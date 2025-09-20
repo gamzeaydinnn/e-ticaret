@@ -9,3 +9,4 @@ C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Business\ECommerce.Business\obj\De
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Business\ECommerce.Business\obj\Debug\net9.0\refint\ECommerce.Business.dll
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Business\ECommerce.Business\obj\Debug\net9.0\ECommerce.Business.pdb
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Business\ECommerce.Business\obj\Debug\net9.0\ref\ECommerce.Business.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Business\ECommerce.Business\obj\Debug\net9.0\ECommerce.Business.sourcelink.json

@@ -10,3 +10,4 @@ C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\De
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\refint\ECommerce.Entities.dll
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.pdb
 C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ref\ECommerce.Entities.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.sourcelink.json
