@@ -1,0 +1,11 @@
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\bin\Debug\net9.0\ECommerce.Core.deps.json
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\bin\Debug\net9.0\ECommerce.Core.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\bin\Debug\net9.0\ECommerce.Core.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.AssemblyInfoInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.AssemblyInfo.cs
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.csproj.CoreCompileInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\refint\ECommerce.Core.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ECommerce.Core.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Core\ECommerce.Core\obj\Debug\net9.0\ref\ECommerce.Core.dll

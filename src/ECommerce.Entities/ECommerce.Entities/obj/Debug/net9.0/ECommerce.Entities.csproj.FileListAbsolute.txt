@@ -1,0 +1,12 @@
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.AssemblyInfoInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.AssemblyInfo.cs
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.csproj.CoreCompileInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\bin\Debug\net9.0\ECommerce.Entities.deps.json
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\bin\Debug\net9.0\ECommerce.Entities.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\bin\Debug\net9.0\ECommerce.Entities.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.csproj.AssemblyReference.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\refint\ECommerce.Entities.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ECommerce.Entities.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Entities\ECommerce.Entities\obj\Debug\net9.0\ref\ECommerce.Entities.dll

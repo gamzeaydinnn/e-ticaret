@@ -1,0 +1,11 @@
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\bin\Debug\net9.0\ECommerce.Infrastructure.deps.json
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\bin\Debug\net9.0\ECommerce.Infrastructure.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\bin\Debug\net9.0\ECommerce.Infrastructure.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.AssemblyInfo.cs
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\refint\ECommerce.Infrastructure.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ECommerce.Infrastructure.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Infrastructure\ECommerce.Infrastructure\obj\Debug\net9.0\ref\ECommerce.Infrastructure.dll

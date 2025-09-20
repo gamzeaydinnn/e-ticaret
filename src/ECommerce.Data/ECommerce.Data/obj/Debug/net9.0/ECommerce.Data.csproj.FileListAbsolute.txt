@@ -1,0 +1,17 @@
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Data.deps.json
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Data.runtimeconfig.json
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Data.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Data.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.csproj.AssemblyReference.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.AssemblyInfoInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.AssemblyInfo.cs
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.csproj.CoreCompileInputs.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\refint\ECommerce.Data.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerce.Data.genruntimeconfig.cache
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ref\ECommerce.Data.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Entities.dll
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\bin\Debug\net9.0\ECommerce.Entities.pdb
+C:\Users\GAMZE\Desktop\eticaret\src\ECommerce.Data\ECommerce.Data\obj\Debug\net9.0\ECommerc.0B8C960C.Up2Date
