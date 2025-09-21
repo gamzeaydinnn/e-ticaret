@@ -9,7 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddDefaultIdentity<User>(options => 
+// Identity Configuration for API
+builder.Services.AddIdentityApiEndpoints<User>(options => 
 {
     options.SignIn.RequireConfirmedAccount = false;
     options.Password.RequireDigit = true;
@@ -20,30 +21,47 @@ builder.Services.AddDefaultIdentity<User>(options =>
 })
 .AddEntityFrameworkStores<ECommerceDbContext>();
 
-builder.Services.AddControllersWithViews();
+// API Controllers
+builder.Services.AddControllers();
+
+// Swagger for API documentation
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// CORS for React frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:3000", "http://localhost:5173") // React dev servers
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Home/Error");
-    app.UseHsts();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
-app.UseRouting();
+
+// Enable CORS
+app.UseCors("AllowReactApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
+// Map API Controllers
+app.MapControllers();
 
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
-    .WithStaticAssets();
-
-app.MapRazorPages();
+// Map Identity API endpoints
+app.MapIdentityApi<User>();
 
 app.Run();
