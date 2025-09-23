@@ -1,0 +1,30 @@
+using ECommerce.Business.Services.Interfaces;
+using System;
+using System.Threading.Tasks;
+
+namespace ECommerce.Business.Services.Managers
+{
+    public class PaymentManager : IPaymentService
+    {
+        public PaymentManager()
+        {
+            // Burada DI ile ödeme sağlayıcı client ekleyebilirsin (IyzicoClient, StripeClient vb.)
+        }
+
+        public async Task<bool> ProcessPaymentAsync(int orderId, decimal amount)
+        {
+            // Basit simülasyon: ödeme başarılı ise true döndür
+            await Task.Delay(500); // Simüle edilmiş API call
+            Console.WriteLine($"Order {orderId} için {amount} TL ödeme işleniyor...");
+            return true;
+        }
+
+        public async Task<bool> CheckPaymentStatusAsync(string paymentId)
+        {
+            // Basit simülasyon: ödeme durumu sorgusu
+            await Task.Delay(300); // Simüle edilmiş API call
+            Console.WriteLine($"Payment {paymentId} durumu kontrol ediliyor...");
+            return true; // Ödeme başarılı
+        }
+    }
+}
