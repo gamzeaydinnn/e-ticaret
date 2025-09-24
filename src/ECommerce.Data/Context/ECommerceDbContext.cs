@@ -16,6 +16,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Product> Products { get; set; }
         public virtual DbSet<Order> Orders { get; set; }
         public virtual DbSet<OrderItem> OrderItems { get; set; }
+        public virtual DbSet<CartItem> CartItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -93,12 +94,33 @@ namespace ECommerce.Data.Context
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
+            // CartItem Configuration
+            modelBuilder.Entity<CartItem>(entity =>
+            {
+                entity.ToTable("CartItems");
+                
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Product)
+                    .WithMany()
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasIndex(e => new { e.UserId, e.ProductId }).IsUnique();
+            });
+
             // Seed Data
             SeedData(modelBuilder);
         }
 
         private void SeedData(ModelBuilder modelBuilder)
         {
+            // Use fixed timestamp to avoid migration diffs
+            var seededAt = new DateTime(2024, 01, 01, 0, 0, 0, DateTimeKind.Utc);
+
             // Seed Categories
             modelBuilder.Entity<Category>().HasData(
                 new Category
@@ -107,7 +129,7 @@ namespace ECommerce.Data.Context
                     Name = "Elektronik",
                     Description = "Elektronik ürünler",
                     SortOrder = 1,
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = seededAt
                 },
                 new Category
                 {
@@ -115,7 +137,7 @@ namespace ECommerce.Data.Context
                     Name = "Giyim",
                     Description = "Giyim ürünleri",
                     SortOrder = 2,
-                    CreatedDate = DateTime.UtcNow
+                    CreatedDate = seededAt
                 }
             );
         }

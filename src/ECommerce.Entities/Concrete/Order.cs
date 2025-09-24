@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using ECommerce.Entities.Enums;
 
 namespace ECommerce.Entities.Concrete
 {
@@ -7,7 +8,7 @@ namespace ECommerce.Entities.Concrete
         public string OrderNumber { get; set; } = string.Empty;
         public int UserId { get; set; }
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-        public OrderStatus Status { get; set; } = OrderStatus.Pending;
+    public OrderStatus Status { get; set; } = OrderStatus.Pending;
         
         [Column(TypeName = "decimal(18,2)")]
         public decimal TotalAmount { get; set; }
@@ -21,12 +22,5 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
     }
 
-    public enum OrderStatus
-    {
-        Pending = 1,
-        Confirmed = 2,
-        Shipped = 3,
-        Delivered = 4,
-        Cancelled = 5
-    }
+    
 }

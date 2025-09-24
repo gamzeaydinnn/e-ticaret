@@ -1,3 +1,4 @@
+using ECommerce.Entities.Enums;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Data.Context;
