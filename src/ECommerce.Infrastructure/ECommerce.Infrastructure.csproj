@@ -11,6 +11,7 @@
     <ProjectReference Include="..\ECommerce.Data\ECommerce.Data.csproj" />
     <ProjectReference Include="..\ECommerce.Entities\ECommerce.Entities.csproj" />
     <ProjectReference Include="..\ECommerce.Core\ECommerce.Core.csproj" />
+    <ProjectReference Include="..\ECommerce.Business\ECommerce.Business.csproj" />
 </ItemGroup>
 
 
