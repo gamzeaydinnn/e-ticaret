@@ -14,7 +14,8 @@ namespace ECommerce.Data.Repositories
         public override async Task<IEnumerable<Product>> GetAllAsync()
         {
             return await _dbSet
-                .Include(p => p.Category)
+                .Include(p => p.Categories)
+
                 .Where(p => p.IsActive)
                 .ToListAsync();
         }
@@ -22,14 +23,16 @@ namespace ECommerce.Data.Repositories
         public override async Task<Product?> GetByIdAsync(int id)
         {
             return await _dbSet
-                .Include(p => p.Category)
+                .Include(p => p.Categories)
+
                 .FirstOrDefaultAsync(p => p.Id == id && p.IsActive);
         }
 
         public async Task<IEnumerable<Product>> GetByCategoryIdAsync(int categoryId)
         {
             return await _dbSet
-                .Include(p => p.Category)
+                .Include(p => p.Categories)
+
                 .Where(p => p.CategoryId == categoryId && p.IsActive)
                 .ToListAsync();
         }
@@ -37,7 +40,8 @@ namespace ECommerce.Data.Repositories
         public async Task<IEnumerable<Product>> SearchAsync(string searchTerm)
         {
             return await _dbSet
-                .Include(p => p.Category)
+                .Include(p => p.Categories)
+
                 .Where(p => p.IsActive && 
                     (p.Name.Contains(searchTerm) || 
                      p.Description.Contains(searchTerm) ||

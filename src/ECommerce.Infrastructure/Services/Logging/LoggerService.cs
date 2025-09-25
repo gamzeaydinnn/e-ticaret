@@ -1,5 +1,6 @@
 using System;
-
+//bu class Kodun çalışması sırasında neler olduğunu takip etmek için log (kayıt) tutar
+//Geliştirme ve test aşamasında özellikle hata ayıklama (debugging) için kullanışl
 namespace ECommerce.Infrastructure.Services.Logging
 {
     public class LoggerService

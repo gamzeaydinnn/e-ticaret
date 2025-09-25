@@ -19,6 +19,7 @@ namespace ECommerce.Data.Repositories
             return await _context.Users
                 .FirstOrDefaultAsync(u => u.Email == email);
         }
+        
 
         public async Task<User?> GetByIdAsync(int id)
         {
@@ -51,6 +52,11 @@ namespace ECommerce.Data.Repositories
         public void Delete(User user)
         {
             _context.Users.Remove(user);
+        }
+
+        public Task<bool> ExistsAsync(string email)
+        {
+            throw new NotImplementedException();
         }
     }
 }

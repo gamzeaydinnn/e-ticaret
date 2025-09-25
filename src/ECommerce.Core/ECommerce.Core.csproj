@@ -8,9 +8,13 @@
   <ItemGroup>
     
     <ProjectReference Include="../ECommerce.Entities/ECommerce.Entities.csproj" />
+    
+   
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.14.0" />
   </ItemGroup>
 </Project>
