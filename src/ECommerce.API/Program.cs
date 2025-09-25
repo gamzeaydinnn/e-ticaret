@@ -1,11 +1,37 @@
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
+using ECommerce.Infrastructure.Services.Email;
+using ECommerce.Infrastructure.Config;
+using ECommerce.Business.Services.Managers;
+using ECommerce.Business.Services.Interfaces;   
+
+
+using Microsoft.Extensions.Options;
+using ECommerce.Infrastructure.Services.Shipping;
+using ECommerce.Core.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // DbContext ekle
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// AppSettings’i konfigürasyondan al
+builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
+
+// EmailSender servisini AppSettings üzerinden kullanacak şekilde ekle
+builder.Services.AddScoped<EmailSender>();
+builder.Services.AddScoped<IUserService, UserManager>();
+builder.Services.AddScoped<IProductService, ProductManager>();
+builder.Services.AddScoped<IOrderService, OrderManager>();
+builder.Services.AddScoped<ICartService, CartManager>();
+builder.Services.AddScoped<IPaymentService, PaymentManager>();
+builder.Services.AddScoped<IShippingService, ShippingManager>();
+
+builder.Services.AddScoped<ArasShippingService>();
+builder.Services.AddScoped<MNGShippingService>();
+builder.Services.AddScoped<YurtiçiShippingService>();
+builder.Services.AddScoped<IShippingService, ShippingManager>();
 
 // Controller ekle
 builder.Services.AddControllers();
@@ -29,3 +55,11 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+//Ne işe yarıyor?
+//Bu kod, bir ASP.NET Core Web API uygulamasının başlangıç (startup) kodudur.
+//Uygulama başlatılırken gerekli servisleri (DbContext, EmailSender, AppSettings) dependency injection konteynerine ekler,
+//middleware yapılandırmasını yapar ve HTTP isteklerini karşılamak için controller'ları haritalar.
+//Swagger, API dokümantasyonu için geliştirme ortamında etkinleştirilir.
+//AppSettings, uygulama genelinde kullanılacak yapılandırma ayarlarını tutar ve
+//EmailSender servisi bu ayarları kullanarak e-posta gönderme işlevselliği sağlar.
+//DbContext, SQL Server veritabanı ile etkileşim için yapılandırılır.

@@ -1,3 +1,5 @@
+using ECommerce.Core.Interfaces;
+
 namespace ECommerce.Infrastructure.Services.Payment
 {
     public class StripePaymentService

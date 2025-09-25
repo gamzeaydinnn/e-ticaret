@@ -1,4 +1,5 @@
-using System.ComponentModel.DataAnnotations.Schema;
+using System;
+using System.Collections.Generic;
 using ECommerce.Entities.Enums;
 
 namespace ECommerce.Entities.Concrete
@@ -7,20 +8,15 @@ namespace ECommerce.Entities.Concrete
     {
         public string OrderNumber { get; set; } = string.Empty;
         public int UserId { get; set; }
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-    public OrderStatus Status { get; set; } = OrderStatus.Pending;
-        
-        [Column(TypeName = "decimal(18,2)")]
-        public decimal TotalAmount { get; set; }
-        
-        // Shipping Address
         public string ShippingAddress { get; set; } = string.Empty;
         public string ShippingCity { get; set; } = string.Empty;
+        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        public decimal TotalAmount { get; set; } = 0m;
+
+        public OrderStatus Status { get; set; } = OrderStatus.Pending;
 
         // Navigation Properties
-        public virtual User User { get; set; } = null!;
+        public virtual User? User { get; set; }
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
     }
-
-    
 }
