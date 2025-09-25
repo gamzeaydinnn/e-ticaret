@@ -1,8 +1,22 @@
 import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./App.css";
+import ProductGrid from "./components/ProductGrid";
+import AccountPage from "./components/AccountPage";
+import CartPage from "./components/CartPage";
+import { useCartCount } from "./hooks/useCartCount";
 
-function App() {
+function Header() {
+  const { count: cartCount } = useCartCount();
+  const navigate = useNavigate();
+
   return (
     <div className="App">
       {/* Main Header */}
@@ -11,17 +25,26 @@ function App() {
           <div className="row align-items-center">
             {/* Logo */}
             <div className="col-md-3">
-              <div className="d-flex align-items-center">
-                <div className="logo-container me-2">
-                  <div className="logo-circle bg-danger text-white">TC</div>
+              <Link to="/" className="text-decoration-none">
+                <div className="d-flex align-items-center">
+                  <div className="logo-container me-2">
+                    <div
+                      className="logo-circle text-white fw-bold"
+                      style={{
+                        background: "linear-gradient(45deg, #ff6f00, #ff8f00)",
+                      }}
+                    >
+                      TC
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="mb-0 fw-bold text-dark">TicaretiCenter</h4>
+                    <small className="text-muted">
+                      Türkiye'nin E-Ticaret Lideri
+                    </small>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="mb-0 fw-bold">TicaretiCenter</h4>
-                  <small className="text-muted">
-                    Türkiye'nin E-Ticaret Lideri
-                  </small>
-                </div>
-              </div>
+              </Link>
             </div>
 
             {/* Search Bar */}
@@ -33,7 +56,12 @@ function App() {
                     className="form-control form-control-lg"
                     placeholder="20 milyondan fazla ürün arasında ara..."
                   />
-                  <button className="btn btn-danger btn-lg">
+                  <button
+                    className="btn btn-lg text-white border-0"
+                    style={{
+                      background: "linear-gradient(45deg, #ff6f00, #ff8f00)",
+                    }}
+                  >
                     <i className="fas fa-search"></i>
                   </button>
                 </div>
@@ -43,17 +71,23 @@ function App() {
             {/* Right Actions */}
             <div className="col-md-3">
               <div className="header-actions justify-content-end">
-                <a href="#" className="header-action">
+                <button
+                  onClick={() => navigate("/account")}
+                  className="header-action btn btn-link p-0 text-decoration-none"
+                >
                   <i className="fas fa-user"></i>
                   <span>Hesabım</span>
-                </a>
-                <a href="#" className="header-action position-relative">
+                </button>
+                <button
+                  onClick={() => navigate("/cart")}
+                  className="header-action btn btn-link p-0 text-decoration-none position-relative"
+                >
                   <i className="fas fa-shopping-cart"></i>
                   <span>Sepetim</span>
                   <span className="badge cart-badge position-absolute top-0 start-0">
-                    3
+                    {cartCount}
                   </span>
-                </a>
+                </button>
               </div>
             </div>
           </div>
@@ -101,7 +135,28 @@ function App() {
           </div>
         </div>
       </nav>
+    </div>
+  );
+}
 
+function App() {
+  return (
+    <Router>
+      <div className="App">
+        <Header />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/cart" element={<CartPage />} />
+        </Routes>
+      </div>
+    </Router>
+  );
+}
+
+function HomePage() {
+  return (
+    <>
       {/* Hero Section */}
       <section className="hero-section py-5">
         <div className="container-fluid px-4">
@@ -451,187 +506,7 @@ function App() {
           </div>
 
           {/* Products Grid */}
-          <div className="row">
-            {/* Ürün 1 - Bluetooth Kulaklık */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="product-card">
-                <div className="product-image">
-                  <div className="product-badges">
-                    <span className="badge-new">Yeni</span>
-                    <span className="badge-shipping">Hızlı Kargo</span>
-                  </div>
-                  <div className="product-discount">%25 İndirim</div>
-                  <div className="product-img-placeholder yellow">
-                    <i className="fas fa-headphones"></i>
-                  </div>
-                </div>
-                <div className="product-info">
-                  <div className="product-brand">TechSound</div>
-                  <h5 className="product-title">Bluetooth Kulaklık</h5>
-                  <div className="product-rating">
-                    <div className="stars">
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="far fa-star"></i>
-                    </div>
-                    <span className="rating-text">4.5 (12 değerlendirme)</span>
-                  </div>
-                  <div className="product-price">
-                    <span className="current-price">₺299</span>
-                    <span className="old-price">₺399</span>
-                  </div>
-                  <div className="product-features">
-                    <span className="feature-badge shipping">
-                      <i className="fas fa-truck"></i> Hızlı Kargo
-                    </span>
-                    <span className="feature-badge secure">
-                      <i className="fas fa-shield-alt"></i> Güvenli
-                    </span>
-                  </div>
-                  <button className="btn-add-cart">
-                    <i className="fas fa-shopping-cart me-2"></i>
-                    Sepete Ekle
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Ürün 2 - Kadın Triko Kazak */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="product-card">
-                <div className="product-image">
-                  <div className="product-badges">
-                    <span className="badge-popular">Popüler</span>
-                    <span className="badge-shipping">Hızlı Kargo</span>
-                  </div>
-                  <div className="product-discount">%27 İndirim</div>
-                  <div className="product-img-placeholder beige">
-                    <i className="fas fa-tshirt"></i>
-                  </div>
-                </div>
-                <div className="product-info">
-                  <div className="product-brand">StyleWear</div>
-                  <h5 className="product-title">Kadın Triko Kazak</h5>
-                  <div className="product-rating">
-                    <div className="stars">
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                    </div>
-                    <span className="rating-text">4.7 (8 değerlendirme)</span>
-                  </div>
-                  <div className="product-price">
-                    <span className="current-price">₺159</span>
-                    <span className="old-price">₺219</span>
-                  </div>
-                  <div className="product-features">
-                    <span className="feature-badge shipping">
-                      <i className="fas fa-truck"></i> Hızlı Kargo
-                    </span>
-                    <span className="feature-badge secure">
-                      <i className="fas fa-shield-alt"></i> Güvenli
-                    </span>
-                  </div>
-                  <button className="btn-add-cart">
-                    <i className="fas fa-shopping-cart me-2"></i>
-                    Sepete Ekle
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Ürün 3 - Ev Dekoru Vazo */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="product-card">
-                <div className="product-image">
-                  <div className="product-badges">
-                    <span className="badge-sale">İndirimde</span>
-                  </div>
-                  <div className="product-discount">%25 İndirim</div>
-                  <div className="product-img-placeholder blue">
-                    <i className="fas fa-vase"></i>
-                  </div>
-                </div>
-                <div className="product-info">
-                  <div className="product-brand">HomeArt</div>
-                  <h5 className="product-title">Ev Dekoru Vazo</h5>
-                  <div className="product-rating">
-                    <div className="stars">
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="far fa-star"></i>
-                    </div>
-                    <span className="rating-text">4.3 (5 değerlendirme)</span>
-                  </div>
-                  <div className="product-price">
-                    <span className="current-price">₺89</span>
-                    <span className="old-price">₺119</span>
-                  </div>
-                  <div className="product-features">
-                    <span className="feature-badge secure">
-                      <i className="fas fa-shield-alt"></i> Güvenli
-                    </span>
-                  </div>
-                  <button className="btn-add-cart">
-                    <i className="fas fa-shopping-cart me-2"></i>
-                    Sepete Ekle
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Ürün 4 - Spor Ayakkabı */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="product-card">
-                <div className="product-image">
-                  <div className="product-badges">
-                    <span className="badge-trend">Trend</span>
-                    <span className="badge-shipping">Hızlı Kargo</span>
-                  </div>
-                  <div className="product-discount">%25 İndirim</div>
-                  <div className="product-img-placeholder brown">
-                    <i className="fas fa-shoe-prints"></i>
-                  </div>
-                </div>
-                <div className="product-info">
-                  <div className="product-brand">ActiveStep</div>
-                  <h5 className="product-title">Spor Ayakkabı</h5>
-                  <div className="product-rating">
-                    <div className="stars">
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                      <i className="fas fa-star"></i>
-                    </div>
-                    <span className="rating-text">4.6 (15 değerlendirme)</span>
-                  </div>
-                  <div className="product-price">
-                    <span className="current-price">₺449</span>
-                    <span className="old-price">₺599</span>
-                  </div>
-                  <div className="product-features">
-                    <span className="feature-badge shipping">
-                      <i className="fas fa-truck"></i> Hızlı Kargo
-                    </span>
-                    <span className="feature-badge secure">
-                      <i className="fas fa-shield-alt"></i> Güvenli
-                    </span>
-                  </div>
-                  <button className="btn-add-cart">
-                    <i className="fas fa-shopping-cart me-2"></i>
-                    Sepete Ekle
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <ProductGrid />
 
           {/* Daha Fazla Ürün Keşfet Section */}
           <div className="discover-more-section text-center py-5">
@@ -975,7 +850,7 @@ function App() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
   );
 }
 
