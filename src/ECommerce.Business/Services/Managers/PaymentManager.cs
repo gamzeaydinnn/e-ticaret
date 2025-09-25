@@ -1,4 +1,5 @@
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Interfaces;
 using System;
 using System.Threading.Tasks;
 

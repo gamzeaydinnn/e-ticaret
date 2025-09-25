@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using System.Collections.Generic;
 
 namespace ECommerce.Entities.Concrete
 {
@@ -8,8 +9,6 @@ namespace ECommerce.Entities.Concrete
         public string LastName { get; set; } = string.Empty;
         public string? Address { get; set; }
         public string? City { get; set; }
-        public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
-        public bool IsActive { get; set; } = true;
 
         // Navigation Properties
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();

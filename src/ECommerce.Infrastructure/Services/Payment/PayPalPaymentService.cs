@@ -1,5 +1,5 @@
+using ECommerce.Core.Interfaces;
 using System.Threading.Tasks;
-using ECommerce.Business.Services.Interfaces;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {

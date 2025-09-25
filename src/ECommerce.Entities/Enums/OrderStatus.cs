@@ -3,9 +3,9 @@ namespace ECommerce.Entities.Enums
     public enum OrderStatus
     {
         Pending,
-        Paid,
+        Processing,
         Shipped,
-        Completed,
+        Delivered,
         Cancelled
     }
 }

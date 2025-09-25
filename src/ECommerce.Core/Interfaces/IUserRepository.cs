@@ -1,6 +1,7 @@
 using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Core.Interfaces
+
 {
     public interface IUserRepository
     {
@@ -11,5 +12,6 @@ namespace ECommerce.Core.Interfaces
         Task AddAsync(User user);
         void Update(User user);
         void Delete(User user);
+        Task<bool> ExistsAsync(string email);
     }
 }

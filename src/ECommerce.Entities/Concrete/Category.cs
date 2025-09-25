@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace ECommerce.Entities.Concrete
 {
     public class Category : BaseEntity

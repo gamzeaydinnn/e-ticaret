@@ -38,7 +38,7 @@ namespace ECommerce.Data.Context
                 entity.ToTable("Categories");
                 entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(500);
-                
+
                 entity.HasOne(e => e.Parent)
                     .WithMany(e => e.SubCategories)
                     .HasForeignKey(e => e.ParentId)
@@ -82,7 +82,7 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<OrderItem>(entity =>
             {
                 entity.ToTable("OrderItems");
-                
+
                 entity.HasOne(e => e.Order)
                     .WithMany(e => e.OrderItems)
                     .HasForeignKey(e => e.OrderId)
@@ -98,7 +98,7 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<CartItem>(entity =>
             {
                 entity.ToTable("CartItems");
-                
+
                 entity.HasOne(e => e.User)
                     .WithMany()
                     .HasForeignKey(e => e.UserId)
@@ -142,4 +142,5 @@ namespace ECommerce.Data.Context
             );
         }
     }
+    
 }

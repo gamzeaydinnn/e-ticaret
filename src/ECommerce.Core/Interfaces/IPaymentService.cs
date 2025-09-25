@@ -1,12 +1,12 @@
 using System.Threading.Tasks;
 
-namespace ECommerce.Business.Services.Interfaces
+namespace  ECommerce.Core.Interfaces
 {
     public interface IPaymentService
     {
         /// <summary>
         /// Ödeme işlemi başlatır
-        /// </summary>
+        /// </summary> 
         /// <param name="orderId">Sipariş ID</param>
         /// <param name="amount">Ödenecek tutar</param>
         /// <returns>Ödeme başarılı mı?</returns>
