@@ -9,6 +9,10 @@ using ECommerce.Business.Services.Interfaces;
 using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Services.Shipping;
 using ECommerce.Core.Interfaces;
+using ECommerce.Data.Repositories;
+using ECommerce.Infrastructure.Services.Payment;
+using ECommerce.Infrastructure.Services.BackgroundJobs;
+using ECommerce.Infrastructure.Services.Mikro;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +31,21 @@ builder.Services.AddScoped<IOrderService, OrderManager>();
 builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
+builder.Services.AddScoped<ProductManager>();
+builder.Services.AddScoped<OrderManager>();
+builder.Services.AddScoped<UserManager>();
+builder.Services.AddScoped<CartManager>();
+builder.Services.AddScoped<InventoryManager>();
+builder.Services.AddScoped<MikroSyncManager>();
+builder.Services.AddScoped<LocalSalesRepository>();
+
+builder.Services.AddScoped<IPaymentService, StripePaymentService>();
+builder.Services.AddScoped<IShippingService, ArasShippingService>();
+
+builder.Services.AddHostedService<StockSyncJob>();
+builder.Services.AddScoped<IMicroService, MikroService>();
+builder.Services.AddScoped<MikroSyncManager>();
+
 
 builder.Services.AddScoped<ArasShippingService>();
 builder.Services.AddScoped<MNGShippingService>();
