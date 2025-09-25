@@ -1,9 +1,9 @@
 using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Interfaces;
 
-namespace ECommerce.Infrastructure.Services.Mikro
+namespace ECommerce.Infrastructure.Services.Micro
 {
-    public class MikroService : IMicroService
+    public class MicroService : IMicroService
     {
         public void UpdateProduct(MicroProductDto productDto)
         {

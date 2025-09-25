@@ -12,7 +12,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Data.Repositories;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
-using ECommerce.Infrastructure.Services.Mikro;
+using ECommerce.Infrastructure.Services.Micro;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,15 +36,15 @@ builder.Services.AddScoped<OrderManager>();
 builder.Services.AddScoped<UserManager>();
 builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
-builder.Services.AddScoped<MikroSyncManager>();
+builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<LocalSalesRepository>();
 
 builder.Services.AddScoped<IPaymentService, StripePaymentService>();
 builder.Services.AddScoped<IShippingService, ArasShippingService>();
 
 builder.Services.AddHostedService<StockSyncJob>();
-builder.Services.AddScoped<IMicroService, MikroService>();
-builder.Services.AddScoped<MikroSyncManager>();
+builder.Services.AddScoped<IMicroService, MicroService>();
+builder.Services.AddScoped<MicroSyncManager>();
 
 
 builder.Services.AddScoped<ArasShippingService>();

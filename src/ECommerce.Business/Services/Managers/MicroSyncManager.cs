@@ -6,14 +6,14 @@ using ECommerce.Infrastructure.Services;
 //Amaç: Mikro ERP ile veri senkronizasyonu (stok, ürün, satış).
 namespace ECommerce.Business.Services.Managers
 {
-    public class MikroSyncManager
+    public class MicroSyncManager
     {
-        private readonly IMicroService _mikroService;
+        private readonly IMicroService _microService;
         private readonly IProductRepository _productRepository;
 
-        public MikroSyncManager(IMicroService mikroService, IProductRepository productRepository)
+        public MicroSyncManager(IMicroService microService, IProductRepository productRepository)
         {
-            _mikroService = mikroService;
+            _microService = microService;
             _productRepository = productRepository;
         }
 
@@ -22,7 +22,7 @@ namespace ECommerce.Business.Services.Managers
             var products = _productRepository.GetAll();
             foreach (var product in products)
             {
-                _mikroService.UpdateProduct(new MicroProductDto
+                _microService.UpdateProduct(new MicroProductDto
                 {
                     Id = product.Id,
                     Name = product.Name,
