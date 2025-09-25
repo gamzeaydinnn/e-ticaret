@@ -1,14 +1,22 @@
 using ECommerce.Core.Interfaces;
+using System.Threading.Tasks;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {
-    public class StripePaymentService
+    public class StripePaymentService : IPaymentService
     {
-        public bool ProcessPayment(decimal amount, string cardNumber, string expiry, string cvv)
+        public async Task<bool> ProcessPaymentAsync(int orderId, decimal amount)
         {
-            // Mock Stripe payment API call
+            // Stripe API çağrısı yapılacak
+            await Task.Delay(100); // simülasyon
+            return true;
+        }
+
+        public async Task<bool> CheckPaymentStatusAsync(string paymentId)
+        {
+            // Stripe ödeme durumu sorgulanacak
+            await Task.Delay(100);
             return true;
         }
     }
 }
-

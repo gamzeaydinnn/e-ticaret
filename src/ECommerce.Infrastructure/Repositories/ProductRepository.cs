@@ -59,5 +59,20 @@ namespace ECommerce.Data.Repositories
                              (!string.IsNullOrEmpty(p.Brand) && p.Brand.Contains(searchTerm))))
                 .ToListAsync();
         }
+
+        public Product GetById(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task UpdateAsync(Product product)
+        {
+            throw new NotImplementedException();
+        }
+
+        public IEnumerable<Product> GetAll()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
