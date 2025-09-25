@@ -5,7 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // DbContext ekle
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Controller ekle
 builder.Services.AddControllers();
