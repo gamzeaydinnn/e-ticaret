@@ -5,31 +5,29 @@ using System.Threading.Tasks;
 
 namespace ECommerce.Business.Services.Managers
 {
-    public class ShippingManager : IShippingService // <-- Bunu ekledik
+    public class ShippingManager : IShippingService
     {
-        private readonly IShippingService[] _shippingProviders;
-
-        public ShippingManager(IShippingService[] shippingProviders)
+        public ShippingManager()
         {
-            _shippingProviders = shippingProviders;
         }
 
         public async Task<decimal> CalculateShippingCostAsync(int orderId)
         {
-            var costs = await Task.WhenAll(_shippingProviders.Select(p => p.CalculateShippingCostAsync(orderId)));
-            return costs.Min();
+            // Basit shipping cost simulasyonu
+            await Task.Delay(100);
+            return 15.99m; // Fixed shipping cost
         }
 
         public async Task<string> GetEstimatedDeliveryAsync(int orderId)
         {
-            var estimates = await Task.WhenAll(_shippingProviders.Select(p => p.GetEstimatedDeliveryAsync(orderId)));
-            return estimates.OrderBy(e => e).First();
+            await Task.Delay(100);
+            return "2-3 gün"; // Fixed delivery estimate
         }
 
         public async Task<bool> ShipOrderAsync(int orderId)
         {
-            // Örnek: ilk sağlayıcı ile gönderim başlat
-            return await _shippingProviders[0].ShipOrderAsync(orderId);
+            await Task.Delay(100);
+            return true; // Always successful for demo
         }
     }
 }

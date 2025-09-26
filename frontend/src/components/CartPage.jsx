@@ -1,9 +1,10 @@
 import React from "react";
 import { useCartCount } from "../hooks/useCartCount";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const CartPage = () => {
   const { count: cartCount } = useCartCount();
+  const navigate = useNavigate();
 
   return (
     <div
@@ -128,9 +129,10 @@ const CartPage = () => {
                                 borderRadius: "50px",
                                 padding: "1rem",
                               }}
+                              onClick={() => navigate("/payment")}
                             >
                               <i className="fas fa-credit-card me-2"></i>
-                              Siparişi Tamamla
+                              Ödemeye Geç
                             </button>
                           </div>
                         </div>

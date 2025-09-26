@@ -11,6 +11,8 @@ import "./App.css";
 import ProductGrid from "./components/ProductGrid";
 import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
+import OrderTracking from "./components/OrderTracking";
+import PaymentPage from "./components/PaymentPage";
 import { useCartCount } from "./hooks/useCartCount";
 
 function Header() {
@@ -77,6 +79,13 @@ function Header() {
                 >
                   <i className="fas fa-user"></i>
                   <span>Hesabım</span>
+                </button>
+                <button
+                  onClick={() => navigate("/orders")}
+                  className="header-action btn btn-link p-0 text-decoration-none"
+                >
+                  <i className="fas fa-truck"></i>
+                  <span>Siparişlerim</span>
                 </button>
                 <button
                   onClick={() => navigate("/cart")}
@@ -148,6 +157,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/orders" element={<OrderTracking />} />
+          <Route path="/payment" element={<PaymentPage />} />
         </Routes>
       </div>
     </Router>
