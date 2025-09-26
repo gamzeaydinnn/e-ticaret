@@ -1,17 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import AdminDashboard from './AdminDashboard';
-import AdminProducts from './AdminProducts';
-import AdminOrders from './AdminOrders';
-import AdminUsers from './AdminUsers';
+import React, { useState, useEffect } from "react";
+import AdminDashboard from "./AdminDashboard";
+import AdminProducts from "./AdminProducts";
+import AdminOrders from "./AdminOrders";
+import AdminUsers from "./AdminUsers";
 
 const AdminPanel = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [loginData, setLoginData] = useState({ username: "", password: "" });
 
   useEffect(() => {
     // Admin kimlik doğrulama kontrolü
-    const adminToken = localStorage.getItem('adminToken');
+    const adminToken = localStorage.getItem("adminToken");
     if (adminToken) {
       setIsAuthenticated(true);
     }
@@ -20,25 +20,33 @@ const AdminPanel = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     // Demo için basit authentication
-    if (loginData.username === 'admin' && loginData.password === 'admin123') {
-      localStorage.setItem('adminToken', 'demo-admin-token');
+    if (loginData.username === "admin" && loginData.password === "admin123") {
+      localStorage.setItem("adminToken", "demo-admin-token");
       setIsAuthenticated(true);
     } else {
-      alert('Geçersiz kullanıcı adı veya şifre');
+      alert("Geçersiz kullanıcı adı veya şifre");
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('adminToken');
+    localStorage.removeItem("adminToken");
     setIsAuthenticated(false);
-    setActiveTab('dashboard');
+    setActiveTab("dashboard");
   };
 
   if (!isAuthenticated) {
     return (
-      <div className="min-vh-100 d-flex align-items-center justify-content-center" 
-           style={{ background: 'linear-gradient(135deg, #ff6f00 0%, #ff8f00 50%, #ffa000 100%)' }}>
-        <div className="card shadow-lg" style={{ width: '400px', borderRadius: '20px' }}>
+      <div
+        className="min-vh-100 d-flex align-items-center justify-content-center"
+        style={{
+          background:
+            "linear-gradient(135deg, #ff6f00 0%, #ff8f00 50%, #ffa000 100%)",
+        }}
+      >
+        <div
+          className="card shadow-lg"
+          style={{ width: "400px", borderRadius: "20px" }}
+        >
           <div className="card-body p-5">
             <div className="text-center mb-4">
               <h3 className="fw-bold text-dark">Admin Paneli</h3>
@@ -51,8 +59,10 @@ const AdminPanel = () => {
                   className="form-control"
                   placeholder="Kullanıcı Adı"
                   value={loginData.username}
-                  onChange={(e) => setLoginData({...loginData, username: e.target.value})}
-                  style={{ borderRadius: '10px' }}
+                  onChange={(e) =>
+                    setLoginData({ ...loginData, username: e.target.value })
+                  }
+                  style={{ borderRadius: "10px" }}
                   required
                 />
               </div>
@@ -62,18 +72,20 @@ const AdminPanel = () => {
                   className="form-control"
                   placeholder="Şifre"
                   value={loginData.password}
-                  onChange={(e) => setLoginData({...loginData, password: e.target.value})}
-                  style={{ borderRadius: '10px' }}
+                  onChange={(e) =>
+                    setLoginData({ ...loginData, password: e.target.value })
+                  }
+                  style={{ borderRadius: "10px" }}
                   required
                 />
               </div>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className="btn w-100 text-white fw-bold"
-                style={{ 
-                  background: 'linear-gradient(45deg, #ff6f00, #ff8f00)',
-                  borderRadius: '10px',
-                  border: 'none'
+                style={{
+                  background: "linear-gradient(45deg, #ff6f00, #ff8f00)",
+                  borderRadius: "10px",
+                  border: "none",
                 }}
               >
                 Giriş Yap
@@ -89,27 +101,32 @@ const AdminPanel = () => {
   }
 
   return (
-    <div className="d-flex" style={{ minHeight: '100vh' }}>
+    <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
-      <div className="sidebar" style={{ 
-        width: '250px', 
-        background: 'linear-gradient(180deg, #ff6f00 0%, #ff8f00 100%)',
-        color: 'white'
-      }}>
+      <div
+        className="sidebar"
+        style={{
+          width: "250px",
+          background: "linear-gradient(180deg, #ff6f00 0%, #ff8f00 100%)",
+          color: "white",
+        }}
+      >
         <div className="p-4">
           <h4 className="fw-bold mb-4">Admin Panel</h4>
           <nav className="nav flex-column">
             {[
-              { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-              { id: 'products', icon: '📦', label: 'Ürünler' },
-              { id: 'orders', icon: '🛍️', label: 'Siparişler' },
-              { id: 'users', icon: '👥', label: 'Kullanıcılar' }
-            ].map(item => (
+              { id: "dashboard", icon: "📊", label: "Dashboard" },
+              { id: "products", icon: "📦", label: "Ürünler" },
+              { id: "orders", icon: "🛍️", label: "Siparişler" },
+              { id: "users", icon: "👥", label: "Kullanıcılar" },
+            ].map((item) => (
               <button
                 key={item.id}
-                className={`nav-link text-white border-0 rounded mb-2 p-3 ${activeTab === item.id ? 'bg-white bg-opacity-25' : ''}`}
+                className={`nav-link text-white border-0 rounded mb-2 p-3 ${
+                  activeTab === item.id ? "bg-white bg-opacity-25" : ""
+                }`}
                 onClick={() => setActiveTab(item.id)}
-                style={{ backgroundColor: 'transparent', textAlign: 'left' }}
+                style={{ backgroundColor: "transparent", textAlign: "left" }}
               >
                 <span className="me-2">{item.icon}</span>
                 {item.label}
@@ -118,7 +135,7 @@ const AdminPanel = () => {
           </nav>
         </div>
         <div className="mt-auto p-4">
-          <button 
+          <button
             className="btn btn-outline-light w-100"
             onClick={handleLogout}
           >
@@ -128,12 +145,12 @@ const AdminPanel = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-grow-1" style={{ background: '#f8f9fa' }}>
+      <div className="flex-grow-1" style={{ background: "#f8f9fa" }}>
         <div className="p-4">
-          {activeTab === 'dashboard' && <AdminDashboard />}
-          {activeTab === 'products' && <AdminProducts />}
-          {activeTab === 'orders' && <AdminOrders />}
-          {activeTab === 'users' && <AdminUsers />}
+          {activeTab === "dashboard" && <AdminDashboard />}
+          {activeTab === "products" && <AdminProducts />}
+          {activeTab === "orders" && <AdminOrders />}
+          {activeTab === "users" && <AdminUsers />}
         </div>
       </div>
     </div>
