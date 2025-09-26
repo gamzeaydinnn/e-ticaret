@@ -11,5 +11,6 @@ namespace ECommerce.Business.Services.Interfaces
         Task AddAsync(User user);
         void Update(User user);
         void Delete(User user);
+        Task<int> GetUserCountAsync();
     }
 }

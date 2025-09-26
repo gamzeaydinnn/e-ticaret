@@ -13,6 +13,7 @@ import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
+import AdminPanel from "./admin/AdminPanel";
 import { useCartCount } from "./hooks/useCartCount";
 
 function Header() {
@@ -97,6 +98,13 @@ function Header() {
                     {cartCount}
                   </span>
                 </button>
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="header-action btn btn-link p-0 text-decoration-none"
+                >
+                  <i className="fas fa-cog text-warning"></i>
+                  <span>Admin</span>
+                </button>
               </div>
             </div>
           </div>
@@ -159,6 +167,7 @@ function App() {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/orders" element={<OrderTracking />} />
           <Route path="/payment" element={<PaymentPage />} />
+          <Route path="/admin" element={<AdminPanel />} />
         </Routes>
       </div>
     </Router>

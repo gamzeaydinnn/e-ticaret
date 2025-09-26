@@ -35,5 +35,14 @@ namespace ECommerce.Business.Services.Interfaces
         /// Sipariş durumunu değiştir
         /// </summary>
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
+
+        // Admin methods
+        Task<int> GetOrderCountAsync();
+        Task<int> GetTodayOrderCountAsync();
+        Task<decimal> GetTotalRevenueAsync();
+        Task<IEnumerable<OrderListDto>> GetAllOrdersAsync(int page = 1, int size = 20);
+        Task<OrderListDto> GetOrderByIdAsync(int id);
+        Task UpdateOrderStatusAsync(int id, string status);
+        Task<IEnumerable<OrderListDto>> GetRecentOrdersAsync(int count = 10);
     }
 }
