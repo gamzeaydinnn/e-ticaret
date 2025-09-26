@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 const ProductFilter = ({ onFilterChange, categories = [] }) => {
   const [filters, setFilters] = useState({
-    search: '',
-    category: '',
-    minPrice: '',
-    maxPrice: '',
-    sortBy: 'name',
-    sortOrder: 'asc'
+    search: "",
+    category: "",
+    minPrice: "",
+    maxPrice: "",
+    sortBy: "name",
+    sortOrder: "asc",
   });
 
   useEffect(() => {
@@ -16,46 +16,46 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const clearFilters = () => {
     setFilters({
-      search: '',
-      category: '',
-      minPrice: '',
-      maxPrice: '',
-      sortBy: 'name',
-      sortOrder: 'asc'
+      search: "",
+      category: "",
+      minPrice: "",
+      maxPrice: "",
+      sortBy: "name",
+      sortOrder: "asc",
     });
   };
 
   return (
-    <div 
+    <div
       className="card shadow-lg border-0 mb-4"
-      style={{ 
-        borderRadius: '20px',
-        background: 'linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%)'
+      style={{
+        borderRadius: "20px",
+        background: "linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%)",
       }}
     >
-      <div 
+      <div
         className="card-header text-white border-0"
-        style={{ 
-          background: 'linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px',
-          padding: '1rem 1.5rem'
+        style={{
+          background: "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)",
+          borderTopLeftRadius: "20px",
+          borderTopRightRadius: "20px",
+          padding: "1rem 1.5rem",
         }}
       >
         <h5 className="mb-0 fw-bold">
           <i className="fas fa-filter me-2"></i>Ürün Filtreleme
         </h5>
       </div>
-      
-      <div className="card-body" style={{ padding: '1.5rem' }}>
+
+      <div className="card-body" style={{ padding: "1.5rem" }}>
         <div className="row g-3">
           {/* Arama */}
           <div className="col-md-4">
@@ -66,10 +66,10 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
               type="text"
               name="search"
               className="form-control border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               placeholder="Ürün adı veya açıklama..."
               value={filters.search}
@@ -85,17 +85,19 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
             <select
               name="category"
               className="form-select border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               value={filters.category}
               onChange={handleInputChange}
             >
               <option value="">Tüm Kategoriler</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
               ))}
             </select>
           </div>
@@ -109,10 +111,10 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
               type="number"
               name="minPrice"
               className="form-control border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               placeholder="₺0"
               value={filters.minPrice}
@@ -128,10 +130,10 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
               type="number"
               name="maxPrice"
               className="form-control border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               placeholder="₺999999"
               value={filters.maxPrice}
@@ -147,10 +149,10 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
             <select
               name="sortBy"
               className="form-select border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               value={filters.sortBy}
               onChange={handleInputChange}
@@ -167,10 +169,10 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
             <select
               name="sortOrder"
               className="form-select border-0 shadow-sm"
-              style={{ 
-                backgroundColor: '#fff8f0',
-                borderRadius: '15px',
-                padding: '0.75rem 1rem'
+              style={{
+                backgroundColor: "#fff8f0",
+                borderRadius: "15px",
+                padding: "0.75rem 1rem",
               }}
               value={filters.sortOrder}
               onChange={handleInputChange}
@@ -179,14 +181,14 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
               <option value="desc">Z-A / Yüksek-Düşük</option>
             </select>
           </div>
-          
+
           <div className="col-md-9 d-flex justify-content-end align-items-end">
             <button
               type="button"
               className="btn btn-outline-warning fw-bold shadow-sm"
-              style={{ 
-                borderRadius: '15px',
-                padding: '0.75rem 2rem'
+              style={{
+                borderRadius: "15px",
+                padding: "0.75rem 2rem",
               }}
               onClick={clearFilters}
             >
