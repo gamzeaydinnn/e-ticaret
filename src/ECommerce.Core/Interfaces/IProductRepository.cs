@@ -12,6 +12,9 @@ namespace ECommerce.Core.Interfaces
         Product GetById(int id);
         Task UpdateAsync(Product product);
         void Update(Product product); 
+        Task DeleteAsync(Product product);
+        Task Delete(Product product);
+        Task<Product> AddAsync(Product product);
         
 
         IEnumerable<Product> GetAll();

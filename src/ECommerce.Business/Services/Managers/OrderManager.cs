@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+
 namespace ECommerce.Business.Services.Managers
 {
     public class OrderManager : IOrderService
@@ -34,7 +35,9 @@ namespace ECommerce.Business.Services.Managers
                 UserId = o.UserId,
                 TotalPrice = o.TotalAmount,
                 Status = o.Status.ToString(),
-                OrderDate = o.OrderDate
+                OrderDate = o.OrderDate,
+                TotalItems = o.OrderItems.Sum(oi => oi.Quantity)
+                
             });
         }
 
@@ -118,5 +121,7 @@ namespace ECommerce.Business.Services.Managers
 
             return false;
         }
+
+       
     }
 }

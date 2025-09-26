@@ -39,6 +39,19 @@ builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<LocalSalesRepository>();
 
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<ICartRepository, CartRepository>();
+
+builder.Services.AddScoped<IUserService, UserManager>();
+builder.Services.AddScoped<IProductService, ProductManager>();
+builder.Services.AddScoped<IOrderService, OrderManager>();
+builder.Services.AddScoped<IInventoryService, InventoryManager>();
+builder.Services.AddScoped<IShippingService, ShippingManager>();
+// diğer service/manager kayıtları...
+
+
 builder.Services.AddScoped<IPaymentService, StripePaymentService>();
 builder.Services.AddScoped<IShippingService, ArasShippingService>();
 

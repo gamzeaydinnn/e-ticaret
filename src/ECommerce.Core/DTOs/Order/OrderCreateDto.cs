@@ -6,9 +6,8 @@ namespace ECommerce.Core.DTOs.Order
     {
         public int UserId { get; set; }              // Siparişi veren kullanıcı
         public decimal TotalPrice { get; set; }      // Toplam tutar
-        public List<OrderItemDto> OrderItems { get; set; } = new(); 
-        
-         public List<OrderItemDto> Items { get; set; } // Sipariş kalemleri
+        public List<OrderItemDto> OrderItems { get; set; } = new();
+ // Sipariş kalemleri
 
         // Opsiyonel: teslimat veya fatura bilgileri eklenebilir
     }

@@ -1,3 +1,4 @@
+
 using ECommerce.Core.DTOs.Order;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -35,5 +36,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// Sipariş durumunu değiştir
         /// </summary>
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
+
+        
     }
 }

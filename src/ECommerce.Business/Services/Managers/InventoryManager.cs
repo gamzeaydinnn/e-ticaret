@@ -1,11 +1,9 @@
-using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
-using ECommerce.Core.Exceptions;
-using System.Threading.Tasks;
+using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Business.Services.Managers
 {
-    public class InventoryManager
+    public class InventoryManager : IInventoryService
     {
         private readonly IProductRepository _productRepository;
 
@@ -14,15 +12,28 @@ namespace ECommerce.Business.Services.Managers
             _productRepository = productRepository;
         }
 
-        public async Task UpdateStockAsync(int productId, int quantityChange)
+        public async Task<bool> IncreaseStockAsync(int productId, int quantity)
         {
             var product = await _productRepository.GetByIdAsync(productId);
-            if (product == null) throw new NotFoundException("Product not found");
-
-            product.StockQuantity += quantityChange;
-            if (product.StockQuantity < 0) product.StockQuantity = 0;
-
+            if (product == null) return false;
+            product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
+            return true;
+        }
+
+        public async Task<bool> DecreaseStockAsync(int productId, int quantity)
+        {
+            var product = await _productRepository.GetByIdAsync(productId);
+            if (product == null || product.StockQuantity < quantity) return false;
+            product.StockQuantity -= quantity;
+            await _productRepository.UpdateAsync(product);
+            return true;
+        }
+
+        public async Task<int> GetStockLevelAsync(int productId)
+        {
+            var product = await _productRepository.GetByIdAsync(productId);
+            return product?.StockQuantity ?? 0;
         }
     }
 }

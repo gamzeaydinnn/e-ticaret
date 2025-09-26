@@ -50,5 +50,15 @@ namespace ECommerce.Business.Services.Managers
         {
             _userRepository.Delete(user);
         }
+
+        public Task UpdateAsync(User user)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task DeleteAsync(User user)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
