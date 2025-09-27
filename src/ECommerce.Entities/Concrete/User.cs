@@ -10,7 +10,12 @@ namespace ECommerce.Entities.Concrete
         public string? Address { get; set; }
         public string? City { get; set; }
 
+        //bu iki satırı sonradan ekledim
+        public string PasswordHash { get; set; }
+        public string Role { get; set; } = "User";
+
         // Navigation Properties
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
+        
     }
 }
