@@ -1,11 +1,17 @@
+using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Entities.Concrete;
+
 namespace ECommerce.Core.Interfaces
 {
-    public interface IMicroService
-    {
-        void UpdateProduct(ECommerce.Core.DTOs.Micro.MicroProductDto productDto);
-        void UpdateStock(ECommerce.Core.DTOs.Micro.MicroStockDto stockDto);
+	public interface IMicroService
+	{
+		void UpdateProduct(ECommerce.Core.DTOs.Micro.MicroProductDto productDto);
+		void UpdateStock(ECommerce.Core.DTOs.Micro.MicroStockDto stockDto);
+		Task<IEnumerable<MicroProductDto>> GetProductsAsync();
+        Task<IEnumerable<MicroStockDto>> GetStocksAsync();
+         Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders);
         // İhtiyaca göre diğer metodlar eklenebilir
-    }
+	}
 }
 /*Mikro ERP ile entegrasyon
 	• Mikro’nün resmi API dokümanı var; ürün, stok, fiyat ve satış verilerini senkronize etmek için endpoint’leri kullan. Yapılacaklar:
