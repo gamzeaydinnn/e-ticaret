@@ -92,17 +92,30 @@ namespace ECommerce.Business.Services.Managers
             await _productRepository.UpdateAsync(product);
         }
 
-        public async Task DeleteAsync(int id)
-        {
-            var product = await _productRepository.GetByIdAsync(id);
-            if (product == null) return; // null-safe kontrol
+public async Task DeleteAsync(int id)
+{
+    var product = await _context.Products.FindAsync(id);
+    if (product == null) return;
 
-            await _productRepository.Delete(product);
+    _context.Products.Remove(product);
+    await _context.SaveChangesAsync();
+}
+
+
+        // Admin panel için ek methodlar
+        public async Task<int> GetProductCountAsync()
+        {
+            return await _context.Products.CountAsync();
         }
 
-        public async Task<IEnumerable<ProductListDto>> SearchAsync(string searchTerm)
+        public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
         {
-            var products = await _productRepository.SearchAsync(searchTerm);
+            var products = await _context.Products
+                .OrderBy(p => p.Name)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToListAsync();
+
             return products.Select(p => new ProductListDto
             {
                 Id = p.Id,
@@ -113,6 +126,31 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = p.ImageUrl,
                 Brand = p.Brand
             });
+        }
+
+        public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
+        {
+            return await CreateAsync(productDto);
+        }
+
+        public async Task UpdateProductAsync(int id, ProductUpdateDto productDto)
+        {
+            await UpdateAsync(id, productDto);
+        }
+
+        public async Task DeleteProductAsync(int id)
+        {
+            await DeleteAsync(id);
+        }
+
+        public async Task UpdateStockAsync(int id, int stock)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product != null)
+            {
+                product.StockQuantity = stock;
+                await _context.SaveChangesAsync();
+            }
         }
 
         public Task<IEnumerable<ProductListDto>> GetProductsAsync(string query = null, int? categoryId = null, int page = 1, int pageSize = 20)

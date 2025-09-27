@@ -59,6 +59,12 @@ namespace ECommerce.Business.Services.Managers
         public Task DeleteAsync(User user)
         {
             throw new NotImplementedException();
+
+        }
+        public async Task<int> GetUserCountAsync()
+        {
+            var users = await _userRepository.GetAllAsync();
+            return users.Count();
         }
     }
 }

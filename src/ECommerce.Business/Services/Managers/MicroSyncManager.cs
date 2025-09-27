@@ -2,7 +2,6 @@ using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Entities.Concrete;
 using ECommerce.Core.Interfaces;
-using ECommerce.Infrastructure.Services;
 //Amaç: Mikro ERP ile veri senkronizasyonu (stok, ürün, satış).
 namespace ECommerce.Business.Services.Managers
 {

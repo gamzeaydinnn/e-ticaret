@@ -6,6 +6,9 @@ namespace ECommerce.Core.Interfaces
     {
         Task<IEnumerable<Product>> GetByCategoryIdAsync(int categoryId);
         Task<IEnumerable<Product>> SearchAsync(string searchTerm);
+        Task<Product> GetBySkuAsync(string sku);
+        
+        
 
         // Sync ve Async için eklemeler
         Task<Product?> GetByIdAsync(int id); 
