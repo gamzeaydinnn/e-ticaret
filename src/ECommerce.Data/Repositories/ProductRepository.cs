@@ -66,5 +66,10 @@ namespace ECommerce.Data.Repositories
         {
             throw new NotImplementedException();
         }
+
+        public Task<Product> GetBySkuAsync(string sku)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
