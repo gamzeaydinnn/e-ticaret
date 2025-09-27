@@ -1,6 +1,10 @@
 using ECommerce.Core.DTOs.Product;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Core.DTOs.Product;
+using ECommerce.Core.Interfaces;
+using ECommerce.Entities.Concrete;
+
 
 namespace ECommerce.Business.Services.Interfaces
 {

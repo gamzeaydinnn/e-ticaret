@@ -7,10 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ECommerce.Core\ECommerce.Core.csproj" />
-    <ProjectReference Include="..\ECommerce.Entities\ECommerce.Entities.csproj" />
-    <ProjectReference Include="..\ECommerce.Data\ECommerce.Data.csproj" />
-  </ItemGroup>
+  <ProjectReference Include="..\ECommerce.Core\ECommerce.Core.csproj" />
+  <ProjectReference Include="..\ECommerce.Data\ECommerce.Data.csproj" />
+  <ProjectReference Include="..\ECommerce.Entities\ECommerce.Entities.csproj" />
+  <ProjectReference Include="..\ECommerce.Infrastructure\ECommerce.Infrastructure.csproj" />
+</ItemGroup>
+
+
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
