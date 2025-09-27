@@ -118,6 +118,55 @@ public async Task DeleteAsync(int id)
 }
 
 
-        // Create, Update, Delete vs. burada olacak
+        // Admin panel için ek methodlar
+        public async Task<int> GetProductCountAsync()
+        {
+            return await _context.Products.CountAsync();
+        }
+
+        public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
+        {
+            var products = await _context.Products
+                .OrderBy(p => p.Name)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToListAsync();
+
+            return products.Select(p => new ProductListDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Price = p.Price,
+                StockQuantity = p.StockQuantity,
+                ImageUrl = p.ImageUrl,
+                Brand = p.Brand
+            });
+        }
+
+        public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
+        {
+            return await CreateAsync(productDto);
+        }
+
+        public async Task UpdateProductAsync(int id, ProductUpdateDto productDto)
+        {
+            await UpdateAsync(id, productDto);
+        }
+
+        public async Task DeleteProductAsync(int id)
+        {
+            await DeleteAsync(id);
+        }
+
+        public async Task UpdateStockAsync(int id, int stock)
+        {
+            var product = await _context.Products.FindAsync(id);
+            if (product != null)
+            {
+                product.StockQuantity = stock;
+                await _context.SaveChangesAsync();
+            }
+        }
     }
 }

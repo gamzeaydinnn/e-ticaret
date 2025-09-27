@@ -50,5 +50,11 @@ namespace ECommerce.Business.Services.Managers
         {
             _userRepository.Delete(user);
         }
+
+        public async Task<int> GetUserCountAsync()
+        {
+            var users = await _userRepository.GetAllAsync();
+            return users.Count();
+        }
     }
 }
