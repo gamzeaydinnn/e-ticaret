@@ -10,14 +10,12 @@ namespace ECommerce.Data.Context
         public ECommerceDbContext(DbContextOptions<ECommerceDbContext> options) : base(options)
         {
         }
-
         // DbSets
         public virtual DbSet<Category> Categories { get; set; }
         public virtual DbSet<Product> Products { get; set; }
         public virtual DbSet<Order> Orders { get; set; }
         public virtual DbSet<OrderItem> OrderItems { get; set; }
         public virtual DbSet<CartItem> CartItems { get; set; }
-
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -115,7 +113,6 @@ namespace ECommerce.Data.Context
             // Seed Data
             SeedData(modelBuilder);
         }
-
         private void SeedData(ModelBuilder modelBuilder)
         {
             // Use fixed timestamp to avoid migration diffs

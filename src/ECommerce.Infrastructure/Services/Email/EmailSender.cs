@@ -1,3 +1,4 @@
+using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Net.Mail;
@@ -5,16 +6,7 @@ using System.Threading.Tasks;
 
 namespace ECommerce.Infrastructure.Services.Email
 {
-    public class EmailSettings
-    {
-        public string SmtpHost { get; set; } = string.Empty;
-        public int SmtpPort { get; set; }
-        public string SmtpUser { get; set; } = string.Empty;
-        public string SmtpPass { get; set; } = string.Empty;
-        public string FromAddress { get; set; } = string.Empty;
-        public string FromName { get; set; } = string.Empty;
-    }
-
+    
     public class EmailSender
     {
         private readonly EmailSettings _settings;
@@ -29,7 +21,7 @@ namespace ECommerce.Infrastructure.Services.Email
             try
             {
                 using var message = new MailMessage();
-                message.From = new MailAddress(_settings.FromAddress, _settings.FromName);
+                message.From = new MailAddress(_settings.FromEmail, _settings.FromName);
                 message.To.Add(new MailAddress(toEmail));
                 message.Subject = subject;
                 message.Body = body;

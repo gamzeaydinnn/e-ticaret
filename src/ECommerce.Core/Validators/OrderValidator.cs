@@ -6,7 +6,7 @@ namespace ECommerce.Core.Validators
         public static bool Validate(OrderCreateDto dto, out string error)
         {
             error = null;
-            if (dto.Items == null || dto.Items.Count == 0) { error = "Sipariş öğesi bulunmuyor"; return false; }
+            if (dto.OrderItems == null || dto.OrderItems.Count == 0) { error = "Sipariş öğesi bulunmuyor"; return false; }
             return true;
         }
     }
