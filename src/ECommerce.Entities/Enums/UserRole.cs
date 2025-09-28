@@ -5,5 +5,6 @@ namespace ECommerce.Entities.Enums
         Admin,
         User,
         Market
+        
     }
 }

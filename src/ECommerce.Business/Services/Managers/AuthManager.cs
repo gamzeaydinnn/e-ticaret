@@ -1,23 +1,26 @@
-//using ECommerce.Core.Entities.Concrete;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using ECommerce.Data.Context;
-using BCrypt.Net;
 using ECommerce.Entities.Concrete;
-using ECommerce.Business.Helpers;
+using ECommerce.Core.Helpers; // <- Yeni JwtTokenHelper burada
+using ECommerce.Core.DTOs.Auth;
+using ECommerce.Business.Services.Interfaces; // <- LoginDto ve RegisterDto için
 
 public class AuthManager : IAuthService
 {
     private readonly ECommerceDbContext _context;
-    private readonly JwtTokenGenerator _jwtTokenGenerator;
+    private readonly IConfiguration _config;
 
-    public AuthManager(ECommerceDbContext context, JwtTokenGenerator jwtTokenGenerator)
+    public AuthManager(ECommerceDbContext context, IConfiguration config)
     {
         _context = context;
-        _jwtTokenGenerator = jwtTokenGenerator;
+        _config = config;
     }
 
     public async Task<string> RegisterAsync(RegisterDto dto)
@@ -36,7 +39,7 @@ public class AuthManager : IAuthService
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        return _jwtTokenGenerator.GenerateToken(user);
+        return GenerateJwtToken(user);
     }
 
     public async Task<string> LoginAsync(LoginDto dto)
@@ -45,6 +48,19 @@ public class AuthManager : IAuthService
         if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             throw new Exception("Invalid credentials");
 
-        return _jwtTokenGenerator.GenerateToken(user);
+        return GenerateJwtToken(user);
+    }
+
+    private string GenerateJwtToken(User user)
+    {
+        return JwtTokenHelper.GenerateToken(
+            user.Id,
+            user.Email,
+            user.Role,
+            _config["Jwt:Key"],
+            _config["Jwt:Issuer"],
+            _config["Jwt:Audience"],
+            expiresMinutes: 120 // İstersen süresini değiştirebilirsin
+        );
     }
 }

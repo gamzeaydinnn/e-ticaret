@@ -8,5 +8,8 @@ namespace ECommerce.Entities.Concrete
         public DateTime CreatedDate { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedDate { get; set; }
         public bool IsActive { get; set; } = true;
+    
+        DateTime CreatedAt { get; set; }
+        DateTime? UpdatedAt { get; set; }
     }
 }

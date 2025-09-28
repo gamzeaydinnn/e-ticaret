@@ -6,6 +6,9 @@ namespace ECommerce.Entities.Concrete
         public int ProductId { get; set; }
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        public int Id { get; set; }
+        public System.DateTime CreatedAt { get; set; } = System.DateTime.UtcNow;
+        public System.DateTime? UpdatedAt { get; set; }
 
         // Navigation Properties
         public virtual Order? Order { get; set; }

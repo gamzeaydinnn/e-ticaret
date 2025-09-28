@@ -13,8 +13,10 @@ namespace ECommerce.Entities.Concrete
         public string Brand { get; set; } = string.Empty;
         public int CategoryId { get; set; }
         public virtual Category Category { get; set; } = null!;
-
-
+        public int Id { get; set; }
+        public string Currency { get; set; } = "TRY";
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
 
         // Navigation
         public virtual ICollection<Category> Categories { get; set; } = new HashSet<Category>();

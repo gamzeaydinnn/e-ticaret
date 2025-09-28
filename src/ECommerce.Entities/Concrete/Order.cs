@@ -12,8 +12,12 @@ namespace ECommerce.Entities.Concrete
         public string ShippingCity { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
         public decimal TotalAmount { get; set; } = 0m;
-
-        public OrderStatus Status { get; set; } = OrderStatus.Pending;
+        public int Id { get; set; }
+        public string Currency { get; set; } = "TRY";
+        public string Status { get; set; } = "Pending";
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? UpdatedAt { get; set; }
+        public ICollection<OrderItem> Items { get; set; }
 
         // Navigation Properties
         public virtual User? User { get; set; }
