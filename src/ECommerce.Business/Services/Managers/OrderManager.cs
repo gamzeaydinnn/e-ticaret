@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-
+using System;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -29,16 +29,7 @@ namespace ECommerce.Business.Services.Managers
 
             var orders = await query.ToListAsync();
 
-            return orders.Select(o => new OrderListDto
-            {
-                Id = o.Id,
-                UserId = o.UserId,
-                TotalPrice = o.TotalAmount,
-                Status = o.Status.ToString(),
-                OrderDate = o.OrderDate,
-                TotalItems = o.OrderItems.Sum(oi => oi.Quantity)
-                
-            });
+            return orders.Select(o => MapToDto(o));
         }
 
         public async Task<OrderListDto?> GetByIdAsync(int id)
@@ -48,16 +39,7 @@ namespace ECommerce.Business.Services.Managers
                 .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.Id == id);
 
-            if (order == null) return null;
-
-            return new OrderListDto
-            {
-                Id = order.Id,
-                UserId = order.UserId,
-                TotalPrice = order.TotalAmount,
-                Status = order.Status.ToString(),
-                OrderDate = order.OrderDate
-            };
+            return order != null ? MapToDto(order) : null;
         }
 
         public async Task<OrderListDto> CreateAsync(OrderCreateDto dto)
@@ -65,9 +47,9 @@ namespace ECommerce.Business.Services.Managers
             var order = new Order
             {
                 UserId = dto.UserId,
-                TotalAmount = dto.TotalPrice,
+                TotalPrice = dto.TotalPrice,
                 Status = OrderStatus.Pending,
-                OrderDate = System.DateTime.UtcNow,
+                OrderDate = DateTime.UtcNow,
                 OrderItems = dto.OrderItems.Select(i => new OrderItem
                 {
                     ProductId = i.ProductId,
@@ -79,7 +61,7 @@ namespace ECommerce.Business.Services.Managers
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            return await GetByIdAsync(order.Id) ?? throw new System.Exception("Sipariş oluşturulamadı.");
+            return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");
         }
 
         public async Task UpdateAsync(int id, OrderUpdateDto dto)
@@ -87,14 +69,13 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return;
 
-            // Status string'ten enum'a çevrilmeli
-            if (System.Enum.TryParse<OrderStatus>(dto.Status, out var statusEnum))
+            // DTO'dan string -> enum
+            if (Enum.TryParse<OrderStatus>(dto.Status, out var statusEnum))
             {
                 order.Status = statusEnum;
             }
 
-            order.TotalAmount = dto.TotalPrice;
-
+            order.TotalPrice = dto.TotalPrice;
             await _context.SaveChangesAsync();
         }
 
@@ -112,7 +93,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return false;
 
-            if (System.Enum.TryParse<OrderStatus>(newStatus, out var statusEnum))
+            if (Enum.TryParse<OrderStatus>(newStatus, out var statusEnum))
             {
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
@@ -122,7 +103,6 @@ namespace ECommerce.Business.Services.Managers
             return false;
         }
 
-        // Admin panel için ek methodlar
         public async Task<int> GetOrderCountAsync()
         {
             return await _context.Orders.CountAsync();
@@ -131,16 +111,14 @@ namespace ECommerce.Business.Services.Managers
         public async Task<int> GetTodayOrderCountAsync()
         {
             var today = DateTime.UtcNow.Date;
-            return await _context.Orders
-                .Where(o => o.OrderDate.Date == today)
-                .CountAsync();
+            return await _context.Orders.CountAsync(o => o.OrderDate.Date == today);
         }
 
         public async Task<decimal> GetTotalRevenueAsync()
         {
             return await _context.Orders
                 .Where(o => o.Status == OrderStatus.Delivered)
-                .SumAsync(o => o.TotalAmount);
+                .SumAsync(o => o.TotalPrice);
         }
 
         public async Task<IEnumerable<OrderListDto>> GetAllOrdersAsync(int page = 1, int size = 20)
@@ -153,20 +131,13 @@ namespace ECommerce.Business.Services.Managers
                 .Take(size)
                 .ToListAsync();
 
-            return orders.Select(o => new OrderListDto
-            {
-                Id = o.Id,
-                UserId = o.UserId,
-                TotalPrice = o.TotalAmount,
-                Status = o.Status.ToString(),
-                OrderDate = o.OrderDate
-            });
+            return orders.Select(o => MapToDto(o));
         }
 
         public async Task UpdateOrderStatusAsync(int id, string status)
         {
             var order = await _context.Orders.FindAsync(id);
-            if (order != null && System.Enum.TryParse<OrderStatus>(status, out var statusEnum))
+            if (order != null && Enum.TryParse<OrderStatus>(status, out var statusEnum))
             {
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
@@ -182,20 +153,84 @@ namespace ECommerce.Business.Services.Managers
                 .Take(count)
                 .ToListAsync();
 
-            return orders.Select(o => new OrderListDto
-            {
-                Id = o.Id,
-                UserId = o.UserId,
-                TotalPrice = o.TotalAmount,
-                Status = o.Status.ToString(),
-                OrderDate = o.OrderDate
-            });
+            return orders.Select(o => MapToDto(o));
         }
 
         public async Task<OrderListDto> GetOrderByIdAsync(int id)
         {
             var result = await GetByIdAsync(id);
-            return result ?? throw new System.Exception("Sipariş bulunamadı.");
+            return result ?? throw new Exception("Sipariş bulunamadı.");
         }
+
+        // --------------------------
+        // Helper method: Order -> DTO
+        private OrderListDto MapToDto(Order order)
+        {
+            return new OrderListDto
+            {
+                Id = order.Id,
+                UserId = order.UserId,
+                TotalPrice = order.TotalPrice,
+                Status = order.Status.ToString(),
+                OrderDate = order.OrderDate,
+                TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0
+            };
+        }
+        //stok rezervasyonu + ödeme + sipariş kaydı
+        public async Task<OrderListDto> CheckoutAsync(OrderCreateDto dto)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(); // transaction başlat
+
+            try
+            {
+                // 1. Stok kontrol ve düşme
+                foreach (var item in dto.OrderItems)
+                {
+                    var product = await _context.Products.FindAsync(item.ProductId);
+                    if (product == null)
+                        throw new Exception($"Ürün bulunamadı: {item.ProductId}");
+
+                    if (product.StockQuantity < item.Quantity)
+                        throw new Exception($"Yetersiz stok: {product.Name}");
+
+                    product.StockQuantity -= item.Quantity; // stok düş
+                }
+
+                // 2. Siparişi oluştur
+                var order = new Order
+                {
+                    UserId = dto.UserId,
+                    TotalPrice = dto.TotalPrice,
+                    Status = OrderStatus.Pending,
+                    OrderDate = DateTime.UtcNow,
+                    OrderItems = dto.OrderItems.Select(i => new OrderItem
+                    {
+                        ProductId = i.ProductId,
+                        Quantity = i.Quantity,
+                        UnitPrice = i.UnitPrice
+                    }).ToList()
+                };
+
+                _context.Orders.Add(order);
+
+                // 3. Ödeme işlemi (örnek olarak bir ödeme servisi çağrısı)
+                var paymentSuccess = true; // ödeme servisi çağrılır, sonucu true/false döner
+                if (!paymentSuccess)
+                    throw new Exception("Ödeme başarısız");
+
+                await _context.SaveChangesAsync();
+
+                // 4. Transaction commit
+                await transaction.CommitAsync();
+
+                return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");
+            }
+            catch
+            {
+                await transaction.RollbackAsync(); // hata olursa geri al
+                throw;
+            }
+        }
+
     }
 }

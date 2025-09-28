@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using ECommerce.Core.Interfaces;
-
+//Amaç: Mikro ERP ile stok senkronizasyonunu otomatikleştirmek.
 namespace ECommerce.Infrastructure.Services.BackgroundJobs
 {
     public class StockSyncJob : IHostedService

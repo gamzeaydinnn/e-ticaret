@@ -14,7 +14,9 @@ namespace ECommerce.Entities.Concrete
         public decimal TotalPrice{ get; set; } = 0m;
         public int Id { get; set; }
         public string Currency { get; set; } = "TRY";
-        public string Status { get; set; } = "Pending";
+        //public string Status { get; set; } = "Pending";
+        public OrderStatus Status { get; set; } = OrderStatus.Pending;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
         public ICollection<OrderItem> Items { get; set; }

@@ -17,22 +17,60 @@ namespace ECommerce.Business.Services.Managers
             _productRepository = productRepository;
         }
 
-        public async Task<ProductListDto?> GetByIdAsync(int id)
-        {
-            var product = await _productRepository.GetByIdAsync(id);
-            if (product == null) return null;
+        public async Task<IEnumerable<ProductListDto>> GetProductsAsync(
+    string? query = null,
+    int? categoryId = null,
+    decimal? minPrice = null,
+    decimal? maxPrice = null,
+    bool? inStock = null,
+    int page = 1,
+    int pageSize = 20)
+{
+    // Tüm ürünleri çek
+    var products = await _productRepository.GetAllAsync();
 
-            return new ProductListDto
-            {
-                Id = product.Id,
-                Name = product.Name,
-                Description = product.Description,
-                Price = product.Price,
-                StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
-                Brand = product.Brand
-            };
-        }
+    // Filtreleme
+    if (!string.IsNullOrEmpty(query))
+        products = products.Where(p =>
+            p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            p.Description.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+    if (categoryId.HasValue)
+        products = products.Where(p => p.CategoryId == categoryId.Value);
+
+    if (minPrice.HasValue)
+        products = products.Where(p => p.Price >= minPrice.Value);
+
+    if (maxPrice.HasValue)
+        products = products.Where(p => p.Price <= maxPrice.Value);
+
+    if (inStock.HasValue)
+    {
+        if (inStock.Value)
+            products = products.Where(p => p.StockQuantity > 0);
+        else
+            products = products.Where(p => p.StockQuantity == 0);
+    }
+
+    // Pagination
+    products = products
+        .OrderBy(p => p.Name)
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize);
+
+    // DTO dönüşümü
+    return products.Select(p => new ProductListDto
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Description = p.Description,
+        Price = p.Price,
+        StockQuantity = p.StockQuantity,
+        ImageUrl = p.ImageUrl,
+        Brand = p.Brand
+    });
+}
+
 
         public async Task<IEnumerable<ProductListDto>> GetAllAsync()
         {
@@ -94,39 +132,38 @@ namespace ECommerce.Business.Services.Managers
 
 public async Task DeleteAsync(int id)
 {
-    var product = await _context.Products.FindAsync(id);
+    var product = await _productRepository.GetByIdAsync(id);
     if (product == null) return;
 
-    _context.Products.Remove(product);
-    await _context.SaveChangesAsync();
+    await _productRepository.DeleteAsync(product);
 }
 
 
         // Admin panel için ek methodlar
         public async Task<int> GetProductCountAsync()
-        {
-            return await _context.Products.CountAsync();
-        }
+{
+    var allProducts = await _productRepository.GetAllAsync();
+    return allProducts.Count();
+}
 
         public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
-        {
-            var products = await _context.Products
-                .OrderBy(p => p.Name)
-                .Skip((page - 1) * size)
-                .Take(size)
-                .ToListAsync();
+{
+    var products = (await _productRepository.GetAllAsync())
+        .OrderBy(p => p.Name)
+        .Skip((page - 1) * size)
+        .Take(size);
 
-            return products.Select(p => new ProductListDto
-            {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.Description,
-                Price = p.Price,
-                StockQuantity = p.StockQuantity,
-                ImageUrl = p.ImageUrl,
-                Brand = p.Brand
-            });
-        }
+    return products.Select(p => new ProductListDto
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Description = p.Description,
+        Price = p.Price,
+        StockQuantity = p.StockQuantity,
+        ImageUrl = p.ImageUrl,
+        Brand = p.Brand
+    });
+}
 
         public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
         {
@@ -144,16 +181,21 @@ public async Task DeleteAsync(int id)
         }
 
         public async Task UpdateStockAsync(int id, int stock)
-        {
-            var product = await _context.Products.FindAsync(id);
-            if (product != null)
-            {
-                product.StockQuantity = stock;
-                await _context.SaveChangesAsync();
-            }
-        }
+{
+    var product = await _productRepository.GetByIdAsync(id);
+    if (product != null)
+    {
+        product.StockQuantity = stock;
+        await _productRepository.UpdateAsync(product);
+    }
+}
 
         public Task<IEnumerable<ProductListDto>> GetProductsAsync(string query = null, int? categoryId = null, int page = 1, int pageSize = 20)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<ProductListDto?> GetByIdAsync(int id)
         {
             throw new NotImplementedException();
         }

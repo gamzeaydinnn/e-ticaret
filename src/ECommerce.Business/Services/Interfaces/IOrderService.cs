@@ -36,6 +36,9 @@ namespace ECommerce.Business.Services.Interfaces
         /// Sipariş durumunu değiştir
         /// </summary>
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
+        Task<OrderListDto> CheckoutAsync(OrderCreateDto dto);
+
+
 
         
         // Admin methods
