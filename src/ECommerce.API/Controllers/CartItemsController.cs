@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Core.DTOs.Cart;
+using ECommerce.Core.Validators;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -28,17 +30,40 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<CartItem>> CreateCartItem(CartItem item)
+        public async Task<ActionResult<CartItem>> CreateCartItem([FromBody] CartItemDto dto)
         {
+            // DTO validasyonu
+            if (!CartValidator.Validate(dto, out string error))
+                return BadRequest(new { message = error });
+
+            // Entity oluşturma
+            var item = new CartItem
+            {
+                ProductId = dto.ProductId,
+                Quantity = dto.Quantity,
+                UserId = 0,          // giriş yoksa örnek değer
+                CartToken = "guest"  // örnek guest token
+            };
+
             _context.CartItems.Add(item);
             await _context.SaveChangesAsync();
             return CreatedAtAction(nameof(GetCartItem), new { id = item.Id }, item);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateCartItem(int id, CartItem item)
+        public async Task<IActionResult> UpdateCartItem(int id, [FromBody] CartItemDto dto)
         {
-            if (id != item.Id) return BadRequest();
+            var item = await _context.CartItems.FindAsync(id);
+            if (item == null) return NotFound();
+
+            // DTO validasyonu
+            if (!CartValidator.Validate(dto, out string error))
+                return BadRequest(new { message = error });
+
+            // Entity güncelleme
+            item.ProductId = dto.ProductId;
+            item.Quantity = dto.Quantity;
+
             _context.Entry(item).State = EntityState.Modified;
             await _context.SaveChangesAsync();
             return NoContent();

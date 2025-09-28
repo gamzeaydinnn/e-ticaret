@@ -1,3 +1,4 @@
+using ECommerce.Core.DTOs.User;
 namespace ECommerce.Core.Validators
 {
     using ECommerce.Core.DTOs.User;

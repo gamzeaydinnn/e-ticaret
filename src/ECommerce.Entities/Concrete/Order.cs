@@ -11,7 +11,7 @@ namespace ECommerce.Entities.Concrete
         public string ShippingAddress { get; set; } = string.Empty;
         public string ShippingCity { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-        public decimal TotalAmount { get; set; } = 0m;
+        public decimal TotalPrice{ get; set; } = 0m;
         public int Id { get; set; }
         public string Currency { get; set; } = "TRY";
         public string Status { get; set; } = "Pending";

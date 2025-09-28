@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Product;
+using ECommerce.Infrastructure.Services.BackgroundJobs;
 
 namespace ECommerce.API.Controllers.Admin;
 
@@ -9,10 +10,12 @@ namespace ECommerce.API.Controllers.Admin;
 public class AdminProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly StockSyncJob _stockSyncJob;
 
-    public AdminProductsController(IProductService productService)
+    public AdminProductsController(IProductService productService, StockSyncJob stockSyncJob)
     {
         _productService = productService;
+        _stockSyncJob = stockSyncJob;
     }
 
     [HttpGet]
@@ -48,5 +51,12 @@ public class AdminProductsController : ControllerBase
     {
         await _productService.UpdateStockAsync(id, stock);
         return NoContent();
+    }
+
+    [HttpPost("sync-stocks")]
+    public async Task<IActionResult> SyncStocks()
+    {
+        await _stockSyncJob.RunOnce();
+        return Ok("Stok senkronizasyonu başlatıldı.");
     }
 }

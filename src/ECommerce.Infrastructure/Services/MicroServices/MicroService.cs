@@ -3,6 +3,7 @@ using System.Text.Json;
 using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Entities.Concrete;
 using ECommerce.Core.Interfaces;
+using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Infrastructure.Services.Micro
 {
@@ -55,5 +56,6 @@ namespace ECommerce.Infrastructure.Services.Micro
         {
             // Mikro ERP stok güncellemesi
         }
+
     }
 }

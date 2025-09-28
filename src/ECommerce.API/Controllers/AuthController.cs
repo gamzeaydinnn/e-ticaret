@@ -1,3 +1,5 @@
+using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.DTOs.Auth;
 using Microsoft.AspNetCore.Mvc;
 
 [ApiController]

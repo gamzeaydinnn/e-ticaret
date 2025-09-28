@@ -8,7 +8,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/users")]
-    [Authorize(Roles = "Admin")]  // sadece admin erişebilir
+    [Authorize(Roles = "Admin")]
     public class AdminUsersController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -43,11 +43,26 @@ namespace ECommerce.API.Controllers.Admin
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Password = dto.Password
-                // Diğer alanları istersen ekleyebilirsin
             };
 
             await _userService.AddAsync(user);
-            return Ok(user);
+            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UserUpdateDto dto)
+        {
+            var user = await _userService.GetByIdAsync(id);
+            if (user == null)
+                return NotFound();
+
+            user.FirstName = dto.FirstName;
+            user.LastName = dto.LastName;
+            user.Email = dto.Email;
+            // şifre güncelleme opsiyonel olarak eklenebilir
+
+            await _userService.UpdateAsync(user);
+            return NoContent();
         }
 
         [HttpDelete("{id}")]
