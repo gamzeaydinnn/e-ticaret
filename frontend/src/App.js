@@ -32,7 +32,7 @@ function Header() {
                 <div className="d-flex align-items-center">
                   <div className="logo-container me-3">
                     <img
-                      src="/golkoy-logo.png"
+                      src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
                         height: "50px",
@@ -113,22 +113,40 @@ function Header() {
         </div>
       </header>
 
-      {/* Kategori Navigasyonu - En Üstte */}
-      <nav className="top-categories-nav bg-white border-bottom">
-        <div className="container-fluid px-4">
-          <div className="categories-simple py-2">
-            <div className="d-flex flex-wrap justify-content-start gap-4">
-              <button className="category-link active">KATEGORİLER</button>
-              <button className="category-link">MEYVE & SEBZE</button>
-              <button className="category-link">ET & TAVUK & BALIK</button>
-              <button className="category-link">SÜT ÜRÜNLERİ</button>
-              <button className="category-link">TEMEL GIDA</button>
-              <button className="category-link">İÇECEKLER</button>
-              <button className="category-link">ATIŞTIRMALIK</button>
-              <button className="category-link">TEMİZLİK</button>
-              <button className="category-link">FAVORİLERİM</button>
-              <button className="category-link">KAMPANYALAR</button>
-            </div>
+      {/* Professional Single Line Category Navigation */}
+      <nav className="single-line-categories">
+        <div className="container-fluid">
+          <div className="category-scroll-container">
+            <button className="category-btn active" type="button">
+              KATEGORİLER
+            </button>
+            <button className="category-btn" type="button">
+              MEYVE &amp; SEBZE
+            </button>
+            <button className="category-btn" type="button">
+              ET &amp; TAVUK &amp; BALIK
+            </button>
+            <button className="category-btn" type="button">
+              SÜT ÜRÜNLERİ
+            </button>
+            <button className="category-btn" type="button">
+              TEMEL GIDA
+            </button>
+            <button className="category-btn" type="button">
+              İÇECEKLER
+            </button>
+            <button className="category-btn" type="button">
+              ATIŞTIRMALIK
+            </button>
+            <button className="category-btn" type="button">
+              TEMİZLİK
+            </button>
+            <button className="category-btn" type="button">
+              FAVORİLERİM
+            </button>
+            <button className="category-btn" type="button">
+              KAMPANYALAR
+            </button>
           </div>
         </div>
       </nav>

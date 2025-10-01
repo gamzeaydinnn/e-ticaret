@@ -1841,49 +1841,58 @@
   }
 }
 
-/* Top Kategori Navigasyonu */
-.top-categories-nav {
+/* Professional Single Line Category Navigation */
+.single-line-categories {
   position: sticky;
   top: 0;
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(90deg, #ff6b35, #ff8c00, #ffa500);
+  box-shadow: 0 2px 15px rgba(255, 107, 53, 0.2);
+  overflow: hidden;
 }
 
-.categories-simple {
-  padding: 10px 0;
+.category-scroll-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 20px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.category-link {
-  background: none;
-  border: none;
-  color: #6c757d;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 8px 0;
-  text-decoration: none;
-  transition: color 0.3s ease;
+.category-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.category-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 20px;
+  color: white;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  white-space: nowrap;
   cursor: pointer;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.category-link:hover {
-  color: #495057;
+.category-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.category-link.active {
-  color: #212529;
-  font-weight: 600;
-  position: relative;
-}
-
-.category-link.active::after {
-  content: "";
-  position: absolute;
-  bottom: -10px;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background-color: #ff8c00;
+.category-btn.active {
+  background: white;
+  color: #ff6b35;
+  font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
 }
 
 /* Responsive kategori navigasyonu */
