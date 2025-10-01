@@ -125,6 +125,7 @@ namespace ECommerce.Data.Context
                     Id = 1,
                     Name = "Elektronik",
                     Description = "Elektronik ürünler",
+                    Slug = "elektronik",
                     SortOrder = 1,
                     CreatedDate = seededAt
                 },
@@ -133,6 +134,7 @@ namespace ECommerce.Data.Context
                     Id = 2,
                     Name = "Giyim",
                     Description = "Giyim ürünleri",
+                    Slug = "giyim",
                     SortOrder = 2,
                     CreatedDate = seededAt
                 }

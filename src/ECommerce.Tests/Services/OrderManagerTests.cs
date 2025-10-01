@@ -24,7 +24,14 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var orderManager = new OrderManager(context);
             
-            var user = new User { Email = "test@test.com", UserName = "testuser" };
+            var user = new User 
+            { 
+                Email = "test@test.com", 
+                UserName = "testuser",
+                FullName = "Test User",
+                Password = "testpassword123",
+                PasswordHash = "hashedpassword123"
+            };
             context.Users.Add(user);
             await context.SaveChangesAsync();
 
@@ -43,13 +50,13 @@ namespace ECommerce.Tests.Services
         [InlineData(0, 100, false)]
         [InlineData(1, 0, false)]
         [InlineData(1, -50, false)]
-        public void ValidateOrder_ShouldReturnExpectedResult(int userId, decimal totalAmount, bool expectedValid)
+        public void ValidateOrder_ShouldReturnExpectedResult(int userId, decimal totalPrice, bool expectedValid)
         {
             // Arrange
-            var order = new Order { UserId = userId, TotalAmount = totalAmount };
+            var order = new Order { UserId = userId, TotalPrice = totalPrice };
 
             // Act
-            bool isValid = order.UserId > 0 && order.TotalAmount > 0;
+            bool isValid = order.UserId > 0 && order.TotalPrice > 0;
 
             // Assert
             Assert.Equal(expectedValid, isValid);

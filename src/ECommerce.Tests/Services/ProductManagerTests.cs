@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Data.Repositories;
 using System.Threading.Tasks;
 using System.Linq;
 
@@ -33,10 +34,11 @@ namespace ECommerce.Tests.Services
             context.Products.AddRange(products);
             await context.SaveChangesAsync();
 
-            var productManager = new ProductManager(context);
+            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
+            var productManager = new ProductManager(productRepository);
 
             // Act
-            var result = await productManager.GetProductsAsync();
+            var result = await productManager.GetProductsAsync(null, null, null, null, null, 1, 20);
 
             // Assert
             Assert.NotNull(result);
@@ -55,7 +57,8 @@ namespace ECommerce.Tests.Services
             context.Products.Add(product);
             await context.SaveChangesAsync();
 
-            var productManager = new ProductManager(context);
+            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
+            var productManager = new ProductManager(productRepository);
 
             // Act
             var result = await productManager.GetByIdAsync(product.Id);
@@ -71,7 +74,8 @@ namespace ECommerce.Tests.Services
         {
             // Arrange
             using var context = GetInMemoryDbContext();
-            var productManager = new ProductManager(context);
+            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
+            var productManager = new ProductManager(productRepository);
 
             // Act
             var result = await productManager.GetByIdAsync(999);
