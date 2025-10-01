@@ -1,0 +1,1 @@
+//teslimat ataması.

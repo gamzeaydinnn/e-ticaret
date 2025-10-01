@@ -28,20 +28,20 @@ namespace ECommerce.Data.Repositories
 
         public virtual async Task AddAsync(T entity)
         {
-            entity.CreatedDate = DateTime.UtcNow;
+            entity.CreatedAt = DateTime.UtcNow;
             await _dbSet.AddAsync(entity);
         }
 
         public virtual void Update(T entity)
         {
-            entity.UpdatedDate = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(entity);
         }
 
         public virtual void Delete(T entity)
         {
             entity.IsActive = false;
-            entity.UpdatedDate = DateTime.UtcNow;
+            entity.UpdatedAt = DateTime.UtcNow;
         }
 
         public virtual void HardDelete(T entity)

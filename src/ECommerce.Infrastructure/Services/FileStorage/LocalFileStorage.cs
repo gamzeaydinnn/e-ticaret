@@ -1,49 +1,45 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using ECommerce.Core.Interfaces;
 
 namespace ECommerce.Infrastructure.Services.FileStorage
 {
-    public class LocalFileStorage
+    public class LocalFileStorage : IFileStorage
     {
-        private readonly string _basePath;
+        private readonly string _rootPath;
 
-        public LocalFileStorage(string basePath)
+        public LocalFileStorage(string rootPath)
         {
-            _basePath = basePath;
-
-            if (!Directory.Exists(_basePath))
-            {
-                Directory.CreateDirectory(_basePath);
-            }
+            _rootPath = Path.Combine(rootPath, "uploads");
+            if (!Directory.Exists(_rootPath))
+                Directory.CreateDirectory(_rootPath);
         }
 
-        /// <summary>
-        /// Dosya kaydeder ve kaydedilen dosyanın yolunu döner.
-        /// </summary>
-        public async Task<string> SaveFileAsync(byte[] fileBytes, string fileName, string folder = "")
+        public async Task<string> UploadAsync(Stream fileStream, string fileName, string contentType)
         {
-            string folderPath = string.IsNullOrEmpty(folder) ? _basePath : Path.Combine(_basePath, folder);
-
-            if (!Directory.Exists(folderPath))
-                Directory.CreateDirectory(folderPath);
-
-            string fullPath = Path.Combine(folderPath, fileName);
-
-            await File.WriteAllBytesAsync(fullPath, fileBytes);
-
-            return fullPath;
+            var filePath = Path.Combine(_rootPath, fileName);
+            using (var file = File.Create(filePath))
+            {
+                await fileStream.CopyToAsync(file);
+            }
+            return $"/uploads/{fileName}";
         }
 
-        /// <summary>
-        /// Dosyayı siler.
-        /// </summary>
-        public void DeleteFile(string path)
+        public Task DeleteAsync(string fileUrl)
         {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
+            var filePath = Path.Combine(_rootPath, Path.GetFileName(fileUrl));
+            if (File.Exists(filePath))
+                File.Delete(filePath);
+            return Task.CompletedTask;
+        }
+
+        public Task<Stream> DownloadAsync(string fileUrl)
+        {
+            var filePath = Path.Combine(_rootPath, Path.GetFileName(fileUrl));
+            return Task.FromResult<Stream>(File.OpenRead(filePath));
         }
     }
-}
+}//		○ FileStorage (Local, S3, Azure Blob) implementasyonu.
+
+

@@ -7,3 +7,4 @@ namespace ECommerce.Core.Interfaces
         Task<int> GetStockLevelAsync(int productId);
     }
 }
+//stok artır/azalt.

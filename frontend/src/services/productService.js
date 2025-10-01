@@ -7,3 +7,5 @@ export const getProductById = (id) =>
   api.get(`${base}/${id}`).then((r) => r.data);
 export const searchProducts = (q) =>
   api.get(`${base}/search`, { params: { q } }).then((r) => r.data);
+
+//— ekle getProducts, getProduct, createProduct fonksiyonları

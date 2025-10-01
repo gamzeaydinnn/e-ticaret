@@ -38,6 +38,10 @@ namespace ECommerce.Data.Migrations
                     LastName = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
                     Address = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
                     City = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    Role = table.Column<string>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     UserName = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
                     NormalizedUserName = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
                     Email = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
@@ -175,10 +179,11 @@ namespace ECommerce.Data.Migrations
                     ShippingAddress = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
                     ShippingCity = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
                     OrderDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "TEXT", nullable: false),
+                    TotalPrice = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Currency = table.Column<string>(type: "TEXT", nullable: false),
                     Status = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedDate = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -201,10 +206,11 @@ namespace ECommerce.Data.Migrations
                     UserId = table.Column<int>(type: "INTEGER", nullable: false),
                     ProductId = table.Column<int>(type: "INTEGER", nullable: false),
                     Quantity = table.Column<int>(type: "INTEGER", nullable: false),
+                    CartToken = table.Column<string>(type: "TEXT", nullable: true),
                     ProductId1 = table.Column<int>(type: "INTEGER", nullable: true),
-                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedDate = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -228,10 +234,11 @@ namespace ECommerce.Data.Migrations
                     ImageUrl = table.Column<string>(type: "TEXT", nullable: true),
                     ParentId = table.Column<int>(type: "INTEGER", nullable: true),
                     SortOrder = table.Column<int>(type: "INTEGER", nullable: false),
+                    Slug = table.Column<string>(type: "TEXT", nullable: false),
                     ProductId = table.Column<int>(type: "INTEGER", nullable: true),
-                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedDate = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -251,17 +258,18 @@ namespace ECommerce.Data.Migrations
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Slug = table.Column<string>(type: "TEXT", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false),
+                    CategoryId = table.Column<int>(type: "INTEGER", nullable: false),
+                    Brand = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
+                    Slug = table.Column<string>(type: "TEXT", nullable: false),
                     Price = table.Column<decimal>(type: "TEXT", nullable: false),
                     StockQuantity = table.Column<int>(type: "INTEGER", nullable: false),
                     ImageUrl = table.Column<string>(type: "TEXT", nullable: false),
                     SKU = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    Brand = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    CategoryId = table.Column<int>(type: "INTEGER", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedDate = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Currency = table.Column<string>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -284,9 +292,10 @@ namespace ECommerce.Data.Migrations
                     ProductId = table.Column<int>(type: "INTEGER", nullable: false),
                     Quantity = table.Column<int>(type: "INTEGER", nullable: false),
                     UnitPrice = table.Column<decimal>(type: "TEXT", nullable: false),
-                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedDate = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    OrderId1 = table.Column<int>(type: "INTEGER", nullable: true),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -298,6 +307,11 @@ namespace ECommerce.Data.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
+                        name: "FK_OrderItems_Orders_OrderId1",
+                        column: x => x.OrderId1,
+                        principalTable: "Orders",
+                        principalColumn: "Id");
+                    table.ForeignKey(
                         name: "FK_OrderItems_Products_ProductId",
                         column: x => x.ProductId,
                         principalTable: "Products",
@@ -307,11 +321,11 @@ namespace ECommerce.Data.Migrations
 
             migrationBuilder.InsertData(
                 table: "Categories",
-                columns: new[] { "Id", "CreatedDate", "Description", "ImageUrl", "IsActive", "Name", "ParentId", "ProductId", "SortOrder", "UpdatedDate" },
+                columns: new[] { "Id", "CreatedAt", "Description", "ImageUrl", "IsActive", "Name", "ParentId", "ProductId", "Slug", "SortOrder", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { 1, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Elektronik ürünler", null, true, "Elektronik", null, null, 1, null },
-                    { 2, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Giyim ürünleri", null, true, "Giyim", null, null, 2, null }
+                    { 1, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Elektronik ürünler", null, true, "Elektronik", null, null, "elektronik", 1, null },
+                    { 2, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Giyim ürünleri", null, true, "Giyim", null, null, "giyim", 2, null }
                 });
 
             migrationBuilder.CreateIndex(
@@ -370,6 +384,11 @@ namespace ECommerce.Data.Migrations
                 name: "IX_OrderItems_OrderId",
                 table: "OrderItems",
                 column: "OrderId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OrderItems_OrderId1",
+                table: "OrderItems",
+                column: "OrderId1");
 
             migrationBuilder.CreateIndex(
                 name: "IX_OrderItems_ProductId",

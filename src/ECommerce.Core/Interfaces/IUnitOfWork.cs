@@ -12,3 +12,4 @@ namespace ECommerce.Core.Interfaces
         int SaveChanges();
     }
 }
+//UnitOfWork ile repository'leri kullanarak transaction'ları burada yönet.

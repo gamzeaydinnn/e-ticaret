@@ -1,7 +1,10 @@
 // ECommerce.Core/Interfaces/IFileStorage.cs
-public interface IFileStorage
+namespace ECommerce.Core.Interfaces
 {
-    Task<string> UploadAsync(Stream fileStream, string fileName, string contentType);
-    Task DeleteAsync(string fileUrl);
-    Task<Stream> DownloadAsync(string fileUrl);
-}
+    public interface IFileStorage
+    {
+        Task<string> UploadAsync(Stream fileStream, string fileName, string contentType);
+        Task DeleteAsync(string fileUrl);
+        Task<Stream> DownloadAsync(string fileUrl);
+    }
+}//resim upload (thumbnail üretim opsiyonu).

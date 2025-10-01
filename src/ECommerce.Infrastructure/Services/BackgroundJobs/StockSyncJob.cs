@@ -59,3 +59,4 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
 
     }
 }
+//	○ BackgroundJobs/StockSyncJob.cs mevcut; burada Hangfire veya Quartz ile planlanmış iş olarak çalıştır.

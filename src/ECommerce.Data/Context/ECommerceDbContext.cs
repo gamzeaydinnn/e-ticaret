@@ -94,21 +94,21 @@ namespace ECommerce.Data.Context
 
             // CartItem Configuration
             modelBuilder.Entity<CartItem>(entity =>
-            {
-                entity.ToTable("CartItems");
+{
+    entity.HasKey(e => e.Id);
+    entity.HasOne(e => e.User)
+          .WithMany()
+          .HasForeignKey(e => e.UserId)
+          .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(e => e.User)
-                    .WithMany()
-                    .HasForeignKey(e => e.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+    entity.HasOne(e => e.Product)
+          .WithMany()
+          .HasForeignKey(e => e.ProductId)
+          .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.Product)
-                    .WithMany()
-                    .HasForeignKey(e => e.ProductId)
-                    .OnDelete(DeleteBehavior.Restrict);
+    entity.HasIndex(e => new { e.UserId, e.ProductId }).IsUnique();
+});
 
-                entity.HasIndex(e => new { e.UserId, e.ProductId }).IsUnique();
-            });
 
             // Seed Data
             SeedData(modelBuilder);
@@ -116,27 +116,34 @@ namespace ECommerce.Data.Context
         private void SeedData(ModelBuilder modelBuilder)
         {
             // Use fixed timestamp to avoid migration diffs
-            var seededAt = new DateTime(2024, 01, 01, 0, 0, 0, DateTimeKind.Utc);
+            var fixedDate = new DateTime(2024, 01, 01, 0, 0, 0, DateTimeKind.Utc);
 
             // Seed Categories
+            // Seed Categories
             modelBuilder.Entity<Category>().HasData(
-                new Category
-                {
-                    Id = 1,
-                    Name = "Elektronik",
-                    Description = "Elektronik ürünler",
-                    SortOrder = 1,
-                    CreatedDate = seededAt
-                },
-                new Category
+              new Category
+              {
+                  Id = 1,
+                  Name = "Elektronik",
+                  Description = "Elektronik ürünler",
+                  SortOrder = 1,
+                  Slug = "elektronik", // buraya ekledik
+                  CreatedAt = fixedDate,
+                  IsActive = true,
+                    
+               },
+            new Category
                 {
                     Id = 2,
                     Name = "Giyim",
                     Description = "Giyim ürünleri",
                     SortOrder = 2,
-                    CreatedDate = seededAt
+                    Slug = "giyim", // buraya ekledik
+                    CreatedAt = fixedDate,
+                    IsActive = true
                 }
-            );
+        );
+
         }
     }
     

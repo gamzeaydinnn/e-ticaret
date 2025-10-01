@@ -111,3 +111,20 @@ export const adminService = {
     }
   },
 };
+/*import api from './api';
+export const AdminService = {
+// Categories
+getCategories: () => api.get('/admin/categories').then(r => r.data),
+createCategory: (formData) => api.post('/admin/categories', formData).then(r => r.data),
+updateCategory: (id, formData) => api.put(`/admin/categories/${id}`, formData).then(r => r.data),
+deleteCategory: (id) => api.delete(`/admin/categories/${id}`).then(r => r.data),
+// Products
+listProducts: () => api.get('/admin/products').then(r => r.data),
+createProduct: (formData) => api.post('/admin/products', formData).then(r=>r.data),
+updateProduct: (id, formData) => api.put(`/admin/products/${id}`, formData).then(r=>r.data),
+// Orders
+listOrders: () => api.get('/admin/orders').then(r => r.data),
+updateOrderStatus: (orderId, status) => api.put(`/admin/orders/${orderId}/status`, { status }).then(r=>r.data),
+assignCourier: (orderId, courierId) => api.post('/admin/orders/assign-courier', { orderId, courierId }).then(r=>r.data)
+}
+*/

@@ -2,7 +2,11 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
-
+/*ProductsController
+•	GET /api/products -> ürün listesi (kategori, pagination destekleyin)
+•	GET /api/products/{id}
+•	Admin: POST /api/products, PUT /api/products/{id}, DELETE /api/products/{id}
+*/
 namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]

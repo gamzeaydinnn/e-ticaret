@@ -38,9 +38,6 @@ namespace ECommerce.Business.Services.Interfaces
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
         Task<OrderListDto> CheckoutAsync(OrderCreateDto dto);
 
-
-
-        
         // Admin methods
         Task<int> GetOrderCountAsync();
         Task<int> GetTodayOrderCountAsync();
@@ -49,5 +46,12 @@ namespace ECommerce.Business.Services.Interfaces
         Task<OrderListDto> GetOrderByIdAsync(int id);
         Task UpdateOrderStatusAsync(int id, string status);
         Task<IEnumerable<OrderListDto>> GetRecentOrdersAsync(int count = 10);
+        
     }
 }
+/* Task<OrderSummaryDto> CreateOrderAsync(OrderCreateDto dto, Guid userId, CancellationToken ct = default);
+    Task<OrderDetailDto> GetOrderAsync(Guid orderId);
+    Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null);
+    Task CancelOrderAsync(Guid orderId, string reason);
+    Task ConfirmPaymentAsync(Guid orderId, PaymentResultDto paymentResult); // payment webhook tetikler
+}*/

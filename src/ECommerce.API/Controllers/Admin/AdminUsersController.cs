@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.User;
 using ECommerce.Entities.Concrete;
+using Microsoft.AspNetCore.Identity;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -42,12 +43,16 @@ namespace ECommerce.API.Controllers.Admin
                 Email = dto.Email,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
-                Password = dto.Password
+                UserName = dto.Email
+                //Password = dto.Password 
             };
 
-            await _userService.AddAsync(user);
-            return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
-        }
+            var passwordHasher = new PasswordHasher<User>();
+            user.PasswordHash = passwordHasher.HashPassword(user, dto.Password);
+
+             await _userService.AddAsync(user);
+             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
+       }
 
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UserUpdateDto dto)

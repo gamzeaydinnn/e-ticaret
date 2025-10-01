@@ -1,0 +1,1 @@
+//kategori, varyant, stok, resim listesi.

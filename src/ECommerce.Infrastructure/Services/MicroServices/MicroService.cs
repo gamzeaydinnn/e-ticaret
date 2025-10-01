@@ -56,6 +56,7 @@ namespace ECommerce.Infrastructure.Services.Micro
         {
             // Mikro ERP stok güncellemesi
         }
+//ERP tarafı XML/Excel bekliyorsa, System.Xml veya ClosedXML kullanıp serialize edip gönderebilirsin.
+    }//	○ MicroService.cs — Mikro ERP ile iletişimi sağlayan adaptör (HTTP client + XML/Excel exporter/importer).
 
-    }
 }

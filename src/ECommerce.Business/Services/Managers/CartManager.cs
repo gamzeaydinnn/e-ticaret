@@ -27,5 +27,30 @@ namespace ECommerce.Business.Services.Managers
         {
             return Task.CompletedTask;
         }
+
+        public Task<CartSummaryDto> GetCartAsync(Guid userId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task AddToCartAsync(Guid userId, int productVariantId, int quantity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task UpdateCartItemAsync(Guid userId, int cartItemId, int quantity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task RemoveCartItemAsync(Guid userId, int cartItemId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task ClearCartAsync(Guid userId)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

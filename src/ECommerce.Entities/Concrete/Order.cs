@@ -1,7 +1,19 @@
 using System;
 using System.Collections.Generic;
 using ECommerce.Entities.Enums;
-
+//	• Orders (Id GUID, UserId, TotalAmount, ShippingAmount, PaymentStatus, OrderStatus, CreatedAt, ReservationId (Guid?), AddressId)
+/*    public int Id { get; set; }
+    public int? UserId { get; set; } // guest ise null
+    public User User { get; set; }
+    public string CustomerName { get; set; }
+    public string CustomerPhone { get; set; }
+    public string CustomerEmail { get; set; }
+    public string Address { get; set; }
+    public string PaymentMethod { get; set; }
+    public string Status { get; set; } // e.g. Pending, Preparing, OutForDelivery, Delivered, Cancelled
+    public int? CourierId { get; set; }
+    public Courier Courier { get; set; }
+*/
 namespace ECommerce.Entities.Concrete
 {
     public class Order : BaseEntity

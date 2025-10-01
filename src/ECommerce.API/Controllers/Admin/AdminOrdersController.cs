@@ -3,7 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Core.Interfaces;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
-
+/*OrdersController
+•	POST /api/orders (guest veya userId ile) -> sipariş oluşturma. Eğer guest ise, zorunlu alanlar: name, phone, email, address, paymentMethod
+•	GET /api/orders/{id} -> sipariş detay (admin, ilgili kullanıcı veya kurye görmeli)
+•	GET /api/orders/user/{userId} -> kullanıcı siparişleri
+*/
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]

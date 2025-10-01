@@ -1,7 +1,12 @@
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Auth;
 using Microsoft.AspNetCore.Mvc;
-
+//		○ Auth: JWT + refresh token. UsersController ve AuthController.
+//		○ CORS, Rate limiting, HSTS, HTTPS redirection.
+/*AuthController
+•	POST /api/auth/login -> { email, password } -> { token }
+•	POST /api/auth/register -> register user
+*/
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase

@@ -23,13 +23,15 @@ builder.Services.AddCors(options =>
 });
 
 // DbContext ekle
-builder.Services.AddDbContext<ECommerceDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    builder.Services.AddDbContext<ECommerceDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 
 // Hangfire (tek seferde)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddHangfire(config => config.UseSQLiteStorage(connectionString));
+builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
 builder.Services.AddHangfireServer();
+
 
 var app = builder.Build();
 app.UseHangfireDashboard();
@@ -39,9 +41,9 @@ RecurringJob.AddOrUpdate<StockSyncJob>(
     "stock-sync-job",
     job => job.RunOnce(),
     Cron.Hourly,
-    TimeZoneInfo.Local,   // artık queueName eklemene gerek yok
-    "default"             // opsiyonel, default zaten "default"
+    new RecurringJobOptions { TimeZone = TimeZoneInfo.Local }
 );
+
 
 
 
@@ -61,6 +63,7 @@ builder.Services.AddAuthentication("Bearer")
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
+    
 
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();

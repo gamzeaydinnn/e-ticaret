@@ -1,14 +1,13 @@
+//
 namespace ECommerce.Entities.Concrete
-{
+{//	• OrderItems (Id, OrderId, ProductVariantId, UnitPrice, Quantity, Total)
+
     public class OrderItem : BaseEntity
     {
         public int OrderId { get; set; }
         public int ProductId { get; set; }
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
-        public int Id { get; set; }
-        public System.DateTime CreatedAt { get; set; } = System.DateTime.UtcNow;
-        public System.DateTime? UpdatedAt { get; set; }
 
         // Navigation Properties
         public virtual Order? Order { get; set; }

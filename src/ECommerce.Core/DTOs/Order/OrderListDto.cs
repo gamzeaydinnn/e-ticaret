@@ -12,3 +12,4 @@ namespace ECommerce.Core.DTOs.Order
         public int TotalItems { get; set; } // Toplam ürün sayısı
     }
 }
+//admin/kullanıcı için farklı projection.??

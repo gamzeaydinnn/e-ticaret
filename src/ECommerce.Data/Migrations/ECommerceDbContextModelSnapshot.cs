@@ -3,7 +3,6 @@ using System;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,11 +10,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECommerce.Data.Migrations
 {
     [DbContext(typeof(ECommerceDbContext))]
-    [Migration("20250925111842_InitialCreate")]
-    partial class InitialCreate
+    partial class ECommerceDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.9");
@@ -26,7 +23,10 @@ namespace ECommerce.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<string>("CartToken")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
@@ -41,7 +41,7 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("Quantity")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("UpdatedDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("UserId")
@@ -56,7 +56,7 @@ namespace ECommerce.Data.Migrations
                     b.HasIndex("UserId", "ProductId")
                         .IsUnique();
 
-                    b.ToTable("CartItems", (string)null);
+                    b.ToTable("CartItems");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Category", b =>
@@ -65,7 +65,7 @@ namespace ECommerce.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -90,10 +90,14 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("ProductId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("UpdatedDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -108,19 +112,21 @@ namespace ECommerce.Data.Migrations
                         new
                         {
                             Id = 1,
-                            CreatedDate = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Elektronik ürünler",
                             IsActive = true,
                             Name = "Elektronik",
+                            Slug = "elektronik",
                             SortOrder = 1
                         },
                         new
                         {
                             Id = 2,
-                            CreatedDate = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Giyim ürünleri",
                             IsActive = true,
                             Name = "Giyim",
+                            Slug = "giyim",
                             SortOrder = 2
                         });
                 });
@@ -131,7 +137,11 @@ namespace ECommerce.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
@@ -158,10 +168,10 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 
-                    b.Property<decimal>("TotalAmount")
+                    b.Property<decimal>("TotalPrice")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("UpdatedDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<int>("UserId")
@@ -183,13 +193,16 @@ namespace ECommerce.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("OrderId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("OrderId1")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("ProductId")
@@ -201,12 +214,14 @@ namespace ECommerce.Data.Migrations
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("UpdatedDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
+
+                    b.HasIndex("OrderId1");
 
                     b.HasIndex("ProductId");
 
@@ -227,7 +242,11 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime>("CreatedDate")
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -262,7 +281,7 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("StockQuantity")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("UpdatedDate")
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -296,6 +315,9 @@ namespace ECommerce.Data.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
@@ -307,6 +329,9 @@ namespace ECommerce.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("LastName")
                         .IsRequired()
@@ -336,11 +361,18 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
@@ -540,6 +572,10 @@ namespace ECommerce.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ECommerce.Entities.Concrete.Order", null)
+                        .WithMany("Items")
+                        .HasForeignKey("OrderId1");
+
                     b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
                         .WithMany("OrderItems")
                         .HasForeignKey("ProductId")
@@ -622,6 +658,8 @@ namespace ECommerce.Data.Migrations
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Order", b =>
                 {
+                    b.Navigation("Items");
+
                     b.Navigation("OrderItems");
                 });
 
