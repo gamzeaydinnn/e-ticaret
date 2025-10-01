@@ -121,6 +121,7 @@ namespace ECommerce.Data.Context
             // Seed Categories
             // Seed Categories
             modelBuilder.Entity<Category>().HasData(
+<<<<<<< HEAD
               new Category
               {
                   Id = 1,
@@ -133,10 +134,23 @@ namespace ECommerce.Data.Context
                     
                },
             new Category
+=======
+                new Category
+                {
+                    Id = 1,
+                    Name = "Elektronik",
+                    Description = "Elektronik ürünler",
+                    Slug = "elektronik",
+                    SortOrder = 1,
+                    CreatedDate = seededAt
+                },
+                new Category
+>>>>>>> main
                 {
                     Id = 2,
                     Name = "Giyim",
                     Description = "Giyim ürünleri",
+                    Slug = "giyim",
                     SortOrder = 2,
                     Slug = "giyim", // buraya ekledik
                     CreatedAt = fixedDate,

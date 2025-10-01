@@ -195,9 +195,21 @@ public async Task DeleteAsync(int id)
             throw new NotImplementedException();
         }
 
-        public Task<ProductListDto?> GetByIdAsync(int id)
+        public async Task<ProductListDto?> GetByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            var product = await _productRepository.GetByIdAsync(id);
+            if (product == null) return null;
+
+            return new ProductListDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                StockQuantity = product.StockQuantity,
+                ImageUrl = product.ImageUrl,
+                Brand = product.Brand
+            };
         }
     }
 }

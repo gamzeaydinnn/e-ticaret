@@ -90,6 +90,15 @@
   z-index: 1000;
 }
 
+.logo-container img {
+  transition: transform 0.3s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.logo-container img:hover {
+  transform: scale(1.05);
+}
+
 .logo-circle {
   width: 55px;
   height: 55px;
@@ -239,6 +248,89 @@
   );
   transform: translateY(-3px);
   box-shadow: 0 6px 20px var(--shadow-color);
+}
+
+/* Single Category Style for Gölköy Gourmet Market */
+.nav-category.active {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white !important;
+  font-size: 18px;
+  padding: 15px 30px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(40, 167, 69, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.nav-category.active:hover {
+  background: linear-gradient(135deg, #1e7e34 0%, #17a2b8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(40, 167, 69, 0.4);
+  color: white !important;
+}
+
+/* Campaign Carousel Styles */
+.campaign-carousel {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.carousel-container {
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
+  margin: 0 40px;
+}
+
+.carousel-nav {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.carousel-nav:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.campaign-visual {
+  position: relative;
+  min-height: 200px;
+}
+
+.floating-items {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.floating-items .product-item {
+  transition: transform 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.floating-items .product-item:hover {
+  transform: scale(1.1);
+}
+
+/* Section Styles */
+.section-title {
+  color: var(--warm-gray);
+}
+
+.section-subtitle .badge {
+  border-radius: 25px;
+  font-weight: 600;
+}
+
+/* Product Cards Styles */
+.product-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #f0f0f0;
+}
+
+.product-card:hover {
+  border-color: #ff6b35;
+}
+
+.price-info {
+  min-height: 60px;
 }
 
 /* Hero Section - Profesyonel Yeni Site Tasarımı */
@@ -1746,5 +1838,62 @@
   .footer-bottom-links {
     justify-content: center;
     text-align: center;
+  }
+}
+
+/* Top Kategori Navigasyonu */
+.top-categories-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.categories-simple {
+  padding: 10px 0;
+}
+
+.category-link {
+  background: none;
+  border: none;
+  color: #6c757d;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 0;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+
+.category-link:hover {
+  color: #495057;
+}
+
+.category-link.active {
+  color: #212529;
+  font-weight: 600;
+  position: relative;
+}
+
+.category-link.active::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #ff8c00;
+}
+
+/* Responsive kategori navigasyonu */
+@media (max-width: 768px) {
+  .categories-simple .d-flex {
+    justify-content: center !important;
+    gap: 1rem !important;
+  }
+
+  .category-link {
+    font-size: 12px;
   }
 }

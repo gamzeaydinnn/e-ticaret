@@ -30,20 +30,22 @@ function Header() {
             <div className="col-md-3">
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center">
-                  <div className="logo-container me-2">
-                    <div
-                      className="logo-circle text-white fw-bold"
+                  <div className="logo-container me-3">
+                    <img
+                      src="/golkoy-logo.png"
+                      alt="Gölköy Gourmet Market"
                       style={{
-                        background: "linear-gradient(45deg, #ff6f00, #ff8f00)",
+                        height: "50px",
+                        width: "auto",
                       }}
-                    >
-                      TC
-                    </div>
+                    />
                   </div>
                   <div>
-                    <h4 className="mb-0 fw-bold text-dark">TicaretiCenter</h4>
+                    <h4 className="mb-0 fw-bold text-dark">
+                      Gölköy Gourmet Market
+                    </h4>
                     <small className="text-muted">
-                      Türkiye'nin E-Ticaret Lideri
+                      Doğal ve Kaliteli Ürünler
                     </small>
                   </div>
                 </div>
@@ -57,7 +59,7 @@ function Header() {
                   <input
                     type="text"
                     className="form-control form-control-lg"
-                    placeholder="20 milyondan fazla ürün arasında ara..."
+                    placeholder="Doğal ve kaliteli ürünler arasında ara..."
                   />
                   <button
                     className="btn btn-lg text-white border-0"
@@ -111,43 +113,21 @@ function Header() {
         </div>
       </header>
 
-      {/* Navigation Categories */}
-      <nav className="categories-nav bg-light py-2">
+      {/* Kategori Navigasyonu - En Üstte */}
+      <nav className="top-categories-nav bg-white border-bottom">
         <div className="container-fluid px-4">
-          <div className="row">
-            <div className="col-12">
-              <div className="d-flex justify-content-between">
-                <a href="#" className="nav-category">
-                  Süpermarket
-                </a>
-                <a href="#" className="nav-category">
-                  Elektronik
-                </a>
-                <a href="#" className="nav-category">
-                  Moda
-                </a>
-                <a href="#" className="nav-category">
-                  Ev & Yaşam
-                </a>
-                <a href="#" className="nav-category">
-                  Kozmetik
-                </a>
-                <a href="#" className="nav-category">
-                  Spor
-                </a>
-                <a href="#" className="nav-category">
-                  Kitap
-                </a>
-                <a href="#" className="nav-category">
-                  Oyuncak
-                </a>
-                <a href="#" className="nav-category">
-                  Otomotiv
-                </a>
-                <a href="#" className="nav-category text-danger">
-                  İndirimli Ürünler
-                </a>
-              </div>
+          <div className="categories-simple py-2">
+            <div className="d-flex flex-wrap justify-content-start gap-4">
+              <button className="category-link active">KATEGORİLER</button>
+              <button className="category-link">MEYVE & SEBZE</button>
+              <button className="category-link">ET & TAVUK & BALIK</button>
+              <button className="category-link">SÜT ÜRÜNLERİ</button>
+              <button className="category-link">TEMEL GIDA</button>
+              <button className="category-link">İÇECEKLER</button>
+              <button className="category-link">ATIŞTIRMALIK</button>
+              <button className="category-link">TEMİZLİK</button>
+              <button className="category-link">FAVORİLERİM</button>
+              <button className="category-link">KAMPANYALAR</button>
             </div>
           </div>
         </div>
@@ -177,375 +157,162 @@ function App() {
 function HomePage() {
   return (
     <>
-      {/* Hero Section */}
-      <section className="hero-section py-5">
+      {/* Kampanya Carousel */}
+      <section className="campaign-carousel py-4">
         <div className="container-fluid px-4">
-          <div className="row align-items-center">
-            <div className="col-md-8">
-              <div className="hero-content">
-                <div className="hero-badge mb-3">
-                  <span className="badge bg-warning text-dark fw-bold px-3 py-2">
-                    <i className="fas fa-star me-2"></i>
-                    2024'ün Yeni E-Ticaret Platformu
-                  </span>
-                </div>
-                <h1 className="display-4 fw-bold mb-4">
-                  Güvenilir <br />
-                  <span className="text-danger">Alışverişin Adresi</span>
-                </h1>
-                <p className="lead text-muted mb-4">
-                  Kaliteli ürünler, güvenli ödeme sistemi ve müşteri odaklı
-                  hizmet anlayışı. Modern e-ticaret deneyimini keşfedin.
-                </p>
-                {/* Yeni Site Özellikleri */}
-                <div className="new-features mb-4">
-                  <div className="row">
-                    <div className="col-md-4">
-                      <div className="feature-highlight">
-                        <i className="fas fa-certificate text-warning mb-2"></i>
-                        <h6>Kaliteli Ürünler</h6>
-                        <small className="text-muted">
-                          Özenle seçilmiş markalar
-                        </small>
-                      </div>
+          <div className="position-relative">
+            {/* Carousel Container */}
+            <div
+              className="carousel-container"
+              style={{ borderRadius: "20px", overflow: "hidden" }}
+            >
+              <div
+                className="carousel-slide active"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
+                  minHeight: "300px",
+                  position: "relative",
+                  overflow: "hidden",
+                }}
+              >
+                <div className="row align-items-center h-100">
+                  <div className="col-md-6 p-5">
+                    <div className="campaign-badge mb-3">
+                      <span className="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold">
+                        Kahve Keyfi Aç!
+                      </span>
                     </div>
-                    <div className="col-md-4">
-                      <div className="feature-highlight">
-                        <i className="fas fa-lock text-warning mb-2"></i>
-                        <h6>Güvenli Alışveriş</h6>
-                        <small className="text-muted">
-                          256-bit SSL koruması
-                        </small>
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="feature-highlight">
-                        <i className="fas fa-shipping-fast text-warning mb-2"></i>
-                        <h6>Hızlı Teslimat</h6>
-                        <small className="text-muted">
-                          Türkiye geneli kargo
-                        </small>
-                      </div>
-                    </div>
+                    <h2
+                      className="text-white fw-bold mb-3"
+                      style={{ fontSize: "2.5rem" }}
+                    >
+                      SEÇİLİ ÜRÜNLERDE
+                      <br />
+                      <span className="fw-bolder">%25 İNDİRİM!</span>
+                    </h2>
+                    <p className="text-white mb-4 opacity-90">
+                      *Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde
+                      geçerlidir.
+                      <br />
+                      Kampanya kapsamında listelenen ürünler için tıklayın.
+                    </p>
                   </div>
-                </div>
-                {/* CTA Butonları */}
-                <div className="cta-buttons mb-4">
-                  <button className="btn btn-warning btn-lg me-3 px-4 py-3 shadow">
-                    <i className="fas fa-shopping-cart me-2"></i>
-                    Alışverişe Başla
-                  </button>
-                  <button className="btn btn-outline-warning btn-lg px-4 py-3 shadow">
-                    <i className="fas fa-percentage me-2"></i>
-                    Kampanyalar
-                  </button>
-                </div>{" "}
-                {/* Statistics - Yeni Site için daha mütevazi */}
-                <div className="row stats-row">
-                  <div className="col-md-4">
-                    <div className="stat-item">
-                      <h3 className="text-danger fw-bold">2024</h3>
-                      <p className="text-muted">Kuruluş Yılı</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="stat-item">
-                      <h3 className="text-danger fw-bold">100+</h3>
-                      <p className="text-muted">Marka</p>
-                    </div>
-                  </div>
-                  <div className="col-md-4">
-                    <div className="stat-item">
-                      <h3 className="text-danger fw-bold">7/24</h3>
-                      <p className="text-muted">Destek</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="col-md-4">
-              <div className="hero-image">
-                <div className="warehouse-container">
-                  <div className="delivery-badge">
-                    <i className="fas fa-clock text-warning"></i>
-                    <strong>24/7</strong>
-                    <span>Hızlı Teslimat</span>
-                  </div>
-                  <div className="warehouse-visual">
-                    <div className="shopping-bags-scene">
-                      <div className="bags-grid-3d">
-                        <div className="bag-row front-row">
-                          <div className="shopping-bag-3d bag-1">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
+                  <div className="col-md-6 d-flex justify-content-center align-items-center p-4">
+                    <div className="campaign-visual">
+                      <div className="product-basket position-relative">
+                        <div className="floating-items">
+                          <div
+                            className="product-item"
+                            style={{
+                              position: "absolute",
+                              top: "20px",
+                              right: "30px",
+                              background: "rgba(255,255,255,0.9)",
+                              padding: "15px",
+                              borderRadius: "10px",
+                              fontSize: "1.5rem",
+                            }}
+                          >
+                            🍫
                           </div>
-                          <div className="shopping-bag-3d bag-2">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
+                          <div
+                            className="product-item"
+                            style={{
+                              position: "absolute",
+                              top: "80px",
+                              right: "80px",
+                              background: "rgba(255,255,255,0.9)",
+                              padding: "15px",
+                              borderRadius: "10px",
+                              fontSize: "1.5rem",
+                            }}
+                          >
+                            🍪
                           </div>
-                          <div className="shopping-bag-3d bag-3">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                        </div>
-                        <div className="bag-row middle-row">
-                          <div className="shopping-bag-3d bag-4">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                          <div className="shopping-bag-3d bag-5">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                          <div className="shopping-bag-3d bag-6">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                        </div>
-                        <div className="bag-row back-row">
-                          <div className="shopping-bag-3d bag-7">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                          <div className="shopping-bag-3d bag-8">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
-                          </div>
-                          <div className="shopping-bag-3d bag-9">
-                            <div className="bag-handle"></div>
-                            <div className="bag-body"></div>
-                            <div className="bag-shadow"></div>
+                          <div
+                            className="product-item"
+                            style={{
+                              position: "absolute",
+                              top: "60px",
+                              right: "10px",
+                              background: "rgba(255,255,255,0.9)",
+                              padding: "15px",
+                              borderRadius: "10px",
+                              fontSize: "1.5rem",
+                            }}
+                          >
+                            ☕
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Features Section - Kompakt Tasarım */}
-      <section className="features-section py-4 bg-light">
-        <div className="container-fluid px-4">
-          <div className="row">
-            <div className="col-md-3">
-              <div className="feature-card text-center">
-                <div className="feature-icon">
-                  <i className="fas fa-truck text-warning"></i>
-                </div>
-                <h6>Ücretsiz Kargo</h6>
-                <small className="text-muted">
-                  Türkiye geneli ücretsiz teslimat
-                </small>
-              </div>
-            </div>
-            <div className="col-md-3">
-              <div className="feature-card text-center">
-                <div className="feature-icon">
-                  <i className="fas fa-bolt text-warning"></i>
-                </div>
-                <h6>Hızlı Teslimat</h6>
-                <small className="text-muted">Aynı gün teslimat imkanı</small>
-              </div>
-            </div>
-            <div className="col-md-3">
-              <div className="feature-card text-center">
-                <div className="feature-icon">
-                  <i className="fas fa-shield-alt text-warning"></i>
-                </div>
-                <h6>Güvenli Ödeme</h6>
-                <small className="text-muted">256-bit SSL güvenlik</small>
-              </div>
-            </div>
-            <div className="col-md-3">
-              <div className="feature-card text-center">
-                <div className="feature-icon">
-                  <i className="fas fa-undo-alt text-warning"></i>
-                </div>
-                <h6>Kolay İade</h6>
-                <small className="text-muted">14 gün ücretsiz iade</small>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Ürün Kategorilerimiz Section */}
-      <section className="categories-section py-5">
-        <div className="container-fluid px-4">
-          <div className="text-center mb-5">
-            <h2 className="section-title mb-3">Ürün Kategorilerimiz</h2>
-            <p className="section-subtitle text-muted">
-              Her geçen gün genişleyen ürün yelpazemizle size hizmet veriyoruz
-            </p>
-          </div>
-
-          <div className="row">
-            {/* İlk satır */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon blue">
-                    <i className="fas fa-mobile-alt"></i>
-                  </div>
-                  <span className="category-badge yakinda">Yakında</span>
-                </div>
-                <h5 className="category-title">Elektronik</h5>
-                <p className="category-subtitle">
-                  Telefon, Bilgisayar, Aksesuar
-                </p>
-              </div>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon pink">
-                    <i className="fas fa-tshirt"></i>
-                  </div>
-                  <span className="category-badge mevcut">Mevcut</span>
-                </div>
-                <h5 className="category-title">Moda</h5>
-                <p className="category-subtitle">Kadın, Erkek Giyim</p>
-              </div>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon green">
-                    <i className="fas fa-home"></i>
-                  </div>
-                  <span className="category-badge mevcut">Mevcut</span>
-                </div>
-                <h5 className="category-title">Ev & Yaşam</h5>
-                <p className="category-subtitle">Ev Dekorasyonu</p>
-              </div>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon orange">
-                    <i className="fas fa-gamepad"></i>
-                  </div>
-                  <span className="category-badge hazirlaniyor">
-                    Hazırlanıyor
+                {/* Slide Counter */}
+                <div className="position-absolute top-0 end-0 m-3">
+                  <span className="badge bg-dark bg-opacity-50 px-3 py-2 rounded-pill">
+                    1 / 3
                   </span>
                 </div>
-                <h5 className="category-title">Oyun & Hobi</h5>
-                <p className="category-subtitle">Oyuncak, Oyun</p>
-                <small className="coming-soon">Çok yakında...</small>
               </div>
             </div>
 
-            {/* İkinci satır */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon gray">
-                    <i className="fas fa-car"></i>
-                  </div>
-                  <span className="category-badge planlaniyor">
-                    Planlanıyor
-                  </span>
-                </div>
-                <h5 className="category-title">Otomotiv</h5>
-                <p className="category-subtitle">Araç Bakım & Aksesuar</p>
-              </div>
-            </div>
+            {/* Navigation Arrows */}
+            <button
+              className="carousel-nav carousel-prev position-absolute top-50 start-0 translate-middle-y"
+              style={{
+                background: "rgba(255,255,255,0.9)",
+                border: "none",
+                borderRadius: "50%",
+                width: "50px",
+                height: "50px",
+                marginLeft: "-25px",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                zIndex: 10,
+              }}
+            >
+              <i className="fas fa-chevron-left text-dark"></i>
+            </button>
 
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon pink-alt">
-                    <i className="fas fa-baby"></i>
-                  </div>
-                  <span className="category-badge mevcut">Mevcut</span>
-                </div>
-                <h5 className="category-title">Anne & Bebek</h5>
-                <p className="category-subtitle">Bebek Bakım & Oyuncak</p>
-              </div>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon orange-alt">
-                    <i className="fas fa-dumbbell"></i>
-                  </div>
-                  <span className="category-badge yakinda">Yakında</span>
-                </div>
-                <h5 className="category-title">Spor & Outdoor</h5>
-                <p className="category-subtitle">Fitness & Spor Malzemeleri</p>
-              </div>
-            </div>
-
-            <div className="col-lg-3 col-md-6 mb-4">
-              <div className="category-card">
-                <div className="category-icon-wrapper">
-                  <div className="category-icon purple">
-                    <i className="fas fa-book"></i>
-                  </div>
-                  <span className="category-badge mevcut">Mevcut</span>
-                </div>
-                <h5 className="category-title">Kitap & Kırtasiye</h5>
-                <p className="category-subtitle">Roman, Akademik, Kırtasiye</p>
-              </div>
-            </div>
+            <button
+              className="carousel-nav carousel-next position-absolute top-50 end-0 translate-middle-y"
+              style={{
+                background: "rgba(255,255,255,0.9)",
+                border: "none",
+                borderRadius: "50%",
+                width: "50px",
+                height: "50px",
+                marginRight: "-25px",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                zIndex: 10,
+              }}
+            >
+              <i className="fas fa-chevron-right text-dark"></i>
+            </button>
           </div>
         </div>
       </section>
 
-      {/* Özenle Seçilen Ürünler Section */}
-      <section className="featured-products-section py-5">
+      {/* İlgini Çekebilecek Ürünler Section */}
+      <section className="featured-products-section py-5 bg-light">
         <div className="container-fluid px-4">
           {/* Section Header */}
           <div className="text-center mb-5">
-            <div className="section-badge mb-3">
-              <i className="fas fa-bolt me-2"></i>
-              Yeni Ürünlerimiz
+            <h2 className="section-title mb-3 fw-bold">
+              İlgini Çekebilecek Ürünler
+            </h2>
+            <div className="section-subtitle">
+              <span className="badge bg-warning text-dark px-3 py-2 fs-6">
+                <i className="fas fa-fire me-2"></i>
+                Bu Fırsatları Kaçırma
+              </span>
             </div>
-            <h2 className="featured-title mb-3">Özenle Seçilen Ürünler</h2>
-            <p className="featured-subtitle">
-              Kalite standartlarımıza uygun, müşteri memnuniyeti odaklı
-              ürünlerimizi keşfedin
-            </p>
           </div>
 
           {/* Products Grid */}
           <ProductGrid />
-
-          {/* Daha Fazla Ürün Keşfet Section */}
-          <div className="discover-more-section text-center py-5">
-            <h3 className="discover-title mb-3">Daha Fazla Ürün Keşfet</h3>
-            <p className="discover-subtitle mb-4">
-              Sürekli genişleyen ürün yelpazemizle kaliteli alışverişin keyfini
-              çıkarın
-            </p>
-            <div className="discover-buttons">
-              <button className="btn btn-primary btn-lg me-3">
-                <i className="fas fa-arrow-right me-2"></i>
-                Tüm Ürünler
-              </button>
-              <button className="btn btn-outline-primary btn-lg">
-                <i className="fas fa-th-large me-2"></i>
-                Kategoriler
-              </button>
-            </div>
-          </div>
         </div>
       </section>
 
