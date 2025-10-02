@@ -6,7 +6,6 @@ const AccountPage = () => {
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
-  const [isCodeSent, setIsCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [formData, setFormData] = useState({
     email: "",
@@ -38,7 +37,6 @@ const AccountPage = () => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCode(code);
     setShowVerification(true);
-    setIsCodeSent(true);
     setCountdown(60); // 60 saniye geri sayım
 
     // Konsola kodu yazdır (gerçek uygulamada SMS gönderilir)
@@ -56,7 +54,6 @@ const AccountPage = () => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          setIsCodeSent(false);
           return 0;
         }
         return prev - 1;
@@ -103,7 +100,6 @@ const AccountPage = () => {
     setShowVerification(false);
     setVerificationCode("");
     setGeneratedCode("");
-    setIsCodeSent(false);
     setCountdown(0);
   };
 

@@ -140,40 +140,139 @@ const CartPage = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-5">
-                    <div
-                      className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
-                      style={{
-                        backgroundColor: "#fff8f0",
-                        width: "120px",
-                        height: "120px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <i
-                        className="fas fa-shopping-cart text-warning"
-                        style={{ fontSize: "3rem" }}
-                      ></i>
+                  <div className="row justify-content-center">
+                    <div className="col-md-8">
+                      <div className="text-center mb-4">
+                        <div
+                          className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
+                          style={{
+                            backgroundColor: "#fff8f0",
+                            width: "100px",
+                            height: "100px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <i
+                            className="fas fa-user-circle text-warning"
+                            style={{ fontSize: "2.5rem" }}
+                          ></i>
+                        </div>
+                        <h4 className="text-warning fw-bold mb-2">
+                          Giriş Yapın
+                        </h4>
+                        <p className="text-muted mb-4">
+                          Sepetinize ürün eklemek için hesabınıza giriş yapmanız
+                          gerekiyor
+                        </p>
+                      </div>
+
+                      <form className="login-form">
+                        <div className="mb-4">
+                          <label className="form-label fw-semibold text-muted">
+                            <i className="fas fa-envelope me-2"></i>E-posta
+                            Adresi
+                          </label>
+                          <input
+                            type="email"
+                            className="form-control form-control-lg"
+                            placeholder="ornek@email.com"
+                            style={{
+                              borderRadius: "15px",
+                              border: "2px solid #ffe0b2",
+                              padding: "12px 20px",
+                            }}
+                          />
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="form-label fw-semibold text-muted">
+                            <i className="fas fa-lock me-2"></i>Şifre
+                          </label>
+                          <input
+                            type="password"
+                            className="form-control form-control-lg"
+                            placeholder="••••••••"
+                            style={{
+                              borderRadius: "15px",
+                              border: "2px solid #ffe0b2",
+                              padding: "12px 20px",
+                            }}
+                          />
+                        </div>
+
+                        <div className="d-flex justify-content-between align-items-center mb-4">
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id="rememberMe"
+                            />
+                            <label
+                              className="form-check-label text-muted"
+                              htmlFor="rememberMe"
+                            >
+                              Beni hatırla
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-link text-warning text-decoration-none fw-semibold p-0"
+                            onClick={() => alert("Şifre sıfırlama özelliği yakında...")}
+                          >
+                            Şifremi unuttum
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="btn btn-lg w-100 text-white fw-bold shadow-lg border-0 mb-3"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                            borderRadius: "25px",
+                            padding: "15px",
+                            fontSize: "1.1rem",
+                          }}
+                          onClick={() => {
+                            // Basit demo login - gerçek uygulamada API çağrısı yapılır
+                            alert(
+                              "Giriş başarılı! Şimdi ürünleri sepetinize ekleyebilirsiniz."
+                            );
+                            navigate("/");
+                          }}
+                        >
+                          <i className="fas fa-sign-in-alt me-2"></i>
+                          Giriş Yap
+                        </button>
+
+                        <div className="text-center">
+                          <span className="text-muted">Hesabınız yok mu? </span>
+                          <button
+                            type="button"
+                            className="btn btn-link text-warning text-decoration-none fw-semibold p-0"
+                            onClick={() => alert("Kayıt olma özelliği yakında...")}
+                          >
+                            Kayıt olun
+                          </button>
+                        </div>
+                      </form>
+
+                      <div className="text-center mt-4">
+                        <Link
+                          to="/"
+                          className="btn btn-outline-warning btn-lg border-2 fw-semibold"
+                          style={{
+                            borderRadius: "25px",
+                            padding: "12px 30px",
+                          }}
+                        >
+                          <i className="fas fa-arrow-left me-2"></i>
+                          Alışverişe Devam Et
+                        </Link>
+                      </div>
                     </div>
-                    <h4 className="text-warning fw-bold mb-3">Sepetiniz boş</h4>
-                    <p className="text-muted mb-4 fs-5">
-                      Alışverişe başlamak için ürünleri sepetinize ekleyin
-                    </p>
-                    <Link
-                      to="/"
-                      className="btn btn-lg text-white fw-bold shadow-lg border-0"
-                      style={{
-                        background:
-                          "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)",
-                        borderRadius: "50px",
-                        padding: "1rem 2rem",
-                      }}
-                    >
-                      <i className="fas fa-shopping-bag me-2"></i>
-                      Alışverişe Başla
-                    </Link>
                   </div>
                 )}
               </div>

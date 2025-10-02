@@ -120,7 +120,11 @@ namespace ECommerce.Data.Context
 
             // Seed Categories
             // Seed Categories
+<<<<<<< HEAD
             modelBuilder.Entity<Category>().HasData(
+=======
+           modelBuilder.Entity<Category>().HasData(
+>>>>>>> origin/main
               new Category
               {
                   Id = 1,

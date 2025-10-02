@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { getAllProducts } from "../services/productService";
-import { addToCart } from "../services/cartService";
-import { useCartCount } from "../hooks/useCartCount";
 
 export default function ProductGrid() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error] = useState("");
-  const { refresh: refreshCart } = useCartCount();
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
   // Tüm ürünleri göster (filtreleme kaldırıldı)
   const filteredProducts = useMemo(() => {
@@ -15,25 +14,26 @@ export default function ProductGrid() {
   }, [data]);
 
   const handleAddToCart = async (productId) => {
-    try {
-      await addToCart(productId);
-      refreshCart();
-      // Success feedback
-      const button = document.querySelector(`[data-product-id="${productId}"]`);
-      if (button) {
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-check me-2"></i>Eklendi!';
-        button.classList.add("btn-success");
-        button.classList.remove("btn-primary");
-        setTimeout(() => {
-          button.innerHTML = originalText;
-          button.classList.remove("btn-success");
-          button.classList.add("btn-primary");
-        }, 1500);
-      }
-    } catch (error) {
-      console.error("Sepete ekleme hatası:", error);
+    // Sepete ekleme işlemi için giriş sayfasına yönlendir
+    window.location.href = "/cart";
+  };
+
+  const handleProductClick = (product, event) => {
+    // Sepete ekle butonuna tıklanmışsa modal açma
+    if (
+      event.target.closest(".modern-add-btn") ||
+      event.target.closest(".btn-favorite")
+    ) {
+      return;
     }
+
+    setSelectedProduct(product);
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setSelectedProduct(null);
   };
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export default function ProductGrid() {
             originalPrice: 229.95,
             categoryId: 7,
             categoryName: "Temizlik",
-            imageUrl: "/yeşil-cif-krem.jpg",
+            imageUrl: "/images/yeşil-cif-krem.jpg",
             isNew: true,
             discountPercentage: 11,
             rating: 4.5,
@@ -66,7 +66,7 @@ export default function ProductGrid() {
             price: 18.0,
             categoryId: 6,
             categoryName: "Atıştırmalık",
-            imageUrl: "/tahil-cipsi.jpg",
+            imageUrl: "/images/tahil-cipsi.jpg",
             isNew: false,
             discountPercentage: 17,
             rating: 4.8,
@@ -81,7 +81,7 @@ export default function ProductGrid() {
             price: 60.0,
             categoryId: 5,
             categoryName: "İçecekler",
-            imageUrl: "/lipton-ice-tea.jpg",
+            imageUrl: "/images/lipton-ice-tea.jpg",
             isNew: false,
             discountPercentage: 32,
             rating: 4.2,
@@ -97,7 +97,7 @@ export default function ProductGrid() {
             originalPrice: 429.95,
             categoryId: 2,
             categoryName: "Et & Tavuk & Balık",
-            imageUrl: "/dana-kusbasi.jpg",
+            imageUrl: "/images/dana-kusbasi.jpg",
             isNew: true,
             discountPercentage: 26,
             rating: 4.7,
@@ -112,7 +112,7 @@ export default function ProductGrid() {
             price: 1399.95,
             categoryId: 2,
             categoryName: "Et & Tavuk & Balık",
-            imageUrl: "/kuzu-incik.webp",
+            imageUrl: "/images/kuzu-incik.webp",
             isNew: false,
             discountPercentage: 0,
             rating: 4.4,
@@ -128,7 +128,7 @@ export default function ProductGrid() {
             originalPrice: 169.99,
             categoryId: 5,
             categoryName: "İçecekler",
-            imageUrl: "/nescafe.jpg",
+            imageUrl: "/images/nescafe.jpg",
             isNew: false,
             discountPercentage: 14,
             rating: 4.3,
@@ -143,7 +143,7 @@ export default function ProductGrid() {
             price: 45.9,
             categoryId: 1,
             categoryName: "Meyve & Sebze",
-            imageUrl: "/domates.webp",
+            imageUrl: "/images/domates.webp",
             isNew: true,
             discountPercentage: 0,
             rating: 4.9,
@@ -156,7 +156,7 @@ export default function ProductGrid() {
             price: 28.5,
             categoryId: 3,
             categoryName: "Süt Ürünleri",
-            imageUrl: "/pınar-süt.jpg",
+            imageUrl: "/images/pınar-süt.jpg",
             isNew: false,
             discountPercentage: 0,
             rating: 4.6,
@@ -169,7 +169,7 @@ export default function ProductGrid() {
             price: 75.9,
             categoryId: 3,
             categoryName: "Süt Ürünleri",
-            imageUrl: "/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+            imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
             isNew: false,
             discountPercentage: 15,
             rating: 4.4,
@@ -184,7 +184,7 @@ export default function ProductGrid() {
             price: 32.9,
             categoryId: 4,
             categoryName: "Temel Gıda",
-            imageUrl: "/bulgur.png",
+            imageUrl: "/images/bulgur.png",
             isNew: true,
             discountPercentage: 0,
             rating: 4.7,
@@ -197,7 +197,7 @@ export default function ProductGrid() {
             price: 12.5,
             categoryId: 5,
             categoryName: "İçecekler",
-            imageUrl: "/coca-cola.jpg",
+            imageUrl: "/images/coca-cola.jpg",
             isNew: false,
             discountPercentage: 20,
             rating: 4.2,
@@ -212,7 +212,7 @@ export default function ProductGrid() {
             price: 28.9,
             categoryId: 1,
             categoryName: "Meyve & Sebze",
-            imageUrl: "/salatalik.jpg",
+            imageUrl: "/images/salatalik.jpg",
             isNew: false,
             discountPercentage: 0,
             rating: 4.3,
@@ -319,167 +319,559 @@ export default function ProductGrid() {
         </div>
       ) : (
         <div className="row">
-          {filteredProducts.map((p) => (
+          {filteredProducts.map((p, index) => (
             <div key={p.id} className="col-lg-3 col-md-6 mb-4">
               <div
-                className="product-card h-100 shadow-sm border-0"
+                className="modern-product-card h-100"
                 style={{
-                  borderRadius: "12px",
-                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                  backgroundColor: "white",
+                  background: `linear-gradient(145deg, #ffffff, #f8f9fa)`,
+                  borderRadius: "20px",
+                  border: "1px solid rgba(255, 107, 53, 0.1)",
+                  overflow: "hidden",
+                  position: "relative",
+                  animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
+                  cursor: "pointer",
+                  minHeight: "520px",
+                  display: "flex",
+                  flexDirection: "column",
                 }}
+                onClick={(e) => handleProductClick(p, e)}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = "translateY(-3px)";
-                  e.target.style.boxShadow = "0 8px 25px rgba(0, 0, 0, 0.1)";
+                  e.currentTarget.style.transform =
+                    "translateY(-8px) scale(1.02)";
+                  e.currentTarget.style.boxShadow =
+                    "0 20px 40px rgba(255, 107, 53, 0.15)";
+                  e.currentTarget.style.borderColor = "rgba(255, 107, 53, 0.3)";
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.transform = "translateY(0)";
-                  e.target.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.05)";
+                  e.currentTarget.style.transform = "translateY(0) scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 5px 15px rgba(0, 0, 0, 0.08)";
+                  e.currentTarget.style.borderColor = "rgba(255, 107, 53, 0.1)";
                 }}
               >
+                {/* Badge - Sol Üst */}
+                {p.badge && (
+                  <div
+                    className="position-absolute top-0 start-0 p-2"
+                    style={{ zIndex: 3 }}
+                  >
+                    <span
+                      className="badge-modern"
+                      style={{
+                        background:
+                          p.badge === "İndirim"
+                            ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                            : p.badge === "Yeni"
+                            ? "linear-gradient(135deg, #28a745, #20c997)"
+                            : "linear-gradient(135deg, #ffc107, #fd7e14)",
+                        color: "white",
+                        padding: "4px 12px",
+                        borderRadius: "15px",
+                        fontSize: "0.7rem",
+                        fontWeight: "700",
+                        textTransform: "uppercase",
+                        boxShadow: "0 2px 8px rgba(255, 107, 53, 0.3)",
+                        animation: "pulse 2s infinite",
+                      }}
+                    >
+                      {p.badge}
+                    </span>
+                  </div>
+                )}
+
+                {/* Favori Butonu - Sağ Üst */}
                 <div
-                  style={{
-                    height: 180,
-                    borderTopLeftRadius: "12px",
-                    borderTopRightRadius: "12px",
-                    backgroundColor: "#f8f9fa",
-                    position: "relative",
-                  }}
-                  className="d-flex align-items-center justify-content-center"
+                  className="position-absolute top-0 end-0 p-2"
+                  style={{ zIndex: 3 }}
                 >
-                  {/* Favori butonu */}
                   <button
-                    className="btn btn-link position-absolute top-0 end-0 m-2 p-1"
-                    style={{ zIndex: 2, color: "#dee2e6" }}
+                    className="btn-favorite"
+                    type="button"
+                    style={{
+                      background: "rgba(255, 255, 255, 0.9)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: "35px",
+                      height: "35px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#ff6b35",
+                      transition: "all 0.3s ease",
+                      backdropFilter: "blur(10px)",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = "scale(1.1)";
+                      e.target.style.background = "#ff6b35";
+                      e.target.style.color = "white";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = "scale(1)";
+                      e.target.style.background = "rgba(255, 255, 255, 0.9)";
+                      e.target.style.color = "#ff6b35";
+                    }}
                   >
                     <i className="far fa-heart"></i>
                   </button>
-
-                  {p.imageUrl ? (
-                    <img
-                      src={p.imageUrl}
-                      alt={p.name}
-                      className="img-fluid"
-                      style={{
-                        maxHeight: "140px",
-                        maxWidth: "140px",
-                        objectFit: "contain",
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "100px",
-                        height: "100px",
-                        backgroundColor: "#e9ecef",
-                        borderRadius: "8px",
-                        fontSize: "2rem",
-                      }}
-                    >
-                      🛒
-                    </div>
-                  )}
                 </div>
 
-                <div className="card-body p-3">
-                  <h6
-                    className="card-title mb-2"
+                <div
+                  className="product-image-container"
+                  style={{
+                    height: 200,
+                    background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    className="image-wrapper d-flex align-items-center justify-content-center h-100"
                     style={{
-                      minHeight: "40px",
-                      fontSize: "0.9rem",
-                      fontWeight: "400",
-                      lineHeight: "1.3",
+                      transition: "all 0.4s ease",
+                      position: "relative",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "scale(1.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "scale(1)";
+                    }}
+                  >
+                    {p.imageUrl ? (
+                      <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="product-image"
+                        style={{
+                          maxHeight: "160px",
+                          maxWidth: "160px",
+                          objectFit: "contain",
+                          filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
+                          transition: "all 0.3s ease",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        className="d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "120px",
+                          height: "120px",
+                          background:
+                            "linear-gradient(135deg, #e9ecef, #dee2e6)",
+                          borderRadius: "15px",
+                          fontSize: "2.5rem",
+                        }}
+                      >
+                        🛒
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className="card-body p-4 d-flex flex-column"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.9))",
+                    minHeight: "280px",
+                  }}
+                >
+                  {/* Rating */}
+                  {p.rating && (
+                    <div className="d-flex align-items-center mb-2">
+                      <div className="star-rating me-2">
+                        {[...Array(5)].map((_, i) => (
+                          <i
+                            key={i}
+                            className={`fas fa-star ${
+                              i < Math.floor(p.rating)
+                                ? "text-warning"
+                                : "text-muted"
+                            }`}
+                            style={{ fontSize: "0.7rem" }}
+                          ></i>
+                        ))}
+                      </div>
+                      <small className="text-muted">({p.reviewCount})</small>
+                    </div>
+                  )}
+
+                  <h6
+                    className="product-title mb-3"
+                    style={{
+                      height: "50px",
+                      fontSize: "0.95rem",
+                      fontWeight: "600",
+                      lineHeight: "1.4",
+                      color: "#2c3e50",
+                      display: "flex",
+                      alignItems: "center",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
                     }}
                   >
                     {p.name}
                   </h6>
 
-                  {/* Fiyat Bilgileri */}
-                  <div className="price-info mb-2">
-                    {p.originalPrice ? (
-                      <div>
-                        <div className="d-flex align-items-center mb-1">
-                          <span
-                            className="text-decoration-line-through text-muted me-2"
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            {p.originalPrice.toFixed(2)} TL
-                          </span>
-                        </div>
-                        {p.badge && (
-                          <div className="mb-1">
+                  {/* Content Area - Flexible */}
+                  <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
+                    {/* Modern Fiyat Bilgileri */}
+                    <div className="price-section mb-3">
+                      {p.originalPrice ? (
+                        <div className="price-container">
+                          <div className="d-flex align-items-center mb-2">
                             <span
-                              className="badge"
+                              className="old-price me-2"
                               style={{
-                                backgroundColor:
-                                  p.badge === "İndirim" ? "#ff6b35" : "#28a745",
-                                color: "white",
-                                fontSize: "0.7rem",
-                                padding: "2px 6px",
+                                fontSize: "0.85rem",
+                                textDecoration: "line-through",
+                                color: "#6c757d",
                               }}
                             >
-                              <i
-                                className={`fas ${
-                                  p.badge === "İndirim"
-                                    ? "fa-percentage"
-                                    : "fa-star"
-                                } me-1`}
-                              ></i>
-                              {p.badge}
+                              {p.originalPrice.toFixed(2)} TL
                             </span>
+                            {p.discountPercentage > 0 && (
+                              <span
+                                className="discount-badge"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #dc3545, #c82333)",
+                                  color: "white",
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: "700",
+                                  animation: "bounce 2s infinite",
+                                }}
+                              >
+                                -%{p.discountPercentage}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {p.specialPrice && (
                           <div
-                            className="fw-bold"
-                            style={{ fontSize: "0.85rem" }}
+                            className="current-price"
+                            style={{
+                              fontSize: "1.4rem",
+                              fontWeight: "800",
+                              background:
+                                "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                              backgroundClip: "text",
+                              WebkitBackgroundClip: "text",
+                              WebkitTextFillColor: "transparent",
+                              display: "inline-block",
+                              textShadow: "0 2px 4px rgba(255,107,53,0.3)",
+                            }}
                           >
-                            {p.specialPrice.toFixed(2)} TL
+                            {p.price.toFixed(2)} TL
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="fw-bold" style={{ fontSize: "0.9rem" }}>
-                        {p.price.toFixed(2)} TL
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="current-price"
+                          style={{
+                            fontSize: "1.4rem",
+                            fontWeight: "800",
+                            background:
+                              "linear-gradient(135deg, #28a745, #20c997)",
+                            backgroundClip: "text",
+                            WebkitBackgroundClip: "text",
+                            WebkitTextFillColor: "transparent",
+                            display: "inline-block",
+                          }}
+                        >
+                          {p.price.toFixed(2)} TL
+                        </div>
+                      )}
+                    </div>
 
-                  <div className="d-flex align-items-center justify-content-between mt-3">
-                    <div></div>
-
-                    <button
-                      className="btn btn-outline-warning btn-sm"
-                      data-product-id={p.id}
-                      style={{
-                        borderRadius: "20px",
-                        padding: "6px 12px",
-                        fontSize: "0.8rem",
-                        fontWeight: "600",
-                        border: "2px solid #ff6b35",
-                        color: "#ff6b35",
-                        transition: "all 0.3s ease",
-                      }}
-                      onClick={() => handleAddToCart(p.id)}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = "#ff6b35";
-                        e.target.style.color = "white";
-                        e.target.style.transform = "scale(1.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "transparent";
-                        e.target.style.color = "#ff6b35";
-                        e.target.style.transform = "scale(1)";
-                      }}
-                    >
-                      <i className="fas fa-plus me-1"></i>
-                    </button>
+                    {/* Modern Action Buttons - Always at Bottom */}
+                    <div className="action-buttons mt-auto">
+                      <button
+                        className="modern-add-btn"
+                        data-product-id={p.id}
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                          border: "none",
+                          borderRadius: "25px",
+                          padding: "12px 24px",
+                          fontSize: "0.9rem",
+                          fontWeight: "700",
+                          color: "white",
+                          transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                          boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+                          position: "relative",
+                          overflow: "hidden",
+                          width: "100%",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.5px",
+                        }}
+                        onClick={() => handleAddToCart(p.id)}
+                        onMouseEnter={(e) => {
+                          e.target.style.background =
+                            "linear-gradient(135deg, #ff8c00, #ffa500)";
+                          e.target.style.transform =
+                            "translateY(-2px) scale(1.02)";
+                          e.target.style.boxShadow =
+                            "0 8px 25px rgba(255, 107, 53, 0.4)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background =
+                            "linear-gradient(135deg, #ff6b35, #ff8c00)";
+                          e.target.style.transform = "translateY(0) scale(1)";
+                          e.target.style.boxShadow =
+                            "0 4px 15px rgba(255, 107, 53, 0.3)";
+                        }}
+                      >
+                        <i className="fas fa-shopping-cart me-2"></i>
+                        Sepete Ekle
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Product Detail Modal */}
+      {showModal && selectedProduct && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => e.target === e.currentTarget && closeModal()}
+        >
+          <div className="modal-dialog modal-lg modal-dialog-centered">
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "20px" }}
+            >
+              <div className="modal-header border-0 p-0">
+                <div
+                  className="w-100 d-flex justify-content-between align-items-center p-3"
+                  style={{
+                    background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                    borderRadius: "20px 20px 0 0",
+                  }}
+                >
+                  <h5 className="modal-title text-white fw-bold mb-0">
+                    <i className="fas fa-info-circle me-2"></i>
+                    Ürün Detayları
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn btn-link text-white p-0 border-0"
+                    onClick={closeModal}
+                    style={{
+                      fontSize: "1.5rem",
+                      textDecoration: "none",
+                      opacity: 0.9,
+                      transition: "all 0.3s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.opacity = "1";
+                      e.target.style.transform = "scale(1.1)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.opacity = "0.9";
+                      e.target.style.transform = "scale(1)";
+                    }}
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div className="modal-body px-4 pb-4">
+                <div className="row align-items-center">
+                  <div className="col-md-5 text-center">
+                    <div
+                      className="product-image-large mb-3"
+                      style={{
+                        background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                        borderRadius: "20px",
+                        padding: "30px",
+                        height: "300px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {selectedProduct.imageUrl ? (
+                        <img
+                          src={selectedProduct.imageUrl}
+                          alt={selectedProduct.name}
+                          style={{
+                            maxHeight: "240px",
+                            maxWidth: "240px",
+                            objectFit: "contain",
+                            filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.1))",
+                          }}
+                        />
+                      ) : (
+                        <div style={{ fontSize: "4rem", color: "#dee2e6" }}>
+                          🛒
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="col-md-7">
+                    <div className="product-details">
+                      {selectedProduct.badge && (
+                        <span
+                          className="badge mb-3"
+                          style={{
+                            background:
+                              selectedProduct.badge === "İndirim"
+                                ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                                : "linear-gradient(135deg, #28a745, #20c997)",
+                            color: "white",
+                            padding: "6px 15px",
+                            borderRadius: "20px",
+                            fontSize: "0.8rem",
+                            fontWeight: "700",
+                          }}
+                        >
+                          {selectedProduct.badge}
+                        </span>
+                      )}
+
+                      <h3
+                        className="product-title mb-3"
+                        style={{
+                          fontWeight: "700",
+                          color: "#2c3e50",
+                          lineHeight: "1.3",
+                        }}
+                      >
+                        {selectedProduct.name}
+                      </h3>
+
+                      {selectedProduct.rating && (
+                        <div className="rating mb-3 d-flex align-items-center">
+                          <div className="stars me-2">
+                            {[...Array(5)].map((_, i) => (
+                              <i
+                                key={i}
+                                className={`fas fa-star ${
+                                  i < Math.floor(selectedProduct.rating)
+                                    ? "text-warning"
+                                    : "text-muted"
+                                }`}
+                              ></i>
+                            ))}
+                          </div>
+                          <span className="text-muted">
+                            ({selectedProduct.reviewCount || 0} değerlendirme)
+                          </span>
+                        </div>
+                      )}
+
+                      <p
+                        className="product-description mb-4 text-muted"
+                        style={{
+                          fontSize: "1.1rem",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        {selectedProduct.description ||
+                          "Bu ürün hakkında detaylı bilgi için müşteri hizmetleri ile iletişime geçebilirsiniz."}
+                      </p>
+
+                      <div className="price-info mb-4">
+                        {selectedProduct.originalPrice ? (
+                          <div>
+                            <span
+                              className="old-price me-3"
+                              style={{
+                                fontSize: "1.1rem",
+                                textDecoration: "line-through",
+                                color: "#6c757d",
+                              }}
+                            >
+                              {selectedProduct.originalPrice.toFixed(2)} TL
+                            </span>
+                            <span
+                              className="current-price"
+                              style={{
+                                fontSize: "2rem",
+                                fontWeight: "800",
+                                background:
+                                  "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                                backgroundClip: "text",
+                                WebkitBackgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                              }}
+                            >
+                              {selectedProduct.price.toFixed(2)} TL
+                            </span>
+                          </div>
+                        ) : (
+                          <span
+                            className="current-price"
+                            style={{
+                              fontSize: "2rem",
+                              fontWeight: "800",
+                              background:
+                                "linear-gradient(135deg, #28a745, #20c997)",
+                              backgroundClip: "text",
+                              WebkitBackgroundClip: "text",
+                              WebkitTextFillColor: "transparent",
+                            }}
+                          >
+                            {selectedProduct.price.toFixed(2)} TL
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="product-actions d-flex justify-content-center">
+                        <button
+                          className="btn btn-lg w-75"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                            border: "none",
+                            borderRadius: "25px",
+                            padding: "15px 40px",
+                            color: "white",
+                            fontWeight: "700",
+                            fontSize: "1.1rem",
+                            boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+                            transition: "all 0.3s ease",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.5px",
+                          }}
+                          onClick={() => {
+                            // Modal'ı kapat ve sepet sayfasına yönlendir
+                            closeModal();
+                            window.location.href = "/cart";
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.transform =
+                              "translateY(-3px) scale(1.05)";
+                            e.target.style.boxShadow =
+                              "0 8px 25px rgba(255, 107, 53, 0.4)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.transform = "translateY(0) scale(1)";
+                            e.target.style.boxShadow =
+                              "0 4px 15px rgba(255, 107, 53, 0.3)";
+                          }}
+                        >
+                          <i className="fas fa-shopping-cart me-2"></i>
+                          Sepete Ekle
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
