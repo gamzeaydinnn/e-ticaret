@@ -1,11 +1,25 @@
-import api from "../api/client";
+import api from "./api";
 
-const base = "/api/CartItems";
+const base = "/api/Carts";
 
-export const getCart = () => api.get(base).then((r) => r.data);
-export const addToCart = (productId, quantity = 1) =>
-  api.post(base, { productId, quantity }).then((r) => r.data);
-export const updateCartItem = (id, quantity) =>
-  api.put(`${base}/${id}`, { id, quantity }).then((r) => r.data);
-export const removeCartItem = (id) =>
-  api.delete(`${base}/${id}`).then((r) => r.data);
+// userId Guid olarak gönderiliyor varsayıyoruz
+export const CartService = {
+  // Sepeti getir
+  getCart: (userId) => api.get(`${base}/${userId}`).then(r => r.data),
+
+  // Sepete ürün ekle
+  addItem: (userId, productVariantId, quantity) =>
+    api.post(`${base}/${userId}`, { productVariantId, quantity }).then(r => r.data),
+
+  // Sepet ürününü güncelle
+  updateItem: (userId, cartItemId, quantity) =>
+    api.put(`${base}/${userId}/${cartItemId}`, { quantity }).then(r => r.data),
+
+  // Sepet ürününü sil
+  removeItem: (userId, cartItemId) =>
+    api.delete(`${base}/${userId}/${cartItemId}`).then(r => r.data),
+
+  // Sepeti temizle
+  clearCart: (userId) =>
+    api.delete(`${base}/${userId}`).then(r => r.data),
+};

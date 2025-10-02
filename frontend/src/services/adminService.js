@@ -1,116 +1,31 @@
-import client from "../api/client";
+import api from "./api";
 
-export const adminService = {
+export const AdminService = {
   // Dashboard
-  getDashboardStats: async () => {
-    try {
-      const response = await client.get("/admin/dashboard/stats");
-      return response.data;
-    } catch (error) {
-      console.error("Dashboard stats error:", error);
-      // Demo data fallback
-      return {
-        totalUsers: 156,
-        totalProducts: 89,
-        totalOrders: 234,
-        todayOrders: 12,
-        revenue: 45600,
-      };
-    }
-  },
+  getDashboardStats: () => api.get("/api/Admin/dashboard/stats").then(r => r.data),
+  // Categories
+getCategories: () => api.get('/admin/categories').then(r => r.data),
+createCategory: (formData) => api.post('/admin/categories', formData).then(r => r.data),
+updateCategory: (id, formData) => api.put(`/admin/categories/${id}`, formData).then(r => r.data),
+deleteCategory: (id) => api.delete(`/admin/categories/${id}`).then(r => r.data),
 
   // Products
-  getProducts: async (page = 1, size = 10) => {
-    try {
-      const response = await client.get(
-        `/admin/products?page=${page}&size=${size}`
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Get products error:", error);
-      return [];
-    }
-  },
-
-  createProduct: async (productData) => {
-    try {
-      const response = await client.post("/admin/products", productData);
-      return response.data;
-    } catch (error) {
-      console.error("Create product error:", error);
-      throw error;
-    }
-  },
-
-  updateProduct: async (id, productData) => {
-    try {
-      await client.put(`/admin/products/${id}`, productData);
-    } catch (error) {
-      console.error("Update product error:", error);
-      throw error;
-    }
-  },
-
-  deleteProduct: async (id) => {
-    try {
-      await client.delete(`/admin/products/${id}`);
-    } catch (error) {
-      console.error("Delete product error:", error);
-      throw error;
-    }
-  },
-
-  updateStock: async (id, stock) => {
-    try {
-      await client.patch(`/admin/products/${id}/stock`, stock);
-    } catch (error) {
-      console.error("Update stock error:", error);
-      throw error;
-    }
-  },
+  getProducts: (page = 1, size = 10) => api.get(`/api/Admin/products?page=${page}&size=${size}`).then(r => r.data),
+  createProduct: (payload) => api.post("/api/Admin/products", payload).then(r => r.data),
+  updateProduct: (id, payload) => api.put(`/api/Admin/products/${id}`, payload).then(r => r.data),
+  deleteProduct: (id) => api.delete(`/api/Admin/products/${id}`).then(r => r.data),
+  updateStock: (id, stock) => api.patch(`/api/Admin/products/${id}/stock`, stock).then(r => r.data),
 
   // Orders
-  getOrders: async (page = 1, size = 20) => {
-    try {
-      const response = await client.get(
-        `/admin/orders?page=${page}&size=${size}`
-      );
-      return response.data;
-    } catch (error) {
-      console.error("Get orders error:", error);
-      return [];
-    }
-  },
+  getOrders: (page = 1, size = 20) => api.get(`/api/Admin/orders?page=${page}&size=${size}`).then(r => r.data),
+  getOrder: (id) => api.get(`/api/Admin/orders/${id}`).then(r => r.data),
+  updateOrderStatus: (id, status) => api.put(`/api/Admin/orders/${id}/status`, { status }).then(r => r.data),
+  getRecentOrders: () => api.get("/api/Admin/orders/recent").then(r => r.data),
 
-  getOrder: async (id) => {
-    try {
-      const response = await client.get(`/admin/orders/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error("Get order error:", error);
-      throw error;
-    }
-  },
 
-  updateOrderStatus: async (id, status) => {
-    try {
-      await client.put(`/admin/orders/${id}/status`, status);
-    } catch (error) {
-      console.error("Update order status error:", error);
-      throw error;
-    }
-  },
-
-  getRecentOrders: async () => {
-    try {
-      const response = await client.get("/admin/orders/recent");
-      return response.data;
-    } catch (error) {
-      console.error("Get recent orders error:", error);
-      return [];
-    }
-  },
 };
+
+
 /*import api from './api';
 export const AdminService = {
 // Categories
@@ -127,4 +42,34 @@ listOrders: () => api.get('/admin/orders').then(r => r.data),
 updateOrderStatus: (orderId, status) => api.put(`/admin/orders/${orderId}/status`, { status }).then(r=>r.data),
 assignCourier: (orderId, courierId) => api.post('/admin/orders/assign-courier', { orderId, courierId }).then(r=>r.data)
 }
+*/
+
+/*// src/services/adminService.js
+import api from "./api";
+
+export const AdminService = {
+  // Categories
+  getCategories: () => api.get("/admin/categories"),
+  createCategory: (formData) => api.post("/admin/categories", formData),
+  updateCategory: (id, formData) => api.put(`/admin/categories/${id}`, formData),
+  deleteCategory: (id) => api.delete(`/admin/categories/${id}`),
+
+  // Products
+  listProducts: (query = "") => api.get(`/admin/products${query}`),
+  createProduct: (formData) => api.post("/admin/products", formData),
+  updateProduct: (id, formData) => api.put(`/admin/products/${id}`, formData),
+  deleteProduct: (id) => api.delete(`/admin/products/${id}`),
+
+  // Orders
+  listOrders: (query = "") => api.get(`/admin/orders${query}`),
+  updateOrderStatus: (orderId, status) =>
+    api.put(`/admin/orders/${orderId}/status`, { status }),
+  assignCourier: (orderId, courierId) =>
+    api.post("/admin/orders/assign-courier", { orderId, courierId }),
+
+  // Users
+  listUsers: () => api.get("/admin/users"),
+  getUser: (id) => api.get(`/admin/users/${id}`),
+  updateUser: (id, payload) => api.put(`/admin/users/${id}`, payload),
+};
 */
