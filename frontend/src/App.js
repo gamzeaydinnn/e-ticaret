@@ -14,6 +14,12 @@ import CartPage from "./components/CartPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import AdminPanel from "./admin/AdminPanel";
+// Yeni sayfalar
+import Cart from "./pages/Cart";
+import Category from "./pages/Category";
+import Checkout from "./pages/Checkout";
+import Home from "./pages/Home";
+import Product from "./pages/Product";
 import { useCartCount } from "./hooks/useCartCount";
 
 function Header() {
@@ -30,21 +36,42 @@ function Header() {
             <div className="col-md-3">
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center">
-                  <div className="logo-container me-3">
+                  <div className="logo-container me-4">
                     <img
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "50px",
+                        height: "70px",
                         width: "auto",
+                        filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
+                        transition: "all 0.3s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = "scale(1.05)";
+                        e.target.style.filter =
+                          "drop-shadow(0 4px 12px rgba(255,107,53,0.4))";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = "scale(1)";
+                        e.target.style.filter =
+                          "drop-shadow(0 2px 8px rgba(255,107,53,0.3))";
                       }}
                     />
                   </div>
                   <div>
-                    <h4 className="mb-0 fw-bold text-dark">
+                    <h4
+                      className="mb-0 fw-bold"
+                      style={{
+                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        fontSize: "1.4rem",
+                      }}
+                    >
                       Gölköy Gourmet Market
                     </h4>
-                    <small className="text-muted">
+                    <small className="text-muted fw-semibold">
                       Doğal ve Kaliteli Ürünler
                     </small>
                   </div>
@@ -52,60 +79,133 @@ function Header() {
               </Link>
             </div>
 
-            {/* Search Bar */}
+            {/* Modern Search Bar */}
             <div className="col-md-6">
-              <div className="search-container">
-                <div className="input-group">
+              <div className="modern-search-container position-relative">
+                <div className="input-group shadow-sm">
+                  <span className="input-group-text bg-transparent border-0 ps-4">
+                    <i className="fas fa-search text-muted"></i>
+                  </span>
                   <input
                     type="text"
-                    className="form-control form-control-lg"
+                    className="form-control form-control-lg border-0 ps-0"
                     placeholder="Doğal ve kaliteli ürünler arasında ara..."
+                    style={{
+                      borderRadius: "25px 0 0 25px",
+                      fontSize: "0.95rem",
+                      paddingLeft: "0",
+                    }}
                   />
                   <button
-                    className="btn btn-lg text-white border-0"
+                    className="btn btn-lg border-0 px-4"
                     style={{
-                      background: "linear-gradient(45deg, #ff6f00, #ff8f00)",
+                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                      borderRadius: "0 25px 25px 0",
+                      boxShadow: "0 2px 10px rgba(255,107,53,0.3)",
                     }}
                   >
-                    <i className="fas fa-search"></i>
+                    <i className="fas fa-search text-white"></i>
                   </button>
+                </div>
+                <div className="search-suggestions position-absolute w-100 bg-white rounded-3 shadow-lg mt-1 p-2 d-none">
+                  <div className="suggestion-item p-2 rounded text-muted">
+                    <i className="fas fa-fire me-2 text-warning"></i>Popüler:
+                    Organik süt, Taze meyve, Doğal bal
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Actions */}
+            {/* Modern Action Buttons */}
             <div className="col-md-3">
-              <div className="header-actions justify-content-end">
+              <div className="header-actions d-flex justify-content-end align-items-center gap-3">
                 <button
                   onClick={() => navigate("/account")}
-                  className="header-action btn btn-link p-0 text-decoration-none"
+                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                  title="Hesabım"
                 >
-                  <i className="fas fa-user"></i>
-                  <span>Hesabım</span>
+                  <div
+                    className="action-icon p-2 rounded-circle"
+                    style={{
+                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                      boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <i className="fas fa-user text-white"></i>
+                  </div>
+                  <small className="text-muted fw-semibold mt-1">Hesabım</small>
                 </button>
+
                 <button
                   onClick={() => navigate("/orders")}
-                  className="header-action btn btn-link p-0 text-decoration-none"
+                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                  title="Siparişlerim"
                 >
-                  <i className="fas fa-truck"></i>
-                  <span>Siparişlerim</span>
+                  <div
+                    className="action-icon p-2 rounded-circle"
+                    style={{
+                      background: "linear-gradient(135deg, #ff6b35, #ffa500)",
+                      boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <i className="fas fa-truck text-white"></i>
+                  </div>
+                  <small className="text-muted fw-semibold mt-1">
+                    Siparişlerim
+                  </small>
                 </button>
+
                 <button
                   onClick={() => navigate("/cart")}
-                  className="header-action btn btn-link p-0 text-decoration-none position-relative"
+                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent position-relative"
+                  title="Sepetim"
                 >
-                  <i className="fas fa-shopping-cart"></i>
-                  <span>Sepetim</span>
-                  <span className="badge cart-badge position-absolute top-0 start-0">
-                    {cartCount}
-                  </span>
+                  <div
+                    className="action-icon p-2 rounded-circle position-relative"
+                    style={{
+                      background: "linear-gradient(135deg, #27ae60, #58d68d)",
+                      boxShadow: "0 2px 8px rgba(39,174,96,0.3)",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <i className="fas fa-shopping-cart text-white"></i>
+                    {cartCount > 0 && (
+                      <span
+                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #e74c3c, #ec7063)",
+                          fontSize: "0.65rem",
+                          minWidth: "18px",
+                          height: "18px",
+                          animation: "pulse 2s infinite",
+                        }}
+                      >
+                        {cartCount}
+                      </span>
+                    )}
+                  </div>
+                  <small className="text-muted fw-semibold mt-1">Sepetim</small>
                 </button>
+
                 <button
                   onClick={() => navigate("/admin")}
-                  className="header-action btn btn-link p-0 text-decoration-none"
+                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                  title="Admin Panel"
                 >
-                  <i className="fas fa-cog text-warning"></i>
-                  <span>Admin</span>
+                  <div
+                    className="action-icon p-2 rounded-circle"
+                    style={{
+                      background: "linear-gradient(135deg, #f39c12, #f7dc6f)",
+                      boxShadow: "0 2px 8px rgba(243,156,18,0.3)",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    <i className="fas fa-cog text-white"></i>
+                  </div>
+                  <small className="text-muted fw-semibold mt-1">Admin</small>
                 </button>
               </div>
             </div>
@@ -166,6 +266,12 @@ function App() {
           <Route path="/orders" element={<OrderTracking />} />
           <Route path="/payment" element={<PaymentPage />} />
           <Route path="/admin" element={<AdminPanel />} />
+          {/* Yeni sayfalar */}
+          <Route path="/pages/home" element={<Home />} />
+          <Route path="/pages/cart" element={<Cart />} />
+          <Route path="/category/:slug" element={<Category />} />
+          <Route path="/product/:id" element={<Product />} />
+          <Route path="/checkout" element={<Checkout />} />
         </Routes>
       </div>
     </Router>
@@ -173,159 +279,255 @@ function App() {
 }
 
 function HomePage() {
+  const [currentSlide, setCurrentSlide] = React.useState(0);
+  const slides = [
+    {
+      id: 1,
+      title: "SEÇİLİ ÜRÜNLERDE",
+      subtitle: "%25 İNDİRİM!",
+      description:
+        "*Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde geçerlidir. Kampanya kapsamında listelenen ürünler için tıklayın.",
+      badge: "Kahve Keyfi Aç!",
+      background: "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
+      icons: ["🍫", "🍪", "☕"],
+    },
+    {
+      id: 2,
+      title: "DOĞAL ve TAZE",
+      subtitle: "ÜRÜNLERİMİZE GÖZ ATIN",
+      description:
+        "En taze süt ürünleri, organik meyve sebzeler ve kaliteli et ürünleri için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
+      badge: "Günlük Taze",
+      background: "linear-gradient(135deg, #28a745 0%, #34ce57 100%)",
+      icons: ["🥛", "🧀", "🥬"],
+    },
+  ];
+
+  // Auto-slide effect
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 4000); // 4 saniyede bir değişir
+    return () => clearInterval(interval);
+  }, [slides.length]);
+
   return (
     <>
-      {/* Kampanya Carousel */}
+      {/* Auto Kampanya Carousel */}
       <section className="campaign-carousel py-4">
         <div className="container-fluid px-4">
           <div className="position-relative">
             {/* Carousel Container */}
             <div
               className="carousel-container"
-              style={{ borderRadius: "20px", overflow: "hidden" }}
+              style={{
+                borderRadius: "20px",
+                overflow: "hidden",
+                position: "relative",
+              }}
             >
-              <div
-                className="carousel-slide active"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
-                  minHeight: "300px",
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-              >
-                <div className="row align-items-center h-100">
-                  <div className="col-md-6 p-5">
-                    <div className="campaign-badge mb-3">
-                      <span className="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold">
-                        Kahve Keyfi Aç!
-                      </span>
+              {slides.map((slide, index) => (
+                <div
+                  key={slide.id}
+                  className={`carousel-slide ${
+                    index === currentSlide ? "active" : ""
+                  }`}
+                  style={{
+                    background: slide.background,
+                    minHeight: "300px",
+                    position: index === currentSlide ? "relative" : "absolute",
+                    top: index === currentSlide ? "auto" : "0",
+                    left: index === currentSlide ? "auto" : "0",
+                    width: "100%",
+                    overflow: "hidden",
+                    opacity: index === currentSlide ? 1 : 0,
+                    transition: "opacity 0.8s ease-in-out",
+                    zIndex: index === currentSlide ? 2 : 1,
+                  }}
+                >
+                  <div className="row align-items-center h-100">
+                    <div className="col-md-6 p-5">
+                      <div className="campaign-badge mb-3">
+                        <span className="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold">
+                          {slide.badge}
+                        </span>
+                      </div>
+                      <h2
+                        className="text-white fw-bold mb-3"
+                        style={{
+                          fontSize: "2.5rem",
+                          animation:
+                            index === currentSlide
+                              ? "slideInLeft 1s ease"
+                              : "none",
+                        }}
+                      >
+                        {slide.title}
+                        <br />
+                        <span className="fw-bolder">{slide.subtitle}</span>
+                      </h2>
+                      <p
+                        className="text-white mb-4 opacity-90"
+                        style={{
+                          animation:
+                            index === currentSlide
+                              ? "slideInLeft 1s ease 0.3s both"
+                              : "none",
+                        }}
+                      >
+                        {slide.description}
+                      </p>
                     </div>
-                    <h2
-                      className="text-white fw-bold mb-3"
-                      style={{ fontSize: "2.5rem" }}
-                    >
-                      SEÇİLİ ÜRÜNLERDE
-                      <br />
-                      <span className="fw-bolder">%25 İNDİRİM!</span>
-                    </h2>
-                    <p className="text-white mb-4 opacity-90">
-                      *Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde
-                      geçerlidir.
-                      <br />
-                      Kampanya kapsamında listelenen ürünler için tıklayın.
-                    </p>
-                  </div>
-                  <div className="col-md-6 d-flex justify-content-center align-items-center p-4">
-                    <div className="campaign-visual">
-                      <div className="product-basket position-relative">
-                        <div className="floating-items">
-                          <div
-                            className="product-item"
-                            style={{
-                              position: "absolute",
-                              top: "20px",
-                              right: "30px",
-                              background: "rgba(255,255,255,0.9)",
-                              padding: "15px",
-                              borderRadius: "10px",
-                              fontSize: "1.5rem",
-                            }}
-                          >
-                            🍫
-                          </div>
-                          <div
-                            className="product-item"
-                            style={{
-                              position: "absolute",
-                              top: "80px",
-                              right: "80px",
-                              background: "rgba(255,255,255,0.9)",
-                              padding: "15px",
-                              borderRadius: "10px",
-                              fontSize: "1.5rem",
-                            }}
-                          >
-                            🍪
-                          </div>
-                          <div
-                            className="product-item"
-                            style={{
-                              position: "absolute",
-                              top: "60px",
-                              right: "10px",
-                              background: "rgba(255,255,255,0.9)",
-                              padding: "15px",
-                              borderRadius: "10px",
-                              fontSize: "1.5rem",
-                            }}
-                          >
-                            ☕
+                    <div className="col-md-6 d-flex justify-content-center align-items-center p-4">
+                      <div className="campaign-visual">
+                        <div className="product-basket position-relative">
+                          <div className="floating-items">
+                            {slide.icons.map((icon, iconIndex) => (
+                              <div
+                                key={iconIndex}
+                                className="product-item"
+                                style={{
+                                  position: "absolute",
+                                  top: `${20 + iconIndex * 30}px`,
+                                  right: `${30 + (iconIndex % 2) * 50}px`,
+                                  background: "rgba(255,255,255,0.9)",
+                                  padding: "15px",
+                                  borderRadius: "15px",
+                                  fontSize: "2rem",
+                                  boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+                                  animation:
+                                    index === currentSlide
+                                      ? `floatIn 1s ease ${
+                                          iconIndex * 0.2 + 0.5
+                                        }s both`
+                                      : "none",
+                                }}
+                              >
+                                {icon}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Slide Counter */}
-                <div className="position-absolute top-0 end-0 m-3">
-                  <span className="badge bg-dark bg-opacity-50 px-3 py-2 rounded-pill">
-                    1 / 3
-                  </span>
+                  {/* Slide Counter */}
+                  <div className="position-absolute top-0 end-0 m-3">
+                    <span className="badge bg-dark bg-opacity-50 px-3 py-2 rounded-pill">
+                      {currentSlide + 1} / {slides.length}
+                    </span>
+                  </div>
+
+                  {/* Slide Indicators */}
+                  <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
+                    <div className="d-flex gap-2">
+                      {slides.map((_, indicatorIndex) => (
+                        <button
+                          key={indicatorIndex}
+                          className={`slide-indicator ${
+                            indicatorIndex === currentSlide ? "active" : ""
+                          }`}
+                          style={{
+                            width: "12px",
+                            height: "12px",
+                            borderRadius: "50%",
+                            border: "none",
+                            background:
+                              indicatorIndex === currentSlide
+                                ? "white"
+                                : "rgba(255,255,255,0.5)",
+                            transition: "all 0.3s ease",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => setCurrentSlide(indicatorIndex)}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
-
-            {/* Navigation Arrows */}
-            <button
-              className="carousel-nav carousel-prev position-absolute top-50 start-0 translate-middle-y"
-              style={{
-                background: "rgba(255,255,255,0.9)",
-                border: "none",
-                borderRadius: "50%",
-                width: "50px",
-                height: "50px",
-                marginLeft: "-25px",
-                boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                zIndex: 10,
-              }}
-            >
-              <i className="fas fa-chevron-left text-dark"></i>
-            </button>
-
-            <button
-              className="carousel-nav carousel-next position-absolute top-50 end-0 translate-middle-y"
-              style={{
-                background: "rgba(255,255,255,0.9)",
-                border: "none",
-                borderRadius: "50%",
-                width: "50px",
-                height: "50px",
-                marginRight: "-25px",
-                boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                zIndex: 10,
-              }}
-            >
-              <i className="fas fa-chevron-right text-dark"></i>
-            </button>
           </div>
         </div>
       </section>
 
       {/* İlgini Çekebilecek Ürünler Section */}
-      <section className="featured-products-section py-5 bg-light">
-        <div className="container-fluid px-4">
-          {/* Section Header */}
+      <section
+        className="featured-products-section py-5"
+        style={{
+          background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
+          position: "relative",
+        }}
+      >
+        <div
+          className="section-bg-pattern position-absolute w-100 h-100"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ff6b35' fill-opacity='0.03'%3E%3Cpath d='m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            opacity: 0.5,
+          }}
+        ></div>
+
+        <div className="container-fluid px-4 position-relative">
+          {/* Modern Section Header */}
           <div className="text-center mb-5">
-            <h2 className="section-title mb-3 fw-bold">
-              İlgini Çekebilecek Ürünler
-            </h2>
-            <div className="section-subtitle">
-              <span className="badge bg-warning text-dark px-3 py-2 fs-6">
-                <i className="fas fa-fire me-2"></i>
-                Bu Fırsatları Kaçırma
-              </span>
+            <div
+              className="section-header-animation"
+              style={{ animation: "fadeInUp 1s ease" }}
+            >
+              <div className="section-badge mb-3">
+                <span
+                  className="modern-badge px-4 py-2 rounded-pill fw-bold"
+                  style={{
+                    background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                    color: "white",
+                    fontSize: "0.85rem",
+                    letterSpacing: "0.5px",
+                    textTransform: "uppercase",
+                    boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+                  }}
+                >
+                  <i className="fas fa-fire me-2 animate__animated animate__pulse animate__infinite"></i>
+                  Özel Seçimler
+                </span>
+              </div>
+
+              <h2
+                className="section-title mb-3"
+                style={{
+                  fontSize: "2.5rem",
+                  fontWeight: "800",
+                  background: "linear-gradient(135deg, #2c3e50, #34495e)",
+                  backgroundClip: "text",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  letterSpacing: "-0.5px",
+                }}
+              >
+                İlgini Çekebilecek Ürünler
+              </h2>
+
+              <p
+                className="section-description text-muted mb-4"
+                style={{
+                  fontSize: "1.1rem",
+                  maxWidth: "600px",
+                  margin: "0 auto",
+                }}
+              >
+                Gölköy Gourmet Market'in özenle seçilmiş, doğal ve taze
+                ürünleriyle tanışın
+              </p>
+
+              <div
+                className="section-decorative-line mx-auto"
+                style={{
+                  width: "80px",
+                  height: "3px",
+                  background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                  borderRadius: "2px",
+                }}
+              ></div>
             </div>
           </div>
 
@@ -340,21 +542,31 @@ function HomePage() {
           <div className="row justify-content-center">
             <div className="col-lg-10">
               <div className="join-journey-card text-center">
-                <h2 className="journey-title mb-4">
+                <div className="journey-icon mb-4">
+                  <div className="animated-icons">
+                    <i className="fas fa-heart pulse-icon"></i>
+                    <i className="fas fa-handshake bounce-icon"></i>
+                    <i className="fas fa-star twinkle-icon"></i>
+                  </div>
+                </div>
+
+                <h2 className="journey-title mb-4 animated-title">
                   Bu Yolculukta Bizimle Olun
                 </h2>
-                <p className="journey-subtitle mb-4">
-                  AlışMarket ailesi olarak, sizlerle birlikte büyümek ve
-                  gelişmek istiyoruz.
+
+                <p className="journey-subtitle mb-4 fade-in-text">
+                  Gölköy Gourmet Market ailesi olarak, sizlerle birlikte büyümek
+                  ve gelişmek istiyoruz.
                   <br />
                   Görüşleriniz bizim için çok değerli.
                 </p>
-                <div className="journey-buttons">
-                  <button className="btn btn-light btn-lg me-3">
+
+                <div className="journey-buttons animated-buttons">
+                  <button className="btn btn-light btn-lg me-3 hover-lift">
                     <i className="fas fa-envelope me-2"></i>
                     İletişime Geçin
                   </button>
-                  <button className="btn btn-outline-light btn-lg">
+                  <button className="btn btn-outline-light btn-lg hover-lift">
                     <i className="fas fa-users me-2"></i>
                     Bültenimize Katılın
                   </button>
@@ -370,24 +582,41 @@ function HomePage() {
         <div className="container-fluid px-4">
           <div className="row justify-content-center align-items-center">
             <div className="col-lg-8 text-center">
-              <h2 className="newsletter-title mb-3">
+              <div className="newsletter-icon-animation mb-4">
+                <div className="floating-envelope">
+                  <i className="fas fa-envelope-open newsletter-main-icon"></i>
+                  <div className="newsletter-sparkles">
+                    <i className="fas fa-star sparkle-1"></i>
+                    <i className="fas fa-star sparkle-2"></i>
+                    <i className="fas fa-star sparkle-3"></i>
+                    <i className="fas fa-star sparkle-4"></i>
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="newsletter-title mb-3 newsletter-title-animated">
                 Yeni Ürünlerden İlk Sen Haberdar Ol
               </h2>
-              <p className="newsletter-subtitle mb-4">
+
+              <p className="newsletter-subtitle mb-4 newsletter-subtitle-animated">
                 Yeni ürünler, özel kampanyalar ve fırsatlar için e-bültenimize
                 katıl
               </p>
-              <div className="newsletter-form">
-                <div className="input-group">
+
+              <div className="newsletter-form newsletter-form-animated">
+                <div className="input-group newsletter-input-group">
                   <input
                     type="email"
-                    className="form-control form-control-lg"
+                    className="form-control form-control-lg newsletter-input"
                     placeholder="E-mail adresiniz"
                   />
-                  <button className="btn btn-light btn-lg">Katıl</button>
+                  <button className="btn btn-light btn-lg newsletter-btn">
+                    <i className="fas fa-paper-plane me-2"></i>
+                    Katıl
+                  </button>
                 </div>
-                <div className="newsletter-note mt-3">
-                  <i className="fas fa-heart me-2"></i>
+                <div className="newsletter-note mt-3 newsletter-note-animated">
+                  <i className="fas fa-heart me-2 beating-heart"></i>
                   Spam göndermiyoruz, sadece değerli içerik
                 </div>
               </div>
@@ -396,19 +625,46 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="main-footer">
-        <div className="container-fluid px-4">
+      {/* Modern Footer */}
+      <footer
+        className="modern-footer"
+        style={{
+          background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
+          color: "white",
+        }}
+      >
+        <div className="container-fluid px-4 py-5">
           <div className="row">
             {/* Company Info */}
-            <div className="col-lg-3 col-md-6 mb-4">
+            <div className="col-lg-4 col-md-6 mb-4">
               <div className="footer-brand">
-                <div className="d-flex align-items-center mb-3">
-                  <div className="footer-logo me-2">AM</div>
+                <div className="d-flex align-items-center mb-4">
+                  <img
+                    src="/images/golkoy-logo.png"
+                    alt="Gölköy Gourmet Market"
+                    style={{
+                      height: "60px",
+                      width: "auto",
+                      filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
+                    }}
+                    className="me-3"
+                  />
                   <div>
-                    <h5 className="footer-brand-name">AlışMarket</h5>
-                    <small className="footer-brand-tagline">
-                      Yeni Nesil E-Ticaret
+                    <h5
+                      className="footer-brand-name mb-1"
+                      style={{
+                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        backgroundClip: "text",
+                        WebkitBackgroundClip: "text",
+                        WebkitTextFillColor: "transparent",
+                        fontSize: "1.4rem",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      Gölköy Gourmet Market
+                    </h5>
+                    <small style={{ color: "#bdc3c7" }}>
+                      Doğal ve Kaliteli Ürünler
                     </small>
                   </div>
                 </div>
@@ -440,42 +696,42 @@ function HomePage() {
               <ul className="footer-links">
                 <li>
                   <a href="#" className="footer-link">
-                    Elektronik
+                    Meyve & Sebze
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Moda
+                    Et & Tavuk & Balık
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Ev & Yaşam
+                    Süt Ürünleri
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Kozmetik
+                    Temel Gıda
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Spor & Outdoor
+                    İçecekler
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Kitap & Kırtasiye
+                    Atıştırmalık
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Anne & Bebek
+                    Temizlik
                   </a>
                 </li>
                 <li>
                   <a href="#" className="footer-link">
-                    Oyuncak
+                    Favorilerim
                   </a>
                 </li>
               </ul>
