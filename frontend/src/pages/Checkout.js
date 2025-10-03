@@ -1,6 +1,6 @@
 // Adres, kargo, ödeme adımları
 import React, { useEffect, useState } from "react";
-import api from "../api/client";
+import api from "../services/api";
 import { useNavigate } from "react-router-dom";
 
 export default function Checkout() {

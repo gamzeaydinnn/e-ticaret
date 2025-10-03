@@ -14,12 +14,6 @@ import CartPage from "./components/CartPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import AdminPanel from "./admin/AdminPanel";
-// Yeni sayfalar
-import Cart from "./pages/Cart";
-import Category from "./pages/Category";
-import Checkout from "./pages/Checkout";
-import Home from "./pages/Home";
-import Product from "./pages/Product";
 import { useCartCount } from "./hooks/useCartCount";
 
 function Header() {
@@ -41,7 +35,7 @@ function Header() {
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "70px",
+                        height: "120px",
                         width: "auto",
                         filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                         transition: "all 0.3s ease",
@@ -266,12 +260,6 @@ function App() {
           <Route path="/orders" element={<OrderTracking />} />
           <Route path="/payment" element={<PaymentPage />} />
           <Route path="/admin" element={<AdminPanel />} />
-          {/* Yeni sayfalar */}
-          <Route path="/pages/home" element={<Home />} />
-          <Route path="/pages/cart" element={<Cart />} />
-          <Route path="/category/:slug" element={<Category />} />
-          <Route path="/product/:id" element={<Product />} />
-          <Route path="/checkout" element={<Checkout />} />
         </Routes>
       </div>
     </Router>
@@ -289,7 +277,11 @@ function HomePage() {
         "*Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde geçerlidir. Kampanya kapsamında listelenen ürünler için tıklayın.",
       badge: "Kahve Keyfi Aç!",
       background: "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
-      icons: ["🍫", "🍪", "☕"],
+      icons: [
+        "/images/nescafe.jpg",
+        "/images/tahil-cipsi.jpg",
+        "/images/coca-cola.jpg",
+      ],
     },
     {
       id: 2,
@@ -299,7 +291,11 @@ function HomePage() {
         "En taze süt ürünleri, organik meyve sebzeler ve kaliteli et ürünleri için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
       badge: "Günlük Taze",
       background: "linear-gradient(135deg, #28a745 0%, #34ce57 100%)",
-      icons: ["🥛", "🧀", "🥬"],
+      icons: [
+        "/images/pınar-süt.jpg",
+        "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+        "/images/domates.webp",
+      ],
     },
   ];
 
@@ -388,12 +384,11 @@ function HomePage() {
                                 className="product-item"
                                 style={{
                                   position: "absolute",
-                                  top: `${20 + iconIndex * 30}px`,
-                                  right: `${30 + (iconIndex % 2) * 50}px`,
-                                  background: "rgba(255,255,255,0.9)",
-                                  padding: "15px",
-                                  borderRadius: "15px",
-                                  fontSize: "2rem",
+                                  top: `${15 + iconIndex * 40}px`,
+                                  right: `${25 + (iconIndex % 2) * 70}px`,
+                                  background: "rgba(255,255,255,0.95)",
+                                  padding: "8px",
+                                  borderRadius: "12px",
                                   boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
                                   animation:
                                     index === currentSlide
@@ -401,9 +396,23 @@ function HomePage() {
                                           iconIndex * 0.2 + 0.5
                                         }s both`
                                       : "none",
+                                  width: "90px",
+                                  height: "90px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
                                 }}
                               >
-                                {icon}
+                                <img
+                                  src={icon}
+                                  alt="Product"
+                                  style={{
+                                    width: "75px",
+                                    height: "75px",
+                                    objectFit: "cover",
+                                    borderRadius: "8px",
+                                  }}
+                                />
                               </div>
                             ))}
                           </div>
@@ -643,7 +652,7 @@ function HomePage() {
                     src="/images/golkoy-logo.png"
                     alt="Gölköy Gourmet Market"
                     style={{
-                      height: "60px",
+                      height: "80px",
                       width: "auto",
                       filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                     }}

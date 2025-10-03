@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { getAllProducts } from "../services/productService";
+import { ProductService } from "../services/productService";
 
 export default function ProductGrid() {
   const [data, setData] = useState([]);
@@ -37,7 +37,7 @@ export default function ProductGrid() {
   };
 
   useEffect(() => {
-    getAllProducts()
+    ProductService.list()
       .then(setData)
       .catch((e) => {
         console.error("API hatası, demo data kullanılıyor:", e);
@@ -45,7 +45,7 @@ export default function ProductGrid() {
         setData([
           {
             id: 1,
-            name: "Yeşil Cif Krem",
+            name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
             description: "Yüzey temizleyici, çok amaçlı temizlik",
             price: 204.95,
             originalPrice: 229.95,
@@ -61,7 +61,7 @@ export default function ProductGrid() {
           },
           {
             id: 2,
-            name: "Ülker Altınbaşak Tahıl Cipsi",
+            name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
             description: "Taco aromalı & çıtır tahıl cipsi",
             price: 18.0,
             categoryId: 6,
@@ -76,7 +76,7 @@ export default function ProductGrid() {
           },
           {
             id: 3,
-            name: "Lipton Ice Tea Limon Aromalı",
+            name: "Lipton Ice Tea Limon 330 Ml",
             description: "Soğuk çay, kutu 330ml",
             price: 60.0,
             categoryId: 5,
@@ -91,7 +91,7 @@ export default function ProductGrid() {
           },
           {
             id: 4,
-            name: "Dana Kuşbaşı Et",
+            name: "Dana But Tas Kebaplık Et Çiftlik Kg",
             description: "Taze dana eti, kuşbaşı doğranmış 500g",
             price: 375.95,
             originalPrice: 429.95,
@@ -122,7 +122,7 @@ export default function ProductGrid() {
           },
           {
             id: 6,
-            name: "Nescafe 2'si 1 Arada",
+            name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
             description: "Kahve karışımı, paket 15 x 10g",
             price: 145.55,
             originalPrice: 169.99,
@@ -164,7 +164,7 @@ export default function ProductGrid() {
           },
           {
             id: 9,
-            name: "Sek Kaşar Peyniri",
+            name: "Sek Kaşar Peyniri 200 G",
             description: "Dilimli kaşar peyniri 200g",
             price: 75.9,
             categoryId: 3,
@@ -179,7 +179,7 @@ export default function ProductGrid() {
           },
           {
             id: 10,
-            name: "Mis Bulgur Pilavlık",
+            name: "Mis Bulgur Pilavlık 1Kg",
             description: "Birinci sınıf bulgur 1kg",
             price: 32.9,
             categoryId: 4,
@@ -192,7 +192,7 @@ export default function ProductGrid() {
           },
           {
             id: 11,
-            name: "Coca Cola 330ml",
+            name: "Coca-Cola Orijinal Tat Kutu 330ml",
             description: "Kola gazlı içecek kutu",
             price: 12.5,
             categoryId: 5,

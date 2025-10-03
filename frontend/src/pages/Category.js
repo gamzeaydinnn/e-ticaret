@@ -1,7 +1,7 @@
 //Kategoriye göre ürün listeleme, filtre sidebar
 import React, { useEffect, useState } from "react";
-import api from "../api/client";
-import ProductGrid from "../components/ProductGrid";
+import api from "../services/api";
+import ProductCard from "./components/ProductCard";
 import { useParams } from "react-router-dom";
 
 export default function Category() {
@@ -11,11 +11,11 @@ export default function Category() {
 
   useEffect(() => {
     api
-      .get(`/api/Categories/slug/${slug}`)
+      .get(`/categories/slug/${slug}`)
       .then((r) => setCategory(r.data))
       .catch(() => {});
     api
-      .get(`/api/Products?categorySlug=${slug}`)
+      .get(`/products?category=${slug}`)
       .then((r) => setProducts(r.data))
       .catch(() => {});
   }, [slug]);
@@ -30,7 +30,11 @@ export default function Category() {
           <div className="bg-white p-4 rounded shadow">Filtreler (örnek)</div>
         </aside>
         <main className="md:col-span-3">
-          <ProductGrid products={products} />
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
         </main>
       </div>
     </div>
