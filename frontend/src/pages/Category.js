@@ -11,11 +11,11 @@ export default function Category() {
 
   useEffect(() => {
     api
-      .get(`/categories/slug/${slug}`)
+      .get(`/api/Categories/slug/${slug}`)
       .then((r) => setCategory(r.data))
       .catch(() => {});
     api
-      .get(`/products?category=${slug}`)
+      .get(`/api/Products?categorySlug=${slug}`)
       .then((r) => setProducts(r.data))
       .catch(() => {});
   }, [slug]);

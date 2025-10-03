@@ -1,15 +1,13 @@
-// kategori grid kutucuğu
+// CategoryTile.js
+import React from "react";
 
-/*import React from 'react';
-import { Link } from 'react-router-dom';
-export default function CategoryTile({ category }){
+export default function CategoryTile({ category }) {
   return (
-    <Link to={`/category/${category.slug}`} className="block bg-white rounded shadow p-4 text-center">
-      <div className="h-32 mb-3 overflow-hidden rounded">
-        <img src={category.image || '/placeholder-category.png'} className="w-full h-full object-cover" />
-      </div>
-      <div className="font-semibold">{category.name}</div>
-    </Link>
+    <div className="border p-4 rounded shadow hover:shadow-lg transition cursor-pointer">
+      {category?.ImageUrl && (
+        <img src={category.ImageUrl} alt={category.name} className="mb-2 w-full h-32 object-cover rounded" />
+      )}
+      <h3 className="font-semibold">{category.name}</h3>
+    </div>
   );
 }
-*/

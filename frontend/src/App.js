@@ -15,6 +15,15 @@ import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import AdminPanel from "./admin/AdminPanel";
 import { useCartCount } from "./hooks/useCartCount";
+import AdminMicro from "./pages/Admin/AdminMicro";
+import Home from "./pages/Home";
+import Cart from "./pages/Cart";
+import Category from "./pages/Category";
+import Product from "./pages/ProductDetail";
+import Checkout from "./pages/Checkout";
+import Category from "./pages/Category";
+import Product from "./pages/Product";
+import Checkout from "./pages/Checkout";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -260,6 +269,13 @@ function App() {
           <Route path="/orders" element={<OrderTracking />} />
           <Route path="/payment" element={<PaymentPage />} />
           <Route path="/admin" element={<AdminPanel />} />
+          {/* Yeni sayfalar */}
+          <Route path="/pages/home" element={<Home />} />
+          <Route path="/pages/cart" element={<Cart />} />
+          <Route path="/category/:slug" element={<Category />} />
+          <Route path="/product/:id" element={<Product />} />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/admin/micro" element={<AdminMicro />} />
         </Routes>
       </div>
     </Router>
