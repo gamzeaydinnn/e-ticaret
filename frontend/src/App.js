@@ -36,12 +36,12 @@ function Header() {
             <div className="col-md-3">
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center">
-                  <div className="logo-container me-4">
+                  <div className="logo-container me-2">
                     <img
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "120px",
+                        height: "150px",
                         width: "auto",
                         filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                         transition: "all 0.3s ease",
@@ -60,30 +60,24 @@ function Header() {
                   </div>
                   <div>
                     <h4
-                      className="mb-0 fw-bold"
+                      className="mb-0 fw-bold animated-slogan"
                       style={{
-                        background: "linear-gradient(135deg, #2d5016, #4a7c59)",
+                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500, #ff7f50, #ff4500)",
+                        backgroundSize: "400% 400%",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.6rem",
-                        fontFamily: "'Playfair Display', serif",
-                        letterSpacing: "0.5px",
+                        fontSize: "2.2rem",
+                        fontFamily: "'Dancing Script', cursive",
+                        fontWeight: "700",
+                        letterSpacing: "2px",
+                        animation: "gradientShift 4s ease-in-out infinite, fadeInScale 0.8s ease-out, bounceIn 1.2s ease-out",
+                        textShadow: "0 3px 6px rgba(255, 107, 53, 0.3)",
+                        transform: "rotate(-2deg)",
                       }}
                     >
                       Doğadan Sofralara
                     </h4>
-                    <small 
-                      className="fw-semibold"
-                      style={{
-                        color: "#6c757d",
-                        fontSize: "0.85rem",
-                        fontStyle: "italic",
-                        letterSpacing: "0.3px"
-                      }}
-                    >
-                      Gölköy Gourmet Market
-                    </small>
                   </div>
                 </div>
               </Link>
@@ -114,7 +108,7 @@ function Header() {
                       boxShadow: "0 2px 10px rgba(255,107,53,0.3)",
                     }}
                   >
-                    <i className="fas fa-search text-white"></i>
+                    <i className="fas fa-arrow-right text-white"></i>
                   </button>
                 </div>
                 <div className="search-suggestions position-absolute w-100 bg-white rounded-3 shadow-lg mt-1 p-2 d-none">
@@ -675,31 +669,30 @@ function HomePage() {
                     src="/images/golkoy-logo.png"
                     alt="Gölköy Gourmet Market"
                     style={{
-                      height: "80px",
+                      height: "100px",
                       width: "auto",
                       filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                     }}
-                    className="me-3"
+                    className="me-2"
                   />
                   <div>
                     <h5
                       className="footer-brand-name mb-1"
                       style={{
-                        background: "linear-gradient(135deg, #2d5016, #4a7c59)",
+                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500)",
+                        backgroundSize: "200% 200%",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.5rem",
-                        fontWeight: "bold",
-                        fontFamily: "'Playfair Display', serif",
-                        letterSpacing: "0.5px",
+                        fontSize: "1.8rem",
+                        fontWeight: "700",
+                        fontFamily: "'Dancing Script', cursive",
+                        letterSpacing: "1px",
+                        animation: "gradientShift 4s ease-in-out infinite",
                       }}
                     >
                       Doğadan Sofralara
                     </h5>
-                    <small style={{ color: "#bdc3c7", fontStyle: "italic" }}>
-                      Gölköy Gourmet Market
-                    </small>
                   </div>
                 </div>
                 <p className="footer-description">
