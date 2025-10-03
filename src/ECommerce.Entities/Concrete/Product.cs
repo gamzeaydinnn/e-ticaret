@@ -15,10 +15,11 @@ namespace ECommerce.Entities.Concrete
     public string ImageUrl { get; set; } = string.Empty;
     public string SKU { get; set; } = string.Empty;
     public string Currency { get; set; } = "TRY";
+    
 
     //o	Price, DiscountPrice, IsActive, Slug, Images (n-n), Variants ilişkisi.
 
-    public virtual Category Category { get; set; } = null!;
+        public virtual Category Category { get; set; } = null!;
     
     // Navigation
     public virtual ICollection<Category> Categories { get; set; } = new HashSet<Category>();

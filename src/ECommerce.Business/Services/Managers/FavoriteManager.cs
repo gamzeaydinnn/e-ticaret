@@ -41,15 +41,20 @@ namespace ECommerce.Business.Services.Managers
                 await _favoriteRepository.AddAsync(new Favorite { UserId = userId, ProductId = productId, IsActive = true });
             }
             else
-            {
-                favorite.IsActive = !favorite.IsActive;
-                _favoriteRepository.Update(favorite);
-            }
+    {
+        favorite.IsActive = !favorite.IsActive;
+        await _favoriteRepository.UpdateAsync(favorite); 
+    }
         }
 
         public async Task RemoveFavoriteAsync(Guid userId, int productId)
         {
             await _favoriteRepository.RemoveFavoriteAsync(userId, productId);
+        }
+
+        public Task<int> GetFavoriteCountAsync()
+        {
+            throw new NotImplementedException();
         }
     }
 }

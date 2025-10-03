@@ -27,5 +27,10 @@ namespace ECommerce.Business.Services.Managers
             Console.WriteLine($"Payment {paymentId} durumu kontrol ediliyor...");
             return true; // Ödeme başarılı
         }
+
+        public Task<int> GetPaymentCountAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

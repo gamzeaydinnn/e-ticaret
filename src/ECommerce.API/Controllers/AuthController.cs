@@ -31,18 +31,27 @@ public class AuthController : ControllerBase
         var token = await _authService.LoginAsync(dto);
         return Ok(new { Token = token });
     }
+    [HttpPost("refresh")]
+public async Task<IActionResult> Refresh(TokenRefreshDto dto)
+{
+    var newToken = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
+    return Ok(new { Token = newToken });
+}
+
     [HttpGet("me")]
 public async Task<IActionResult> Me()
 {
-    // Token'dan user id veya email claim çek
-    var userId = User.FindFirst("sub")?.Value; // sub claim genelde userId olur
+    var userId = User.FindFirst("sub")?.Value; 
     if (string.IsNullOrEmpty(userId))
         return Unauthorized();
 
-    var user = await _authService.GetUserByIdAsync(Guid.Parse(userId));
+    if (!int.TryParse(userId, out var parsedUserId))
+        return BadRequest("Invalid user id in token");
+
+    var user = await _authService.GetUserByIdAsync(parsedUserId);
     if (user == null) return NotFound();
 
-    return Ok(user); // burada istersen DTO dönebilirsin
+    return Ok(user);
 }
 
 }

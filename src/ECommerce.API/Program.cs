@@ -84,7 +84,6 @@ builder.Services.AddScoped<UserManager>();
 builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
-builder.Services.AddScoped<LocalSalesRepository>();
 
 builder.Services.AddScoped<StockSyncJob>();
 // MicroService ve MicroSyncManager

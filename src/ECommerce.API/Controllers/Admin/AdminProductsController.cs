@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
+using Microsoft.AspNetCore.Authorization;
 /*ProductsController
 •	GET /api/products -> ürün listesi (kategori, pagination destekleyin)
 •	GET /api/products/{id}
@@ -11,6 +12,8 @@ namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]
 [Route("api/admin/[controller]")]
+[Authorize(Roles = "SuperAdmin,Admin,Manager,Editor")]
+
 public class AdminProductsController : ControllerBase
 {
     private readonly IProductService _productService;

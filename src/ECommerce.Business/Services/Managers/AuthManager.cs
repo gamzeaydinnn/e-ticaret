@@ -1,16 +1,13 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using Microsoft.Extensions.Configuration;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
-using ECommerce.Core.Helpers; // <- Yeni JwtTokenHelper burada
+using ECommerce.Core.Helpers;
 using ECommerce.Core.DTOs.Auth;
-using ECommerce.Business.Services.Interfaces; // <- LoginDto ve RegisterDto için
+using ECommerce.Core.DTOs.User;
+using ECommerce.Business.Services.Interfaces;
 
 public class AuthManager : IAuthService
 {
@@ -23,6 +20,7 @@ public class AuthManager : IAuthService
         _config = config;
     }
 
+    // Yeni kullanıcı kaydı
     public async Task<string> RegisterAsync(RegisterDto dto)
     {
         if (_context.Users.Any(u => u.Email == dto.Email))
@@ -31,9 +29,11 @@ public class AuthManager : IAuthService
         var user = new User
         {
             Email = dto.Email,
-            UserName = dto.Email, // Identity için gerekli
+            UserName = dto.Email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = "User"
+            Role = "User",
+            FirstName = dto.FirstName,
+            LastName = dto.LastName
         };
 
         _context.Users.Add(user);
@@ -42,6 +42,7 @@ public class AuthManager : IAuthService
         return GenerateJwtToken(user);
     }
 
+    // Login
     public async Task<string> LoginAsync(LoginDto dto)
     {
         var user = _context.Users.SingleOrDefault(u => u.Email == dto.Email);
@@ -51,16 +52,52 @@ public class AuthManager : IAuthService
         return GenerateJwtToken(user);
     }
 
+    // Kullanıcıyı Id ile getir
+    public async Task<UserLoginDto> GetUserByIdAsync(int userId)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return null;
+
+        return new UserLoginDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Role = user.Role
+        };
+    }
+
+    // JWT token üret
     private string GenerateJwtToken(User user)
     {
         return JwtTokenHelper.GenerateToken(
-            user.Id,
+            user.Id, // int olarak gönder
             user.Email,
             user.Role,
             _config["Jwt:Key"],
             _config["Jwt:Issuer"],
             _config["Jwt:Audience"],
-            expiresMinutes: 120 // İstersen süresini değiştirebilirsin
+            expiresMinutes: 120
         );
+    }
+
+    // Refresh token üretme
+    public async Task<string> RefreshTokenAsync(string token, string refreshToken)
+    {
+        // Burada token doğrulama, kullanıcı kontrolü ve yeni JWT üret
+        throw new NotImplementedException();
+    }
+
+    // Refresh token iptal et
+    public async Task RevokeRefreshTokenAsync(int userId)
+    {
+        // Kullanıcının refresh tokenlarını iptal et
+        throw new NotImplementedException();
+    }
+
+    public Task RevokeRefreshTokenAsync(Guid userId)
+    {
+        throw new NotImplementedException();
     }
 }
