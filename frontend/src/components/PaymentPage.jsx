@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { processPayment } from "../services/orderService";
-import { getCart } from "../services/cartService";
+import { OrderService } from "../services/orderService";
+import { CartService } from "../services/cartService";
 
 const PaymentPage = () => {
   const [cartItems, setCartItems] = useState([]);
@@ -39,7 +39,8 @@ const PaymentPage = () => {
 
   const loadCartItems = async () => {
     try {
-      const items = await getCart();
+      const userId = localStorage.getItem("userId");
+      const items = await CartService.getCart(userId);
       setCartItems(items || []);
     } catch (error) {
       console.error("Sepet yüklenemedi:", error);
@@ -185,7 +186,7 @@ const PaymentPage = () => {
             : null,
       };
 
-      const result = await processPayment(paymentData);
+      const result = await OrderService.checkout(paymentData);
 
       if (result.success) {
         alert(

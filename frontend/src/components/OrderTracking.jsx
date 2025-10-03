@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getUserOrders } from "../services/orderService";
+import { OrderService } from "../services/orderService";
 
 const OrderTracking = () => {
   const [orders, setOrders] = useState([]);
@@ -13,7 +13,9 @@ const OrderTracking = () => {
 
   const loadOrders = async () => {
     try {
-      const userOrders = await getUserOrders();
+      // getUserId from localStorage veya context'ten alınmalı
+      const userId = localStorage.getItem("userId");
+      const userOrders = await OrderService.list(userId);
       setOrders(userOrders || []);
     } catch (error) {
       console.error("Siparişler yüklenemedi:", error);

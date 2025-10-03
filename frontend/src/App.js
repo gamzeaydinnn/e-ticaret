@@ -14,14 +14,13 @@ import CartPage from "./components/CartPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import AdminPanel from "./admin/AdminPanel";
-// Yeni sayfalar
+import { useCartCount } from "./hooks/useCartCount";
+import AdminMicro from "./pages/Admin/AdminMicro";
+import Home from "./pages/Home";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
+import Product from "./pages/ProductDetail";
 import Checkout from "./pages/Checkout";
-import Home from "./pages/Home";
-import Product from "./pages/Product";
-import { useCartCount } from "./hooks/useCartCount";
-import AdminMicro from "./admin/AdminMicro";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -37,12 +36,12 @@ function Header() {
             <div className="col-md-3">
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center">
-                  <div className="logo-container me-4">
+                  <div className="logo-container me-2">
                     <img
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "70px",
+                        height: "150px",
                         width: "auto",
                         filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                         transition: "all 0.3s ease",
@@ -61,20 +60,24 @@ function Header() {
                   </div>
                   <div>
                     <h4
-                      className="mb-0 fw-bold"
+                      className="mb-0 fw-bold animated-slogan"
                       style={{
-                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500, #ff7f50, #ff4500)",
+                        backgroundSize: "400% 400%",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.4rem",
+                        fontSize: "2.2rem",
+                        fontFamily: "'Dancing Script', cursive",
+                        fontWeight: "700",
+                        letterSpacing: "2px",
+                        animation: "gradientShift 4s ease-in-out infinite, fadeInScale 0.8s ease-out, bounceIn 1.2s ease-out",
+                        textShadow: "0 3px 6px rgba(255, 107, 53, 0.3)",
+                        transform: "rotate(-2deg)",
                       }}
                     >
-                      Gölköy Gourmet Market
+                      Doğadan Sofralara
                     </h4>
-                    <small className="text-muted fw-semibold">
-                      Doğal ve Kaliteli Ürünler
-                    </small>
                   </div>
                 </div>
               </Link>
@@ -105,7 +108,7 @@ function Header() {
                       boxShadow: "0 2px 10px rgba(255,107,53,0.3)",
                     }}
                   >
-                    <i className="fas fa-search text-white"></i>
+                    <i className="fas fa-arrow-right text-white"></i>
                   </button>
                 </div>
                 <div className="search-suggestions position-absolute w-100 bg-white rounded-3 shadow-lg mt-1 p-2 d-none">
@@ -274,7 +277,6 @@ function App() {
           <Route path="/product/:id" element={<Product />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/admin/micro" element={<AdminMicro />} />
-          
         </Routes>
       </div>
     </Router>
@@ -292,17 +294,26 @@ function HomePage() {
         "*Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde geçerlidir. Kampanya kapsamında listelenen ürünler için tıklayın.",
       badge: "Kahve Keyfi Aç!",
       background: "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
-      icons: ["🍫", "🍪", "☕"],
+      icons: [
+        "/images/nescafe.jpg",
+        "/images/tahil-cipsi.jpg",
+        "/images/coca-cola.jpg",
+      ],
     },
     {
       id: 2,
       title: "DOĞAL ve TAZE",
       subtitle: "ÜRÜNLERİMİZE GÖZ ATIN",
       description:
-        "En taze süt ürünleri, organik meyve sebzeler ve kaliteli et ürünleri için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
+        "Bu lezzetler kaçmaz! En taze süt ürünleri, organik meyve sebzeler ve kaliteli ürünler için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
       badge: "Günlük Taze",
       background: "linear-gradient(135deg, #28a745 0%, #34ce57 100%)",
-      icons: ["🥛", "🧀", "🥬"],
+      icons: [
+        "/images/pinar-yogurt-banner.jpg",
+        "/images/pınar-süt.jpg",
+        "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+        "/images/domates.webp",
+      ],
     },
   ];
 
@@ -391,22 +402,35 @@ function HomePage() {
                                 className="product-item"
                                 style={{
                                   position: "absolute",
-                                  top: `${20 + iconIndex * 30}px`,
-                                  right: `${30 + (iconIndex % 2) * 50}px`,
-                                  background: "rgba(255,255,255,0.9)",
-                                  padding: "15px",
-                                  borderRadius: "15px",
-                                  fontSize: "2rem",
-                                  boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+                                  top: iconIndex === 0 ? "10px" : `${140 + (iconIndex - 1) * 45}px`,
+                                  right: iconIndex === 0 ? "10px" : `${15 + ((iconIndex - 1) % 2) * 80}px`,
+                                  background: iconIndex === 0 ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.95)",
+                                  padding: iconIndex === 0 ? "12px" : "8px",
+                                  borderRadius: iconIndex === 0 ? "20px" : "12px",
+                                  boxShadow: iconIndex === 0 ? "0 12px 35px rgba(0,0,0,0.2)" : "0 8px 25px rgba(0,0,0,0.15)",
                                   animation:
                                     index === currentSlide
                                       ? `floatIn 1s ease ${
                                           iconIndex * 0.2 + 0.5
                                         }s both`
                                       : "none",
+                                  width: iconIndex === 0 ? "160px" : "90px",
+                                  height: iconIndex === 0 ? "120px" : "90px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
                                 }}
                               >
-                                {icon}
+                                <img
+                                  src={icon}
+                                  alt="Product"
+                                  style={{
+                                    width: iconIndex === 0 ? "140px" : "75px",
+                                    height: iconIndex === 0 ? "100px" : "75px",
+                                    objectFit: iconIndex === 0 ? "contain" : "cover",
+                                    borderRadius: iconIndex === 0 ? "15px" : "8px",
+                                  }}
+                                />
                               </div>
                             ))}
                           </div>
@@ -646,29 +670,30 @@ function HomePage() {
                     src="/images/golkoy-logo.png"
                     alt="Gölköy Gourmet Market"
                     style={{
-                      height: "60px",
+                      height: "100px",
                       width: "auto",
                       filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                     }}
-                    className="me-3"
+                    className="me-2"
                   />
                   <div>
                     <h5
                       className="footer-brand-name mb-1"
                       style={{
-                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500)",
+                        backgroundSize: "200% 200%",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.4rem",
-                        fontWeight: "bold",
+                        fontSize: "1.8rem",
+                        fontWeight: "700",
+                        fontFamily: "'Dancing Script', cursive",
+                        letterSpacing: "1px",
+                        animation: "gradientShift 4s ease-in-out infinite",
                       }}
                     >
-                      Gölköy Gourmet Market
+                      Doğadan Sofralara
                     </h5>
-                    <small style={{ color: "#bdc3c7" }}>
-                      Doğal ve Kaliteli Ürünler
-                    </small>
                   </div>
                 </div>
                 <p className="footer-description">
