@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { MicroService } from "../../services/microService";
-import Sidebar from "./Sidebar";
+import Sidebar from "../components/Sidebar";
 
 export default function AdminMicro() {
   const [products, setProducts] = useState([]);

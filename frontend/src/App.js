@@ -21,9 +21,6 @@ import Cart from "./pages/Cart";
 import Category from "./pages/Category";
 import Product from "./pages/ProductDetail";
 import Checkout from "./pages/Checkout";
-import Category from "./pages/Category";
-import Product from "./pages/Product";
-import Checkout from "./pages/Checkout";
 
 function Header() {
   const { count: cartCount } = useCartCount();
