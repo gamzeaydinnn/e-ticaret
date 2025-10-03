@@ -21,6 +21,7 @@ import Checkout from "./pages/Checkout";
 import Home from "./pages/Home";
 import Product from "./pages/Product";
 import { useCartCount } from "./hooks/useCartCount";
+import AdminMicro from "./admin/AdminMicro";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -272,6 +273,8 @@ function App() {
           <Route path="/category/:slug" element={<Category />} />
           <Route path="/product/:id" element={<Product />} />
           <Route path="/checkout" element={<Checkout />} />
+          <Route path="/admin/micro" element={<AdminMicro />} />
+          
         </Routes>
       </div>
     </Router>

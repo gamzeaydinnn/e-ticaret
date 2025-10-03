@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Admin, Resource, List, Datagrid, TextField, NumberField } from "react-admin";
 import simpleRestProvider from "ra-data-simple-rest";
+import { AdminService } from '../services/adminService';
 
 const dataProvider = simpleRestProvider("http://localhost:5000/api/admin/orders");
 

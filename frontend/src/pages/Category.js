@@ -10,15 +10,16 @@ export default function Category() {
   const [category, setCategory] = useState(null);
 
   useEffect(() => {
-    api
-      .get(`/api/Categories/slug/${slug}`)
-      .then((r) => setCategory(r.data))
-      .catch(() => {});
-    api
-      .get(`/api/Products?categorySlug=${slug}`)
-      .then((r) => setProducts(r.data))
-      .catch(() => {});
-  }, [slug]);
+  api
+    .get(`/api/Categories/slug/${slug}`)
+    .then((r) => setCategory(r.data))
+    .catch(() => {});
+  api
+    .get(`/api/Products?categorySlug=${slug}`)
+    .then((r) => setProducts(r.data))
+    .catch(() => {});
+}, [slug]);
+
 
   return (
     <div className="container mx-auto px-4 py-8">

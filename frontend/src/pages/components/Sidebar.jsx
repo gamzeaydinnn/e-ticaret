@@ -9,6 +9,7 @@ export default function Sidebar() {
         <Link to="/admin/products" className="hover:text-blue-600">Ürünler</Link>
         <Link to="/admin/orders" className="hover:text-blue-600">Siparişler</Link>
         <Link to="/admin/users" className="hover:text-blue-600">Kullanıcılar</Link>
+        <Link to="/admin/micro" className="hover:text-blue-600">Micro ERP</Link> {/* Yeni link */}
       </nav>
     </div>
   );
