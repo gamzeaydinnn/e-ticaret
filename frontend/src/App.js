@@ -305,10 +305,11 @@ function HomePage() {
       title: "DOĞAL ve TAZE",
       subtitle: "ÜRÜNLERİMİZE GÖZ ATIN",
       description:
-        "En taze süt ürünleri, organik meyve sebzeler ve kaliteli et ürünleri için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
+        "Bu lezzetler kaçmaz! En taze süt ürünleri, organik meyve sebzeler ve kaliteli ürünler için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
       badge: "Günlük Taze",
       background: "linear-gradient(135deg, #28a745 0%, #34ce57 100%)",
       icons: [
+        "/images/pinar-yogurt-banner.jpg",
         "/images/pınar-süt.jpg",
         "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
         "/images/domates.webp",
@@ -401,20 +402,20 @@ function HomePage() {
                                 className="product-item"
                                 style={{
                                   position: "absolute",
-                                  top: `${15 + iconIndex * 40}px`,
-                                  right: `${25 + (iconIndex % 2) * 70}px`,
-                                  background: "rgba(255,255,255,0.95)",
-                                  padding: "8px",
-                                  borderRadius: "12px",
-                                  boxShadow: "0 8px 25px rgba(0,0,0,0.15)",
+                                  top: iconIndex === 0 ? "10px" : `${140 + (iconIndex - 1) * 45}px`,
+                                  right: iconIndex === 0 ? "10px" : `${15 + ((iconIndex - 1) % 2) * 80}px`,
+                                  background: iconIndex === 0 ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.95)",
+                                  padding: iconIndex === 0 ? "12px" : "8px",
+                                  borderRadius: iconIndex === 0 ? "20px" : "12px",
+                                  boxShadow: iconIndex === 0 ? "0 12px 35px rgba(0,0,0,0.2)" : "0 8px 25px rgba(0,0,0,0.15)",
                                   animation:
                                     index === currentSlide
                                       ? `floatIn 1s ease ${
                                           iconIndex * 0.2 + 0.5
                                         }s both`
                                       : "none",
-                                  width: "90px",
-                                  height: "90px",
+                                  width: iconIndex === 0 ? "160px" : "90px",
+                                  height: iconIndex === 0 ? "120px" : "90px",
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
@@ -424,10 +425,10 @@ function HomePage() {
                                   src={icon}
                                   alt="Product"
                                   style={{
-                                    width: "75px",
-                                    height: "75px",
-                                    objectFit: "cover",
-                                    borderRadius: "8px",
+                                    width: iconIndex === 0 ? "140px" : "75px",
+                                    height: iconIndex === 0 ? "100px" : "75px",
+                                    objectFit: iconIndex === 0 ? "contain" : "cover",
+                                    borderRadius: iconIndex === 0 ? "15px" : "8px",
                                   }}
                                 />
                               </div>
