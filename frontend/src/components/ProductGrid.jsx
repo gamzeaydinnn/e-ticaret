@@ -324,9 +324,11 @@ export default function ProductGrid() {
               <div
                 className="modern-product-card h-100"
                 style={{
-                  background: `linear-gradient(145deg, #ffffff, #f8f9fa)`,
-                  borderRadius: "20px",
-                  border: "1px solid rgba(255, 107, 53, 0.1)",
+                  background: `linear-gradient(145deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9))`,
+                  borderRadius: "25px",
+                  border: "none",
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                  backdropFilter: "blur(10px)",
                   overflow: "hidden",
                   position: "relative",
                   animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
@@ -338,16 +340,16 @@ export default function ProductGrid() {
                 onClick={(e) => handleProductClick(p, e)}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform =
-                    "translateY(-8px) scale(1.02)";
+                    "translateY(-12px) scale(1.03)";
                   e.currentTarget.style.boxShadow =
-                    "0 20px 40px rgba(255, 107, 53, 0.15)";
-                  e.currentTarget.style.borderColor = "rgba(255, 107, 53, 0.3)";
+                    "0 25px 50px rgba(255, 107, 53, 0.2)";
+                  e.currentTarget.style.background = "rgba(255,255,255,0.98)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.transform = "translateY(0) scale(1)";
                   e.currentTarget.style.boxShadow =
-                    "0 5px 15px rgba(0, 0, 0, 0.08)";
-                  e.currentTarget.style.borderColor = "rgba(255, 107, 53, 0.1)";
+                    "0 8px 32px rgba(0,0,0,0.1)";
+                  e.currentTarget.style.background = "linear-gradient(145deg, rgba(255,255,255,0.95), rgba(248,249,250,0.9))";
                 }}
               >
                 {/* Badge - Sol Üst */}
@@ -420,7 +422,7 @@ export default function ProductGrid() {
                   className="product-image-container"
                   style={{
                     height: 200,
-                    background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                    background: "transparent",
                     position: "relative",
                     overflow: "hidden",
                   }}
@@ -472,8 +474,7 @@ export default function ProductGrid() {
                 <div
                   className="card-body p-4 d-flex flex-column"
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.9))",
+                    background: "transparent",
                     minHeight: "280px",
                   }}
                 >

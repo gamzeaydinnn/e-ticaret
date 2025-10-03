@@ -62,17 +62,27 @@ function Header() {
                     <h4
                       className="mb-0 fw-bold"
                       style={{
-                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        background: "linear-gradient(135deg, #2d5016, #4a7c59)",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.4rem",
+                        fontSize: "1.6rem",
+                        fontFamily: "'Playfair Display', serif",
+                        letterSpacing: "0.5px",
+                      }}
+                    >
+                      Doğadan Sofralara
+                    </h4>
+                    <small 
+                      className="fw-semibold"
+                      style={{
+                        color: "#6c757d",
+                        fontSize: "0.85rem",
+                        fontStyle: "italic",
+                        letterSpacing: "0.3px"
                       }}
                     >
                       Gölköy Gourmet Market
-                    </h4>
-                    <small className="text-muted fw-semibold">
-                      Doğal ve Kaliteli Ürünler
                     </small>
                   </div>
                 </div>
@@ -675,18 +685,20 @@ function HomePage() {
                     <h5
                       className="footer-brand-name mb-1"
                       style={{
-                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        background: "linear-gradient(135deg, #2d5016, #4a7c59)",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.4rem",
+                        fontSize: "1.5rem",
                         fontWeight: "bold",
+                        fontFamily: "'Playfair Display', serif",
+                        letterSpacing: "0.5px",
                       }}
                     >
-                      Gölköy Gourmet Market
+                      Doğadan Sofralara
                     </h5>
-                    <small style={{ color: "#bdc3c7" }}>
-                      Doğal ve Kaliteli Ürünler
+                    <small style={{ color: "#bdc3c7", fontStyle: "italic" }}>
+                      Gölköy Gourmet Market
                     </small>
                   </div>
                 </div>
