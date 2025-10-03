@@ -1,42 +1,74 @@
-/*using Microsoft.AspNetCore.Mvc;
-using ECommerce.Business.Abstract;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
-namespace ECommerce.API.Controllers
+
+namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/admin/categories")]
+    [Authorize(Roles = "Admin")]
     public class AdminCategoriesController : ControllerBase
     {
-        private readonly IAdminService _adminService;
-public AdminCategoriesController(IAdminService adminService)
+        private readonly ICategoryService _categoryService;
+
+        public AdminCategoriesController(ICategoryService categoryService)
         {
-            _adminService = adminService;
+            _categoryService = categoryService;
         }
-[HttpGet]
-        public IActionResult GetAll()
+
+        // GET /api/admin/categories
+        [HttpGet]
+        public async Task<IActionResult> GetCategories()
         {
-            return Ok(_adminService.GetAllCategories());
+            var categories = await _categoryService.GetAllAsync();
+            return Ok(categories);
         }
-[HttpPost]
-        public IActionResult Add(Category category)
+
+        // GET /api/admin/categories/{id}
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetCategory(int id)
         {
-            var result = _adminService.AddCategory(category);
-            return Ok(result);
+            var category = await _categoryService.GetByIdAsync(id);
+            if (category == null) return NotFound();
+            return Ok(category);
         }
-[HttpPut]
-        public IActionResult Update(Category category)
+
+        // POST /api/admin/categories
+        [HttpPost]
+        public async Task<IActionResult> CreateCategory([FromBody] Category category)
         {
-            var result = _adminService.UpdateCategory(category);
-            return Ok(result);
+            await _categoryService.AddAsync(category);
+            return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
         }
-[HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+
+        // PUT /api/admin/categories/{id}
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateCategory(int id, [FromBody] Category category)
         {
-            var success = _adminService.DeleteCategory(id);
-            if (!success) return NotFound();
-            return Ok();
+            var existing = await _categoryService.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+
+            existing.Name = category.Name;
+            existing.Description = category.Description;
+            existing.ImageUrl = category.ImageUrl;
+            existing.ParentId = category.ParentId;
+            existing.SortOrder = category.SortOrder;
+            existing.Slug = category.Slug;
+
+            await _categoryService.UpdateAsync(existing);
+            return NoContent();
+        }
+
+        // DELETE /api/admin/categories/{id}
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteCategory(int id)
+        {
+            var category = await _categoryService.GetByIdAsync(id);
+            if (category == null) return NotFound();
+
+            await _categoryService.DeleteAsync(category);
+            return NoContent();
         }
     }
 }
- 
-*/

@@ -26,6 +26,18 @@ namespace ECommerce.Data.Repositories
                 .OrderBy(c => c.SortOrder)
                 .ToListAsync();
         }
+        public async Task UpdateAsync(Category category)
+        {
+            _dbSet.Update(category); // EF Core Update
+            await _context.SaveChangesAsync();
+        }
+        
+
+    public async Task DeleteAsync(Category category)
+    {
+        _dbSet.Remove(category); // EF Core remove
+        await _context.SaveChangesAsync();
+    }
 
         public override async Task<IEnumerable<Category>> GetAllAsync()
         {
@@ -36,5 +48,13 @@ namespace ECommerce.Data.Repositories
                 .OrderBy(c => c.SortOrder)
                 .ToListAsync();
         }
+        public async Task<Category?> GetBySlugAsync(string slug)
+        {
+            return await _dbSet
+                .Include(c => c.SubCategories)
+                .Include(c => c.Products)
+                .FirstOrDefaultAsync(c => c.Slug == slug && c.IsActive);
+        }
+
     }
 }

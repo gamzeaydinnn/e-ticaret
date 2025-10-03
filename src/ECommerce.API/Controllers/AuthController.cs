@@ -31,4 +31,18 @@ public class AuthController : ControllerBase
         var token = await _authService.LoginAsync(dto);
         return Ok(new { Token = token });
     }
+    [HttpGet("me")]
+public async Task<IActionResult> Me()
+{
+    // Token'dan user id veya email claim çek
+    var userId = User.FindFirst("sub")?.Value; // sub claim genelde userId olur
+    if (string.IsNullOrEmpty(userId))
+        return Unauthorized();
+
+    var user = await _authService.GetUserByIdAsync(Guid.Parse(userId));
+    if (user == null) return NotFound();
+
+    return Ok(user); // burada istersen DTO dönebilirsin
+}
+
 }

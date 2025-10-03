@@ -18,5 +18,6 @@ namespace  ECommerce.Core.Interfaces
         /// <param name="paymentId">Ödeme ID</param>
         /// <returns>Ödeme durumu (true = başarılı, false = başarısız)</returns>
         Task<bool> CheckPaymentStatusAsync(string paymentId);
+        Task<int> GetPaymentCountAsync(); 
     }
 }

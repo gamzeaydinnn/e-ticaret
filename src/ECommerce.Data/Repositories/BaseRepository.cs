@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace ECommerce.Data.Repositories
 {
@@ -30,23 +33,53 @@ namespace ECommerce.Data.Repositories
         {
             entity.CreatedAt = DateTime.UtcNow;
             await _dbSet.AddAsync(entity);
+            await _context.SaveChangesAsync();
         }
 
-        public virtual void Update(T entity)
+        public virtual async Task UpdateAsync(T entity)
         {
             entity.UpdatedAt = DateTime.UtcNow;
             _dbSet.Update(entity);
+            await _context.SaveChangesAsync();
         }
 
-        public virtual void Delete(T entity)
+        public virtual async Task DeleteAsync(T entity)
         {
             entity.IsActive = false;
             entity.UpdatedAt = DateTime.UtcNow;
+            _dbSet.Update(entity);
+            await _context.SaveChangesAsync();
         }
 
-        public virtual void HardDelete(T entity)
+        public virtual async Task HardDeleteAsync(T entity)
         {
             _dbSet.Remove(entity);
+            await _context.SaveChangesAsync();
+        }
+
+        public void Update(T entity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void Delete(T entity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<T?> GetAsync(int id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task Remove(T entity)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task SaveChangesAsync()
+        {
+            throw new NotImplementedException();
         }
     }
 }

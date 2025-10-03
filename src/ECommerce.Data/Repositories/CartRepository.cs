@@ -46,5 +46,15 @@ namespace ECommerce.Data.Repositories
                 Delete(item);
             }
         }
+
+        // ✅ Yeni eklenen metot (sadece id ile silme)
+        public async Task RemoveCartItemAsync(int cartItemId)
+        {
+            var cartItem = await _dbSet.FindAsync(cartItemId);
+            if (cartItem != null)
+            {
+                Delete(cartItem);
+            }
+        }
     }
 }

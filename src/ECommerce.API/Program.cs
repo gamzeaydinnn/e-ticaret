@@ -86,11 +86,11 @@ builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<LocalSalesRepository>();
 
-
-builder.Services.AddHostedService<StockSyncJob>();
-builder.Services.AddScoped<IMicroService, MicroService>();
-
 builder.Services.AddScoped<StockSyncJob>();
+// MicroService ve MicroSyncManager
+builder.Services.AddScoped<IMicroService, ECommerce.Business.Services.Managers.MicroService>();
+builder.Services.AddScoped<MicroSyncManager>();
+
 
 builder.Services.AddAuthorization();
 

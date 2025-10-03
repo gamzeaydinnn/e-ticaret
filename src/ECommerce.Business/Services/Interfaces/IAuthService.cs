@@ -7,5 +7,7 @@ namespace ECommerce.Business.Services.Interfaces
     {
         Task<string> RegisterAsync(RegisterDto dto);
         Task<string> LoginAsync(LoginDto dto);
+        //Yeni ekleme: JWT içindeki userId'den user bilgilerini döndürmek için
+        Task<UserLoginDto> GetUserByIdAsync(Guid userId);
     }
 }

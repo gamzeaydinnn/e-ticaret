@@ -1,3 +1,4 @@
+//PaymentCreateDto → sadece ödeme başlatma için.
 namespace ECommerce.Core.DTOs.Payment
 {
     public class PaymentCreateDto
