@@ -1,10 +1,16 @@
-using ECommerce.Core.DTOs;
+using System;
+using System.Linq;
 using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Entities.Concrete;
 using ECommerce.Core.Interfaces;
-//Amaç: Mikro ERP ile veri senkronizasyonu (stok, ürün, satış).
+using ECommerce.Entities.Concrete;
+
+
 namespace ECommerce.Business.Services.Managers
 {
+    /// <summary>
+    /// Amaç: Mikro ERP ile veri senkronizasyonu (ürün, stok, satış vb.)
+    /// </summary>
     public class MicroSyncManager
     {
         private readonly IMicroService _microService;
@@ -16,18 +22,48 @@ namespace ECommerce.Business.Services.Managers
             _productRepository = productRepository;
         }
 
+        /// <summary>
+        /// Ürünleri Mikro ERP sistemine senkronize eder.
+        /// </summary>
         public void SyncProductsToMikro()
         {
-            var products = _productRepository.GetAll();
-            foreach (var product in products)
+            try
             {
-                _microService.UpdateProduct(new MicroProductDto
+                var products = _productRepository.GetAll();
+
+                foreach (var product in products)
                 {
-                    Id = product.Id,
-                    Name = product.Name,
-                    Stock = product.StockQuantity,
-                    Price = product.Price
+                    _microService.UpdateProduct(new MicroProductDto
+                    {
+                        Id = product.Id,
+                        Name = product.Name,
+                        Stock = product.StockQuantity,
+                        Price = product.Price
+                    });
+                }
+
+                // Başarılı log
+                _productRepository.LogSync(new MicroSyncLog
+                {
+                    EntityType = "Product",
+                    Status = "Success",
+                    Message = $"Tüm ürünler Mikro ile senkronize edildi ({products.Count()} ürün).",
+                    CreatedAt = DateTime.Now
                 });
+            }
+            catch (Exception ex)
+            {
+                // Hatalı log
+                _productRepository.LogSync(new MicroSyncLog
+                {
+                    EntityType = "Product",
+                    Status = "Failed",
+                    Message = ex.Message,
+                    CreatedAt = DateTime.Now
+                });
+
+                // İstersen hata yönetimi için yeniden fırlatabilirsin
+                throw;
             }
         }
     }

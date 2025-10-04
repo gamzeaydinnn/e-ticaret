@@ -5,10 +5,10 @@ namespace ECommerce.Entities.Concrete
     public class ProductVariant : BaseEntity
 {
     public int ProductId { get; set; }
-    public string Title { get; set; }         // e.g. "Kırmızı / M"
-    public decimal Price { get; set; }
-    public int Stock { get; set; }
-    public string SKU { get; set; }
-    public Product Product { get; set; }
+        public string Title { get; set; } = string.Empty;   // default değer atandı
+        public decimal Price { get; set; }
+        public int Stock { get; set; }
+        public string SKU { get; set; } = string.Empty;     // default değer atandı
+        public Product Product { get; set; } = null!;
 }
 }

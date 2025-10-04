@@ -78,9 +78,26 @@ namespace ECommerce.Business.Services.Managers
             throw new NotImplementedException();
         }
 
-        public Task<int> GetCartCountAsync()
+
+        public Task UpdateCartItemAsync(int userId, int cartItemId, int quantity)
         {
             throw new NotImplementedException();
         }
+
+        public Task RemoveCartItemAsync(int userId, int cartItemId)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<int> GetCartCountAsync(int userId)
+        {
+            throw new NotImplementedException();
+        }
+        public async Task<int> GetCartCountAsync()
+{
+    return await _cartRepository.GetCartCountAsync();
+}
+
+
     }
 }

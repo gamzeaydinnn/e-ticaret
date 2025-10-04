@@ -18,6 +18,11 @@ namespace ECommerce.Infrastructure.Services.Payment
             await Task.Delay(100);
             return true;
         }
+
+        public Task<int> GetPaymentCountAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
     /*F. Ödeme entegrasyon (Stripe / iyzico / PayTR)
 	• Stripe: .NET server-side SDK var; PaymentIntent veya Checkout Sessions kullan. Webhook ile ödeme tamamlandığında işle. (Stripe server-side .NET SDK docs). (docs.stripe.com)

@@ -3,12 +3,11 @@
 using ECommerce.Entities.Concrete;
 namespace ECommerce.Entities.Concrete
 {
-    public class AuditLog : BaseEntity
+    public class AuditLogs : BaseEntity
 {
     public int UserId { get; set; }
-    public string Action { get; set; } // "CreateProduct", "UpdateProduct", ...
-    public string EntityName { get; set; }
-    public int EntityId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public string Action { get; set; } = string.Empty;      // default değer atandı
+        public string EntityName { get; set; } = string.Empty;  // default değer atandı
+        public int EntityId { get; set; }
 }
 }

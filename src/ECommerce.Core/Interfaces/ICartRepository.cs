@@ -9,6 +9,8 @@ namespace ECommerce.Core.Interfaces
         Task RemoveByUserAndProductAsync(int userId, int productId);
         Task ClearCartAsync(int userId);
         Task RemoveCartItemAsync(int cartItemId);
+        Task<int> GetCartCountAsync();
+
 
     }
 }

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
-
 namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]

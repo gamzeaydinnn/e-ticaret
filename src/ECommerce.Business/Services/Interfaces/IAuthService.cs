@@ -8,10 +8,12 @@ namespace ECommerce.Business.Services.Interfaces
     {
         Task<string> RegisterAsync(RegisterDto dto);
         Task<string> LoginAsync(LoginDto dto);
-        //Yeni ekleme: JWT içindeki userId'den user bilgilerini döndürmek için
+
+        // JWT'den userId çekip kullanıcıyı döndürmek için
         Task<UserLoginDto> GetUserByIdAsync(int userId);
+
+        // Refresh token ve revoke token işlemleri
         Task<string> RefreshTokenAsync(string token, string refreshToken);
         Task RevokeRefreshTokenAsync(int userId);
-
     }
 }

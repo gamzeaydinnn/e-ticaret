@@ -43,3 +43,55 @@ namespace ECommerce.Business.Services.Managers
         }
     }
 }
+/*using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Interfaces;
+using ECommerce.Entities.Concrete;
+using Microsoft.Extensions.Configuration;
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+
+namespace ECommerce.Business.Services
+{
+    public class MicroService : IMicroService
+    {
+        private readonly HttpClient _httpClient;
+        private readonly IConfiguration _config;
+
+        public MicroService(IConfiguration config)
+        {
+            _config = config;
+            _httpClient = new HttpClient
+            {
+                BaseAddress = new Uri(_config["MikroSettings:ApiUrl"])
+            };
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_config["MikroSettings:ApiKey"]}");
+        }
+
+        public async Task<IEnumerable<MicroProductDto>> GetProductsAsync()
+        {
+            var result = await _httpClient.GetFromJsonAsync<IEnumerable<MicroProductDto>>("/api/products");
+            return result ?? new List<MicroProductDto>();
+        }
+
+        public async Task<IEnumerable<MicroStockDto>> GetStocksAsync()
+        {
+            var result = await _httpClient.GetFromJsonAsync<IEnumerable<MicroStockDto>>("/api/stocks");
+            return result ?? new List<MicroStockDto>();
+        }
+
+        public async Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders)
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/orders/import", orders);
+            return response.IsSuccessStatusCode;
+        }
+
+        public void UpdateProduct(MicroProductDto product)
+        {
+            _httpClient.PostAsJsonAsync("/api/products/update", product);
+        }
+    }
+}
+*/

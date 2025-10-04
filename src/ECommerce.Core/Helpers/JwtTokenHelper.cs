@@ -40,5 +40,37 @@ namespace ECommerce.Core.Helpers
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        // ✅ Refresh Token işlemleri için gerekli metot
+        public static ClaimsPrincipal? GetPrincipalFromExpiredToken(string token, string key)
+        {
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateAudience = false,
+                ValidateIssuer = false,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                ValidateLifetime = false // Süresi dolmuş olsa da çözümle
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            try
+            {
+                var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+
+                // Güvenlik kontrolü
+                if (securityToken is not JwtSecurityToken jwtToken ||
+                    !jwtToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+                {
+                    throw new SecurityTokenException("Invalid token");
+                }
+
+                return principal;
+            }
+            catch
+            {
+                return null;
+            }
+        }
     }
 }

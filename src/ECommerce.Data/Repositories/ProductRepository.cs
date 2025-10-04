@@ -12,18 +12,18 @@ namespace ECommerce.Data.Repositories
     {
         public ProductRepository(ECommerceDbContext context) : base(context)
         {
-            
         }
-        public async Task UpdateAsync(Product product)
-    {
-        _dbSet.Update(product);
-        await _context.SaveChangesAsync();
-    }
-    public async Task DeleteAsync(Product product)
-    {
-        _dbSet.Remove(product);
-        await _context.SaveChangesAsync();
-    }
+        public override async Task UpdateAsync(Product product)
+        {
+            _dbSet.Update(product);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task DeleteAsync(Product product)
+        {
+            _dbSet.Remove(product);
+            await _context.SaveChangesAsync();
+        }
         public async Task<Product> AddAsync(Product product)
         {
             await _context.Products.AddAsync(product);
@@ -39,18 +39,18 @@ namespace ECommerce.Data.Repositories
             return await _context.Products.ToListAsync();
         }
 
-            /*public async Task<Product> UpdateAsync(Product product)
-            {
-                _context.Products.Update(product);
-                await _context.SaveChangesAsync();
-                return product;
-            }
+        /*public async Task<Product> UpdateAsync(Product product)
+        {
+            _context.Products.Update(product);
+            await _context.SaveChangesAsync();
+            return product;
+        }
 
-            public async Task DeleteAsync(Product product)
-            {
-                _context.Products.Remove(product);
-                await _context.SaveChangesAsync();
-            }*/
+        public async Task DeleteAsync(Product product)
+        {
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+        }*/
 
         public void Update(Product product)
         {
@@ -78,10 +78,7 @@ namespace ECommerce.Data.Repositories
                 (p.Brand != null && p.Brand.Contains(searchTerm))))
                     .ToListAsync();
         }
-        public IEnumerable<Product> GetAll()
-        {
-            throw new NotImplementedException();
-        }
+
 
         Task IProductRepository.Delete(Product product)
         {
@@ -89,6 +86,23 @@ namespace ECommerce.Data.Repositories
         }
 
         public Task<Product> GetBySkuAsync(string sku)
+        {
+            throw new NotImplementedException();
+        }
+ 
+
+        public async Task LogSyncAsync(MicroSyncLog log)
+        {
+            await _context.MicroSyncLogs.AddAsync(log);
+            await _context.SaveChangesAsync();
+        }
+
+        public IEnumerable<Product> GetAll()
+        {
+            return _context.Products.AsNoTracking().ToList();
+        }
+
+        public void LogSync(MicroSyncLog log)
         {
             throw new NotImplementedException();
         }

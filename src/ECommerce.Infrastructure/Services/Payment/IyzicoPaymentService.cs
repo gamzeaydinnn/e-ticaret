@@ -31,6 +31,11 @@ namespace ECommerce.Infrastructure.Services.Payment
 //Ödeme ID’si ile ödeme durumunu sorguluyor.. Şu an sadece 100ms bekliyor ve true dönüyor (ödeme tamamlandı gibi).
 //Gerçek kullanımda Iyzico API’den ödeme durumu alınacak.
         }
+
+        public Task<int> GetPaymentCountAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 //Ne işe yarıyor?

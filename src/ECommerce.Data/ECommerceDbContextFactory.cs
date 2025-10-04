@@ -10,8 +10,8 @@ namespace ECommerce.Data
         {
             var optionsBuilder = new DbContextOptionsBuilder<ECommerceDbContext>();
 
-            // SQLite bağlantısı
-            optionsBuilder.UseSqlite("Data Source=ECommerce.db");
+            // 🔹 BURAYA Azure SQL bağlantı cümleni yaz:
+            optionsBuilder.UseSqlServer("Server=localhost,1433;Database=ECommerceDb;User Id=sa;Password=Admin123!;TrustServerCertificate=True;");
 
             return new ECommerceDbContext(optionsBuilder.Options);
         }

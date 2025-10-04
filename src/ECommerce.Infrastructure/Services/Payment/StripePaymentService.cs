@@ -18,5 +18,10 @@ namespace ECommerce.Infrastructure.Services.Payment
             await Task.Delay(100);
             return true;
         }
+
+        public Task<int> GetPaymentCountAsync()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

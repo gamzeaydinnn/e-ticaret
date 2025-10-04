@@ -6,11 +6,11 @@ namespace ECommerce.Core.Interfaces
 {
 	public interface IMicroService
 	{
-		void UpdateProduct(ECommerce.Core.DTOs.Micro.MicroProductDto productDto);
-		void UpdateStock(ECommerce.Core.DTOs.Micro.MicroStockDto stockDto);
 		Task<IEnumerable<MicroProductDto>> GetProductsAsync();
         Task<IEnumerable<MicroStockDto>> GetStocksAsync();
-         Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders);
+        Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders);
+        void UpdateProduct(MicroProductDto product);
+		 
         // İhtiyaca göre diğer metodlar eklenebilir
 	}
 }

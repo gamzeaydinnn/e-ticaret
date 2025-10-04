@@ -8,16 +8,12 @@ namespace ECommerce.Business.Services.Interfaces
     {
         Task<CartSummaryDto> GetCartAsync(int userId);
         Task AddItemToCartAsync(int userId, CartItemDto item);
-        Task RemoveItemFromCartAsync(int userId, int productId);
+        Task UpdateCartItemAsync(int userId, int cartItemId, int quantity);
+        Task RemoveCartItemAsync(int userId, int cartItemId);
         Task ClearCartAsync(int userId);
-        Task RemoveCartItemAsync(int cartItemId);
-        //
-        Task<CartSummaryDto> GetCartAsync(Guid userId);
-        Task<int> GetCartCountAsync();
-        Task AddToCartAsync(Guid userId, int productVariantId, int quantity);
-        Task UpdateCartItemAsync(Guid userId, int cartItemId, int quantity);
-        Task RemoveCartItemAsync(Guid userId, int cartItemId);
-        Task ClearCartAsync(Guid userId);
+        
+        Task<int> GetCartCountAsync(); // Yeni overload
+
 
     }
 }

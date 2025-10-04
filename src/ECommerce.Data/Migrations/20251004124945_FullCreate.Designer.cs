@@ -4,6 +4,7 @@ using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECommerce.Data.Migrations
 {
     [DbContext(typeof(ECommerceDbContext))]
-    partial class ECommerceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251004124945_FullCreate")]
+    partial class FullCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,7 +25,7 @@ namespace ECommerce.Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("ECommerce.Entities.Concrete.AuditLogs", b =>
+            modelBuilder.Entity("ECommerce.Entities.Concrete.AuditLog", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()

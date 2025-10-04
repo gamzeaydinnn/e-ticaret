@@ -46,6 +46,10 @@ namespace ECommerce.Data.Repositories
                 Delete(item);
             }
         }
+        public async Task<int> GetCartCountAsync()
+        {      
+           return await _context.CartItems.CountAsync();
+        }
 
         // ✅ Yeni eklenen metot (sadece id ile silme)
         public async Task RemoveCartItemAsync(int cartItemId)
@@ -56,5 +60,6 @@ namespace ECommerce.Data.Repositories
                 Delete(cartItem);
             }
         }
+        
     }
 }

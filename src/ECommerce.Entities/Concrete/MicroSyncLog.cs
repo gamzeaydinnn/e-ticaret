@@ -1,4 +1,3 @@
-//	• MikroSyncLog (Id, EntityType, ExternalId, InternalId, Direction, Status, Attempts, LastError, LastAttemptAt)
 using System;
 
 namespace ECommerce.Entities.Concrete
@@ -6,9 +5,17 @@ namespace ECommerce.Entities.Concrete
     public class MicroSyncLog
     {
         public int Id { get; set; }
-        public DateTime SyncDate { get; set; } = DateTime.UtcNow;
-        public string EntityType { get; set; } = string.Empty; // Product, Stock, Order
-        public string Status { get; set; } = string.Empty; // Success, Failed
-        public string Message { get; set; } = string.Empty; // Hata veya detay mesajı
+        public string EntityType { get; set; } = string.Empty;
+        public string? ExternalId { get; set; }
+        public string? InternalId { get; set; }
+        public string Direction { get; set; } = "ToERP";
+        public string Status { get; set; } = "Pending";
+        public int Attempts { get; set; } = 0;
+        public string? LastError { get; set; }
+        public DateTime? LastAttemptAt { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Kısa özet metin için Message alanı
+        public string Message { get; set; } = string.Empty;
     }
 }

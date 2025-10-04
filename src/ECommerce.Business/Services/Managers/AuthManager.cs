@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Helpers;
@@ -20,7 +21,6 @@ public class AuthManager : IAuthService
         _config = config;
     }
 
-    // Yeni kullanıcı kaydı
     public async Task<string> RegisterAsync(RegisterDto dto)
     {
         if (_context.Users.Any(u => u.Email == dto.Email))
@@ -42,7 +42,6 @@ public class AuthManager : IAuthService
         return GenerateJwtToken(user);
     }
 
-    // Login
     public async Task<string> LoginAsync(LoginDto dto)
     {
         var user = _context.Users.SingleOrDefault(u => u.Email == dto.Email);
@@ -52,7 +51,6 @@ public class AuthManager : IAuthService
         return GenerateJwtToken(user);
     }
 
-    // Kullanıcıyı Id ile getir
     public async Task<UserLoginDto> GetUserByIdAsync(int userId)
     {
         var user = await _context.Users.FindAsync(userId);
@@ -68,11 +66,10 @@ public class AuthManager : IAuthService
         };
     }
 
-    // JWT token üret
     private string GenerateJwtToken(User user)
     {
         return JwtTokenHelper.GenerateToken(
-            user.Id, // int olarak gönder
+            user.Id,
             user.Email,
             user.Role,
             _config["Jwt:Key"],
@@ -82,22 +79,23 @@ public class AuthManager : IAuthService
         );
     }
 
-    // Refresh token üretme
     public async Task<string> RefreshTokenAsync(string token, string refreshToken)
     {
-        // Burada token doğrulama, kullanıcı kontrolü ve yeni JWT üret
-        throw new NotImplementedException();
+        var principal = JwtTokenHelper.GetPrincipalFromExpiredToken(token, _config["Jwt:Key"]);
+        if (principal == null)
+            throw new Exception("Invalid token");
+
+        var userEmail = principal.Identity?.Name;
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == userEmail);
+        if (user == null)
+            throw new Exception("User not found");
+
+        return GenerateJwtToken(user);
     }
 
-    // Refresh token iptal et
     public async Task RevokeRefreshTokenAsync(int userId)
     {
-        // Kullanıcının refresh tokenlarını iptal et
-        throw new NotImplementedException();
-    }
-
-    public Task RevokeRefreshTokenAsync(Guid userId)
-    {
-        throw new NotImplementedException();
+        // Refresh token yönetimi eklenecekse burada invalidate edilir
+        await Task.CompletedTask;
     }
 }

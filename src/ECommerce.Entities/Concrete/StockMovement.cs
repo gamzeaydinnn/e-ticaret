@@ -9,7 +9,7 @@ namespace ECommerce.Core.Entities.Concrete
         public int ProductId { get; set; }
         public int QuantityChange { get; set; }
         public DateTime MovementDate { get; set; }
-        public string Reason { get; set; } // Örn: "Sale", "Return", "Manual"
+        public string Reason { get; set; } = string.Empty;  // Örn: "Sale", "Return", "Manual"
     }
 }
 /*Kullanım amacı:
