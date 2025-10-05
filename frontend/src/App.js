@@ -19,7 +19,7 @@ import AdminMicro from "./pages/Admin/AdminMicro";
 import Home from "./pages/Home";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
-import Product from "./pages/ProductDetail";
+import Product from "./pages/Product";
 import Checkout from "./pages/Checkout";
 
 function Header() {
@@ -29,7 +29,7 @@ function Header() {
   return (
     <div className="App">
       {/* Main Header */}
-      <header className="main-header bg-white shadow-sm py-3">
+      <header className="main-header bg-white shadow-sm py-1">
         <div className="container-fluid px-4">
           <div className="row align-items-center">
             {/* Logo */}
@@ -41,7 +41,7 @@ function Header() {
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "150px",
+                        height: "90px",
                         width: "auto",
                         filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                         transition: "all 0.3s ease",
@@ -58,26 +58,19 @@ function Header() {
                       }}
                     />
                   </div>
-                  <div>
-                    <h4
-                      className="mb-0 fw-bold animated-slogan"
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    <img
+                      src="/images/dogadan-sofranza-logo.png"
+                      alt="Doğadan Sofranza"
                       style={{
-                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500, #ff7f50, #ff4500)",
-                        backgroundSize: "400% 400%",
-                        backgroundClip: "text",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        fontSize: "2.2rem",
-                        fontFamily: "'Dancing Script', cursive",
-                        fontWeight: "700",
-                        letterSpacing: "2px",
-                        animation: "gradientShift 4s ease-in-out infinite, fadeInScale 0.8s ease-out, bounceIn 1.2s ease-out",
-                        textShadow: "0 3px 6px rgba(255, 107, 53, 0.3)",
-                        transform: "rotate(-2deg)",
+                        height: "160px",
+                        width: "auto",
+                        marginLeft: "-15px",
+                        marginTop: "-10px",
+                        marginBottom: "-10px",
+                        filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.1))",
                       }}
-                    >
-                      Doğadan Sofralara
-                    </h4>
+                    />
                   </div>
                 </div>
               </Link>
@@ -108,7 +101,7 @@ function Header() {
                       boxShadow: "0 2px 10px rgba(255,107,53,0.3)",
                     }}
                   >
-                    <i className="fas fa-arrow-right text-white"></i>
+                    <i className="fas fa-search text-white"></i>
                   </button>
                 </div>
                 <div className="search-suggestions position-absolute w-100 bg-white rounded-3 shadow-lg mt-1 p-2 d-none">
@@ -288,32 +281,27 @@ function HomePage() {
   const slides = [
     {
       id: 1,
-      title: "SEÇİLİ ÜRÜNLERDE",
-      subtitle: "%25 İNDİRİM!",
-      description:
-        "*Seçili ürünlerden verilecek 150 TL ve üzeri siparişlerde geçerlidir. Kampanya kapsamında listelenen ürünler için tıklayın.",
-      badge: "Kahve Keyfi Aç!",
-      background: "linear-gradient(135deg, #ff6b35 0%, #ff8f42 100%)",
-      icons: [
-        "/images/nescafe.jpg",
-        "/images/tahil-cipsi.jpg",
-        "/images/coca-cola.jpg",
-      ],
+      title: "TAZE VE DOĞAL İNDİRİM REYONU",
+      subtitle: "",
+      description: "",
+      badge: "",
+      image: "/images/taze-dogal-indirim-banner.png",
     },
     {
       id: 2,
-      title: "DOĞAL ve TAZE",
-      subtitle: "ÜRÜNLERİMİZE GÖZ ATIN",
-      description:
-        "Bu lezzetler kaçmaz! En taze süt ürünleri, organik meyve sebzeler ve kaliteli ürünler için doğru adrestesiniz. Gölköy Gourmet Market farkını yaşayın.",
-      badge: "Günlük Taze",
-      background: "linear-gradient(135deg, #28a745 0%, #34ce57 100%)",
-      icons: [
-        "/images/pinar-yogurt-banner.jpg",
-        "/images/pınar-süt.jpg",
-        "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-        "/images/domates.webp",
-      ],
+      title: "İLK ALIŞVERİŞİNİZE %25 İNDİRİM",
+      subtitle: "",
+      description: "",
+      badge: "",
+      image: "/images/ilk-alisveris-indirim-banner.png",
+    },
+    {
+      id: 3,
+      title: "MEYVE REYONUMUZ",
+      subtitle: "EN TAZELERİ",
+      description: "",
+      badge: "",
+      image: "/images/meyve-reyonu-banner.png",
     },
   ];
 
@@ -328,16 +316,25 @@ function HomePage() {
   return (
     <>
       {/* Auto Kampanya Carousel */}
-      <section className="campaign-carousel py-4">
-        <div className="container-fluid px-4">
+      <section
+        className="campaign-carousel py-4"
+        style={{ overflowX: "hidden" }}
+      >
+        <div
+          className="container-fluid"
+          style={{ padding: "0 15px", maxWidth: "100vw" }}
+        >
           <div className="position-relative">
             {/* Carousel Container */}
             <div
               className="carousel-container"
               style={{
-                borderRadius: "20px",
+                borderRadius: "10px",
                 overflow: "hidden",
                 position: "relative",
+                width: "100%",
+                maxWidth: "calc(100vw - 30px)",
+                margin: "0 auto",
               }}
             >
               {slides.map((slide, index) => (
@@ -347,98 +344,23 @@ function HomePage() {
                     index === currentSlide ? "active" : ""
                   }`}
                   style={{
-                    background: slide.background,
-                    minHeight: "300px",
+                    minHeight: "500px",
+                    height: "500px",
                     position: index === currentSlide ? "relative" : "absolute",
                     top: index === currentSlide ? "auto" : "0",
                     left: index === currentSlide ? "auto" : "0",
                     width: "100%",
+                    maxWidth: "100%",
                     overflow: "hidden",
                     opacity: index === currentSlide ? 1 : 0,
                     transition: "opacity 0.8s ease-in-out",
                     zIndex: index === currentSlide ? 2 : 1,
+                    backgroundImage: `url(${slide.image})`,
+                    backgroundSize: "100% auto",
+                    backgroundPosition: "center 55%",
+                    backgroundRepeat: "no-repeat",
                   }}
                 >
-                  <div className="row align-items-center h-100">
-                    <div className="col-md-6 p-5">
-                      <div className="campaign-badge mb-3">
-                        <span className="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold">
-                          {slide.badge}
-                        </span>
-                      </div>
-                      <h2
-                        className="text-white fw-bold mb-3"
-                        style={{
-                          fontSize: "2.5rem",
-                          animation:
-                            index === currentSlide
-                              ? "slideInLeft 1s ease"
-                              : "none",
-                        }}
-                      >
-                        {slide.title}
-                        <br />
-                        <span className="fw-bolder">{slide.subtitle}</span>
-                      </h2>
-                      <p
-                        className="text-white mb-4 opacity-90"
-                        style={{
-                          animation:
-                            index === currentSlide
-                              ? "slideInLeft 1s ease 0.3s both"
-                              : "none",
-                        }}
-                      >
-                        {slide.description}
-                      </p>
-                    </div>
-                    <div className="col-md-6 d-flex justify-content-center align-items-center p-4">
-                      <div className="campaign-visual">
-                        <div className="product-basket position-relative">
-                          <div className="floating-items">
-                            {slide.icons.map((icon, iconIndex) => (
-                              <div
-                                key={iconIndex}
-                                className="product-item"
-                                style={{
-                                  position: "absolute",
-                                  top: iconIndex === 0 ? "10px" : `${140 + (iconIndex - 1) * 45}px`,
-                                  right: iconIndex === 0 ? "10px" : `${15 + ((iconIndex - 1) % 2) * 80}px`,
-                                  background: iconIndex === 0 ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.95)",
-                                  padding: iconIndex === 0 ? "12px" : "8px",
-                                  borderRadius: iconIndex === 0 ? "20px" : "12px",
-                                  boxShadow: iconIndex === 0 ? "0 12px 35px rgba(0,0,0,0.2)" : "0 8px 25px rgba(0,0,0,0.15)",
-                                  animation:
-                                    index === currentSlide
-                                      ? `floatIn 1s ease ${
-                                          iconIndex * 0.2 + 0.5
-                                        }s both`
-                                      : "none",
-                                  width: iconIndex === 0 ? "160px" : "90px",
-                                  height: iconIndex === 0 ? "120px" : "90px",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <img
-                                  src={icon}
-                                  alt="Product"
-                                  style={{
-                                    width: iconIndex === 0 ? "140px" : "75px",
-                                    height: iconIndex === 0 ? "100px" : "75px",
-                                    objectFit: iconIndex === 0 ? "contain" : "cover",
-                                    borderRadius: iconIndex === 0 ? "15px" : "8px",
-                                  }}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Slide Counter */}
                   <div className="position-absolute top-0 end-0 m-3">
                     <span className="badge bg-dark bg-opacity-50 px-3 py-2 rounded-pill">
@@ -670,36 +592,35 @@ function HomePage() {
                     src="/images/golkoy-logo.png"
                     alt="Gölköy Gourmet Market"
                     style={{
-                      height: "100px",
+                      height: "80px",
                       width: "auto",
                       filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
                     }}
-                    className="me-2"
+                    className="me-3"
                   />
                   <div>
                     <h5
                       className="footer-brand-name mb-1"
                       style={{
-                        background: "linear-gradient(45deg, #ff6b35, #ff8c00, #ffa500)",
-                        backgroundSize: "200% 200%",
+                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
                         backgroundClip: "text",
                         WebkitBackgroundClip: "text",
                         WebkitTextFillColor: "transparent",
-                        fontSize: "1.8rem",
-                        fontWeight: "700",
-                        fontFamily: "'Dancing Script', cursive",
-                        letterSpacing: "1px",
-                        animation: "gradientShift 4s ease-in-out infinite",
+                        fontSize: "1.4rem",
+                        fontWeight: "bold",
                       }}
                     >
-                      Doğadan Sofralara
+                      Gölköy Gourmet Market
                     </h5>
+                    <small style={{ color: "#bdc3c7" }}>
+                      Doğal ve Kaliteli Ürünler
+                    </small>
                   </div>
                 </div>
                 <p className="footer-description">
-                  2024 yılında kurulan AlışMarket, kaliteli ürünler ve güvenilir
-                  hizmet anlayışıyla Türkiye'nin yeni e-ticaret deneyimini
-                  sunuyor.
+                  Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli
+                  ürünleri, en yüksek kalite standartlarında siz değerli
+                  müşterilerimize sunmayı amaçlıyoruz.
                 </p>
                 <div className="footer-features">
                   <div className="footer-feature">
@@ -824,7 +745,7 @@ function HomePage() {
                 <div className="contact-item">
                   <i className="fas fa-phone text-warning me-2"></i>
                   <div>
-                    <strong>0850 XXX XX XX</strong>
+                    <strong>+90 533 478 30 72</strong>
                     <br />
                     <small>Müşteri Hizmetleri</small>
                   </div>
@@ -832,7 +753,7 @@ function HomePage() {
                 <div className="contact-item">
                   <i className="fas fa-envelope text-warning me-2"></i>
                   <div>
-                    <strong>info@alismarket.com.tr</strong>
+                    <strong>golturkbuku@golkoygurme.com.tr</strong>
                     <br />
                     <small>Genel bilgi ve destek</small>
                   </div>
@@ -840,7 +761,7 @@ function HomePage() {
                 <div className="contact-item">
                   <i className="fas fa-map-marker-alt text-warning me-2"></i>
                   <div>
-                    <strong>İstanbul, Türkiye</strong>
+                    <strong>Gölköy Mah. 67 Sokak No: 1/A Bodrum/Muğla</strong>
                     <br />
                     <small>Merkez Ofis</small>
                   </div>
@@ -910,7 +831,9 @@ function HomePage() {
             <div className="row align-items-center">
               <div className="col-md-8">
                 <div className="footer-bottom-links">
-                  <span>© 2024 AlışMarket. Tüm hakları saklıdır.</span>
+                  <span>
+                    Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
+                  </span>
                   <a href="#" className="footer-bottom-link">
                     Gizlilik Politikası
                   </a>
