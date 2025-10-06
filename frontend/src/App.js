@@ -41,10 +41,12 @@ function Header() {
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
                       style={{
-                        height: "90px",
+                        height: "150px",
                         width: "auto",
-                        filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
+                        filter: "drop-shadow(0 3px 10px rgba(255,107,53,0.4))",
                         transition: "all 0.3s ease",
+                        marginTop: "-15px",
+                        marginBottom: "-15px",
                       }}
                       onMouseEnter={(e) => {
                         e.target.style.transform = "scale(1.05)";
@@ -63,12 +65,12 @@ function Header() {
                       src="/images/dogadan-sofranza-logo.png"
                       alt="Doğadan Sofranza"
                       style={{
-                        height: "160px",
+                        height: "180px",
                         width: "auto",
-                        marginLeft: "-15px",
-                        marginTop: "-10px",
-                        marginBottom: "-10px",
-                        filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.1))",
+                        marginLeft: "-40px",
+                        marginTop: "-15px",
+                        marginBottom: "-15px",
+                        filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.2))",
                       }}
                     />
                   </div>
@@ -80,17 +82,14 @@ function Header() {
             <div className="col-md-6">
               <div className="modern-search-container position-relative">
                 <div className="input-group shadow-sm">
-                  <span className="input-group-text bg-transparent border-0 ps-4">
-                    <i className="fas fa-search text-muted"></i>
-                  </span>
                   <input
                     type="text"
-                    className="form-control form-control-lg border-0 ps-0"
+                    className="form-control form-control-lg border-0"
                     placeholder="Doğal ve kaliteli ürünler arasında ara..."
                     style={{
                       borderRadius: "25px 0 0 25px",
                       fontSize: "0.95rem",
-                      paddingLeft: "0",
+                      paddingLeft: "20px",
                     }}
                   />
                   <button
@@ -185,24 +184,6 @@ function Header() {
                     )}
                   </div>
                   <small className="text-muted fw-semibold mt-1">Sepetim</small>
-                </button>
-
-                <button
-                  onClick={() => navigate("/admin")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
-                  title="Admin Panel"
-                >
-                  <div
-                    className="action-icon p-2 rounded-circle"
-                    style={{
-                      background: "linear-gradient(135deg, #f39c12, #f7dc6f)",
-                      boxShadow: "0 2px 8px rgba(243,156,18,0.3)",
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    <i className="fas fa-cog text-white"></i>
-                  </div>
-                  <small className="text-muted fw-semibold mt-1">Admin</small>
                 </button>
               </div>
             </div>
@@ -592,30 +573,21 @@ function HomePage() {
                     src="/images/golkoy-logo.png"
                     alt="Gölköy Gourmet Market"
                     style={{
-                      height: "80px",
+                      height: "140px",
                       width: "auto",
-                      filter: "drop-shadow(0 2px 8px rgba(255,107,53,0.3))",
+                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
                     }}
-                    className="me-3"
+                    className="me-4"
                   />
-                  <div>
-                    <h5
-                      className="footer-brand-name mb-1"
-                      style={{
-                        background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                        backgroundClip: "text",
-                        WebkitBackgroundClip: "text",
-                        WebkitTextFillColor: "transparent",
-                        fontSize: "1.4rem",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      Gölköy Gourmet Market
-                    </h5>
-                    <small style={{ color: "#bdc3c7" }}>
-                      Doğal ve Kaliteli Ürünler
-                    </small>
-                  </div>
+                  <img
+                    src="/images/dogadan-sofranza-logo.png"
+                    alt="Doğadan Sofranza"
+                    style={{
+                      height: "140px",
+                      width: "auto",
+                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
+                    }}
+                  />
                 </div>
                 <p className="footer-description">
                   Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli
