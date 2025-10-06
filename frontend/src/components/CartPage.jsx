@@ -1,10 +1,213 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useCartCount } from "../hooks/useCartCount";
 import { Link, useNavigate } from "react-router-dom";
+import { CartService } from "../services/cartService";
+import { ProductService } from "../services/productService";
 
 const CartPage = () => {
   const { count: cartCount } = useCartCount();
   const navigate = useNavigate();
+  const [cartItems, setCartItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState({});
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    loadCartData();
+  }, []);
+
+  const loadCartData = async () => {
+    setLoading(true);
+    const userId = localStorage.getItem("userId");
+    setIsLoggedIn(!!userId);
+
+    try {
+      let items = [];
+
+      if (userId) {
+        // Kayıtlı kullanıcı için backend'den sepeti getir
+        try {
+          items = await CartService.getCartItems();
+        } catch (error) {
+          console.log("Backend bağlantısı yok, localStorage kullanılıyor");
+          items = CartService.getGuestCart();
+        }
+      } else {
+        // Misafir kullanıcı için localStorage'dan sepeti getir
+        items = CartService.getGuestCart();
+      }
+
+      setCartItems(items);
+
+      // Ürün detaylarını getir - sahte verilerle test
+      try {
+        let allProducts = [];
+        let productData = {};
+
+        try {
+          allProducts = await ProductService.list();
+        } catch (error) {
+          // Sahte ürün verileri - ProductGrid'dekilerle aynı
+          allProducts = [
+            {
+              id: 1,
+              name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
+              description: "Yüzey temizleyici, çok amaçlı temizlik",
+              price: 204.95,
+              originalPrice: 229.95,
+              categoryId: 7,
+              categoryName: "Temizlik",
+              imageUrl: "/images/yeşil-cif-krem.jpg",
+              specialPrice: 129.95,
+            },
+            {
+              id: 2,
+              name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
+              description: "Taco aromalı & çıtır tahıl cipsi",
+              price: 18.0,
+              categoryId: 6,
+              categoryName: "Atıştırmalık",
+              imageUrl: "/images/tahil-cipsi.jpg",
+              specialPrice: 14.9,
+            },
+            {
+              id: 3,
+              name: "Lipton Ice Tea Limon 330 Ml",
+              description: "Soğuk çay, kutu 330ml",
+              price: 60.0,
+              categoryId: 5,
+              categoryName: "İçecekler",
+              imageUrl: "/images/lipton-ice-tea.jpg",
+            },
+            {
+              id: 4,
+              name: "Coca Cola 330 ML Kutu",
+              description: "Gazlı içecek, klasik tat",
+              price: 45.0,
+              categoryId: 5,
+              categoryName: "İçecekler",
+              imageUrl: "/images/coca-cola.jpg",
+            },
+            {
+              id: 5,
+              name: "Pınar Süt Tam Yağlı 1 Lt",
+              description: "Tam yağlı süt, 1 litre",
+              price: 85.0,
+              categoryId: 4,
+              categoryName: "Süt Ürünleri",
+              imageUrl: "/images/pınar-süt.jpg",
+            },
+            {
+              id: 6,
+              name: "Domates 1 Kg",
+              description: "Taze domates, 1 kilogram",
+              price: 35.0,
+              categoryId: 1,
+              categoryName: "Meyve & Sebze",
+              imageUrl: "/images/domates.webp",
+            },
+            {
+              id: 7,
+              name: "Salatalık 1 Kg",
+              description: "Taze salatalık, 1 kilogram",
+              price: 25.0,
+              categoryId: 1,
+              categoryName: "Meyve & Sebze",
+              imageUrl: "/images/salatalik.jpg",
+            },
+            {
+              id: 8,
+              name: "Bulgur 1 Kg",
+              description: "Pilavlık bulgur, 1 kilogram",
+              price: 42.0,
+              categoryId: 3,
+              categoryName: "Temel Gıda",
+              imageUrl: "/images/bulgur.png",
+            },
+          ];
+        }
+
+        console.log("🔍 Sepet items:", items);
+        console.log("📋 Mevcut ürünler:", allProducts);
+
+        for (const item of items) {
+          console.log(
+            "🎯 Aranan ürün ID:",
+            item.productId,
+            typeof item.productId
+          );
+          const product = allProducts.find((p) => p.id == item.productId); // == kullandım çünkü tip uyumsuzluğu olabilir
+          console.log("✨ Bulunan ürün:", product);
+
+          if (product) {
+            productData[item.productId] = {
+              ...product,
+              imageUrl: product.imageUrl || `/images/placeholder.png`,
+            };
+          } else {
+            // Ürün bulunamadıysa placeholder kullan
+            productData[item.productId] = {
+              id: item.productId,
+              name: "Bilinmeyen Ürün",
+              price: 0,
+              category: "Genel",
+              imageUrl: "/images/placeholder.png",
+            };
+          }
+        }
+
+        console.log("💾 Final productData:", productData);
+        setProducts(productData);
+      } catch (error) {
+        console.error("Ürün bilgileri alınırken hata:", error);
+      }
+    } catch (error) {
+      console.error("Sepet verileri yüklenirken hata:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateQuantity = async (item, newQuantity) => {
+    if (newQuantity < 1) {
+      removeItem(item);
+      return;
+    }
+
+    try {
+      if (isLoggedIn) {
+        await CartService.updateItem(item.id, item.productId, newQuantity);
+      } else {
+        CartService.updateGuestCartItem(item.productId, newQuantity);
+      }
+      await loadCartData();
+    } catch (error) {
+      console.error("Miktar güncellenirken hata:", error);
+      alert("Miktar güncellenirken bir hata oluştu.");
+    }
+  };
+
+  const removeItem = async (item) => {
+    try {
+      if (isLoggedIn) {
+        await CartService.removeItem(item.id);
+      } else {
+        CartService.removeFromGuestCart(item.productId);
+      }
+      await loadCartData();
+    } catch (error) {
+      console.error("Ürün silinirken hata:", error);
+      alert("Ürün silinirken bir hata oluştu.");
+    }
+  };
+
+  const getTotalPrice = () => {
+    return cartItems.reduce((total, item) => {
+      const product = products[item.productId];
+      const price = product ? product.specialPrice || product.price : 0;
+      return total + price * item.quantity;
+    }, 0);
+  };
 
   return (
     <div
@@ -43,11 +246,12 @@ const CartPage = () => {
                     borderRadius: "50px",
                   }}
                 >
-                  {cartCount} Ürün
+                  {cartItems.reduce((total, item) => total + item.quantity, 0)}{" "}
+                  Ürün
                 </span>
               </div>
               <div className="card-body" style={{ padding: "2rem" }}>
-                {cartCount > 0 ? (
+                {cartItems.length > 0 || loading ? (
                   <>
                     <div
                       className="row pb-3 mb-4 fw-bold text-warning"
@@ -70,22 +274,141 @@ const CartPage = () => {
                       </div>
                     </div>
 
-                    <div className="text-center py-5">
-                      <div
-                        className="spinner-border mb-3"
-                        role="status"
-                        style={{
-                          color: "#ff8f00",
-                          width: "3rem",
-                          height: "3rem",
-                        }}
-                      >
-                        <span className="visually-hidden">Loading...</span>
+                    {loading ? (
+                      <div className="text-center py-5">
+                        <div
+                          className="spinner-border mb-3"
+                          role="status"
+                          style={{
+                            color: "#ff8f00",
+                            width: "3rem",
+                            height: "3rem",
+                          }}
+                        >
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <p className="text-muted fw-bold">
+                          Sepet detayları yükleniyor...
+                        </p>
                       </div>
-                      <p className="text-muted fw-bold">
-                        Sepet detayları yükleniyor...
-                      </p>
-                    </div>
+                    ) : cartItems.length > 0 ? (
+                      <>
+                        {cartItems.map((item) => {
+                          const product = products[item.productId];
+                          return (
+                            <div
+                              key={item.id || item.productId}
+                              className="row align-items-center py-3 border-bottom"
+                            >
+                              <div className="col-md-8">
+                                <div className="d-flex align-items-center">
+                                  <img
+                                    src={
+                                      product?.imageUrl ||
+                                      "/images/placeholder.png"
+                                    }
+                                    alt={product?.name || "Ürün"}
+                                    style={{
+                                      width: "80px",
+                                      height: "80px",
+                                      objectFit: "contain",
+                                      borderRadius: "10px",
+                                      background:
+                                        "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                                      padding: "8px",
+                                      border: "2px solid #ffe0b2",
+                                    }}
+                                    className="me-3"
+                                    onError={(e) => {
+                                      e.target.src = "/images/placeholder.png";
+                                    }}
+                                  />
+                                  <div>
+                                    <h6 className="fw-bold mb-1">
+                                      {product?.name || "Yükleniyor..."}
+                                    </h6>
+                                    <p className="text-muted small mb-0">
+                                      {product?.category || ""}
+                                    </p>
+                                    <p className="text-warning fw-bold mb-0">
+                                      ₺
+                                      {product?.specialPrice ||
+                                        product?.price ||
+                                        "0.00"}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="col-md-2 text-center">
+                                <div className="d-flex align-items-center justify-content-center">
+                                  <button
+                                    className="btn btn-outline-warning btn-sm me-2"
+                                    onClick={() =>
+                                      updateQuantity(item, item.quantity - 1)
+                                    }
+                                    style={{
+                                      width: "30px",
+                                      height: "30px",
+                                      borderRadius: "50%",
+                                    }}
+                                  >
+                                    -
+                                  </button>
+                                  <span className="fw-bold mx-2">
+                                    {item.quantity}
+                                  </span>
+                                  <button
+                                    className="btn btn-outline-warning btn-sm ms-2"
+                                    onClick={() =>
+                                      updateQuantity(item, item.quantity + 1)
+                                    }
+                                    style={{
+                                      width: "30px",
+                                      height: "30px",
+                                      borderRadius: "50%",
+                                    }}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="col-md-2 text-end">
+                                <div className="d-flex flex-column align-items-end">
+                                  <p className="fw-bold text-warning mb-1">
+                                    ₺
+                                    {product
+                                      ? (
+                                          (product.specialPrice ||
+                                            product.price) * item.quantity
+                                        ).toFixed(2)
+                                      : "0.00"}
+                                  </p>
+                                  <button
+                                    className="btn btn-link text-danger p-0"
+                                    onClick={() => removeItem(item)}
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <div className="text-center py-5">
+                        <i
+                          className="fas fa-shopping-cart text-warning mb-3"
+                          style={{ fontSize: "3rem" }}
+                        ></i>
+                        <h5 className="text-warning fw-bold mb-2">
+                          Sepetiniz Boş
+                        </h5>
+                        <p className="text-muted">
+                          Alışverişe başlamak için ürünleri keşfedin!
+                        </p>
+                      </div>
+                    )}
 
                     <div className="row mt-4">
                       <div className="col-md-8"></div>
@@ -108,31 +431,50 @@ const CartPage = () => {
                             <hr style={{ borderColor: "#ffe0b2" }} />
                             <div className="d-flex justify-content-between mb-2">
                               <span>Ara Toplam:</span>
-                              <span className="fw-bold">₺0.00</span>
+                              <span className="fw-bold">
+                                ₺{getTotalPrice().toFixed(2)}
+                              </span>
                             </div>
                             <div className="d-flex justify-content-between mb-2">
                               <span>Kargo:</span>
                               <span className="text-success fw-bold">
-                                Ücretsiz
+                                {getTotalPrice() > 100 ? "Ücretsiz" : "₺15.00"}
                               </span>
                             </div>
                             <hr style={{ borderColor: "#ffe0b2" }} />
                             <div className="d-flex justify-content-between fw-bold fs-5 mb-3">
                               <span>Toplam:</span>
-                              <span className="text-warning">₺0.00</span>
+                              <span className="text-warning">
+                                ₺
+                                {(
+                                  getTotalPrice() +
+                                  (getTotalPrice() > 100 ? 0 : 15)
+                                ).toFixed(2)}
+                              </span>
                             </div>
                             <button
                               className="btn btn-lg w-100 text-white fw-bold shadow-lg border-0"
                               style={{
                                 background:
-                                  "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)",
+                                  cartItems.length > 0
+                                    ? "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)"
+                                    : "#cccccc",
                                 borderRadius: "50px",
                                 padding: "1rem",
+                                cursor:
+                                  cartItems.length > 0
+                                    ? "pointer"
+                                    : "not-allowed",
                               }}
-                              onClick={() => navigate("/payment")}
+                              onClick={() =>
+                                cartItems.length > 0 && navigate("/payment")
+                              }
+                              disabled={cartItems.length === 0}
                             >
                               <i className="fas fa-credit-card me-2"></i>
-                              Ödemeye Geç
+                              {cartItems.length > 0
+                                ? "Ödemeye Geç"
+                                : "Sepet Boş"}
                             </button>
                           </div>
                         </div>
@@ -219,7 +561,9 @@ const CartPage = () => {
                           <button
                             type="button"
                             className="btn btn-link text-warning text-decoration-none fw-semibold p-0"
-                            onClick={() => alert("Şifre sıfırlama özelliği yakında...")}
+                            onClick={() =>
+                              alert("Şifre sıfırlama özelliği yakında...")
+                            }
                           >
                             Şifremi unuttum
                           </button>
@@ -252,7 +596,9 @@ const CartPage = () => {
                           <button
                             type="button"
                             className="btn btn-link text-warning text-decoration-none fw-semibold p-0"
-                            onClick={() => alert("Kayıt olma özelliği yakında...")}
+                            onClick={() =>
+                              alert("Kayıt olma özelliği yakında...")
+                            }
                           >
                             Kayıt olun
                           </button>
