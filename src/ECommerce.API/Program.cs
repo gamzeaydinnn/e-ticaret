@@ -10,6 +10,7 @@ using ECommerce.Infrastructure.Services.BackgroundJobs;
 using Hangfire;
 using Hangfire.SQLite;
 using ECommerce.Infrastructure.Services.Micro;
+using ECommerce.Business.Services.Concrete;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -84,6 +85,23 @@ builder.Services.AddScoped<UserManager>();
 builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
+// repositories
+builder.Services.AddScoped<IBrandRepository, BrandRepository>();
+builder.Services.AddScoped<IDiscountRepository, DiscountRepository>();
+builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
+builder.Services.AddScoped<IAddressRepository, AddressRepository>();
+builder.Services.AddScoped<ICouponRepository, CouponRepository>();
+
+// services / managers
+builder.Services.AddScoped<IBrandService, BrandManager>();
+builder.Services.AddScoped<IDiscountService, DiscountManager>();
+builder.Services.AddScoped<IReviewService, ReviewManager>();
+builder.Services.AddScoped<IAddressService, AddressManager>();
+builder.Services.AddScoped<ICouponService, CouponManager>();
+
+
+// vs.
+
 
 
 builder.Services.AddScoped<StockSyncJob>();

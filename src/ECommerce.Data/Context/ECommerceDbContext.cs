@@ -28,7 +28,15 @@ namespace ECommerce.Data.Context
         public virtual DbSet<ProductImage> ProductImages { get; set; }
         public virtual DbSet<ProductVariant> ProductVariants { get; set; }
         //public virtual DbSet<StockMovement> StockMovements { get; set; }
-        
+        public DbSet<Brand> Brands { get; set; }
+public DbSet<Discount> Discounts { get; set; }
+public DbSet<ProductReview> ProductReviews { get; set; }
+public DbSet<Address> Addresses { get; set; }
+public DbSet<DeliverySlot> DeliverySlots { get; set; }
+public DbSet<Coupon> Coupons { get; set; }
+public DbSet<InventoryLog> InventoryLogs { get; set; }
+public DbSet<Notification> Notifications { get; set; }
+
         public virtual DbSet<Stocks> Stocks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
