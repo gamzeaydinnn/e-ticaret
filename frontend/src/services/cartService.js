@@ -11,41 +11,52 @@ export const CartService = {
     api.post(base, { productId, quantity }).then((r) => r.data),
 
   // Sepet ürününü güncelle
-  updateItem: (id, productId, quantity) =>
-    api.put(`${base}/${id}`, { productId, quantity }).then((r) => r.data),
+  updateItem: async (id, productId, quantity) => {
+    try {
+      return await api
+        .put(`${base}/${id}`, { productId, quantity })
+        .then((r) => r.data);
+    } catch (error) {
+      console.log("Backend bağlantısı yok, localStorage kullanılıyor");
+      // Backend hatası durumunda localStorage'e güncelle
+      CartService.updateGuestCartItem(productId, quantity);
+      return { success: true, fallback: true };
+    }
+  },
 
   // Sepet ürününü sil
-  removeItem: (id) => api.delete(`${base}/${id}`).then((r) => r.data),
+  removeItem: async (id, productId) => {
+    try {
+      return await api.delete(`${base}/${id}`).then((r) => r.data);
+    } catch (error) {
+      console.log("Backend bağlantısı yok, localStorage kullanılıyor");
+      // Backend hatası durumunda localStorage'den sil
+      CartService.removeFromGuestCart(productId);
+      return { success: true, fallback: true };
+    }
+  },
 
   // LocalStorage için guest sepet yönetimi
   getGuestCart: () => {
     const cart = localStorage.getItem("guestCart");
-    const parsedCart = cart ? JSON.parse(cart) : [];
-    console.log("getGuestCart çağrıldı, dönen veri:", parsedCart);
-    return parsedCart;
+    return cart ? JSON.parse(cart) : [];
   },
 
   addToGuestCart: (productId, quantity = 1) => {
-    console.log("addToGuestCart çağrıldı:", { productId, quantity });
     const cart = CartService.getGuestCart();
-    console.log("Mevcut sepet:", cart);
     const existingItem = cart.find((item) => item.productId === productId);
 
     if (existingItem) {
       existingItem.quantity += quantity;
-      console.log("Mevcut ürünün miktarı artırıldı:", existingItem);
     } else {
-      const newItem = {
+      cart.push({
         productId,
         quantity,
         addedAt: new Date().toISOString(),
-      };
-      cart.push(newItem);
-      console.log("Yeni ürün sepete eklendi:", newItem);
+      });
     }
 
     localStorage.setItem("guestCart", JSON.stringify(cart));
-    console.log("Güncellenen sepet localStorage'a kaydedildi:", cart);
     return cart;
   },
 

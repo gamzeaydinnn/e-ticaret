@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -7,14 +7,18 @@ import {
   useNavigate,
 } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import "./App.css";
 import ProductGrid from "./components/ProductGrid";
 import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
+import FavoritesPage from "./components/FavoritesPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import AdminPanel from "./admin/AdminPanel";
+import LoginModal from "./components/LoginModal";
 import { useCartCount } from "./hooks/useCartCount";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import AdminMicro from "./pages/Admin/AdminMicro";
 import Home from "./pages/Home";
 import Cart from "./pages/Cart";
@@ -25,6 +29,37 @@ import Checkout from "./pages/Checkout";
 function Header() {
   const { count: cartCount } = useCartCount();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const handleAccountClick = () => {
+    if (user) {
+      setShowUserDropdown(!showUserDropdown);
+    } else {
+      setShowLoginModal(true);
+    }
+  };
+
+  const handleLogout = async () => {
+    setShowUserDropdown(false);
+    await logout();
+    navigate("/");
+  };
+
+  // Dropdown dışına tıklama ile kapatma
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUserDropdown && !event.target.closest(".position-relative")) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showUserDropdown]);
 
   return (
     <div className="App">
@@ -115,23 +150,74 @@ function Header() {
             {/* Modern Action Buttons */}
             <div className="col-md-3">
               <div className="header-actions d-flex justify-content-end align-items-center gap-3">
-                <button
-                  onClick={() => navigate("/account")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
-                  title="Hesabım"
-                >
-                  <div
-                    className="action-icon p-2 rounded-circle"
-                    style={{
-                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                      boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
-                      transition: "all 0.3s ease",
-                    }}
+                <div className="position-relative">
+                  <button
+                    onClick={handleAccountClick}
+                    className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                    title={user ? `Hoş geldin, ${user.name}` : "Giriş Yap"}
                   >
-                    <i className="fas fa-user text-white"></i>
-                  </div>
-                  <small className="text-muted fw-semibold mt-1">Hesabım</small>
-                </button>
+                    <div
+                      className="action-icon p-2 rounded-circle"
+                      style={{
+                        background: user
+                          ? "linear-gradient(135deg, #27ae60, #58d68d)"
+                          : "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                        boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
+                        transition: "all 0.3s ease",
+                      }}
+                    >
+                      <i
+                        className={`fas ${
+                          user ? "fa-user-check" : "fa-user"
+                        } text-white`}
+                      ></i>
+                    </div>
+                    <small className="text-muted fw-semibold mt-1">
+                      {user ? user.name.split(" ")[0] : "Giriş Yap"}
+                    </small>
+                  </button>
+
+                  {user && showUserDropdown && (
+                    <div
+                      className="position-absolute bg-white shadow-lg rounded-3 border-0 mt-1 py-2"
+                      style={{
+                        right: 0,
+                        minWidth: "200px",
+                        zIndex: 1000,
+                        top: "100%",
+                      }}
+                    >
+                      <button
+                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          navigate("/account");
+                        }}
+                      >
+                        <i className="fas fa-user-circle me-2 text-primary"></i>
+                        Hesabım
+                      </button>
+                      <button
+                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start"
+                        onClick={() => {
+                          setShowUserDropdown(false);
+                          navigate("/favorites");
+                        }}
+                      >
+                        <i className="fas fa-heart me-2 text-danger"></i>
+                        Favorilerim
+                      </button>
+                      <hr className="dropdown-divider mx-3" />
+                      <button
+                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start text-danger"
+                        onClick={handleLogout}
+                      >
+                        <i className="fas fa-sign-out-alt me-2"></i>
+                        Çıkış Yap
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={() => navigate("/orders")}
@@ -219,7 +305,11 @@ function Header() {
             <button className="category-btn" type="button">
               TEMİZLİK
             </button>
-            <button className="category-btn" type="button">
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => (window.location.href = "/favorites")}
+            >
               FAVORİLERİM
             </button>
             <button className="category-btn" type="button">
@@ -228,32 +318,45 @@ function Header() {
           </div>
         </div>
       </nav>
+
+      {/* Login Modal */}
+      <LoginModal
+        show={showLoginModal}
+        onHide={() => setShowLoginModal(false)}
+        onLoginSuccess={() => {
+          setShowLoginModal(false);
+          // Başarılı giriş sonrası gerekli işlemler
+        }}
+      />
     </div>
   );
 }
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Header />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/account" element={<AccountPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/orders" element={<OrderTracking />} />
-          <Route path="/payment" element={<PaymentPage />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          {/* Yeni sayfalar */}
-          <Route path="/pages/home" element={<Home />} />
-          <Route path="/pages/cart" element={<Cart />} />
-          <Route path="/category/:slug" element={<Category />} />
-          <Route path="/product/:id" element={<Product />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/admin/micro" element={<AdminMicro />} />
-        </Routes>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <Header />
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/cart" element={<CartPage />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
+            <Route path="/orders" element={<OrderTracking />} />
+            <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/admin" element={<AdminPanel />} />
+            {/* Yeni sayfalar */}
+            <Route path="/pages/home" element={<Home />} />
+            <Route path="/pages/cart" element={<Cart />} />
+            <Route path="/category/:slug" element={<Category />} />
+            <Route path="/product/:id" element={<Product />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/admin/micro" element={<AdminMicro />} />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

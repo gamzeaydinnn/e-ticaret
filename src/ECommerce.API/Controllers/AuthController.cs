@@ -83,4 +83,28 @@ public async Task<IActionResult> Refresh(TokenRefreshDto dto)
         return Ok(new { Message = "Şifreniz başarıyla değiştirilmiştir." });
     }
 
+    [HttpPost("logout")]
+    [Authorize]
+    public IActionResult Logout()
+    {
+        try
+        {
+            // JWT token'ı geçersiz kılma işlemi
+            // Gerçek projede token blacklist'e eklenebilir veya refresh token silinebilir
+            var userIdString = User.FindFirst("sub")?.Value;
+            
+            if (!string.IsNullOrEmpty(userIdString) && int.TryParse(userIdString, out var userId))
+            {
+                // Kullanıcının tüm aktif sessionlarını sonlandırabilirsiniz
+                // await _authService.InvalidateUserTokensAsync(userId);
+            }
+            
+            return Ok(new { success = true, message = "Başarıyla çıkış yapıldı!" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Çıkış sırasında bir hata oluştu!", error = ex.Message });
+        }
+    }
+
 }

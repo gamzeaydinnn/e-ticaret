@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { ProductService } from "../services/productService";
 import { CartService } from "../services/cartService";
+import { FavoriteService } from "../services/favoriteService";
+import { useAuth } from "../contexts/AuthContext";
+import LoginModal from "./LoginModal";
+import LoginRequiredModal from "./LoginRequiredModal";
 
 export default function ProductGrid() {
   const [data, setData] = useState([]);
@@ -8,8 +12,14 @@ export default function ProductGrid() {
   const [error] = useState("");
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showLoginRequired, setShowLoginRequired] = useState(false);
+  const [loginAction, setLoginAction] = useState(null); // 'cart' or 'favorite'
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showLoginAlert, setShowLoginAlert] = useState(false);
+  const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
   const [cartNotification, setCartNotification] = useState(null);
+  const [favorites, setFavorites] = useState([]);
+  const { user } = useAuth();
 
   // Tüm ürünleri göster (filtreleme kaldırıldı)
   const filteredProducts = useMemo(() => {
@@ -18,62 +28,160 @@ export default function ProductGrid() {
 
   const handleAddToCart = async (productId) => {
     // Kullanıcı giriş yapmış mı kontrol et
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      // Giriş yapmamışsa uyarı modalını göster
-      setShowLoginAlert(true);
-      // Ürün ID'sini geçici olarak sakla
+    if (!user) {
+      // Login gerekli modalını göster
+      setLoginAction("cart");
+      setShowLoginRequired(true);
       localStorage.setItem("tempProductId", productId);
       return;
     }
-    
+
     // Giriş yapmışsa backend API'ye sepete ekle
     try {
       await CartService.addItem(productId, 1);
-      const product = data.find(p => p.id === productId);
+      const product = data.find((p) => p.id === productId);
       showCartNotification(product, "registered");
     } catch (error) {
       console.error("Sepete ekleme hatası:", error);
       // Hata durumunda localStorage'e ekle
-      const product = data.find(p => p.id === productId);
+      const product = data.find((p) => p.id === productId);
       CartService.addToGuestCart(parseInt(productId), 1);
       showCartNotification(product, "guest");
     }
   };
 
   const handleGuestContinue = async () => {
-    setShowLoginAlert(false);
-    const productId = localStorage.getItem("tempProductId");
-    
-    if (productId) {
-      // Misafir olarak localStorage'e ekle
-      try {
+    setShowLoginRequired(false);
+
+    if (loginAction === "cart") {
+      const productId = localStorage.getItem("tempProductId");
+      if (productId) {
         CartService.addToGuestCart(parseInt(productId), 1);
-        const product = data.find(p => p.id === parseInt(productId));
+        const product = data.find((p) => p.id === parseInt(productId));
         showCartNotification(product, "guest");
         localStorage.removeItem("tempProductId");
-      } catch (error) {
-        console.error("Guest sepete ekleme hatası:", error);
-        setCartNotification({
-          type: "error",
-          message: "Ürün sepete eklenirken bir hata oluştu!"
-        });
+      }
+    } else if (loginAction === "favorite") {
+      const productId = localStorage.getItem("tempFavoriteProductId");
+      if (productId) {
+        addToGuestFavorites(parseInt(productId));
+        localStorage.removeItem("tempFavoriteProductId");
       }
     }
+
+    setLoginAction(null);
+  };
+
+  const handleShowLogin = () => {
+    setShowLoginRequired(false);
+    setShowLoginModal(true);
   };
 
   const handleGoToLogin = () => {
     setShowLoginAlert(false);
+    setShowLoginRequired(false);
+    setShowLoginModal(true);
+  };
+
+  // Favoriler için fonksiyonlar
+  const handleAddToFavorites = async (productId) => {
+    if (!user) {
+      // Login gerekli modalını göster
+      setLoginAction("favorite");
+      setShowLoginRequired(true);
+      localStorage.setItem("tempFavoriteProductId", productId);
+      return;
+    }
+
+    // Giriş yapmışsa backend API'ye favorilere ekle
+    try {
+      await FavoriteService.toggleFavorite(productId);
+      // Favoriler listesini güncelle
+      loadFavorites();
+    } catch (error) {
+      console.error("Favorilere ekleme hatası:", error);
+      // Hata durumunda localStorage'e ekle
+      addToGuestFavorites(productId);
+    }
+  };
+
+  const handleFavoriteGuestContinue = () => {
+    setShowFavoriteAlert(false);
+    const productId = localStorage.getItem("tempFavoriteProductId");
+
+    if (productId) {
+      addToGuestFavorites(parseInt(productId));
+      localStorage.removeItem("tempFavoriteProductId");
+    }
+  };
+
+  const handleFavoriteGoToLogin = () => {
+    setShowFavoriteAlert(false);
     window.location.href = "/cart";
+  };
+
+  const addToGuestFavorites = (productId) => {
+    const guestFavorites = JSON.parse(
+      localStorage.getItem("guestFavorites") || "[]"
+    );
+    if (!guestFavorites.includes(productId)) {
+      guestFavorites.push(productId);
+      localStorage.setItem("guestFavorites", JSON.stringify(guestFavorites));
+      setFavorites(guestFavorites);
+
+      // Başarı bildirimi göster
+      const product = data.find((p) => p.id === productId);
+      showFavoriteNotification(product);
+    }
+  };
+
+  const loadFavorites = async () => {
+    const userId = localStorage.getItem("userId");
+    if (userId) {
+      try {
+        const userFavorites = await FavoriteService.getFavorites();
+        setFavorites(userFavorites.map((f) => f.id));
+      } catch (error) {
+        console.error("Favoriler yüklenirken hata:", error);
+        // Hata durumunda localStorage'dan yükle
+        const guestFavorites = JSON.parse(
+          localStorage.getItem("guestFavorites") || "[]"
+        );
+        setFavorites(guestFavorites);
+      }
+    } else {
+      // Misafir kullanıcı için localStorage'dan yükle
+      const guestFavorites = JSON.parse(
+        localStorage.getItem("guestFavorites") || "[]"
+      );
+      setFavorites(guestFavorites);
+    }
+  };
+
+  const showFavoriteNotification = (product) => {
+    // Toast bildirim göster
+    setCartNotification({
+      type: "favorite",
+      product: product,
+      message: "Favorilere eklendi!",
+    });
+
+    setTimeout(() => {
+      setCartNotification(null);
+    }, 3000);
+  };
+
+  const isFavorite = (productId) => {
+    return favorites.includes(productId);
   };
 
   const showCartNotification = (product, userType) => {
     setCartNotification({
       type: "success",
       product: product,
-      userType: userType
+      userType: userType,
     });
-    
+
     // 4 saniye sonra bildirimi gizle
     setTimeout(() => {
       setCartNotification(null);
@@ -282,7 +390,11 @@ export default function ProductGrid() {
           },
         ]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        // Ürünler yüklendikten sonra favorileri de yükle
+        loadFavorites();
+      });
   }, []);
 
   if (loading) {
@@ -450,8 +562,14 @@ export default function ProductGrid() {
                   <button
                     className="btn-favorite"
                     type="button"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Ürün detay modalının açılmasını engelle
+                      handleAddToFavorites(p.id);
+                    }}
                     style={{
-                      background: "rgba(255, 255, 255, 0.9)",
+                      background: isFavorite(p.id)
+                        ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                        : "rgba(255, 255, 255, 0.9)",
                       border: "none",
                       borderRadius: "50%",
                       width: "35px",
@@ -459,22 +577,33 @@ export default function ProductGrid() {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: "#ff6b35",
+                      color: isFavorite(p.id) ? "white" : "#ff6b35",
                       transition: "all 0.3s ease",
                       backdropFilter: "blur(10px)",
+                      boxShadow: isFavorite(p.id)
+                        ? "0 4px 15px rgba(255, 107, 53, 0.4)"
+                        : "none",
                     }}
                     onMouseEnter={(e) => {
-                      e.target.style.transform = "scale(1.1)";
-                      e.target.style.background = "#ff6b35";
-                      e.target.style.color = "white";
+                      if (!isFavorite(p.id)) {
+                        e.target.style.transform = "scale(1.1)";
+                        e.target.style.background = "#ff6b35";
+                        e.target.style.color = "white";
+                      }
                     }}
                     onMouseLeave={(e) => {
-                      e.target.style.transform = "scale(1)";
-                      e.target.style.background = "rgba(255, 255, 255, 0.9)";
-                      e.target.style.color = "#ff6b35";
+                      if (!isFavorite(p.id)) {
+                        e.target.style.transform = "scale(1)";
+                        e.target.style.background = "rgba(255, 255, 255, 0.9)";
+                        e.target.style.color = "#ff6b35";
+                      }
                     }}
                   >
-                    <i className="far fa-heart"></i>
+                    <i
+                      className={
+                        isFavorite(p.id) ? "fas fa-heart" : "far fa-heart"
+                      }
+                    ></i>
                   </button>
                 </div>
 
@@ -945,76 +1074,115 @@ export default function ProductGrid() {
           style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
         >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "20px" }}>
-              <div className="modal-header border-0" style={{ borderRadius: "20px 20px 0 0", background: "linear-gradient(135deg, #ff6b35, #ff8c00)", color: "white", padding: "2rem" }}>
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "20px" }}
+            >
+              <div
+                className="modal-header border-0"
+                style={{
+                  borderRadius: "20px 20px 0 0",
+                  background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                  color: "white",
+                  padding: "2rem",
+                }}
+              >
                 <div className="text-center w-100">
-                  <i className="fas fa-user-plus mb-3" style={{ fontSize: "2.5rem" }}></i>
+                  <i
+                    className="fas fa-user-plus mb-3"
+                    style={{ fontSize: "2.5rem" }}
+                  ></i>
                   <h4 className="modal-title fw-bold">Hesap Oluşturun</h4>
                 </div>
               </div>
-              
-              <div className="modal-body text-center" style={{ padding: "2rem" }}>
+
+              <div
+                className="modal-body text-center"
+                style={{ padding: "2rem" }}
+              >
                 <div className="mb-4">
-                  <div 
-                    className="position-relative overflow-hidden border-0 shadow-lg" 
-                    style={{ 
-                      borderRadius: "20px", 
-                      background: "linear-gradient(135deg, #FFD700, #FFA500, #FF6347)",
+                  <div
+                    className="position-relative overflow-hidden border-0 shadow-lg"
+                    style={{
+                      borderRadius: "20px",
+                      background:
+                        "linear-gradient(135deg, #FFD700, #FFA500, #FF6347)",
                       padding: "1.5rem",
-                      boxShadow: "0 8px 25px rgba(255, 215, 0, 0.4)"
+                      boxShadow: "0 8px 25px rgba(255, 215, 0, 0.4)",
                     }}
                   >
-                    <div className="position-absolute top-0 start-0 w-100 h-100" style={{
-                      background: "url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><defs><pattern id=\"stars\" x=\"0\" y=\"0\" width=\"20\" height=\"20\" patternUnits=\"userSpaceOnUse\"><circle cx=\"10\" cy=\"10\" r=\"1\" fill=\"%23ffffff\" opacity=\"0.3\"/></pattern></defs><rect width=\"100\" height=\"100\" fill=\"url(%23stars)\"/></svg>') repeat",
-                      opacity: 0.6
-                    }}></div>
-                    
+                    <div
+                      className="position-absolute top-0 start-0 w-100 h-100"
+                      style={{
+                        background:
+                          'url(\'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="stars" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="%23ffffff" opacity="0.3"/></pattern></defs><rect width="100" height="100" fill="url(%23stars)"/></svg>\') repeat',
+                        opacity: 0.6,
+                      }}
+                    ></div>
+
                     <div className="position-relative text-center text-white">
                       <div className="mb-3">
-                        <i className="fas fa-gift fa-3x text-white" style={{ 
-                          filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.3))",
-                          animation: "bounce 2s infinite"
-                        }}></i>
+                        <i
+                          className="fas fa-gift fa-3x text-white"
+                          style={{
+                            filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.3))",
+                            animation: "bounce 2s infinite",
+                          }}
+                        ></i>
                       </div>
-                      
-                      <h4 className="fw-bold mb-2" style={{ 
-                        textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
-                        fontSize: "1.4rem"
-                      }}>
+
+                      <h4
+                        className="fw-bold mb-2"
+                        style={{
+                          textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+                          fontSize: "1.4rem",
+                        }}
+                      >
                         🎉 SÜPER FIRSAT! 🎉
                       </h4>
-                      
-                      <div className="bg-white text-dark rounded-pill px-3 py-2 mx-auto d-inline-block mb-2" style={{
-                        boxShadow: "0 4px 15px rgba(0,0,0,0.2)"
-                      }}>
-                        <strong style={{ color: "#FF6347" }}>İLK ALIŞVERİŞ</strong>
+
+                      <div
+                        className="bg-white text-dark rounded-pill px-3 py-2 mx-auto d-inline-block mb-2"
+                        style={{
+                          boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                        }}
+                      >
+                        <strong style={{ color: "#FF6347" }}>
+                          İLK ALIŞVERİŞ
+                        </strong>
                       </div>
-                      
-                      <p className="mb-2 fw-bold" style={{ 
-                        fontSize: "1.1rem",
-                        textShadow: "1px 1px 3px rgba(0,0,0,0.3)"
-                      }}>
+
+                      <p
+                        className="mb-2 fw-bold"
+                        style={{
+                          fontSize: "1.1rem",
+                          textShadow: "1px 1px 3px rgba(0,0,0,0.3)",
+                        }}
+                      >
                         Hesap oluştur ve kaydol
                       </p>
-                      
-                      <div className="bg-success text-white rounded-pill px-4 py-2 mx-auto d-inline-block" style={{
-                        fontSize: "1.2rem",
-                        fontWeight: "800",
-                        boxShadow: "0 4px 15px rgba(40, 167, 69, 0.4)",
-                        animation: "pulse 2s infinite"
-                      }}>
+
+                      <div
+                        className="bg-success text-white rounded-pill px-4 py-2 mx-auto d-inline-block"
+                        style={{
+                          fontSize: "1.2rem",
+                          fontWeight: "800",
+                          boxShadow: "0 4px 15px rgba(40, 167, 69, 0.4)",
+                          animation: "pulse 2s infinite",
+                        }}
+                      >
                         <i className="fas fa-shipping-fast me-2"></i>
                         KARGO BEDAVA! 🚚
                       </div>
                     </div>
                   </div>
                 </div>
-                
+
                 <p className="text-muted mb-4">
-                  Sepetinize ürün eklemek için hesap oluşturmanız önerilir. 
+                  Sepetinize ürün eklemek için hesap oluşturmanız önerilir.
                   Ancak misafir olarak da alışveriş yapabilirsiniz.
                 </p>
-                
+
                 <div className="d-grid gap-3">
                   <button
                     type="button"
@@ -1023,21 +1191,21 @@ export default function ProductGrid() {
                       background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
                       borderRadius: "15px",
                       padding: "15px",
-                      fontSize: "1.1rem"
+                      fontSize: "1.1rem",
                     }}
                     onClick={handleGoToLogin}
                   >
                     <i className="fas fa-user-plus me-2"></i>
                     Hesap Oluştur & Giriş Yap
                   </button>
-                  
+
                   <button
                     type="button"
                     className="btn btn-outline-secondary btn-lg fw-bold"
                     style={{
                       borderRadius: "15px",
                       padding: "15px",
-                      borderWidth: "2px"
+                      borderWidth: "2px",
                     }}
                     onClick={handleGuestContinue}
                   >
@@ -1046,8 +1214,11 @@ export default function ProductGrid() {
                   </button>
                 </div>
               </div>
-              
-              <div className="modal-footer border-0" style={{ padding: "0 2rem 2rem" }}>
+
+              <div
+                className="modal-footer border-0"
+                style={{ padding: "0 2rem 2rem" }}
+              >
                 <button
                   type="button"
                   className="btn btn-link text-muted mx-auto"
@@ -1061,7 +1232,142 @@ export default function ProductGrid() {
         </div>
       )}
 
-      {/* Cart Notification Toast */}
+      {/* Favorite Alert Modal */}
+      {showFavoriteAlert && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "20px" }}
+            >
+              <div
+                className="modal-header border-0"
+                style={{
+                  borderRadius: "20px 20px 0 0",
+                  background: "linear-gradient(135deg, #e91e63, #ad1457)",
+                  color: "white",
+                  padding: "2rem",
+                }}
+              >
+                <div className="text-center w-100">
+                  <i
+                    className="fas fa-heart mb-3"
+                    style={{ fontSize: "2.5rem" }}
+                  ></i>
+                  <h4 className="modal-title fw-bold">Favorilere Ekle</h4>
+                </div>
+              </div>
+
+              <div
+                className="modal-body text-center"
+                style={{ padding: "2rem" }}
+              >
+                <div className="mb-4">
+                  <div
+                    className="alert border-0 shadow-lg p-4"
+                    style={{
+                      borderRadius: "20px",
+                      background: "linear-gradient(135deg, #fff3cd, #ffeaa7)",
+                      border: "3px solid #f39c12",
+                    }}
+                  >
+                    <div className="text-center">
+                      <div
+                        className="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          background:
+                            "linear-gradient(135deg, #e91e63, #ad1457)",
+                        }}
+                      >
+                        <i
+                          className="fas fa-heart text-white"
+                          style={{ fontSize: "1.5rem" }}
+                        ></i>
+                      </div>
+                      <div
+                        className="fw-bold text-warning mb-2"
+                        style={{ fontSize: "1.1rem" }}
+                      >
+                        💖 ÖZEL AVANTAJ! 💖
+                      </div>
+                      <div className="text-dark mb-2">
+                        Hesap oluşturup favorilerinizi kaydedin
+                      </div>
+                      <div
+                        className="badge px-3 py-2 fw-bold"
+                        style={{
+                          backgroundColor: "#e91e63",
+                          fontSize: "0.9rem",
+                          borderRadius: "25px",
+                        }}
+                      >
+                        💝 Favorileriniz Her Zaman Yanınızda!
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-muted mb-4">
+                  Favorilerinize ürün eklemek için hesap oluşturmanız önerilir.
+                  Ancak misafir olarak da favori ürünlerinizi kaydedebilirsiniz.
+                </p>
+
+                <div className="d-grid gap-3">
+                  <button
+                    type="button"
+                    className="btn btn-lg fw-bold text-white border-0"
+                    style={{
+                      background: "linear-gradient(135deg, #e91e63, #ad1457)",
+                      borderRadius: "15px",
+                      padding: "15px",
+                      fontSize: "1.1rem",
+                    }}
+                    onClick={handleFavoriteGoToLogin}
+                  >
+                    <i className="fas fa-user-plus me-2"></i>
+                    Hesap Oluştur & Giriş Yap
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-lg fw-bold"
+                    style={{
+                      borderRadius: "15px",
+                      padding: "15px",
+                      borderWidth: "2px",
+                    }}
+                    onClick={handleFavoriteGuestContinue}
+                  >
+                    <i className="fas fa-heart me-2"></i>
+                    Hesap Oluşturmadan Devam Et
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className="modal-footer border-0"
+                style={{ padding: "0 2rem 2rem" }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-link text-muted mx-auto"
+                  onClick={() => setShowFavoriteAlert(false)}
+                >
+                  <i className="fas fa-times me-1"></i> Kapat
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Cart Notification Toast */}
       {cartNotification && (
         <div
           className="position-fixed top-0 end-0 m-4"
@@ -1070,94 +1376,223 @@ export default function ProductGrid() {
           <div
             className="toast show border-0 shadow-lg"
             style={{
-              borderRadius: "20px",
-              minWidth: "350px",
-              background: cartNotification.type === "success" 
-                ? "linear-gradient(135deg, #d4edda, #c3e6cb)"
-                : "linear-gradient(135deg, #f8d7da, #f1aeb5)",
-              animation: "slideInRight 0.5s ease-out"
+              borderRadius: "25px",
+              minWidth: "380px",
+              background:
+                cartNotification.type === "success"
+                  ? "linear-gradient(145deg, #ffffff, #f8f9fa)"
+                  : cartNotification.type === "favorite"
+                  ? "linear-gradient(145deg, #fdf2f8, #fce7f3)"
+                  : "linear-gradient(145deg, #fff5f5, #fed7d7)",
+              animation:
+                "slideInRight 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+              border:
+                cartNotification.type === "success"
+                  ? "3px solid #10b981"
+                  : cartNotification.type === "favorite"
+                  ? "3px solid #e91e63"
+                  : "3px solid #ef4444",
+              boxShadow:
+                "0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1)",
             }}
           >
-            <div className="toast-header border-0" style={{ 
-              background: cartNotification.type === "success"
-                ? "linear-gradient(135deg, #28a745, #20c997)"
-                : "linear-gradient(135deg, #dc3545, #c82333)",
-              borderRadius: "20px 20px 0 0",
-              color: "white"
-            }}>
-              <i className={`fas ${cartNotification.type === "success" ? "fa-check-circle" : "fa-exclamation-triangle"} me-2`}></i>
-              <strong className="me-auto">
-                {cartNotification.type === "success" ? "🎉 Başarılı!" : "❌ Hata!"}
-              </strong>
+            <div
+              className="toast-header border-0"
+              style={{
+                background:
+                  cartNotification.type === "success"
+                    ? "linear-gradient(135deg, #10b981, #059669)"
+                    : cartNotification.type === "favorite"
+                    ? "linear-gradient(135deg, #e91e63, #ad1457)"
+                    : "linear-gradient(135deg, #ef4444, #dc2626)",
+                borderRadius: "22px 22px 0 0",
+                color: "white",
+                padding: "1rem 1.5rem",
+              }}
+            >
+              <div className="d-flex align-items-center">
+                <div
+                  className="rounded-circle me-3 d-flex align-items-center justify-content-center"
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    backgroundColor: "rgba(255,255,255,0.2)",
+                  }}
+                >
+                  <i
+                    className={`fas ${
+                      cartNotification.type === "success"
+                        ? "fa-check"
+                        : cartNotification.type === "favorite"
+                        ? "fa-heart"
+                        : "fa-exclamation"
+                    }`}
+                    style={{ fontSize: "1.2rem" }}
+                  ></i>
+                </div>
+                <strong className="fs-6">
+                  {cartNotification.type === "success"
+                    ? "Sepete Eklendi!"
+                    : cartNotification.type === "favorite"
+                    ? "Favorilere Eklendi!"
+                    : "Hata Oluştu!"}
+                </strong>
+              </div>
               <button
                 type="button"
-                className="btn-close btn-close-white"
+                className="btn-close btn-close-white ms-auto"
                 onClick={() => setCartNotification(null)}
+                style={{ opacity: 0.8 }}
               ></button>
             </div>
-            
-            {cartNotification.type === "success" && cartNotification.product && (
-              <div className="toast-body p-3">
-                <div className="d-flex align-items-center">
-                  <img
-                    src={cartNotification.product.imageUrl || "/images/placeholder.png"}
-                    alt={cartNotification.product.name}
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      objectFit: "cover",
-                      borderRadius: "10px",
-                      border: "2px solid #28a745"
-                    }}
-                    className="me-3"
-                  />
-                  <div className="flex-grow-1">
-                    <h6 className="mb-1 fw-bold text-success">
-                      {cartNotification.product.name}
-                    </h6>
-                    <p className="mb-2 text-muted small">
-                      ₺{cartNotification.product.price?.toFixed(2)} - Sepete eklendi
-                    </p>
-                    
-                    {cartNotification.userType === "guest" && (
-                      <div className="alert alert-warning border-0 p-2 mb-2" style={{ borderRadius: "10px" }}>
-                        <i className="fas fa-gift me-1"></i>
-                        <small><strong>💰 Özel Fırsat:</strong> Hesap oluştur, ilk alışverişinde <strong>kargo bedava!</strong></small>
-                      </div>
-                    )}
-                    
-                    <div className="d-flex gap-2">
-                      <button
-                        className="btn btn-success btn-sm"
-                        onClick={() => {
-                          setCartNotification(null);
-                          window.location.href = "/cart";
+
+            {cartNotification.type === "success" &&
+              cartNotification.product && (
+                <div className="toast-body p-4">
+                  <div className="d-flex align-items-start">
+                    <div className="position-relative me-3">
+                      <img
+                        src={
+                          cartNotification.product.imageUrl ||
+                          "/images/placeholder.png"
+                        }
+                        alt={cartNotification.product.name}
+                        style={{
+                          width: "70px",
+                          height: "70px",
+                          objectFit: "contain",
+                          borderRadius: "15px",
+                          border: "3px solid #10b981",
+                          background:
+                            "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                          padding: "5px",
                         }}
-                        style={{ borderRadius: "15px", fontSize: "0.8rem" }}
+                      />
+                      <div
+                        className="position-absolute top-0 start-100 translate-middle rounded-circle bg-success d-flex align-items-center justify-content-center"
+                        style={{ width: "24px", height: "24px" }}
                       >
-                        <i className="fas fa-shopping-cart me-1"></i>
-                        Sepete Git
-                      </button>
-                      
+                        <i
+                          className="fas fa-check text-white"
+                          style={{ fontSize: "0.7rem" }}
+                        ></i>
+                      </div>
+                    </div>
+
+                    <div className="flex-grow-1">
+                      <h6
+                        className="mb-1 fw-bold text-dark"
+                        style={{ fontSize: "0.95rem" }}
+                      >
+                        {cartNotification.product.name}
+                      </h6>
+                      <div className="d-flex align-items-center mb-2">
+                        <span className="text-success fw-bold me-2">
+                          ₺
+                          {(
+                            cartNotification.product.specialPrice ||
+                            cartNotification.product.price
+                          )?.toFixed(2)}
+                        </span>
+                        {cartNotification.product.specialPrice && (
+                          <span className="text-muted text-decoration-line-through small">
+                            ₺{cartNotification.product.price?.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+
                       {cartNotification.userType === "guest" && (
-                        <button
-                          className="btn btn-outline-warning btn-sm"
-                          onClick={() => {
-                            setCartNotification(null);
-                            setShowLoginAlert(true);
+                        <div
+                          className="alert border-0 p-3 mb-3"
+                          style={{
+                            borderRadius: "15px",
+                            background:
+                              "linear-gradient(135deg, #fff3cd, #ffeaa7)",
+                            border: "2px solid #f39c12",
                           }}
-                          style={{ borderRadius: "15px", fontSize: "0.8rem" }}
                         >
-                          <i className="fas fa-user-plus me-1"></i>
-                          Hesap Oluştur
-                        </button>
+                          <div className="d-flex align-items-center">
+                            <div
+                              className="rounded-circle me-2 d-flex align-items-center justify-content-center"
+                              style={{
+                                width: "30px",
+                                height: "30px",
+                                backgroundColor: "#f39c12",
+                              }}
+                            >
+                              <i
+                                className="fas fa-gift text-white"
+                                style={{ fontSize: "0.8rem" }}
+                              ></i>
+                            </div>
+                            <div>
+                              <div className="fw-bold text-warning small mb-1">
+                                🎁 SÜPER FIRSAT!
+                              </div>
+                              <div
+                                className="text-dark"
+                                style={{ fontSize: "0.75rem" }}
+                              >
+                                Hesap oluştur,{" "}
+                                <strong>ilk alışverişinde kargo bedava!</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       )}
+
+                      <div className="d-grid gap-2">
+                        <div className="row g-2">
+                          <div className="col-8">
+                            <button
+                              className="btn w-100 text-white fw-bold"
+                              onClick={() => {
+                                setCartNotification(null);
+                                window.location.href = "/cart";
+                              }}
+                              style={{
+                                borderRadius: "20px",
+                                fontSize: "0.85rem",
+                                background:
+                                  "linear-gradient(135deg, #10b981, #059669)",
+                                border: "none",
+                                padding: "10px",
+                              }}
+                            >
+                              <i className="fas fa-shopping-cart me-1"></i>
+                              Sepete Git
+                            </button>
+                          </div>
+
+                          {cartNotification.userType === "guest" && (
+                            <div className="col-4">
+                              <button
+                                className="btn btn-outline-warning w-100 fw-bold"
+                                onClick={() => {
+                                  setCartNotification(null);
+                                  setShowLoginAlert(true);
+                                }}
+                                style={{
+                                  borderRadius: "20px",
+                                  fontSize: "0.75rem",
+                                  borderWidth: "2px",
+                                  padding: "10px 8px",
+                                }}
+                              >
+                                <i
+                                  className="fas fa-user-plus"
+                                  style={{ fontSize: "0.7rem" }}
+                                ></i>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-            
+              )}
+
             {cartNotification.type === "error" && (
               <div className="toast-body">
                 <p className="mb-0 text-danger fw-bold">
@@ -1168,6 +1603,44 @@ export default function ProductGrid() {
           </div>
         </div>
       )}
+
+      {/* Login Required Modal */}
+      <LoginRequiredModal
+        show={showLoginRequired}
+        action={loginAction}
+        onHide={() => {
+          setShowLoginRequired(false);
+          setLoginAction(null);
+          localStorage.removeItem("tempProductId");
+          localStorage.removeItem("tempFavoriteProductId");
+        }}
+        onGuestContinue={handleGuestContinue}
+        onLogin={handleShowLogin}
+      />
+
+      {/* Login Modal */}
+      <LoginModal
+        show={showLoginModal}
+        onHide={() => setShowLoginModal(false)}
+        onLoginSuccess={() => {
+          setShowLoginModal(false);
+          // Giriş başarılı olunca işlemi tamamla
+          if (loginAction === "cart") {
+            const productId = localStorage.getItem("tempProductId");
+            if (productId) {
+              handleAddToCart(parseInt(productId));
+              localStorage.removeItem("tempProductId");
+            }
+          } else if (loginAction === "favorite") {
+            const productId = localStorage.getItem("tempFavoriteProductId");
+            if (productId) {
+              handleAddToFavorites(parseInt(productId));
+              localStorage.removeItem("tempFavoriteProductId");
+            }
+          }
+          setLoginAction(null);
+        }}
+      />
     </div>
   );
 }

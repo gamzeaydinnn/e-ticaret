@@ -3,14 +3,15 @@ import { useCartCount } from "../hooks/useCartCount";
 import { Link, useNavigate } from "react-router-dom";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
+import { useAuth } from "../contexts/AuthContext";
 
 const CartPage = () => {
-  const { count: cartCount } = useCartCount();
+  const { count: cartCount, refresh: refreshCartCount } = useCartCount();
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState({});
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     loadCartData();
@@ -18,13 +19,11 @@ const CartPage = () => {
 
   const loadCartData = async () => {
     setLoading(true);
-    const userId = localStorage.getItem("userId");
-    setIsLoggedIn(!!userId);
 
     try {
       let items = [];
 
-      if (userId) {
+      if (user) {
         // Kayıtlı kullanıcı için backend'den sepeti getir
         try {
           items = await CartService.getCartItems();
@@ -47,7 +46,7 @@ const CartPage = () => {
         try {
           allProducts = await ProductService.list();
         } catch (error) {
-          // Sahte ürün verileri - ProductGrid'dekilerle aynı
+          // Sahte ürün verileri - ProductGrid'dekilerle TAMAMEN aynı
           allProducts = [
             {
               id: 1,
@@ -78,66 +77,105 @@ const CartPage = () => {
               categoryId: 5,
               categoryName: "İçecekler",
               imageUrl: "/images/lipton-ice-tea.jpg",
+              specialPrice: 40.9,
             },
             {
               id: 4,
-              name: "Coca Cola 330 ML Kutu",
-              description: "Gazlı içecek, klasik tat",
-              price: 45.0,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/coca-cola.jpg",
+              name: "Dana But Tas Kebaplık Et Çiftlik Kg",
+              description: "Taze dana eti, kuşbaşı doğranmış 500g",
+              price: 375.95,
+              originalPrice: 429.95,
+              categoryId: 2,
+              categoryName: "Et & Tavuk & Balık",
+              imageUrl: "/images/dana-kusbasi.jpg",
+              specialPrice: 279.0,
             },
             {
               id: 5,
-              name: "Pınar Süt Tam Yağlı 1 Lt",
-              description: "Tam yağlı süt, 1 litre",
-              price: 85.0,
-              categoryId: 4,
-              categoryName: "Süt Ürünleri",
-              imageUrl: "/images/pınar-süt.jpg",
+              name: "Kuzu İncik Kg",
+              description: "Taze kuzu incik, kilogram",
+              price: 1399.95,
+              categoryId: 2,
+              categoryName: "Et & Tavuk & Balık",
+              imageUrl: "/images/kuzu-incik.webp",
+              specialPrice: 699.95,
             },
             {
               id: 6,
-              name: "Domates 1 Kg",
-              description: "Taze domates, 1 kilogram",
-              price: 35.0,
-              categoryId: 1,
-              categoryName: "Meyve & Sebze",
-              imageUrl: "/images/domates.webp",
+              name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
+              description: "Kahve karışımı, paket 15 x 10g",
+              price: 145.55,
+              originalPrice: 169.99,
+              categoryId: 5,
+              categoryName: "İçecekler",
+              imageUrl: "/images/nescafe.jpg",
+              specialPrice: 84.5,
             },
             {
               id: 7,
-              name: "Salatalık 1 Kg",
-              description: "Taze salatalık, 1 kilogram",
-              price: 25.0,
+              name: "Domates Kg",
+              description: "Taze domates, kilogram",
+              price: 45.9,
               categoryId: 1,
               categoryName: "Meyve & Sebze",
-              imageUrl: "/images/salatalik.jpg",
+              imageUrl: "/images/domates.webp",
+              specialPrice: 45.9,
             },
             {
               id: 8,
-              name: "Bulgur 1 Kg",
-              description: "Pilavlık bulgur, 1 kilogram",
-              price: 42.0,
+              name: "Pınar Süt 1L",
+              description: "Tam yağlı UHT süt 1 litre",
+              price: 28.5,
               categoryId: 3,
+              categoryName: "Süt Ürünleri",
+              imageUrl: "/images/pınar-süt.jpg",
+              specialPrice: 28.5,
+            },
+            {
+              id: 9,
+              name: "Sek Kaşar Peyniri 200 G",
+              description: "Dilimli kaşar peyniri 200g",
+              price: 75.9,
+              categoryId: 3,
+              categoryName: "Süt Ürünleri",
+              imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+              specialPrice: 64.5,
+            },
+            {
+              id: 10,
+              name: "Mis Bulgur Pilavlık 1Kg",
+              description: "Birinci sınıf bulgur 1kg",
+              price: 32.9,
+              categoryId: 4,
               categoryName: "Temel Gıda",
               imageUrl: "/images/bulgur.png",
+              specialPrice: 32.9,
+            },
+            {
+              id: 11,
+              name: "Coca-Cola Orijinal Tat Kutu 330ml",
+              description: "Kola gazlı içecek kutu",
+              price: 12.5,
+              categoryId: 5,
+              categoryName: "İçecekler",
+              imageUrl: "/images/coca-cola.jpg",
+              specialPrice: 10.0,
+            },
+            {
+              id: 12,
+              name: "Salatalık Kg",
+              description: "Taze salatalık, kilogram",
+              price: 28.9,
+              categoryId: 1,
+              categoryName: "Meyve & Sebze",
+              imageUrl: "/images/salatalik.jpg",
+              specialPrice: 28.9,
             },
           ];
         }
 
-        console.log("🔍 Sepet items:", items);
-        console.log("📋 Mevcut ürünler:", allProducts);
-
         for (const item of items) {
-          console.log(
-            "🎯 Aranan ürün ID:",
-            item.productId,
-            typeof item.productId
-          );
           const product = allProducts.find((p) => p.id == item.productId); // == kullandım çünkü tip uyumsuzluğu olabilir
-          console.log("✨ Bulunan ürün:", product);
 
           if (product) {
             productData[item.productId] = {
@@ -175,12 +213,18 @@ const CartPage = () => {
     }
 
     try {
-      if (isLoggedIn) {
-        await CartService.updateItem(item.id, item.productId, newQuantity);
+      if (user) {
+        try {
+          await CartService.updateItem(item.id, item.productId, newQuantity);
+        } catch (error) {
+          // Backend hatası durumunda localStorage'e fallback
+          CartService.updateGuestCartItem(item.productId, newQuantity);
+        }
       } else {
         CartService.updateGuestCartItem(item.productId, newQuantity);
       }
       await loadCartData();
+      await refreshCartCount();
     } catch (error) {
       console.error("Miktar güncellenirken hata:", error);
       alert("Miktar güncellenirken bir hata oluştu.");
@@ -189,12 +233,18 @@ const CartPage = () => {
 
   const removeItem = async (item) => {
     try {
-      if (isLoggedIn) {
-        await CartService.removeItem(item.id);
+      if (user) {
+        try {
+          await CartService.removeItem(item.id, item.productId);
+        } catch (error) {
+          // Backend hatası durumunda localStorage'e fallback
+          CartService.removeFromGuestCart(item.productId);
+        }
       } else {
         CartService.removeFromGuestCart(item.productId);
       }
       await loadCartData();
+      await refreshCartCount();
     } catch (error) {
       console.error("Ürün silinirken hata:", error);
       alert("Ürün silinirken bir hata oluştu.");
@@ -385,7 +435,10 @@ const CartPage = () => {
                                   </p>
                                   <button
                                     className="btn btn-link text-danger p-0"
-                                    onClick={() => removeItem(item)}
+                                    onClick={() => {
+                                      console.log("Delete clicked!", item);
+                                      removeItem(item);
+                                    }}
                                   >
                                     <i className="fas fa-trash"></i>
                                   </button>
