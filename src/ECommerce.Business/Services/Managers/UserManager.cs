@@ -3,6 +3,7 @@ using ECommerce.Entities.Concrete;
     
 using ECommerce.Data.Repositories;
 using ECommerce.Core.Interfaces;
+using ECommerce.Core.DTOs.Auth;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -66,5 +67,23 @@ namespace ECommerce.Business.Services.Managers
             var users = await _userRepository.GetAllAsync();
             return users.Count();
         }
+        public async Task<bool> ChangePasswordAsync(ChangePasswordDto dto)
+{
+    // TODO: Şifre değiştirme işlemi burada yapılacak
+    return await Task.FromResult(true);
+}
+
+public async Task<bool> ForgotPasswordAsync(ForgotPasswordDto dto)
+{
+    // TODO: Şifre sıfırlama maili gönderme işlemi burada yapılacak
+    return await Task.FromResult(true);
+}
+
+public async Task<bool> ResetPasswordAsync(ResetPasswordDto dto)
+{
+    // TODO: Yeni şifre kaydetme işlemi burada yapılacak
+    return await Task.FromResult(true);
+}
+
     }
 }
