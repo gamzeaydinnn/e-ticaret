@@ -98,4 +98,69 @@ public class AuthManager : IAuthService
         // Refresh token yönetimi eklenecekse burada invalidate edilir
         await Task.CompletedTask;
     }
+    public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
+        if (user == null)
+        {
+            // Güvenlik nedeniyle, kullanıcı bulunamasa bile hata fırlatmıyoruz.
+            // Sadece işlem yapmadan dönüyoruz.
+            return;
+        }
+
+        // Güvenli bir token oluşturuyoruz (örn: GUID)
+        user.PasswordResetToken = Guid.NewGuid().ToString();
+        // Bu token'ı 1 saat geçerli kılıyoruz
+        user.ResetTokenExpires = DateTime.UtcNow.AddHours(1);
+
+        await _context.SaveChangesAsync();
+
+        // TODO: E-posta gönderme servisi burada çağrılacak.
+        // Kullanıcıya user.PasswordResetToken'ı içeren bir link gönderilmelidir.
+        // Örn: emailService.SendPasswordResetEmail(user.Email, user.PasswordResetToken);
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
+
+        if (user == null || user.PasswordResetToken != dto.Token || user.ResetTokenExpires < DateTime.UtcNow)
+        {
+            throw new Exception("Invalid or expired password reset token.");
+        }
+
+        if (dto.NewPassword != dto.ConfirmPassword)
+        {
+            throw new Exception("Passwords do not match.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        // Token'ı kullandıktan sonra temizliyoruz.
+        user.PasswordResetToken = null;
+        user.ResetTokenExpires = null;
+
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task ChangePasswordAsync(int userId, ChangePasswordDto dto)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            throw new Exception("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.OldPassword, user.PasswordHash))
+        {
+            throw new Exception("Invalid old password.");
+        }
+        
+        if (dto.NewPassword != dto.ConfirmPassword)
+        {
+            throw new Exception("New passwords do not match.");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        await _context.SaveChangesAsync();
+    }
 }

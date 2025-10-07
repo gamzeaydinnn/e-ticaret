@@ -15,5 +15,8 @@ namespace ECommerce.Business.Services.Interfaces
         // Refresh token ve revoke token işlemleri
         Task<string> RefreshTokenAsync(string token, string refreshToken);
         Task RevokeRefreshTokenAsync(int userId);
+        Task ForgotPasswordAsync(ForgotPasswordDto dto);
+        Task ResetPasswordAsync(ResetPasswordDto dto);
+        Task ChangePasswordAsync(int userId, ChangePasswordDto dto);
     }
 }
