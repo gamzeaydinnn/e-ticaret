@@ -95,13 +95,27 @@ export default function ProductGrid() {
 
     // Giriş yapmışsa backend API'ye favorilere ekle
     try {
-      await FavoriteService.toggleFavorite(productId);
+      const result = await FavoriteService.toggleFavorite(productId);
+
       // Favoriler listesini güncelle
-      loadFavorites();
+      await loadFavorites();
+
+      // Ürün bilgisini bul ve bildirim göster
+      const product = data.find((p) => p.id === productId);
+      if (product) {
+        showFavoriteNotification(product);
+      }
+
+      console.log("Favori işlemi başarılı:", result);
     } catch (error) {
       console.error("Favorilere ekleme hatası:", error);
-      // Hata durumunda localStorage'e ekle
-      addToGuestFavorites(productId);
+
+      // Hata durumunda localStorage'e ekle ve bildirim göster
+      const product = data.find((p) => p.id === productId);
+      if (product) {
+        addToGuestFavorites(productId);
+        showFavoriteNotification(product);
+      }
     }
   };
 
@@ -136,11 +150,19 @@ export default function ProductGrid() {
   };
 
   const loadFavorites = async () => {
-    const userId = localStorage.getItem("userId");
-    if (userId) {
+    if (user) {
       try {
         const userFavorites = await FavoriteService.getFavorites();
-        setFavorites(userFavorites.map((f) => f.id));
+        // Backend'den gelen favori listesini işle
+        if (Array.isArray(userFavorites)) {
+          // Eğer backend favori objeleri dönüyorsa ID'leri çıkar
+          const favoriteIds = userFavorites.map((f) =>
+            typeof f === "object" ? f.id : f
+          );
+          setFavorites(favoriteIds);
+        } else {
+          setFavorites([]);
+        }
       } catch (error) {
         console.error("Favoriler yüklenirken hata:", error);
         // Hata durumunda localStorage'dan yükle
@@ -396,6 +418,13 @@ export default function ProductGrid() {
         loadFavorites();
       });
   }, []);
+
+  // Kullanıcı giriş/çıkış yapınca favorileri yükle
+  useEffect(() => {
+    if (data.length > 0) {
+      loadFavorites();
+    }
+  }, [user]);
 
   if (loading) {
     return (

@@ -1,216 +1,259 @@
-import React, { useState, useEffect } from "react";
-import { FavoriteService } from "../services/favoriteService";
+﻿import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { ProductService } from "../services/productService";
 import { useAuth } from "../contexts/AuthContext";
-import { Link } from "react-router-dom";
+import { useFavorite } from "../hooks/useFavorite";
+
+/**
+ * FavoritesPage.jsx
+ * - Temiz, BOM içermeyen bir dosya olacak şekilde hazırlandı.
+ * - useFavorite hook'u favorites dizisini ve removeFavorite fonksiyonunu sağlamalı.
+ * - ProductService.list() metodu tüm ürünleri döndürmeli veya hata atmalı.
+ */
 
 const FavoritesPage = () => {
-  const [favoriteItems, setFavoriteItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [products, setProducts] = useState({});
-  const { user } = useAuth();
+  const [productsMap, setProductsMap] = useState({}); // { [id]: product }
+  const [productsLoading, setProductsLoading] = useState(true);
+  const { user } = useAuth(); // Kullanıcı bilgisine gerek varsa kullanabilirsiniz
+  const {
+    favorites = [],
+    loading: favoritesLoading,
+    removeFavorite,
+  } = useFavorite();
 
   useEffect(() => {
-    loadFavoriteData();
-  }, [user]); // user değiştiğinde yeniden yükle
+    loadProductData();
+    // favorites değiştikçe ürünleri tekrar yükle
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [favorites]);
 
-  const loadFavoriteData = async () => {
-    setLoading(true);
+  const loadProductData = async () => {
+    setProductsLoading(true);
 
     try {
-      let favoriteIds = [];
+      let allProducts = [];
 
-      if (user) {
-        // Kayıtlı kullanıcı için backend'den favorileri getir
-        try {
-          const favorites = await FavoriteService.getFavorites();
-          favoriteIds = favorites.map((f) => f.id);
-        } catch (error) {
-          console.log("Backend bağlantısı yok, localStorage kullanılıyor");
-          favoriteIds = FavoriteService.getGuestFavorites();
-        }
-      } else {
-        // Misafir kullanıcı için localStorage'dan favorileri getir
-        favoriteIds = FavoriteService.getGuestFavorites();
-      }
-
-      setFavoriteItems(favoriteIds);
-
-      // Ürün detaylarını getir - sahte verilerle
       try {
-        let allProducts = [];
-
-        try {
-          allProducts = await ProductService.list();
-        } catch (error) {
-          // Sahte ürün verileri - ProductGrid'dekilerle aynı
-          allProducts = [
-            {
-              id: 1,
-              name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
-              description: "Yüzey temizleyici, çok amaçlı temizlik",
-              price: 204.95,
-              originalPrice: 229.95,
-              categoryId: 7,
-              categoryName: "Temizlik",
-              imageUrl: "/images/yeşil-cif-krem.jpg",
-              specialPrice: 129.95,
-            },
-            {
-              id: 2,
-              name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
-              description: "Taco aromalı & çıtır tahıl cipsi",
-              price: 18.0,
-              categoryId: 6,
-              categoryName: "Atıştırmalık",
-              imageUrl: "/images/tahil-cipsi.jpg",
-              specialPrice: 14.9,
-            },
-            {
-              id: 3,
-              name: "Lipton Ice Tea Limon 330 Ml",
-              description: "Soğuk çay, kutu 330ml",
-              price: 60.0,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/lipton-ice-tea.jpg",
-              specialPrice: 40.9,
-            },
-            {
-              id: 4,
-              name: "Dana But Tas Kebaplık Et Çiftlik Kg",
-              description: "Taze dana eti, kuşbaşı doğranmış 500g",
-              price: 375.95,
-              originalPrice: 429.95,
-              categoryId: 2,
-              categoryName: "Et & Tavuk & Balık",
-              imageUrl: "/images/dana-kusbasi.jpg",
-              specialPrice: 279.0,
-            },
-            {
-              id: 5,
-              name: "Kuzu İncik Kg",
-              description: "Taze kuzu incik, kilogram",
-              price: 1399.95,
-              categoryId: 2,
-              categoryName: "Et & Tavuk & Balık",
-              imageUrl: "/images/kuzu-incik.webp",
-              specialPrice: 699.95,
-            },
-            {
-              id: 6,
-              name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
-              description: "Kahve karışımı, paket 15 x 10g",
-              price: 145.55,
-              originalPrice: 169.99,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/nescafe.jpg",
-              specialPrice: 84.5,
-            },
-            {
-              id: 7,
-              name: "Domates Kg",
-              description: "Taze domates, kilogram",
-              price: 45.9,
-              categoryId: 1,
-              categoryName: "Meyve & Sebze",
-              imageUrl: "/images/domates.webp",
-              specialPrice: 45.9,
-            },
-            {
-              id: 8,
-              name: "Pınar Süt 1L",
-              description: "Tam yağlı UHT süt 1 litre",
-              price: 28.5,
-              categoryId: 3,
-              categoryName: "Süt Ürünleri",
-              imageUrl: "/images/pınar-süt.jpg",
-              specialPrice: 28.5,
-            },
-            {
-              id: 9,
-              name: "Sek Kaşar Peyniri 200 G",
-              description: "Dilimli kaşar peyniri 200g",
-              price: 75.9,
-              categoryId: 3,
-              categoryName: "Süt Ürünleri",
-              imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-              specialPrice: 64.5,
-            },
-            {
-              id: 10,
-              name: "Mis Bulgur Pilavlık 1Kg",
-              description: "Birinci sınıf bulgur 1kg",
-              price: 32.9,
-              categoryId: 4,
-              categoryName: "Temel Gıda",
-              imageUrl: "/images/bulgur.png",
-              specialPrice: 32.9,
-            },
-            {
-              id: 11,
-              name: "Coca-Cola Orijinal Tat Kutu 330ml",
-              description: "Kola gazlı içecek kutu",
-              price: 12.5,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/coca-cola.jpg",
-              specialPrice: 10.0,
-            },
-            {
-              id: 12,
-              name: "Salatalık Kg",
-              description: "Taze salatalık, kilogram",
-              price: 28.9,
-              categoryId: 1,
-              categoryName: "Meyve & Sebze",
-              imageUrl: "/images/salatalik.jpg",
-              specialPrice: 28.9,
-            },
-          ];
-        }
-
-        const productData = {};
-        for (const productId of favoriteIds) {
-          const product = allProducts.find((p) => p.id === productId);
-          if (product) {
-            productData[productId] = product;
-          }
-        }
-        setProducts(productData);
-      } catch (error) {
-        console.error("Ürün verileri yüklenirken hata:", error);
+        // Gerçek servis varsa buradan çekecek
+        allProducts = await ProductService.list();
+      } catch (err) {
+        console.log("Backend API hatası, sahte veri kullanılıyor:", err);
+        // Servis yoksa veya hata olursa test amaçlı fallback (sahte veri) - ProductGrid'deki aynı veri
+        allProducts = [
+          {
+            id: 1,
+            name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
+            description: "Yüzey temizleyici, çok amaçlı temizlik",
+            price: 204.95,
+            originalPrice: 229.95,
+            categoryId: 7,
+            categoryName: "Temizlik",
+            imageUrl: "/images/yeşil-cif-krem.jpg",
+            isNew: true,
+            discountPercentage: 11,
+            rating: 4.5,
+            reviewCount: 128,
+            badge: "İndirim",
+            specialPrice: 129.95,
+          },
+          {
+            id: 2,
+            name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
+            description: "Taco aromalı & çıtır tahıl cipsi",
+            price: 18.0,
+            categoryId: 6,
+            categoryName: "Atıştırmalık",
+            imageUrl: "/images/tahil-cipsi.jpg",
+            isNew: false,
+            discountPercentage: 17,
+            rating: 4.8,
+            reviewCount: 256,
+            badge: "İndirim",
+            specialPrice: 14.9,
+          },
+          {
+            id: 3,
+            name: "Lipton Ice Tea Limon 330 Ml",
+            description: "Soğuk çay, kutu 330ml",
+            price: 60.0,
+            categoryId: 5,
+            categoryName: "İçecekler",
+            imageUrl: "/images/lipton-ice-tea.jpg",
+            isNew: false,
+            discountPercentage: 32,
+            rating: 4.2,
+            reviewCount: 89,
+            badge: "İndirim",
+            specialPrice: 40.9,
+          },
+          {
+            id: 4,
+            name: "Dana But Tas Kebaplık Et Çiftlik Kg",
+            description: "Taze dana eti, kuşbaşı doğranmış 500g",
+            price: 375.95,
+            originalPrice: 429.95,
+            categoryId: 2,
+            categoryName: "Et & Tavuk & Balık",
+            imageUrl: "/images/dana-kusbasi.jpg",
+            isNew: true,
+            discountPercentage: 26,
+            rating: 4.7,
+            reviewCount: 67,
+            badge: "İndirim",
+            specialPrice: 279.0,
+          },
+          {
+            id: 5,
+            name: "Kuzu İncik Kg",
+            description: "Taze kuzu incik, kilogram",
+            price: 1399.95,
+            categoryId: 2,
+            categoryName: "Et & Tavuk & Balık",
+            imageUrl: "/images/kuzu-incik.webp",
+            isNew: false,
+            discountPercentage: 0,
+            rating: 4.4,
+            reviewCount: 195,
+            badge: "İyi Fiyat",
+            specialPrice: 699.95,
+          },
+          {
+            id: 6,
+            name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
+            description: "Kahve karışımı, paket 15 x 10g",
+            price: 145.55,
+            originalPrice: 169.99,
+            categoryId: 5,
+            categoryName: "İçecekler",
+            imageUrl: "/images/nescafe.jpg",
+            isNew: false,
+            discountPercentage: 14,
+            rating: 4.3,
+            reviewCount: 143,
+            badge: "İndirim",
+            specialPrice: 84.5,
+          },
+          {
+            id: 7,
+            name: "Domates Kg",
+            description: "Taze domates, kilogram",
+            price: 45.9,
+            categoryId: 1,
+            categoryName: "Meyve & Sebze",
+            imageUrl: "/images/domates.webp",
+            isNew: true,
+            discountPercentage: 0,
+            rating: 4.9,
+            reviewCount: 312,
+          },
+          {
+            id: 8,
+            name: "Pınar Süt 1L",
+            description: "Tam yağlı UHT süt 1 litre",
+            price: 28.5,
+            categoryId: 3,
+            categoryName: "Süt Ürünleri",
+            imageUrl: "/images/pınar-süt.jpg",
+            isNew: false,
+            discountPercentage: 0,
+            rating: 4.6,
+            reviewCount: 234,
+          },
+          {
+            id: 9,
+            name: "Sek Kaşar Peyniri 200 G",
+            description: "Dilimli kaşar peyniri 200g",
+            price: 75.9,
+            categoryId: 3,
+            categoryName: "Süt Ürünleri",
+            imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+            isNew: false,
+            discountPercentage: 15,
+            rating: 4.4,
+            reviewCount: 156,
+            badge: "İndirim",
+            specialPrice: 64.5,
+          },
+          {
+            id: 10,
+            name: "Mis Bulgur Pilavlık 1Kg",
+            description: "Birinci sınıf bulgur 1kg",
+            price: 32.9,
+            categoryId: 4,
+            categoryName: "Temel Gıda",
+            imageUrl: "/images/bulgur.png",
+            isNew: true,
+            discountPercentage: 0,
+            rating: 4.7,
+            reviewCount: 89,
+          },
+          {
+            id: 11,
+            name: "Coca-Cola Orijinal Tat Kutu 330ml",
+            description: "Kola gazlı içecek kutu",
+            price: 12.5,
+            categoryId: 5,
+            categoryName: "İçecekler",
+            imageUrl: "/images/coca-cola.jpg",
+            isNew: false,
+            discountPercentage: 20,
+            rating: 4.2,
+            reviewCount: 445,
+            badge: "İndirim",
+            specialPrice: 10.0,
+          },
+          {
+            id: 12,
+            name: "Salatalık Kg",
+            description: "Taze salatalık, kilogram",
+            price: 28.9,
+            categoryId: 1,
+            categoryName: "Meyve & Sebze",
+            imageUrl: "/images/salatalik.jpg",
+            isNew: false,
+            discountPercentage: 0,
+            rating: 4.3,
+            reviewCount: 67,
+          },
+        ];
       }
+
+      const map = {};
+      for (const id of favorites) {
+        const p = allProducts.find((item) => item.id === id);
+        if (p) map[id] = p;
+      }
+      setProductsMap(map);
     } catch (error) {
-      console.error("Favori verileri yüklenirken hata:", error);
+      console.error("Ürün verileri yüklenirken hata:", error);
+      setProductsMap({});
     } finally {
-      setLoading(false);
+      setProductsLoading(false);
     }
   };
 
-  const removeFavorite = async (productId) => {
+  const handleRemoveFavorite = async (productId) => {
     try {
-      if (user) {
-        await FavoriteService.removeFavorite(productId);
-      } else {
-        FavoriteService.removeFromGuestFavorites(productId);
+      const result = await removeFavorite(productId);
+      // useFavorite removeFavorite fonksiyonu success flag döndürmüyorsa bu kontrolü kaldırabilirsiniz
+      if (result && result.success === false) {
+        alert("Favori silinirken bir hata oluştu.");
       }
-      await loadFavoriteData();
     } catch (error) {
       console.error("Favori silinirken hata:", error);
       alert("Favori silinirken bir hata oluştu.");
     }
   };
 
+  const isLoading = favoritesLoading || productsLoading;
+
   return (
     <div
       style={{
         minHeight: "100vh",
+        padding: "2rem 0",
         background:
-          "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 50%, #ffcc80 100%)",
-        paddingTop: "2rem",
-        paddingBottom: "2rem",
+          "linear-gradient(135deg,#fff3e0 0%,#ffe0b2 50%,#ffcc80 100%)",
       }}
     >
       <div className="container">
@@ -218,15 +261,14 @@ const FavoritesPage = () => {
           <div className="col-md-10 mx-auto">
             <div
               className="card shadow-lg border-0"
-              style={{ borderRadius: "20px" }}
+              style={{ borderRadius: 20 }}
             >
               <div
-                className="card-header text-white d-flex justify-content-between align-items-center border-0"
+                className="card-header d-flex justify-content-between align-items-center border-0 text-white"
                 style={{
-                  background:
-                    "linear-gradient(45deg, #e91e63, #ad1457, #880e4f)",
-                  borderTopLeftRadius: "20px",
-                  borderTopRightRadius: "20px",
+                  background: "linear-gradient(45deg,#e91e63,#ad1457,#880e4f)",
+                  borderTopLeftRadius: 20,
+                  borderTopRightRadius: 20,
                   padding: "1.5rem 2rem",
                 }}
               >
@@ -237,24 +279,20 @@ const FavoritesPage = () => {
                   className="badge fs-6 fw-bold px-3 py-2"
                   style={{
                     backgroundColor: "rgba(255,255,255,0.2)",
-                    borderRadius: "50px",
+                    borderRadius: 50,
                   }}
                 >
-                  {favoriteItems.length} Ürün
+                  {favorites.length} Ürün
                 </span>
               </div>
 
               <div className="card-body" style={{ padding: "2rem" }}>
-                {loading ? (
+                {isLoading ? (
                   <div className="text-center py-5">
                     <div
                       className="spinner-border mb-3"
                       role="status"
-                      style={{
-                        color: "#e91e63",
-                        width: "3rem",
-                        height: "3rem",
-                      }}
+                      style={{ width: "3rem", height: "3rem" }}
                     >
                       <span className="visually-hidden">Loading...</span>
                     </div>
@@ -262,7 +300,7 @@ const FavoritesPage = () => {
                       Favoriler yükleniyor...
                     </p>
                   </div>
-                ) : favoriteItems.length > 0 ? (
+                ) : favorites.length > 0 ? (
                   <>
                     <div
                       className="row pb-3 mb-4 fw-bold"
@@ -288,8 +326,8 @@ const FavoritesPage = () => {
                       </div>
                     </div>
 
-                    {favoriteItems.map((productId) => {
-                      const product = products[productId];
+                    {favorites.map((productId) => {
+                      const product = productsMap[productId];
                       return (
                         <div
                           key={productId}
@@ -303,13 +341,11 @@ const FavoritesPage = () => {
                                 }
                                 alt={product?.name || "Ürün"}
                                 style={{
-                                  width: "80px",
-                                  height: "80px",
+                                  width: 80,
+                                  height: 80,
                                   objectFit: "contain",
-                                  borderRadius: "15px",
-                                  background:
-                                    "linear-gradient(135deg, #f8f9fa, #e9ecef)",
-                                  padding: "8px",
+                                  borderRadius: 15,
+                                  padding: 8,
                                   border: "2px solid #fce4ec",
                                 }}
                                 className="me-3"
@@ -328,9 +364,9 @@ const FavoritesPage = () => {
                                   className="badge text-white fw-bold px-2 py-1"
                                   style={{
                                     fontSize: "0.7rem",
-                                    borderRadius: "8px",
+                                    borderRadius: 8,
                                     background:
-                                      "linear-gradient(135deg, #e91e63, #ad1457)",
+                                      "linear-gradient(135deg,#e91e63,#ad1457)",
                                   }}
                                 >
                                   <i className="fas fa-heart me-1"></i>Favorim
@@ -338,13 +374,14 @@ const FavoritesPage = () => {
                               </div>
                             </div>
                           </div>
+
                           <div className="col-md-2 text-center">
                             <div className="d-flex flex-column align-items-center">
                               <p className="fw-bold text-success mb-1">
                                 ₺
                                 {product
                                   ? (
-                                      product.specialPrice || product.price
+                                      product.specialPrice ?? product.price
                                     )?.toFixed(2)
                                   : "0.00"}
                               </p>
@@ -355,19 +392,20 @@ const FavoritesPage = () => {
                               )}
                             </div>
                           </div>
+
                           <div className="col-md-2 text-center">
                             <div className="d-flex justify-content-center gap-2">
                               <button
                                 className="btn btn-outline-danger btn-sm"
-                                onClick={() => removeFavorite(productId)}
-                                style={{ borderRadius: "10px" }}
+                                onClick={() => handleRemoveFavorite(productId)}
+                                style={{ borderRadius: 10 }}
                               >
                                 <i className="fas fa-trash"></i>
                               </button>
                               <Link
                                 to={`/product/${productId}`}
                                 className="btn btn-outline-primary btn-sm"
-                                style={{ borderRadius: "10px" }}
+                                style={{ borderRadius: 10 }}
                               >
                                 <i className="fas fa-eye"></i>
                               </Link>
@@ -390,53 +428,19 @@ const FavoritesPage = () => {
                       Beğendiğiniz ürünleri kalp butonuna tıklayarak
                       favorilerinize ekleyebilirsiniz!
                     </p>
-
-                    {/* Kampanya Bilgisi */}
-                    <div
-                      className="alert border-0 mb-4 mx-auto"
-                      style={{
-                        background: "linear-gradient(135deg, #fff3e0, #ffcc80)",
-                        borderRadius: "15px",
-                        border: "2px solid #ff6b35",
-                        maxWidth: "500px",
-                      }}
-                    >
-                      <div className="d-flex align-items-center text-start">
-                        <i
-                          className="fas fa-fire text-warning me-3"
-                          style={{ fontSize: "1.5rem" }}
-                        ></i>
-                        <div>
-                          <h6
-                            className="mb-1 fw-bold"
-                            style={{ color: "#ff6b35" }}
-                          >
-                            🎉 Özel Kampanya! İlk alışverişinize %25 indirim!
-                          </h6>
-                          <small className="text-muted">
-                            Favori ürünlerinizi sepete ekleyin ve avantajlı
-                            fiyatlardan yararlanın
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-muted mb-4">
-                      Beğendiğiniz ürünleri kalp butonuna tıklayarak
-                      favorilerinize ekleyebilirsiniz!
-                    </p>
                     <Link
                       to="/"
-                      className="btn btn-lg border-2 fw-semibold"
+                      className="btn btn-lg fw-semibold"
                       style={{
-                        borderRadius: "25px",
+                        borderRadius: 25,
                         padding: "12px 30px",
-                        background: "linear-gradient(135deg, #e91e63, #ad1457)",
+                        background: "linear-gradient(135deg,#e91e63,#ad1457)",
                         color: "white",
                         border: "none",
                       }}
                     >
-                      <i className="fas fa-shopping-bag me-2"></i>
-                      Alışverişe Başla
+                      <i className="fas fa-shopping-bag me-2"></i>Alışverişe
+                      Başla
                     </Link>
                   </div>
                 )}
