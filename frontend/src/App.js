@@ -20,6 +20,15 @@ import LoginModal from "./components/LoginModal";
 import { useCartCount } from "./hooks/useCartCount";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import AdminMicro from "./pages/Admin/AdminMicro";
+// Admin sayfaları
+import AdminLogin from "./pages/Admin/AdminLogin";
+import Dashboard from "./pages/Admin/Dashboard";
+import AdminUsers from "./pages/Admin/AdminUsers";
+import AdminOrders from "./pages/Admin/AdminOrders";
+import AdminProducts from "./pages/Admin/AdminProducts";
+import AdminCategories from "./pages/Admin/AdminCategories";
+// Admin guards
+import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
 import Home from "./pages/Home";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
@@ -345,14 +354,66 @@ function App() {
             <Route path="/favorites" element={<FavoritesPage />} />
             <Route path="/orders" element={<OrderTracking />} />
             <Route path="/payment" element={<PaymentPage />} />
-            <Route path="/admin" element={<AdminPanel />} />
-            {/* Yeni sayfalar */}
+            {/* Ana site rotaları */}
             <Route path="/pages/home" element={<Home />} />
             <Route path="/pages/cart" element={<Cart />} />
             <Route path="/category/:slug" element={<Category />} />
             <Route path="/product/:id" element={<Product />} />
             <Route path="/checkout" element={<Checkout />} />
+
+            {/* Eski admin (geçici) */}
+            <Route path="/admin" element={<AdminPanel />} />
             <Route path="/admin/micro" element={<AdminMicro />} />
+
+            {/* Yeni Admin Panel Rotaları */}
+            <Route
+              path="/admin/login"
+              element={
+                <AdminLoginGuard>
+                  <AdminLogin />
+                </AdminLoginGuard>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <AdminGuard>
+                  <Dashboard />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <AdminGuard>
+                  <AdminUsers />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/orders"
+              element={
+                <AdminGuard>
+                  <AdminOrders />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/products"
+              element={
+                <AdminGuard>
+                  <AdminProducts />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/categories"
+              element={
+                <AdminGuard>
+                  <AdminCategories />
+                </AdminGuard>
+              }
+            />
           </Routes>
         </div>
       </Router>

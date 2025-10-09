@@ -1,10 +1,10 @@
 import axios from "axios";
 
-// Base URL fallback: CRA veya Vite uyumlu
-const baseURL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
+// Base URL fallback: CRA veya Vite uyumlu - Backend hazır olmadığında mock data kullan
+const baseURL = process.env.REACT_APP_API_BASE_URL || null;
 
 const api = axios.create({
-  baseURL,
+  baseURL: baseURL || "http://localhost:3000", // Fallback to prevent errors
   // FormData veya JSON fark etmez, axios otomatik ayarlar
 });
 
@@ -25,6 +25,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // Backend olmadığında sessizce başarısız ol
+    if (!baseURL) {
+      return Promise.reject(new Error("Backend not available"));
+    }
+
     const serverData = error?.response?.data;
     const message =
       typeof serverData === "string"

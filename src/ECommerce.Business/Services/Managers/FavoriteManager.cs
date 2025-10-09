@@ -24,13 +24,18 @@ namespace ECommerce.Business.Services.Managers
         public async Task<List<ProductListDto>> GetFavoritesAsync(Guid userId)
         {
             var favorites = await _favoriteRepository.GetFavoritesByUserAsync(userId);
-            return favorites.Select(f => new ProductListDto
-            {
-                Id = f.Product.Id,
-                Name = f.Product.Name,
-                Price = f.Product.Price,
-                ImageUrl = f.Product.ImageUrl
-            }).ToList();
+            return favorites.Where(f => f.IsActive)
+                .Select(f => new ProductListDto
+                {
+                    Id = f.Product.Id,
+                    Name = f.Product.Name,
+                    Price = f.Product.Price,
+                    SpecialPrice = f.Product.SpecialPrice,
+                    ImageUrl = f.Product.ImageUrl,
+                    CategoryName = f.Product.Category?.Name,
+                    StockQuantity = f.Product.StockQuantity,
+                    Brand = f.Product.Brand
+                }).ToList();
         }
 
         public async Task ToggleFavoriteAsync(Guid userId, int productId)

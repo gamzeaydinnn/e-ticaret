@@ -10,6 +10,7 @@ namespace ECommerce.Entities.Concrete
     public string Brand { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
     public decimal Price { get; set; } = 0m;
+    public decimal? SpecialPrice { get; set; }
     //public int Stock { get; set; }
     public int StockQuantity { get; set; } = 0;
     public string ImageUrl { get; set; } = string.Empty;

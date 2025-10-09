@@ -17,24 +17,51 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetFavorites([FromQuery] Guid userId)
+        public async Task<IActionResult> GetFavorites([FromQuery] Guid? userId = null)
         {
-            var favorites = await _favoriteService.GetFavoritesAsync(userId);
-            return Ok(favorites);
+            try
+            {
+                // Geçici olarak sahte userId kullanıyoruz - gerçek auth sistemine geçince kaldırılacak
+                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                var favorites = await _favoriteService.GetFavoritesAsync(effectiveUserId);
+                return Ok(new { success = true, data = favorites });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPost("{productId}")]
-        public async Task<IActionResult> ToggleFavorite([FromQuery] Guid userId, int productId)
+        public async Task<IActionResult> ToggleFavorite(int productId, [FromQuery] Guid? userId = null)
         {
-            await _favoriteService.ToggleFavoriteAsync(userId, productId);
-            return Ok();
+            try
+            {
+                // Geçici olarak sahte userId kullanıyoruz
+                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                await _favoriteService.ToggleFavoriteAsync(effectiveUserId, productId);
+                return Ok(new { success = true, message = "Favori durumu güncellendi" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpDelete("{productId}")]
-        public async Task<IActionResult> RemoveFavorite([FromQuery] Guid userId, int productId)
+        public async Task<IActionResult> RemoveFavorite(int productId, [FromQuery] Guid? userId = null)
         {
-            await _favoriteService.RemoveFavoriteAsync(userId, productId);
-            return Ok();
+            try
+            {
+                // Geçici olarak sahte userId kullanıyoruz
+                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                await _favoriteService.RemoveFavoriteAsync(effectiveUserId, productId);
+                return Ok(new { success = true, message = "Favori silindi" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
     }
 }

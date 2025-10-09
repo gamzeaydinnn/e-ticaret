@@ -1,25 +1,37 @@
 import * as React from "react";
-import { Admin, Resource, List, Datagrid, TextField, NumberField } from "react-admin";
+import {
+  Admin,
+  Resource,
+  List,
+  Datagrid,
+  TextField,
+  NumberField,
+} from "react-admin";
 import simpleRestProvider from "ra-data-simple-rest";
-import { AdminService } from '../services/adminService';
+import { AdminService } from "../../services/adminService";
 
-const dataProvider = simpleRestProvider("http://localhost:5000/api/admin/orders");
-
-export const Orders = () => (
-    <Admin dataProvider={dataProvider}>
-        <Resource name="orders" list={OrderList} />
-    </Admin>
+const dataProvider = simpleRestProvider(
+  "http://localhost:5000/api/admin/orders"
 );
 
+export const Orders = () => (
+  <Admin dataProvider={dataProvider}>
+    <Resource name="orders" list={OrderList} />
+  </Admin>
+);
+
+const AdminOrders = Orders;
+export default AdminOrders;
+
 const OrderList = (props) => (
-    <List {...props}>
-        <Datagrid>
-            <TextField source="id" />
-            <TextField source="userId" />
-            <NumberField source="totalPrice" />
-            <TextField source="status" />
-        </Datagrid>
-    </List>
+  <List {...props}>
+    <Datagrid>
+      <TextField source="id" />
+      <TextField source="userId" />
+      <NumberField source="totalPrice" />
+      <TextField source="status" />
+    </Datagrid>
+  </List>
 );
 
 /*src/admin/AdminOrders.jsx
