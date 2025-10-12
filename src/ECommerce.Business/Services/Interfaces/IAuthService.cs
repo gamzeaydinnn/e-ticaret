@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Auth;
 using ECommerce.Core.DTOs.User;
+using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Business.Services.Interfaces
 {

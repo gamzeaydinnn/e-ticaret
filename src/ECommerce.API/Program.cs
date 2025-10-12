@@ -8,9 +8,12 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
 using Hangfire;
-using Hangfire.SQLite;
-using ECommerce.Infrastructure.Services.Micro;
-using ECommerce.Business.Services.Concrete;
+using ECommerce.Infrastructure.Services.MicroServices;
+using Microsoft.AspNetCore.Authorization;
+using ECommerce.Infrastructure.Services.Payment;
+using ECommerce.Infrastructure.Config;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,9 +47,6 @@ RecurringJob.AddOrUpdate<StockSyncJob>(
     Cron.Hourly,
     new RecurringJobOptions { TimeZone = TimeZoneInfo.Local }
 );
-
-
-
 
 // JWT Auth
 builder.Services.AddAuthentication("Bearer")
@@ -92,12 +92,14 @@ builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<ICouponRepository, CouponRepository>();
 
+
 // services / managers
 builder.Services.AddScoped<IBrandService, BrandManager>();
 builder.Services.AddScoped<IDiscountService, DiscountManager>();
 builder.Services.AddScoped<IReviewService, ReviewManager>();
 builder.Services.AddScoped<IAddressService, AddressManager>();
 builder.Services.AddScoped<ICouponService, CouponManager>();
+
 
 
 // vs.

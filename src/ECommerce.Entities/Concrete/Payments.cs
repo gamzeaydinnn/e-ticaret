@@ -1,5 +1,7 @@
 //	• Payments (Id, OrderId, Provider, ProviderPaymentId, Amount, Status, CreatedAt, RawResponse)
 using System;
+using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
 
 namespace ECommerce.Entities.Concrete
 {

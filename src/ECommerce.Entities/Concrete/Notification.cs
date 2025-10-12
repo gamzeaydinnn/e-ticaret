@@ -1,4 +1,6 @@
 using System;
+using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
 
 namespace ECommerce.Entities.Concrete
 {

@@ -5,6 +5,7 @@ using ECommerce.Data.Context;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
+using System;
 
 namespace ECommerce.Data.Repositories
 {
@@ -70,14 +71,16 @@ namespace ECommerce.Data.Repositories
                 .ToListAsync();
         }
         public async Task<IEnumerable<Product>> SearchAsync(string searchTerm)
-        {
-            return await _dbSet.Include(p => p.Categories)
-                .Where(p => p.IsActive &&
-                (p.Name.Contains(searchTerm) ||
-                    p.Description.Contains(searchTerm) ||
-                (p.Brand != null && p.Brand.Contains(searchTerm))))
-                    .ToListAsync();
-        }
+{
+    return await _dbSet.Include(p => p.Categories)
+                       .Include(p => p.Brand) // Brand entity’sini yükle
+                       .Where(p => p.IsActive &&
+                                   (p.Name.Contains(searchTerm) ||
+                                    p.Description.Contains(searchTerm) ||
+                                    (p.Brand != null && p.Brand.Name.Contains(searchTerm))))
+                       .ToListAsync();
+}
+
 
 
         Task IProductRepository.Delete(Product product)

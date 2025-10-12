@@ -1,59 +1,37 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
-using ECommerce.Entities.Concrete;
+using System.Threading.Tasks;
 
-namespace ECommerce.API.Controllers.Admin
+
+namespace ECommerce.API.Controllers
 {
+    // Admin yetkisi yok, genel kullanıma açık
     [ApiController]
-    [Route("api/admin/coupons")]
-    [Authorize(Roles = "Admin")]
-    public class AdminCouponsController : ControllerBase
+    [Route("api/[controller]")] // api/coupon
+    public class CouponController : ControllerBase
     {
         private readonly ICouponService _couponService;
-        public AdminCouponsController(ICouponService couponService) => _couponService = couponService;
 
-        [HttpGet]
-        public async Task<IActionResult> GetAll() => Ok(await _couponService.GetAllAsync());
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(int id)
+        public CouponController(ICouponService couponService)
         {
-            var c = await _couponService.GetByIdAsync(id);
-            if (c == null) return NotFound();
-            return Ok(c);
+            _couponService = couponService;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Coupon coupon)
+        /// <summary>
+        /// Kullanıcının sepette girdiği kupon kodunu doğrular ve uygular.
+        /// </summary>
+        [HttpPost("apply/{code}")]
+        public async Task<IActionResult> ApplyCoupon(string code)
         {
-            await _couponService.AddAsync(coupon);
-            return CreatedAtAction(nameof(Get), new { id = coupon.Id }, coupon);
-        }
+            // CouponService içindeki ValidateCouponAsync(string code) metodu kullanılmalı
+            bool isValid = await _couponService.ValidateCouponAsync(code);
+            
+            if (!isValid)
+                return BadRequest(new { message = "Girdiğiniz kupon kodu geçersiz veya süresi dolmuş." });
 
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Coupon coupon)
-        {
-            var existing = await _couponService.GetByIdAsync(id);
-            if (existing == null) return NotFound();
-
-            existing.Code = coupon.Code;
-            existing.IsPercentage = coupon.IsPercentage;
-            existing.Value = coupon.Value;
-            existing.ExpirationDate = coupon.ExpirationDate;
-            existing.MinOrderAmount = coupon.MinOrderAmount;
-            existing.UsageLimit = coupon.UsageLimit;
-            existing.IsActive = coupon.IsActive;
-
-            await _couponService.UpdateAsync(existing);
-            return NoContent();
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            await _couponService.DeleteAsync(id);
-            return NoContent();
+            // Burada kupon bilgilerini sepet/oturum servisine kaydetme işlemi yapılabilir
+            
+            return Ok(new { message = "Kupon başarıyla uygulandı." });
         }
     }
 }

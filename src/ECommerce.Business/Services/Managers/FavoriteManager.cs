@@ -1,12 +1,11 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.DTOs.Product;
-using ECommerce.Core.Interfaces;
-using ECommerce.Data.Repositories;
-using ECommerce.Entities.Concrete;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // IFavoriteService
+using ECommerce.Entities.Concrete;            // Favorite, Product
+using ECommerce.Core.DTOs.Product;            // ProductListDto
+using ECommerce.Core.Interfaces;              // IFavoriteRepository, IProductRepository
+
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -34,7 +33,7 @@ namespace ECommerce.Business.Services.Managers
                     ImageUrl = f.Product.ImageUrl,
                     CategoryName = f.Product.Category?.Name,
                     StockQuantity = f.Product.StockQuantity,
-                    Brand = f.Product.Brand
+                    Brand = f.Product.Brand?.Name
                 }).ToList();
         }
 

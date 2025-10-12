@@ -1,10 +1,10 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // IAddressService
+using ECommerce.Entities.Concrete;            // Address
+using ECommerce.Core.Interfaces;              // IAddressRepository
 
-namespace ECommerce.Business.Services.Concrete
+namespace ECommerce.Business.Services.Managers
 {
     public class AddressManager : IAddressService
     {

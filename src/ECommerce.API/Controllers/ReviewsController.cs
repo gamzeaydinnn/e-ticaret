@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
-using ECommerce.Entities.Concrete;
+using ECommerce.Core.DTOs.ProductReview;
 using System.Threading.Tasks;
+using ECommerce.Entities.Concrete;
 
 namespace ECommerce.API.Controllers
 {
@@ -22,22 +23,14 @@ namespace ECommerce.API.Controllers
 
         [HttpPost]
         [Authorize]
-        public async Task<IActionResult> Create(int productId, [FromBody] ECommerce.Core.DTOs.Review.ReviewCreateDto reviewDto)
+        public async Task<IActionResult> Create(int productId, [FromBody] ProductReview reviewDto)
         {
             var sub = User.FindFirst("sub")?.Value;
             if (!int.TryParse(sub, out var uid)) return Unauthorized();
 
-            var review = new Review
-            {
-                ProductId = productId,
-                UserId = uid,
-                Rating = reviewDto.Rating,
-                Comment = reviewDto.Comment,
-                IsApproved = false
-            };
-
-            await _reviewService.AddAsync(review);
-            return CreatedAtAction(nameof(GetForProduct), new { productId }, review);
+            reviewDto.ProductId = productId;
+            var created = await _reviewService.AddAsync(reviewDto, uid);
+            return CreatedAtAction(nameof(GetForProduct), new { productId }, created);
         }
     }
 }

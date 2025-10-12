@@ -2,6 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using System.Threading.Tasks;
+using System.Linq;
+using System.Collections.Generic;
+using System;
 
 namespace ECommerce.Data.Repositories
 {

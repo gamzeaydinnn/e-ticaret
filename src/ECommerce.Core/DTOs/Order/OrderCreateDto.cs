@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using ECommerce.Core.DTOs;
+
 
 namespace ECommerce.Core.DTOs.Order
 {

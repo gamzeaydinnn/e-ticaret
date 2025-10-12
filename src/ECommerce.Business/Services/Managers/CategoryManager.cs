@@ -1,8 +1,9 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // ICategoryService
+using ECommerce.Entities.Concrete;            // Category
+using ECommerce.Core.Interfaces;              // ICategoryRepository
+
 
 namespace ECommerce.Business.Services.Managers
 {

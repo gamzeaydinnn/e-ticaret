@@ -1,4 +1,7 @@
 using System;
+using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
+using System;
 
 namespace ECommerce.Entities.Concrete
 {
@@ -39,5 +42,6 @@ namespace ECommerce.Entities.Concrete
         // Opsiyonel navigasyon property’leri
         public ProductVariant? ProductVariant { get; set; }
         //public Warehouse? Warehouse { get; set; }
+        
     }
 }

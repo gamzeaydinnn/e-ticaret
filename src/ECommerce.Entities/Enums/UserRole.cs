@@ -1,3 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+
 namespace ECommerce.Entities.Enums
 {
     public enum UserRole
@@ -5,6 +12,6 @@ namespace ECommerce.Entities.Enums
         Admin,
         User,
         Market
-        
+
     }
 }

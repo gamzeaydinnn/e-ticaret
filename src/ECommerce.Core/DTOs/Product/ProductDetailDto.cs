@@ -1,6 +1,8 @@
 //kategori, varyant, stok, resim listesi.
 using System.Collections.Generic;
-
+using ECommerce.Core.DTOs;
+using System;
+using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Product
 {
     public class ProductDetailDto

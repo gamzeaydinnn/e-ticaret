@@ -1,4 +1,8 @@
 using System;
+using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
+using System;
+
 //	• StockMovements (Id, ProductVariantId, ChangeQuantity, MovementType ENUM {Purchase, Sale, Return, Adjustment, Reservation, Release}, ReferenceId, CreatedAt, Note)
 
 namespace ECommerce.Core.Entities.Concrete

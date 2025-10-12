@@ -2,6 +2,9 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces;
+using System.Linq;
+using System;
 
 namespace ECommerce.Business.Services.Managers
 {

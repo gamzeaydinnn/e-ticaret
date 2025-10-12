@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
 
 namespace ECommerce.API.Controllers
 {

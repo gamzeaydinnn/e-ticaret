@@ -1,3 +1,6 @@
+using ECommerce.Core.DTOs;
+using System;
+using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Brand
 {
     public class BrandDto

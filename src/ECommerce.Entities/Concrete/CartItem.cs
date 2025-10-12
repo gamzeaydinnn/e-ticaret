@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using ECommerce.Entities.Concrete;
+using System;
+
 namespace ECommerce.Entities.Concrete
 {
     public class CartItem : BaseEntity

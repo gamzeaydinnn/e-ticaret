@@ -5,6 +5,7 @@ using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System;
 
 namespace ECommerce.Data.Repositories
 {
@@ -15,50 +16,22 @@ namespace ECommerce.Data.Repositories
         public async Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId)
         {
             return await _dbSet
-                .Where(r => r.ProductId == productId)
+                .Where(r => r.ProductId == productId && r.IsApproved) // Sadece onaylı yorumları göstermek daha mantıklı.
                 .OrderByDescending(r => r.CreatedAt)
                 .ToListAsync();
         }
 
         public async Task<double> GetAverageRatingAsync(int productId)
         {
-            var reviews = await _dbSet.Where(r => r.ProductId == productId).ToListAsync();
+            var reviews = await _dbSet
+                .Where(r => r.ProductId == productId && r.IsApproved) // Ortalama da onaylılardan hesaplanmalı.
+                .ToListAsync();
+                
             return reviews.Any() ? reviews.Average(r => r.Rating) : 0;
         }
 
-        Task<IEnumerable<Review>> IReviewRepository.GetByProductIdAsync(int productId)
-        {
-            throw new NotImplementedException();
-        }
-
-        Task<Review?> IRepository<Review>.GetByIdAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
-
-        Task<IEnumerable<Review>> IRepository<Review>.GetAllAsync()
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task AddAsync(Review entity)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task UpdateAsync(Review entity)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task DeleteAsync(Review entity)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task HardDeleteAsync(Review entity)
-        {
-            throw new NotImplementedException();
-        }
+        // DEĞİŞİKLİK: Aşağıdaki tüm NotImplementedException fırlatan hatalı ve gereksiz kod blokları silindi.
+        // BaseRepository<ProductReview> sınıfı IRepository<ProductReview> arayüzünün temel metotlarını (GetById, GetAll, Add, Update, Delete)
+        // zaten implemente ediyor. Bu yüzden bu kodlara burada gerek yok.
     }
 }

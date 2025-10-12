@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
 namespace ECommerce.Infrastructure.Config
 { //Email, ödeme, JWT gibi ayarlar tek bir yerde toplanır.
     public class AppSettings
@@ -14,10 +20,10 @@ namespace ECommerce.Infrastructure.Config
 
         // Genel uygulama ayarları
         public string BaseUrl { get; set; } = string.Empty;
-        
+
     }
 
 
-    
-  
+
+
 }

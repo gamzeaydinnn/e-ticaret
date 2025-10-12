@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+
 //	• Orders (Id GUID, UserId, TotalAmount, ShippingAmount, PaymentStatus, OrderStatus, CreatedAt, ReservationId (Guid?), AddressId)
 /*    public int Id { get; set; }
     public int? UserId { get; set; } // guest ise null

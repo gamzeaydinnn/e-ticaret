@@ -4,7 +4,10 @@ using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Entities.Concrete;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
-
+using ECommerce.Business.Services.Interfaces;
+using ECommerce.Data.Repositories;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace ECommerce.Business.Services.Managers
 {

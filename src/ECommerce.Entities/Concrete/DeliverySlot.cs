@@ -1,4 +1,7 @@
 using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
+using System;
+
 namespace ECommerce.Entities.Concrete
 {
     //Migros gibi sitelerde “bugün 16:00–18:00 arası teslimat” seçeneği olur.

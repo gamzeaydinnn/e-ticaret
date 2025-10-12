@@ -4,9 +4,11 @@ using System.Threading.Tasks;
 
 namespace ECommerce.Core.Interfaces
 {
-    public interface IReviewRepository : IRepository<Review>
+    // DEĞİŞİKLİK: IRepository<Review> yerine IRepository<ProductReview> kullanıldı.
+    public interface IReviewRepository : IRepository<ProductReview>
     {
-        Task<IEnumerable<Review>> GetByProductIdAsync(int productId);
+        // DEĞİŞİKLİK: Dönüş tipi IEnumerable<Review> yerine IEnumerable<ProductReview> oldu.
+        Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId);
         Task<double> GetAverageRatingAsync(int productId);
     }
 }

@@ -1,4 +1,7 @@
-//
+using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
+using System;
+
 namespace ECommerce.Entities.Concrete
 {//	• OrderItems (Id, OrderId, ProductVariantId, UnitPrice, Quantity, Total)
 

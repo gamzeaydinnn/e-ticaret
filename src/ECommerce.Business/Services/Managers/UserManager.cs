@@ -1,9 +1,12 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Entities.Concrete;
-    
-using ECommerce.Data.Repositories;
-using ECommerce.Core.Interfaces;
+using ECommerce.Business.Services.Interfaces; // IUserService
+using ECommerce.Entities.Concrete;           // User, diğer entityler
 using ECommerce.Core.DTOs.Auth;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using ECommerce.Core.Interfaces;
+
 
 namespace ECommerce.Business.Services.Managers
 {

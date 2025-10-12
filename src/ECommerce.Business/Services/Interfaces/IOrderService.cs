@@ -1,7 +1,9 @@
 
-using ECommerce.Core.DTOs.Order;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Entities.Concrete;  // Order, OrderItem
+using ECommerce.Core.DTOs.Order;    // Order DTO'ları
+
 
 namespace ECommerce.Business.Services.Interfaces
 {

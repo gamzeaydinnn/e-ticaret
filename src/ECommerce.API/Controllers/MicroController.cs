@@ -6,60 +6,43 @@ using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+// ... using'ler
 namespace ECommerce.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
     public class MicroController : ControllerBase
     {
-        private readonly MicroSyncManager _microSyncManager;
+        // Sadece okuma/public işlemler için gerekiyorsa tutulur
+        private readonly IMicroService _microService; 
 
-        public MicroController(MicroSyncManager microSyncManager)
+        public MicroController(IMicroService microService)
         {
-            _microSyncManager = microSyncManager;
+            _microService = microService;
         }
 
-        /// <summary>
-        /// Mikro ERP’ye tüm ürünleri senkronize et
-        /// </summary>
-        [HttpPost("sync-products")]
-        public IActionResult SyncProducts()
-        {
-            _microSyncManager.SyncProductsToMikro();
-            return Ok(new { message = "Ürünler Mikro ERP ile senkronize edildi." });
-        }
+        /* Kaldırıldı: SyncProducts() 
+        Kaldırıldı: ExportOrders() 
+        */
 
         /// <summary>
-        /// Mikro ERP’den ürünleri getir
+        /// Mikro ERP’den ürünleri getir (Gerekirse burada kalır)
         /// </summary>
         [HttpGet("products")]
-        public async Task<IActionResult> GetProducts([FromServices] IMicroService microService)
+        public async Task<IActionResult> GetProducts()
         {
-            var products = await microService.GetProductsAsync();
+            var products = await _microService.GetProductsAsync();
             return Ok(products);
         }
 
         /// <summary>
-        /// Mikro ERP’den stokları getir
+        /// Mikro ERP’den stokları getir (Gerekirse burada kalır)
         /// </summary>
         [HttpGet("stocks")]
-        public async Task<IActionResult> GetStocks([FromServices] IMicroService microService)
+        public async Task<IActionResult> GetStocks()
         {
-            var stocks = await microService.GetStocksAsync();
+            var stocks = await _microService.GetStocksAsync();
             return Ok(stocks);
-        }
-
-        /// <summary>
-        /// Siparişleri Mikro ERP’ye gönder
-        /// </summary>
-        [HttpPost("export-orders")]
-        public async Task<IActionResult> ExportOrders([FromBody] IEnumerable<ECommerce.Entities.Concrete.Order> orders, [FromServices] IMicroService microService)
-        {
-            var success = await microService.ExportOrdersToERPAsync(orders);
-            if (!success)
-                return BadRequest(new { message = "Siparişler ERP'ye aktarılamadı." });
-
-            return Ok(new { message = "Siparişler ERP'ye aktarıldı." });
         }
     }
 }

@@ -1,11 +1,6 @@
 using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using ECommerce.Entities;
-using ECommerce.Core;
-using ECommerce.Data;
-
-
 
 namespace ECommerce.Business.Services.Interfaces
 {

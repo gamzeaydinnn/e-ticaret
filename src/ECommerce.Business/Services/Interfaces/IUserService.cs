@@ -1,7 +1,9 @@
-using ECommerce.Core.DTOs.Auth;
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Entities.Concrete;  // User
+using ECommerce.Core.DTOs.User;
+using ECommerce.Core.DTOs.Auth;     // User DTO
+
 
 namespace ECommerce.Business.Services.Interfaces
 {

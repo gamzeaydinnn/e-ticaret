@@ -1,59 +1,38 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
-using ECommerce.Entities.Concrete;
+using System.Threading.Tasks;
 
-namespace ECommerce.API.Controllers.Admin
+
+
+namespace ECommerce.API.Controllers
 {
     [ApiController]
-    [Route("api/admin/discounts")]
-    [Authorize(Roles = "Admin")]
-    public class AdminDiscountsController : ControllerBase
+    [Route("api/[controller]")] // api/discounts
+    public class DiscountsController : ControllerBase
     {
         private readonly IDiscountService _discountService;
-        public AdminDiscountsController(IDiscountService discountService) => _discountService = discountService;
 
+        public DiscountsController(IDiscountService discountService)
+        {
+            _discountService = discountService;
+        }
+
+        /// <summary>
+        /// Etkin ve geçerli tüm indirimleri listeler (ör. Migros indirimleri gibi).
+        /// </summary>
         [HttpGet]
-        public async Task<IActionResult> GetAll() => Ok(await _discountService.GetAllAsync());
-
-        [HttpGet("{id}")]
-        public async Task<IActionResult> Get(int id)
+        public async Task<IActionResult> GetAllActive()
         {
-            var d = await _discountService.GetByIdAsync(id);
-            if (d == null) return NotFound();
-            return Ok(d);
+            var discounts = await _discountService.GetActiveDiscountsAsync(); 
+            return Ok(discounts);
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] Discount discount)
+        // Örnek: Belirli bir ürüne ait aktif indirimleri getir
+        [HttpGet("product/{productId}")]
+        public async Task<IActionResult> GetDiscountsByProduct(int productId)
         {
-            await _discountService.AddAsync(discount);
-            return CreatedAtAction(nameof(Get), new { id = discount.Id }, discount);
-        }
-
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Discount discount)
-        {
-            var existing = await _discountService.GetByIdAsync(id);
-            if (existing == null) return NotFound();
-
-            existing.Title = discount.Title;
-            existing.Value = discount.Value;
-            existing.IsPercentage = discount.IsPercentage;
-            existing.StartDate = discount.StartDate;
-            existing.EndDate = discount.EndDate;
-            existing.IsActive = discount.IsActive;
-            existing.ConditionsJson = discount.ConditionsJson;
-
-            await _discountService.UpdateAsync(existing);
-            return NoContent();
-        }
-
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
-        {
-            await _discountService.DeleteAsync(id);
-            return NoContent();
+            var discounts = await _discountService.GetByProductIdAsync(productId);
+            return Ok(discounts);
         }
     }
 }

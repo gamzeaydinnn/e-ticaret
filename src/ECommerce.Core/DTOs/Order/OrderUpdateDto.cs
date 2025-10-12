@@ -1,4 +1,9 @@
+using ECommerce.Core.DTOs;
+using System;
+using System.Collections.Generic;
+
 namespace ECommerce.Core.DTOs.Order
+
 {
     public class OrderUpdateDto
     {

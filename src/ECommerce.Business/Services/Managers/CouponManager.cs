@@ -1,11 +1,11 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using System;
+using ECommerce.Business.Services.Interfaces; // ICouponService
+using ECommerce.Entities.Concrete;            // Coupon
+using ECommerce.Core.Interfaces;              // ICouponRepository
 
-namespace ECommerce.Business.Services.Concrete
+
+namespace ECommerce.Business.Services.Managers
 {
     public class CouponManager : ICouponService
     {

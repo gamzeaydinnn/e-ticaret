@@ -1,3 +1,6 @@
+using ECommerce.Core.DTOs;
+using System;
+using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Micro
 {
     public class MicroStockDto
@@ -5,6 +8,6 @@ namespace ECommerce.Core.DTOs.Micro
         public int ProductId { get; set; }
         public int Stock { get; set; }
         public string Sku { get; set; } = string.Empty; // ekle
-         public int Quantity { get; set; }
+        public int Quantity { get; set; }
     }
 }

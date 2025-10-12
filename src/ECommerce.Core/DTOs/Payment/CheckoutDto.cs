@@ -1,5 +1,8 @@
 //ödeme + adres + sepet.
 //CheckoutDto → sepeti finalize etmek, shipping, billing info vs. içerir.
+using ECommerce.Core.DTOs;
+using System;
+using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Payment
 {
     public class CheckoutDto

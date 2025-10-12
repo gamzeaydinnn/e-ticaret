@@ -1,10 +1,10 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.DTOs.Cart;
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
-using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // ICartService
+using ECommerce.Entities.Concrete;            // CartItem, Cart
+using ECommerce.Core.Interfaces;
+using ECommerce.Core.DTOs.Cart;              // ICartRepository
+
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -98,6 +98,10 @@ namespace ECommerce.Business.Services.Managers
     return await _cartRepository.GetCartCountAsync();
 }
 
+        Task<CartSummaryDto> ICartService.GetCartAsync(int userId)
+        {
+            throw new NotImplementedException();
+        }
 
     }
 }

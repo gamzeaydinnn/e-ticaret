@@ -1,6 +1,7 @@
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Entities.Concrete;  // Discount
+
 
 namespace ECommerce.Business.Services.Interfaces
 {
@@ -11,5 +12,9 @@ namespace ECommerce.Business.Services.Interfaces
         Task AddAsync(Discount discount);
         Task UpdateAsync(Discount discount);
         Task DeleteAsync(int id);
+
+        // 👇 Eklenen metotlar:
+        Task<IEnumerable<Discount>> GetActiveDiscountsAsync();
+        Task<IEnumerable<Discount>> GetByProductIdAsync(int productId);
     }
 }

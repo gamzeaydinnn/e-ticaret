@@ -10,6 +10,8 @@ using ECommerce.Core.DTOs.Auth;
 using ECommerce.Core.DTOs.User;
 using ECommerce.Business.Services.Interfaces;
 
+namespace ECommerce.Business.Services.Managers
+{
 public class AuthManager : IAuthService
 {
     private readonly ECommerceDbContext _context;
@@ -163,4 +165,5 @@ public class AuthManager : IAuthService
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
         await _context.SaveChangesAsync();
     }
+}
 }

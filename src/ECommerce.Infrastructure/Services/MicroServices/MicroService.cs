@@ -4,8 +4,11 @@ using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Entities.Concrete;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-namespace ECommerce.Infrastructure.Services.Micro
+namespace ECommerce.Infrastructure.Services.MicroServices
 {
     
     public class MicroService : IMicroService

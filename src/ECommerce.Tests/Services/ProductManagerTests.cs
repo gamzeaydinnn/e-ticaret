@@ -6,6 +6,8 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Data.Repositories;
 using System.Threading.Tasks;
 using System.Linq;
+using ECommerce.Core.Interfaces; // IReviewRepository için gerekli
+using Moq; // Mock kullanımı için gerekli
 
 namespace ECommerce.Tests.Services
 {
@@ -14,6 +16,7 @@ namespace ECommerce.Tests.Services
         private ECommerceDbContext GetInMemoryDbContext()
         {
             var options = new DbContextOptionsBuilder<ECommerceDbContext>()
+                // Her test için benzersiz bir veritabanı adı kullanmak önemlidir
                 .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
                 .Options;
             return new ECommerceDbContext(options);
@@ -34,11 +37,17 @@ namespace ECommerce.Tests.Services
             context.Products.AddRange(products);
             await context.SaveChangesAsync();
 
-            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
-            var productManager = new ProductManager(productRepository);
+            var productRepository = new ProductRepository(context);
+            
+            // Hata CS7036'yı çözmek için: ProductManager'ın beklediği ikinci bağımlılığı ekle
+            var mockReviewRepository = new Mock<IReviewRepository>(); 
+            
+            // ProductManager'ı tüm bağımlılıklarla başlat
+            var productManager = new ProductManager(productRepository, mockReviewRepository.Object);
 
             // Act
-            var result = await productManager.GetProductsAsync(null, null, null, null, null, 1, 20);
+            // Hata CS1501'i çözmek için: Metodun yalnızca 4 argüman alan aşırı yüklemesini kullan
+            var result = await productManager.GetProductsAsync(query: null, categoryId: null, page: 1, pageSize: 20);
 
             // Assert
             Assert.NotNull(result);
@@ -57,8 +66,10 @@ namespace ECommerce.Tests.Services
             context.Products.Add(product);
             await context.SaveChangesAsync();
 
-            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
-            var productManager = new ProductManager(productRepository);
+            var productRepository = new ProductRepository(context);
+            // Hata CS7036'yı çözmek için bağımlılığı ekle
+            var mockReviewRepository = new Mock<IReviewRepository>();
+            var productManager = new ProductManager(productRepository, mockReviewRepository.Object);
 
             // Act
             var result = await productManager.GetByIdAsync(product.Id);
@@ -74,8 +85,10 @@ namespace ECommerce.Tests.Services
         {
             // Arrange
             using var context = GetInMemoryDbContext();
-            var productRepository = new ECommerce.Data.Repositories.ProductRepository(context);
-            var productManager = new ProductManager(productRepository);
+            var productRepository = new ProductRepository(context);
+            // Hata CS7036'yı çözmek için bağımlılığı ekle
+            var mockReviewRepository = new Mock<IReviewRepository>();
+            var productManager = new ProductManager(productRepository, mockReviewRepository.Object);
 
             // Act
             var result = await productManager.GetByIdAsync(999);

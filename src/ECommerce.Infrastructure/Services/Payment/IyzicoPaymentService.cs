@@ -3,9 +3,15 @@ using ECommerce.Data.Repositories;        // Repository kullanacaksan
 using ECommerce.Core.DTOs.Order;          // OrderCreateDto, OrderDetailDto
 using ECommerce.Core.Helpers;             // HashingHelper, JwtTokenHelper vs.
 using ECommerce.Core.Interfaces;
-
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {

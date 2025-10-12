@@ -1,6 +1,8 @@
-using ECommerce.Core.DTOs.Cart;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Core.DTOs.Cart;
+using ECommerce.Entities.Concrete;  // CartItem, Cart
+
 
 namespace ECommerce.Business.Services.Interfaces
 {

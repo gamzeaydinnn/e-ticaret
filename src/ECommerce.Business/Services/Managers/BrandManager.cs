@@ -1,10 +1,11 @@
-using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // IBrandService
+using ECommerce.Entities.Concrete;            // Brand
+using ECommerce.Core.Interfaces;              // IBrandRepository
 
-namespace ECommerce.Business.Services.Concrete
+
+namespace ECommerce.Business.Services.Managers
 {
     public class BrandManager : IBrandService
     {

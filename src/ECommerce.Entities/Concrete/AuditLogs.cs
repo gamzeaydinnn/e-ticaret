@@ -1,6 +1,7 @@
 //	• AuditLogs (Id, Entity, Action, UserId, Changes JSON, CreatedAt)
 //	• ProductVariants (Id, ProductId, SKU, Price, Cost, VAT, Attributes(JSON), Weight, Barcode, RowVersion)
 using ECommerce.Entities.Concrete;
+using System.Collections.Generic;
 namespace ECommerce.Entities.Concrete
 {
     public class AuditLogs : BaseEntity

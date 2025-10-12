@@ -1,13 +1,13 @@
-using ECommerce.Entities.Enums;
-using ECommerce.Business.Services.Interfaces;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces; // IOrderService
+using ECommerce.Entities.Concrete;            // Order, OrderItem
+using ECommerce.Core.Interfaces;              // IOrderRepository
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Data.Context;
-using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System;
+using ECommerce.Entities.Enums;              // Order DTO
+
 
 namespace ECommerce.Business.Services.Managers
 {
