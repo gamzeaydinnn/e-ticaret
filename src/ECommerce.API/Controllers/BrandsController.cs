@@ -18,14 +18,41 @@ namespace ECommerce.API.Controllers // Ana namespace, Admin DEĞİL
         {
             _brandService = brandService;
         }
-
         // GET: api/brands
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            // Kullanıcıların göreceği aktif markalar getirilir
-            return Ok(await _brandService.GetAllAsync());
+            // ✅ DTO döndüren yeni metot kullanıldı.
+            return Ok(await _brandService.GetAllBrandsDtoAsync());
         }
+
+        // GET: api/brands/slug-ismi (Örn: api/brands/ulker)
+        [HttpGet("{slug}")]
+        public async Task<IActionResult> GetBySlug(string slug)
+        {
+            // Slug uzunluğu genellikle ID'den daha uzun olacağı için
+            // bu metodu ID yerine slug ile arama için kullanıyoruz.
+            
+            var brand = await _brandService.GetBrandBySlugAsync(slug);
+            if (brand == null)
+            {
+                // Ek olarak, eğer slug numeric ise ID ile arama yapma yedek mekanizması (opsiyonel)
+                if (int.TryParse(slug, out int id))
+                {
+                    brand = await _brandService.GetBrandDtoByIdAsync(id);
+                }
+            }
+            
+            if (brand == null) return NotFound();
+            return Ok(brand);
+        }
+        
+        // **Not:** Eğer sadece ID ile arama isterseniz, önceki Get metodunuzu
+        // GetBrandDtoByIdAsync metodunu kullanacak şekilde de güncelleyebilirdiniz. 
+        // Ancak web sitelerinde marka linkleri genellikle slug kullanır.
+    
+
+        
 
         // GET: api/brands/5
         [HttpGet("{id}")]

@@ -17,5 +17,11 @@ namespace ECommerce.Data.Repositories
         {
             return await _dbSet.FirstOrDefaultAsync(b => b.Name == name && b.IsActive);
         }
+        
+        // ✅ Slug ile Arama Metodu
+        public async Task<Brand?> GetBySlugAsync(string slug)
+        {
+            return await _dbSet.FirstOrDefaultAsync(b => b.Slug == slug && b.IsActive);
+        }
     }
 }
