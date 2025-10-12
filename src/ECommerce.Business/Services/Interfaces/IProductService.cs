@@ -28,6 +28,9 @@ namespace ECommerce.Business.Services.Interfaces
         // Kullanıcı tarafı ürün detayı
         Task<ProductListDto?> GetProductByIdAsync(int id);
 
+        // ✅ Genel Arama Metodu
+        Task<IEnumerable<ProductListDto>> SearchProductsAsync(string query, int page = 1, int size = 10);
+
         // ✅ Kullanıcı ürün yorumu ekleme (DTO kullanacak)
         Task AddProductReviewAsync(int productId, int userId, ProductReviewCreateDto reviewDto);
 

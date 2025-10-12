@@ -14,6 +14,45 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly IProductRepository _productRepository;
         private readonly IReviewRepository _reviewRepository;
+        // Yeni Eklenen: Genel Arama Metodu
+        public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string query, int page = 1, int size = 10)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                // Arama sorgusu yoksa boş liste dönüyoruz veya aktif ürünleri dönebilirsiniz.
+                return Enumerable.Empty<ProductListDto>();
+            }
+
+            // Tüm ürünleri çek
+            var allProducts = await _productRepository.GetAllAsync();
+
+            // Arama sorgusuna göre filtrele (isimde veya açıklamada içeriyorsa)
+            var filteredProducts = allProducts.Where(p =>
+                p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                (p.Description != null && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            // Sayfalama uygula
+            var pagedProducts = filteredProducts
+                .OrderBy(p => p.Name) // Sonuçları isme göre sırala
+                .Skip((page - 1) * size)
+                .Take(size);
+
+            // DTO'ya dönüştür
+            return pagedProducts.Select(p => new ProductListDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Price = p.Price,
+                SpecialPrice = p.SpecialPrice,
+                StockQuantity = p.StockQuantity,
+                ImageUrl = p.ImageUrl,
+                Brand = p.Brand?.Name ?? string.Empty,
+                CategoryName = p.Category?.Name ?? string.Empty
+            });
+        }
+        
 
         public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository)
         {

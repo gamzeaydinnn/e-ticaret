@@ -18,12 +18,29 @@ namespace ECommerce.API.Controllers
             _productService = productService;
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchProducts([FromQuery] string query, [FromQuery] int page = 1, [FromQuery] int size = 10)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                // Arama sorgusu boşsa, mevcut tüm ürünleri (veya kategorili ürünleri) dönebilirsiniz.
+                // Basitçe boş bir liste dönmek de bir seçenek. Burada tüm aktif ürünleri döneceğiz.
+                var allProducts = await _productService.GetActiveProductsAsync(page, size);
+                return Ok(allProducts);
+            }
+
+            var products = await _productService.SearchProductsAsync(query, page, size);
+            return Ok(products);
+        }
+        
         [HttpGet]
         public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int size = 10, [FromQuery] int? categoryId = null)
         {
             var products = await _productService.GetActiveProductsAsync(page, size, categoryId);
             return Ok(products);
         }
+
+    
 
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProduct(int id)
