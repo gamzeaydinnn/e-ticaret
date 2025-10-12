@@ -5,7 +5,10 @@ using ECommerce.Entities.Concrete;            // ProductReview
 using ECommerce.Core.Interfaces;              // IReviewRepository
 using ECommerce.Core.DTOs.ProductReview;             // Review DTO
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 namespace ECommerce.Business.Services.Managers
 {
     public class ReviewManager : IReviewService

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Data.Context;
+using ECommerce.Infrastructure;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Helpers;
 using ECommerce.Core.DTOs.Auth;

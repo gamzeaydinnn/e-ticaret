@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import AdminDashboard from "./AdminDashboard";
-import AdminProducts from "./AdminProducts";
-import AdminOrders from "./AdminOrders";
-import AdminUsers from "./AdminUsers";
+import AdminDashboard from "../pages/Admin/Dashboard";
+import AdminProducts from "../pages/Admin/AdminProducts";
+import AdminOrders from "../pages/Admin/AdminOrders";
+import AdminUsers from "../pages/Admin/AdminUsers";
 
 const AdminPanel = () => {
   const [activeTab, setActiveTab] = useState("dashboard");

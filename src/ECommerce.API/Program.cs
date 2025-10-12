@@ -14,6 +14,9 @@ using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Config;
 
 
+// using ECommerce.Infrastructure.Services.BackgroundJobs;
+// using Hangfire;
+// using Hangfire.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,24 +24,31 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-    policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
-        .AllowAnyHeader()
-        .AllowAnyMethod());
+        policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
-// DbContext ekle
-    builder.Services.AddDbContext<ECommerceDbContext>(options =>
+// DbContext ekle - SQL Server kullan
+builder.Services.AddDbContext<ECommerceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Hangfire - SQL Server kullan (Geçici olarak devre dışı - Azure bağlantı sorunu)
+// builder.Services.AddHangfire(config => 
+//     config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+//           .UseSimpleAssemblyNameTypeSerializer()
+//           .UseRecommendedSerializerSettings()
+//           .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
+// builder.Services.AddHangfireServer();
 
 // Hangfire (tek seferde)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
+/*builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
 builder.Services.AddHangfireServer();
 
 
 var app = builder.Build();
-app.UseHangfireDashboard();
+app.UseHangfireDashboard();*/
 
 // Recurring job (yeni API kullanımı)
 RecurringJob.AddOrUpdate<StockSyncJob>(
@@ -49,6 +59,7 @@ RecurringJob.AddOrUpdate<StockSyncJob>(
 );
 
 // JWT Auth
+// JWT Auth 
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
     {
@@ -64,7 +75,6 @@ builder.Services.AddAuthentication("Bearer")
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
         };
     });
-    
 
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
@@ -104,22 +114,31 @@ builder.Services.AddScoped<ICouponService, CouponManager>();
 
 // vs.
 
-
-
 builder.Services.AddScoped<StockSyncJob>();
 // MicroService ve MicroSyncManager
 builder.Services.AddScoped<IMicroService, ECommerce.Business.Services.Managers.MicroService>();
 builder.Services.AddScoped<MicroSyncManager>();
+builder.Services.AddScoped<IAuthService, AuthManager>();
 
+// builder.Services.AddScoped<StockSyncJob>();
 
 builder.Services.AddAuthorization();
 
 // Controller ekle
 builder.Services.AddControllers();
 
-// Swagger
+// Swagger (isteğe bağlı)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// app.UseHangfireDashboard();
+
+// Recurring job (Geçici olarak devre dışı)
+// RecurringJob.AddOrUpdate<StockSyncJob>(
+//     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
+//     Cron.Hourly);
 
 // Middleware
 if (app.Environment.IsDevelopment())
