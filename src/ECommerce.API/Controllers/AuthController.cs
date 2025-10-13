@@ -27,15 +27,35 @@ namespace ECommerce.API.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
-            var token = await _authService.RegisterAsync(dto);
-            return Ok(new { Token = token });
+            try
+            {
+                var token = await _authService.RegisterAsync(dto);
+                return Ok(new { 
+                    Token = token,
+                    Message = "Kayıt başarılı! Giriş yapabilirsiniz."
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            var token = await _authService.LoginAsync(dto);
-            return Ok(new { Token = token });
+            try
+            {
+                var token = await _authService.LoginAsync(dto);
+                return Ok(new { 
+                    Token = token,
+                    Message = "Giriş başarılı!"
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = "Geçersiz email veya şifre!" });
+            }
         }
         [HttpPost("refresh")]
         public async Task<IActionResult> Refresh(TokenRefreshDto dto)
