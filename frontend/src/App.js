@@ -188,42 +188,220 @@ function Header() {
 
                   {user && showUserDropdown && (
                     <div
-                      className="position-absolute bg-white shadow-lg rounded-3 border-0 mt-1 py-2"
+                      className="position-absolute bg-white shadow-lg rounded-3 border-0 mt-2 overflow-hidden"
                       style={{
                         right: 0,
-                        minWidth: "200px",
+                        minWidth: "240px",
                         zIndex: 1000,
-                        top: "100%",
+                        top: "80%",
+                        boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                        backdropFilter: "blur(10px)",
+                        animation: "fadeIn 0.2s ease-out",
                       }}
                     >
-                      <button
-                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          setShowUserDropdown(false);
-                          navigate("/account");
+                      {/* Kullanıcı Bilgileri Header */}
+                      <div
+                        className="px-4 py-3 border-bottom"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                          color: "white",
                         }}
                       >
-                        <i className="fas fa-user-circle me-2 text-primary"></i>
-                        Hesabım
-                      </button>
-                      <button
-                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start"
-                        onClick={() => {
-                          setShowUserDropdown(false);
-                          navigate("/favorites");
-                        }}
-                      >
-                        <i className="fas fa-heart me-2 text-danger"></i>
-                        Favorilerim
-                      </button>
-                      <hr className="dropdown-divider mx-3" />
-                      <button
-                        className="dropdown-item d-flex align-items-center px-3 py-2 border-0 bg-transparent w-100 text-start text-danger"
-                        onClick={handleLogout}
-                      >
-                        <i className="fas fa-sign-out-alt me-2"></i>
-                        Çıkış Yap
-                      </button>
+                        <div className="d-flex align-items-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "40px",
+                              height: "40px",
+                              background: "rgba(255,255,255,0.2)",
+                              backdropFilter: "blur(10px)",
+                            }}
+                          >
+                            <i className="fas fa-user text-white"></i>
+                          </div>
+                          <div>
+                            <div className="fw-bold">{user.name}</div>
+                            <small style={{ opacity: 0.9 }}>{user.email}</small>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Menü Items */}
+                      <div className="py-2">
+                        <button
+                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
+                          style={{
+                            transition: "all 0.2s ease",
+                            fontSize: "14px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background =
+                              "linear-gradient(135deg, #f8f9ff, #e3f2fd)";
+                            e.target.style.transform = "translateX(5px)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.transform = "translateX(0)";
+                          }}
+                          onClick={() => {
+                            setShowUserDropdown(false);
+                            navigate("/account");
+                          }}
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              background:
+                                "linear-gradient(135deg, #667eea, #764ba2)",
+                              color: "white",
+                            }}
+                          >
+                            <i
+                              className="fas fa-user-circle"
+                              style={{ fontSize: "14px" }}
+                            ></i>
+                          </div>
+                          <div>
+                            <div className="fw-semibold text-dark">Hesabım</div>
+                            <small className="text-muted">
+                              Profil ayarları
+                            </small>
+                          </div>
+                        </button>
+
+                        <button
+                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
+                          style={{
+                            transition: "all 0.2s ease",
+                            fontSize: "14px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background =
+                              "linear-gradient(135deg, #fff0f0, #ffe6e6)";
+                            e.target.style.transform = "translateX(5px)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.transform = "translateX(0)";
+                          }}
+                          onClick={() => {
+                            setShowUserDropdown(false);
+                            navigate("/favorites");
+                          }}
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              background:
+                                "linear-gradient(135deg, #ff6b6b, #ee5a52)",
+                              color: "white",
+                            }}
+                          >
+                            <i
+                              className="fas fa-heart"
+                              style={{ fontSize: "14px" }}
+                            ></i>
+                          </div>
+                          <div>
+                            <div className="fw-semibold text-dark">
+                              Favorilerim
+                            </div>
+                            <small className="text-muted">
+                              Beğendiğim ürünler
+                            </small>
+                          </div>
+                        </button>
+
+                        <button
+                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
+                          style={{
+                            transition: "all 0.2s ease",
+                            fontSize: "14px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background =
+                              "linear-gradient(135deg, #fff5e6, #ffe0cc)";
+                            e.target.style.transform = "translateX(5px)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.transform = "translateX(0)";
+                          }}
+                          onClick={() => {
+                            setShowUserDropdown(false);
+                            navigate("/orders");
+                          }}
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              background:
+                                "linear-gradient(135deg, #ff9500, #ff6b35)",
+                              color: "white",
+                            }}
+                          >
+                            <i
+                              className="fas fa-truck"
+                              style={{ fontSize: "14px" }}
+                            ></i>
+                          </div>
+                          <div>
+                            <div className="fw-semibold text-dark">
+                              Siparişlerim
+                            </div>
+                            <small className="text-muted">Sipariş takibi</small>
+                          </div>
+                        </button>
+
+                        <hr className="mx-3 my-2" style={{ opacity: 0.1 }} />
+
+                        <button
+                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
+                          style={{
+                            transition: "all 0.2s ease",
+                            fontSize: "14px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background =
+                              "linear-gradient(135deg, #ffe6e6, #ffcccc)";
+                            e.target.style.transform = "translateX(5px)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.transform = "translateX(0)";
+                          }}
+                          onClick={handleLogout}
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              background:
+                                "linear-gradient(135deg, #e74c3c, #c0392b)",
+                              color: "white",
+                            }}
+                          >
+                            <i
+                              className="fas fa-sign-out-alt"
+                              style={{ fontSize: "14px" }}
+                            ></i>
+                          </div>
+                          <div>
+                            <div className="fw-semibold text-danger">
+                              Çıkış Yap
+                            </div>
+                            <small className="text-muted">Hesaptan çık</small>
+                          </div>
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

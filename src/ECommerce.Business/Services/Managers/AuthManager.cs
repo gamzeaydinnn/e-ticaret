@@ -47,9 +47,12 @@ public class AuthManager : IAuthService
 
     public async Task<string> LoginAsync(LoginDto dto)
     {
-        var user = _context.Users.SingleOrDefault(u => u.Email == dto.Email);
-        if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            throw new Exception("Invalid credentials");
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
+        if (user == null)
+            throw new Exception("Kullanıcı bulunamadı");
+
+        if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            throw new Exception("Şifre yanlış");
 
         return GenerateJwtToken(user);
     }

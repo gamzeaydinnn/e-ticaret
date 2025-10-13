@@ -6,7 +6,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -22,7 +23,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       if (isLogin) {
         result = await login(email, password);
       } else {
-        result = await register(email, password, name);
+        result = await register(email, password, firstName, lastName);
       }
 
       if (result.success) {
@@ -31,7 +32,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
         // Formu temizle
         setEmail("");
         setPassword("");
-        setName("");
+        setFirstName("");
+        setLastName("");
       } else {
         setError(result.error);
       }
@@ -105,20 +107,36 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
 
             <form onSubmit={handleSubmit}>
               {!isLogin && (
-                <div className="mb-3">
-                  <label htmlFor="name" className="form-label">
-                    <i className="fas fa-user me-2"></i>Ad Soyad
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control form-control-lg"
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required={!isLogin}
-                    placeholder="Adınızı ve soyadınızı girin"
-                  />
-                </div>
+                <>
+                  <div className="mb-3">
+                    <label htmlFor="firstName" className="form-label">
+                      <i className="fas fa-user me-2"></i>Ad
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg"
+                      id="firstName"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      required={!isLogin}
+                      placeholder="Adınızı girin"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="lastName" className="form-label">
+                      <i className="fas fa-user me-2"></i>Soyad
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg"
+                      id="lastName"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      required={!isLogin}
+                      placeholder="Soyadınızı girin"
+                    />
+                  </div>
+                </>
               )}
 
               <div className="mb-3">

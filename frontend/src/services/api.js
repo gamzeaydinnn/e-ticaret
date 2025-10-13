@@ -4,7 +4,7 @@ import axios from "axios";
 const baseURL = process.env.REACT_APP_API_BASE_URL || null;
 
 const api = axios.create({
-  baseURL: baseURL || "http://localhost:3000", // Fallback to prevent errors
+  baseURL: baseURL || "https://localhost:7068", // Backend API URL
   // FormData veya JSON fark etmez, axios otomatik ayarlar
 });
 

@@ -16,17 +16,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Demo kullanıcıları
-  const demoUsers = [
-    { id: 1, email: "demo@example.com", password: "123456", name: "Demo User" },
-    { id: 2, email: "test@example.com", password: "123456", name: "Test User" },
-    {
-      id: 3,
-      email: "user@example.com",
-      password: "123456",
-      name: "Example User",
-    },
-  ];
+  // Demo kullanıcıları - localStorage'dan yükle veya default'ları kullan
+  const getStoredDemoUsers = () => {
+    try {
+      const stored = localStorage.getItem("demoUsers");
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error("Demo users parsing error:", error);
+    }
+    return [
+      { id: 1, email: "demo@example.com", password: "123456", firstName: "Demo", lastName: "User" },
+      { id: 2, email: "test@example.com", password: "123456", firstName: "Test", lastName: "User" },
+      { id: 3, email: "user@example.com", password: "123456", firstName: "Example", lastName: "User" },
+    ];
+  };
+
+  const [demoUsers, setDemoUsers] = useState(getStoredDemoUsers());
 
   useEffect(() => {
     // Token interceptor'ını kur
@@ -83,7 +90,9 @@ export const AuthProvider = ({ children }) => {
         const userData = {
           id: demoUser.id,
           email: demoUser.email,
-          name: demoUser.name,
+          firstName: demoUser.firstName,
+          lastName: demoUser.lastName,
+          name: demoUser.name || `${demoUser.firstName} ${demoUser.lastName}`,
         };
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -132,18 +141,28 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const register = async (email, password, name) => {
+  const register = async (email, password, firstName, lastName) => {
     try {
       // Backend API çağrısı
-      const response = await AuthService.register({ email, password, name });
+      const response = await AuthService.register({ 
+        email, 
+        password, 
+        firstName, 
+        lastName 
+      });
 
-      if (response.data.success) {
-        const { user: userData, token } = response.data;
+      if (response.data.Token) {
+        const userData = {
+          email,
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`
+        };
 
         // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(token);
+        AuthService.saveToken(response.data.Token);
         localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", userData.id.toString());
+        localStorage.setItem("userId", Date.now().toString());
 
         setUser(userData);
 
@@ -151,7 +170,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         return {
           success: false,
-          error: response.data.message || "Kayıt başarısız!",
+          error: response.data.Message || "Kayıt başarısız!",
         };
       }
     } catch (error) {
@@ -164,18 +183,33 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: "Bu email adresi zaten kullanımda!" };
       }
 
+      // Şifre kontrolü
+      if (!password || password.length < 6) {
+        return { success: false, error: "Şifre en az 6 karakter olmalıdır!" };
+      }
+
       // Yeni kullanıcı oluştur (demo için)
       const newUser = {
         id: Date.now(),
         email,
-        name,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`,
+        password // Demo için şifreyi de saklayalım
       };
+
+      // Demo kullanıcılar listesine ekle
+      const updatedDemoUsers = [...demoUsers, newUser];
+      setDemoUsers(updatedDemoUsers);
 
       const token = "demo_token_" + Date.now();
 
       AuthService.saveToken(token);
       localStorage.setItem("user", JSON.stringify(newUser));
       localStorage.setItem("userId", newUser.id.toString());
+      
+      // Demo kullanıcıları localStorage'a kaydet
+      localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
 
       setUser(newUser);
 
