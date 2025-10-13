@@ -110,8 +110,6 @@ builder.Services.AddScoped<IReviewService, ReviewManager>();
 builder.Services.AddScoped<IAddressService, AddressManager>();
 builder.Services.AddScoped<ICouponService, CouponManager>();
 
-
-
 // vs.
 
 builder.Services.AddScoped<StockSyncJob>();
