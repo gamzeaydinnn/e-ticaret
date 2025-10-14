@@ -17,12 +17,12 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetFavorites([FromQuery] Guid? userId = null)
+        public async Task<IActionResult> GetFavorites([FromQuery] int? userId = null)
         {
             try
             {
                 // Geçici olarak sahte userId kullanıyoruz - gerçek auth sistemine geçince kaldırılacak
-                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                var effectiveUserId = userId ?? 1;
                 var favorites = await _favoriteService.GetFavoritesAsync(effectiveUserId);
                 return Ok(new { success = true, data = favorites });
             }
@@ -33,12 +33,12 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpPost("{productId}")]
-        public async Task<IActionResult> ToggleFavorite(int productId, [FromQuery] Guid? userId = null)
+        public async Task<IActionResult> ToggleFavorite(int productId, [FromQuery] int? userId = null)
         {
             try
             {
                 // Geçici olarak sahte userId kullanıyoruz
-                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                var effectiveUserId = userId ?? 1;
                 await _favoriteService.ToggleFavoriteAsync(effectiveUserId, productId);
                 return Ok(new { success = true, message = "Favori durumu güncellendi" });
             }
@@ -49,12 +49,12 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpDelete("{productId}")]
-        public async Task<IActionResult> RemoveFavorite(int productId, [FromQuery] Guid? userId = null)
+        public async Task<IActionResult> RemoveFavorite(int productId, [FromQuery] int? userId = null)
         {
             try
             {
                 // Geçici olarak sahte userId kullanıyoruz
-                var effectiveUserId = userId ?? Guid.Parse("11111111-1111-1111-1111-111111111111");
+                var effectiveUserId = userId ?? 1;
                 await _favoriteService.RemoveFavoriteAsync(effectiveUserId, productId);
                 return Ok(new { success = true, message = "Favori silindi" });
             }

@@ -7,8 +7,9 @@ namespace ECommerce.Core.Interfaces
 {
     public interface IFavoriteRepository : IRepository<Favorite>
     {
-        Task<IEnumerable<Favorite>> GetFavoritesByUserAsync(Guid userId);
-        Task<Favorite> GetFavoriteAsync(Guid userId, int productId);
-        Task RemoveFavoriteAsync(Guid userId, int productId);
+        Task<IEnumerable<Favorite>> GetFavoritesByUserAsync(int userId);
+        Task<Favorite?> GetFavoriteAsync(int userId, int productId);
+        Task RemoveFavoriteAsync(int userId, int productId);
+        Task<int> GetFavoriteCountAsync(int userId);
     }
 }

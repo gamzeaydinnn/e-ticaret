@@ -7,7 +7,7 @@ namespace ECommerce.Entities.Concrete
 {
     public class Favorite : BaseEntity
     {
-        public Guid UserId { get; set; }
+        public int UserId { get; set; }
         public int ProductId { get; set; }
 
         // Navigation properties

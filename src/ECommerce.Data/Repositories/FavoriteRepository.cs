@@ -15,26 +15,34 @@ namespace ECommerce.Data.Repositories
         {
         }
 
-        public async Task<IEnumerable<Favorite>> GetFavoritesByUserAsync(Guid userId)
+        public async Task<IEnumerable<Favorite>> GetFavoritesByUserAsync(int userId)
         {
             return await _dbSet
                 .Include(f => f.Product)
+                    .ThenInclude(p => p.Category)
+                .Include(f => f.Product)
+                    .ThenInclude(p => p.Brand)
                 .Where(f => f.UserId == userId && f.IsActive)
                 .ToListAsync();
         }
 
-        public async Task<Favorite> GetFavoriteAsync(Guid userId, int productId)
+        public async Task<Favorite?> GetFavoriteAsync(int userId, int productId)
         {
-            return await _dbSet.FirstOrDefaultAsync(f => f.UserId == userId && f.ProductId == productId && f.IsActive);
+            return await _dbSet.FirstOrDefaultAsync(f => f.UserId == userId && f.ProductId == productId);
         }
 
-        public async Task RemoveFavoriteAsync(Guid userId, int productId)
+        public async Task RemoveFavoriteAsync(int userId, int productId)
         {
             var favorite = await GetFavoriteAsync(userId, productId);
             if (favorite != null)
             {
                 Delete(favorite);
             }
+        }
+
+        public async Task<int> GetFavoriteCountAsync(int userId)
+        {
+            return await _dbSet.CountAsync(f => f.UserId == userId && f.IsActive);
         }
     }
 }

@@ -58,9 +58,9 @@ namespace ECommerce.Data.Repositories
             _context.Users.Remove(user);
         }
 
-        public Task<bool> ExistsAsync(string email)
+        public async Task<bool> ExistsAsync(string email)
         {
-            throw new NotImplementedException();
+            return await _context.Users.AnyAsync(u => u.Email == email);
         }
     }
 }

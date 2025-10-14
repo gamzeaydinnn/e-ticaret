@@ -55,15 +55,16 @@ namespace ECommerce.Business.Services.Managers
             _userRepository.Delete(user);
         }
 
-        public Task UpdateAsync(User user)
+        public async Task UpdateAsync(User user)
         {
-            throw new NotImplementedException();
+            _userRepository.Update(user);
+            await Task.CompletedTask;
         }
 
-        public Task DeleteAsync(User user)
+        public async Task DeleteAsync(User user)
         {
-            throw new NotImplementedException();
-
+            _userRepository.Delete(user);
+            await Task.CompletedTask;
         }
         public async Task<int> GetUserCountAsync()
         {

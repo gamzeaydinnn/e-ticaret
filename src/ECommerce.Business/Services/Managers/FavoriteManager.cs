@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces; // IFavoriteService
 using ECommerce.Entities.Concrete;            // Favorite, Product
 using ECommerce.Core.DTOs.Product;            // ProductListDto
-using ECommerce.Core.Interfaces;              // IFavoriteRepository, IProductRepository
+using ECommerce.Core.Interfaces;              // IFavoriteRepository
 
 
 namespace ECommerce.Business.Services.Managers
@@ -12,15 +12,13 @@ namespace ECommerce.Business.Services.Managers
     public class FavoriteManager : IFavoriteService
     {
         private readonly IFavoriteRepository _favoriteRepository;
-        private readonly IProductRepository _productRepository;
 
-        public FavoriteManager(IFavoriteRepository favoriteRepository, IProductRepository productRepository)
+        public FavoriteManager(IFavoriteRepository favoriteRepository)
         {
             _favoriteRepository = favoriteRepository;
-            _productRepository = productRepository;
         }
 
-        public async Task<List<ProductListDto>> GetFavoritesAsync(Guid userId)
+        public async Task<List<ProductListDto>> GetFavoritesAsync(int userId)
         {
             var favorites = await _favoriteRepository.GetFavoritesByUserAsync(userId);
             return favorites.Where(f => f.IsActive)
@@ -37,7 +35,7 @@ namespace ECommerce.Business.Services.Managers
                 }).ToList();
         }
 
-        public async Task ToggleFavoriteAsync(Guid userId, int productId)
+        public async Task ToggleFavoriteAsync(int userId, int productId)
         {
             var favorite = await _favoriteRepository.GetFavoriteAsync(userId, productId);
             if (favorite == null)
@@ -51,14 +49,14 @@ namespace ECommerce.Business.Services.Managers
     }
         }
 
-        public async Task RemoveFavoriteAsync(Guid userId, int productId)
+        public async Task RemoveFavoriteAsync(int userId, int productId)
         {
             await _favoriteRepository.RemoveFavoriteAsync(userId, productId);
         }
 
-        public Task<int> GetFavoriteCountAsync()
+        public async Task<int> GetFavoriteCountAsync(int userId)
         {
-            throw new NotImplementedException();
+            return await _favoriteRepository.GetFavoriteCountAsync(userId);
         }
     }
 }

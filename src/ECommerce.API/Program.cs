@@ -6,8 +6,8 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Data.Repositories;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using ECommerce.Infrastructure.Services.BackgroundJobs;
-using Hangfire;
+// using ECommerce.Infrastructure.Services.BackgroundJobs;
+// using Hangfire;
 using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
@@ -51,12 +51,12 @@ var app = builder.Build();
 app.UseHangfireDashboard();*/
 
 // Recurring job (yeni API kullanımı)
-RecurringJob.AddOrUpdate<StockSyncJob>(
-    "stock-sync-job",
-    job => job.RunOnce(),
-    Cron.Hourly,
-    new RecurringJobOptions { TimeZone = TimeZoneInfo.Local }
-);
+// RecurringJob.AddOrUpdate<StockSyncJob>(
+//     "stock-sync-job",
+//     job => job.RunOnce(),
+    // Cron.Hourly,
+//     new RecurringJobOptions { TimeZone = TimeZoneInfo.Local }
+// );
 
 // JWT Auth
 // JWT Auth 
@@ -112,13 +112,13 @@ builder.Services.AddScoped<ICouponService, CouponManager>();
 
 // vs.
 
-builder.Services.AddScoped<StockSyncJob>();
+// builder.Services.AddScoped<StockSyncJob>();
 // MicroService ve MicroSyncManager
 builder.Services.AddScoped<IMicroService, ECommerce.Business.Services.Managers.MicroService>();
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<IAuthService, AuthManager>();
 
-// builder.Services.AddScoped<StockSyncJob>();
+// // builder.Services.AddScoped<StockSyncJob>();
 
 builder.Services.AddAuthorization();
 
@@ -134,9 +134,9 @@ var app = builder.Build();
 // app.UseHangfireDashboard();
 
 // Recurring job (Geçici olarak devre dışı)
-// RecurringJob.AddOrUpdate<StockSyncJob>(
-//     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
-//     Cron.Hourly);
+// // RecurringJob.AddOrUpdate<StockSyncJob>(
+// //     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
+//     // Cron.Hourly);
 
 // Middleware
 if (app.Environment.IsDevelopment())

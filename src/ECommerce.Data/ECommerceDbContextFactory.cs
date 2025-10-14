@@ -10,8 +10,8 @@ namespace ECommerce.Data
         {
             var optionsBuilder = new DbContextOptionsBuilder<ECommerceDbContext>();
 
-            // 🔹 BURAYA Azure SQL bağlantı cümleni yaz:
-            optionsBuilder.UseSqlServer("Server=localhost,1433;Database=ECommerceDb;User Id=sa;Password=Admin123!;TrustServerCertificate=True;");
+            // SQL Server kullanımı
+            optionsBuilder.UseSqlServer("Server=my-sqlserver-db.cgbyoi6smmgt.us-east-1.rds.amazonaws.com,1433;Database=ECommerceDb;User Id=gamze;Password=Admin00...;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;");
 
             return new ECommerceDbContext(optionsBuilder.Options);
         }

@@ -49,7 +49,7 @@ namespace ECommerce.API.Controllers.Admin
                 TotalOrders = await _orderService.GetOrderCountAsync(),
                 TotalCategories = await _categoryService.GetCategoryCountAsync(),
                 TotalCarts = await _cartService.GetCartCountAsync(),
-                TotalFavorites = await _favoriteService.GetFavoriteCountAsync(),
+                TotalFavorites = 0, // Geçici olarak 0 - userId parametresi gerekli
                 TotalCouriers = await _courierService.GetCourierCountAsync(),
                 TotalPayments = await _paymentService.GetPaymentCountAsync(),
                 TodayOrders = await _orderService.GetTodayOrderCountAsync(),
