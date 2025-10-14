@@ -11,7 +11,7 @@ namespace ECommerce.Data
             var optionsBuilder = new DbContextOptionsBuilder<ECommerceDbContext>();
 
             // SQL Server kullanımı
-            optionsBuilder.UseSqlServer("Server=my-sqlserver-db.cgbyoi6smmgt.us-east-1.rds.amazonaws.com,1433;Database=ECommerceDb;User Id=gamze;Password=Admin00...;Encrypt=True;TrustServerCertificate=True;Connection Timeout=60;");
+            optionsBuilder.UseSqlServer("Server=my-sqlserver-db.cgbyoi6smmgt.us-east-1.rds.amazonaws.com,1433;Database=ECommerceDb;User Id=gamze;Password=Admin00...;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;");
 
             return new ECommerceDbContext(optionsBuilder.Options);
         }
