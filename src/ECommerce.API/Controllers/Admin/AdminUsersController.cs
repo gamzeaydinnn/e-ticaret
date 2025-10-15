@@ -10,7 +10,6 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/users")]
-    [Authorize(Roles = "Admin")]
     public class AdminUsersController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -23,8 +22,27 @@ namespace ECommerce.API.Controllers.Admin
         [HttpGet]
         public async Task<IActionResult> GetUsers()
         {
-            var users = await _userService.GetAllAsync();
-            return Ok(users);
+            try
+            {
+                var users = await _userService.GetAllAsync();
+                var userList = users.Select(u => new
+                {
+                    u.Id,
+                    u.Email,
+                    u.FirstName,
+                    u.LastName,
+                    FullName = $"{u.FirstName} {u.LastName}",
+                    u.IsActive,
+                    u.CreatedAt,
+                    u.Role
+                }).ToList();
+
+                return Ok(new { success = true, data = userList, count = userList.Count });
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet("{id}")]

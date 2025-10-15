@@ -21,18 +21,31 @@ namespace ECommerce.Entities.Concrete
     public class Order : BaseEntity
     {
         public string OrderNumber { get; set; } = string.Empty;
-    public int UserId { get; set; }
-    public string ShippingAddress { get; set; } = string.Empty;
-    public string ShippingCity { get; set; } = string.Empty;
-    public DateTime OrderDate { get; set; } = DateTime.UtcNow;
-    public decimal TotalPrice { get; set; } = 0m;
-    public string Currency { get; set; } = "TRY";
-    public OrderStatus Status { get; set; } = OrderStatus.Pending;
+        public int UserId { get; set; }
+        public string ShippingAddress { get; set; } = string.Empty;
+        public string ShippingCity { get; set; } = string.Empty;
+        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        public decimal TotalPrice { get; set; } = 0m;
+        public string Currency { get; set; } = "TRY";
+        public OrderStatus Status { get; set; } = OrderStatus.Pending;
+        
+        // Kurye bilgileri
+        public int? CourierId { get; set; }
+        public string? CustomerName { get; set; }
+        public string? CustomerPhone { get; set; }
+        public string? CustomerEmail { get; set; }
+        public DateTime? EstimatedDelivery { get; set; }
+        public DateTime? AssignedAt { get; set; }
+        public DateTime? PickedUpAt { get; set; }
+        public DateTime? DeliveredAt { get; set; }
+        public string? DeliveryNotes { get; set; }
+        public string Priority { get; set; } = "normal"; // normal, urgent, low
 
-    public ICollection<OrderItem> Items { get; set; } = new HashSet<OrderItem>();
+        public ICollection<OrderItem> Items { get; set; } = new HashSet<OrderItem>();
 
-    // Navigation Properties
-    public virtual User? User { get; set; }
-    public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
- }
+        // Navigation Properties
+        public virtual User? User { get; set; }
+        public virtual Courier? Courier { get; set; }
+        public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
+    }
 }

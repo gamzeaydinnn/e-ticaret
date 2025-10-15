@@ -23,6 +23,7 @@ export default function AdminLayout({ children }) {
       label: "Siparişler",
     },
     { path: "/admin/users", icon: "fas fa-users", label: "Kullanıcılar" },
+    { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
   ];
 
   const handleLogout = () => {

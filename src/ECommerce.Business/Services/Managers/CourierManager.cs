@@ -11,9 +11,9 @@ namespace ECommerce.Business.Services.Managers
 {
     public class CourierManager : ICourierService
     {
-        private readonly IRepository<Courier> _courierRepository;
+        private readonly ICourierRepository _courierRepository;
 
-        public CourierManager(IRepository<Courier> courierRepository)
+        public CourierManager(ICourierRepository courierRepository)
         {
             _courierRepository = courierRepository;
         }

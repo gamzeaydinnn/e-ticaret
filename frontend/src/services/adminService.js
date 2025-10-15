@@ -245,43 +245,54 @@ export const AdminService = {
   getUsers: async () => {
     if (!isBackendAvailable()) {
       debugLog("Admin Users - Mock data kullanılıyor");
-      return [
-        {
-          id: 1,
-          firstName: "Ahmet",
-          lastName: "Yılmaz",
-          username: "ahmet123",
-          email: "ahmet@example.com",
-          phoneNumber: "0555 123 4567",
-          role: "Customer",
-          createdAt: "2024-01-15",
-          isActive: true,
-        },
-        {
-          id: 2,
-          firstName: "Ayşe",
-          lastName: "Kaya",
-          username: "ayse456",
-          email: "ayse@example.com",
-          phoneNumber: "0555 234 5678",
-          role: "Customer",
-          createdAt: "2024-02-20",
-          isActive: true,
-        },
-        {
-          id: 3,
-          firstName: "Mehmet",
-          lastName: "Admin",
-          username: "admin",
-          email: "admin@admin.com",
-          phoneNumber: "0555 999 9999",
-          role: "Admin",
-          createdAt: "2024-01-01",
-          isActive: true,
-        },
-      ];
+      return {
+        success: true,
+        data: [
+          {
+            id: 1,
+            firstName: "Ahmet",
+            lastName: "Yılmaz",
+            username: "ahmet123",
+            email: "ahmet@example.com",
+            phoneNumber: "0555 123 4567",
+            role: "Customer",
+            createdAt: "2024-01-15",
+            isActive: true,
+          },
+          {
+            id: 2,
+            firstName: "Ayşe",
+            lastName: "Kaya",
+            username: "ayse456",
+            email: "ayse@example.com",
+            phoneNumber: "0555 234 5678",
+            role: "Customer",
+            createdAt: "2024-02-20",
+            isActive: true,
+          },
+          {
+            id: 3,
+            firstName: "Mehmet",
+            lastName: "Admin",
+            username: "admin",
+            email: "admin@admin.com",
+            phoneNumber: "0555 999 9999",
+            role: "Admin",
+            createdAt: "2024-01-01",
+            isActive: true,
+          },
+        ],
+        count: 3,
+      };
     }
-    return api.get("/api/Admin/users").then((r) => r.data);
+
+    try {
+      const response = await api.get("/api/admin/users");
+      return response.data;
+    } catch (error) {
+      console.error("Users fetch error:", error);
+      throw error;
+    }
   },
 
   // Categories

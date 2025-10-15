@@ -27,6 +27,11 @@ import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminCategories from "./pages/Admin/AdminCategories";
+import AdminCouriers from "./pages/Admin/AdminCouriers";
+// Kurye sayfaları
+import CourierLogin from "./pages/Courier/CourierLogin";
+import CourierDashboard from "./pages/Courier/CourierDashboard";
+import CourierOrders from "./pages/Courier/CourierOrders";
 // Admin guards
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
 import Home from "./pages/Home";
@@ -592,6 +597,19 @@ function App() {
                 </AdminGuard>
               }
             />
+            <Route
+              path="/admin/couriers"
+              element={
+                <AdminGuard>
+                  <AdminCouriers />
+                </AdminGuard>
+              }
+            />
+
+            {/* Kurye Panel Rotaları */}
+            <Route path="/courier/login" element={<CourierLogin />} />
+            <Route path="/courier/dashboard" element={<CourierDashboard />} />
+            <Route path="/courier/orders" element={<CourierOrders />} />
           </Routes>
         </div>
       </Router>

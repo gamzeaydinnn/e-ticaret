@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using ECommerce.Data.Context;
 using ECommerce.Infrastructure;
 using ECommerce.Entities.Concrete;
@@ -26,7 +27,7 @@ public class AuthManager : IAuthService
 
     public async Task<string> RegisterAsync(RegisterDto dto)
     {
-        if (_context.Users.Any(u => u.Email == dto.Email))
+        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
             throw new Exception("User already exists");
 
         var user = new User
@@ -36,7 +37,9 @@ public class AuthManager : IAuthService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = "User",
             FirstName = dto.FirstName,
-            LastName = dto.LastName
+            LastName = dto.LastName,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
         };
 
         _context.Users.Add(user);
@@ -47,7 +50,7 @@ public class AuthManager : IAuthService
 
     public async Task<string> LoginAsync(LoginDto dto)
     {
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
+        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
         if (user == null)
             throw new Exception("Kullanıcı bulunamadı");
 

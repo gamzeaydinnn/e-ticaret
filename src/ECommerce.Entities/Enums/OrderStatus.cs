@@ -8,12 +8,17 @@ namespace ECommerce.Entities.Enums
 {
     public enum OrderStatus
     {
-        Pending,
-        Processing,
-        Shipped,
-        Delivered,
-        Cancelled,
-        Paid,
-        Completed
+        Pending,        // Beklemede
+        Preparing,      // Hazırlanıyor  
+        Ready,          // Teslim alınmaya hazır
+        Assigned,       // Kuryeye atandı
+        PickedUp,       // Kurye tarafından teslim alındı
+        InTransit,      // Yolda
+        Delivered,      // Teslim edildi
+        Cancelled,      // İptal edildi
+        Processing,     // İşleniyor (eski)
+        Shipped,        // Kargoya verildi (eski)
+        Paid,           // Ödendi
+        Completed       // Tamamlandı
     }
 }

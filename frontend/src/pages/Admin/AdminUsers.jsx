@@ -11,8 +11,10 @@ const AdminUsers = () => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        const usersData = await AdminService.getUsers();
-        setUsers(usersData);
+        const response = await AdminService.getUsers();
+        // Response formatına göre data'yı set et
+        const usersData = response.data || response;
+        setUsers(Array.isArray(usersData) ? usersData : []);
       } catch (err) {
         setError("Kullanıcılar yüklenirken hata oluştu");
         console.error("Kullanıcılar yükleme hatası:", err);

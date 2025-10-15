@@ -10,7 +10,7 @@ export const API_CONFIG = {
   BACKEND_ENABLED: false, // Backend hazır olduğunda true yapın
 
   // API Base URL
-  BASE_URL: process.env.REACT_APP_API_URL || "http://localhost:5000",
+  BASE_URL: process.env.REACT_APP_API_URL || "http://localhost:5153",
 
   // Auth durumu
   AUTH_ENABLED: false, // Auth sistemi hazır olduğunda true yapın

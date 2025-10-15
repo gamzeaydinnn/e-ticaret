@@ -527,7 +527,7 @@ export default function ProductGrid() {
               <div
                 className="modern-product-card h-100"
                 style={{
-                  background: `linear-gradient(145deg, #ffffff, #f8f9fa)`,
+                  background: "#ffffff",
                   borderRadius: "20px",
                   border: "1px solid rgba(255, 107, 53, 0.1)",
                   overflow: "hidden",
@@ -537,6 +537,7 @@ export default function ProductGrid() {
                   minHeight: "520px",
                   display: "flex",
                   flexDirection: "column",
+                  boxShadow: "0 5px 15px rgba(0, 0, 0, 0.08)",
                 }}
                 onClick={(e) => handleProductClick(p, e)}
                 onMouseEnter={(e) => {
@@ -640,7 +641,7 @@ export default function ProductGrid() {
                   className="product-image-container"
                   style={{
                     height: 200,
-                    background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+                    background: "#ffffff",
                     position: "relative",
                     overflow: "hidden",
                   }}
@@ -677,10 +678,10 @@ export default function ProductGrid() {
                         style={{
                           width: "120px",
                           height: "120px",
-                          background:
-                            "linear-gradient(135deg, #e9ecef, #dee2e6)",
+                          background: "#ffffff",
                           borderRadius: "15px",
                           fontSize: "2.5rem",
+                          border: "1px solid #e9ecef",
                         }}
                       >
                         🛒
@@ -692,8 +693,7 @@ export default function ProductGrid() {
                 <div
                   className="card-body p-4 d-flex flex-column"
                   style={{
-                    background:
-                      "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.9))",
+                    background: "#ffffff",
                     minHeight: "280px",
                   }}
                 >

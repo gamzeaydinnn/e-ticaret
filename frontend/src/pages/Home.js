@@ -29,8 +29,10 @@ export default function Home() {
       </section>
 
       <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Kategoriler</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">
+          Kategoriler
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {categories.map((c) => (
             <CategoryTile key={c.id} category={c} />
           ))}
