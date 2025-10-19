@@ -31,8 +31,8 @@ export const FavoriteService = {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
         debugLog("Backend'den favoriler çekiliyor", { userId: user.id });
-        const response = await api.get(`/api/favorites?userId=${user.id}`);
-        return response.data.success ? response.data.data : [];
+        const result = await api.get(`/api/favorites?userId=${user.id}`);
+        return result?.success ? result.data : [];
       } catch (error) {
         debugLog("Backend API hatası, localStorage fallback", error);
         return FavoriteService.getGuestFavorites();
@@ -50,10 +50,10 @@ export const FavoriteService = {
     if (isBackendAvailable() && user) {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
-        const response = await api.post(
+        const result = await api.post(
           `/api/favorites/${productId}?userId=${user.id}`
         );
-        return response.data;
+        return result;
       } catch (error) {
         console.warn("Backend API hatası, localStorage fallback:", error);
         // API hatası durumunda localStorage'a fallback
@@ -97,10 +97,10 @@ export const FavoriteService = {
     if (isBackendAvailable() && user) {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
-        const response = await api.delete(
+        const result = await api.delete(
           `/api/favorites/${productId}?userId=${user.id}`
         );
-        return response.data;
+        return result;
       } catch (error) {
         console.warn("Backend API hatası, localStorage fallback:", error);
         return {

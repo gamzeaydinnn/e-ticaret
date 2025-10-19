@@ -4,24 +4,24 @@ const base = "/api/couriers"; // Backend'de CourierController route'unu kontrol 
 
 export const CourierService = {
   // Tüm kuryeleri listele
-  getAll: () => api.get(base).then(res => res.data),
+  getAll: () => api.get(base),
 
   // Tek bir kurye getir
-  getById: (id) => api.get(`${base}/${id}`).then(res => res.data),
+  getById: (id) => api.get(`${base}/${id}`),
 
   // Yeni kurye ekle
-  add: (courier) => api.post(base, courier).then(res => res.data),
+  add: (courier) => api.post(base, courier),
 
   // Kurye güncelle
-  update: (id, courier) => api.put(`${base}/${id}`, courier).then(res => res.data),
+  update: (id, courier) => api.put(`${base}/${id}`, courier),
 
   // Kurye sil
-  remove: (id) => api.delete(`${base}/${id}`).then(res => res.data),
+  remove: (id) => api.delete(`${base}/${id}`),
 
   // Kurye siparişlerini listele
-  myOrders: () => api.get("/courier/orders").then(res => res.data),
+  myOrders: () => api.get("/courier/orders"),
 
   // Sipariş durumunu güncelle
   updateStatus: (orderId, status) =>
-    api.post(`/courier/orders/${orderId}/status`, { status }).then(res => res.data),
+    api.post(`/courier/orders/${orderId}/status`, { status }),
 };

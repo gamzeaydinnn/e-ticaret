@@ -8,11 +8,10 @@ import {
   NumberField,
 } from "react-admin";
 import simpleRestProvider from "ra-data-simple-rest";
+import { getApiBaseUrl } from "../../config/apiConfig";
 import { AdminService } from "../../services/adminService";
 
-const dataProvider = simpleRestProvider(
-  "http://localhost:5000/api/admin/orders"
-);
+const dataProvider = simpleRestProvider(`${getApiBaseUrl()}/api/Admin`);
 
 export const Orders = () => (
   <Admin dataProvider={dataProvider}>

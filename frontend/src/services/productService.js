@@ -3,12 +3,13 @@ import api from "./api";
 
 export const ProductService = {
   // Genel kullanıcı tarafı
-  list: (query = "") => api.get(`/api/Products${query}`).then(r => r.data),
-  get: (id) => api.get(`/api/Products/${id}`).then(r => r.data),
+  list: (query = "") => api.get(`/api/Products${query}`),
+  get: (id) => api.get(`/api/Products/${id}`),
 
   // Admin endpoints
-  createAdmin: (formData) => api.post("/api/Admin/products", formData).then(r => r.data),
-  updateAdmin: (id, formData) => api.put(`/api/Admin/products/${id}`, formData).then(r => r.data),
-  deleteAdmin: (id) => api.delete(`/api/Admin/products/${id}`).then(r => r.data),
-  updateStockAdmin: (id, stock) => api.patch(`/api/Admin/products/${id}/stock`, { stock }).then(r => r.data),
+  createAdmin: (formData) => api.post("/api/Admin/products", formData),
+  updateAdmin: (id, formData) => api.put(`/api/Admin/products/${id}`, formData),
+  deleteAdmin: (id) => api.delete(`/api/Admin/products/${id}`),
+  updateStockAdmin: (id, stock) =>
+    api.patch(`/api/Admin/products/${id}/stock`, { stock }),
 };

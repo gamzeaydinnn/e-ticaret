@@ -1,9 +1,10 @@
 import * as React from "react";
 import { Admin, Resource, ListGuesser, EditGuesser } from "react-admin";
 import simpleRestProvider from "ra-data-simple-rest";
+import { getApiBaseUrl } from "../../config/apiConfig";
 
 // Backend API endpoint (örnek: ASP.NET Core'da api/admin/users gibi)
-const dataProvider = simpleRestProvider("http://localhost:5000/api");
+const dataProvider = simpleRestProvider(`${getApiBaseUrl()}/api`);
 
 const AdminApp = () => (
   <Admin dataProvider={dataProvider}>
