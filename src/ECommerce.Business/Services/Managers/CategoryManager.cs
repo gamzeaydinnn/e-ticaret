@@ -41,9 +41,10 @@ namespace ECommerce.Business.Services.Managers
             return await _categoryRepository.GetBySlugAsync(slug);
         }
 
-        public Task<int> GetCategoryCountAsync()
+        public async Task<int> GetCategoryCountAsync()
         {
-            throw new NotImplementedException();
+            var categories = await _categoryRepository.GetAllAsync();
+            return categories.Count();
         }
 
         public async Task UpdateAsync(Category category)

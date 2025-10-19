@@ -26,16 +26,18 @@ namespace ECommerce.API.Controllers.Admin
         [HttpGet]
         public async Task<IActionResult> GetOrders()
         {
-            var orders = await _orderService.GetOrdersAsync(); // düzeltilmiş
+            var orders = await _orderService.GetOrdersAsync();
             return Ok(orders);
-                }
+        }
 
-            [HttpDelete("{id}")]
-            public async Task<IActionResult> DeleteOrder(int id)
-                {
-                await _orderService.DeleteAsync(id); // zaten tek DeleteAsync var
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteOrder(int id)
+        {
+            var existing = await _orderService.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _orderService.DeleteAsync(id);
             return NoContent();
-                }
+        }
 
 
         [HttpGet("{id}")]

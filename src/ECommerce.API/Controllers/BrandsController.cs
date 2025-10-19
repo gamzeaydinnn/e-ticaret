@@ -55,7 +55,7 @@ namespace ECommerce.API.Controllers // Ana namespace, Admin DEĞİL
         
 
         // GET: api/brands/5
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> Get(int id)
         {
             var brand = await _brandService.GetByIdAsync(id);

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
+    [Authorize(Roles = "Admin")]
     [Route("api/admin/users")]
     public class AdminUsersController : ControllerBase
     {

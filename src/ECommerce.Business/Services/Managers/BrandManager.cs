@@ -83,14 +83,14 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
-        public Task<IEnumerable<Brand>> GetAllAsync()
+        public async Task<IEnumerable<Brand>> GetAllAsync()
         {
-            throw new NotImplementedException();
+            return await _brandRepository.GetAllAsync();
         }
 
-        public Task<Brand?> GetByIdAsync(int id)
+        public async Task<Brand?> GetByIdAsync(int id)
         {
-            throw new NotImplementedException();
+            return await _brandRepository.GetByIdAsync(id);
         }
     }
 }

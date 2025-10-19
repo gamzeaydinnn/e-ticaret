@@ -11,8 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]
-[Route("api/admin/[controller]")]
-[Authorize(Roles = "SuperAdmin,Admin,Manager,Editor")]
+[Route("api/admin/products")]
+    [Authorize(Roles = "SuperAdmin,Admin,Manager,Editor")]
 
 public class AdminProductsController : ControllerBase
 {
@@ -36,7 +36,7 @@ public class AdminProductsController : ControllerBase
     public async Task<IActionResult> CreateProduct([FromBody] ProductCreateDto productDto)
     {
         var result = await _productService.CreateProductAsync(productDto);
-        return CreatedAtAction(nameof(GetProducts), new { id = result.Id }, result);
+        return CreatedAtAction(nameof(GetProduct), new { id = result.Id }, result);
     }
 
     [HttpPut("{id}")]
@@ -51,6 +51,16 @@ public class AdminProductsController : ControllerBase
     {
         await _productService.DeleteProductAsync(id);
         return NoContent();
+    }
+
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetProduct(int id)
+    {
+        // Tercihen tekil get-by-id için belirli servis metodunu kullan
+        var product = await _productService.GetByIdAsync(id) 
+                      ?? await _productService.GetProductByIdAsync(id);
+        if (product == null) return NotFound();
+        return Ok(product);
     }
 
     [HttpPatch("{id}/stock")]

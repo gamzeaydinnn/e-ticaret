@@ -12,7 +12,7 @@ namespace ECommerce.API.Controllers.Admin
     [Authorize(Roles = "Admin")]
     [ApiController]
     // Rota: api/admin/micro
-    [Route("api/admin/[controller]")] 
+    [Route("api/admin/micro")] 
     public class AdminMicroController : ControllerBase
     {
         private readonly MicroSyncManager _microSyncManager;

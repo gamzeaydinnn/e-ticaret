@@ -8,7 +8,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [Authorize(Roles = "Admin")]
     [ApiController]
-    [Route("api/admin/[controller]")] // api/admin/discounts
+    [Route("api/admin/discounts")] // api/admin/discounts
     public class AdminDiscountsController : ControllerBase
     {
         private readonly IDiscountService _discountService;

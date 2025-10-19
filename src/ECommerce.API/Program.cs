@@ -9,7 +9,7 @@ using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ECommerce.Entities.Concrete;
-// using ECommerce.Infrastructure.Services.BackgroundJobs;
+using ECommerce.Infrastructure.Services.BackgroundJobs;
 // using Hangfire;
 using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.AspNetCore.Authorization;
@@ -132,7 +132,7 @@ builder.Services.AddScoped<ICouponService, CouponManager>();
 
 // vs.
 
-// builder.Services.AddScoped<StockSyncJob>();
+builder.Services.AddScoped<StockSyncJob>();
 // MicroService ve MicroSyncManager
 builder.Services.AddScoped<IMicroService, ECommerce.Business.Services.Managers.MicroService>();
 builder.Services.AddScoped<MicroSyncManager>();

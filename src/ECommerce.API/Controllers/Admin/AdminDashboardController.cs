@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
 using System.Threading.Tasks;
@@ -6,7 +7,8 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Route("api/admin/[controller]")]
+    [Authorize(Roles = "Admin")]
+    [Route("api/admin/dashboard")]
     public class AdminDashboardController : ControllerBase
     {
         private readonly IUserService _userService;

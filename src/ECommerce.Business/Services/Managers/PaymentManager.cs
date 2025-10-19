@@ -30,7 +30,9 @@ namespace ECommerce.Business.Services.Managers
 
         public Task<int> GetPaymentCountAsync()
         {
-            throw new NotImplementedException();
+            // Henüz gerçek bir ödeme veritabanı yoksa 0 döndür.
+            // İleride repository ile entegre edilerek gerçek sayı alınabilir.
+            return Task.FromResult(0);
         }
     }
 }
