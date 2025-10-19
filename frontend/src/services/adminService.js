@@ -300,17 +300,12 @@ export const AdminService = {
     }
 
     try {
-      const response = await api.get("/api/admin/users");
-      return response.data;
+      ensureBackend();
+      return await api.get("/api/admin/users");
     } catch (error) {
       console.error("Users fetch error:", error);
       throw error;
     }
-<<<<<<< HEAD
-=======
-    ensureBackend();
-    return api.get("/api/Admin/users");
->>>>>>> sare-branch
   },
 
   // Categories
@@ -320,7 +315,7 @@ export const AdminService = {
       return [...mockCategories];
     }
     ensureBackend();
-    return api.get("/api/Admin/categories");
+    return api.get("/api/admin/categories");
   },
   createCategory: async (formData) => {
     if (shouldUseMockData()) {
@@ -330,7 +325,7 @@ export const AdminService = {
       return newCategory;
     }
     ensureBackend();
-    return api.post("/api/Admin/categories", formData);
+    return api.post("/api/admin/categories", formData);
   },
   updateCategory: async (id, formData) => {
     if (shouldUseMockData()) {
@@ -342,7 +337,7 @@ export const AdminService = {
       throw new Error("Kategori bulunamadı");
     }
     ensureBackend();
-    return api.put(`/api/Admin/categories/${id}`, formData);
+    return api.put(`/api/admin/categories/${id}`, formData);
   },
   deleteCategory: async (id) => {
     if (shouldUseMockData()) {
@@ -354,7 +349,7 @@ export const AdminService = {
       throw new Error("Kategori bulunamadı");
     }
     ensureBackend();
-    return api.delete(`/api/Admin/categories/${id}`);
+    return api.delete(`/api/admin/categories/${id}`);
   },
 
   // Products
@@ -364,8 +359,7 @@ export const AdminService = {
       return [...mockProducts];
     }
     ensureBackend();
-    return api
-      .get(`/api/Admin/products?page=${page}&size=${size}`);
+    return api.get(`/api/admin/products?page=${page}&size=${size}`);
   },
   createProduct: async (payload) => {
     if (shouldUseMockData()) {
@@ -380,7 +374,7 @@ export const AdminService = {
       return newProduct;
     }
     ensureBackend();
-    return api.post("/api/Admin/products", payload);
+    return api.post("/api/admin/products", payload);
   },
   updateProduct: async (id, payload) => {
     if (shouldUseMockData()) {
@@ -397,7 +391,7 @@ export const AdminService = {
       throw new Error("Ürün bulunamadı");
     }
     ensureBackend();
-    return api.put(`/api/Admin/products/${id}`, payload);
+    return api.put(`/api/admin/products/${id}`, payload);
   },
   deleteProduct: async (id) => {
     if (shouldUseMockData()) {
@@ -409,10 +403,10 @@ export const AdminService = {
       throw new Error("Ürün bulunamadı");
     }
     ensureBackend();
-    return api.delete(`/api/Admin/products/${id}`);
+    return api.delete(`/api/admin/products/${id}`);
   },
   updateStock: (id, stock) =>
-    api.patch(`/api/Admin/products/${id}/stock`, stock),
+    api.patch(`/api/admin/products/${id}/stock`, stock),
 
   // Orders
   getOrders: async (page = 1, size = 20) => {
@@ -449,11 +443,11 @@ export const AdminService = {
       ];
     }
     ensureBackend();
-    return api.get(`/api/Admin/orders?page=${page}&size=${size}`);
+    return api.get(`/api/admin/orders?page=${page}&size=${size}`);
   },
-  getOrder: (id) => api.get(`/api/Admin/orders/${id}`),
+  getOrder: (id) => api.get(`/api/admin/orders/${id}`),
   updateOrderStatus: (id, status) =>
-    api.put(`/api/Admin/orders/${id}/status`, { status }),
+    api.put(`/api/admin/orders/${id}/status`, { status }),
   getRecentOrders: () =>
-    api.get("/api/Admin/orders/recent"),
+    api.get("/api/admin/orders/recent"),
 };

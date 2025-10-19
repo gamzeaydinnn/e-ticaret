@@ -62,7 +62,6 @@ const mockOrders = [
 ];
 
 export const CourierService = {
-<<<<<<< HEAD
   // Admin - Tüm kuryeleri listele
   getAll: () => {
     if (USE_MOCK_DATA) {
@@ -101,25 +100,6 @@ export const CourierService = {
       .then((res) => res.data)
       .catch(() => mockOrders);
   },
-=======
-  // Tüm kuryeleri listele
-  getAll: () => api.get(base),
-
-  // Tek bir kurye getir
-  getById: (id) => api.get(`${base}/${id}`),
-
-  // Yeni kurye ekle
-  add: (courier) => api.post(base, courier),
-
-  // Kurye güncelle
-  update: (id, courier) => api.put(`${base}/${id}`, courier),
-
-  // Kurye sil
-  remove: (id) => api.delete(`${base}/${id}`),
-
-  // Kurye siparişlerini listele
-  myOrders: () => api.get("/courier/orders"),
->>>>>>> sare-branch
 
   // Sipariş durumunu güncelle
   updateOrderStatus: (orderId, status, notes = "") => {
@@ -173,11 +153,7 @@ export const CourierService = {
   remove: (id) => api.delete(`${base}/${id}`).then((res) => res.data),
   myOrders: () => api.get("/courier/orders").then((res) => res.data),
   updateStatus: (orderId, status) =>
-<<<<<<< HEAD
     api
       .post(`/courier/orders/${orderId}/status`, { status })
       .then((res) => res.data),
-=======
-    api.post(`/courier/orders/${orderId}/status`, { status }),
->>>>>>> sare-branch
 };

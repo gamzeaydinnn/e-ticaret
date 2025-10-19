@@ -13,7 +13,8 @@ const parseBoolean = (value, defaultValue) => {
   return ["1", "true", "yes", "y", "on"].includes(normalized);
 };
 
-const baseUrl = (process.env.REACT_APP_API_URL || "http://localhost:5000").replace(/\/+$/, "");
+// Default to .NET dev URL from launchSettings.json
+const baseUrl = (process.env.REACT_APP_API_URL || "http://localhost:5153").replace(/\/+$/, "");
 
 const backendEnabled = parseBoolean(
   process.env.REACT_APP_BACKEND_ENABLED,
@@ -21,21 +22,6 @@ const backendEnabled = parseBoolean(
 );
 
 export const API_CONFIG = {
-<<<<<<< HEAD
-  // Backend API durumu
-  BACKEND_ENABLED: false, // Backend hazır olduğunda true yapın
-
-  // API Base URL
-  BASE_URL: process.env.REACT_APP_API_URL || "http://localhost:5153",
-
-  // Auth durumu
-  AUTH_ENABLED: false, // Auth sistemi hazır olduğunda true yapın
-
-  // Mock data kullanımı
-  USE_MOCK_DATA: true, // Backend hazır olduğunda false yapın
-
-  // Debug modu
-=======
   BASE_URL: baseUrl,
   BACKEND_ENABLED: backendEnabled,
   AUTH_ENABLED: parseBoolean(
@@ -46,7 +32,6 @@ export const API_CONFIG = {
     process.env.REACT_APP_USE_MOCK_DATA,
     !backendEnabled && process.env.NODE_ENV !== "production"
   ),
->>>>>>> sare-branch
   DEBUG_MODE: process.env.NODE_ENV === "development",
 };
 
