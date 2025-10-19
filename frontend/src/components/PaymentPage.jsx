@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { OrderService } from "../services/orderService";
 import { CartService } from "../services/cartService";
+import { ProductService } from "../services/productService";
+import { useAuth } from "../contexts/AuthContext";
 
 const PaymentPage = () => {
+  const { user } = useAuth();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("creditCard");
+  const [products, setProducts] = useState({});
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -39,36 +43,62 @@ const PaymentPage = () => {
 
   const loadCartItems = async () => {
     try {
-      const userId = localStorage.getItem("userId");
-      const items = await CartService.getCart(userId);
-      setCartItems(items || []);
-    } catch (error) {
-      console.error("Sepet yüklenemedi:", error);
-      // Demo data
-      setCartItems([
-        {
-          id: 1,
-          productName: "Wireless Bluetooth Kulaklık",
-          price: 149.99,
-          quantity: 1,
-        },
-        {
-          id: 2,
-          productName: "Gaming Mouse",
-          price: 299.99,
-          quantity: 1,
-        },
-      ]);
+      let items = [];
+      // Önce oturum açmış kullanıcıdan backend sepeti; değilse guest localStorage
+      if (user) {
+        try {
+          const serverItems = await CartService.getCartItems();
+          items = Array.isArray(serverItems) ? serverItems : [];
+        } catch (e) {
+          // Backend erişilemiyorsa guest'e dön
+          items = CartService.getGuestCart();
+        }
+      } else {
+        items = CartService.getGuestCart();
+      }
+
+      setCartItems(items);
+
+      // Ürün detayları (fiyat için gerekli)
+      try {
+        let allProducts = [];
+        try {
+          allProducts = await ProductService.list();
+        } catch (error) {
+          // Mock ürünler (CartPage ile tutarlı)
+          allProducts = [
+            { id: 1, name: "Cif Krem Doğanın Gücü Hijyen 675Ml", price: 204.95, specialPrice: 129.95, categoryId: 7, imageUrl: "/images/yeşil-cif-krem.jpg" },
+            { id: 2, name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr", price: 18.0, specialPrice: 14.9, categoryId: 6, imageUrl: "/images/tahil-cipsi.jpg" },
+            { id: 3, name: "Lipton Ice Tea Limon 330 Ml", price: 60.0, specialPrice: 40.9, categoryId: 5, imageUrl: "/images/lipton-ice-tea.jpg" },
+            { id: 4, name: "Dana But Tas Kebaplık Et Çiftlik Kg", price: 375.95, specialPrice: 279.0, categoryId: 2, imageUrl: "/images/dana-kusbasi.jpg" },
+            { id: 5, name: "Kuzu İncik Kg", price: 1399.95, specialPrice: 699.95, categoryId: 2, imageUrl: "/images/kuzu-incik.webp" },
+            { id: 6, name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g", price: 145.55, specialPrice: 84.5, categoryId: 5, imageUrl: "/images/nescafe.jpg" },
+            { id: 7, name: "Domates Kg", price: 45.9, specialPrice: 45.9, categoryId: 1, imageUrl: "/images/domates.webp" },
+            { id: 8, name: "Pınar Süt 1L", price: 28.5, specialPrice: 28.5, categoryId: 3, imageUrl: "/images/pınar-süt.jpg" },
+            { id: 9, name: "Sek Kaşar Peyniri 200 G", price: 75.9, specialPrice: 64.5, categoryId: 3, imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg" },
+            { id: 10, name: "Mis Bulgur Pilavlık 1Kg", price: 32.9, specialPrice: 32.9, categoryId: 4, imageUrl: "/images/bulgur.png" },
+            { id: 11, name: "Coca-Cola Orijinal Tat Kutu 330ml", price: 12.5, specialPrice: 10.0, categoryId: 5, imageUrl: "/images/coca-cola.jpg" },
+            { id: 12, name: "Salatalık Kg", price: 28.9, specialPrice: 28.9, categoryId: 1, imageUrl: "/images/salatalik.jpg" },
+          ];
+        }
+
+        const map = {};
+        for (const p of allProducts) map[p.id] = p;
+        setProducts(map);
+      } catch (error) {
+        console.error("Ürün verileri yüklenemedi:", error);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const calculateTotals = () => {
-    const subtotal = cartItems.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
+    const subtotal = cartItems.reduce((sum, item) => {
+      const p = products[item.productId];
+      const price = p ? p.specialPrice || p.price : 0;
+      return sum + price * item.quantity;
+    }, 0);
     const shipping = subtotal > 150 ? 0 : 15; // 150 TL üzeri ücretsiz kargo
     const tax = subtotal * 0.18; // KDV %18
     const total = subtotal + shipping + tax;
@@ -145,54 +175,40 @@ const PaymentPage = () => {
     try {
       const { total } = calculateTotals();
 
-      const paymentData = {
-        items: cartItems,
+      // Backend DTO'suna uygun payload
+      const orderItems = cartItems.map((ci) => {
+        const p = products[ci.productId];
+        const unitPrice = p ? p.specialPrice || p.price : 0;
+        return {
+          productId: ci.productId,
+          quantity: ci.quantity,
+          unitPrice: unitPrice,
+        };
+      });
+
+      const payload = {
+        userId: user ? user.id : null,
+        totalPrice: total, // sunucu yeniden hesaplayacak
+        orderItems,
+        customerName: `${formData.firstName} ${formData.lastName}`.trim(),
+        customerPhone: formData.phone,
+        customerEmail: formData.email,
+        shippingAddress: formData.address,
+        shippingCity: formData.city,
+        shippingDistrict: formData.district,
+        shippingPostalCode: formData.postalCode,
         paymentMethod,
-        amount: total,
-        customerInfo: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-        },
-        deliveryAddress: {
-          address: formData.address,
-          city: formData.city,
-          district: formData.district,
-          postalCode: formData.postalCode,
-        },
-        billingAddress: formData.sameAsDelivery
-          ? {
-              address: formData.address,
-              city: formData.city,
-              district: formData.district,
-              postalCode: formData.postalCode,
-            }
-          : {
-              address: formData.billingAddress,
-              city: formData.billingCity,
-              district: formData.billingDistrict,
-              postalCode: formData.billingPostalCode,
-            },
-        cardInfo:
-          paymentMethod === "creditCard"
-            ? {
-                cardNumber: formData.cardNumber.replace(/\s/g, ""),
-                cardName: formData.cardName,
-                expiryMonth: formData.expiryMonth,
-                expiryYear: formData.expiryYear,
-                cvv: formData.cvv,
-              }
-            : null,
       };
 
-      const result = await OrderService.checkout(paymentData);
+      const result = await OrderService.checkout(payload);
 
       if (result.success) {
         alert(
           "Ödeme başarıyla tamamlandı! Sipariş numaranız: " + result.orderNumber
         );
-        // Sepeti temizle ve başarı sayfasına yönlendir
+        // Sepeti temizle (guest ise)
+        try { CartService.clearGuestCart(); } catch {}
+        // Başarı sayfasına yönlendir
         window.location.href =
           "/order-success?orderNumber=" + result.orderNumber;
       } else {
@@ -668,14 +684,14 @@ const PaymentPage = () => {
                         </div>
                         <div className="flex-grow-1">
                           <h6 className="mb-1" style={{ fontSize: "0.9rem" }}>
-                            {item.productName}
+                            {products[item.productId]?.name || "Ürün"}
                           </h6>
                           <small className="text-muted">
-                            {item.quantity} x ₺{Number(item.price).toFixed(2)}
+                            {item.quantity} x ₺{Number((products[item.productId]?.specialPrice || products[item.productId]?.price || 0)).toFixed(2)}
                           </small>
                         </div>
                         <strong className="text-warning">
-                          ₺{Number(item.quantity * item.price).toFixed(2)}
+                          ₺{Number(item.quantity * (products[item.productId]?.specialPrice || products[item.productId]?.price || 0)).toFixed(2)}
                         </strong>
                       </div>
                     ))}

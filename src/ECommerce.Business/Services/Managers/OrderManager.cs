@@ -46,18 +46,37 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<OrderListDto> CreateAsync(OrderCreateDto dto)
         {
+            // Checkout mantığına benzer: fiyatları yeniden hesapla ve OrderNumber üret
+            decimal total = 0m;
+            var items = new List<OrderItem>();
+            foreach (var i in dto.OrderItems)
+            {
+                if (i.Quantity <= 0) throw new Exception("Geçersiz miktar");
+                var product = await _context.Products.FindAsync(i.ProductId)
+                    ?? throw new Exception($"Ürün bulunamadı: {i.ProductId}");
+                var unitPrice = product.SpecialPrice ?? product.Price;
+                total += unitPrice * i.Quantity;
+                items.Add(new OrderItem
+                {
+                    ProductId = product.Id,
+                    Quantity = i.Quantity,
+                    UnitPrice = unitPrice
+                });
+            }
+
             var order = new Order
             {
                 UserId = dto.UserId,
-                TotalPrice = dto.TotalPrice,
+                OrderNumber = GenerateOrderNumber(),
+                TotalPrice = total,
                 Status = OrderStatus.Pending,
                 OrderDate = DateTime.UtcNow,
-                OrderItems = dto.OrderItems.Select(i => new OrderItem
-                {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity,
-                    UnitPrice = i.UnitPrice
-                }).ToList()
+                ShippingAddress = string.IsNullOrWhiteSpace(dto.ShippingAddress) ? "-" : dto.ShippingAddress,
+                ShippingCity = string.IsNullOrWhiteSpace(dto.ShippingCity) ? "-" : dto.ShippingCity,
+                CustomerName = dto.CustomerName,
+                CustomerPhone = dto.CustomerPhone,
+                CustomerEmail = dto.CustomerEmail,
+                OrderItems = items
             };
 
             _context.Orders.Add(order);
@@ -171,7 +190,8 @@ namespace ECommerce.Business.Services.Managers
             return new OrderListDto
             {
                 Id = order.Id,
-                UserId = order.UserId,
+                UserId = order.UserId ?? 0,
+                OrderNumber = order.OrderNumber,
                 TotalPrice = order.TotalPrice,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
@@ -185,53 +205,63 @@ namespace ECommerce.Business.Services.Managers
 
             try
             {
-                // 1. Stok ön-kontrol
+                // 1) Stok + fiyat ön-kontrol, toplam hesapla
+                decimal total = 0m;
+                var items = new List<OrderItem>();
                 foreach (var item in dto.OrderItems)
                 {
+                    if (item.Quantity <= 0)
+                        throw new Exception("Geçersiz miktar");
+
                     var product = await _context.Products.FindAsync(item.ProductId);
                     if (product == null)
                         throw new Exception($"Ürün bulunamadı: {item.ProductId}");
                     if (product.StockQuantity < item.Quantity)
                         throw new Exception($"Yetersiz stok: {product.Name}");
+
+                    var unitPrice = product.SpecialPrice ?? product.Price;
+                    total += unitPrice * item.Quantity;
+                    items.Add(new OrderItem
+                    {
+                        ProductId = product.Id,
+                        Quantity = item.Quantity,
+                        UnitPrice = unitPrice
+                    });
                 }
 
-                // 2. Ödeme işlemi (örnek)
-                var paymentSuccess = true; // ödeme servisi çağrılır, sonucu true/false döner
-                if (!paymentSuccess)
-                    throw new Exception("Ödeme başarısız");
-
-                // 3. Siparişi oluştur (id üretmek için önce kaydet)
+                // 2) Siparişi oluştur
                 var order = new Order
                 {
                     UserId = dto.UserId,
-                    TotalPrice = dto.TotalPrice,
+                    OrderNumber = GenerateOrderNumber(),
+                    TotalPrice = total,
                     Status = OrderStatus.Pending,
                     OrderDate = DateTime.UtcNow,
-                    OrderItems = dto.OrderItems.Select(i => new OrderItem
-                    {
-                        ProductId = i.ProductId,
-                        Quantity = i.Quantity,
-                        UnitPrice = i.UnitPrice
-                    }).ToList()
+                    ShippingAddress = dto.ShippingAddress,
+                    ShippingCity = dto.ShippingCity,
+                    CustomerName = dto.CustomerName,
+                    CustomerPhone = dto.CustomerPhone,
+                    CustomerEmail = dto.CustomerEmail,
+                    OrderItems = items
                 };
 
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
-                // 4. Stok düşme + log + eşik uyarısı
+                // 3) Stok düşümü
                 foreach (var item in order.OrderItems)
                 {
                     var ok = await _inventoryService.DecreaseStockAsync(
                         item.ProductId,
                         item.Quantity,
                         InventoryChangeType.Sale,
-                        note: $"Online Order #{order.Id}",
+                        note: $"Online Order #{order.OrderNumber}",
                         performedByUserId: order.UserId
                     );
                     if (!ok) throw new Exception("Stok düşümü başarısız");
                 }
 
-                // 5. Transaction commit
+                // 4) Transaction commit
                 await transaction.CommitAsync();
 
                 return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");
@@ -241,6 +271,14 @@ namespace ECommerce.Business.Services.Managers
                 await transaction.RollbackAsync(); // hata olursa geri al
                 throw;
             }
+        }
+
+        private static string GenerateOrderNumber()
+        {
+            // Basit, benzersiz sipariş numarası (örnek): ORD-YYYYMMDD-HHMMSS-XXXX
+            var ts = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var rnd = Random.Shared.Next(1000, 9999);
+            return $"ORD-{ts}-{rnd}";
         }
 
     }

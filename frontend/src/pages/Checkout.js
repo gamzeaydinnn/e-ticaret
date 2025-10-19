@@ -1,6 +1,7 @@
 // Adres, kargo, ödeme adımları
 import React, { useEffect, useState } from "react";
-import api from "../services/api";
+import { CartService } from "../services/cartService";
+import { OrderService } from "../services/orderService";
 import { useNavigate } from "react-router-dom";
 
 export default function Checkout() {
@@ -30,11 +31,41 @@ export default function Checkout() {
 
   const submit = async (e) => {
     e.preventDefault();
-    const payload = { ...form, paymentMethod };
+    // guest sepetini oku ve sipariş kalemlerini hazırla
+    const guestCart = CartService.getGuestCart();
+    if (!guestCart || guestCart.length === 0) {
+      alert("Sepetiniz boş. Lütfen ürün ekleyin.");
+      return;
+    }
+
+    const orderItems = guestCart.map((i) => ({
+      productId: i.productId,
+      quantity: i.quantity,
+      unitPrice: 0, // Sunucu fiyatı esas alacak
+    }));
+
+    const payload = {
+      userId: null,
+      totalPrice: 0, // Sunucu hesaplar
+      orderItems,
+      customerName: form.name,
+      customerPhone: form.phone,
+      customerEmail: form.email,
+      shippingAddress: form.address,
+      shippingCity: form.city || "",
+      shippingDistrict: "",
+      shippingPostalCode: "",
+      paymentMethod,
+    };
     try {
-      const res = await api.post("/orders", payload);
-      alert("Sipariş alındı: " + res.data.id);
-      navigate("/");
+      const res = await OrderService.checkout(payload);
+      if (res?.success) {
+        alert("Sipariş alındı: " + res.orderNumber);
+        try { CartService.clearGuestCart(); } catch {}
+        navigate("/");
+      } else {
+        throw new Error(res?.message || "Sipariş başarısız");
+      }
     } catch (err) {
       alert("Hata: " + err.message);
     }
@@ -63,6 +94,13 @@ export default function Checkout() {
           placeholder="E-posta"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
+          className="w-full mb-2 border p-2"
+        />
+        <input
+          required
+          placeholder="İl"
+          value={form.city || ""}
+          onChange={(e) => setForm({ ...form, city: e.target.value })}
           className="w-full mb-2 border p-2"
         />
         <textarea
