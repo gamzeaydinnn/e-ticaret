@@ -89,7 +89,7 @@ namespace ECommerce.Data.Repositories
             return DeleteAsync(product);
         }
 
-        public async Task<Product> GetBySkuAsync(string sku)
+        public async Task<Product?> GetBySkuAsync(string sku)
         {
             return await _dbSet.FirstOrDefaultAsync(p => p.SKU == sku && p.IsActive);
         }

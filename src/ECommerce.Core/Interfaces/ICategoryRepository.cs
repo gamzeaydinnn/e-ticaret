@@ -11,7 +11,7 @@ namespace ECommerce.Core.Interfaces
         Task<Category?> GetBySlugAsync(string slug);
 
         // Eksik metodlar eklendi
-        Task UpdateAsync(Category category);
-        Task DeleteAsync(Category category);
+        new Task UpdateAsync(Category category);
+        new Task DeleteAsync(Category category);
     }
 }

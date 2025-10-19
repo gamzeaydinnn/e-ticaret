@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-namespace  ECommerce.Core.Interfaces
+namespace ECommerce.Core.Interfaces
 {
     public interface IPaymentService
     {

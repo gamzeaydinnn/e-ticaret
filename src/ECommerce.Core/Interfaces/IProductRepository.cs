@@ -10,16 +10,16 @@ namespace ECommerce.Core.Interfaces
         // 🔹 Ürün sorgulama
         Task<IEnumerable<Product>> GetByCategoryIdAsync(int categoryId);
         Task<IEnumerable<Product>> SearchAsync(string searchTerm);
-        Task<Product> GetBySkuAsync(string sku);
+        Task<Product?> GetBySkuAsync(string sku);
 
         // 🔹 CRUD işlemleri (senkron + asenkron)
-        Task<Product?> GetByIdAsync(int id);
+        new Task<Product?> GetByIdAsync(int id);
         Product GetById(int id);
 
-        Task<Product> AddAsync(Product product);
-        Task UpdateAsync(Product product);
+        new Task<Product> AddAsync(Product product);
+        new Task UpdateAsync(Product product);
         void Update(Product product);
-        Task DeleteAsync(Product product);
+        new Task DeleteAsync(Product product);
         Task Delete(Product product);
 
         IEnumerable<Product> GetAll();
