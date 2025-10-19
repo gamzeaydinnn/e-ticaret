@@ -5,11 +5,191 @@ import { FavoriteService } from "../services/favoriteService";
 import { useAuth } from "../contexts/AuthContext";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
+import { shouldUseMockData, debugLog } from "../config/apiConfig";
+
+const DEMO_PRODUCTS = [
+  {
+    id: 1,
+    name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
+    description: "Yüzey temizleyici, çok amaçlı temizlik",
+    price: 204.95,
+    originalPrice: 229.95,
+    categoryId: 7,
+    categoryName: "Temizlik",
+    imageUrl: "/images/yeşil-cif-krem.jpg",
+    isNew: true,
+    discountPercentage: 11,
+    rating: 4.5,
+    reviewCount: 128,
+    badge: "İndirim",
+    specialPrice: 129.95,
+  },
+  {
+    id: 2,
+    name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
+    description: "Taco aromalı & çıtır tahıl cipsi",
+    price: 18.0,
+    categoryId: 6,
+    categoryName: "Atıştırmalık",
+    imageUrl: "/images/tahil-cipsi.jpg",
+    isNew: false,
+    discountPercentage: 17,
+    rating: 4.8,
+    reviewCount: 256,
+    badge: "İndirim",
+    specialPrice: 14.9,
+  },
+  {
+    id: 3,
+    name: "Lipton Ice Tea Limon 330 Ml",
+    description: "Soğuk çay, kutu 330ml",
+    price: 60.0,
+    categoryId: 5,
+    categoryName: "İçecekler",
+    imageUrl: "/images/lipton-ice-tea.jpg",
+    isNew: false,
+    discountPercentage: 32,
+    rating: 4.2,
+    reviewCount: 89,
+    badge: "İndirim",
+    specialPrice: 40.9,
+  },
+  {
+    id: 4,
+    name: "Dana But Tas Kebaplık Et Çiftlik Kg",
+    description: "Taze dana eti, kuşbaşı doğranmış 500g",
+    price: 375.95,
+    originalPrice: 429.95,
+    categoryId: 2,
+    categoryName: "Et & Tavuk & Balık",
+    imageUrl: "/images/dana-kusbasi.jpg",
+    isNew: true,
+    discountPercentage: 26,
+    rating: 4.7,
+    reviewCount: 67,
+    badge: "İndirim",
+    specialPrice: 279.0,
+  },
+  {
+    id: 5,
+    name: "Kuzu İncik Kg",
+    description: "Taze kuzu incik, kilogram",
+    price: 1399.95,
+    categoryId: 2,
+    categoryName: "Et & Tavuk & Balık",
+    imageUrl: "/images/kuzu-incik.webp",
+    isNew: false,
+    discountPercentage: 0,
+    rating: 4.4,
+    reviewCount: 195,
+    badge: "İyi Fiyat",
+    specialPrice: 699.95,
+  },
+  {
+    id: 6,
+    name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
+    description: "Kahve karışımı, paket 15 x 10g",
+    price: 145.55,
+    originalPrice: 169.99,
+    categoryId: 5,
+    categoryName: "İçecekler",
+    imageUrl: "/images/nescafe.jpg",
+    isNew: false,
+    discountPercentage: 14,
+    rating: 4.3,
+    reviewCount: 143,
+    badge: "İndirim",
+    specialPrice: 84.5,
+  },
+  {
+    id: 7,
+    name: "Domates Kg",
+    description: "Taze domates, kilogram",
+    price: 45.9,
+    categoryId: 1,
+    categoryName: "Meyve & Sebze",
+    imageUrl: "/images/domates.webp",
+    isNew: true,
+    discountPercentage: 0,
+    rating: 4.9,
+    reviewCount: 312,
+  },
+  {
+    id: 8,
+    name: "Pınar Süt 1L",
+    description: "Tam yağlı UHT süt 1 litre",
+    price: 28.5,
+    categoryId: 3,
+    categoryName: "Süt Ürünleri",
+    imageUrl: "/images/pınar-süt.jpg",
+    isNew: false,
+    discountPercentage: 0,
+    rating: 4.6,
+    reviewCount: 234,
+  },
+  {
+    id: 9,
+    name: "Sek Kaşar Peyniri 200 G",
+    description: "Dilimli kaşar peyniri 200g",
+    price: 75.9,
+    categoryId: 3,
+    categoryName: "Süt Ürünleri",
+    imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+    isNew: false,
+    discountPercentage: 15,
+    rating: 4.4,
+    reviewCount: 156,
+    badge: "İndirim",
+    specialPrice: 64.5,
+  },
+  {
+    id: 10,
+    name: "Mis Bulgur Pilavlık 1Kg",
+    description: "Birinci sınıf bulgur 1kg",
+    price: 32.9,
+    categoryId: 4,
+    categoryName: "Temel Gıda",
+    imageUrl: "/images/bulgur.png",
+    isNew: true,
+    discountPercentage: 0,
+    rating: 4.7,
+    reviewCount: 89,
+  },
+  {
+    id: 11,
+    name: "Coca-Cola Orijinal Tat Kutu 330ml",
+    description: "Kola gazlı içecek kutu",
+    price: 12.5,
+    categoryId: 5,
+    categoryName: "İçecekler",
+    imageUrl: "/images/coca-cola.jpg",
+    isNew: false,
+    discountPercentage: 20,
+    rating: 4.2,
+    reviewCount: 445,
+    badge: "İndirim",
+    specialPrice: 10.0,
+  },
+  {
+    id: 12,
+    name: "Salatalık Kg",
+    description: "Taze salatalık, kilogram",
+    price: 28.9,
+    categoryId: 1,
+    categoryName: "Meyve & Sebze",
+    imageUrl: "/images/salatalik.jpg",
+    isNew: false,
+    discountPercentage: 0,
+    rating: 4.3,
+    reviewCount: 67,
+  },
+];
 
 export default function ProductGrid() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error] = useState("");
+  const [error, setError] = useState("");
+  const [usingMockData, setUsingMockData] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showLoginRequired, setShowLoginRequired] = useState(false);
@@ -229,202 +409,64 @@ export default function ProductGrid() {
   };
 
   useEffect(() => {
-    ProductService.list()
-      .then(setData)
-      .catch((e) => {
-        console.error("API hatası, demo data kullanılıyor:", e);
-        // Demo süpermarket ürünleri - API çalışmıyorsa
-        setData([
-          {
-            id: 1,
-            name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
-            description: "Yüzey temizleyici, çok amaçlı temizlik",
-            price: 204.95,
-            originalPrice: 229.95,
-            categoryId: 7,
-            categoryName: "Temizlik",
-            imageUrl: "/images/yeşil-cif-krem.jpg",
-            isNew: true,
-            discountPercentage: 11,
-            rating: 4.5,
-            reviewCount: 128,
-            badge: "İndirim",
-            specialPrice: 129.95,
-          },
-          {
-            id: 2,
-            name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
-            description: "Taco aromalı & çıtır tahıl cipsi",
-            price: 18.0,
-            categoryId: 6,
-            categoryName: "Atıştırmalık",
-            imageUrl: "/images/tahil-cipsi.jpg",
-            isNew: false,
-            discountPercentage: 17,
-            rating: 4.8,
-            reviewCount: 256,
-            badge: "İndirim",
-            specialPrice: 14.9,
-          },
-          {
-            id: 3,
-            name: "Lipton Ice Tea Limon 330 Ml",
-            description: "Soğuk çay, kutu 330ml",
-            price: 60.0,
-            categoryId: 5,
-            categoryName: "İçecekler",
-            imageUrl: "/images/lipton-ice-tea.jpg",
-            isNew: false,
-            discountPercentage: 32,
-            rating: 4.2,
-            reviewCount: 89,
-            badge: "İndirim",
-            specialPrice: 40.9,
-          },
-          {
-            id: 4,
-            name: "Dana But Tas Kebaplık Et Çiftlik Kg",
-            description: "Taze dana eti, kuşbaşı doğranmış 500g",
-            price: 375.95,
-            originalPrice: 429.95,
-            categoryId: 2,
-            categoryName: "Et & Tavuk & Balık",
-            imageUrl: "/images/dana-kusbasi.jpg",
-            isNew: true,
-            discountPercentage: 26,
-            rating: 4.7,
-            reviewCount: 67,
-            badge: "İndirim",
-            specialPrice: 279.0,
-          },
-          {
-            id: 5,
-            name: "Kuzu İncik Kg",
-            description: "Taze kuzu incik, kilogram",
-            price: 1399.95,
-            categoryId: 2,
-            categoryName: "Et & Tavuk & Balık",
-            imageUrl: "/images/kuzu-incik.webp",
-            isNew: false,
-            discountPercentage: 0,
-            rating: 4.4,
-            reviewCount: 195,
-            badge: "İyi Fiyat",
-            specialPrice: 699.95,
-          },
-          {
-            id: 6,
-            name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
-            description: "Kahve karışımı, paket 15 x 10g",
-            price: 145.55,
-            originalPrice: 169.99,
-            categoryId: 5,
-            categoryName: "İçecekler",
-            imageUrl: "/images/nescafe.jpg",
-            isNew: false,
-            discountPercentage: 14,
-            rating: 4.3,
-            reviewCount: 143,
-            badge: "İndirim",
-            specialPrice: 84.5,
-          },
-          {
-            id: 7,
-            name: "Domates Kg",
-            description: "Taze domates, kilogram",
-            price: 45.9,
-            categoryId: 1,
-            categoryName: "Meyve & Sebze",
-            imageUrl: "/images/domates.webp",
-            isNew: true,
-            discountPercentage: 0,
-            rating: 4.9,
-            reviewCount: 312,
-          },
-          {
-            id: 8,
-            name: "Pınar Süt 1L",
-            description: "Tam yağlı UHT süt 1 litre",
-            price: 28.5,
-            categoryId: 3,
-            categoryName: "Süt Ürünleri",
-            imageUrl: "/images/pınar-süt.jpg",
-            isNew: false,
-            discountPercentage: 0,
-            rating: 4.6,
-            reviewCount: 234,
-          },
-          {
-            id: 9,
-            name: "Sek Kaşar Peyniri 200 G",
-            description: "Dilimli kaşar peyniri 200g",
-            price: 75.9,
-            categoryId: 3,
-            categoryName: "Süt Ürünleri",
-            imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-            isNew: false,
-            discountPercentage: 15,
-            rating: 4.4,
-            reviewCount: 156,
-            badge: "İndirim",
-            specialPrice: 64.5,
-          },
-          {
-            id: 10,
-            name: "Mis Bulgur Pilavlık 1Kg",
-            description: "Birinci sınıf bulgur 1kg",
-            price: 32.9,
-            categoryId: 4,
-            categoryName: "Temel Gıda",
-            imageUrl: "/images/bulgur.png",
-            isNew: true,
-            discountPercentage: 0,
-            rating: 4.7,
-            reviewCount: 89,
-          },
-          {
-            id: 11,
-            name: "Coca-Cola Orijinal Tat Kutu 330ml",
-            description: "Kola gazlı içecek kutu",
-            price: 12.5,
-            categoryId: 5,
-            categoryName: "İçecekler",
-            imageUrl: "/images/coca-cola.jpg",
-            isNew: false,
-            discountPercentage: 20,
-            rating: 4.2,
-            reviewCount: 445,
-            badge: "İndirim",
-            specialPrice: 10.0,
-          },
-          {
-            id: 12,
-            name: "Salatalık Kg",
-            description: "Taze salatalık, kilogram",
-            price: 28.9,
-            categoryId: 1,
-            categoryName: "Meyve & Sebze",
-            imageUrl: "/images/salatalik.jpg",
-            isNew: false,
-            discountPercentage: 0,
-            rating: 4.3,
-            reviewCount: 67,
-          },
-        ]);
-      })
-      .finally(() => {
-        setLoading(false);
-        // Ürünler yüklendikten sonra favorileri de yükle
-        loadFavorites();
-      });
+    let isMounted = true;
+
+    const loadProducts = async () => {
+      try {
+        const response = await ProductService.list();
+        if (!isMounted) {
+          return;
+        }
+
+        const products = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.items)
+          ? response.items
+          : [];
+
+        setData(products);
+        setError("");
+        setUsingMockData(false);
+        await loadFavorites();
+      } catch (err) {
+        if (!isMounted) {
+          return;
+        }
+
+        debugLog("Ürün listesi yüklenemedi, fallback değerlendiriliyor", err);
+
+        if (shouldUseMockData()) {
+          setData(DEMO_PRODUCTS);
+          setError("");
+          setUsingMockData(true);
+          await loadFavorites();
+        } else {
+          setError(
+            err?.message ||
+              "Ürünler yüklenemedi. Lütfen daha sonra tekrar deneyin."
+          );
+          setData([]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProducts();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Kullanıcı giriş/çıkış yapınca favorileri yükle
   useEffect(() => {
-    if (data.length > 0) {
+    if (!loading) {
       loadFavorites();
     }
-  }, [user]);
+  }, [user, loading]);
 
   if (loading) {
     return (
@@ -493,6 +535,20 @@ export default function ProductGrid() {
           <strong>{filteredProducts.length}</strong> ürün listeleniyor
         </p>
       </div>
+
+      {usingMockData && (
+        <div
+          className="alert border-0 shadow-sm mb-4 text-center"
+          style={{
+            backgroundColor: "#fff8e1",
+            color: "#fb8c00",
+            borderRadius: "15px",
+          }}
+        >
+          <i className="fas fa-info-circle me-2"></i>
+          Demo verisi gösteriliyor. Backend bağlantısı kurulduğunda ürünler otomatik güncellenecek.
+        </div>
+      )}
 
       {/* Ürün Grid */}
       {filteredProducts.length === 0 ? (

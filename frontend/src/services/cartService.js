@@ -4,18 +4,16 @@ const base = "/api/cartitems";
 
 export const CartService = {
   // Sepet öğelerini getir
-  getCartItems: () => api.get(base).then((r) => r.data),
+  getCartItems: () => api.get(base),
 
   // Sepete ürün ekle
   addItem: (productId, quantity = 1) =>
-    api.post(base, { productId, quantity }).then((r) => r.data),
+    api.post(base, { productId, quantity }),
 
   // Sepet ürününü güncelle
   updateItem: async (id, productId, quantity) => {
     try {
-      return await api
-        .put(`${base}/${id}`, { productId, quantity })
-        .then((r) => r.data);
+      return await api.put(`${base}/${id}`, { productId, quantity });
     } catch (error) {
       console.log("Backend bağlantısı yok, localStorage kullanılıyor");
       // Backend hatası durumunda localStorage'e güncelle
@@ -27,7 +25,7 @@ export const CartService = {
   // Sepet ürününü sil
   removeItem: async (id, productId) => {
     try {
-      return await api.delete(`${base}/${id}`).then((r) => r.data);
+      return await api.delete(`${base}/${id}`);
     } catch (error) {
       console.log("Backend bağlantısı yok, localStorage kullanılıyor");
       // Backend hatası durumunda localStorage'den sil

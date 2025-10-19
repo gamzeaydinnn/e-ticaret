@@ -1,5 +1,9 @@
 import api from "./api";
-import { isBackendAvailable, debugLog } from "../config/apiConfig";
+import {
+  isBackendAvailable,
+  shouldUseMockData,
+  debugLog,
+} from "../config/apiConfig";
 
 // Mock data storage
 let mockCategories = [
@@ -199,10 +203,18 @@ let mockProducts = [
   },
 ];
 
+const ensureBackend = () => {
+  if (!isBackendAvailable()) {
+    throw new Error(
+      "Backend API devre dışı. Lütfen sunucu bağlantısını kontrol edin."
+    );
+  }
+};
+
 export const AdminService = {
   // Dashboard
   getDashboardStats: async () => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       debugLog("Admin Dashboard - Mock data kullanılıyor");
       return {
         totalUsers: 156,
@@ -239,11 +251,12 @@ export const AdminService = {
         ],
       };
     }
-    return api.get("/api/Admin/dashboard/stats").then((r) => r.data);
+    ensureBackend();
+    return api.get("/api/Admin/dashboard/stats");
   },
   // Users
   getUsers: async () => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       debugLog("Admin Users - Mock data kullanılıyor");
       return {
         success: true,
@@ -293,27 +306,34 @@ export const AdminService = {
       console.error("Users fetch error:", error);
       throw error;
     }
+<<<<<<< HEAD
+=======
+    ensureBackend();
+    return api.get("/api/Admin/users");
+>>>>>>> sare-branch
   },
 
   // Categories
   getCategories: async () => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       debugLog("Admin Categories - Mock data kullanılıyor");
       return [...mockCategories];
     }
-    return api.get("/api/Admin/categories").then((r) => r.data);
+    ensureBackend();
+    return api.get("/api/Admin/categories");
   },
   createCategory: async (formData) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const newId = Math.max(...mockCategories.map((c) => c.id)) + 1;
       const newCategory = { ...formData, id: newId, productCount: 0 };
       mockCategories.push(newCategory);
       return newCategory;
     }
-    return api.post("/api/Admin/categories", formData).then((r) => r.data);
+    ensureBackend();
+    return api.post("/api/Admin/categories", formData);
   },
   updateCategory: async (id, formData) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const index = mockCategories.findIndex((c) => c.id === id);
       if (index !== -1) {
         mockCategories[index] = { ...mockCategories[index], ...formData };
@@ -321,10 +341,11 @@ export const AdminService = {
       }
       throw new Error("Kategori bulunamadı");
     }
-    return api.put(`/api/Admin/categories/${id}`, formData).then((r) => r.data);
+    ensureBackend();
+    return api.put(`/api/Admin/categories/${id}`, formData);
   },
   deleteCategory: async (id) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const index = mockCategories.findIndex((c) => c.id === id);
       if (index !== -1) {
         mockCategories.splice(index, 1);
@@ -332,21 +353,22 @@ export const AdminService = {
       }
       throw new Error("Kategori bulunamadı");
     }
-    return api.delete(`/api/Admin/categories/${id}`).then((r) => r.data);
+    ensureBackend();
+    return api.delete(`/api/Admin/categories/${id}`);
   },
 
   // Products
   getProducts: async (page = 1, size = 10) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       debugLog("Admin Products - Mock data kullanılıyor");
       return [...mockProducts];
     }
+    ensureBackend();
     return api
-      .get(`/api/Admin/products?page=${page}&size=${size}`)
-      .then((r) => r.data);
+      .get(`/api/Admin/products?page=${page}&size=${size}`);
   },
   createProduct: async (payload) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const newId = Math.max(...mockProducts.map((p) => p.id)) + 1;
       const category = mockCategories.find((c) => c.id == payload.categoryId);
       const newProduct = {
@@ -357,10 +379,11 @@ export const AdminService = {
       mockProducts.push(newProduct);
       return newProduct;
     }
-    return api.post("/api/Admin/products", payload).then((r) => r.data);
+    ensureBackend();
+    return api.post("/api/Admin/products", payload);
   },
   updateProduct: async (id, payload) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const index = mockProducts.findIndex((p) => p.id === id);
       if (index !== -1) {
         const category = mockCategories.find((c) => c.id == payload.categoryId);
@@ -373,10 +396,11 @@ export const AdminService = {
       }
       throw new Error("Ürün bulunamadı");
     }
-    return api.put(`/api/Admin/products/${id}`, payload).then((r) => r.data);
+    ensureBackend();
+    return api.put(`/api/Admin/products/${id}`, payload);
   },
   deleteProduct: async (id) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       const index = mockProducts.findIndex((p) => p.id === id);
       if (index !== -1) {
         mockProducts.splice(index, 1);
@@ -384,14 +408,15 @@ export const AdminService = {
       }
       throw new Error("Ürün bulunamadı");
     }
-    return api.delete(`/api/Admin/products/${id}`).then((r) => r.data);
+    ensureBackend();
+    return api.delete(`/api/Admin/products/${id}`);
   },
   updateStock: (id, stock) =>
-    api.patch(`/api/Admin/products/${id}/stock`, stock).then((r) => r.data),
+    api.patch(`/api/Admin/products/${id}/stock`, stock),
 
   // Orders
   getOrders: async (page = 1, size = 20) => {
-    if (!isBackendAvailable()) {
+    if (shouldUseMockData()) {
       debugLog("Admin Orders - Mock data kullanılıyor");
       return [
         {
@@ -423,61 +448,12 @@ export const AdminService = {
         },
       ];
     }
-    return api
-      .get(`/api/Admin/orders?page=${page}&size=${size}`)
-      .then((r) => r.data);
+    ensureBackend();
+    return api.get(`/api/Admin/orders?page=${page}&size=${size}`);
   },
-  getOrder: (id) => api.get(`/api/Admin/orders/${id}`).then((r) => r.data),
+  getOrder: (id) => api.get(`/api/Admin/orders/${id}`),
   updateOrderStatus: (id, status) =>
-    api.put(`/api/Admin/orders/${id}/status`, { status }).then((r) => r.data),
+    api.put(`/api/Admin/orders/${id}/status`, { status }),
   getRecentOrders: () =>
-    api.get("/api/Admin/orders/recent").then((r) => r.data),
+    api.get("/api/Admin/orders/recent"),
 };
-
-/*import api from './api';
-export const AdminService = {
-// Categories
-getCategories: () => api.get('/admin/categories').then(r => r.data),
-createCategory: (formData) => api.post('/admin/categories', formData).then(r => r.data),
-updateCategory: (id, formData) => api.put(`/admin/categories/${id}`, formData).then(r => r.data),
-deleteCategory: (id) => api.delete(`/admin/categories/${id}`).then(r => r.data),
-// Products
-listProducts: () => api.get('/admin/products').then(r => r.data),
-createProduct: (formData) => api.post('/admin/products', formData).then(r=>r.data),
-updateProduct: (id, formData) => api.put(`/admin/products/${id}`, formData).then(r=>r.data),
-// Orders
-listOrders: () => api.get('/admin/orders').then(r => r.data),
-updateOrderStatus: (orderId, status) => api.put(`/admin/orders/${orderId}/status`, { status }).then(r=>r.data),
-assignCourier: (orderId, courierId) => api.post('/admin/orders/assign-courier', { orderId, courierId }).then(r=>r.data)
-}
-*/
-
-/*// src/services/adminService.js
-import api from "./api";
-
-export const AdminService = {
-  // Categories
-  getCategories: () => api.get("/admin/categories"),
-  createCategory: (formData) => api.post("/admin/categories", formData),
-  updateCategory: (id, formData) => api.put(`/admin/categories/${id}`, formData),
-  deleteCategory: (id) => api.delete(`/admin/categories/${id}`),
-
-  // Products
-  listProducts: (query = "") => api.get(`/admin/products${query}`),
-  createProduct: (formData) => api.post("/admin/products", formData),
-  updateProduct: (id, formData) => api.put(`/admin/products/${id}`, formData),
-  deleteProduct: (id) => api.delete(`/admin/products/${id}`),
-
-  // Orders
-  listOrders: (query = "") => api.get(`/admin/orders${query}`),
-  updateOrderStatus: (orderId, status) =>
-    api.put(`/admin/orders/${orderId}/status`, { status }),
-  assignCourier: (orderId, courierId) =>
-    api.post("/admin/orders/assign-courier", { orderId, courierId }),
-
-  // Users
-  listUsers: () => api.get("/admin/users"),
-  getUser: (id) => api.get(`/admin/users/${id}`),
-  updateUser: (id, payload) => api.put(`/admin/users/${id}`, payload),
-};
-*/

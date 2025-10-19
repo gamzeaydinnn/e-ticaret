@@ -6,6 +6,9 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Data.Repositories;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using ECommerce.Entities.Concrete;
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
 // using Hangfire;
 using ECommerce.Infrastructure.Services.MicroServices;
@@ -33,6 +36,20 @@ builder.Services.AddCors(options =>
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services
+    .AddIdentityCore<User>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.Password.RequireDigit = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequiredLength = 6;
+    })
+    .AddRoles<IdentityRole<int>>()
+    .AddEntityFrameworkStores<ECommerceDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
 // Hangfire - SQL Server kullan (Geçici olarak devre dışı - Azure bağlantı sorunu)
 // builder.Services.AddHangfire(config => 
 //     config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -59,9 +76,12 @@ app.UseHangfireDashboard();*/
 // );
 
 // JWT Auth
-// JWT Auth 
-builder.Services.AddAuthentication("Bearer")
-    .AddJwtBearer("Bearer", options =>
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
         {

@@ -3,8 +3,8 @@ import api from "./api";
 const base = "/api/Users";
 
 export const UserService = {
-  register: (payload) => api.post(base, payload).then(r => r.data),
-  login: (payload) => api.post("/api/Auth/login", payload).then(r => r.data), // login endpoint var
+  register: (payload) => api.post(base, payload),
+  login: (payload) => api.post("/api/Auth/login", payload), // login endpoint var
   me: async () => {
     const id = localStorage.getItem("userId");
     if (!id) return null;
@@ -14,8 +14,8 @@ export const UserService = {
       return null;
     }
   },
-  getAll: () => api.get(base).then(r => r.data),
-  getById: (id) => api.get(`${base}/${id}`).then(r => r.data),
-  update: (id, payload) => api.put(`${base}/${id}`, payload).then(r => r.data),
-  remove: (id) => api.delete(`${base}/${id}`).then(r => r.data),
+  getAll: () => api.get(base),
+  getById: (id) => api.get(`${base}/${id}`),
+  update: (id, payload) => api.put(`${base}/${id}`, payload),
+  remove: (id) => api.delete(`${base}/${id}`),
 };

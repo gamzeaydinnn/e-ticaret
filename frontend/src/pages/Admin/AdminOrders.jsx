@@ -1,9 +1,51 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from "react";
 import { OrderService } from "../../services/orderService";
 import { CourierService } from "../../services/courierService";
 import AdminLayout from "../../components/AdminLayout";
 
 export default function AdminOrders() {
+=======
+import * as React from "react";
+import {
+  Admin,
+  Resource,
+  List,
+  Datagrid,
+  TextField,
+  NumberField,
+} from "react-admin";
+import simpleRestProvider from "ra-data-simple-rest";
+import { getApiBaseUrl } from "../../config/apiConfig";
+import { AdminService } from "../../services/adminService";
+
+const dataProvider = simpleRestProvider(`${getApiBaseUrl()}/api/Admin`);
+
+export const Orders = () => (
+  <Admin dataProvider={dataProvider}>
+    <Resource name="orders" list={OrderList} />
+  </Admin>
+);
+
+const AdminOrders = Orders;
+export default AdminOrders;
+
+const OrderList = (props) => (
+  <List {...props}>
+    <Datagrid>
+      <TextField source="id" />
+      <TextField source="userId" />
+      <NumberField source="totalPrice" />
+      <TextField source="status" />
+    </Datagrid>
+  </List>
+);
+
+/*src/admin/AdminOrders.jsx
+import React, { useEffect, useState } from 'react';
+import { AdminService } from '../services/adminService';
+export default function AdminOrders(){
+>>>>>>> sare-branch
   const [orders, setOrders] = useState([]);
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
