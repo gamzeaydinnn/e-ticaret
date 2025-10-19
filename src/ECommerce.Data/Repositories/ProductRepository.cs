@@ -85,12 +85,13 @@ namespace ECommerce.Data.Repositories
 
         Task IProductRepository.Delete(Product product)
         {
-            throw new NotImplementedException();
+            // Interface'teki senkron Task imzasını, mevcut async silme ile köprüleyelim
+            return DeleteAsync(product);
         }
 
-        public Task<Product> GetBySkuAsync(string sku)
+        public async Task<Product> GetBySkuAsync(string sku)
         {
-            throw new NotImplementedException();
+            return await _dbSet.FirstOrDefaultAsync(p => p.SKU == sku && p.IsActive);
         }
  
 
@@ -107,7 +108,8 @@ namespace ECommerce.Data.Repositories
 
         public void LogSync(MicroSyncLog log)
         {
-            throw new NotImplementedException();
+            _context.MicroSyncLogs.Add(log);
+            _context.SaveChanges();
         }
     }
 }

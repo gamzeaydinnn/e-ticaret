@@ -21,10 +21,12 @@ namespace ECommerce.Business.Services.Managers
             return new List<MicroStockDto>();
         }
 
-        public async Task UpdateProduct(MicroProductDto product)
+        // Not: IMicroService.UpdateProduct imzası void.
+        // Basit bir no-op uygulama ekledik ki çağrıldığında fırlamasın.
+        void IMicroService.UpdateProduct(MicroProductDto productDto)
         {
-            // Mikro ERP'ye ürün güncelleme işlemi
-            await Task.CompletedTask;
+            // Gerçek ERP entegrasyonu burada yapılacak.
+            // Şimdilik izleme/log eklenebilir.
         }
 
         public async Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders)
@@ -33,15 +35,8 @@ namespace ECommerce.Business.Services.Managers
             return await Task.FromResult(true);
         }
 
-        void IMicroService.UpdateProduct(MicroProductDto productDto)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void UpdateStock(MicroStockDto stockDto)
-        {
-            throw new NotImplementedException();
-        }
+        // İleride kullanılmak üzere ek yardımcı metot; şimdilik no-op bırakıyoruz.
+        public void UpdateStock(MicroStockDto stockDto) { }
     }
 }
 /*using ECommerce.Core.DTOs.Micro;

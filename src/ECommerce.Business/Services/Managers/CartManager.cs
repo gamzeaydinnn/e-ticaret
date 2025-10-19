@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Linq;
 using ECommerce.Business.Services.Interfaces; // ICartService
 using ECommerce.Entities.Concrete;            // CartItem, Cart
-using ECommerce.Core.Interfaces;
-using ECommerce.Core.DTOs.Cart;              // ICartRepository
+using ECommerce.Core.Interfaces;              // ICartRepository
+using ECommerce.Core.DTOs.Cart;
 
 
 namespace ECommerce.Business.Services.Managers
@@ -17,9 +18,10 @@ namespace ECommerce.Business.Services.Managers
             _cartRepository = cartRepository;
         }
 
-        public async Task<CartSummaryDto> GetCartAsync(Guid userId)
+        // ICartService uygulaması (int userId)
+        public async Task<CartSummaryDto> GetCartAsync(int userId)
         {
-            var items = await _cartRepository.GetByUserIdAsync(userId.GetHashCode()); // Guid -> int userId örnek
+            var items = await _cartRepository.GetByUserIdAsync(userId);
             return new CartSummaryDto
             {
                 Items = items.Select(i => new CartItemDto
@@ -31,76 +33,51 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
-        public async Task AddToCartAsync(Guid userId, int productVariantId, int quantity)
+        public async Task AddItemToCartAsync(int userId, CartItemDto item)
         {
-            var existing = await _cartRepository.GetByUserAndProductAsync(userId.GetHashCode(), productVariantId);
+            var existing = await _cartRepository.GetByUserAndProductAsync(userId, item.ProductId);
             if (existing != null)
             {
-                existing.Quantity += quantity;
+                existing.Quantity += item.Quantity;
+                await _cartRepository.UpdateAsync(existing);
             }
             else
             {
                 await _cartRepository.AddAsync(new CartItem
                 {
-                    UserId = userId.GetHashCode(),
-                    ProductId = productVariantId,
-                    Quantity = quantity,
+                    UserId = userId,
+                    ProductId = item.ProductId,
+                    Quantity = item.Quantity,
                     CartToken = userId.ToString()
                 });
             }
         }
 
-        public async Task UpdateCartItemAsync(Guid userId, int cartItemId, int quantity)
+        public async Task UpdateCartItemAsync(int userId, int cartItemId, int quantity)
         {
             var item = await _cartRepository.GetByIdAsync(cartItemId);
-            if (item != null) item.Quantity = quantity;
+            if (item == null || item.UserId != userId) return;
+
+            item.Quantity = quantity;
+            await _cartRepository.UpdateAsync(item);
         }
 
-        public async Task RemoveCartItemAsync(Guid userId, int cartItemId)
+        public async Task RemoveCartItemAsync(int userId, int cartItemId)
         {
+            var item = await _cartRepository.GetByIdAsync(cartItemId);
+            if (item == null || item.UserId != userId) return;
+
             await _cartRepository.RemoveCartItemAsync(cartItemId);
-
         }
 
-        public async Task ClearCartAsync(Guid userId)
+        public async Task ClearCartAsync(int userId)
         {
-            await _cartRepository.ClearCartAsync(userId.GetHashCode());
+            await _cartRepository.ClearCartAsync(userId);
         }
 
-        // int userId versiyonu
-        public async Task<CartSummaryDto> GetCartAsync(int userId) => await GetCartAsync(Guid.NewGuid()); // örnek
-        public async Task AddItemToCartAsync(int userId, CartItemDto item) => await AddToCartAsync(Guid.NewGuid(), item.ProductId, item.Quantity);
-        public async Task RemoveItemFromCartAsync(int userId, int productId) => await RemoveCartItemAsync(Guid.NewGuid(), productId);
-        public async Task ClearCartAsync(int userId) => await ClearCartAsync(Guid.NewGuid());
-
-        public Task RemoveCartItemAsync(int cartItemId)
-        {
-            throw new NotImplementedException();
-        }
-
-
-        public Task UpdateCartItemAsync(int userId, int cartItemId, int quantity)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task RemoveCartItemAsync(int userId, int cartItemId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<int> GetCartCountAsync(int userId)
-        {
-            throw new NotImplementedException();
-        }
         public async Task<int> GetCartCountAsync()
-{
-    return await _cartRepository.GetCartCountAsync();
-}
-
-        Task<CartSummaryDto> ICartService.GetCartAsync(int userId)
         {
-            throw new NotImplementedException();
+            return await _cartRepository.GetCartCountAsync();
         }
 
     }

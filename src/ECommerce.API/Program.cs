@@ -101,6 +101,9 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 
 // Services  
 builder.Services.AddScoped<IUserService, UserManager>();
@@ -129,6 +132,9 @@ builder.Services.AddScoped<IDiscountService, DiscountManager>();
 builder.Services.AddScoped<IReviewService, ReviewManager>();
 builder.Services.AddScoped<IAddressService, AddressManager>();
 builder.Services.AddScoped<ICouponService, CouponManager>();
+builder.Services.AddScoped<ICategoryService, CategoryManager>();
+builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
+builder.Services.AddScoped<ICourierService, CourierManager>();
 
 // vs.
 
