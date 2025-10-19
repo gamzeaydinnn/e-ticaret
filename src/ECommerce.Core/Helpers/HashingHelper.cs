@@ -14,12 +14,29 @@ namespace ECommerce.Core.Helpers
         }
 public static bool VerifyPassword(string hashedWithSalt, string password)
         {
-            var parts = hashedWithSalt.Split('.');
-            if (parts.Length != 2) return false;
-            var salt = Convert.FromBase64String(parts[0]);
-            var stored = parts[1];
-            var hashed = Convert.ToBase64String(KeyDerivation.Pbkdf2(password, salt, KeyDerivationPrf.HMACSHA256, 10000, 256 / 8));
-            return stored == hashed;
+            try
+            {
+                var parts = hashedWithSalt.Split('.');
+                if (parts.Length != 2) return false;
+
+                var salt = Convert.FromBase64String(parts[0]);
+                var storedBase64 = parts[1];
+
+                // Recompute hash with the same parameters
+                var computedBase64 = Convert.ToBase64String(
+                    KeyDerivation.Pbkdf2(password, salt, KeyDerivationPrf.HMACSHA256, 10000, 256 / 8)
+                );
+
+                // Constant-time compare to avoid timing attacks
+                var storedBytes = Convert.FromBase64String(storedBase64);
+                var computedBytes = Convert.FromBase64String(computedBase64);
+                return CryptographicOperations.FixedTimeEquals(storedBytes, computedBytes);
+            }
+            catch (FormatException)
+            {
+                // Invalid base64 input
+                return false;
+            }
         }
     }
 }

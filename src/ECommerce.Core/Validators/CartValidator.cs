@@ -7,6 +7,11 @@ namespace ECommerce.Core.Validators
         public static bool Validate(CartItemDto dto, out string error)
         {
             error = null;
+            if (dto is null)
+            {
+                error = "İstek gövdesi gerekli.";
+                return false;
+            }
 
             if (dto.ProductId <= 0)
             {

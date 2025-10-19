@@ -7,7 +7,13 @@ namespace ECommerce.Core.Helpers
     {
         public static IEnumerable<T> Paginate<T>(IEnumerable<T> source, int page, int pageSize)
         {
-            return source.Skip((page - 1) * pageSize).Take(pageSize);
+            if (source is null) throw new ArgumentNullException(nameof(source));
+            if (page <= 0) throw new ArgumentOutOfRangeException(nameof(page), "Page must be >= 1");
+            if (pageSize <= 0) throw new ArgumentOutOfRangeException(nameof(pageSize), "PageSize must be >= 1");
+
+            // Safe calculation
+            var skip = checked((page - 1) * pageSize);
+            return source.Skip(skip).Take(pageSize);
         }
     }
 }

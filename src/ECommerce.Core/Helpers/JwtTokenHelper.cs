@@ -18,6 +18,8 @@ namespace ECommerce.Core.Helpers
             string audience,
             int expiresMinutes = 120)
         {
+            if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
+                throw new ArgumentException("JWT signing key must be at least 256 bits (32 bytes)", nameof(key));
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, email),
