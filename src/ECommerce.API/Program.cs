@@ -119,6 +119,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("Inventory"));
 
 // Email + FileStorage services
 builder.Services.AddSingleton<EmailSender>();
@@ -162,6 +163,7 @@ builder.Services.AddScoped<OrderManager>();
 builder.Services.AddScoped<UserManager>();
 builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
+builder.Services.AddScoped<IInventoryService, InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
 // repositories
 builder.Services.AddScoped<IBrandRepository, BrandRepository>();
@@ -183,7 +185,9 @@ builder.Services.AddScoped<ICourierService, CourierManager>();
 
 // vs.
 
-builder.Services.AddScoped<StockSyncJob>();
+// Stock sync job as hosted service and injectable singleton
+builder.Services.AddSingleton<StockSyncJob>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
@@ -230,12 +234,27 @@ var app = builder.Build();
 // //     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
 //     // Cron.Hourly);
 
-// Seed Roles/Admin User (ilk çalıştırmada)
+// DB init + Seed Roles/Admin User (ilk çalıştırmada)
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
+        var db = services.GetRequiredService<ECommerceDbContext>();
+        // Migrations yoksa dev ortamında EnsureCreated; varsa migrate
+        try
+        {
+            var pending = db.Database.GetPendingMigrations();
+            if (pending != null && pending.Any())
+                db.Database.Migrate();
+            else
+                db.Database.EnsureCreated();
+        }
+        catch
+        {
+            // Yine de devam et
+        }
+
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
     }
     catch (Exception ex)

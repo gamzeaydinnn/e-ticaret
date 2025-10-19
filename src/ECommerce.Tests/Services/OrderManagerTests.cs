@@ -4,6 +4,8 @@ using ECommerce.Business.Services.Managers;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using System.Threading.Tasks;
+using Moq;
+using ECommerce.Core.Interfaces;
 
 namespace ECommerce.Tests.Services
 {
@@ -22,7 +24,11 @@ namespace ECommerce.Tests.Services
         {
             // Arrange
             using var context = GetInMemoryDbContext();
-            var orderManager = new OrderManager(context);
+            var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.DecreaseStockAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<InventoryChangeType>(), It.IsAny<string?>(), It.IsAny<int?>()))
+                .ReturnsAsync(true);
+            var orderManager = new OrderManager(context, inventoryMock.Object);
             
             var user = new User 
             { 

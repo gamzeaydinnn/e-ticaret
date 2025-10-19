@@ -14,10 +14,12 @@ namespace ECommerce.Business.Services.Managers
     public class OrderManager : IOrderService
     {
         private readonly ECommerceDbContext _context;
+        private readonly IInventoryService _inventoryService;
 
-        public OrderManager(ECommerceDbContext context)
+        public OrderManager(ECommerceDbContext context, IInventoryService inventoryService)
         {
             _context = context;
+            _inventoryService = inventoryService;
         }
 
         public async Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null)
@@ -183,20 +185,22 @@ namespace ECommerce.Business.Services.Managers
 
             try
             {
-                // 1. Stok kontrol ve düşme
+                // 1. Stok ön-kontrol
                 foreach (var item in dto.OrderItems)
                 {
                     var product = await _context.Products.FindAsync(item.ProductId);
                     if (product == null)
                         throw new Exception($"Ürün bulunamadı: {item.ProductId}");
-
                     if (product.StockQuantity < item.Quantity)
                         throw new Exception($"Yetersiz stok: {product.Name}");
-
-                    product.StockQuantity -= item.Quantity; // stok düş
                 }
 
-                // 2. Siparişi oluştur
+                // 2. Ödeme işlemi (örnek)
+                var paymentSuccess = true; // ödeme servisi çağrılır, sonucu true/false döner
+                if (!paymentSuccess)
+                    throw new Exception("Ödeme başarısız");
+
+                // 3. Siparişi oluştur (id üretmek için önce kaydet)
                 var order = new Order
                 {
                     UserId = dto.UserId,
@@ -212,15 +216,22 @@ namespace ECommerce.Business.Services.Managers
                 };
 
                 _context.Orders.Add(order);
-
-                // 3. Ödeme işlemi (örnek olarak bir ödeme servisi çağrısı)
-                var paymentSuccess = true; // ödeme servisi çağrılır, sonucu true/false döner
-                if (!paymentSuccess)
-                    throw new Exception("Ödeme başarısız");
-
                 await _context.SaveChangesAsync();
 
-                // 4. Transaction commit
+                // 4. Stok düşme + log + eşik uyarısı
+                foreach (var item in order.OrderItems)
+                {
+                    var ok = await _inventoryService.DecreaseStockAsync(
+                        item.ProductId,
+                        item.Quantity,
+                        InventoryChangeType.Sale,
+                        note: $"Online Order #{order.Id}",
+                        performedByUserId: order.UserId
+                    );
+                    if (!ok) throw new Exception("Stok düşümü başarısız");
+                }
+
+                // 5. Transaction commit
                 await transaction.CommitAsync();
 
                 return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");

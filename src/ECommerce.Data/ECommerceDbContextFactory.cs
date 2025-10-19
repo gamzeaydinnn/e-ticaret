@@ -1,6 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using ECommerce.Data.Context;
+using Microsoft.Extensions.Configuration;
+using System.IO;
+using System;
 
 namespace ECommerce.Data
 {
@@ -10,8 +13,21 @@ namespace ECommerce.Data
         {
             var optionsBuilder = new DbContextOptionsBuilder<ECommerceDbContext>();
 
-            // SQL Server kullanımı
-            optionsBuilder.UseSqlServer("Server=my-sqlserver-db.cgbyoi6smmgt.us-east-1.rds.amazonaws.com,1433;Database=ECommerceDb;User Id=gamze;Password=Admin00...;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;");
+            // appsettings.json yükle (tasarım zamanı)
+            var basePath = Directory.GetCurrentDirectory();
+            var apiPath = Path.Combine(basePath, "..", "ECommerce.API");
+            var selectedBase = File.Exists(Path.Combine(basePath, "appsettings.json")) ? basePath : apiPath;
+
+            var config = new ConfigurationBuilder()
+                .SetBasePath(selectedBase)
+                .AddJsonFile("appsettings.json", optional: true)
+                .AddJsonFile("appsettings.Development.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
+
+            var cs = config.GetConnectionString("DefaultConnection")
+                     ?? "Server=localhost;Database=ECommerceDb;Trusted_Connection=True;TrustServerCertificate=True;";
+            optionsBuilder.UseSqlServer(cs);
 
             return new ECommerceDbContext(optionsBuilder.Options);
         }

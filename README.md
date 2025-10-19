@@ -19,7 +19,7 @@ Modern ve profesyonel bir e-ticaret sistemi. Admin paneli, mikroservis entegrasy
 
 - ✅ ASP.NET Core Web API (.NET 9.0)
 - ✅ Clean Architecture (Core, Business, Data, Infrastructure)
-- ✅ Entity Framework Core with SQLite
+- ✅ Entity Framework Core (SQL Server)
 - ✅ Repository Pattern & Dependency Injection
 - ✅ Admin API endpoints
 - ✅ Mikroservis entegrasyonu hazır
@@ -58,8 +58,7 @@ eticaret/
 
 - .NET 9.0
 - ASP.NET Core Web API
-- Entity Framework Core
-- SQLite Database
+- Entity Framework Core (SQL Server)
 - Repository Pattern
 - Dependency Injection
 
@@ -87,11 +86,25 @@ cd src/ECommerce.API
 dotnet restore
 ```
 
-3. Veritabanını oluşturun:
+3. Veritabanı sağlayıcısı ve ilk kurulum
 
-```bash
-dotnet ef database update
+- Varsayılan: SQL Server. `src/ECommerce.API/appsettings.json` içinde:
+
 ```
+"Database": { "Provider": "SqlServer" },
+"ConnectionStrings": { "DefaultConnection": "Server=localhost;Database=ECommerceDb;Trusted_Connection=True;TrustServerCertificate=True;" }
+```
+
+ 
+
+- İlk şema seçenekleri:
+  - Migration ile:
+    ```bash
+    cd src/ECommerce.API
+    dotnet ef migrations add InitialCreate -p ../ECommerce.Data -s .
+    dotnet ef database update -p ../ECommerce.Data -s .
+    ```
+  - Geliştirme kolaylığı: Migration yoksa Development ortamında uygulama açılışında şema `EnsureCreated` ile oluşturulur.
 
 4. Backend'i çalıştırın:
 

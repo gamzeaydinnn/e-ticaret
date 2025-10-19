@@ -4,6 +4,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using System;
+using ECommerce.Data.Context;
+using ECommerce.Infrastructure.Config;
+using Microsoft.Extensions.Options;
+using ECommerce.Infrastructure.Services.Email;
+using Microsoft.Extensions.Configuration;
 
 
 namespace ECommerce.Business.Services.Managers
@@ -11,10 +16,23 @@ namespace ECommerce.Business.Services.Managers
     public class InventoryManager : IInventoryService
     {
         private readonly IProductRepository _productRepository;
+        private readonly ECommerceDbContext _context;
+        private readonly EmailSender _emailSender;
+        private readonly InventorySettings _inventorySettings;
+        private readonly IConfiguration _configuration;
 
-        public InventoryManager(IProductRepository productRepository)
+        public InventoryManager(
+            IProductRepository productRepository,
+            ECommerceDbContext context,
+            EmailSender emailSender,
+            IOptions<InventorySettings> inventoryOptions,
+            IConfiguration configuration)
         {
             _productRepository = productRepository;
+            _context = context;
+            _emailSender = emailSender;
+            _inventorySettings = inventoryOptions.Value;
+            _configuration = configuration;
         }
 
         public async Task<bool> IncreaseStockAsync(int productId, int quantity)
@@ -23,6 +41,9 @@ namespace ECommerce.Business.Services.Managers
             if (product == null) return false;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
+
+            // Log
+            await LogAsync(product.Id, quantity, InventoryChangeType.Purchase, "Manual increase");
             return true;
         }
 
@@ -32,6 +53,9 @@ namespace ECommerce.Business.Services.Managers
             if (product == null || product.StockQuantity < quantity) return false;
             product.StockQuantity -= quantity;
             await _productRepository.UpdateAsync(product);
+
+            await LogAsync(product.Id, -quantity, InventoryChangeType.Sale, "Manual decrease");
+            await CheckThresholdAndNotifyAsync(product);
             return true;
         }
 
@@ -40,6 +64,85 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(productId);
             return product?.StockQuantity ?? 0;
         }
+        public async Task<bool> DecreaseStockAsync(int productId, int quantity, InventoryChangeType changeType, string? note = null, int? performedByUserId = null)
+        {
+            var product = await _productRepository.GetByIdAsync(productId);
+            if (product == null || product.StockQuantity < quantity) return false;
+
+            product.StockQuantity -= quantity;
+            await _productRepository.UpdateAsync(product);
+
+            await LogAsync(productId, -quantity, changeType, note, performedByUserId);
+            await CheckThresholdAndNotifyAsync(product);
+            return true;
+        }
+
+        public async Task<bool> IncreaseStockAsync(int productId, int quantity, InventoryChangeType changeType, string? note = null, int? performedByUserId = null)
+        {
+            var product = await _productRepository.GetByIdAsync(productId);
+            if (product == null) return false;
+
+            product.StockQuantity += quantity;
+            await _productRepository.UpdateAsync(product);
+
+            await LogAsync(productId, quantity, changeType, note, performedByUserId);
+            return true;
+        }
+
+        private async Task LogAsync(int productId, int changeQty, InventoryChangeType type, string? note = null, int? byUserId = null)
+        {
+            var log = new InventoryLog
+            {
+                ProductId = productId,
+                ChangeQuantity = changeQty,
+                ChangeType = type,
+                Note = note,
+                PerformedByUserId = byUserId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+            _context.InventoryLogs.Add(log);
+            await _context.SaveChangesAsync();
+        }
+
+        private async Task CheckThresholdAndNotifyAsync(Product product)
+        {
+            var threshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
+            if (product.StockQuantity <= threshold)
+            {
+                // DB notification
+                var n = new Notification
+                {
+                    Title = "Düşük Stok Uyarısı",
+                    Message = $"{product.Name} için stok {product.StockQuantity} seviyesine düştü (eşik: {threshold}).",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _context.Notifications.Add(n);
+                await _context.SaveChangesAsync();
+
+                // E-mail (admin adresi appsettings'ten alınırsa daha iyi; burada varsayılan yoksa atlanır)
+                // EmailSender arayüzü basit; AppSettings üzerinden tanımlı From'a gönderilebilir veya Admin:Email alınabilir.
+                var adminEmail = _configuration["Admin:Email"];
+                if (!string.IsNullOrWhiteSpace(adminEmail))
+                {
+                    try
+                    {
+                        await _emailSender.SendEmailAsync(
+                            toEmail: adminEmail,
+                            subject: "Düşük Stok Uyarısı",
+                            body: $"Ürün: {product.Name}\nStok: {product.StockQuantity}\nEşik: {threshold}\nTarih: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}",
+                            isHtml: false
+                        );
+                    }
+                    catch
+                    {
+                        // e-posta yapılandırılmadı ise sessiz geç
+                    }
+                }
+            }
+        }
+
           /*
           Stok yönetimi & eşzamanlılık (kritik algoritma)
          Önemli kavram: satış sırasında rezervasyon (reserve) → ödeme onayı gelince kesin düşüm (decrement). 

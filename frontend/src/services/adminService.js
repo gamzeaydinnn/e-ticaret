@@ -450,4 +450,24 @@ export const AdminService = {
     api.put(`/api/admin/orders/${id}/status`, { status }),
   getRecentOrders: () =>
     api.get("/api/admin/orders/recent"),
+
+  // Reports
+  getLowStockProducts: async () => {
+    const res = await api.get("/api/admin/reports/stock/low");
+    return res;
+  },
+  getInventoryMovements: async ({ from, to } = {}) => {
+    const params = [];
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    const qs = params.length ? `?${params.join("&")}` : "";
+    const res = await api.get(`/api/admin/reports/inventory/movements${qs}`);
+    return res;
+  },
+  getSalesReport: async (period = "daily") => {
+    const res = await api.get(`/api/admin/reports/sales?period=${encodeURIComponent(period)}`);
+    return res;
+  },
 };
+
+export default AdminService;

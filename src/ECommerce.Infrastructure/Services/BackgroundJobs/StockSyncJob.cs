@@ -4,6 +4,8 @@ using Microsoft.Extensions.Hosting;
 using ECommerce.Core.Interfaces;
 // using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
 using ECommerce.Data.Repositories;
+using Microsoft.Extensions.Options;
+using ECommerce.Infrastructure.Config;
 
 //Amaç: Mikro ERP ile stok senkronizasyonunu otomatikleştirmek.
 namespace ECommerce.Infrastructure.Services.BackgroundJobs
@@ -13,11 +15,16 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
         private readonly IMicroService _microService;
         private readonly IProductRepository _productRepository;
         private CancellationTokenSource? _cts;
+        private readonly int _intervalSeconds;
 
-        public StockSyncJob(IMicroService microService, IProductRepository productRepository)
+        public StockSyncJob(
+            IMicroService microService,
+            IProductRepository productRepository,
+            IOptions<InventorySettings> inventoryOptions)
         {
             _microService = microService;
             _productRepository = productRepository;
+            _intervalSeconds = Math.Max(10, inventoryOptions.Value.StockSyncIntervalSeconds);
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -29,7 +36,7 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
                 while (_cts != null && !_cts.Token.IsCancellationRequested)
                 {
                     await SyncStocks();
-                    await Task.Delay(60000, _cts.Token); // her 60 saniyede bir çalıştır
+                    await Task.Delay(TimeSpan.FromSeconds(_intervalSeconds), _cts.Token);
                 }
             });
 

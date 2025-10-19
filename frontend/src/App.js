@@ -28,6 +28,7 @@ import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminCategories from "./pages/Admin/AdminCategories";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
+import AdminReports from "./pages/Admin/AdminReports";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -602,6 +603,15 @@ function App() {
               element={
                 <AdminGuard>
                   <AdminCouriers />
+                </AdminGuard>
+              }
+            />
+
+            <Route
+              path="/admin/reports"
+              element={
+                <AdminGuard>
+                  <AdminReports />
                 </AdminGuard>
               }
             />
