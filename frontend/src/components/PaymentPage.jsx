@@ -11,6 +11,8 @@ const PaymentPage = () => {
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("creditCard");
   const [products, setProducts] = useState({});
+  const [shippingMethod, setShippingMethod] = useState("standard"); // standard | express
+  const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -99,7 +101,8 @@ const PaymentPage = () => {
       const price = p ? p.specialPrice || p.price : 0;
       return sum + price * item.quantity;
     }, 0);
-    const shipping = subtotal > 150 ? 0 : 15; // 150 TL üzeri ücretsiz kargo
+    const baseShipping = shippingMethod === "express" ? 30 : 15;
+    const shipping = subtotal > 150 ? 0 : baseShipping; // 150 TL üzeri ücretsiz kargo
     const tax = subtotal * 0.18; // KDV %18
     const total = subtotal + shipping + tax;
 
@@ -112,6 +115,48 @@ const PaymentPage = () => {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+  };
+
+  // Kart doğrulama yardımcıları (Luhn ve alan kontrolleri)
+  const onlyDigits = (s) => (s || "").replace(/\D/g, "");
+  const luhnCheck = (num) => {
+    const arr = onlyDigits(num).split("").reverse().map((n) => parseInt(n, 10));
+    if (!arr.length) return false;
+    let sum = 0;
+    for (let i = 0; i < arr.length; i++) {
+      let n = arr[i];
+      if (i % 2 === 1) {
+        n *= 2;
+        if (n > 9) n -= 9;
+      }
+      sum += n;
+    }
+    return sum % 10 === 0;
+  };
+  const validateCard = () => {
+    const errs = {};
+    if (paymentMethod === "creditCard") {
+      const num = onlyDigits(formData.cardNumber || "");
+      if (num.length < 13 || num.length > 19 || !luhnCheck(num)) {
+        errs.cardNumber = "Geçersiz kart numarası";
+      }
+      if (!formData.cardName || formData.cardName.trim().length < 3) {
+        errs.cardName = "Kart üzerindeki isim gerekli";
+      }
+      const m = parseInt(formData.expiryMonth, 10);
+      const y = parseInt(formData.expiryYear, 10);
+      if (!(m >= 1 && m <= 12)) {
+        errs.expiryMonth = "Ay 01-12 arasında olmalı";
+      }
+      const currentYY = new Date().getFullYear();
+      if (!(y >= currentYY)) {
+        errs.expiryYear = "Yıl geçersiz";
+      }
+      if (!/^[0-9]{3,4}$/.test(formData.cvv || "")) {
+        errs.cvv = "CVV 3-4 haneli olmalı";
+      }
+    }
+    return errs;
   };
 
   const formatCardNumber = (value) => {
@@ -167,6 +212,13 @@ const PaymentPage = () => {
 
     if (cartItems.length === 0) {
       alert("Sepetiniz boş. Lütfen önce ürün ekleyin.");
+      return;
+    }
+
+    // Kart doğrulama (kredi kartı seçiliyse)
+    const v = validateCard();
+    setErrors(v);
+    if (Object.keys(v).length > 0) {
       return;
     }
 
@@ -369,6 +421,9 @@ const PaymentPage = () => {
                           maxLength="19"
                           required
                         />
+                        {errors.cardNumber && (
+                          <small className="text-danger">{errors.cardNumber}</small>
+                        )}
                       </div>
                       <div className="col-md-6 mb-3">
                         <label className="form-label fw-bold text-warning">
@@ -388,6 +443,9 @@ const PaymentPage = () => {
                           onChange={handleInputChange}
                           required
                         />
+                        {errors.cardName && (
+                          <small className="text-danger">{errors.cardName}</small>
+                        )}
                       </div>
                     </div>
                     <div className="row">
@@ -417,6 +475,9 @@ const PaymentPage = () => {
                             </option>
                           ))}
                         </select>
+                        {errors.expiryMonth && (
+                          <small className="text-danger">{errors.expiryMonth}</small>
+                        )}
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label fw-bold text-warning">
@@ -444,6 +505,9 @@ const PaymentPage = () => {
                             );
                           })}
                         </select>
+                        {errors.expiryYear && (
+                          <small className="text-danger">{errors.expiryYear}</small>
+                        )}
                       </div>
                       <div className="col-md-4 mb-3">
                         <label className="form-label fw-bold text-warning">
@@ -464,7 +528,63 @@ const PaymentPage = () => {
                           maxLength="4"
                           required
                         />
+                        {errors.cvv && (
+                          <small className="text-danger">{errors.cvv}</small>
+                        )}
                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Havale/EFT Bilgi Kartı */}
+              {paymentMethod === "bankTransfer" && (
+                <div className="card shadow-lg border-0 mb-4" style={{ borderRadius: 20 }}>
+                  <div
+                    className="card-header text-white border-0"
+                    style={{
+                      background: "linear-gradient(45deg, #6f42c1, #6610f2)",
+                      borderTopLeftRadius: 20,
+                      borderTopRightRadius: 20,
+                      padding: "1.25rem",
+                    }}
+                  >
+                    <h5 className="mb-0 fw-bold">
+                      <i className="fas fa-university me-2"></i>Havale/EFT Bilgileri
+                    </h5>
+                  </div>
+                  <div className="card-body" style={{ padding: "1.5rem" }}>
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="p-3 bg-light rounded">
+                          <div className="text-muted">Banka</div>
+                          <div className="fw-bold">ABC Bank</div>
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        <div className="p-3 bg-light rounded">
+                          <div className="text-muted">Hesap Adı</div>
+                          <div className="fw-bold">Gölköy Gourmet Market</div>
+                        </div>
+                      </div>
+                      <div className="col-md-12">
+                        <div className="p-3 bg-light rounded d-flex justify-content-between align-items-center">
+                          <div>
+                            <div className="text-muted">IBAN</div>
+                            <div className="fw-bold">TR00 0000 0000 0000 0000 0000 00</div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary"
+                            onClick={() => navigator.clipboard.writeText("TR0000000000000000000000")}
+                          >
+                            <i className="fas fa-copy me-2"></i>Kopyala
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 text-muted" style={{ fontSize: "0.95rem" }}>
+                      Lütfen açıklama kısmına sipariş numaranızı yazınız. Sipariş tamamlandıktan sonra “Sipariş Başarı” sayfasında sipariş numaranız görüntülenecektir.
                     </div>
                   </div>
                 </div>
@@ -671,16 +791,18 @@ const PaymentPage = () => {
                         key={item.id}
                         className="d-flex align-items-center mb-3 pb-3 border-bottom"
                       >
-                        <div
-                          className="me-3 d-flex align-items-center justify-content-center"
-                          style={{
-                            width: "50px",
-                            height: "50px",
-                            backgroundColor: "#fff8f0",
-                            borderRadius: "10px",
-                          }}
-                        >
-                          📦
+                        <div className="me-3 d-flex align-items-center justify-content-center"
+                          style={{ width: 50, height: 50, backgroundColor: "#fff8f0", borderRadius: 10 }}>
+                          {products[item.productId]?.imageUrl ? (
+                            <img
+                              src={products[item.productId].imageUrl}
+                              alt={products[item.productId]?.name || "Ürün"}
+                              style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, objectFit: "contain" }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <span role="img" aria-label="box">📦</span>
+                          )}
                         </div>
                         <div className="flex-grow-1">
                           <h6 className="mb-1" style={{ fontSize: "0.9rem" }}>
@@ -695,6 +817,37 @@ const PaymentPage = () => {
                         </strong>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Teslimat Yöntemi */}
+                  <div className="mb-4">
+                    <h6 className="text-warning fw-bold mb-2">Teslimat Yöntemi</h6>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="shippingMethod"
+                        id="shipStandard"
+                        checked={shippingMethod === "standard"}
+                        onChange={() => setShippingMethod("standard")}
+                      />
+                      <label className="form-check-label" htmlFor="shipStandard">
+                        Standart Teslimat (₺15) — 2-3 gün
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="shippingMethod"
+                        id="shipExpress"
+                        checked={shippingMethod === "express"}
+                        onChange={() => setShippingMethod("express")}
+                      />
+                      <label className="form-check-label" htmlFor="shipExpress">
+                        Hızlı Teslimat (₺30) — 24 saat
+                      </label>
+                    </div>
                   </div>
 
                   {/* Toplam Hesapları */}
