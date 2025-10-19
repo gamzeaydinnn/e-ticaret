@@ -3,6 +3,7 @@ import { OrderService } from "../services/orderService";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 import { useAuth } from "../contexts/AuthContext";
+import LoginModal from "./LoginModal";
 
 const PaymentPage = () => {
   const { user } = useAuth();
@@ -13,6 +14,7 @@ const PaymentPage = () => {
   const [products, setProducts] = useState({});
   const [shippingMethod, setShippingMethod] = useState("standard"); // standard | express
   const [errors, setErrors] = useState({});
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -302,7 +304,38 @@ const PaymentPage = () => {
       }}
     >
       <div className="container">
-        <form onSubmit={handleSubmit}>
+        {!user && (
+          <div
+            className="alert d-flex justify-content-between align-items-center shadow-sm"
+            style={{
+              borderRadius: 12,
+              background: "linear-gradient(90deg, #fff8f0, #fff3e0)",
+              border: "1px solid #ffe0b2",
+            }}
+          >
+            <div className="d-flex align-items-center">
+              <i className="fas fa-user-alt me-2 text-warning"></i>
+              <span className="text-muted">
+                Giriş yapmadan da devam edebilirsiniz. İsterseniz hesabınızla
+                giriş yaparak adres ve ödeme bilgilerinizi hızlıca kullanın.
+              </span>
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-warning"
+                onClick={() => setShowLoginModal(true)}
+                style={{ borderRadius: 20 }}
+              >
+                <i className="fas fa-sign-in-alt me-1"></i> Giriş Yap
+              </button>
+              <a href="#checkout-form" className="btn btn-sm btn-warning text-white" style={{ borderRadius: 20 }}>
+                Misafir Olarak Devam Et
+              </a>
+            </div>
+          </div>
+        )}
+        <form onSubmit={handleSubmit} id="checkout-form">
           <div className="row">
             {/* Sol Taraf: Ödeme Formu */}
             <div className="col-lg-8">
@@ -917,6 +950,11 @@ const PaymentPage = () => {
           </div>
         </form>
       </div>
+      <LoginModal
+        show={showLoginModal}
+        onHide={() => setShowLoginModal(false)}
+        onLoginSuccess={() => setShowLoginModal(false)}
+      />
     </div>
   );
 };
