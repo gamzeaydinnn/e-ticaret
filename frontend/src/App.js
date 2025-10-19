@@ -15,6 +15,7 @@ import CartPage from "./components/CartPage";
 import FavoritesPage from "./components/FavoritesPage";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
+import OrderSuccess from "./components/OrderSuccess";
 import AdminPanel from "./admin/AdminPanel";
 import LoginModal from "./components/LoginModal";
 import { useCartCount } from "./hooks/useCartCount";
@@ -538,6 +539,7 @@ function App() {
             <Route path="/favorites" element={<FavoritesPage />} />
             <Route path="/orders" element={<OrderTracking />} />
             <Route path="/payment" element={<PaymentPage />} />
+            <Route path="/order-success" element={<OrderSuccess />} />
             {/* Ana site rotaları */}
             <Route path="/pages/home" element={<Home />} />
             <Route path="/pages/cart" element={<Cart />} />
