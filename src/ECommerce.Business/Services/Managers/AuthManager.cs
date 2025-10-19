@@ -4,12 +4,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-<<<<<<< HEAD
 using Microsoft.AspNetCore.Identity;
 using ECommerce.Data.Context;
 using ECommerce.Infrastructure;
-=======
->>>>>>> sare-branch
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Helpers;
 using ECommerce.Core.DTOs.Auth;
@@ -23,103 +20,10 @@ namespace ECommerce.Business.Services.Managers
         private readonly UserManager<User> _userManager;
         private readonly IConfiguration _config;
 
-<<<<<<< HEAD
-    public async Task<string> RegisterAsync(RegisterDto dto)
-    {
-        if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-            throw new Exception("User already exists");
-
-        var user = new User
-        {
-            Email = dto.Email,
-            UserName = dto.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-            Role = "User",
-            FirstName = dto.FirstName,
-            LastName = dto.LastName,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        return GenerateJwtToken(user);
-    }
-
-    public async Task<string> LoginAsync(LoginDto dto)
-    {
-        var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
-        if (user == null)
-            throw new Exception("Kullanıcı bulunamadı");
-
-        if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            throw new Exception("Şifre yanlış");
-
-        return GenerateJwtToken(user);
-    }
-
-    public async Task<UserLoginDto> GetUserByIdAsync(int userId)
-    {
-        var user = await _context.Users.FindAsync(userId);
-        if (user == null) return null;
-
-        return new UserLoginDto
-        {
-            Id = user.Id,
-            Email = user.Email,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            Role = user.Role
-        };
-    }
-
-    private string GenerateJwtToken(User user)
-    {
-        return JwtTokenHelper.GenerateToken(
-            user.Id,
-            user.Email,
-            user.Role,
-            _config["Jwt:Key"],
-            _config["Jwt:Issuer"],
-            _config["Jwt:Audience"],
-            expiresMinutes: 120
-        );
-    }
-
-    public async Task<string> RefreshTokenAsync(string token, string refreshToken)
-    {
-        var principal = JwtTokenHelper.GetPrincipalFromExpiredToken(token, _config["Jwt:Key"]);
-        if (principal == null)
-            throw new Exception("Invalid token");
-
-        var userEmail = principal.Identity?.Name;
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == userEmail);
-        if (user == null)
-            throw new Exception("User not found");
-
-        return GenerateJwtToken(user);
-    }
-
-    public async Task RevokeRefreshTokenAsync(int userId)
-    {
-        // Refresh token yönetimi eklenecekse burada invalidate edilir
-        await Task.CompletedTask;
-    }
-    public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
-    {
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == dto.Email);
-        if (user == null)
-        {
-            // Güvenlik nedeniyle, kullanıcı bulunamasa bile hata fırlatmıyoruz.
-            // Sadece işlem yapmadan dönüyoruz.
-            return;
-=======
         public AuthManager(UserManager<User> userManager, IConfiguration config)
         {
             _userManager = userManager;
             _config = config;
->>>>>>> sare-branch
         }
 
         public async Task<string> RegisterAsync(RegisterDto dto)
