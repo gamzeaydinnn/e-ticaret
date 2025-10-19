@@ -58,29 +58,25 @@ namespace ECommerce.Data.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public void Update(T entity)
+        public virtual void Update(T entity)
         {
-            throw new NotImplementedException();
+            entity.UpdatedAt = DateTime.UtcNow;
+            _dbSet.Update(entity);
+            _context.SaveChanges();
         }
 
-        public void Delete(T entity)
+        public virtual void Delete(T entity)
         {
-            throw new NotImplementedException();
+            entity.IsActive = false;
+            entity.UpdatedAt = DateTime.UtcNow;
+            _dbSet.Update(entity);
+            _context.SaveChanges();
         }
 
-        public Task<T?> GetAsync(int id)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual Task<T?> GetAsync(int id) => GetByIdAsync(id);
 
-        public Task Remove(T entity)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual Task Remove(T entity) => HardDeleteAsync(entity);
 
-        public Task SaveChangesAsync()
-        {
-            throw new NotImplementedException();
-        }
+        public virtual Task SaveChangesAsync() => _context.SaveChangesAsync();
     }
 }

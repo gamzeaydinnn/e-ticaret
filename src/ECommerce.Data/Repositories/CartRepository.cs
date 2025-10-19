@@ -19,7 +19,7 @@ namespace ECommerce.Data.Repositories
         {
             return await _dbSet
                 .Include(c => c.Product)
-                .ThenInclude(p => p.Category)
+                .ThenInclude(p => p!.Category)
                 .Where(c => c.UserId == userId && c.IsActive)
                 .ToListAsync();
         }

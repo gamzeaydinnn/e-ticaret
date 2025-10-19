@@ -30,14 +30,14 @@ namespace ECommerce.Data.Repositories
                 .OrderBy(c => c.SortOrder)
                 .ToListAsync();
         }
-        public async Task UpdateAsync(Category category)
+        public override async Task UpdateAsync(Category category)
         {
             _dbSet.Update(category); // EF Core Update
             await _context.SaveChangesAsync();
         }
         
 
-    public async Task DeleteAsync(Category category)
+    public override async Task DeleteAsync(Category category)
     {
         _dbSet.Remove(category); // EF Core remove
         await _context.SaveChangesAsync();

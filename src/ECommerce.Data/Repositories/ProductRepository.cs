@@ -20,22 +20,22 @@ namespace ECommerce.Data.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task DeleteAsync(Product product)
+        public override async Task DeleteAsync(Product product)
         {
             _dbSet.Remove(product);
             await _context.SaveChangesAsync();
         }
-        public async Task<Product> AddAsync(Product product)
+        public new async Task<Product> AddAsync(Product product)
         {
             await _context.Products.AddAsync(product);
             await _context.SaveChangesAsync();
             return product;
         }
-        public async Task<Product?> GetByIdAsync(int id)
+        public override async Task<Product?> GetByIdAsync(int id)
         {
             return await _context.Products.FindAsync(id);
         }
-        public async Task<List<Product>> GetAllAsync()
+        public new async Task<List<Product>> GetAllAsync()
         {
             return await _context.Products.ToListAsync();
         }
@@ -53,7 +53,7 @@ namespace ECommerce.Data.Repositories
             await _context.SaveChangesAsync();
         }*/
 
-        public void Update(Product product)
+        public override void Update(Product product)
         {
             _dbSet.Update(product);
             _context.SaveChanges();
