@@ -19,12 +19,16 @@ namespace ECommerce.Infrastructure.Services.FileStorage
 
         public async Task<string> UploadAsync(Stream fileStream, string fileName, string contentType)
         {
-            var filePath = Path.Combine(_rootPath, fileName);
+            var ext = Path.GetExtension(fileName);
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            var safeName = string.IsNullOrWhiteSpace(name) ? "file" : name;
+            var unique = $"{safeName}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{ext}";
+            var filePath = Path.Combine(_rootPath, unique);
             using (var file = File.Create(filePath))
             {
                 await fileStream.CopyToAsync(file);
             }
-            return $"/uploads/{fileName}";
+            return $"/uploads/{unique}";
         }
 
         public Task DeleteAsync(string fileUrl)
@@ -42,5 +46,4 @@ namespace ECommerce.Infrastructure.Services.FileStorage
         }
     }
 }//		○ FileStorage (Local, S3, Azure Blob) implementasyonu.
-
 

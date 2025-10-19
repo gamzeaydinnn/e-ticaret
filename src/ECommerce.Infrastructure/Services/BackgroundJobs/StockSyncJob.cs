@@ -12,7 +12,7 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
     {
         private readonly IMicroService _microService;
         private readonly IProductRepository _productRepository;
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource? _cts;
 
         public StockSyncJob(IMicroService microService, IProductRepository productRepository)
         {
@@ -26,7 +26,7 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
 
             _ = Task.Run(async () =>
             {
-                while (!_cts.Token.IsCancellationRequested)
+                while (_cts != null && !_cts.Token.IsCancellationRequested)
                 {
                     await SyncStocks();
                     await Task.Delay(60000, _cts.Token); // her 60 saniyede bir çalıştır
@@ -52,7 +52,7 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _cts.Cancel();
+            _cts?.Cancel();
             return Task.CompletedTask;
         }
         public async Task RunOnce()

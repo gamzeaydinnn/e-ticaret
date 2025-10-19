@@ -25,8 +25,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<MicroProductDto>>(json);
-            throw new NotImplementedException();
+            return JsonSerializer.Deserialize<List<MicroProductDto>>(json) ?? new List<MicroProductDto>();
     }
 
         public async Task<IEnumerable<MicroStockDto>> GetStocksAsync()
@@ -35,8 +34,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<List<MicroStockDto>>(json);
-             throw new NotImplementedException();
+            return JsonSerializer.Deserialize<List<MicroStockDto>>(json) ?? new List<MicroStockDto>();
     }
 
         public async Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders)
@@ -46,7 +44,6 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
             var response = await _httpClient.PostAsync("erp/orders/import", content);
             return response.IsSuccessStatusCode;
-            throw new NotImplementedException();
     }
     
 

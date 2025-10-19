@@ -1,5 +1,6 @@
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
+using ECommerce.Entities.Enums;
 using System;
 using System.Threading.Tasks;
 
@@ -33,6 +34,18 @@ namespace ECommerce.Business.Services.Managers
             // Henüz gerçek bir ödeme veritabanı yoksa 0 döndür.
             // İleride repository ile entegre edilerek gerçek sayı alınabilir.
             return Task.FromResult(0);
+        }
+
+        public async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
+        {
+            var ok = await ProcessPaymentAsync(orderId, amount);
+            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+        }
+
+        public async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)
+        {
+            var ok = await CheckPaymentStatusAsync(paymentId);
+            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
         }
     }
 }

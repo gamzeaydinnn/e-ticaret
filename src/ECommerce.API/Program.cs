@@ -16,6 +16,9 @@ using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Core.Constants;
+using ECommerce.Infrastructure.Services.Email;
+using ECommerce.Infrastructure.Services.FileStorage;
+using Microsoft.Extensions.Options;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -97,6 +100,16 @@ builder.Services.AddAuthentication(options =>
         };
     });
 
+// Bind settings
+builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
+builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+
+// Email + FileStorage services
+builder.Services.AddSingleton<EmailSender>();
+builder.Services.AddSingleton<IFileStorage>(sp =>
+    new LocalFileStorage(builder.Environment.ContentRootPath));
+
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -111,7 +124,23 @@ builder.Services.AddScoped<IUserService, UserManager>();
 builder.Services.AddScoped<IProductService, ProductManager>();
 builder.Services.AddScoped<IOrderService, OrderManager>();
 builder.Services.AddScoped<ICartService, CartManager>();
-builder.Services.AddScoped<IPaymentService, PaymentManager>();
+// Payment provider selection by config
+var paymentProvider = builder.Configuration["Payment:Provider"]?.ToLowerInvariant();
+switch (paymentProvider)
+{
+    case "stripe":
+        builder.Services.AddScoped<IPaymentService, StripePaymentService>();
+        break;
+    case "iyzico":
+        builder.Services.AddScoped<IPaymentService, IyzicoPaymentService>();
+        break;
+    case "paypal":
+        builder.Services.AddScoped<IPaymentService, PayPalPaymentService>();
+        break;
+    default:
+        builder.Services.AddScoped<IPaymentService, PaymentManager>();
+        break;
+}
 builder.Services.AddScoped<IShippingService, ShippingManager>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();
@@ -140,8 +169,12 @@ builder.Services.AddScoped<ICourierService, CourierManager>();
 // vs.
 
 builder.Services.AddScoped<StockSyncJob>();
-// MicroService ve MicroSyncManager
-builder.Services.AddScoped<IMicroService, ECommerce.Business.Services.Managers.MicroService>();
+// MicroService ve MicroSyncManager (HttpClient tabanlı)
+builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
+{
+    var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
+});
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<IAuthService, AuthManager>();
 

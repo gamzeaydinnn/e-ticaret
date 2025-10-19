@@ -19,5 +19,9 @@ namespace ECommerce.Core.Interfaces
         /// <returns>Ödeme durumu (true = başarılı, false = başarısız)</returns>
         Task<bool> CheckPaymentStatusAsync(string paymentId);
         Task<int> GetPaymentCountAsync(); 
+
+        // Tip güvenliği için ayrıntılı sürümler
+        Task<ECommerce.Entities.Enums.PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount);
+        Task<ECommerce.Entities.Enums.PaymentStatus> GetPaymentStatusAsync(string paymentId);
     }
 }

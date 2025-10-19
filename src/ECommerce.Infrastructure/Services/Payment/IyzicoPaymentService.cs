@@ -3,6 +3,9 @@ using ECommerce.Data.Repositories;        // Repository kullanacaksan
 using ECommerce.Core.DTOs.Order;          // OrderCreateDto, OrderDetailDto
 using ECommerce.Core.Helpers;             // HashingHelper, JwtTokenHelper vs.
 using ECommerce.Core.Interfaces;
+using ECommerce.Infrastructure.Config;
+using Microsoft.Extensions.Options;
+using ECommerce.Entities.Enums;
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -17,6 +20,12 @@ namespace ECommerce.Infrastructure.Services.Payment
 {
     public class IyzicoPaymentService : IPaymentService
     {
+        private readonly PaymentSettings _settings;
+
+        public IyzicoPaymentService(IOptions<PaymentSettings> options)
+        {
+            _settings = options.Value;
+        }
         public async Task<bool> ProcessPaymentAsync(int orderId, decimal amount)
         {
             // Burada Iyzico API çağrısı yapılır
@@ -38,9 +47,18 @@ namespace ECommerce.Infrastructure.Services.Payment
 //Gerçek kullanımda Iyzico API’den ödeme durumu alınacak.
         }
 
-        public Task<int> GetPaymentCountAsync()
+        public Task<int> GetPaymentCountAsync() => Task.FromResult(0);
+
+        public async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
         {
-            throw new NotImplementedException();
+            var ok = await ProcessPaymentAsync(orderId, amount);
+            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+        }
+
+        public async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)
+        {
+            var ok = await CheckPaymentStatusAsync(paymentId);
+            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
         }
     }
 }
