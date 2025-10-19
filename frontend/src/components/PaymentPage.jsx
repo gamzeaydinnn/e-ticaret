@@ -14,6 +14,8 @@ const PaymentPage = () => {
   const [products, setProducts] = useState({});
   const [shippingMethod, setShippingMethod] = useState("standard"); // standard | express
   const [errors, setErrors] = useState({});
+  const [deliverySlot, setDeliverySlot] = useState("standard");
+  const [deliveryNote, setDeliveryNote] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
@@ -252,6 +254,12 @@ const PaymentPage = () => {
         shippingDistrict: formData.district,
         shippingPostalCode: formData.postalCode,
         paymentMethod,
+        deliveryNotes: [
+          deliverySlot ? `Slot: ${deliverySlot}` : null,
+          deliveryNote ? `Not: ${deliveryNote}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | "),
       };
 
       const result = await OrderService.checkout(payload);
@@ -789,6 +797,93 @@ const PaymentPage = () => {
                         onChange={handleInputChange}
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Teslimat Zamanı */}
+              <div className="card shadow-lg border-0 mb-4" style={{ borderRadius: "20px" }}>
+                <div
+                  className="card-header text-white border-0"
+                  style={{
+                    background: "linear-gradient(45deg, #20c997, #28a745)",
+                    borderTopLeftRadius: "20px",
+                    borderTopRightRadius: "20px",
+                    padding: "1.5rem",
+                  }}
+                >
+                  <h5 className="mb-0 fw-bold">
+                    <i className="fas fa-clock me-2"></i>Teslimat Zamanı
+                  </h5>
+                </div>
+                <div className="card-body" style={{ padding: "2rem" }}>
+                  <div className="mb-3">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="deliverySlot"
+                        id="slotStandard"
+                        checked={deliverySlot === "standard"}
+                        onChange={() => setDeliverySlot("standard")}
+                      />
+                      <label className="form-check-label" htmlFor="slotStandard">
+                        Gün içinde (Standart)
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="deliverySlot"
+                        id="slotMorning"
+                        checked={deliverySlot === "10:00-13:00"}
+                        onChange={() => setDeliverySlot("10:00-13:00")}
+                      />
+                      <label className="form-check-label" htmlFor="slotMorning">
+                        10:00 - 13:00
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="deliverySlot"
+                        id="slotAfternoon"
+                        checked={deliverySlot === "13:00-16:00"}
+                        onChange={() => setDeliverySlot("13:00-16:00")}
+                      />
+                      <label className="form-check-label" htmlFor="slotAfternoon">
+                        13:00 - 16:00
+                      </label>
+                    </div>
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="radio"
+                        name="deliverySlot"
+                        id="slotEvening"
+                        checked={deliverySlot === "16:00-20:00"}
+                        onChange={() => setDeliverySlot("16:00-20:00")}
+                      />
+                      <label className="form-check-label" htmlFor="slotEvening">
+                        16:00 - 20:00
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label fw-bold text-warning">
+                      Teslimat Notu
+                    </label>
+                    <textarea
+                      className="form-control form-control-lg border-0 shadow-sm"
+                      style={{ backgroundColor: "#fff8f0", borderRadius: 15, padding: "1rem 1.5rem" }}
+                      rows="3"
+                      placeholder="Örn. Kapı önüne bırakın, güvenlikte bırakın vb."
+                      value={deliveryNote}
+                      onChange={(e) => setDeliveryNote(e.target.value)}
+                    />
                   </div>
                 </div>
               </div>

@@ -21,6 +21,9 @@ namespace ECommerce.Core.DTOs.Order
         public string ShippingCity { get; set; } = string.Empty;
         public string? ShippingDistrict { get; set; }
         public string? ShippingPostalCode { get; set; }
+
+        // Teslimat notu/slot bilgisi (opsiyonel)
+        public string? DeliveryNotes { get; set; }
     }
 
     public class OrderItemDto

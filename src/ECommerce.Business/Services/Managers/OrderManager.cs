@@ -76,6 +76,7 @@ namespace ECommerce.Business.Services.Managers
                 CustomerName = dto.CustomerName,
                 CustomerPhone = dto.CustomerPhone,
                 CustomerEmail = dto.CustomerEmail,
+                DeliveryNotes = dto.DeliveryNotes,
                 OrderItems = items
             };
 
@@ -242,6 +243,7 @@ namespace ECommerce.Business.Services.Managers
                     CustomerName = dto.CustomerName,
                     CustomerPhone = dto.CustomerPhone,
                     CustomerEmail = dto.CustomerEmail,
+                    DeliveryNotes = dto.DeliveryNotes,
                     OrderItems = items
                 };
 
