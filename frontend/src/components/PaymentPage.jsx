@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { OrderService } from "../services/orderService";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
@@ -297,6 +298,63 @@ const PaymentPage = () => {
           <span className="visually-hidden">Loading...</span>
         </div>
         <p className="text-muted fw-bold">Ödeme sayfası yükleniyor...</p>
+      </div>
+    );
+  }
+
+  // Boş sepet için görsel durum ve CTA
+  if (!loading && (!cartItems || cartItems.length === 0)) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background:
+            "linear-gradient(135deg, #fff3e0 0%, #ffe0b2 50%, #ffcc80 100%)",
+          paddingTop: "2rem",
+          paddingBottom: "2rem",
+        }}
+      >
+        <div className="container">
+          <div className="row justify-content-center">
+            <div className="col-lg-8">
+              <div className="card shadow-lg border-0" style={{ borderRadius: 20 }}>
+                <div className="card-body text-center p-5">
+                  <div
+                    className="mx-auto d-flex align-items-center justify-content-center mb-4"
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: "50%",
+                      background:
+                        "linear-gradient(135deg, #ff6f00, #ff8f00, #ffa000)",
+                      boxShadow: "0 10px 30px rgba(255,111,0,0.25)",
+                      color: "white",
+                    }}
+                  >
+                    <i className="fas fa-shopping-cart fa-2x"></i>
+                  </div>
+                  <h3 className="fw-bold text-warning mb-2">Sepetiniz Boş</h3>
+                  <p className="text-muted mb-4">
+                    Ödeme adımına geçebilmek için sepetinize ürün ekleyin.
+                  </p>
+                  <Link
+                    to="/"
+                    className="btn btn-lg text-white fw-bold shadow-lg border-0"
+                    style={{
+                      background:
+                        "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)",
+                      borderRadius: 15,
+                      padding: "0.9rem 1.5rem",
+                    }}
+                  >
+                    <i className="fas fa-arrow-left me-2"></i>
+                    Alışverişe Dön
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
