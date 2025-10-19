@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
@@ -8,7 +9,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/categories")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     public class AdminCategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;

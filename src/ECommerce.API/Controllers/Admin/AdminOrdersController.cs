@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Core.Interfaces;
 using ECommerce.Business.Services.Interfaces;
@@ -12,7 +13,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = "Admin")] // sadece admin erişebilir
+    [Authorize(Roles = Roles.Admin)] // sadece admin erişebilir
     [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {

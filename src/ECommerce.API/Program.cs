@@ -15,6 +15,7 @@ using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Config;
+using ECommerce.Core.Constants;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -89,10 +90,10 @@ builder.Services.AddAuthentication(options =>
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidIssuer = builder.Configuration[ConfigKeys.JwtIssuer],
+            ValidAudience = builder.Configuration[ConfigKeys.JwtAudience],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+                Encoding.UTF8.GetBytes(builder.Configuration[ConfigKeys.JwtKey]))
         };
     });
 

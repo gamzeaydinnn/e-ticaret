@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.User;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [Route("api/admin/users")]
     public class AdminUsersController : ControllerBase
     {

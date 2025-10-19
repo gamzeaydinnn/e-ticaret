@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Core.Interfaces;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     // Sadece "Admin" rolüne sahip kullanıcıların erişimine izin verir
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ApiController]
     // Rota: api/admin/micro
     [Route("api/admin/micro")] 

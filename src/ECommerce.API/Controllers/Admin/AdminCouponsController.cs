@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ECommerce.Core.Constants;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using System.Threading.Tasks;
 
 namespace ECommerce.API.Controllers.Admin
 {
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = Roles.Admin)]
     [ApiController]
     [Route("api/admin/coupons")] // api/admin/coupons
     public class AdminCouponsController : ControllerBase
