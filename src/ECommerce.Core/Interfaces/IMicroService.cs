@@ -1,5 +1,4 @@
 using ECommerce.Core.DTOs.Micro;
-using ECommerce.Core.Entities.Concrete;
 using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Core.Interfaces

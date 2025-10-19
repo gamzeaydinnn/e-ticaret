@@ -11,7 +11,7 @@ namespace ECommerce.Entities.Concrete
         public decimal Value { get; set; } // % veya sabit tutar
         public DateTime StartDate { get; set; } = DateTime.UtcNow;
         public DateTime EndDate { get; set; }
-        public bool IsActive { get; set; } = true;
+        // IsActive already provided by BaseEntity
         public string? ConditionsJson { get; set; }
 
         // ✅ Many-to-many ilişki

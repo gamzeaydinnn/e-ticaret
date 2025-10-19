@@ -1,11 +1,10 @@
 using System;
 using ECommerce.Entities.Concrete;
-using System.Collections.Generic;
-using System;
+using ECommerce.Entities.Enums;
 
-//	• StockMovements (Id, ProductVariantId, ChangeQuantity, MovementType ENUM {Purchase, Sale, Return, Adjustment, Reservation, Release}, ReferenceId, CreatedAt, Note)
+//	• StockMovements (Id, ProductVariantId, ChangeQuantity, MovementType, ReferenceId, CreatedAt, Note)
 
-namespace ECommerce.Core.Entities.Concrete
+namespace ECommerce.Entities.Concrete
 {
     public class StockMovement
     {
@@ -13,7 +12,8 @@ namespace ECommerce.Core.Entities.Concrete
         public int ProductId { get; set; }
         public int QuantityChange { get; set; }
         public DateTime MovementDate { get; set; }
-        public string Reason { get; set; } = string.Empty;  // Örn: "Sale", "Return", "Manual"
+        public MovementType MovementType { get; set; } = MovementType.Sale;
+        public string Reason { get; set; } = string.Empty;  // İsteğe bağlı serbest metin
     }
 }
 /*Kullanım amacı:

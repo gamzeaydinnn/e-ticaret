@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Entities.Concrete;
-using ECommerce.Core.Entities.Concrete;
+// using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
 
 namespace ECommerce.Core.Interfaces
 {

@@ -12,6 +12,6 @@ namespace ECommerce.Entities.Concrete
         public DateTime ExpirationDate { get; set; }
         public decimal? MinOrderAmount { get; set; }
         public int UsageLimit { get; set; } = 1;
-        public bool IsActive { get; set; } = true; // BaseEntity’de zaten var, ama gerekirse override edebilirsin
+        // IsActive already provided by BaseEntity
     }
 }

@@ -2,7 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using ECommerce.Core.Interfaces;
-using ECommerce.Core.Entities.Concrete;
+// using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
 using ECommerce.Data.Repositories;
 
 //Amaç: Mikro ERP ile stok senkronizasyonunu otomatikleştirmek.

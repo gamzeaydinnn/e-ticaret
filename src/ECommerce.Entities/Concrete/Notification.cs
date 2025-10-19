@@ -11,7 +11,7 @@ namespace ECommerce.Entities.Concrete
         public string Message { get; set; } = string.Empty;
         public bool IsRead { get; set; } = false;
         public string? Url { get; set; } // optional link
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        // CreatedAt already exists in BaseEntity
 
         public virtual User? User { get; set; }
     }

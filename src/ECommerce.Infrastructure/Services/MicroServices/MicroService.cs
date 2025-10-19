@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using ECommerce.Core.DTOs.Micro;
-using ECommerce.Core.Entities.Concrete;
+// using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using System;

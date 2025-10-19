@@ -14,7 +14,7 @@ namespace ECommerce.Entities.Concrete
         public InventoryChangeType ChangeType { get; set; }
         public string? Note { get; set; }
         public int? PerformedByUserId { get; set; }
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        // CreatedAt already provided by BaseEntity
 
         public virtual Product? Product { get; set; }
     }
