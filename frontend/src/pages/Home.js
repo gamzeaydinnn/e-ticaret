@@ -10,11 +10,11 @@ export default function Home() {
 
   useEffect(() => {
     api
-      .get("/categories")
+      .get("/api/Categories")
       .then((r) => setCategories(r.data))
       .catch(() => {});
     api
-      .get("/products?featured=true")
+      .get("/api/Products")
       .then((r) => setFeatured(r.data))
       .catch(() => {});
   }, []);

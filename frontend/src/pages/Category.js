@@ -10,13 +10,14 @@ export default function Category() {
   const [category, setCategory] = useState(null);
 
   useEffect(() => {
+    // Önce kategori detayını slug ile çek, ardından kategori id'si ile ürünleri getir
     api
-      .get(`/api/Categories/slug/${slug}`)
-      .then((r) => setCategory(r.data))
-      .catch(() => {});
-    api
-      .get(`/api/Products?categorySlug=${slug}`)
-      .then((r) => setProducts(r.data))
+      .get(`/api/Categories/${slug}`)
+      .then((cat) => {
+        setCategory(cat);
+        return api.get(`/api/Products?categoryId=${cat.id}`);
+      })
+      .then((prods) => setProducts(prods))
       .catch(() => {});
   }, [slug]);
 

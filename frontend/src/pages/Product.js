@@ -53,14 +53,14 @@ export default function Product() {
 
   useEffect(() => {
     api
-      .get(`/products/${id}`)
+      .get(`/api/Products/${id}`)
       .then((r) => setProduct(r.data))
       .catch(() => {});
   }, [id]);
 
   const addToCart = async () => {
     try {
-      await api.post("/cart/items", {
+      await api.post("/api/CartItems", {
         productId: product.id,
         qty: quantity,
         variant: selectedVariant,
