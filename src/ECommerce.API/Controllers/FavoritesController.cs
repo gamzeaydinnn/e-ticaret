@@ -2,11 +2,14 @@ using ECommerce.Business.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ECommerce.Core.Extensions;
 
 namespace ECommerce.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class FavoritesController : ControllerBase
     {
         private readonly IFavoriteService _favoriteService;
@@ -21,8 +24,13 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                // Geçici olarak sahte userId kullanıyoruz - gerçek auth sistemine geçince kaldırılacak
-                var effectiveUserId = userId ?? 1;
+                // Kimlik doğrulamadan gelen kullanıcı id'si kullanılmalı
+                var effectiveUserId = User.GetUserId();
+                if (effectiveUserId <= 0)
+                {
+                    return Unauthorized(new { success = false, message = "Kullanıcı doğrulanamadı" });
+                }
+
                 var favorites = await _favoriteService.GetFavoritesAsync(effectiveUserId);
                 return Ok(new { success = true, data = favorites });
             }
@@ -37,8 +45,12 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                // Geçici olarak sahte userId kullanıyoruz
-                var effectiveUserId = userId ?? 1;
+                var effectiveUserId = User.GetUserId();
+                if (effectiveUserId <= 0)
+                {
+                    return Unauthorized(new { success = false, message = "Kullanıcı doğrulanamadı" });
+                }
+
                 await _favoriteService.ToggleFavoriteAsync(effectiveUserId, productId);
                 return Ok(new { success = true, message = "Favori durumu güncellendi" });
             }
@@ -53,8 +65,12 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                // Geçici olarak sahte userId kullanıyoruz
-                var effectiveUserId = userId ?? 1;
+                var effectiveUserId = User.GetUserId();
+                if (effectiveUserId <= 0)
+                {
+                    return Unauthorized(new { success = false, message = "Kullanıcı doğrulanamadı" });
+                }
+
                 await _favoriteService.RemoveFavoriteAsync(effectiveUserId, productId);
                 return Ok(new { success = true, message = "Favori silindi" });
             }

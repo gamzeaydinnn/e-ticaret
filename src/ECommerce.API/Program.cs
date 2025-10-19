@@ -19,6 +19,9 @@ using ECommerce.Core.Constants;
 using ECommerce.Infrastructure.Services.Email;
 using ECommerce.Infrastructure.Services.FileStorage;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
+using ECommerce.API.Infrastructure;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -27,13 +30,25 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CORS (Frontend için izin ver)
+// CORS (ortama göre sıkılaştırma)
 builder.Services.AddCors(options =>
 {
-    options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
-              .AllowAnyHeader()
-              .AllowAnyMethod());
+    options.AddPolicy("Default", policy =>
+    {
+        var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (allowed != null && allowed.Length > 0)
+        {
+            policy.WithOrigins(allowed)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+        else
+        {
+            policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+    });
 });
 
 // DbContext ekle - SQL Server kullan
@@ -182,6 +197,23 @@ builder.Services.AddScoped<IAuthService, AuthManager>();
 
 builder.Services.AddAuthorization();
 
+// Rate Limiting (Global, IP başına)
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 100,
+            Window = TimeSpan.FromMinutes(1),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit = 0
+        });
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
 // Controller ekle
 builder.Services.AddControllers();
 
@@ -198,6 +230,21 @@ var app = builder.Build();
 // //     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
 //     // Cron.Hourly);
 
+// Seed Roles/Admin User (ilk çalıştırmada)
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
+        logger.LogError(ex, "Identity seed sırasında hata oluştu");
+    }
+}
+
 // Middleware
 if (app.Environment.IsDevelopment())
 {
@@ -206,7 +253,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+app.UseCors("Default");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
