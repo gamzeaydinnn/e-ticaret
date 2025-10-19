@@ -12,11 +12,14 @@ export default function AdminReports() {
   const [salesPeriod, setSalesPeriod] = useState("daily");
   const [sales, setSales] = useState(null);
   const [loadingSales, setLoadingSales] = useState(true);
+  const [erp, setErp] = useState({ groups: [] });
+  const [loadingErp, setLoadingErp] = useState(true);
 
   useEffect(() => {
     loadLowStock();
     loadMovements();
     loadSales();
+    loadErp();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -47,6 +50,16 @@ export default function AdminReports() {
       setSales(data);
     } finally {
       setLoadingSales(false);
+    }
+  }
+
+  async function loadErp() {
+    try {
+      setLoadingErp(true);
+      const data = await AdminService.getErpSyncStatus({ from, to });
+      setErp(data);
+    } finally {
+      setLoadingErp(false);
     }
   }
 
@@ -108,6 +121,76 @@ export default function AdminReports() {
         </div>
 
         <div className="row g-4">
+          {/* ERP Sync Status */}
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white d-flex justify-content-between align-items-center">
+                <div>
+                  <i className="fas fa-sync-alt me-2 text-primary"></i>
+                  ERP Senkron Durumu
+                </div>
+                <div className="d-flex gap-2">
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                  />
+                  <input
+                    type="date"
+                    className="form-control form-control-sm"
+                    value={to}
+                    onChange={(e) => setTo(e.target.value)}
+                  />
+                  <button className="btn btn-sm btn-outline-secondary" onClick={loadErp}>
+                    Getir
+                  </button>
+                </div>
+              </div>
+              <div className="card-body">
+                {loadingErp ? (
+                  <div className="text-muted">Yükleniyor...</div>
+                ) : erp.groups?.length ? (
+                  <div className="table-responsive">
+                    <table className="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>Varlık</th>
+                          <th>Yön</th>
+                          <th>Son Deneme</th>
+                          <th>Durum</th>
+                          <th>Son Başarılı</th>
+                          <th>Güncellenen</th>
+                          <th>Son Hata</th>
+                          <th>Kayıt Sayısı</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {erp.groups.map((g, idx) => (
+                          <tr key={idx}>
+                            <td>{g.entity}</td>
+                            <td>{g.direction}</td>
+                            <td>{g.lastAttemptAt ? new Date(g.lastAttemptAt).toLocaleString("tr-TR") : "-"}</td>
+                            <td>
+                              <span className={`badge ${g.lastStatus === "Success" ? "bg-success" : "bg-danger"}`}>
+                                {g.lastStatus}
+                              </span>
+                            </td>
+                            <td>{g.lastSuccessAt ? new Date(g.lastSuccessAt).toLocaleString("tr-TR") : "-"}</td>
+                            <td>{g.updatedCount ?? "-"}</td>
+                            <td className="text-danger">{g.lastError || "-"}</td>
+                            <td>{g.recentCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-muted">Kayıt bulunamadı.</div>
+                )}
+              </div>
+            </div>
+          </div>
           {/* Low Stock */}
           <div className="col-lg-6">
             <div className="card border-0 shadow-sm h-100">
@@ -238,4 +321,3 @@ function isoDate(d) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
-

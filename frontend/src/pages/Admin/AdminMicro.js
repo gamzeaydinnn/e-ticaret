@@ -53,6 +53,28 @@ export default function AdminMicro() {
     setLoading(false);
   };
 
+  const syncStocksFromERP = async () => {
+    setLoading(true);
+    try {
+      const res = await MicroService.syncStocksFromERP();
+      setMessage(res.message || "Stoklar ERP'den güncellendi");
+    } catch (err) {
+      setMessage("Stok senkronizasyonu başarısız");
+    }
+    setLoading(false);
+  };
+
+  const syncPricesFromERP = async () => {
+    setLoading(true);
+    try {
+      const res = await MicroService.syncPricesFromERP();
+      setMessage(res.message || "Fiyatlar ERP'den güncellendi");
+    } catch (err) {
+      setMessage("Fiyat senkronizasyonu başarısız");
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="flex">
       <Sidebar />
@@ -65,6 +87,18 @@ export default function AdminMicro() {
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
           >
             Ürünleri Senkronize Et
+          </button>
+          <button
+            onClick={syncStocksFromERP}
+            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+          >
+            Stokları ERP'den Çek
+          </button>
+          <button
+            onClick={syncPricesFromERP}
+            className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700"
+          >
+            Fiyatları ERP'den Çek
           </button>
           <button
             onClick={fetchProducts}

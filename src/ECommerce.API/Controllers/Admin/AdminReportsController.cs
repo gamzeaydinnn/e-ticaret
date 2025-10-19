@@ -9,6 +9,7 @@ using ECommerce.Core.Constants;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using ECommerce.Entities.Enums;
+using System.Text.RegularExpressions;
 //Dönem içi sipariş sayısı, ciro, satılan adet ve top 5 ürün (OrderDate ve Delivered/Completed).
 namespace ECommerce.API.Controllers.Admin
 {
@@ -100,6 +101,55 @@ namespace ECommerce.API.Controllers.Admin
 
             return Ok(new { start, end, movements });
         }
+
+        [HttpGet("erp/sync-status")]
+        public async Task<IActionResult> GetErpSyncStatus([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+        {
+            var start = from ?? DateTime.UtcNow.Date.AddDays(-7);
+            var end = to ?? DateTime.UtcNow;
+
+            var logs = await _context.MicroSyncLogs
+                .Where(l => l.CreatedAt >= start && l.CreatedAt <= end)
+                .OrderByDescending(l => l.CreatedAt)
+                .ToListAsync();
+
+            var groups = logs
+                .GroupBy(l => new { l.EntityType, l.Direction })
+                .Select(g =>
+                {
+                    var latest = g.OrderByDescending(x => x.CreatedAt).First();
+                    var lastSuccess = g.Where(x => x.Status == "Success").OrderByDescending(x => x.CreatedAt).FirstOrDefault();
+                    var lastError = g.Where(x => x.Status != "Success" && x.LastError != null).OrderByDescending(x => x.CreatedAt).FirstOrDefault();
+
+                    int? updatedCount = null;
+                    if (!string.IsNullOrWhiteSpace(lastSuccess?.Message))
+                    {
+                        var m = Regex.Match(lastSuccess.Message, "(\\d+)");
+                        if (m.Success && int.TryParse(m.Groups[1].Value, out var n))
+                        {
+                            updatedCount = n;
+                        }
+                    }
+
+                    return new
+                    {
+                        entity = g.Key.EntityType,
+                        direction = g.Key.Direction,
+                        lastAttemptAt = latest.LastAttemptAt ?? latest.CreatedAt,
+                        lastStatus = latest.Status,
+                        lastSuccessAt = lastSuccess?.CreatedAt,
+                        lastMessage = latest.Message,
+                        lastError = lastError?.LastError,
+                        updatedCount,
+                        totalAttempts = g.Sum(x => x.Attempts),
+                        recentCount = g.Count()
+                    };
+                })
+                .OrderBy(x => x.entity)
+                .ThenBy(x => x.direction)
+                .ToList();
+
+            return Ok(new { start, end, groups });
+        }
     }
 }
-

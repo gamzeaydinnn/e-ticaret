@@ -468,6 +468,13 @@ export const AdminService = {
     const res = await api.get(`/api/admin/reports/sales?period=${encodeURIComponent(period)}`);
     return res;
   },
+  getErpSyncStatus: async ({ from, to } = {}) => {
+    const params = [];
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    const qs = params.length ? `?${params.join("&")}` : "";
+    return api.get(`/api/admin/reports/erp/sync-status${qs}`);
+  },
 };
 
 export default AdminService;
