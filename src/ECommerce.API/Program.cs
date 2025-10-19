@@ -193,7 +193,7 @@ builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.
 {
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
-});
+}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<IAuthService, AuthManager>();
 

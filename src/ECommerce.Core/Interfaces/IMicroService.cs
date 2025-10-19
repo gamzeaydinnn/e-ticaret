@@ -9,6 +9,15 @@ namespace ECommerce.Core.Interfaces
         Task<IEnumerable<MicroStockDto>> GetStocksAsync();
         Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders);
         void UpdateProduct(MicroProductDto product);
+
+        // Ek: fiyat ve müşteri akışları + toplu upsert
+        Task<IEnumerable<MicroPriceDto>> GetPricesAsync();
+        Task<IEnumerable<MicroCustomerDto>> GetCustomersAsync();
+
+        Task<bool> UpsertProductsAsync(IEnumerable<MicroProductDto> products);
+        Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks);
+        Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices);
+        Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers);
 		 
         // İhtiyaca göre diğer metodlar eklenebilir
 	}

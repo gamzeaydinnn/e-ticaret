@@ -39,6 +39,7 @@ namespace ECommerce.Business.Services.Managers
                     _microService.UpdateProduct(new MicroProductDto
                     {
                         Id = product.Id,
+                        Sku = product.SKU,
                         Name = product.Name,
                         Stock = product.StockQuantity,
                         Price = product.Price
@@ -68,6 +69,62 @@ namespace ECommerce.Business.Services.Managers
                 // İstersen hata yönetimi için yeniden fırlatabilirsin
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Mikro ERP'den stokları çekerek yerel ürün stoklarını günceller.
+        /// SKU eşlemesi yapılır; bulunamazsa atlanır.
+        /// </summary>
+        public async Task SyncStocksFromMikroAsync()
+        {
+            var stocks = await _microService.GetStocksAsync();
+            int updated = 0;
+            foreach (var s in stocks)
+            {
+                if (string.IsNullOrWhiteSpace(s.Sku)) continue;
+                var product = await _productRepository.GetBySkuAsync(s.Sku);
+                if (product == null) continue;
+                product.StockQuantity = s.Quantity > 0 ? s.Quantity : s.Stock; // iki alan uyumu için
+                await _productRepository.UpdateAsync(product);
+                updated++;
+            }
+
+            await _productRepository.LogSyncAsync(new MicroSyncLog
+            {
+                EntityType = "Stock",
+                Direction = "FromERP",
+                Status = "Success",
+                Message = $"{updated} ürün stoğu güncellendi",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
+        /// Mikro ERP'den fiyatları çekerek yerel ürün fiyatlarını günceller.
+        /// SKU eşlemesi yapılır.
+        /// </summary>
+        public async Task SyncPricesFromMikroAsync()
+        {
+            var prices = await _microService.GetPricesAsync();
+            int updated = 0;
+            foreach (var p in prices)
+            {
+                if (string.IsNullOrWhiteSpace(p.Sku)) continue;
+                var product = await _productRepository.GetBySkuAsync(p.Sku);
+                if (product == null) continue;
+                product.Price = p.Price;
+                await _productRepository.UpdateAsync(product);
+                updated++;
+            }
+
+            await _productRepository.LogSyncAsync(new MicroSyncLog
+            {
+                EntityType = "Price",
+                Direction = "FromERP",
+                Status = "Success",
+                Message = $"{updated} ürün fiyatı güncellendi",
+                CreatedAt = DateTime.UtcNow
+            });
         }
     }
 }

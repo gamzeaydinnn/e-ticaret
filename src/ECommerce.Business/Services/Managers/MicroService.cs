@@ -37,6 +37,25 @@ namespace ECommerce.Business.Services.Managers
 
         // İleride kullanılmak üzere ek yardımcı metot; şimdilik no-op bırakıyoruz.
         public void UpdateStock(MicroStockDto stockDto) { }
+
+        // Yeni arabirim üyeleri (stub)
+        public Task<IEnumerable<MicroPriceDto>> GetPricesAsync()
+            => Task.FromResult<IEnumerable<MicroPriceDto>>(new List<MicroPriceDto>());
+
+        public Task<IEnumerable<MicroCustomerDto>> GetCustomersAsync()
+            => Task.FromResult<IEnumerable<MicroCustomerDto>>(new List<MicroCustomerDto>());
+
+        public Task<bool> UpsertProductsAsync(IEnumerable<MicroProductDto> products)
+            => Task.FromResult(true);
+
+        public Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks)
+            => Task.FromResult(true);
+
+        public Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices)
+            => Task.FromResult(true);
+
+        public Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)
+            => Task.FromResult(true);
     }
 }
 /*using ECommerce.Core.DTOs.Micro;

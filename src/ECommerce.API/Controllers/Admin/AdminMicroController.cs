@@ -76,5 +76,25 @@ namespace ECommerce.API.Controllers.Admin
             var stocks = await _microService.GetStocksAsync();
             return Ok(stocks);
         }
+
+        /// <summary>
+        /// ERP'den stokları çekip yerelde günceller (SKU eşlemesi)
+        /// </summary>
+        [HttpPost("sync-stocks-from-erp")]
+        public async Task<IActionResult> SyncStocksFromErp()
+        {
+            await _microSyncManager.SyncStocksFromMikroAsync();
+            return Ok(new { message = "Stoklar ERP'den alınıp güncellendi" });
+        }
+
+        /// <summary>
+        /// ERP'den fiyatları çekip yerelde günceller (SKU eşlemesi)
+        /// </summary>
+        [HttpPost("sync-prices-from-erp")]
+        public async Task<IActionResult> SyncPricesFromErp()
+        {
+            await _microSyncManager.SyncPricesFromMikroAsync();
+            return Ok(new { message = "Fiyatlar ERP'den alınıp güncellendi" });
+        }
     }
 }
