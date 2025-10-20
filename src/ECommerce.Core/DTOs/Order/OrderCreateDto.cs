@@ -22,6 +22,10 @@ namespace ECommerce.Core.DTOs.Order
         public string? ShippingDistrict { get; set; }
         public string? ShippingPostalCode { get; set; }
 
+        // Kargo bilgileri
+        public string ShippingMethod { get; set; } = "car"; // car veya motorcycle
+        public decimal ShippingCost { get; set; } = 30m; // Kargo ücreti
+
         // Teslimat notu/slot bilgisi (opsiyonel)
         public string? DeliveryNotes { get; set; }
     }

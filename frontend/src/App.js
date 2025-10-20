@@ -255,7 +255,7 @@ function Header() {
                           }}
                           onClick={() => {
                             setShowUserDropdown(false);
-                            navigate("/account");
+                            navigate("/profile");
                           }}
                         >
                           <div

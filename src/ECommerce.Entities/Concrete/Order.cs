@@ -29,6 +29,10 @@ namespace ECommerce.Entities.Concrete
         public string Currency { get; set; } = "TRY";
         public OrderStatus Status { get; set; } = OrderStatus.Pending;
         
+        // Kargo bilgileri
+        public string ShippingMethod { get; set; } = "car"; // car veya motorcycle
+        public decimal ShippingCost { get; set; } = 30m; // Kargo ücreti
+        
         // Kurye bilgileri
         public int? CourierId { get; set; }
         public string? CustomerName { get; set; }
