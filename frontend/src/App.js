@@ -942,7 +942,7 @@ function HomePage() {
               <div className="footer-brand">
                 <div className="d-flex align-items-center mb-4">
                   <img
-                    src="/images/golkoy-logo.png"
+                    src="/images/golkoy-logo1.png"
                     alt="Gölköy Gourmet Market"
                     style={{
                       height: "140px",
