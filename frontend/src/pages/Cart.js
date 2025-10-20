@@ -2,9 +2,13 @@
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import LoginModal from "../components/LoginModal";
 
 export default function Cart() {
   const [items, setItems] = useState([]);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { user } = useAuth();
 
   const load = () =>
     api
@@ -22,6 +26,12 @@ export default function Cart() {
     api.put(`/cart/items/${id}`, { qty }).then(load);
   const remove = (id) => api.delete(`/cart/items/${id}`).then(load);
   const total = items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+
+  const handleCheckout = () => {
+    if (!user) {
+      setShowLoginModal(true);
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -64,15 +74,28 @@ export default function Cart() {
             <div className="mb-2">
               Ara Toplam: <strong>₺{total.toFixed(2)}</strong>
             </div>
-            <Link
-              to="/checkout"
-              className="block bg-blue-600 text-white p-3 text-center rounded"
-            >
-              Ödemeye geç
-            </Link>
+            {user ? (
+              <Link
+                to="/checkout"
+                className="block bg-blue-600 text-white p-3 text-center rounded"
+              >
+                Ödemeye geç
+              </Link>
+            ) : (
+              <button
+                onClick={handleCheckout}
+                className="block w-full bg-blue-600 text-white p-3 text-center rounded"
+              >
+                Ödemeye geç
+              </button>
+            )}
           </aside>
         </div>
       )}
+      <LoginModal
+        show={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
     </div>
   );
 }

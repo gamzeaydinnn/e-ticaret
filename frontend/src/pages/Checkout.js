@@ -1,8 +1,9 @@
 // Adres, kargo, ödeme adımları
 import React, { useEffect, useState } from "react";
-import { CartService } from "../services/cartService";
-import { OrderService } from "../services/orderService";
+import api from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import LoginModal from "../components/LoginModal";
 
 export default function Checkout() {
   const [form, setForm] = useState({
@@ -12,62 +13,45 @@ export default function Checkout() {
     address: "",
   });
   const [paymentMethod, setPaymentMethod] = useState("card");
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    api
-      .get("/auth/me")
-      .then((r) => {
-        if (r.data) {
-          setForm((prev) => ({
-            ...prev,
-            name: r.data.fullName,
-            email: r.data.email,
-          }));
-        }
-      })
-      .catch(() => {});
-  }, []);
+    if (user) {
+      setForm((prev) => ({
+        ...prev,
+        name: user.fullName || `${user.firstName} ${user.lastName}`,
+        email: user.email,
+      }));
+    }
+  }, [user]);
 
   const submit = async (e) => {
     e.preventDefault();
-    // guest sepetini oku ve sipariş kalemlerini hazırla
-    const guestCart = CartService.getGuestCart();
-    if (!guestCart || guestCart.length === 0) {
-      alert("Sepetiniz boş. Lütfen ürün ekleyin.");
+
+    if (!user) {
+      setShowLoginModal(true);
       return;
     }
 
-    const orderItems = guestCart.map((i) => ({
-      productId: i.productId,
-      quantity: i.quantity,
-      unitPrice: 0, // Sunucu fiyatı esas alacak
-    }));
-
-    const payload = {
-      userId: null,
-      totalPrice: 0, // Sunucu hesaplar
-      orderItems,
-      customerName: form.name,
-      customerPhone: form.phone,
-      customerEmail: form.email,
-      shippingAddress: form.address,
-      shippingCity: form.city || "",
-      shippingDistrict: "",
-      shippingPostalCode: "",
-      paymentMethod,
-    };
     try {
-      const res = await OrderService.checkout(payload);
-      if (res?.success) {
-        alert("Sipariş alındı: " + res.orderNumber);
-        try { CartService.clearGuestCart(); } catch {}
-        navigate("/");
-      } else {
-        throw new Error(res?.message || "Sipariş başarısız");
+      const payload = {
+        customerName: form.name,
+        customerPhone: form.phone,
+        customerEmail: form.email,
+        shippingAddress: form.address,
+        shippingCity: form.city || "",
+        paymentMethod,
+      };
+
+      const res = await api.post("/orders", payload);
+      if (res.success) {
+        alert("Sipariş alındı!");
+        navigate("/orders");
       }
     } catch (err) {
-      alert("Hata: " + err.message);
+      alert("Hata: " + (err.message || "Sipariş başarısız"));
     }
   };
 
@@ -125,6 +109,10 @@ export default function Checkout() {
           Siparişi Onayla
         </button>
       </form>
+      <LoginModal
+        show={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
     </div>
   );
 }

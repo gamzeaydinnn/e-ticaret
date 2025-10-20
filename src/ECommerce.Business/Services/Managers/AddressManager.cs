@@ -1,31 +1,52 @@
+using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Interfaces;
+using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using ECommerce.Business.Services.Interfaces; // IAddressService
-using ECommerce.Entities.Concrete;            // Address
-using ECommerce.Core.Interfaces;              // IAddressRepository
 
 namespace ECommerce.Business.Services.Managers
 {
     public class AddressManager : IAddressService
     {
-        private readonly IAddressRepository _addressRepository;
+        private readonly IAddressRepository _repository;
 
-        public AddressManager(IAddressRepository addressRepository)
+        public AddressManager(IAddressRepository repository)
         {
-            _addressRepository = addressRepository;
+            _repository = repository;
         }
 
-        public async Task<IEnumerable<Address>> GetAllAsync() => await _addressRepository.GetAllAsync();
-        public async Task<Address?> GetByIdAsync(int id) => await _addressRepository.GetByIdAsync(id);
-        public async Task AddAsync(Address address) => await _addressRepository.AddAsync(address);
-        public async Task UpdateAsync(Address address) => await _addressRepository.UpdateAsync(address);
+        public async Task<IEnumerable<Address>> GetAllAsync()
+        {
+            return await _repository.GetAllAsync();
+        }
+
+        public async Task<Address?> GetByIdAsync(int id)
+        {
+            return await _repository.GetByIdAsync(id);
+        }
+
+        public async Task<IEnumerable<Address>> GetByUserIdAsync(int userId)
+        {
+            return await _repository.GetByUserIdAsync(userId);
+        }
+
+        public async Task AddAsync(Address address)
+        {
+            await _repository.AddAsync(address);
+        }
+
+        public async Task UpdateAsync(Address address)
+        {
+            await _repository.UpdateAsync(address);
+        }
+
         public async Task DeleteAsync(int id)
         {
-            var existing = await _addressRepository.GetByIdAsync(id);
-            if (existing == null) return;
-            await _addressRepository.DeleteAsync(existing);
+            var address = await _repository.GetByIdAsync(id);
+            if (address != null)
+            {
+                await _repository.DeleteAsync(address);
+            }
         }
-        public async Task<IEnumerable<Address>> GetByUserIdAsync(int userId) => await _addressRepository.GetByUserIdAsync(userId);
-   
     }
 }

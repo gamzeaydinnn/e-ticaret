@@ -41,6 +41,8 @@ import Cart from "./pages/Cart";
 import Category from "./pages/Category";
 import Product from "./pages/Product";
 import Checkout from "./pages/Checkout";
+import Profile from "./pages/Profile";
+import Addresses from "./pages/Addresses";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -546,6 +548,8 @@ function App() {
             <Route path="/category/:slug" element={<Category />} />
             <Route path="/product/:id" element={<Product />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/addresses" element={<Addresses />} />
 
             {/* Eski admin (geçici) */}
             <Route path="/admin" element={<AdminPanel />} />
