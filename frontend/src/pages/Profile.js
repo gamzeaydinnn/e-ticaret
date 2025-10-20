@@ -37,8 +37,14 @@ export default function Profile() {
     setError("");
 
     try {
-      await api.put("/auth/profile", form);
-      setMessage("Profil başarıyla güncellendi!");
+      const response = await api.put("/profile", {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phoneNumber: form.phone,
+      });
+      if (response.success) {
+        setMessage("Profil başarıyla güncellendi!");
+      }
     } catch (err) {
       setError(err.message || "Profil güncellenemedi");
     }
@@ -55,18 +61,19 @@ export default function Profile() {
     }
 
     try {
-      await api.post("/auth/change-password", {
-        userId: user.id,
+      const response = await api.post("/profile/change-password", {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
         confirmPassword: passwordForm.confirmPassword,
       });
-      setMessage("Şifre başarıyla değiştirildi!");
-      setPasswordForm({
-        oldPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
+      if (response.success) {
+        setMessage("Şifre başarıyla değiştirildi!");
+        setPasswordForm({
+          oldPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        });
+      }
     } catch (err) {
       setError(err.message || "Şifre değiştirilemedi");
     }
