@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
+
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Hosting;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -16,11 +19,65 @@ namespace ECommerce.API.Controllers
     [Route("api/[controller]")]
     public class CourierController : ControllerBase
     {
-        private readonly ICourierService _courierService;
+    private readonly ICourierService _courierService;
+    private readonly UserManager<User> _userManager;
+    private readonly IHostEnvironment _env;
 
-        public CourierController(ICourierService courierService)
+        public CourierController(ICourierService courierService, UserManager<User> userManager, IHostEnvironment env)
         {
             _courierService = courierService;
+            _userManager = userManager;
+            _env = env;
+        }
+        // DEVELOPMENT: Demo kurye ve user ekler
+        [HttpPost("seed-demo")]
+        public async Task<IActionResult> SeedDemoCourier()
+        {
+            if (!_env.IsDevelopment())
+                return Forbid();
+
+            var email = "ahmet@courier.com";
+            var password = "123456";
+            var phone = "05321234567";
+
+            // User zaten var mı?
+            var existingUser = await _userManager.FindByEmailAsync(email);
+            if (existingUser == null)
+            {
+                var user = new User
+                {
+                    UserName = email,
+                    Email = email,
+                    PhoneNumber = phone,
+                    EmailConfirmed = true,
+                    FullName = "Ahmet Yılmaz"
+                };
+                var result = await _userManager.CreateAsync(user, password);
+                if (!result.Succeeded)
+                    return BadRequest(result.Errors);
+                existingUser = user;
+            }
+
+            // Courier zaten var mı?
+            var couriers = await _courierService.GetAllAsync();
+            var existingCourier = couriers.FirstOrDefault(c => c.UserId == existingUser.Id);
+            if (existingCourier == null)
+            {
+                var courier = new Courier
+                {
+                    UserId = existingUser.Id,
+                    Status = "active",
+                    Phone = phone,
+                    Vehicle = "Motosiklet",
+                    Location = "Kadıköy, İstanbul",
+                    Rating = 4.8m,
+                    ActiveOrders = 3,
+                    CompletedToday = 12
+                };
+                await _courierService.AddAsync(courier);
+            }
+
+            return Ok(new { message = "Demo kurye ve user başarıyla eklendi." });
         }
 
         // GET: api/courier

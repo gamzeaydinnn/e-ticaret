@@ -145,6 +145,7 @@ export default function CourierOrders() {
                           <th>Müşteri</th>
                           <th>Adres</th>
                           <th>Tutar</th>
+                          <th>Teslimat</th>
                           <th>Durum</th>
                           <th>İşlemler</th>
                         </tr>
@@ -187,6 +188,15 @@ export default function CourierOrders() {
                             <td>
                               <span className="fw-bold text-success">
                                 {order.totalAmount.toFixed(2)} ₺
+                              </span>
+                            </td>
+                            <td>
+                              <span className="badge bg-light text-dark border px-2 py-1">
+                                {order.shippingMethod === "car"
+                                  ? "Araç"
+                                  : order.shippingMethod === "motorcycle"
+                                  ? "Motosiklet"
+                                  : order.shippingMethod || "-"}
                               </span>
                             </td>
                             <td>
@@ -284,6 +294,16 @@ export default function CourierOrders() {
                     <p>
                       <strong>Tutar:</strong>{" "}
                       {selectedOrder.totalAmount.toFixed(2)} ₺
+                    </p>
+                    <p>
+                      <strong>Teslimat Türü:</strong>{" "}
+                      <span className="badge bg-light text-dark border ms-2">
+                        {selectedOrder.shippingMethod === "car"
+                          ? "Araç"
+                          : selectedOrder.shippingMethod === "motorcycle"
+                          ? "Motosiklet"
+                          : selectedOrder.shippingMethod || "-"}
+                      </span>
                     </p>
                     <p>
                       <strong>Durum:</strong>

@@ -1,8 +1,8 @@
 import api from "./api";
 import { API_CONFIG } from "../config/apiConfig";
 
-const base = "/api/couriers";
-const { USE_MOCK_DATA } = API_CONFIG;
+const base = "/api/courier"; // courier (tekil) olmalı - backend'deki route ile eşleşmeli
+const USE_MOCK_DATA = true; // DEMO: Her zaman mock veri kullan
 
 // Mock kurye verileri
 const mockCouriers = [
@@ -45,6 +45,7 @@ const mockOrders = [
     assignedAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
     estimatedDelivery: new Date(Date.now() + 1000 * 60 * 40).toISOString(),
     priority: "normal",
+    shippingMethod: "car", // Araç
   },
   {
     id: 2,
@@ -58,6 +59,7 @@ const mockOrders = [
     assignedAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
     estimatedDelivery: new Date(Date.now() + 1000 * 60 * 25).toISOString(),
     priority: "urgent",
+    shippingMethod: "motorcycle", // Motosiklet
   },
 ];
 

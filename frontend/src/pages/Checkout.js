@@ -106,7 +106,10 @@ export default function Checkout() {
 
         {/* Kargo Seçeneği */}
         <div className="mb-4">
-          <label className="block mb-2 font-semibold" style={{ color: "#FF8C00" }}>
+          <label
+            className="block mb-2 font-semibold"
+            style={{ color: "#FF8C00" }}
+          >
             🚚 Kargo Tipi Seçin
           </label>
           <div className="d-flex gap-3">
@@ -132,9 +135,11 @@ export default function Checkout() {
               onClick={() => setShippingMethod("motorcycle")}
               className="flex-fill p-3 border rounded cursor-pointer"
               style={{
-                borderColor: shippingMethod === "motorcycle" ? "#FF8C00" : "#ddd",
+                borderColor:
+                  shippingMethod === "motorcycle" ? "#FF8C00" : "#ddd",
                 borderWidth: shippingMethod === "motorcycle" ? "3px" : "1px",
-                backgroundColor: shippingMethod === "motorcycle" ? "#FFF5E6" : "white",
+                backgroundColor:
+                  shippingMethod === "motorcycle" ? "#FFF5E6" : "white",
                 borderRadius: "15px",
                 cursor: "pointer",
                 transition: "all 0.3s",

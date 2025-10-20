@@ -1,9 +1,9 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using ECommerce.Core.Interfaces;
-// using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
-using ECommerce.Data.Repositories;
 using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Config;
 
@@ -12,18 +12,18 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
 {
     public class StockSyncJob : IHostedService
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly IMicroService _microService;
-        private readonly IProductRepository _productRepository;
         private CancellationTokenSource? _cts;
         private readonly int _intervalSeconds;
 
         public StockSyncJob(
+            IServiceScopeFactory scopeFactory,
             IMicroService microService,
-            IProductRepository productRepository,
             IOptions<InventorySettings> inventoryOptions)
         {
+            _scopeFactory = scopeFactory;
             _microService = microService;
-            _productRepository = productRepository;
             _intervalSeconds = Math.Max(10, inventoryOptions.Value.StockSyncIntervalSeconds);
         }
 
@@ -45,14 +45,19 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
 
         private async Task SyncStocks()
         {
-            var stocks = await _microService.GetStocksAsync();
-            foreach (var stock in stocks)
+            using (var scope = _scopeFactory.CreateScope())
             {
-                var product = await _productRepository.GetBySkuAsync(stock.Sku);
-                if (product != null)
+                var productRepository = scope.ServiceProvider.GetRequiredService<IProductRepository>();
+                
+                var stocks = await _microService.GetStocksAsync();
+                foreach (var stock in stocks)
                 {
-                    product.StockQuantity = stock.Quantity;
-                    await _productRepository.UpdateAsync(product);
+                    var product = await productRepository.GetBySkuAsync(stock.Sku);
+                    if (product != null && product.StockQuantity != stock.Quantity)
+                    {
+                        product.StockQuantity = stock.Quantity;
+                        await productRepository.UpdateAsync(product);
+                    }
                 }
             }
         }

@@ -109,16 +109,21 @@ export default function Addresses() {
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-5px)";
-                e.currentTarget.style.boxShadow = "0 8px 30px rgba(255, 140, 0, 0.2)";
+                e.currentTarget.style.boxShadow =
+                  "0 8px 30px rgba(255, 140, 0, 0.2)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 4px 20px rgba(255, 140, 0, 0.1)";
+                e.currentTarget.style.boxShadow =
+                  "0 4px 20px rgba(255, 140, 0, 0.1)";
               }}
             >
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-3">
-                  <h5 className="card-title" style={{ color: "#FF8C00", fontWeight: "bold" }}>
+                  <h5
+                    className="card-title"
+                    style={{ color: "#FF8C00", fontWeight: "bold" }}
+                  >
                     {addr.title}
                   </h5>
                   <div className="d-flex gap-2">
@@ -148,7 +153,8 @@ export default function Addresses() {
                   <strong>📍</strong> {addr.address}
                 </p>
                 <p className="text-muted mb-0">
-                  {addr.district} / {addr.city} {addr.postalCode && `- ${addr.postalCode}`}
+                  {addr.district} / {addr.city}{" "}
+                  {addr.postalCode && `- ${addr.postalCode}`}
                 </p>
               </div>
             </div>
@@ -178,7 +184,8 @@ export default function Addresses() {
               <div
                 className="modal-header"
                 style={{
-                  background: "linear-gradient(135deg, #FF8C00 0%, #FFA500 100%)",
+                  background:
+                    "linear-gradient(135deg, #FF8C00 0%, #FFA500 100%)",
                   color: "white",
                   borderRadius: "22px 22px 0 0",
                 }}
@@ -199,10 +206,15 @@ export default function Addresses() {
                     <input
                       type="text"
                       value={form.title}
-                      onChange={(e) => setForm({ ...form, title: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, title: e.target.value })
+                      }
                       placeholder="Ev, İş vb."
                       className="form-control"
-                      style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                      style={{
+                        borderRadius: "15px",
+                        border: "2px solid #FFE5CC",
+                      }}
                       required
                     />
                   </div>
@@ -211,9 +223,14 @@ export default function Addresses() {
                     <input
                       type="text"
                       value={form.fullName}
-                      onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, fullName: e.target.value })
+                      }
                       className="form-control"
-                      style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                      style={{
+                        borderRadius: "15px",
+                        border: "2px solid #FFE5CC",
+                      }}
                       required
                     />
                   </div>
@@ -222,9 +239,14 @@ export default function Addresses() {
                     <input
                       type="tel"
                       value={form.phone}
-                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, phone: e.target.value })
+                      }
                       className="form-control"
-                      style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                      style={{
+                        borderRadius: "15px",
+                        border: "2px solid #FFE5CC",
+                      }}
                       required
                     />
                   </div>
@@ -234,9 +256,14 @@ export default function Addresses() {
                       <input
                         type="text"
                         value={form.city}
-                        onChange={(e) => setForm({ ...form, city: e.target.value })}
+                        onChange={(e) =>
+                          setForm({ ...form, city: e.target.value })
+                        }
                         className="form-control"
-                        style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                        style={{
+                          borderRadius: "15px",
+                          border: "2px solid #FFE5CC",
+                        }}
                         required
                       />
                     </div>
@@ -245,9 +272,14 @@ export default function Addresses() {
                       <input
                         type="text"
                         value={form.district}
-                        onChange={(e) => setForm({ ...form, district: e.target.value })}
+                        onChange={(e) =>
+                          setForm({ ...form, district: e.target.value })
+                        }
                         className="form-control"
-                        style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                        style={{
+                          borderRadius: "15px",
+                          border: "2px solid #FFE5CC",
+                        }}
                         required
                       />
                     </div>
@@ -256,9 +288,14 @@ export default function Addresses() {
                     <label className="form-label fw-bold">Adres</label>
                     <textarea
                       value={form.address}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, address: e.target.value })
+                      }
                       className="form-control"
-                      style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                      style={{
+                        borderRadius: "15px",
+                        border: "2px solid #FFE5CC",
+                      }}
                       rows="3"
                       required
                     />
@@ -268,9 +305,14 @@ export default function Addresses() {
                     <input
                       type="text"
                       value={form.postalCode}
-                      onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, postalCode: e.target.value })
+                      }
                       className="form-control"
-                      style={{ borderRadius: "15px", border: "2px solid #FFE5CC" }}
+                      style={{
+                        borderRadius: "15px",
+                        border: "2px solid #FFE5CC",
+                      }}
                     />
                   </div>
                   <div className="d-flex gap-2">
@@ -278,7 +320,8 @@ export default function Addresses() {
                       type="submit"
                       className="btn flex-fill"
                       style={{
-                        background: "linear-gradient(135deg, #FF8C00 0%, #FFA500 100%)",
+                        background:
+                          "linear-gradient(135deg, #FF8C00 0%, #FFA500 100%)",
                         color: "white",
                         borderRadius: "20px",
                         fontWeight: "600",
@@ -291,7 +334,11 @@ export default function Addresses() {
                       type="button"
                       onClick={resetForm}
                       className="btn btn-secondary flex-fill"
-                      style={{ borderRadius: "20px", fontWeight: "600", padding: "10px" }}
+                      style={{
+                        borderRadius: "20px",
+                        fontWeight: "600",
+                        padding: "10px",
+                      }}
                     >
                       ❌ İptal
                     </button>
