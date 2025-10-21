@@ -36,5 +36,8 @@ namespace ECommerce.Business.Services.Interfaces
 
         // Kullanıcı favoriye ekleme
         Task AddFavoriteAsync(int userId, int productId);
+
+        // Gelişmiş filtreleme
+        Task<IEnumerable<ProductListDto>> FilterProductsAsync(ProductFilterDto filter);
     }
 }

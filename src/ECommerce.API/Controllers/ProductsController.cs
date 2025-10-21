@@ -50,6 +50,40 @@ namespace ECommerce.API.Controllers
             return Ok(product);
         }
 
+        // Advanced filtering endpoint: supports query, categories, brands, price range, rating, stock and sorting
+        [HttpGet("filter")]
+        public async Task<IActionResult> Filter(
+            [FromQuery] string? query,
+            [FromQuery] int[]? categoryIds,
+            [FromQuery] int[]? brandIds,
+            [FromQuery] decimal? minPrice,
+            [FromQuery] decimal? maxPrice,
+            [FromQuery] bool? inStockOnly,
+            [FromQuery] int? minRating,
+            [FromQuery] string? sortBy,
+            [FromQuery] string? sortDir,
+            [FromQuery] int page = 1,
+            [FromQuery] int size = 12)
+        {
+            var filter = new ECommerce.Core.DTOs.Product.ProductFilterDto
+            {
+                Query = query,
+                CategoryIds = categoryIds?.ToList(),
+                BrandIds = brandIds?.ToList(),
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                InStockOnly = inStockOnly,
+                MinRating = minRating,
+                SortBy = sortBy,
+                SortDir = sortDir,
+                Page = page,
+                Size = size
+            };
+
+            var products = await _productService.FilterProductsAsync(filter);
+            return Ok(products);
+        }
+
         [HttpPost("{id}/review")]
         [Authorize]
         public async Task<IActionResult> AddReview(int id, [FromBody] ProductReviewCreateDto reviewDto)

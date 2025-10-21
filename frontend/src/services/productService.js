@@ -5,6 +5,7 @@ export const ProductService = {
   // Genel kullanıcı tarafı
   list: (query = "") => api.get(`/api/Products${query}`),
   get: (id) => api.get(`/api/Products/${id}`),
+  filter: (params = {}) => api.get(`/api/Products/filter`, { params }),
 
   // Admin endpoints
   createAdmin: (formData) => api.post("/api/Admin/products", formData),

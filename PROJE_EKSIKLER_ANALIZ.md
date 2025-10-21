@@ -23,7 +23,7 @@
 - ✅ **Stok Takibi:** SignalR ile gerçek zamanlı stok güncelleme eklendi (Backend yayın + Frontend abonelik)
 - ✅ **Ürün İnceleme/Yorum:** Frontend yorum listesi ve yorum ekleme formu eklendi
 - ❌ **Ürün Karşılaştırma:** Ürünleri karşılaştırma özelliği yok
-- ❌ **Ürün Arama:** Gelişmiş filtreleme ve arama eksik
+- ✅ **Ürün Arama:** Gelişmiş filtreleme ve arama eklendi (çok kriterli arama, fiyat aralığı, stokta olanlar, marka/kategori, puan, sıralama, sayfalama)
 
 ### 4. **Güvenlik**
 

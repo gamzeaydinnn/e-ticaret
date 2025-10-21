@@ -7,6 +7,8 @@ import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 import { shouldUseMockData, debugLog } from "../config/apiConfig";
 import { subscribeStockUpdates } from "../services/stockHub";
+import ProductFilter from "./ProductFilter";
+import api from "../services/api";
 
 const DEMO_PRODUCTS = [
   {
@@ -201,6 +203,8 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
   const [cartNotification, setCartNotification] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const { user } = useAuth();
+  const [filters, setFilters] = useState(null);
+  const [categories, setCategories] = useState([]);
 
   // Tüm ürünleri göster (filtreleme kaldırıldı)
   const filteredProducts = useMemo(() => {
@@ -480,6 +484,20 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
     }
   }, [user, loading]);
 
+  // Load categories for filter dropdown
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get("/api/Categories")
+      .then((r) => {
+        if (mounted) setCategories(Array.isArray(r) ? r : []);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Live stock updates
   useEffect(() => {
     const unsub = subscribeStockUpdates(({ productId, quantity }) => {
@@ -491,6 +509,51 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
     });
     return () => unsub();
   }, []);
+
+  // Fetch products using advanced filter when filters change
+  useEffect(() => {
+    if (!filters && !categoryId) return; // No custom filters yet
+    let mounted = true;
+    const params = {};
+    if (filters?.search) params.query = filters.search;
+    // Category precedence: explicit filter, else prop
+    const cidStr = filters?.category || (categoryId ? String(categoryId) : "");
+    const cid = parseInt(cidStr, 10);
+    if (!Number.isNaN(cid) && cid > 0) params.categoryIds = [cid];
+    if (filters?.minPrice) params.minPrice = Number(filters.minPrice);
+    if (filters?.maxPrice) params.maxPrice = Number(filters.maxPrice);
+    if (filters?.sortBy) {
+      params.sortBy = filters.sortBy === "createdDate" ? "created" : filters.sortBy;
+    }
+    if (filters?.sortOrder) params.sortDir = filters.sortOrder;
+    params.page = 1;
+    params.size = 48;
+
+    setLoading(true);
+    ProductService.filter(params)
+      .then((response) => {
+        if (!mounted) return;
+        const products = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.items)
+          ? response.items
+          : [];
+        setData(products);
+        setError("");
+        setUsingMockData(false);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        // Do not fallback to mock when user is actively filtering; just show message
+        setError(err?.message || "Ürünler yüklenemedi.");
+      })
+      .finally(() => mounted && setLoading(false));
+
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, categoryId]);
 
   if (loading) {
     return (
@@ -553,6 +616,8 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
 
   return (
     <div>
+      {/* Filters */}
+      <ProductFilter onFilterChange={setFilters} categories={categories} />
       {/* Sonuç Bilgisi */}
       <div className="text-center mb-4">
         <p className="text-muted mb-0">

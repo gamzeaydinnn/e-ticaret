@@ -5,6 +5,7 @@ using ECommerce.Entities.Concrete;            // Product
 using ECommerce.Core.Interfaces;              // IProductRepository
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
+using System.Linq;
 
 
 
@@ -272,6 +273,80 @@ namespace ECommerce.Business.Services.Managers
             };
 
             await _reviewRepository.AddAsync(review);
+        }
+
+        public async Task<IEnumerable<ProductListDto>> FilterProductsAsync(ProductFilterDto filter)
+        {
+            var products = await _productRepository.GetAllAsync();
+
+            if (!string.IsNullOrWhiteSpace(filter.Query))
+            {
+                var q = filter.Query.Trim();
+                products = products.Where(p =>
+                    p.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(p.Description) && p.Description.Contains(q, StringComparison.OrdinalIgnoreCase))
+                );
+            }
+
+            if (filter.CategoryIds != null && filter.CategoryIds.Count > 0)
+                products = products.Where(p => filter.CategoryIds.Contains(p.CategoryId));
+
+            if (filter.BrandIds != null && filter.BrandIds.Count > 0)
+                products = products.Where(p => p.BrandId.HasValue && filter.BrandIds.Contains(p.BrandId.Value));
+
+            if (filter.MinPrice.HasValue)
+            {
+                products = products.Where(p => (p.SpecialPrice ?? p.Price) >= filter.MinPrice.Value);
+            }
+            if (filter.MaxPrice.HasValue)
+            {
+                products = products.Where(p => (p.SpecialPrice ?? p.Price) <= filter.MaxPrice.Value);
+            }
+
+            if (filter.InStockOnly == true)
+                products = products.Where(p => p.StockQuantity > 0);
+
+            if (filter.MinRating.HasValue && filter.MinRating.Value > 0)
+            {
+                products = products.Where(p =>
+                {
+                    var approved = p.ProductReviews?.Where(r => r.IsApproved) ?? Enumerable.Empty<ProductReview>();
+                    if (!approved.Any()) return false;
+                    var avg = approved.Average(r => (double)r.Rating);
+                    return avg >= filter.MinRating.Value;
+                });
+            }
+
+            // Sorting
+            var sortBy = (filter.SortBy ?? "name").ToLowerInvariant();
+            var sortDir = (filter.SortDir ?? "asc").ToLowerInvariant();
+
+            Func<Entities.Concrete.Product, object> keySelector = sortBy switch
+            {
+                "price" => p => (p.SpecialPrice ?? p.Price),
+                "created" => p => p.CreatedAt,
+                _ => p => p.Name
+            };
+
+            products = sortDir == "desc" ? products.OrderByDescending(keySelector) : products.OrderBy(keySelector);
+
+            // Paging
+            var page = Math.Max(1, filter.Page);
+            var size = Math.Clamp(filter.Size, 1, 100);
+            products = products.Skip((page - 1) * size).Take(size);
+
+            return products.Select(p => new ProductListDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Price = p.Price,
+                SpecialPrice = p.SpecialPrice,
+                StockQuantity = p.StockQuantity,
+                ImageUrl = p.ImageUrl,
+                Brand = p.Brand?.Name ?? string.Empty,
+                CategoryName = p.Category?.Name ?? string.Empty
+            });
         }
 
         public Task AddFavoriteAsync(int userId, int productId)
