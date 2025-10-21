@@ -23,7 +23,7 @@ namespace ECommerce.API.Controllers.Admin
         [HttpGet]
         public async Task<IActionResult> GetCategories()
         {
-            var categories = await _categoryService.GetAllAsync();
+            var categories = await _categoryService.GetAllAdminAsync();
             return Ok(categories);
         }
 
@@ -40,8 +40,15 @@ namespace ECommerce.API.Controllers.Admin
         [HttpPost]
         public async Task<IActionResult> CreateCategory([FromBody] Category category)
         {
-            await _categoryService.AddAsync(category);
-            return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
+            try
+            {
+                await _categoryService.AddAsync(category);
+                return CreatedAtAction(nameof(GetCategory), new { id = category.Id }, category);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         // PUT /api/admin/categories/{id}
@@ -57,9 +64,17 @@ namespace ECommerce.API.Controllers.Admin
             existing.ParentId = category.ParentId;
             existing.SortOrder = category.SortOrder;
             existing.Slug = category.Slug;
+            existing.IsActive = category.IsActive;
 
-            await _categoryService.UpdateAsync(existing);
-            return NoContent();
+            try
+            {
+                await _categoryService.UpdateAsync(existing);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         // DELETE /api/admin/categories/{id}
@@ -69,7 +84,9 @@ namespace ECommerce.API.Controllers.Admin
             var category = await _categoryService.GetByIdAsync(id);
             if (category == null) return NotFound();
 
-            await _categoryService.DeleteAsync(category);
+            // Soft delete: IsActive=false
+            category.IsActive = false;
+            await _categoryService.UpdateAsync(category);
             return NoContent();
         }
     }

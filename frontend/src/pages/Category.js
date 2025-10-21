@@ -1,43 +1,66 @@
-//Kategoriye göre ürün listeleme, filtre sidebar
+// Kategoriye göre ürün listeleme (mevcut mimariye uygun)
 import React, { useEffect, useState } from "react";
-import api from "../services/api";
-import ProductCard from "./components/ProductCard";
 import { useParams } from "react-router-dom";
+import api from "../services/api";
+import ProductGrid from "../components/ProductGrid";
 
 export default function Category() {
   const { slug } = useParams();
-  const [products, setProducts] = useState([]);
   const [category, setCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // Önce kategori detayını slug ile çek, ardından kategori id'si ile ürünleri getir
+    let mounted = true;
+    setLoading(true);
+    setError("");
+
     api
-      .get(`/api/Categories/${slug}`)
+      .get(`/api/categories/${encodeURIComponent(slug)}`)
       .then((cat) => {
+        if (!mounted) return;
         setCategory(cat);
-        return api.get(`/api/Products?categoryId=${cat.id}`);
       })
-      .then((prods) => setProducts(prods))
-      .catch(() => {});
+      .catch((e) => {
+        if (!mounted) return;
+        setError(e.message || "Kategori bilgisi yüklenemedi.");
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [slug]);
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">
-        {category?.name || "Kategori"}
-      </h1>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <aside className="md:col-span-1">
-          <div className="bg-white p-4 rounded shadow">Filtreler (örnek)</div>
-        </aside>
-        <main className="md:col-span-3">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {products.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
-        </main>
+    <div className="container-fluid px-4 py-4">
+      <div className="d-flex align-items-center justify-content-between mb-4">
+        <div>
+          <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
+            <i className="fas fa-layer-group me-2" style={{ color: "#f57c00" }}></i>
+            {category?.name || "Kategori"}
+          </h1>
+          {category?.description ? (
+            <div className="text-muted" style={{ maxWidth: 720 }}>{category.description}</div>
+          ) : null}
+        </div>
       </div>
+
+      {error && (
+        <div className="alert alert-danger" role="alert">{error}</div>
+      )}
+
+      {/* Ürün listesi */}
+      {category && (
+        <ProductGrid categoryId={category.id} />
+      )}
+
+      {!category && !loading && !error && (
+        <div className="text-muted">Kategori bulunamadı.</div>
+      )}
     </div>
   );
 }

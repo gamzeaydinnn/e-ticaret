@@ -475,6 +475,13 @@ export const AdminService = {
     const qs = params.length ? `?${params.join("&")}` : "";
     return api.get(`/api/admin/reports/erp/sync-status${qs}`);
   },
+  
+  // Coupons
+  getCoupons: async () => api.get("/api/admin/coupons"),
+  getCoupon: async (id) => api.get(`/api/admin/coupons/${id}`),
+  createCoupon: async (coupon) => api.post("/api/admin/coupons", coupon),
+  updateCoupon: async (id, coupon) => api.put(`/api/admin/coupons/${id}`, coupon),
+  deleteCoupon: async (id) => api.delete(`/api/admin/coupons/${id}`),
 };
 
 export default AdminService;

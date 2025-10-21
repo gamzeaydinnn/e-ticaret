@@ -52,12 +52,29 @@ namespace ECommerce.Data.Repositories
                 .OrderBy(c => c.SortOrder)
                 .ToListAsync();
         }
+        
+        public async Task<IEnumerable<Category>> GetAllIncludingInactiveAsync()
+        {
+            return await _dbSet
+                .Include(c => c.Parent)
+                .Include(c => c.SubCategories)
+                .OrderBy(c => c.SortOrder)
+                .ToListAsync();
+        }
         public async Task<Category?> GetBySlugAsync(string slug)
         {
             return await _dbSet
                 .Include(c => c.SubCategories)
                 .Include(c => c.Products)
                 .FirstOrDefaultAsync(c => c.Slug == slug && c.IsActive);
+        }
+
+        public async Task<bool> ExistsSlugAsync(string slug, int? excludeId = null)
+        {
+            var query = _dbSet.AsQueryable();
+            if (excludeId.HasValue)
+                query = query.Where(c => c.Id != excludeId.Value);
+            return await query.AnyAsync(c => c.Slug == slug);
         }
 
     }

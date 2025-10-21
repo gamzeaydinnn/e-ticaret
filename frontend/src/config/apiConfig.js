@@ -13,12 +13,27 @@ const parseBoolean = (value, defaultValue) => {
   return ["1", "true", "yes", "y", "on"].includes(normalized);
 };
 
-// Default to .NET dev URL from launchSettings.json
-const baseUrl = (process.env.REACT_APP_API_URL || "http://localhost:5153").replace(/\/+$/, "");
+// Default to .NET dev URLs from launchSettings.json
+const envApiUrl =
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_API_BASE_URL ||
+  process.env.REACT_APP_API_BASE ||
+  process.env.REACT_APP_BASE_URL;
+
+const defaultDevUrl = (() => {
+  // Prefer HTTPS dev port when available
+  if (typeof window !== "undefined" && window.location && window.location.protocol === "https:") {
+    return "https://localhost:7221";
+  }
+  // If running over http (CRA default), API still serves HTTPS by default
+  return "https://localhost:7221";
+})();
+
+const baseUrl = (envApiUrl || defaultDevUrl).replace(/\/+$/, "");
 
 const backendEnabled = parseBoolean(
   process.env.REACT_APP_BACKEND_ENABLED,
-  Boolean(process.env.REACT_APP_API_URL) || process.env.NODE_ENV !== "test"
+  Boolean(envApiUrl) || process.env.NODE_ENV !== "test"
 );
 
 export const API_CONFIG = {

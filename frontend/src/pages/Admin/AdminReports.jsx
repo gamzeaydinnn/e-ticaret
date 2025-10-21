@@ -14,6 +14,7 @@ export default function AdminReports() {
   const [loadingSales, setLoadingSales] = useState(true);
   const [erp, setErp] = useState({ groups: [] });
   const [loadingErp, setLoadingErp] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     loadLowStock();
@@ -28,6 +29,10 @@ export default function AdminReports() {
       setLoadingLow(true);
       const data = await AdminService.getLowStockProducts();
       setLowStock(data);
+    } catch (e) {
+      console.error("Low stock report error:", e);
+      setErrorMsg(e.message || "Low stock verisi alınamadı.");
+      setLowStock({ threshold: 0, products: [] });
     } finally {
       setLoadingLow(false);
     }
@@ -38,6 +43,10 @@ export default function AdminReports() {
       setLoadingMov(true);
       const data = await AdminService.getInventoryMovements({ from, to });
       setMovements(data);
+    } catch (e) {
+      console.error("Inventory movements report error:", e);
+      setErrorMsg(e.message || "Stok hareketleri alınamadı.");
+      setMovements({ start: null, end: null, movements: [] });
     } finally {
       setLoadingMov(false);
     }
@@ -48,6 +57,10 @@ export default function AdminReports() {
       setLoadingSales(true);
       const data = await AdminService.getSalesReport(salesPeriod);
       setSales(data);
+    } catch (e) {
+      console.error("Sales report error:", e);
+      setErrorMsg(e.message || "Satış özeti alınamadı.");
+      setSales(null);
     } finally {
       setLoadingSales(false);
     }
@@ -58,6 +71,10 @@ export default function AdminReports() {
       setLoadingErp(true);
       const data = await AdminService.getErpSyncStatus({ from, to });
       setErp(data);
+    } catch (e) {
+      console.error("ERP sync status error:", e);
+      setErrorMsg(e.message || "ERP senkron durumu alınamadı.");
+      setErp({ groups: [] });
     } finally {
       setLoadingErp(false);
     }
@@ -69,6 +86,11 @@ export default function AdminReports() {
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2 className="fw-bold mb-0">Raporlar</h2>
         </div>
+        {errorMsg ? (
+          <div className="alert alert-danger" role="alert">
+            {errorMsg}
+          </div>
+        ) : null}
 
         {/* Sales Summary */}
         <div className="card border-0 shadow-sm mb-4">

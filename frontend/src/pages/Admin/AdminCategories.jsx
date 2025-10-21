@@ -10,8 +10,9 @@ const AdminCategories = () => {
   const [editingCategory, setEditingCategory] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
+    slug: "",
     description: "",
-    icon: "fa-folder",
+    imageUrl: "",
     isActive: true,
   });
 
@@ -43,8 +44,9 @@ const AdminCategories = () => {
       setShowModal(false);
       setFormData({
         name: "",
+        slug: "",
         description: "",
-        icon: "fa-folder",
+        imageUrl: "",
         isActive: true,
       });
       setEditingCategory(null);
@@ -58,8 +60,9 @@ const AdminCategories = () => {
     setEditingCategory(category);
     setFormData({
       name: category.name,
+      slug: category.slug || "",
       description: category.description || "",
-      icon: category.icon || "fa-folder",
+      imageUrl: category.imageUrl || "",
       isActive: category.isActive,
     });
     setShowModal(true);
@@ -129,8 +132,9 @@ const AdminCategories = () => {
               setEditingCategory(null);
               setFormData({
                 name: "",
+                slug: "",
                 description: "",
-                icon: "fa-folder",
+                imageUrl: "",
                 isActive: true,
               });
               setShowModal(true);
@@ -158,16 +162,12 @@ const AdminCategories = () => {
               >
                 <div className="card-body p-4">
                   <div className="d-flex align-items-start justify-content-between mb-3">
-                    <div
-                      className="d-flex align-items-center justify-content-center rounded-circle"
-                      style={{
-                        width: "56px",
-                        height: "56px",
-                        background: "linear-gradient(135deg, #f57c00, #ff9800)",
-                        color: "white",
-                      }}
-                    >
-                      <i className={`fas ${category.icon} fa-lg`}></i>
+                    <div className="d-flex align-items-center justify-content-center rounded-circle overflow-hidden" style={{ width: "56px", height: "56px", background: "#f5f5f5" }}>
+                      {category.imageUrl ? (
+                        <img src={category.imageUrl} alt={category.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e)=>{ e.currentTarget.style.display='none'; }} />
+                      ) : (
+                        <i className="fas fa-folder fa-lg" style={{ color: "#f57c00" }}></i>
+                      )}
                     </div>
                     <span
                       className={`badge rounded-pill ${
@@ -190,15 +190,7 @@ const AdminCategories = () => {
                   </p>
 
                   <div className="d-flex align-items-center justify-content-between">
-                    <div className="d-flex align-items-center">
-                      <i className="fas fa-box text-muted me-2"></i>
-                      <span
-                        className="text-muted"
-                        style={{ fontSize: "0.9rem" }}
-                      >
-                        {category.productCount || 0} ürün
-                      </span>
-                    </div>
+                    <div></div>
 
                     <div className="btn-group" role="group">
                       <button
@@ -273,6 +265,25 @@ const AdminCategories = () => {
                   <div className="modal-body p-4">
                     <div className="mb-4">
                       <label className="form-label fw-semibold mb-2">
+                        URL Slug
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control border-0 py-3"
+                        style={{
+                          background: "rgba(245, 124, 0, 0.05)",
+                          borderRadius: "12px",
+                        }}
+                        value={formData.slug}
+                        onChange={(e) =>
+                          setFormData({ ...formData, slug: e.target.value })
+                        }
+                        placeholder="ornegin: meyve-sebze"
+                        required
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold mb-2">
                         Kategori Adı
                       </label>
                       <input
@@ -283,9 +294,20 @@ const AdminCategories = () => {
                           borderRadius: "12px",
                         }}
                         value={formData.name}
-                        onChange={(e) =>
-                          setFormData({ ...formData, name: e.target.value })
-                        }
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onBlur={() => {
+                          // slug boşsa isimden üret
+                          if (!formData.slug?.trim() && formData.name?.trim()) {
+                            const slug = formData.name
+                              .toLowerCase()
+                              .replaceAll("ç","c").replaceAll("ğ","g").replaceAll("ı","i").replaceAll("ö","o").replaceAll("ş","s").replaceAll("ü","u")
+                              .replace(/[^a-z0-9\s-]/g, "")
+                              .replace(/\s+/g, "-")
+                              .replace(/-+/g, "-")
+                              .trim();
+                            setFormData((f) => ({ ...f, slug }));
+                          }
+                        }}
                         required
                         placeholder="Kategori adını girin"
                       />
@@ -314,28 +336,15 @@ const AdminCategories = () => {
                     </div>
 
                     <div className="mb-4">
-                      <label className="form-label fw-semibold mb-2">
-                        İkon
-                      </label>
-                      <select
+                      <label className="form-label fw-semibold mb-2">Kategori Görsel URL</label>
+                      <input
+                        type="url"
                         className="form-control border-0 py-3"
-                        style={{
-                          background: "rgba(245, 124, 0, 0.05)",
-                          borderRadius: "12px",
-                        }}
-                        value={formData.icon}
-                        onChange={(e) =>
-                          setFormData({ ...formData, icon: e.target.value })
-                        }
-                      >
-                        <option value="fa-folder">📁 Klasör</option>
-                        <option value="fa-drumstick-bite">🍗 Et</option>
-                        <option value="fa-cheese">🧀 Süt Ürünleri</option>
-                        <option value="fa-apple-alt">🍎 Meyve & Sebze</option>
-                        <option value="fa-coffee">☕ İçecek</option>
-                        <option value="fa-bread-slice">🍞 Ekmek</option>
-                        <option value="fa-cookie-bite">🍪 Atıştırmalık</option>
-                      </select>
+                        style={{ background: "rgba(245, 124, 0, 0.05)", borderRadius: "12px" }}
+                        value={formData.imageUrl}
+                        onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                        placeholder="https://..."
+                      />
                     </div>
 
                     <div className="form-check">

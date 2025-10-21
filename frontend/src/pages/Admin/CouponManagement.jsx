@@ -1,368 +1,391 @@
-import React, { useEffect, useState, useRef } from "react";
-import axios from "../../services/api";
-import BannerManagement from "./BannerManagement";
+import React, { useEffect, useMemo, useState } from "react";
+import AdminLayout from "../../components/AdminLayout";
+import { AdminService } from "../../services/adminService";
 
-const CouponManagement = () => {
-  const [coupons, setCoupons] = useState([]);
-  const [form, setForm] = useState({
-    id: 0,
-    code: "",
-    isPercentage: false,
-    value: "",
-    expirationDate: "",
-    minOrderAmount: "",
-    usageLimit: 1,
-    isActive: true,
-  });
-  const [editing, setEditing] = useState(false);
-  const [feedback, setFeedback] = useState("");
-  const tableRef = useRef(null);
-  const [search, setSearch] = useState("");
-
-  const fetchCoupons = async () => {
-    try {
-      const res = await axios.get("/api/admin/coupons");
-      setCoupons(res.data);
-    } catch (err) {
-      setFeedback(
-        "Kuponlar yüklenemedi: " +
-          (err?.response?.data?.message || "Sunucu hatası.")
-      );
-      setTimeout(() => setFeedback(""), 2500);
-    }
-  };
-
-  useEffect(() => {
-    fetchCoupons();
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editing) {
-        await axios.put(`/api/admin/coupons/${form.id}`, form);
-        setFeedback("Kupon başarıyla güncellendi.");
-      } else {
-        await axios.post("/api/admin/coupons", form);
-        setFeedback("Kupon başarıyla eklendi.");
-      }
-      setForm({
-        id: 0,
-        code: "",
-        isPercentage: false,
-        value: "",
-        expirationDate: "",
-        minOrderAmount: "",
-        usageLimit: 1,
-        isActive: true,
-      });
-      setEditing(false);
-      await fetchCoupons();
-      if (tableRef.current) {
-        tableRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    } catch (err) {
-      setFeedback(
-        "Bir hata oluştu. " +
-          (err?.response?.data?.message || "Lütfen tekrar deneyin.")
-      );
-    }
-    setTimeout(() => setFeedback(""), 2500);
-  };
-
-  const handleEdit = (coupon) => {
-    setForm({ ...coupon });
-    setEditing(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Kuponu silmek istediğinize emin misiniz?")) return;
-    try {
-      await axios.delete(`/api/admin/coupons/${id}`);
-      fetchCoupons();
-    } catch (err) {
-      setFeedback(
-        "Silme hatası: " +
-          (err?.response?.data?.message || "Lütfen tekrar deneyin.")
-      );
-      setTimeout(() => setFeedback(""), 2500);
-    }
-  };
-
-  // Arama ve filtreleme
-  const filteredCoupons = Array.isArray(coupons)
-    ? coupons.filter(
-        (c) =>
-          c.code.toLowerCase().includes(search.toLowerCase()) ||
-          (search === "aktif" && c.isActive) ||
-          (search === "pasif" && !c.isActive)
-      )
-    : [];
-
-  // İstatistik
-  const totalCount = Array.isArray(coupons) ? coupons.length : 0;
-  const activeCount = Array.isArray(coupons)
-    ? coupons.filter((c) => c.isActive).length
-    : 0;
-
-  return (
-    <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-        {/* Kupon Paneli */}
-        <div style={{ flex: 1, minWidth: 350 }}>
-          <h2 style={{ marginBottom: 8 }}>Kupon Yönetimi</h2>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 24,
-              marginBottom: 16,
-            }}
-          >
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Kupon kodu, aktif/pasif..."
-              style={{
-                padding: 8,
-                borderRadius: 8,
-                border: "1px solid #ccc",
-                minWidth: 200,
-              }}
-            />
-            <span style={{ fontWeight: "bold" }}>Toplam: {totalCount}</span>
-            <span style={{ color: "#388e3c", fontWeight: "bold" }}>
-              Aktif: {activeCount}
-            </span>
-          </div>
-          {feedback && (
-            <div
-              style={{
-                marginBottom: 12,
-                color: feedback.includes("hata") ? "#d32f2f" : "#388e3c",
-                fontWeight: "bold",
-              }}
-            >
-              {feedback}
-            </div>
-          )}
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              marginBottom: 24,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 12,
-              alignItems: "center",
-            }}
-          >
-            <input
-              name="code"
-              value={form.code}
-              onChange={handleChange}
-              placeholder="Kupon Kodu"
-              required
-              style={{ flex: 1, minWidth: 120 }}
-            />
-            <input
-              name="value"
-              type="number"
-              value={form.value}
-              onChange={handleChange}
-              placeholder="İndirim"
-              required
-              style={{ flex: 1, minWidth: 80 }}
-            />
-            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              Yüzde mi?
-              <input
-                name="isPercentage"
-                type="checkbox"
-                checked={form.isPercentage}
-                onChange={handleChange}
-              />
-            </label>
-            <input
-              name="expirationDate"
-              type="date"
-              value={form.expirationDate?.slice(0, 10)}
-              onChange={handleChange}
-              required
-              style={{ flex: 1, minWidth: 120 }}
-            />
-            <input
-              name="minOrderAmount"
-              type="number"
-              value={form.minOrderAmount}
-              onChange={handleChange}
-              placeholder="Minimum Sipariş Tutarı"
-              style={{ flex: 1, minWidth: 120 }}
-            />
-            <input
-              name="usageLimit"
-              type="number"
-              value={form.usageLimit}
-              onChange={handleChange}
-              placeholder="Kullanım Limiti"
-              style={{ flex: 1, minWidth: 80 }}
-            />
-            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              Aktif mi?
-              <input
-                name="isActive"
-                type="checkbox"
-                checked={form.isActive}
-                onChange={handleChange}
-              />
-            </label>
-            <button
-              type="submit"
-              style={{
-                background: "#388e3c",
-                color: "white",
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 16px",
-                fontWeight: "bold",
-              }}
-            >
-              {editing ? "Güncelle" : "Ekle"}
-            </button>
-            {editing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(false);
-                  setForm({
-                    id: 0,
-                    code: "",
-                    isPercentage: false,
-                    value: "",
-                    expirationDate: "",
-                    minOrderAmount: "",
-                    usageLimit: 1,
-                    isActive: true,
-                  });
-                }}
-                style={{
-                  background: "#d32f2f",
-                  color: "white",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "8px 16px",
-                  fontWeight: "bold",
-                }}
-              >
-                İptal
-              </button>
-            )}
-          </form>
-          <table
-            ref={tableRef}
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "white",
-              borderRadius: 12,
-              overflow: "hidden",
-              boxShadow: "0 2px 8px #eee",
-            }}
-          >
-            <thead style={{ background: "#f5f5f5" }}>
-              <tr>
-                <th style={{ padding: 8 }}>ID</th>
-                <th style={{ padding: 8 }}>Kod</th>
-                <th style={{ padding: 8 }}>İndirim</th>
-                <th style={{ padding: 8 }}>Yüzde mi?</th>
-                <th style={{ padding: 8 }}>Bitiş</th>
-                <th style={{ padding: 8 }}>Min Tutar</th>
-                <th style={{ padding: 8 }}>Kullanım</th>
-                <th style={{ padding: 8 }}>Aktif</th>
-                <th style={{ padding: 8 }}>İşlem</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCoupons.map((c) => (
-                <tr key={c.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: 8 }}>{c.id}</td>
-                  <td style={{ padding: 8 }}>{c.code}</td>
-                  <td style={{ padding: 8 }}>{c.value}</td>
-                  <td style={{ padding: 8 }}>
-                    {c.isPercentage ? "Evet" : "Hayır"}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    {c.expirationDate?.slice(0, 10)}
-                  </td>
-                  <td style={{ padding: 8 }}>{c.minOrderAmount}</td>
-                  <td style={{ padding: 8 }}>{c.usageLimit}</td>
-                  <td style={{ padding: 8 }}>
-                    {c.isActive ? "Evet" : "Hayır"}
-                  </td>
-                  <td style={{ padding: 8 }}>
-                    <button
-                      onClick={() => handleEdit(c)}
-                      style={{
-                        marginRight: 8,
-                        background: "#1976d2",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "4px 10px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      Düzenle
-                    </button>
-                    <button
-                      onClick={() => handleDelete(c.id)}
-                      style={{
-                        background: "#d32f2f",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 6,
-                        padding: "4px 10px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      Sil
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {filteredCoupons.length === 0 && (
-            <div style={{ marginTop: 24, color: "#888", textAlign: "center" }}>
-              Hiç kupon bulunamadı.
-            </div>
-          )}
-        </div>
-        {/* Banner Paneli */}
-        <div
-          style={{
-            flex: 1,
-            minWidth: 350,
-            background: "#fff",
-            borderRadius: 12,
-            boxShadow: "0 2px 8px #eee",
-            padding: 24,
-          }}
-        >
-          <h2 style={{ marginBottom: 8 }}>Poster / Banner Yönetimi</h2>
-          <BannerManagement />
-        </div>
-      </div>
-    </div>
-  );
+const initialForm = {
+  id: 0,
+  code: "",
+  isPercentage: false,
+  value: "",
+  expirationDate: "",
+  minOrderAmount: "",
+  usageLimit: 1,
+  isActive: true,
 };
 
-export default CouponManagement;
+export default function CouponManagement() {
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState(null); // coupon or null
+  const [form, setForm] = useState(initialForm);
+  const [message, setMessage] = useState("");
+  const [messageType, setMessageType] = useState("success"); // success | danger
+
+  useEffect(() => {
+    loadCoupons();
+  }, []);
+
+  async function loadCoupons() {
+    try {
+      setLoading(true);
+      const data = await AdminService.getCoupons();
+      setCoupons(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setError(e.message || "Kuponlar yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return coupons;
+    return coupons.filter((c) => {
+      if (c.code?.toLowerCase().includes(q)) return true;
+      if ((q === "aktif" && c.isActive) || (q === "pasif" && !c.isActive)) return true;
+      return false;
+    });
+  }, [coupons, search]);
+
+  function openCreate() {
+    setEditing(null);
+    setForm(initialForm);
+    setShowModal(true);
+  }
+
+  function openEdit(coupon) {
+    setEditing(coupon);
+    setForm({
+      id: coupon.id,
+      code: coupon.code || "",
+      isPercentage: !!coupon.isPercentage,
+      value: coupon.value?.toString?.() ?? "",
+      expirationDate: coupon.expirationDate ? coupon.expirationDate.slice(0, 10) : "",
+      minOrderAmount: coupon.minOrderAmount?.toString?.() ?? "",
+      usageLimit: coupon.usageLimit ?? 1,
+      isActive: coupon.isActive,
+    });
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setEditing(null);
+    setForm(initialForm);
+  }
+
+  const onFormChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  function buildPayload() {
+    const payload = {
+      id: form.id || 0,
+      code: (form.code || "").trim(),
+      isPercentage: !!form.isPercentage,
+      value: form.value === "" ? 0 : parseFloat(form.value),
+      expirationDate: form.expirationDate ? new Date(form.expirationDate + "T00:00:00") : null,
+      minOrderAmount:
+        form.minOrderAmount === "" || form.minOrderAmount === null
+          ? null
+          : parseFloat(form.minOrderAmount),
+      usageLimit: form.usageLimit ? parseInt(form.usageLimit, 10) : 1,
+      isActive: !!form.isActive,
+    };
+    return payload;
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    try {
+      const payload = buildPayload();
+      if (!payload.code) throw new Error("Kupon kodu gereklidir");
+      if (isNaN(payload.value)) throw new Error("İndirim değeri geçersiz");
+      if (!payload.expirationDate) throw new Error("Bitiş tarihi gereklidir");
+
+      if (editing) {
+        await AdminService.updateCoupon(editing.id, payload);
+        setMessage("Kupon güncellendi");
+        setMessageType("success");
+      } else {
+        await AdminService.createCoupon(payload);
+        setMessage("Kupon eklendi");
+        setMessageType("success");
+      }
+      await loadCoupons();
+      closeModal();
+    } catch (e2) {
+      setMessage(e2.message || "İşlem başarısız");
+      setMessageType("danger");
+    }
+    setTimeout(() => setMessage(""), 2500);
+  }
+
+  async function onDelete(id) {
+    if (!window.confirm("Kuponu silmek istediğinize emin misiniz?")) return;
+    try {
+      await AdminService.deleteCoupon(id);
+      setMessage("Kupon silindi");
+      setMessageType("success");
+      await loadCoupons();
+    } catch (e) {
+      setMessage(e.message || "Silme işlemi başarısız");
+      setMessageType("danger");
+    }
+    setTimeout(() => setMessage(""), 2500);
+  }
+
+  const totalCount = coupons.length;
+  const activeCount = coupons.filter((c) => c.isActive).length;
+
+  return (
+    <AdminLayout>
+      <div className="container-fluid p-4">
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <div>
+            <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
+              <i className="fas fa-ticket-alt me-2" style={{ color: "#f57c00" }} />
+              Kupon Yönetimi
+            </h1>
+            <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+              İndirim kuponlarını oluşturun, düzenleyin ve yönetin
+            </div>
+          </div>
+          <div className="d-flex gap-2">
+            <input
+              type="text"
+              className="form-control form-control-sm"
+              style={{ width: 220 }}
+              placeholder="Ara: kod, aktif/pasif"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <button
+              className="btn btn-sm text-white fw-semibold"
+              style={{ background: "linear-gradient(135deg, #f57c00, #ff9800)" }}
+              onClick={openCreate}
+            >
+              <i className="fas fa-plus me-2"></i>
+              Yeni Kupon
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="alert alert-danger" role="alert">{error}</div>
+        )}
+        {message && (
+          <div className={`alert alert-${messageType}`} role="alert">{message}</div>
+        )}
+
+        <div className="row g-4">
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white d-flex align-items-center justify-content-between">
+                <div>
+                  <i className="fas fa-tags me-2 text-primary"></i>
+                  Kuponlar
+                  <small className="ms-2 text-muted">Toplam: {totalCount} · Aktif: {activeCount}</small>
+                </div>
+                <button className="btn btn-sm btn-outline-secondary" onClick={loadCoupons} disabled={loading}>
+                  Yenile
+                </button>
+              </div>
+              <div className="card-body">
+                {loading ? (
+                  <div className="text-muted">Yükleniyor...</div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm align-middle">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 70 }}>ID</th>
+                          <th>Kod</th>
+                          <th>İndirim</th>
+                          <th>Tür</th>
+                          <th>Bitiş</th>
+                          <th>Min Tutar</th>
+                          <th>Kullanım</th>
+                          <th>Durum</th>
+                          <th style={{ width: 130 }}>İşlemler</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.length ? (
+                          filtered.map((c) => (
+                            <tr key={c.id}>
+                              <td>#{c.id}</td>
+                              <td className="fw-semibold">{c.code}</td>
+                              <td>
+                                {c.isPercentage
+                                  ? `${Number(c.value || 0)}%`
+                                  : `₺${Number(c.value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}`}
+                              </td>
+                              <td>{c.isPercentage ? "Yüzde" : "Tutar"}</td>
+                              <td>{c.expirationDate ? new Date(c.expirationDate).toLocaleDateString("tr-TR") : "-"}</td>
+                              <td>{c.minOrderAmount != null ? `₺${Number(c.minOrderAmount).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}` : "-"}</td>
+                              <td>{c.usageLimit ?? 1}</td>
+                              <td>
+                                <span className={`badge ${c.isActive ? "bg-success" : "bg-secondary"}`}>
+                                  {c.isActive ? "Aktif" : "Pasif"}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="d-flex gap-2">
+                                  <button className="btn btn-outline-primary btn-sm" onClick={() => openEdit(c)}>
+                                    <i className="fas fa-edit"></i>
+                                  </button>
+                                  <button className="btn btn-outline-danger btn-sm" onClick={() => onDelete(c.id)}>
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="9" className="text-muted">Kayıt bulunamadı.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal */}
+        {showModal && (
+          <div className="modal d-block" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content border-0" style={{ borderRadius: 16 }}>
+                <div className="modal-header border-0 p-4">
+                  <h5 className="modal-title fw-bold" style={{ color: "#2d3748" }}>
+                    <i className="fas fa-ticket-alt me-2" style={{ color: "#f57c00" }}></i>
+                    {editing ? "Kuponu Düzenle" : "Yeni Kupon Ekle"}
+                  </h5>
+                  <button className="btn-close" onClick={closeModal}></button>
+                </div>
+
+                <form onSubmit={onSubmit}>
+                  <div className="modal-body p-4">
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold mb-2">Kupon Kodu</label>
+                        <input
+                          name="code"
+                          value={form.code}
+                          onChange={onFormChange}
+                          className="form-control border-0 py-3"
+                          style={{ background: "rgba(245,124,0,0.05)", borderRadius: 12 }}
+                          required
+                          placeholder="Örn: WELCOME10"
+                        />
+                      </div>
+                      <div className="col-md-3">
+                        <label className="form-label fw-semibold mb-2">İndirim</label>
+                        <input
+                          name="value"
+                          type="number"
+                          step="0.01"
+                          value={form.value}
+                          onChange={onFormChange}
+                          className="form-control border-0 py-3"
+                          style={{ background: "rgba(245,124,0,0.05)", borderRadius: 12 }}
+                          required
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="col-md-3 d-flex align-items-end">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            name="isPercentage"
+                            checked={form.isPercentage}
+                            onChange={onFormChange}
+                          />
+                          <label className="form-check-label fw-semibold">Yüzde</label>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold mb-2">Bitiş Tarihi</label>
+                        <input
+                          type="date"
+                          name="expirationDate"
+                          value={form.expirationDate}
+                          onChange={onFormChange}
+                          className="form-control border-0 py-3"
+                          style={{ background: "rgba(245,124,0,0.05)", borderRadius: 12 }}
+                          required
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold mb-2">Minimum Sipariş Tutarı</label>
+                        <input
+                          type="number"
+                          name="minOrderAmount"
+                          step="0.01"
+                          value={form.minOrderAmount}
+                          onChange={onFormChange}
+                          className="form-control border-0 py-3"
+                          style={{ background: "rgba(245,124,0,0.05)", borderRadius: 12 }}
+                          placeholder="Opsiyonel"
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold mb-2">Kullanım Limiti</label>
+                        <input
+                          type="number"
+                          name="usageLimit"
+                          value={form.usageLimit}
+                          onChange={onFormChange}
+                          className="form-control border-0 py-3"
+                          style={{ background: "rgba(245,124,0,0.05)", borderRadius: 12 }}
+                          min={1}
+                        />
+                      </div>
+                      <div className="col-md-6 d-flex align-items-end">
+                        <div className="form-check">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            name="isActive"
+                            checked={form.isActive}
+                            onChange={onFormChange}
+                          />
+                          <label className="form-check-label fw-semibold">Aktif</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="modal-footer border-0 p-4">
+                    <button type="button" className="btn btn-light" onClick={closeModal}>
+                      İptal
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn text-white fw-semibold px-4"
+                      style={{ background: "linear-gradient(135deg, #f57c00, #ff9800)", borderRadius: 8 }}
+                    >
+                      {editing ? "Güncelle" : "Kaydet"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AdminLayout>
+  );
+}

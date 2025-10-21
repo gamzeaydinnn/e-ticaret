@@ -185,7 +185,7 @@ const DEMO_PRODUCTS = [
   },
 ];
 
-export default function ProductGrid() {
+export default function ProductGrid({ products: initialProducts, categoryId } = {}) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -413,7 +413,18 @@ export default function ProductGrid() {
 
     const loadProducts = async () => {
       try {
-        const response = await ProductService.list();
+        // Eğer dışarıdan ürün verisi verilmişse API çağrısı yapma
+        if (Array.isArray(initialProducts)) {
+          if (!isMounted) return;
+          setData(initialProducts);
+          setError("");
+          setUsingMockData(false);
+          await loadFavorites();
+          return;
+        }
+
+        const query = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : "";
+        const response = await ProductService.list(query);
         if (!isMounted) {
           return;
         }
@@ -459,7 +470,7 @@ export default function ProductGrid() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [categoryId, initialProducts]);
 
   // Kullanıcı giriş/çıkış yapınca favorileri yükle
   useEffect(() => {

@@ -27,7 +27,7 @@ import Dashboard from "./pages/Admin/Dashboard";
 import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
-import AdminCategories from "./pages/Admin/AdminCategories";
+import AdminCategories from "./pages/Admin/AdminCategories.jsx";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
 import CouponManagement from "./pages/Admin/CouponManagement";
@@ -554,7 +554,6 @@ function App() {
 
             {/* Eski admin (geçici) */}
             <Route path="/admin" element={<AdminPanel />} />
-            <Route path="/admin/micro" element={<AdminMicro />} />
 
             {/* Yeni Admin Panel Rotaları */}
             <Route
@@ -570,6 +569,14 @@ function App() {
               element={
                 <AdminGuard>
                   <Dashboard />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/micro"
+              element={
+                <AdminGuard>
+                  <AdminMicro />
                 </AdminGuard>
               }
             />
