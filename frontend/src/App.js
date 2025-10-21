@@ -30,6 +30,7 @@ import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminCategories from "./pages/Admin/AdminCategories";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
+import CouponManagement from "./pages/Admin/CouponManagement";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -621,6 +622,14 @@ function App() {
                 </AdminGuard>
               }
             />
+            <Route
+              path="/admin/coupons"
+              element={
+                <AdminGuard>
+                  <CouponManagement />
+                </AdminGuard>
+              }
+            />
 
             {/* Kurye Panel Rotaları */}
             <Route path="/courier/login" element={<CourierLogin />} />
@@ -714,45 +723,37 @@ function HomePage() {
                     zIndex: index === currentSlide ? 2 : 1,
                     backgroundImage: `url(${slide.image})`,
                     backgroundSize: "100% auto",
-                    backgroundPosition: "center 55%",
-                    backgroundRepeat: "no-repeat",
                   }}
                 >
-                  {/* Slide Counter */}
-                  <div className="position-absolute top-0 end-0 m-3">
-                    <span className="badge bg-dark bg-opacity-50 px-3 py-2 rounded-pill">
-                      {currentSlide + 1} / {slides.length}
-                    </span>
-                  </div>
-
-                  {/* Slide Indicators */}
-                  <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
-                    <div className="d-flex gap-2">
-                      {slides.map((_, indicatorIndex) => (
-                        <button
-                          key={indicatorIndex}
-                          className={`slide-indicator ${
-                            indicatorIndex === currentSlide ? "active" : ""
-                          }`}
-                          style={{
-                            width: "12px",
-                            height: "12px",
-                            borderRadius: "50%",
-                            border: "none",
-                            background:
-                              indicatorIndex === currentSlide
-                                ? "white"
-                                : "rgba(255,255,255,0.5)",
-                            transition: "all 0.3s ease",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => setCurrentSlide(indicatorIndex)}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  {/* Slide content (title, subtitle, etc.) eklenebilir */}
                 </div>
               ))}
+              {/* Slide Indicators */}
+              <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
+                <div className="d-flex gap-2">
+                  {slides.map((_, indicatorIndex) => (
+                    <button
+                      key={indicatorIndex}
+                      className={`slide-indicator ${
+                        indicatorIndex === currentSlide ? "active" : ""
+                      }`}
+                      style={{
+                        width: "12px",
+                        height: "12px",
+                        borderRadius: "50%",
+                        border: "none",
+                        background:
+                          indicatorIndex === currentSlide
+                            ? "white"
+                            : "rgba(255,255,255,0.5)",
+                        transition: "all 0.3s ease",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => setCurrentSlide(indicatorIndex)}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>

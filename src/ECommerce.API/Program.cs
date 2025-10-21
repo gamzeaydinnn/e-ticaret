@@ -165,12 +165,14 @@ builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<IInventoryService, InventoryManager>();
 builder.Services.AddScoped<MicroSyncManager>();
-// repositories
+builder.Services.AddScoped<IBannerService, BannerManager>();
 builder.Services.AddScoped<IBrandRepository, BrandRepository>();
 builder.Services.AddScoped<IDiscountRepository, DiscountRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<ICouponRepository, CouponRepository>();
+
+builder.Services.AddScoped<IBannerRepository, ECommerce.Infrastructure.Services.BannerRepository>();
 
 
 // services / managers

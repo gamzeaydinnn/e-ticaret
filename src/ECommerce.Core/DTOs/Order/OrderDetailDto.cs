@@ -13,15 +13,8 @@ namespace ECommerce.Core.DTOs.Order
         public string Status { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
 
-        public List<OrderItemDetailDto> OrderItems { get; set; } = new();
+    public List<OrderItemDto> OrderItems { get; set; } = new();
     }
 
-    public class OrderItemDetailDto
-    {
-        public int ProductId { get; set; }
-        public string ProductName { get; set; } = string.Empty;
-        public int Quantity { get; set; }
-        public decimal UnitPrice { get; set; }
-        public decimal TotalPrice => UnitPrice * Quantity; // Hesaplanmış alan
-    }
+    // OrderItemDetailDto kaldırıldı, ortak OrderItemDto kullanılacak
 }

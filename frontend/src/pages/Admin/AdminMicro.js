@@ -78,109 +78,156 @@ export default function AdminMicro() {
   return (
     <div className="flex">
       <Sidebar />
-      <div className="flex-1 p-6 bg-gray-50 min-h-screen">
-        <h1 className="text-2xl font-bold mb-4">Micro ERP Yönetim Paneli</h1>
-
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={syncProducts}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Ürünleri Senkronize Et
-          </button>
-          <button
-            onClick={syncStocksFromERP}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-          >
-            Stokları ERP'den Çek
-          </button>
-          <button
-            onClick={syncPricesFromERP}
-            className="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700"
-          >
-            Fiyatları ERP'den Çek
-          </button>
-          <button
-            onClick={fetchProducts}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Ürünleri Getir
-          </button>
-          <button
-            onClick={fetchStocks}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-          >
-            Stokları Getir
-          </button>
-          <button
-            onClick={exportOrders}
-            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700"
-          >
-            Siparişleri ERP’ye Gönder
-          </button>
-        </div>
-
-        {loading && <p className="mb-4 text-gray-700">Yükleniyor...</p>}
-        {message && <p className="mb-4 text-gray-800 font-medium">{message}</p>}
-
-        <h2 className="text-xl font-semibold mb-2">Ürünler</h2>
-        <div className="overflow-x-auto mb-6">
-          <table className="min-w-full border border-gray-300">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="border px-2 py-1">ID</th>
-                <th className="border px-2 py-1">Ürün Adı</th>
-                <th className="border px-2 py-1">Fiyat</th>
-                <th className="border px-2 py-1">Kategori</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="text-center p-2">
-                    Ürün bulunamadı
-                  </td>
-                </tr>
-              ) : (
-                products.map((p) => (
-                  <tr key={p.id}>
-                    <td className="border px-2 py-1">{p.id}</td>
-                    <td className="border px-2 py-1">{p.name}</td>
-                    <td className="border px-2 py-1">{p.price}</td>
-                    <td className="border px-2 py-1">{p.category}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <h2 className="text-xl font-semibold mb-2">Stoklar</h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full border border-gray-300">
-            <thead>
-              <tr className="bg-gray-200">
-                <th className="border px-2 py-1">Ürün ID</th>
-                <th className="border px-2 py-1">Stok Miktarı</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stocks.length === 0 ? (
-                <tr>
-                  <td colSpan="2" className="text-center p-2">
-                    Stok bulunamadı
-                  </td>
-                </tr>
-              ) : (
-                stocks.map((s) => (
-                  <tr key={s.productId}>
-                    <td className="border px-2 py-1">{s.productId}</td>
-                    <td className="border px-2 py-1">{s.quantity}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <div className="flex-1 p-0 bg-gray-50 min-h-screen">
+        <div className="max-w-5xl mx-auto py-6 px-4">
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <i
+                  className="fas fa-cogs text-2xl"
+                  style={{ color: "#f57c00" }}
+                ></i>
+                <span className="text-2xl font-bold text-gray-800">
+                  Micro ERP Yönetim Paneli
+                </span>
+              </div>
+              <span className="text-sm text-gray-400">
+                ERP ile ürün, stok ve fiyat yönetimi
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-6">
+              <button
+                onClick={syncProducts}
+                className="px-3 py-2 rounded bg-blue-600 text-white text-sm font-medium shadow hover:bg-blue-700 flex items-center gap-1"
+              >
+                <i className="fas fa-sync-alt"></i>Ürünleri Senkronize Et
+              </button>
+              <button
+                onClick={syncStocksFromERP}
+                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm font-medium shadow hover:bg-indigo-700 flex items-center gap-1"
+              >
+                <i className="fas fa-boxes"></i>Stokları ERP'den Çek
+              </button>
+              <button
+                onClick={syncPricesFromERP}
+                className="px-3 py-2 rounded bg-rose-600 text-white text-sm font-medium shadow hover:bg-rose-700 flex items-center gap-1"
+              >
+                <i className="fas fa-tags"></i>Fiyatları ERP'den Çek
+              </button>
+              <button
+                onClick={fetchProducts}
+                className="px-3 py-2 rounded bg-green-600 text-white text-sm font-medium shadow hover:bg-green-700 flex items-center gap-1"
+              >
+                <i className="fas fa-box"></i>Ürünleri Getir
+              </button>
+              <button
+                onClick={fetchStocks}
+                className="px-3 py-2 rounded bg-yellow-500 text-white text-sm font-medium shadow hover:bg-yellow-600 flex items-center gap-1"
+              >
+                <i className="fas fa-warehouse"></i>Stokları Getir
+              </button>
+              <button
+                onClick={exportOrders}
+                className="px-3 py-2 rounded bg-purple-600 text-white text-sm font-medium shadow hover:bg-purple-700 flex items-center gap-1"
+              >
+                <i className="fas fa-paper-plane"></i>Siparişleri ERP’ye Gönder
+              </button>
+            </div>
+            {loading && (
+              <div className="mb-4 flex items-center text-orange-600 text-sm">
+                <i className="fas fa-spinner fa-spin mr-2"></i>Yükleniyor...
+              </div>
+            )}
+            {message && (
+              <div className="mb-4 px-3 py-2 rounded bg-orange-50 text-orange-800 font-medium shadow text-sm">
+                {message}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <i className="fas fa-box text-lg text-blue-500"></i>
+                  <span className="text-lg font-semibold text-gray-700">
+                    Ürünler
+                  </span>
+                </div>
+                <div className="bg-gray-50 rounded-lg shadow border border-gray-100 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border px-3 py-2 text-left">ID</th>
+                        <th className="border px-3 py-2 text-left">Ürün Adı</th>
+                        <th className="border px-3 py-2 text-left">Fiyat</th>
+                        <th className="border px-3 py-2 text-left">Kategori</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="4"
+                            className="text-center p-6 text-gray-400"
+                          >
+                            <i className="fas fa-box-open fa-2x mb-2"></i>
+                            <div>Ürün bulunamadı</div>
+                          </td>
+                        </tr>
+                      ) : (
+                        products.map((p) => (
+                          <tr key={p.id} className="hover:bg-gray-100">
+                            <td className="border px-3 py-2">{p.id}</td>
+                            <td className="border px-3 py-2">{p.name}</td>
+                            <td className="border px-3 py-2">{p.price}</td>
+                            <td className="border px-3 py-2">{p.category}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <i className="fas fa-warehouse text-lg text-yellow-600"></i>
+                  <span className="text-lg font-semibold text-gray-700">
+                    Stoklar
+                  </span>
+                </div>
+                <div className="bg-gray-50 rounded-lg shadow border border-gray-100 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border px-3 py-2 text-left">Ürün ID</th>
+                        <th className="border px-3 py-2 text-left">
+                          Stok Miktarı
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stocks.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="2"
+                            className="text-center p-6 text-gray-400"
+                          >
+                            <i className="fas fa-box-open fa-2x mb-2"></i>
+                            <div>Stok bulunamadı</div>
+                          </td>
+                        </tr>
+                      ) : (
+                        stocks.map((s) => (
+                          <tr key={s.productId} className="hover:bg-gray-100">
+                            <td className="border px-3 py-2">{s.productId}</td>
+                            <td className="border px-3 py-2">{s.quantity}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -26,6 +26,7 @@ export default function AdminLayout({ children }) {
     { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
     { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
     { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
+    { path: "/admin/coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
   ];
 
   const handleLogout = () => {

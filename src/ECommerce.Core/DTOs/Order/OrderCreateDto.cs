@@ -2,16 +2,19 @@ using System;
 using System.Collections.Generic;
 using ECommerce.Core.DTOs;
 
+using System;
+using System.Collections.Generic;
 
 namespace ECommerce.Core.DTOs.Order
 {
+    // Sipariş oluşturma için kullanılan DTO
     public class OrderCreateDto
     {
-        public int? UserId { get; set; }              // Üye değilse null
-        public decimal TotalPrice { get; set; }       // Toplam tutar (sunucuda yeniden hesaplanır)
-        public List<OrderItemDto> OrderItems { get; set; } = new(); // Kalemler
+        public int? UserId { get; set; } // Üye değilse null
+        public decimal TotalPrice { get; set; } // Toplam tutar (sunucuda yeniden hesaplanır)
+        public List<OrderItemDto> OrderItems { get; set; } = new(); // Sipariş kalemleri (ortak DTO)
 
-        // Guest/Müşteri bilgileri
+        // Müşteri bilgileri
         public string? CustomerName { get; set; }
         public string? CustomerPhone { get; set; }
         public string? CustomerEmail { get; set; }
@@ -29,13 +32,7 @@ namespace ECommerce.Core.DTOs.Order
         // Teslimat notu/slot bilgisi (opsiyonel)
         public string? DeliveryNotes { get; set; }
     }
-
-    public class OrderItemDto
-    {
-        public int ProductId { get; set; }           // Ürün ID
-        public int Quantity { get; set; }            // Miktar
-        public decimal UnitPrice { get; set; }       // Birim fiyat (istek için opsiyonel, sunucu esas alır)
-    }
 }
-
  
+
+

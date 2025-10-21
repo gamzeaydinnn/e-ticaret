@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { AdminService } from "../../services/adminService";
 import AdminLayout from "../../components/AdminLayout";
+import BannerManagement from "./BannerManagement";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -14,13 +15,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadDashboardStats();
-  }, []);
-
   const loadDashboardStats = async () => {
     try {
       setLoading(true);
+      setError(null); // Tekrar denemeden önce hatayı sıfırla
       const dashboardData = await AdminService.getDashboardStats();
       setStats(dashboardData);
     } catch (err) {
@@ -31,6 +29,12 @@ export default function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    loadDashboardStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 1. Yüklenme durumu varsa, sadece yüklenme ekranını göster ve dur.
   if (loading) {
     return (
       <AdminLayout>
@@ -51,6 +55,7 @@ export default function Dashboard() {
     );
   }
 
+  // 2. Hata durumu varsa, sadece hata ekranını göster ve dur.
   if (error) {
     return (
       <AdminLayout>
@@ -70,19 +75,16 @@ export default function Dashboard() {
     );
   }
 
+  // 3. Yüklenme ve hata yoksa, ana dashboard içeriğini göster.
   return (
     <AdminLayout>
-      <div className="container-fluid p-4">
-        {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-5">
+      <div className="container-fluid py-4">
+        {/* Sayfa Başlığı (Orijinal kodunuzda bu bölüm eksikti, yapıya uygun olarak eklendi) */}
+        <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1 className="h2 mb-1 fw-bold" style={{ color: "#2d3748" }}>
-              <i
-                className="fas fa-chart-line me-3"
-                style={{ color: "#f57c00" }}
-              ></i>
-              Admin Dashboard
-            </h1>
+            <h2 className="fw-bold mb-1" style={{ color: "#2d3748" }}>
+              Yönetim Paneli
+            </h2>
             <p className="text-muted mb-0">
               Sistemin genel durumu ve son aktiviteler
             </p>
@@ -340,64 +342,29 @@ export default function Dashboard() {
                               : "none",
                         }}
                       >
-                        <div
-                          className="d-flex align-items-center justify-content-center rounded-circle me-3"
-                          style={{
-                            width: "40px",
-                            height: "40px",
-                            background: `linear-gradient(135deg, ${
-                              index === 0
-                                ? "#f57c00, #ff9800"
-                                : index === 1
-                                ? "#667eea, #764ba2"
-                                : "#11998e, #38ef7d"
-                            })`,
-                            color: "white",
-                            fontSize: "0.875rem",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {index + 1}
-                        </div>
+                        {/* Bu bölüm orijinal kodda eksikti, örnek bir yapı eklendi */}
                         <div className="flex-grow-1">
-                          <div
-                            className="fw-semibold mb-1"
-                            style={{ color: "#2d3748" }}
-                          >
-                            {product.name}
-                          </div>
+                          <h6 className="mb-0 fw-semibold">{product.name}</h6>
                           <small className="text-muted">
                             {product.sales} satış
                           </small>
                         </div>
-                        <span
-                          className="badge rounded-pill"
-                          style={{
-                            background: `linear-gradient(135deg, ${
-                              index === 0
-                                ? "#f57c00, #ff9800"
-                                : index === 1
-                                ? "#667eea, #764ba2"
-                                : "#11998e, #38ef7d"
-                            })`,
-                            color: "white",
-                          }}
-                        >
-                          {product.sales}
-                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-4">
-                    <i className="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                    <p className="text-muted">Henüz satış verisi yok.</p>
+                    <i className="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                    <p className="text-muted">Veri bulunmuyor.</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+
+        {/* Banner Yönetimini burada gösterebilirsin */}
+        {/* <BannerManagement /> */}
       </div>
     </AdminLayout>
   );

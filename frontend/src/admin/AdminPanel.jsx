@@ -3,14 +3,14 @@ import AdminDashboard from "../pages/Admin/Dashboard";
 import AdminProducts from "../pages/Admin/AdminProducts";
 import AdminOrders from "../pages/Admin/AdminOrders";
 import AdminUsers from "../pages/Admin/AdminUsers";
+import CouponManagement from "../pages/Admin/CouponManagement";
 
-const AdminPanel = () => {
+function AdminPanel() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginData, setLoginData] = useState({ username: "", password: "" });
 
   useEffect(() => {
-    // Admin kimlik doğrulama kontrolü
     const adminToken = localStorage.getItem("adminToken");
     if (adminToken) {
       setIsAuthenticated(true);
@@ -19,7 +19,6 @@ const AdminPanel = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    // Demo için basit authentication
     if (loginData.username === "admin" && loginData.password === "admin123") {
       localStorage.setItem("adminToken", "demo-admin-token");
       setIsAuthenticated(true);
@@ -100,9 +99,16 @@ const AdminPanel = () => {
     );
   }
 
+  const sidebarItems = [
+    { id: "dashboard", icon: "📊", label: "Dashboard" },
+    { id: "products", icon: "📦", label: "Ürünler" },
+    { id: "orders", icon: "🛍️", label: "Siparişler" },
+    { id: "users", icon: "👥", label: "Kullanıcılar" },
+    { id: "coupons", icon: "🏷️", label: "Kuponlar" },
+  ];
+
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
-      {/* Sidebar */}
       <div
         className="sidebar"
         style={{
@@ -114,12 +120,7 @@ const AdminPanel = () => {
         <div className="p-4">
           <h4 className="fw-bold mb-4">Admin Panel</h4>
           <nav className="nav flex-column">
-            {[
-              { id: "dashboard", icon: "📊", label: "Dashboard" },
-              { id: "products", icon: "📦", label: "Ürünler" },
-              { id: "orders", icon: "🛍️", label: "Siparişler" },
-              { id: "users", icon: "👥", label: "Kullanıcılar" },
-            ].map((item) => (
+            {sidebarItems.map((item) => (
               <button
                 key={item.id}
                 className={`nav-link text-white border-0 rounded mb-2 p-3 ${
@@ -143,18 +144,17 @@ const AdminPanel = () => {
           </button>
         </div>
       </div>
-
-      {/* Main Content */}
       <div className="flex-grow-1" style={{ background: "#f8f9fa" }}>
         <div className="p-4">
           {activeTab === "dashboard" && <AdminDashboard />}
           {activeTab === "products" && <AdminProducts />}
           {activeTab === "orders" && <AdminOrders />}
           {activeTab === "users" && <AdminUsers />}
+          {activeTab === "coupons" && <CouponManagement />}
         </div>
       </div>
     </div>
   );
-};
+}
 
 export default AdminPanel;

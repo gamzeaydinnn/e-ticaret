@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.Extensions;
+using ECommerce.API.Infrastructure;
 
 namespace ECommerce.API.Controllers
 {
@@ -44,6 +46,33 @@ namespace ECommerce.API.Controllers
                 status = result.Status,
                 totalPrice = result.TotalPrice
             });
+        }
+        /// <summary>
+        /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
+        /// </summary>
+        [HttpPost("{orderId}/cancel")]
+        [Authorize]
+        public async Task<IActionResult> CancelOrder(int orderId)
+        {
+            var userId = User.GetUserId(); // extension ile alınıyor
+            var result = await _orderService.CancelOrderAsync(orderId, userId);
+            if (!result)
+                return BadRequest(new { message = "Sipariş iptal edilemedi veya yetkiniz yok." });
+            return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
+        }
+        /// <summary>
+        /// Sipariş için PDF fatura indir
+        /// </summary>
+        [HttpGet("{orderId}/invoice")]
+        [Authorize]
+        public async Task<IActionResult> DownloadInvoice(int orderId)
+        {
+            var orderDetail = await _orderService.GetDetailByIdAsync(orderId);
+            if (orderDetail == null)
+                return NotFound();
+
+            var pdfBytes = InvoiceGenerator.Generate(orderDetail);
+            return File(pdfBytes, "application/pdf", $"invoice-{orderId}.pdf");
         }
     }
 }
