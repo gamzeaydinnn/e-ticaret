@@ -29,10 +29,10 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                var token = await _authService.RegisterAsync(dto);
-                return Ok(new { 
-                    Token = token,
-                    Message = "Kayıt başarılı! Giriş yapabilirsiniz."
+                await _authService.RegisterAsync(dto);
+                return Ok(new {
+                    RequireEmailConfirmation = true,
+                    Message = "Kayıt başarılı! Lütfen e-posta adresinizi doğrulayın."
                 });
             }
             catch (Exception ex)
@@ -47,14 +47,14 @@ namespace ECommerce.API.Controllers
             try
             {
                 var token = await _authService.LoginAsync(dto);
-                return Ok(new { 
+                return Ok(new {
                     Token = token,
                     Message = "Giriş başarılı!"
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { Message = "Geçersiz email veya şifre!" });
+                return BadRequest(new { Message = ex.Message ?? "Geçersiz email veya şifre!" });
             }
         }
         [HttpPost("refresh")]
@@ -108,6 +108,24 @@ namespace ECommerce.API.Controllers
             return Ok(new { Message = "Şifreniz başarıyla değiştirilmiştir." });
         }
 
+        [HttpGet("confirm-email")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
+        {
+            var ok = await _authService.ConfirmEmailAsync(userId, token);
+            if (!ok) return BadRequest(new { Message = "E-posta doğrulama başarısız. Lütfen geçerli bir bağlantı kullanın." });
+            return Ok(new { Message = "E-posta adresiniz başarıyla doğrulandı. Giriş yapabilirsiniz." });
+        }
+
+        [HttpPost("resend-confirmation")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResendConfirmation([FromBody] ForgotPasswordDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Email)) return BadRequest(new { Message = "Email gereklidir." });
+            await _authService.ResendConfirmationEmailAsync(dto.Email);
+            return Ok(new { Message = "Doğrulama e-postası (varsa) gönderildi." });
+        }
+
         [HttpPost("logout")]
         [Authorize]
         public IActionResult Logout()
@@ -135,4 +153,3 @@ namespace ECommerce.API.Controllers
 
     }
     }
-

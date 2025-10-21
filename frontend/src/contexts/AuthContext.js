@@ -57,26 +57,22 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      // Backend API çağrısı
-      const response = await AuthService.login({ email, password });
-
-      if (response.data.success) {
-        const { user: userData, token } = response.data;
-
-        // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(token);
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", userData.id.toString());
-
-        setUser(userData);
-
-        return { success: true, user: userData };
-      } else {
-        return {
-          success: false,
-          error: response.data.message || "Giriş başarısız!",
-        };
+      const result = await AuthService.login({ email, password });
+      // api.js returns response.data directly
+      if (result?.Token) {
+        // Save token and fetch user profile
+        AuthService.saveToken(result.Token);
+        try {
+          const me = await AuthService.me();
+          if (me) {
+            localStorage.setItem("user", JSON.stringify(me));
+            localStorage.setItem("userId", String(me.id || me.Id || ""));
+            setUser(me);
+          }
+        } catch {}
+        return { success: true, user: user || null };
       }
+      return { success: false, error: result?.Message || "Giriş başarısız!" };
     } catch (error) {
       console.error("Login error:", error);
 
@@ -143,36 +139,25 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, firstName, lastName) => {
     try {
-      // Backend API çağrısı
-      const response = await AuthService.register({ 
-        email, 
-        password, 
-        firstName, 
-        lastName 
-      });
-
-      if (response.data.Token) {
-        const userData = {
-          email,
-          firstName,
-          lastName,
-          name: `${firstName} ${lastName}`
-        };
-
-        // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(response.data.Token);
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", Date.now().toString());
-
-        setUser(userData);
-
-        return { success: true, user: userData };
-      } else {
-        return {
-          success: false,
-          error: response.data.Message || "Kayıt başarısız!",
-        };
+      const result = await AuthService.register({ email, password, firstName, lastName });
+      // Expecting { RequireEmailConfirmation, Message }
+      if (result?.RequireEmailConfirmation) {
+        return { success: true, requiresEmailConfirmation: true, message: result.Message };
       }
+      // Legacy path: if Token returned, treat as logged-in
+      if (result?.Token) {
+        AuthService.saveToken(result.Token);
+        try {
+          const me = await AuthService.me();
+          if (me) {
+            localStorage.setItem("user", JSON.stringify(me));
+            localStorage.setItem("userId", String(me.id || me.Id || ""));
+            setUser(me);
+          }
+        } catch {}
+        return { success: true, user: user || null };
+      }
+      return { success: false, error: result?.Message || "Kayıt başarısız!" };
     } catch (error) {
       console.error("Register error:", error);
 

@@ -5,7 +5,7 @@
 ### 1. **Kullanıcı Yönetimi**
 
 - ✅ **Şifre Sıfırlama:** Backend'de var, frontend entegrasyonu tamamlandı
-- ❌ **E-posta Doğrulama:** Kayıt sonrası e-posta doğrulama yok
+- ✅ **E-posta Doğrulama:** Kayıt sonrası e-posta doğrulama eklendi (token üretimi, e-posta gönderimi, onay endpoint'i, FE uyumu)
 - ✅ **Profil Düzenleme:** Kullanıcı bilgilerini güncelleme eklendi
 - ✅ **Adres Yönetimi:** Kullanıcı birden fazla adres ekleyebiliyor
 - ✅ **Şifre Değiştirme:** Backend ve frontend tamamlandı

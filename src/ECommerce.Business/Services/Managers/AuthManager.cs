@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 using ECommerce.Data.Context;
 using ECommerce.Infrastructure;
 using ECommerce.Entities.Concrete;
@@ -12,6 +11,9 @@ using ECommerce.Core.Helpers;
 using ECommerce.Core.DTOs.Auth;
 using ECommerce.Core.DTOs.User;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Infrastructure.Services.Email;
+using Microsoft.AspNetCore.WebUtilities;
+using System.Text;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -19,14 +21,16 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly UserManager<User> _userManager;
         private readonly IConfiguration _config;
+        private readonly EmailSender _emailSender;
 
-        public AuthManager(UserManager<User> userManager, IConfiguration config)
+        public AuthManager(UserManager<User> userManager, IConfiguration config, EmailSender emailSender)
         {
             _userManager = userManager;
             _config = config;
+            _emailSender = emailSender;
         }
 
-        public async Task<string> RegisterAsync(RegisterDto dto)
+        public async Task RegisterAsync(RegisterDto dto)
         {
             var existingUser = await _userManager.FindByEmailAsync(dto.Email);
             if (existingUser != null)
@@ -51,8 +55,8 @@ namespace ECommerce.Business.Services.Managers
                 var errors = string.Join(", ", result.Errors.Select(e => e.Description));
                 throw new Exception($"Kayıt işlemi başarısız: {errors}");
             }
-
-            return GenerateJwtToken(user);
+            // Generate email confirmation token and send email
+            await SendEmailConfirmationAsync(user);
         }
 
         public async Task<string> LoginAsync(LoginDto dto)
@@ -67,6 +71,11 @@ namespace ECommerce.Business.Services.Managers
             if (!passwordValid)
             {
                 throw new Exception("Şifre yanlış");
+            }
+
+            if (!user.EmailConfirmed)
+            {
+                throw new Exception("E-posta doğrulanmadı. Lütfen e-posta adresinizi doğrulayın.");
             }
 
             return GenerateJwtToken(user);
@@ -185,6 +194,56 @@ namespace ECommerce.Business.Services.Managers
                 var errors = string.Join(", ", changeResult.Errors.Select(e => e.Description));
                 throw new Exception(errors);
             }
+        }
+
+        public async Task<bool> ConfirmEmailAsync(int userId, string token)
+        {
+            var user = await _userManager.FindByIdAsync(userId.ToString());
+            if (user == null) return false;
+
+            // token comes as base64url encoded
+            try
+            {
+                var decoded = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(token));
+                var result = await _userManager.ConfirmEmailAsync(user, decoded);
+                return result.Succeeded;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task ResendConfirmationEmailAsync(string email)
+        {
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                // do not reveal
+                return;
+            }
+            if (user.EmailConfirmed) return;
+            await SendEmailConfirmationAsync(user);
+        }
+
+        private async Task SendEmailConfirmationAsync(User user)
+        {
+            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            var encoded = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+
+            var baseUrl = _config["AppSettings:BaseUrl"]?.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = _config["Jwt:Issuer"]?.TrimEnd('/');
+            }
+            var confirmUrl = $"{baseUrl}/api/auth/confirm-email?userId={user.Id}&token={encoded}";
+
+            var body = $@"<p>Merhaba {System.Net.WebUtility.HtmlEncode(user.FirstName ?? user.Email)},</p>
+                           <p>Hesabınızı doğrulamak için aşağıdaki bağlantıya tıklayın:</p>
+                           <p><a href='{confirmUrl}'>E-posta adresimi doğrula</a></p>
+                           <p>Bu isteği siz yapmadıysanız bu e-postayı yok sayabilirsiniz.</p>";
+
+            await _emailSender.SendEmailAsync(user.Email!, "E-posta Doğrulama", body, isHtml: true);
         }
     }
 }

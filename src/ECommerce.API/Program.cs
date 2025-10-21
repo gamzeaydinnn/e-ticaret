@@ -68,6 +68,7 @@ builder.Services
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
         options.Password.RequiredLength = 6;
+        options.SignIn.RequireConfirmedEmail = true;
     })
     .AddRoles<IdentityRole<int>>()
     .AddEntityFrameworkStores<ECommerceDbContext>()

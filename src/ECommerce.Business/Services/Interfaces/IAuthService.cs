@@ -7,7 +7,7 @@ namespace ECommerce.Business.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task<string> RegisterAsync(RegisterDto dto);
+        Task RegisterAsync(RegisterDto dto);
         Task<string> LoginAsync(LoginDto dto);
 
         // JWT'den userId çekip kullanıcıyı döndürmek için
@@ -19,5 +19,9 @@ namespace ECommerce.Business.Services.Interfaces
         Task ForgotPasswordAsync(ForgotPasswordDto dto);
         Task ResetPasswordAsync(ResetPasswordDto dto);
         Task ChangePasswordAsync(int userId, ChangePasswordDto dto);
+
+        // Email confirmation
+        Task<bool> ConfirmEmailAsync(int userId, string token);
+        Task ResendConfirmationEmailAsync(string email);
     }
 }
