@@ -20,19 +20,22 @@ namespace ECommerce.Business.Services.Managers
         private readonly EmailSender _emailSender;
         private readonly InventorySettings _inventorySettings;
         private readonly IConfiguration _configuration;
+        private readonly IStockUpdatePublisher _stockPublisher;
 
         public InventoryManager(
             IProductRepository productRepository,
             ECommerceDbContext context,
             EmailSender emailSender,
             IOptions<InventorySettings> inventoryOptions,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IStockUpdatePublisher stockPublisher)
         {
             _productRepository = productRepository;
             _context = context;
             _emailSender = emailSender;
             _inventorySettings = inventoryOptions.Value;
             _configuration = configuration;
+            _stockPublisher = stockPublisher;
         }
 
         public async Task<bool> IncreaseStockAsync(int productId, int quantity)
@@ -41,6 +44,7 @@ namespace ECommerce.Business.Services.Managers
             if (product == null) return false;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
+            await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
 
             // Log
             await LogAsync(product.Id, quantity, InventoryChangeType.Purchase, "Manual increase");
@@ -56,6 +60,7 @@ namespace ECommerce.Business.Services.Managers
 
             await LogAsync(product.Id, -quantity, InventoryChangeType.Sale, "Manual decrease");
             await CheckThresholdAndNotifyAsync(product);
+            await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
             return true;
         }
 
@@ -74,6 +79,7 @@ namespace ECommerce.Business.Services.Managers
 
             await LogAsync(productId, -quantity, changeType, note, performedByUserId);
             await CheckThresholdAndNotifyAsync(product);
+            await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
             return true;
         }
 
@@ -86,6 +92,7 @@ namespace ECommerce.Business.Services.Managers
             await _productRepository.UpdateAsync(product);
 
             await LogAsync(productId, quantity, changeType, note, performedByUserId);
+            await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
             return true;
         }
 

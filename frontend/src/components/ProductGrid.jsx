@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 import { shouldUseMockData, debugLog } from "../config/apiConfig";
+import { subscribeStockUpdates } from "../services/stockHub";
 
 const DEMO_PRODUCTS = [
   {
@@ -478,6 +479,18 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
       loadFavorites();
     }
   }, [user, loading]);
+
+  // Live stock updates
+  useEffect(() => {
+    const unsub = subscribeStockUpdates(({ productId, quantity }) => {
+      setData((prev) =>
+        Array.isArray(prev)
+          ? prev.map((p) => (p.id === productId ? { ...p, stockQuantity: quantity } : p))
+          : prev
+      );
+    });
+    return () => unsub();
+  }, []);
 
   if (loading) {
     return (

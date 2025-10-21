@@ -14,6 +14,7 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly IProductRepository _productRepository;
         private readonly IReviewRepository _reviewRepository;
+        private readonly IStockUpdatePublisher _stockPublisher;
         // Yeni Eklenen: Genel Arama Metodu
         public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string query, int page = 1, int size = 10)
         {
@@ -54,10 +55,24 @@ namespace ECommerce.Business.Services.Managers
         }
         
 
+        private sealed class NoopStockPublisher : IStockUpdatePublisher
+        {
+            public Task PublishAsync(int productId, int newQuantity) => Task.CompletedTask;
+        }
+
+        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository, IStockUpdatePublisher stockPublisher)
+        {
+            _productRepository = productRepository;
+            _reviewRepository = reviewRepository;
+            _stockPublisher = stockPublisher;
+        }
+
+        // Backward-compatible ctor for tests or contexts without realtime wiring
         public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository)
         {
             _productRepository = productRepository;
             _reviewRepository = reviewRepository;
+            _stockPublisher = new NoopStockPublisher();
         }
 
         public async Task<IEnumerable<ProductListDto>> GetProductsAsync(string query = null, int? categoryId = null, int page = 1, int pageSize = 20)
@@ -172,6 +187,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 product.StockQuantity = stock;
                 await _productRepository.UpdateAsync(product);
+                await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
             }
         }
 

@@ -22,6 +22,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using ECommerce.API.Infrastructure;
+using ECommerce.API.Hubs;
+using ECommerce.API.Realtime;
+using ECommerce.Core.Interfaces;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -40,13 +43,15 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(allowed)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
         else
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
     });
 });
@@ -126,6 +131,9 @@ builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<IFileStorage>(sp =>
     new LocalFileStorage(builder.Environment.ContentRootPath));
 
+// SignalR for real-time updates
+builder.Services.AddSignalR();
+
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -184,6 +192,9 @@ builder.Services.AddScoped<ICouponService, CouponManager>();
 builder.Services.AddScoped<ICategoryService, CategoryManager>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
+
+// Real-time stock update publisher
+builder.Services.AddSingleton<IStockUpdatePublisher, SignalRStockUpdatePublisher>();
 
 // vs.
 
@@ -285,4 +296,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+// Map SignalR hubs
+app.MapHub<StockHub>("/hubs/stock");
 app.Run();

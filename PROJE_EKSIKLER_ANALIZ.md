@@ -20,8 +20,8 @@
 ### 3. **Ürün Yönetimi**
 
 - ❌ **Ürün Varyantları:** Beden, renk gibi varyantlar eksik
-- ❌ **Stok Takibi:** Gerçek zamanlı stok güncellemesi eksik
-- ❌ **Ürün İnceleme/Yorum:** Backend'de var ama frontend eksik
+- ✅ **Stok Takibi:** SignalR ile gerçek zamanlı stok güncelleme eklendi (Backend yayın + Frontend abonelik)
+- ✅ **Ürün İnceleme/Yorum:** Frontend yorum listesi ve yorum ekleme formu eklendi
 - ❌ **Ürün Karşılaştırma:** Ürünleri karşılaştırma özelliği yok
 - ❌ **Ürün Arama:** Gelişmiş filtreleme ve arama eksik
 
