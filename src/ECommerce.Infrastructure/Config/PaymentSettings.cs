@@ -12,6 +12,7 @@ namespace ECommerce.Infrastructure.Config
         public string IyzicoApiKey { get; set; } = string.Empty;
         public string IyzicoSecretKey { get; set; } = string.Empty;
         public string IyzicoBaseUrl { get; set; } = string.Empty;
+        public string? IyzicoCallbackUrl { get; set; }
 
         // PayPal ayarları
         public string PayPalClientId { get; set; } = string.Empty;
@@ -21,6 +22,11 @@ namespace ECommerce.Infrastructure.Config
         // Stripe ayarları
         public string StripeSecretKey { get; set; } = string.Empty;
         public string StripePublishableKey { get; set; } = string.Empty;
+        public string? StripeWebhookSecret { get; set; }
+
+        // Ortak dönüş URL'leri
+        public string? ReturnUrlSuccess { get; set; }
+        public string? ReturnUrlCancel { get; set; }
     }
 }
 //Bu class, ödeme servislerinin yapılandırma ayarlarını tutar.

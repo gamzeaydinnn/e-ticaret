@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 
 //		○ Auth: JWT + refresh token. UsersController ve AuthController.
 //		○ CORS, Rate limiting, HSTS, HTTPS redirection.
@@ -31,8 +32,8 @@ namespace ECommerce.API.Controllers
             {
                 await _authService.RegisterAsync(dto);
                 return Ok(new {
-                    RequireEmailConfirmation = true,
-                    Message = "Kayıt başarılı! Lütfen e-posta adresinizi doğrulayın."
+                    Message = "Kayıt başarılı! E-posta doğrulama linki gönderildi. Lütfen e-postanızı doğrulayın.",
+                    EmailVerificationRequired = true
                 });
             }
             catch (Exception ex)
@@ -47,14 +48,14 @@ namespace ECommerce.API.Controllers
             try
             {
                 var token = await _authService.LoginAsync(dto);
-                return Ok(new {
+                return Ok(new { 
                     Token = token,
                     Message = "Giriş başarılı!"
                 });
             }
             catch (Exception ex)
             {
-                return BadRequest(new { Message = ex.Message ?? "Geçersiz email veya şifre!" });
+                return BadRequest(new { Message = ex.Message });
             }
         }
         [HttpPost("refresh")]
@@ -108,24 +109,6 @@ namespace ECommerce.API.Controllers
             return Ok(new { Message = "Şifreniz başarıyla değiştirilmiştir." });
         }
 
-        [HttpGet("confirm-email")]
-        [AllowAnonymous]
-        public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
-        {
-            var ok = await _authService.ConfirmEmailAsync(userId, token);
-            if (!ok) return BadRequest(new { Message = "E-posta doğrulama başarısız. Lütfen geçerli bir bağlantı kullanın." });
-            return Ok(new { Message = "E-posta adresiniz başarıyla doğrulandı. Giriş yapabilirsiniz." });
-        }
-
-        [HttpPost("resend-confirmation")]
-        [AllowAnonymous]
-        public async Task<IActionResult> ResendConfirmation([FromBody] ForgotPasswordDto dto)
-        {
-            if (dto == null || string.IsNullOrWhiteSpace(dto.Email)) return BadRequest(new { Message = "Email gereklidir." });
-            await _authService.ResendConfirmationEmailAsync(dto.Email);
-            return Ok(new { Message = "Doğrulama e-postası (varsa) gönderildi." });
-        }
-
         [HttpPost("logout")]
         [Authorize]
         public IActionResult Logout()
@@ -151,5 +134,67 @@ namespace ECommerce.API.Controllers
         }
 
 
+        // E-posta doğrulama linki (GET, e-posta ile gönderilen link)
+        [HttpGet("confirm-email")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ConfirmEmail([FromQuery] int userId, [FromQuery] string token)
+        {
+            var ok = await _authService.ConfirmEmailAsync(userId, token);
+            if (!ok) return BadRequest(new { Message = "Doğrulama başarısız veya token geçersiz." });
+            return Ok(new { Message = "E-posta başarıyla doğrulandı. Artık giriş yapabilirsiniz." });
+        }
+
+        // E-posta doğrulama mailini tekrar gönder
+        [HttpPost("resend-confirmation")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ResendConfirmation([FromBody] ECommerce.Core.DTOs.Auth.ForgotPasswordDto dto)
+        {
+            // Mevcut ForgotPasswordDto sadece Email içeriyor; burada yeniden kullanıyoruz
+            var ok = await _authService.ResendConfirmationEmailAsync(dto.Email);
+            return Ok(new { Message = "Eğer e-posta sistemde kayıtlı ve doğrulanmamışsa, doğrulama linki gönderildi." });
+        }
+
+        // Sadece Development ortamında test kolaylığı için doğrulama linki üretir
+        [HttpGet("dev/confirm-token")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DevConfirmToken([FromQuery] string email)
+        {
+            if (!HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment())
+                return NotFound();
+
+            var user = await _authService.GetUserByEmailAsync(email);
+            if (user == null) return NotFound(new { Message = "User not found" });
+
+            // UserLoginDto dönüyor, bu yüzden tekrar çekelim
+            // Basitçe Identity User Manager üzerinden token üretmek için service resolution yapalım
+            var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ECommerce.Entities.Concrete.User>>();
+            var fullUser = await userManager.FindByEmailAsync(email);
+            if (fullUser == null) return NotFound(new { Message = "User not found" });
+
+            var token = await userManager.GenerateEmailConfirmationTokenAsync(fullUser);
+            var encoded = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(System.Text.Encoding.UTF8.GetBytes(token));
+            var baseUrl = HttpContext.RequestServices.GetRequiredService<IConfiguration>()["AppSettings:BaseUrl"]?.TrimEnd('/') ?? string.Empty;
+            var confirmUrl = string.IsNullOrWhiteSpace(baseUrl)
+                ? $"/api/auth/confirm-email?userId={fullUser.Id}&token={encoded}"
+                : $"{baseUrl}/api/auth/confirm-email?userId={fullUser.Id}&token={encoded}";
+            return Ok(new { confirmUrl });
+        }
+
+        // Development helper: generate and immediately confirm server-side
+        [HttpPost("dev/confirm-direct")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DevConfirmDirect([FromQuery] string email)
+        {
+            if (!HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment())
+                return NotFound();
+
+            var userManager = HttpContext.RequestServices.GetRequiredService<UserManager<ECommerce.Entities.Concrete.User>>();
+            var fullUser = await userManager.FindByEmailAsync(email);
+            if (fullUser == null) return NotFound(new { Message = "User not found" });
+            var token = await userManager.GenerateEmailConfirmationTokenAsync(fullUser);
+            var result = await userManager.ConfirmEmailAsync(fullUser, token);
+            return Ok(new { success = result.Succeeded });
+        }
+
     }
-    }
+}

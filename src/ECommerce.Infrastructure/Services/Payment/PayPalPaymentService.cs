@@ -11,6 +11,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ECommerce.Core.DTOs.Payment;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {
@@ -48,6 +49,19 @@ namespace ECommerce.Infrastructure.Services.Payment
         {
             var ok = await CheckPaymentStatusAsync(paymentId);
             return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+        }
+
+        public Task<PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency)
+        {
+            // Gelecekte PayPal Checkout (Orders API) ile başlatılacak
+            return Task.FromResult(new PaymentInitResult
+            {
+                Provider = "paypal",
+                RequiresRedirect = false,
+                OrderId = orderId,
+                Amount = amount,
+                Currency = currency
+            });
         }
     }
     /*F. Ödeme entegrasyon (Stripe / iyzico / PayTR)

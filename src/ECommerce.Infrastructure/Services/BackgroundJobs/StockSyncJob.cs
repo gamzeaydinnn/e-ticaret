@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using ECommerce.Core.Interfaces;
 using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Config;
-using ECommerce.Core.Interfaces;
 
 //Amaç: Mikro ERP ile stok senkronizasyonunu otomatikleştirmek.
 namespace ECommerce.Infrastructure.Services.BackgroundJobs
@@ -17,18 +16,15 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
         private readonly IMicroService _microService;
         private CancellationTokenSource? _cts;
         private readonly int _intervalSeconds;
-        private readonly IStockUpdatePublisher _stockPublisher;
 
         public StockSyncJob(
             IServiceScopeFactory scopeFactory,
             IMicroService microService,
-            IOptions<InventorySettings> inventoryOptions,
-            IStockUpdatePublisher stockPublisher)
+            IOptions<InventorySettings> inventoryOptions)
         {
             _scopeFactory = scopeFactory;
             _microService = microService;
             _intervalSeconds = Math.Max(10, inventoryOptions.Value.StockSyncIntervalSeconds);
-            _stockPublisher = stockPublisher;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -61,7 +57,6 @@ namespace ECommerce.Infrastructure.Services.BackgroundJobs
                     {
                         product.StockQuantity = stock.Quantity;
                         await productRepository.UpdateAsync(product);
-                        await _stockPublisher.PublishAsync(product.Id, product.StockQuantity);
                     }
                 }
             }

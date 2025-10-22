@@ -23,5 +23,8 @@ namespace ECommerce.Core.Interfaces
         // Tip güvenliği için ayrıntılı sürümler
         Task<ECommerce.Entities.Enums.PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount);
         Task<ECommerce.Entities.Enums.PaymentStatus> GetPaymentStatusAsync(string paymentId);
+
+        // Hosted checkout / 3DS başlatma (Stripe Checkout / Iyzico Checkout Form)
+        Task<ECommerce.Core.DTOs.Payment.PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency);
     }
 }

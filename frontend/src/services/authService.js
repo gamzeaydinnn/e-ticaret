@@ -7,8 +7,6 @@ export const AuthService = {
   logout: () => api.post("/api/auth/logout"),
   me: () => api.get("/api/auth/me"),
   refresh: (data) => api.post("/api/auth/refresh", data),
-  confirmEmail: (params) => api.get("/api/auth/confirm-email", { params }),
-  resendConfirmation: (email) => api.post("/api/auth/resend-confirmation", { email }),
 
   // helper client-side
   saveToken: (token) => {

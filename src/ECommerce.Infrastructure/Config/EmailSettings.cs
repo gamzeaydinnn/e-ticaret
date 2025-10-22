@@ -16,5 +16,9 @@ namespace ECommerce.Infrastructure.Config
         public string FromName { get; set; } = string.Empty;
         public string FromEmail { get; set; } = string.Empty;
 
+        // Dev/test için pickup directory'ye yazma seçeneği
+        public bool UsePickupFolder { get; set; } = false;
+        public string? PickupDirectory { get; set; }
+
     }
 }

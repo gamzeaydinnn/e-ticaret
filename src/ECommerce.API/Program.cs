@@ -22,9 +22,6 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using ECommerce.API.Infrastructure;
-using ECommerce.API.Hubs;
-using ECommerce.API.Realtime;
-using ECommerce.Core.Interfaces;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -43,22 +40,31 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(allowed)
                   .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+                  .AllowAnyMethod();
         }
         else
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
                   .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+                  .AllowAnyMethod();
         }
     });
 });
 
-// DbContext ekle - SQL Server kullan
+// DbContext ekle - SQL Server (varsayılan) veya SQLite (dev) kullan
+var useSqlite = builder.Configuration.GetValue<bool>("Database:UseSqlite");
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+{
+    if (useSqlite)
+    {
+        var dbPath = builder.Configuration["Database:SqlitePath"] ?? "app.db";
+        options.UseSqlite($"Data Source={dbPath}");
+    }
+    else
+    {
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    }
+});
 
 builder.Services
     .AddIdentityCore<User>(options =>
@@ -132,9 +138,6 @@ builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<IFileStorage>(sp =>
     new LocalFileStorage(builder.Environment.ContentRootPath));
 
-// SignalR for real-time updates
-builder.Services.AddSignalR();
-
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -194,9 +197,6 @@ builder.Services.AddScoped<ICategoryService, CategoryManager>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
 
-// Real-time stock update publisher
-builder.Services.AddSingleton<IStockUpdatePublisher, SignalRStockUpdatePublisher>();
-
 // vs.
 
 // Stock sync job as hosted service and injectable singleton
@@ -255,14 +255,22 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = services.GetRequiredService<ECommerceDbContext>();
-        // Migrations yoksa dev ortamında EnsureCreated; varsa migrate
+        // Dev/SQLite: şemayı oluştur; SQL Server: migrate/ensure
         try
         {
-            var pending = db.Database.GetPendingMigrations();
-            if (pending != null && pending.Any())
-                db.Database.Migrate();
-            else
+            var useSqliteAtRuntime = builder.Configuration.GetValue<bool>("Database:UseSqlite");
+            if (useSqliteAtRuntime)
+            {
                 db.Database.EnsureCreated();
+            }
+            else
+            {
+                var pending = db.Database.GetPendingMigrations();
+                if (pending != null && pending.Any())
+                    db.Database.Migrate();
+                else
+                    db.Database.EnsureCreated();
+            }
         }
         catch
         {
@@ -285,7 +293,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 if (!app.Environment.IsDevelopment())
 {
     app.UseHsts();
@@ -297,6 +305,4 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-// Map SignalR hubs
-app.MapHub<StockHub>("/hubs/stock");
 app.Run();

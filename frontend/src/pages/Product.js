@@ -2,11 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../services/api";
-import reviewService from "../services/reviewService";
-import ReviewList from "../components/ReviewList";
-import ReviewForm from "../components/ReviewForm";
-import { useAuth } from "../contexts/AuthContext";
-import { subscribeStockUpdates, joinProduct, leaveProduct } from "../services/stockHub";
 
 // ProductGallery component'ini burada tanımlayalım
 const ProductGallery = ({ images = [] }) => {
@@ -55,48 +50,12 @@ export default function Product() {
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState(null);
-  const [reviews, setReviews] = useState([]);
-  const { user } = useAuth();
 
   useEffect(() => {
     api
       .get(`/api/Products/${id}`)
       .then((r) => setProduct(r.data))
       .catch(() => {});
-  }, [id]);
-
-  // Load reviews for the product
-  useEffect(() => {
-    if (!id) return;
-    reviewService
-      .getReviewsByProductId(id)
-      .then((r) => setReviews(r.data))
-      .catch(() => setReviews([]));
-  }, [id]);
-
-  const handleReviewSubmitted = async () => {
-    try {
-      const r = await reviewService.getReviewsByProductId(id);
-      setReviews(r.data);
-    } catch {}
-  };
-
-  // Realtime stock updates for this product
-  useEffect(() => {
-    if (!id) return;
-    let unsub = () => {};
-    (async () => {
-      try { await joinProduct(id); } catch {}
-      unsub = subscribeStockUpdates(({ productId, quantity }) => {
-        if (String(productId) === String(id)) {
-          setProduct((prev) => (prev ? { ...prev, stockQuantity: quantity } : prev));
-        }
-      });
-    })();
-    return () => {
-      unsub();
-      leaveProduct(id);
-    };
   }, [id]);
 
   const addToCart = async () => {
@@ -121,24 +80,7 @@ export default function Product() {
         <ProductGallery images={product.images || []} />
         <h1 className="text-2xl font-bold mt-4">{product.name}</h1>
         <p className="mt-2 text-lg font-semibold">₺{product.price}</p>
-        <p className="mt-1 text-sm">
-          Stok: {typeof product.stockQuantity === 'number' ? product.stockQuantity : '—'}
-        </p>
         <p className="mt-4">{product.description}</p>
-
-        {/* Reviews Section */}
-        <div className="mt-10">
-          <h2 className="text-xl font-semibold mb-4">Ürün Yorumları</h2>
-          <ReviewList reviews={reviews} />
-          {user ? (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium mb-2">Yorum Yap</h3>
-              <ReviewForm productId={id} onReviewSubmitted={handleReviewSubmitted} />
-            </div>
-          ) : (
-            <p className="text-gray-500 italic mt-4">Yorum yapmak için giriş yapmalısınız.</p>
-          )}
-        </div>
       </div>
 
       <aside className="p-4 bg-white rounded shadow">
@@ -172,16 +114,9 @@ export default function Product() {
 
         <button
           onClick={addToCart}
-          disabled={typeof product.stockQuantity === 'number' && product.stockQuantity <= 0}
-          className={`w-full p-3 rounded ${
-            typeof product.stockQuantity === 'number' && product.stockQuantity <= 0
-              ? 'bg-gray-400 text-white cursor-not-allowed'
-              : 'bg-green-600 text-white'
-          }`}
+          className="w-full bg-green-600 text-white p-3 rounded"
         >
-          {typeof product.stockQuantity === 'number' && product.stockQuantity <= 0
-            ? 'Stokta Yok'
-            : 'Sepete Ekle'}
+          Sepete Ekle
         </button>
       </aside>
     </div>

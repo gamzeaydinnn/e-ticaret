@@ -3,6 +3,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Enums;
 using System;
 using System.Threading.Tasks;
+using ECommerce.Core.DTOs.Payment;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -46,6 +47,19 @@ namespace ECommerce.Business.Services.Managers
         {
             var ok = await CheckPaymentStatusAsync(paymentId);
             return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+        }
+
+        public Task<PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency)
+        {
+            // Mock init result for dev
+            return Task.FromResult(new PaymentInitResult
+            {
+                Provider = "mock",
+                RequiresRedirect = false,
+                OrderId = orderId,
+                Amount = amount,
+                Currency = currency
+            });
         }
     }
 }

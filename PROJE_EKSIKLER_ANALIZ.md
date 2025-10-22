@@ -5,14 +5,14 @@
 ### 1. **Kullanıcı Yönetimi**
 
 - ✅ **Şifre Sıfırlama:** Backend'de var, frontend entegrasyonu tamamlandı
-- ✅ **E-posta Doğrulama:** Kayıt sonrası e-posta doğrulama eklendi (token üretimi, e-posta gönderimi, onay endpoint'i, FE uyumu)
+- ✅ **E-posta Doğrulama:** Kayıt sonrası e-posta doğrulama eklendi (SMTP ayarı gerekir)
 - ✅ **Profil Düzenleme:** Kullanıcı bilgilerini güncelleme eklendi
 - ✅ **Adres Yönetimi:** Kullanıcı birden fazla adres ekleyebiliyor
 - ✅ **Şifre Değiştirme:** Backend ve frontend tamamlandı
 
 ### 2. **Ödeme ve Sipariş**
 
-- ❌ **Ödeme Entegrasyonu:** Gerçek ödeme sistemi yok (Iyzico, Stripe eksik)
+- ⏳ **Ödeme Entegrasyonu:** Stripe/Iyzico sunucu entegrasyonu hazır, sandbox anahtarları ve frontend yönlendirmesi bekleniyor
   ✅ **Sipariş İptali:** Kullanıcı siparişini iptal edebiliyor
   ✅ **Sipariş Detayları:** Sipariş geçmişinde detaylı bilgi eksiksiz gösteriliyor (PDF fatura ile tam entegrasyon sağlandı)
   ✅ **Fatura Oluşturma:** PDF fatura indirme özelliği tamamlandı
@@ -20,10 +20,10 @@
 ### 3. **Ürün Yönetimi**
 
 - ❌ **Ürün Varyantları:** Beden, renk gibi varyantlar eksik
-- ✅ **Stok Takibi:** SignalR ile gerçek zamanlı stok güncelleme eklendi (Backend yayın + Frontend abonelik)
-- ✅ **Ürün İnceleme/Yorum:** Frontend yorum listesi ve yorum ekleme formu eklendi
+- ✅ **Stok Takibi:** Gerçek zamanlı stok güncellemesi eksik
+- ✅ **Ürün İnceleme/Yorum:** Backend'de var ama frontend eksik
 - ❌ **Ürün Karşılaştırma:** Ürünleri karşılaştırma özelliği yok
-- ✅ **Ürün Arama:** Gelişmiş filtreleme ve arama eklendi (çok kriterli arama, fiyat aralığı, stokta olanlar, marka/kategori, puan, sıralama, sayfalama)
+- ❌ **Ürün Arama:** Gelişmiş filtreleme ve arama eksik
 
 ### 4. **Güvenlik**
 
@@ -132,7 +132,7 @@
 
 1. ✅ Modal tasarımı iyileştirildi
 2. ✅ Şifre sıfırlama eklendi
-3. ⏳ E-posta doğrulama eklenecek
+3. ✅ E-posta doğrulama eklendi
 4. ⏳ Ödeme entegrasyonu yapılacak
 5. ⏳ Ürün yorum sistemi tamamlanacak
 

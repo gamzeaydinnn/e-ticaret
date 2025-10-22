@@ -28,11 +28,19 @@ namespace ECommerce.Infrastructure.Services.Email
                 message.Body = body;
                 message.IsBodyHtml = isHtml;
 
-                using var client = new SmtpClient(_settings.SmtpHost, _settings.SmtpPort)
+                using var client = new SmtpClient();
+                if (_settings.UsePickupFolder && !string.IsNullOrWhiteSpace(_settings.PickupDirectory))
                 {
-                    Credentials = new NetworkCredential(_settings.SmtpUser, _settings.SmtpPass),
-                    EnableSsl = true
-                };
+                    client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory;
+                    client.PickupDirectoryLocation = _settings.PickupDirectory;
+                }
+                else
+                {
+                    client.Host = _settings.SmtpHost;
+                    client.Port = _settings.SmtpPort;
+                    client.EnableSsl = true;
+                    client.Credentials = new NetworkCredential(_settings.SmtpUser, _settings.SmtpPass);
+                }
 
                 await client.SendMailAsync(message);
                 return true;

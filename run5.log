@@ -1,0 +1,5 @@
+/Users/dilarasara/e-ticaret/src/ECommerce.API/Controllers/AuthController.cs(169,78): error CS0246: 'UserManager<>' türü veya ad alanı adı bulunamadı (bir using yönergeniz veya derleme başvurunuz mu eksik?) [/Users/dilarasara/e-ticaret/src/ECommerce.API/ECommerce.API.csproj]
+/Users/dilarasara/e-ticaret/src/ECommerce.API/Program.cs(126,40): warning CS8604: 'byte[] Encoding.GetBytes(string s)' içindeki 's' parametresi için olası null başvuru bağımsız değişkeni. [/Users/dilarasara/e-ticaret/src/ECommerce.API/ECommerce.API.csproj]
+/Users/dilarasara/e-ticaret/src/ECommerce.API/Controllers/CourierController.cs(182,42): warning CS1998: Bu zaman uyumsuz yöntemde 'await' işleçleri yok ve zaman uyumlu çalışacak. 'await' işlecini kullanarak engelleyici olmayan API çağrılarını beklemeyi veya 'await Task.Run(...)' kullanarak bir arka plan iş parçacığında CPU bağlantılı iş yapmayı düşünün. [/Users/dilarasara/e-ticaret/src/ECommerce.API/ECommerce.API.csproj]
+
+Derleme başarısız oldu. Derleme hatalarını düzeltip yeniden çalıştırın.
