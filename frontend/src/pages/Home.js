@@ -1,6 +1,7 @@
 // Hero banner, kategori grid, kampanyalar, öne çıkan ürünler
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
+import { Helmet } from "react-helmet-async";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
 
@@ -21,6 +22,40 @@ export default function Home() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <Helmet>
+        {(() => {
+          const siteUrl =
+            process.env.REACT_APP_SITE_URL ||
+            (typeof window !== "undefined" ? window.location.origin : "");
+          return (
+            <>
+              <title>Doğadan Sofranza — Taze ve doğal market ürünleri</title>
+              <meta
+                name="description"
+                content="Doğadan Sofranza: Taze meyve, sebze, süt ürünleri ve günlük ihtiyaçlarınızı güvenle sipariş edin."
+              />
+              <meta
+                property="og:title"
+                content="Doğadan Sofranza — Taze ve doğal market ürünleri"
+              />
+              <meta
+                property="og:description"
+                content="Taze ve doğal ürünleri kapınıza getiren yerel market"
+              />
+              <meta
+                property="og:image"
+                content={`${siteUrl}/images/og-default.jpg`}
+              />
+              <link
+                rel="canonical"
+                href={`${siteUrl}${
+                  typeof window !== "undefined" ? window.location.pathname : ""
+                }`}
+              />
+            </>
+          );
+        })()}
+      </Helmet>
       <section className="mb-8">
         <div className="bg-gradient-to-r from-sky-400 to-indigo-600 rounded-lg p-8 text-white">
           <h1 className="text-3xl font-bold">Bugün ne sipariş ediyorsun?</h1>

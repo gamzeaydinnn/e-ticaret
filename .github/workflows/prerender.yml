@@ -1,0 +1,65 @@
+name: Frontend prerender and build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - feature/**
+
+jobs:
+  prerender:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Generate prerender list
+        working-directory: ./frontend
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          BACKEND_API_TOKEN: ${{ secrets.BACKEND_API_TOKEN }}
+        run: |
+          node scripts/generate-prerender-list.js || echo "generate-prerender-list failed, continuing with defaults"
+
+      - name: Install deps and build frontend
+        working-directory: ./frontend
+        env:
+          REACT_APP_SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          npm ci
+          npm run build --if-present
+
+      - name: Fix canonical fallback (safe/idempotent)
+        working-directory: ./frontend
+        env:
+          NEW_HOST: ${{ secrets.SITE_URL }}
+        run: |
+          node scripts/fix-canonical.js || true
+
+      - name: Inject prerender meta (if available)
+        working-directory: ./frontend
+        env:
+          NEW_HOST: ${{ secrets.SITE_URL }}
+          REACT_APP_SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          node scripts/inject-prerender-meta.js || echo "inject skipped"
+
+      - name: Verify prerender output
+        working-directory: ./frontend
+        run: |
+          node scripts/verify-prerender.js || echo "verification failed"
+
+      - name: Upload prerendered build
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/build
