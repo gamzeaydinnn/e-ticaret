@@ -19,7 +19,7 @@
 
 ### 3. **Ürün Yönetimi**
 
-- ❌ **Ürün Varyantları:** Beden, renk gibi varyantlar eksik
+- ✅**Ürün Varyantları:** Market odaklı varyantlar eksik — ağırlık (kg), paket/ambalaj boyutu, son kullanma tarihi (SKT) ve SKU/gramaj bazlı varyantlar eklenmeli
 - ✅ **Stok Takibi:** Gerçek zamanlı stok güncellemesi eksik
 - ✅ **Ürün İnceleme/Yorum:** Backend'de var ama frontend eksik
 - ❌ **Ürün Karşılaştırma:** Ürünleri karşılaştırma özelliği yok
@@ -46,7 +46,7 @@
 
 - ❌ **Dashboard İstatistikleri:** Satış grafikleri eksik
 - ❌ **Kullanıcı Yönetimi:** Admin kullanıcı rollerini değiştiremiyor
- -✅ **Kupon Yönetimi:** İndirim kuponu oluşturma eksik
+  -✅ **Kupon Yönetimi:** İndirim kuponu oluşturma eksik
   ✅ **İçerik Yönetimi (CMS):** Ana sayfa banner'ları ekleme, düzenleme, silme ve listeleme özelliği eklendi
 
 ### 7. **Kurye Paneli**
@@ -54,12 +54,12 @@
 - ✅ **Kurye Girişi:** Var
 - ✅ **Sipariş Görüntüleme:** Var
 - ✅ **Sipariş Durum Güncelleme:** Var
- - ✅ **Konum Takibi:** Gerçek zamanlı konum (SignalR + Geolocation)
- - ✅ **Teslimat Geçmişi:** Kurye geçmiş teslimatlarını görebiliyor
+- ✅ **Konum Takibi:** Gerçek zamanlı konum (SignalR + Geolocation)
+- ✅ **Teslimat Geçmişi:** Kurye geçmiş teslimatlarını görebiliyor
 
 ### 8. **SEO ve Performans**
 
-- ❌ **Meta Tags:** Dinamik SEO meta tags eksik
+- ✅ **Meta Tags:** Dinamik SEO meta tags eksik
 - ❌ **Sitemap:** XML sitemap yok
 - ❌ **Lazy Loading:** Görsellerde lazy loading eksik
 - ❌ **CDN:** Statik dosyalar CDN'de değil

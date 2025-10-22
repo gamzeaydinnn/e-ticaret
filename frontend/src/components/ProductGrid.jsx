@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 import { shouldUseMockData, debugLog } from "../config/apiConfig";
+import getProductCategoryRules from "../config/productCategoryRules";
 
 const DEMO_PRODUCTS = [
   {
@@ -185,13 +186,20 @@ const DEMO_PRODUCTS = [
   },
 ];
 
-export default function ProductGrid({ products: initialProducts, categoryId } = {}) {
+export default function ProductGrid({
+  products: initialProducts,
+  categoryId,
+} = {}) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [usingMockData, setUsingMockData] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [rules, setRules] = useState([]);
+  const [modalQuantity, setModalQuantity] = useState(1);
+  const [modalRule, setModalRule] = useState(null);
+  const [modalError, setModalError] = useState("");
   const [showLoginRequired, setShowLoginRequired] = useState(false);
   const [loginAction, setLoginAction] = useState(null); // 'cart' or 'favorite'
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -217,7 +225,8 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
       localStorage.setItem("tempProductId", productId);
       return;
     }
-
+    // Example usage (developer-only, not rendered):
+    // const rules = getProductCategoryRules().slice(0,2);
     // Giriş yapmışsa backend API'ye sepete ekle
     try {
       await CartService.addItem(productId, 1);
@@ -231,6 +240,20 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
       showCartNotification(product, "guest");
     }
   };
+
+  // load rules once
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const r = await getProductCategoryRules();
+        if (mounted) setRules(Array.isArray(r) ? r : []);
+      } catch (e) {
+        if (mounted) setRules([]);
+      }
+    })();
+    return () => (mounted = false);
+  }, []);
 
   const handleGuestContinue = async () => {
     setShowLoginRequired(false);
@@ -425,7 +448,9 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
           return;
         }
 
-        const query = categoryId ? `?categoryId=${encodeURIComponent(categoryId)}` : "";
+        const query = categoryId
+          ? `?categoryId=${encodeURIComponent(categoryId)}`
+          : "";
         const response = await ProductService.list(query);
         if (!isMounted) {
           return;
@@ -559,7 +584,8 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
           }}
         >
           <i className="fas fa-info-circle me-2"></i>
-          Demo verisi gösteriliyor. Backend bağlantısı kurulduğunda ürünler otomatik güncellenecek.
+          Demo verisi gösteriliyor. Backend bağlantısı kurulduğunda ürünler
+          otomatik güncellenecek.
         </div>
       )}
 
@@ -896,7 +922,76 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
                           textTransform: "uppercase",
                           letterSpacing: "0.5px",
                         }}
-                        onClick={() => handleAddToCart(p.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // open modal to choose quantity
+                          setSelectedProduct(p);
+                          // find rule for this product
+                          let match =
+                            (rules || []).find((r) => {
+                              const examples = (r.examples || []).map((ex) =>
+                                String(ex).toLowerCase()
+                              );
+                              const pname = (p.name || "").toLowerCase();
+                              return (
+                                (r.category || "")
+                                  .toLowerCase()
+                                  .includes(pname) ||
+                                examples.some(
+                                  (ex) =>
+                                    pname.includes(ex) || ex.includes(pname)
+                                ) ||
+                                (p.categoryName || "")
+                                  .toLowerCase()
+                                  .includes((r.category || "").toLowerCase())
+                              );
+                            }) || null;
+                          // prefer kg rules for fruits/vegetables and meat categories
+                          const pcat = (p.categoryName || "").toLowerCase();
+                          if (
+                            !match &&
+                            (pcat.includes("meyve") ||
+                              pcat.includes("sebze") ||
+                              pcat.includes("et") ||
+                              pcat.includes("tavuk") ||
+                              pcat.includes("balık") ||
+                              pcat.includes("balik"))
+                          ) {
+                            match =
+                              (rules || []).find(
+                                (r) => (r.unit || "").toLowerCase() === "kg"
+                              ) || null;
+                          }
+                          // categories that should be sold as units with min 1 max 10
+                          const unitLimitCats = [
+                            "süt",
+                            "süt ürünleri",
+                            "süt urunleri",
+                            "temel gıda",
+                            "temel gida",
+                            "temizlik",
+                            "içecek",
+                            "icecek",
+                            "atıştırmalık",
+                            "atistirmalik",
+                          ];
+                          if (
+                            !match &&
+                            unitLimitCats.some((tok) => pcat.includes(tok))
+                          ) {
+                            match = {
+                              category: "Kategori adedi sınırı",
+                              unit: "adet",
+                              min_quantity: 1,
+                              max_quantity: 10,
+                              step: 1,
+                            };
+                          }
+                          setModalRule(match);
+                          setModalQuantity(match ? match.min_quantity || 1 : 1);
+                          setModalError("");
+                          setShowModal(true);
+                        }}
                         onMouseEnter={(e) => {
                           e.target.style.background =
                             "linear-gradient(135deg, #ff8c00, #ffa500)";
@@ -1117,7 +1212,44 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
                         )}
                       </div>
 
-                      <div className="product-actions d-flex justify-content-center">
+                      <div className="product-actions d-flex justify-content-center flex-column align-items-center">
+                        <div className="d-flex align-items-center gap-2 mb-3">
+                          <input
+                            type="number"
+                            className="form-control"
+                            style={{ width: 120 }}
+                            value={modalQuantity}
+                            step={
+                              modalRule
+                                ? modalRule.step ??
+                                  (modalRule.unit === "kg" ? 0.25 : 1)
+                                : 1
+                            }
+                            onChange={(e) => setModalQuantity(e.target.value)}
+                          />
+                          <div className="text-muted">
+                            {modalRule
+                              ? modalRule.unit
+                              : selectedProduct.unit || "adet"}
+                          </div>
+                        </div>
+
+                        {modalRule && (
+                          <div className="text-muted small mb-2">
+                            Min: {modalRule.min_quantity} — Max:{" "}
+                            {modalRule.max_quantity} — Adım:{" "}
+                            {modalRule.step ??
+                              (modalRule.unit === "kg" ? 0.25 : 1)}{" "}
+                            {modalRule.unit}
+                          </div>
+                        )}
+
+                        {modalError && (
+                          <div className="text-danger small mb-2">
+                            {modalError}
+                          </div>
+                        )}
+
                         <button
                           className="btn btn-lg w-75"
                           style={{
@@ -1134,10 +1266,68 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
                             textTransform: "uppercase",
                             letterSpacing: "0.5px",
                           }}
-                          onClick={() => {
-                            // Modal'ı kapat ve sepet sayfasına yönlendir
+                          onClick={async () => {
+                            setModalError("");
+                            const q = parseFloat(modalQuantity);
+                            if (isNaN(q) || q <= 0)
+                              return setModalError("Geçerli miktar girin.");
+                            if (modalRule) {
+                              const min = parseFloat(
+                                modalRule.min_quantity ?? -Infinity
+                              );
+                              const max = parseFloat(
+                                modalRule.max_quantity ?? Infinity
+                              );
+                              const step = parseFloat(
+                                modalRule.step ??
+                                  (modalRule.unit === "kg" ? 0.25 : 1)
+                              );
+                              if (q < min)
+                                return setModalError(
+                                  `Minimum ${min} ${modalRule.unit} olmalıdır.`
+                                );
+                              if (q > max)
+                                return setModalError(
+                                  `Maksimum ${max} ${modalRule.unit} ile sınırlıdır.`
+                                );
+                              const remainder = Math.abs(
+                                (q - min) / step - Math.round((q - min) / step)
+                              );
+                              if (remainder > 1e-6)
+                                return setModalError(
+                                  `Miktar ${step} ${modalRule.unit} adımlarıyla olmalıdır.`
+                                );
+                            } else {
+                              if (!selectedProduct.isWeighted && q > 5)
+                                return setModalError(
+                                  "Bu üründen en fazla 5 adet ekleyebilirsiniz."
+                                );
+                            }
+
+                            try {
+                              if (!user) {
+                                // ask user to login or continue guest
+                                setLoginAction("cart");
+                                setShowLoginRequired(true);
+                                localStorage.setItem(
+                                  "tempProductId",
+                                  selectedProduct.id
+                                );
+                                localStorage.setItem("tempProductQty", q);
+                                return;
+                              }
+                              await CartService.addItem(selectedProduct.id, q);
+                              showCartNotification(
+                                selectedProduct,
+                                "registered"
+                              );
+                            } catch (err) {
+                              console.error("Sepete ekleme hatası:", err);
+                              CartService.addToGuestCart(selectedProduct.id, q);
+                              showCartNotification(selectedProduct, "guest");
+                            }
+
                             closeModal();
-                            window.location.href = "/cart";
                           }}
                           onMouseEnter={(e) => {
                             e.target.style.transform =

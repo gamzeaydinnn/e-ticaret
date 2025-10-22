@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminLayout from "../../components/AdminLayout";
 import { AdminService } from "../../services/adminService";
+import variantStore from "../../utils/variantStore";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -18,6 +19,8 @@ const AdminProducts = () => {
     imageUrl: "",
     isActive: true,
   });
+  const [editingProductId, setEditingProductId] = useState(null);
+  const [productVariants, setProductVariants] = useState([]);
 
   useEffect(() => {
     fetchProducts();
@@ -58,7 +61,18 @@ const AdminProducts = () => {
       if (editingProduct) {
         await AdminService.updateProduct(editingProduct.id, productData);
       } else {
-        await AdminService.createProduct(productData);
+        // create and then migrate any temporary variants
+        const created = await AdminService.createProduct(productData);
+        // created may be the created product object or an id depending on API
+        const newId = created && created.id ? created.id : created;
+        // if we had a temp editing id, move local variants into new product id
+        if (editingProductId && String(editingProductId).startsWith("temp-")) {
+          try {
+            variantStore.moveVariants(editingProductId, newId);
+          } catch (moveErr) {
+            console.warn("Variant migration failed:", moveErr);
+          }
+        }
       }
       setShowModal(false);
       setFormData({
@@ -79,6 +93,8 @@ const AdminProducts = () => {
 
   const handleEdit = (product) => {
     setEditingProduct(product);
+    setEditingProductId(product.id);
+    setProductVariants(variantStore.getVariantsForProduct(product.id) || []);
     setFormData({
       name: product.name,
       categoryId: product.categoryId || "",
@@ -89,6 +105,19 @@ const AdminProducts = () => {
       isActive: product.isActive,
     });
     setShowModal(true);
+  };
+
+  const handleAddVariant = (variant) => {
+    if (!editingProductId) return;
+    const added = variantStore.addVariant(editingProductId, variant);
+    setProductVariants(variantStore.getVariantsForProduct(editingProductId));
+    return added;
+  };
+
+  const handleRemoveVariant = (variantId) => {
+    if (!editingProductId) return;
+    variantStore.removeVariant(editingProductId, variantId);
+    setProductVariants(variantStore.getVariantsForProduct(editingProductId));
   };
 
   const handleDelete = async (id) => {
@@ -165,6 +194,12 @@ const AdminProducts = () => {
                 imageUrl: "",
                 isActive: true,
               });
+              // create temporary editing id so admin can add local variants before saving
+              const tempId = `temp-${Date.now()}`;
+              setEditingProductId(tempId);
+              setProductVariants(
+                variantStore.getVariantsForProduct(tempId) || []
+              );
               setShowModal(true);
             }}
           >
@@ -481,6 +516,81 @@ const AdminProducts = () => {
                           placeholder="https://example.com/image.jpg"
                         />
                       </div>
+
+                      {(editingProduct ||
+                        (editingProductId &&
+                          String(editingProductId).startsWith("temp-"))) && (
+                        <div className="col-12 mt-3">
+                          <h6 className="mb-2">Varyantlar (geçici - local)</h6>
+                          <div className="d-flex gap-2 mb-2">
+                            <input
+                              id="v-package"
+                              className="form-control"
+                              placeholder="Paket tipi (ör. 500g)"
+                            ></input>
+                            <input
+                              id="v-qty"
+                              className="form-control"
+                              placeholder="Miktar"
+                              type="number"
+                            ></input>
+                            <input
+                              id="v-unit"
+                              className="form-control"
+                              placeholder="Unit (kg/adet/lt)"
+                            ></input>
+                            <button
+                              className="btn btn-primary"
+                              type="button"
+                              onClick={() => {
+                                const pkg =
+                                  document.getElementById("v-package").value;
+                                const qty =
+                                  parseFloat(
+                                    document.getElementById("v-qty").value
+                                  ) || 0;
+                                const unit =
+                                  document.getElementById("v-unit").value ||
+                                  "adet";
+                                handleAddVariant({
+                                  packageType: pkg,
+                                  quantity: qty,
+                                  unit,
+                                  stock: 0,
+                                });
+                                document.getElementById("v-package").value = "";
+                                document.getElementById("v-qty").value = "";
+                                document.getElementById("v-unit").value = "";
+                              }}
+                            >
+                              Varyant Ekle
+                            </button>
+                          </div>
+
+                          <div>
+                            {productVariants.map((v) => (
+                              <div
+                                key={v.id}
+                                className="d-flex align-items-center justify-content-between mb-1"
+                              >
+                                <div>
+                                  {v.packageType || `${v.quantity} ${v.unit}`}
+                                  {v.expiresAt ? ` — SKT: ${v.expiresAt}` : ""}
+                                </div>
+                                <div>
+                                  <button
+                                    className="btn btn-sm btn-danger"
+                                    type="button"
+                                    onClick={() => handleRemoveVariant(v.id)}
+                                  >
+                                    Sil
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="col-12">
                         <div className="form-check">
