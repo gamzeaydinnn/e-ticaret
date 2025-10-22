@@ -7,6 +7,7 @@ export const AuthService = {
   logout: () => api.post("/api/auth/logout"),
   me: () => api.get("/api/auth/me"),
   refresh: (data) => api.post("/api/auth/refresh", data),
+  socialLogin: (data) => api.post("/api/auth/social-login", data),
 
   // helper client-side
   saveToken: (token) => {

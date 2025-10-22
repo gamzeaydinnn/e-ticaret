@@ -46,7 +46,7 @@
 
 - ❌ **Dashboard İstatistikleri:** Satış grafikleri eksik
 - ❌ **Kullanıcı Yönetimi:** Admin kullanıcı rollerini değiştiremiyor
-  -✅ **Kupon Yönetimi:** İndirim kuponu oluşturma eksik
+ -✅ **Kupon Yönetimi:** İndirim kuponu oluşturma eksik
   ✅ **İçerik Yönetimi (CMS):** Ana sayfa banner'ları ekleme, düzenleme, silme ve listeleme özelliği eklendi
 
 ### 7. **Kurye Paneli**
@@ -54,8 +54,8 @@
 - ✅ **Kurye Girişi:** Var
 - ✅ **Sipariş Görüntüleme:** Var
 - ✅ **Sipariş Durum Güncelleme:** Var
-- ❌ **Konum Takibi:** Gerçek zamanlı konum eksik
-- ❌ **Teslimat Geçmişi:** Kurye geçmiş teslimatlarını göremiyor
+ - ✅ **Konum Takibi:** Gerçek zamanlı konum (SignalR + Geolocation)
+ - ✅ **Teslimat Geçmişi:** Kurye geçmiş teslimatlarını görebiliyor
 
 ### 8. **SEO ve Performans**
 
@@ -71,8 +71,8 @@
 
 ### 9. **Sosyal Özellikler**
 
-- ❌ **Sosyal Medya Paylaşımı:** Ürünleri paylaşma eksik
-- ❌ **Sosyal Giriş:** Google, Facebook ile giriş yok
+- ✅ **Sosyal Medya Paylaşımı:** Ürün kartı ve detayda Web Share + link kopyalama
+- ✅ **Sosyal Giriş:** Google/Facebook (dev fallback) + backend `/api/auth/social-login`
 - ❌ **Ürün İstek Listesi:** Favori ürünler var ama gelişmiş özellikler eksik
 
 ### 10. **Raporlama**

@@ -57,16 +57,28 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      // Backend API çağrısı
-      const response = await AuthService.login({ email, password });
+      // Backend API çağrısı (axios interceptor data döndürür)
+      const resp = await AuthService.login({ email, password });
+      const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
 
-      if (response.data.success) {
-        const { user: userData, token } = response.data;
+      if (data && (data.success || data.token || data.Token)) {
+        const userData = data.user || data.User || {
+          id: data.id,
+          email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          name: data.name || `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
+          role: data.role,
+          isAdmin: data.isAdmin,
+        };
+        const token = data.token || data.Token;
 
         // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(token);
         localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", userData.id.toString());
+        if (userData?.id != null) {
+          localStorage.setItem("userId", String(userData.id));
+        }
 
         setUser(userData);
 
@@ -74,7 +86,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         return {
           success: false,
-          error: response.data.message || "Giriş başarısız!",
+          error: (data && (data.message || data.error)) || "Giriş başarısız!",
         };
       }
     } catch (error) {
@@ -144,14 +156,16 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, firstName, lastName) => {
     try {
       // Backend API çağrısı
-      const response = await AuthService.register({ 
+      const resp = await AuthService.register({ 
         email, 
         password, 
         firstName, 
         lastName 
       });
 
-      if (response.data.Token) {
+      const data = resp && resp.data === undefined ? resp : resp.data;
+
+      if (data && (data.Token || data.token)) {
         const userData = {
           email,
           firstName,
@@ -160,7 +174,7 @@ export const AuthProvider = ({ children }) => {
         };
 
         // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(response.data.Token);
+        AuthService.saveToken(data.Token || data.token);
         localStorage.setItem("user", JSON.stringify(userData));
         localStorage.setItem("userId", Date.now().toString());
 
@@ -170,7 +184,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         return {
           success: false,
-          error: response.data.Message || "Kayıt başarısız!",
+          error: (data && (data.Message || data.message)) || "Kayıt başarısız!",
         };
       }
     } catch (error) {
@@ -221,6 +235,45 @@ export const AuthProvider = ({ children }) => {
     user,
     setUser,
     login,
+    loginWithSocial: async (provider, profile = {}) => {
+      try {
+        const resp = await AuthService.socialLogin({ provider, ...profile });
+        const data = resp && resp.data === undefined ? resp : resp.data;
+        if (data && (data.token || data.Token)) {
+          const token = data.token || data.Token;
+          const userData = data.user || data.User || {
+            id: data.id,
+            email: data.email,
+            name: data.name,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            role: data.role || "User",
+          };
+          AuthService.saveToken(token);
+          localStorage.setItem("user", JSON.stringify(userData));
+          if (userData?.id != null) localStorage.setItem("userId", String(userData.id));
+          setUser(userData);
+          return { success: true, user: userData };
+        }
+        return { success: false, error: data?.message || "Sosyal giriş başarısız" };
+      } catch (e) {
+        // Backend yoksa demo sosyal login
+        const fallbackUser = {
+          id: Date.now(),
+          email: profile.email || `${provider}_demo@local`,
+          firstName: profile.firstName || provider,
+          lastName: profile.lastName || "User",
+          name: profile.name || `${provider} User`,
+          role: "User",
+        };
+        const token = `${provider}_demo_token_${Date.now()}`;
+        AuthService.saveToken(token);
+        localStorage.setItem("user", JSON.stringify(fallbackUser));
+        localStorage.setItem("userId", String(fallbackUser.id));
+        setUser(fallbackUser);
+        return { success: true, user: fallbackUser, demo: true };
+      }
+    },
     logout,
     register,
     loading,

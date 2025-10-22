@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../services/api";
 import ProductGrid from "../components/ProductGrid";
+import { shouldUseMockData, debugLog } from "../config/apiConfig";
 
 export default function Category() {
   const { slug } = useParams();
@@ -23,7 +24,27 @@ export default function Category() {
       })
       .catch((e) => {
         if (!mounted) return;
-        setError(e.message || "Kategori bilgisi yüklenemedi.");
+        // Mock moda düş: bilinen slug -> kategori id eşlemesi
+        if (shouldUseMockData()) {
+          debugLog("Kategori API başarısız, mock eşleşmeye düşülüyor", { slug, error: e?.message });
+          const map = {
+            "meyve-sebze": { id: 1, name: "Meyve & Sebze", description: "Taze meyve sebze ürünleri" },
+            "et-tavuk-balik": { id: 2, name: "Et & Tavuk & Balık", description: "Kırmızı et, tavuk ve balık" },
+            "sut-urunleri": { id: 3, name: "Süt Ürünleri", description: "Süt, peynir, yoğurt" },
+            "temel-gida": { id: 4, name: "Temel Gıda", description: "Bakliyat, temel ihtiyaç" },
+            "icecekler": { id: 5, name: "İçecekler", description: "Soğuk ve sıcak içecekler" },
+            "atistirmalik": { id: 6, name: "Atıştırmalık", description: "Cips, kraker ve atıştırmalıklar" },
+            "temizlik": { id: 7, name: "Temizlik", description: "Ev temizlik ürünleri" },
+          };
+          const mockCat = map[slug];
+          if (mockCat) {
+            setCategory(mockCat);
+            setError("");
+            return;
+          }
+        }
+
+        setError(e?.message || "Kategori bilgisi yüklenemedi.");
       })
       .finally(() => {
         if (!mounted) return;

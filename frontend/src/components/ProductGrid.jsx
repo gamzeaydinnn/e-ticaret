@@ -201,10 +201,12 @@ export default function ProductGrid({ products: initialProducts, categoryId } = 
   const [favorites, setFavorites] = useState([]);
   const { user } = useAuth();
 
-  // Tüm ürünleri göster (filtreleme kaldırıldı)
+  // Kategori filtresi (varsa)
   const filteredProducts = useMemo(() => {
-    return [...data];
-  }, [data]);
+    if (!categoryId) return [...data];
+    const cid = Number(categoryId);
+    return data.filter((p) => Number(p.categoryId) === cid);
+  }, [data, categoryId]);
 
   const handleAddToCart = async (productId) => {
     // Kullanıcı giriş yapmış mı kontrol et

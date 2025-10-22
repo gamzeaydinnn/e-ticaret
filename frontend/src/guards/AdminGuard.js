@@ -7,7 +7,7 @@ import { useAuth } from "../contexts/AuthContext";
  * Admin yetkisi kontrolü yapan guard component
  */
 export const AdminGuard = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, setUser } = useAuth();
 
   // Yükleniyor durumu
   if (loading) {
@@ -23,8 +23,19 @@ export const AdminGuard = ({ children }) => {
     );
   }
 
-  // Kullanıcı yoksa login sayfasına yönlendir
+  // Kullanıcı yoksa localStorage'dan admin oturumu toparlamayı dene
   if (!user) {
+    try {
+      const storedUser = localStorage.getItem("user");
+      const token = localStorage.getItem("authToken") || localStorage.getItem("adminToken") || localStorage.getItem("token");
+      if (storedUser && token) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed && (parsed.isAdmin || parsed.role === "Admin")) {
+          setUser?.(parsed);
+          return children;
+        }
+      }
+    } catch {}
     return <Navigate to="/admin/login" replace />;
   }
 

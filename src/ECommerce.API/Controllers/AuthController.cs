@@ -5,6 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
+using Google.Apis.Auth;
+using ECommerce.Entities.Concrete;
+using ECommerce.Core.Helpers;
 
 //		○ Auth: JWT + refresh token. UsersController ve AuthController.
 //		○ CORS, Rate limiting, HSTS, HTTPS redirection.
@@ -19,10 +23,14 @@ namespace ECommerce.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IConfiguration _config;
+        private readonly UserManager<User> _userManager;
 
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IConfiguration config, UserManager<User> userManager)
         {
             _authService = authService;
+            _config = config;
+            _userManager = userManager;
         }
 
         [HttpPost("register")]
@@ -35,6 +43,110 @@ namespace ECommerce.API.Controllers
                     Message = "Kayıt başarılı! E-posta doğrulama linki gönderildi. Lütfen e-postanızı doğrulayın.",
                     EmailVerificationRequired = true
                 });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        [HttpPost("social-login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> SocialLogin([FromBody] SocialLoginRequest dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Provider))
+                return BadRequest(new { Message = "Invalid provider" });
+
+            var provider = dto.Provider.Trim().ToLowerInvariant();
+            string? email = null;
+            string? name = null;
+
+            try
+            {
+                if (provider == "google")
+                {
+                    var allowDev = _config.GetValue<bool>("OAuth:AllowDevSocialLogin");
+                    var clientId = _config["OAuth:GoogleClientId"];
+                    if (!string.IsNullOrWhiteSpace(dto.IdToken) && !string.IsNullOrWhiteSpace(clientId))
+                    {
+                        var payload = await GoogleJsonWebSignature.ValidateAsync(dto.IdToken, new GoogleJsonWebSignature.ValidationSettings
+                        {
+                            Audience = new[] { clientId }
+                        });
+                        email = payload.Email;
+                        name = payload.Name;
+                    }
+                    else if (allowDev)
+                    {
+                        email = dto.Email ?? $"google_user_{Guid.NewGuid():N}@local";
+                        name = dto.Name ?? "Google User";
+                    }
+                    else
+                    {
+                        return BadRequest(new { Message = "Google OAuth not configured" });
+                    }
+                }
+                else if (provider == "facebook")
+                {
+                    // Basit/dev: yapılandırma yoksa e-posta ile devam et
+                    var allowDev = _config.GetValue<bool>("OAuth:AllowDevSocialLogin");
+                    if (allowDev && !string.IsNullOrWhiteSpace(dto.Email))
+                    {
+                        email = dto.Email;
+                        name = dto.Name ?? "Facebook User";
+                    }
+                    else
+                    {
+                        return BadRequest(new { Message = "Facebook OAuth not configured" });
+                    }
+                }
+                else
+                {
+                    return BadRequest(new { Message = "Unsupported provider" });
+                }
+
+                if (string.IsNullOrWhiteSpace(email))
+                    return BadRequest(new { Message = "Email could not be resolved" });
+
+                // Kullanıcıyı bul veya oluştur
+                var user = await _userManager.FindByEmailAsync(email);
+                if (user == null)
+                {
+                    var first = name?.Split(' ').FirstOrDefault() ?? "User";
+                    var last = string.Join(' ', (name?.Split(' ').Skip(1) ?? Array.Empty<string>()));
+                    user = new User
+                    {
+                        Email = email,
+                        UserName = email,
+                        FirstName = first,
+                        LastName = last,
+                        FullName = name ?? (first + " " + last).Trim(),
+                        Role = "User",
+                        EmailConfirmed = true,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow,
+                    };
+                    var create = await _userManager.CreateAsync(user);
+                    if (!create.Succeeded)
+                    {
+                        var err = string.Join(", ", create.Errors.Select(e => e.Description));
+                        return BadRequest(new { Message = err });
+                    }
+                }
+
+                // JWT üret
+                var token = JwtTokenHelper.GenerateToken(
+                    user.Id,
+                    user.Email!,
+                    user.Role ?? "User",
+                    _config["Jwt:Key"],
+                    _config["Jwt:Issuer"],
+                    _config["Jwt:Audience"],
+                    120);
+
+                var respUser = new { id = user.Id, email = user.Email, firstName = user.FirstName, lastName = user.LastName, name = user.FullName, role = user.Role };
+
+                return Ok(new { token, user = respUser, success = true });
             }
             catch (Exception ex)
             {
@@ -197,4 +309,13 @@ namespace ECommerce.API.Controllers
         }
 
     }
+}
+
+public class SocialLoginRequest
+{
+    public string Provider { get; set; } = string.Empty; // google | facebook
+    public string? IdToken { get; set; } // Google için
+    public string? AccessToken { get; set; } // Facebook için
+    public string? Email { get; set; } // Dev fallback
+    public string? Name { get; set; } // Dev fallback
 }

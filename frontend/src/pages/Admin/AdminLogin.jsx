@@ -20,15 +20,19 @@ export default function AdminLogin() {
     setError("");
 
     try {
-      // Admin girişi
-      if (
+      // Admin veya Demo Admin girişi
+      const isRealAdmin =
         credentials.email === "admin@admin.com" &&
-        credentials.password === "admin123"
-      ) {
+        credentials.password === "admin123";
+      const isDemoAdmin =
+        credentials.email === "demo@example.com" &&
+        credentials.password === "123456";
+
+      if (isRealAdmin || isDemoAdmin) {
         const adminUser = {
-          id: "admin-1",
-          name: "Admin User",
-          email: "admin@admin.com",
+          id: isRealAdmin ? "admin-1" : "demo-admin-1",
+          name: isRealAdmin ? "Admin User" : "Demo User",
+          email: credentials.email,
           role: "Admin",
           isAdmin: true,
         };

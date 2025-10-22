@@ -29,6 +29,27 @@ export default function ProductCard({ product, onAddToCart, onToggleFavorite, is
     onAddToCart(product.id);
   };
 
+  const handleShare = async (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const url = `${window.location.origin}/product/${product.id}`;
+    const title = product.name;
+    const text = `${product.name} - ${Number(product.price).toFixed(2)} TL`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text, url });
+        return;
+      }
+    } catch {}
+    // Web Share yoksa kopyala
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("Ürün bağlantısı kopyalandı");
+    } catch {
+      window.open(url, "_blank");
+    }
+  };
+
   return (
     <div
       className="modern-product-card h-100"
@@ -191,6 +212,19 @@ export default function ProductCard({ product, onAddToCart, onToggleFavorite, is
         >
           <i className="fas fa-shopping-cart me-2"></i>
           Sepete Ekle
+        </button>
+        <button
+          className="btn w-100 mt-2"
+          onClick={handleShare}
+          style={{
+            borderRadius: '25px',
+            border: '1px solid rgba(0,0,0,0.1)',
+            background: '#fff',
+            fontWeight: '600'
+          }}
+        >
+          <i className="fas fa-share-alt me-2"></i>
+          Paylaş
         </button>
       </div>
     </div>

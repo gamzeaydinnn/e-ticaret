@@ -84,6 +84,24 @@ export default function Product() {
       </div>
 
       <aside className="p-4 bg-white rounded shadow">
+        <div className="mb-3">
+          <button
+            className="btn btn-outline-secondary w-100"
+            onClick={() => {
+              const url = `${window.location.origin}/product/${product.id}`;
+              const title = product.name;
+              const text = `${product.name} - ₺${product.price}`;
+              if (navigator.share) {
+                navigator.share({ title, text, url }).catch(() => {});
+              } else {
+                navigator.clipboard.writeText(url).then(() => alert("Bağlantı kopyalandı"));
+              }
+            }}
+          >
+            <i className="fas fa-share-alt me-2"></i>
+            Paylaş
+          </button>
+        </div>
         <div className="mb-4">
           <label className="block text-sm">Adet</label>
           <input

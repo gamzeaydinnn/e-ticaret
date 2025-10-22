@@ -17,6 +17,7 @@ import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import OrderSuccess from "./components/OrderSuccess";
 import AdminPanel from "./admin/AdminPanel";
+import AdminIndex from "./pages/Admin/AdminIndex.jsx";
 import LoginModal from "./components/LoginModal";
 import { useCartCount } from "./hooks/useCartCount";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -44,6 +45,8 @@ import Product from "./pages/Product";
 import Checkout from "./pages/Checkout";
 import Profile from "./pages/Profile";
 import Addresses from "./pages/Addresses";
+import Campaigns from "./pages/Campaigns.jsx";
+import CampaignDetail from "./pages/CampaignDetail.jsx";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -478,28 +481,28 @@ function Header() {
       <nav className="single-line-categories">
         <div className="container-fluid">
           <div className="category-scroll-container">
-            <button className="category-btn active" type="button">
+            <button className="category-btn active" type="button" onClick={() => navigate("/")}>
               KATEGORİLER
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/meyve-sebze")}>
               MEYVE &amp; SEBZE
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/et-tavuk-balik")}>
               ET &amp; TAVUK &amp; BALIK
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/sut-urunleri")}>
               SÜT ÜRÜNLERİ
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/temel-gida")}>
               TEMEL GIDA
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/icecekler")}>
               İÇECEKLER
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/atistirmalik")}>
               ATIŞTIRMALIK
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/category/temizlik")}>
               TEMİZLİK
             </button>
             <button
@@ -509,7 +512,7 @@ function Header() {
             >
               FAVORİLERİM
             </button>
-            <button className="category-btn" type="button">
+            <button className="category-btn" type="button" onClick={() => navigate("/campaigns")}>
               KAMPANYALAR
             </button>
           </div>
@@ -547,13 +550,17 @@ function App() {
             <Route path="/pages/home" element={<Home />} />
             <Route path="/pages/cart" element={<Cart />} />
             <Route path="/category/:slug" element={<Category />} />
+            <Route path="/campaigns" element={<Campaigns />} />
+            <Route path="/campaigns/:slug" element={<CampaignDetail />} />
             <Route path="/product/:id" element={<Product />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/addresses" element={<Addresses />} />
 
+            {/* Admin giriş noktası */}
+            <Route path="/admin" element={<AdminIndex />} />
             {/* Eski admin (geçici) */}
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/admin/legacy" element={<AdminPanel />} />
 
             {/* Yeni Admin Panel Rotaları */}
             <Route

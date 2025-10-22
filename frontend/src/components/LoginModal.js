@@ -13,7 +13,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const { login, register } = useAuth();
+  const { login, register, loginWithSocial } = useAuth();
 
   const handleForgotPassword = async (e) => {
     e.preventDefault();
@@ -75,6 +75,25 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       }
     } catch (error) {
       setError("Bir hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider) => {
+    setError("");
+    setLoading(true);
+    try {
+      // Dev basit senaryo: email/name bilgisi olmadan backend dev fallback'i kullan
+      const result = await loginWithSocial(provider, { email });
+      if (result.success) {
+        onLoginSuccess && onLoginSuccess();
+        onHide();
+      } else {
+        setError(result.error || "Sosyal giriş başarısız");
+      }
+    } catch (e) {
+      setError("Sosyal giriş başarısız");
     } finally {
       setLoading(false);
     }
@@ -239,6 +258,27 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                 )}
 
                 <form onSubmit={handleSubmit}>
+                  {/* Sosyal Giriş */}
+                  <div className="d-grid gap-2 mb-3">
+                    <button
+                      type="button"
+                      className="btn btn-light border d-flex align-items-center justify-content-center"
+                      onClick={() => handleSocialLogin("google")}
+                      disabled={loading}
+                    >
+                      <i className="fab fa-google me-2" style={{ color: "#DB4437" }}></i>
+                      Google ile devam et
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-light border d-flex align-items-center justify-content-center"
+                      onClick={() => handleSocialLogin("facebook")}
+                      disabled={loading}
+                    >
+                      <i className="fab fa-facebook me-2" style={{ color: "#4267B2" }}></i>
+                      Facebook ile devam et
+                    </button>
+                  </div>
                   {!isLogin && (
                     <>
                       <div className="mb-3">
