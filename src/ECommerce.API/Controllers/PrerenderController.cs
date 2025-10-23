@@ -21,12 +21,18 @@ namespace ECommerce.API.Controllers
         [HttpGet("routes")]
         public async Task<IActionResult> Routes()
         {
+            // authorization: if BACKEND_API_TOKEN is set, require Bearer token in Authorization header
+            if (!IsAuthorized()) return Unauthorized();
+
             try
             {
                 // get recent active products (first 200)
                 var products = await _productService.GetActiveProductsAsync(1, 200);
                 var routes = new List<string> { "/", "/category/meyve-sebze" };
-                routes.AddRange(products.Select(p => $"/product/{Slugify(p.Name ?? (p.Id.ToString()))}"));
+                routes.AddRange(products.Select(p => {
+                    var slug = string.IsNullOrWhiteSpace(p.Slug) ? Slugify(p.Name ?? (p.Id.ToString())) : p.Slug;
+                    return $"/product/{slug}";
+                }));
                 return Ok(routes.Distinct());
             }
             catch
@@ -41,14 +47,20 @@ namespace ECommerce.API.Controllers
         [HttpGet("routes-with-meta")]
         public async Task<IActionResult> RoutesWithMeta()
         {
+            // authorization: if BACKEND_API_TOKEN is set, require Bearer token in Authorization header
+            if (!IsAuthorized()) return Unauthorized();
+
             try
             {
                 var products = await _productService.GetActiveProductsAsync(1, 200);
-                var items = products.Select(p => new {
-                    route = $"/product/{Slugify(p.Name ?? (p.Id.ToString()))}",
-                    title = p.Name,
-                    description = p.Description,
-                    image = p.ImageUrl
+                var items = products.Select(p => {
+                    var slug = string.IsNullOrWhiteSpace(p.Slug) ? Slugify(p.Name ?? (p.Id.ToString())) : p.Slug;
+                    return new {
+                        route = $"/product/{slug}",
+                        title = p.Name,
+                        description = p.Description,
+                        image = p.ImageUrl
+                    };
                 }).ToList();
                 // also include a category page
                 items.Insert(0, new { route = "/category/meyve-sebze", title = (string?)"Meyve & Sebze", description = (string?)"Taze meyve ve sebze kategorisi", image = (string?)"/images/og-default.jpg" });
@@ -61,6 +73,28 @@ namespace ECommerce.API.Controllers
                     new { route = "/product/domates", title = (string?)"Domates - Taze", description = (string?)"Günlük hasat domates", image = (string?)"/images/products/domates.jpg" }
                 };
                 return Ok(items);
+            }
+        }
+
+        private bool IsAuthorized()
+        {
+            try
+            {
+                var required = System.Environment.GetEnvironmentVariable("BACKEND_API_TOKEN");
+                // if no token configured, allow access (developer convenience)
+                if (string.IsNullOrWhiteSpace(required)) return true;
+
+                if (!Request.Headers.TryGetValue("Authorization", out var auth)) return false;
+                var header = auth.ToString();
+                const string bearer = "Bearer ";
+                if (header.StartsWith(bearer, System.StringComparison.OrdinalIgnoreCase))
+                    header = header.Substring(bearer.Length).Trim();
+                return header == required;
+            }
+            catch
+            {
+                // on any error, don't expose routes
+                return false;
             }
         }
 

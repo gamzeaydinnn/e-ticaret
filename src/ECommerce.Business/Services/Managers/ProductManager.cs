@@ -78,11 +78,12 @@ namespace ECommerce.Business.Services.Managers
                                .Skip((page - 1) * pageSize)
                                .Take(pageSize);
 
-            return products.Select(p => new ProductListDto
+                return products.Select(p => new ProductListDto
             {
                 Id = p.Id,
                 Name = p.Name,
-                Description = p.Description,
+                Slug = p.Slug ?? string.Empty,
+                Description = p.Description ?? string.Empty,
                 Price = p.Price,
                 SpecialPrice = p.SpecialPrice,
                 StockQuantity = p.StockQuantity,
@@ -101,7 +102,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
@@ -131,7 +133,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
@@ -192,7 +195,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = p.Id,
                 Name = p.Name,
-                Description = p.Description,
+                Slug = p.Slug ?? string.Empty,
+                Description = p.Description ?? string.Empty,
                 Price = p.Price,
                 SpecialPrice = p.SpecialPrice,
                 StockQuantity = p.StockQuantity,
@@ -233,7 +237,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
