@@ -1,6 +1,9 @@
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Business.Services.Managers;
+using ECommerce.Business.Services.Managers;
+using ECommerce.Business.Services.Interfaces;
+using WebPush;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Repositories;
@@ -21,6 +24,8 @@ using ECommerce.Infrastructure.Services.FileStorage;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
 
 
@@ -62,7 +67,13 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
     }
     else
     {
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+        // Enable transient error resiliency for SQL Server connections to reduce 500s
+        // caused by transient network errors (e.g. pre-login handshake failures).
+        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
+        {
+                // stronger retry policy: retry up to 8 times with a larger max delay (helps absorb transient pre-login handshake errors)
+                sqlOptions.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+        });
     }
 });
 
@@ -176,6 +187,7 @@ builder.Services.AddScoped<UserManager>();
 builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<IInventoryService, InventoryManager>();
+builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.INotificationService, ECommerce.Business.Services.Managers.NotificationService>();
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<IBannerService, BannerManager>();
 builder.Services.AddScoped<IBrandRepository, BrandRepository>();
@@ -214,26 +226,87 @@ builder.Services.AddScoped<IAuthService, AuthManager>();
 // // builder.Services.AddScoped<StockSyncJob>();
 
 builder.Services.AddAuthorization();
+// Add in-memory caching for read-heavy endpoints (prerender, products)
+builder.Services.AddMemoryCache();
 
-// Rate Limiting (Global, IP başına)
+// CSRF protection (for cookie-based flows). For SPA using Authorization header this is not strictly
+// necessary, but we expose a token endpoint for cases where a cookie+header double-submit is used.
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "XSRF-TOKEN";
+    options.Cookie.HttpOnly = false; // accessible to JS so SPA can read it if needed
+    options.Cookie.SameSite = SameSiteMode.Strict;
+});
+
+// Rate Limiting (Global, IP-based). Values are read from configuration if present.
+// Config keys (optional): RateLimiting:PermitLimit, RateLimiting:WindowSeconds, RateLimiting:QueueLimit
+var rateCfg = builder.Configuration.GetSection("RateLimiting");
+var permitLimit = rateCfg.GetValue<int?>("PermitLimit") ?? 100;
+var windowSeconds = rateCfg.GetValue<int?>("WindowSeconds") ?? 60;
+var queueLimit = rateCfg.GetValue<int?>("QueueLimit") ?? 0;
+
 builder.Services.AddRateLimiter(options =>
 {
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
-        var key = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // prefer X-Forwarded-For if present (behind proxy), fall back to remote IP
+        var forwarded = httpContext.Request.Headers["X-Forwarded-For"].ToString();
+        string? key = null;
+        if (!string.IsNullOrWhiteSpace(forwarded))
+        {
+            var parts = forwarded.Split(',');
+            key = parts.Length > 0 ? parts[0].Trim() : forwarded.Trim();
+        }
+        key ??= httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
         return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 100,
-            Window = TimeSpan.FromMinutes(1),
+            PermitLimit = permitLimit,
+            Window = TimeSpan.FromSeconds(windowSeconds),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit = 0
+            QueueLimit = queueLimit
         });
     });
+
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, ct) =>
+    {
+        try
+        {
+            if (!context.HttpContext.Response.HasStarted)
+            {
+                // Inform client how long to wait (seconds)
+                context.HttpContext.Response.Headers.RetryAfter = ((int)TimeSpan.FromSeconds(windowSeconds).TotalSeconds).ToString();
+                context.HttpContext.Response.ContentType = "application/json";
+                var payload = System.Text.Json.JsonSerializer.Serialize(new { error = "Too many requests", retry_after_seconds = windowSeconds });
+                await context.HttpContext.Response.WriteAsync(payload, ct);
+            }
+        }
+        catch
+        {
+            // swallow to avoid throwing from rate limiter
+        }
+    };
 });
 
-// Controller ekle
-builder.Services.AddControllers();
+// Prerender CI bypass token (optional): if you set Prerender:BypassToken in configuration or env,
+// requests that include the same token in the X-Prerender-Token header or ?prerender_token=... will be
+// exempt from the rate limiter (useful for controlled CI prerender runs). Keep this secret and
+// restrict CI to use a stable IP when possible.
+var prerenderBypassToken = builder.Configuration["Prerender:BypassToken"];
+
+// Controller ekle (global input sanitization filter ekleniyor)
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add(typeof(ECommerce.API.Infrastructure.SanitizeInputFilter));
+});
+
+// Push (Web Push) - dev-friendly VAPID keys. In production, set these via configuration/secrets.
+var vapidSubject = builder.Configuration["Push:VapidSubject"] ?? "mailto:admin@example.com";
+var vapidPublic = builder.Configuration["Push:VapidPublicKey"] ?? "<YOUR_PUBLIC_VAPID_KEY_PLACEHOLDER>";
+var vapidPrivate = builder.Configuration["Push:VapidPrivateKey"] ?? "<YOUR_PRIVATE_VAPID_KEY_PLACEHOLDER>";
+builder.Services.AddSingleton<IPushService>(sp => new PushService(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PushService>>(), vapidSubject, vapidPublic, vapidPrivate));
 
 // Swagger (isteğe bağlı)
 builder.Services.AddEndpointsApiExplorer();
@@ -300,9 +373,45 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseCors("Default");
-app.UseRateLimiter();
+// Content Security Policy (per-request nonce available at HttpContext.Items["CSPNonce"]) 
+app.UseMiddleware<ECommerce.API.Infrastructure.CspMiddleware>();
+// Exempt some monitoring endpoints from rate limiting (health checks, metrics)
+app.UseWhen(context =>
+{
+    var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
+    // exempt exactly /api/health and /metrics (and their subpaths)
+    if (path.StartsWith("/api/health") || path.StartsWith("/metrics")) return false;
+    // If a prerender bypass token is configured, only allow it to skip rate limiting for
+    // prerender-related endpoints. This limits the blast radius of the secret.
+    if (!string.IsNullOrWhiteSpace(prerenderBypassToken))
+    {
+        // Only consider bypass for dedicated prerender routes
+        if (path.StartsWith("/api/prerender" ) || path.StartsWith("/api/prerender/list"))
+        {
+            var headerToken = context.Request.Headers["X-Prerender-Token"].ToString();
+            var queryToken = context.Request.Query["prerender_token"].ToString();
+            if (!string.IsNullOrWhiteSpace(headerToken) && headerToken == prerenderBypassToken) return false;
+            if (!string.IsNullOrWhiteSpace(queryToken) && queryToken == prerenderBypassToken) return false;
+        }
+    }
+
+    return true;
+}, branch =>
+{
+    branch.UseRateLimiter();
+});
 app.UseAuthentication();
 app.UseAuthorization();
+
+// CSRF token endpoint (double-submit pattern for SPA)
+app.MapGet("/api/csrf/token", (IAntiforgery antiforgery, HttpContext http) =>
+{
+    var tokens = antiforgery.GetAndStoreTokens(http);
+    return Results.Ok(new { token = tokens.RequestToken });
+});
+
+// Centralized CSRF validation + logging middleware
+app.UseMiddleware<ECommerce.API.Infrastructure.CsrfLoggingMiddleware>();
 
 app.MapControllers();
 app.Run();

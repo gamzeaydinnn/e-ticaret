@@ -1,3 +1,52 @@
+name: Build & Prerender
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  prerender:
+    runs-on: ubuntu-latest
+    env:
+      PRERENDER_TOKEN: ${{ secrets.PRERENDER_BYPASS_TOKEN }}
+      PRERENDER_API_URL: ${{ secrets.PRERENDER_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: ./frontend
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: ./frontend
+
+      - name: Fetch prerender list from API
+        run: |
+          API_URL="${PRERENDER_API_URL:-https://api.example.com}"
+          echo "Calling $API_URL/api/prerender/list"
+          curl -Ssf -H "X-Prerender-Token: $PRERENDER_TOKEN" "$API_URL/api/prerender/list" -o frontend/prerender-list.json
+
+      - name: Show prerender list
+        run: |
+          echo '--- prerender list ---'
+          cat frontend/prerender-list.json || true
+
+      - name: Run prerender step (if defined)
+        run: |
+          # If you have a script named "prerender" in frontend/package.json this will run it.
+          if jq -e '.scripts.prerender' frontend/package.json > /dev/null 2>&1; then
+            npm run prerender --prefix frontend
+          else
+            echo 'No prerender npm script found in frontend/package.json. Add one or modify this workflow to run your prerender steps.'
+          fi
 name: Frontend prerender and build
 
 on:
