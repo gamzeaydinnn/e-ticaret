@@ -28,18 +28,112 @@
 ### 4. **Güvenlik**
 
 - ❌ **2FA (İki Faktörlü Doğrulama):** Yok
-- ❌ **Rate Limiting:** API isteklerinde sınırlama yok
-- ❌ **CSRF Koruması:** Token doğrulama eksik
-- ❌ **XSS Koruması:** Input sanitization eksik
+- ✅ **Rate Limiting:** IP-temelli global rate limiting eklendi (konfigüre edilebilir). Not: Prerender CI için token tabanlı muafiyet ve kısa önbellekleme + SQL retry iyileştirmeleri uygulandı.
+- ✅ **CSRF Koruması:** Antiforgery token endpoint ve doğrulama eklendi; sunucu tarafında başarısız doğrulamaları loglayan bir middleware mevcut
+
+### Kısa Frontend örneği (JS)
+
+Frontend tarafında cookie + header (double-submit) kullanıyorsanız, güvenli bir örnek:
+
+```javascript
+// 1) Sayfa yüklenince token al
+async function fetchCsrfToken() {
+  const res = await fetch("/api/csrf/token", { credentials: "include" });
+  const json = await res.json();
+  return json.token; // XSRF-TOKEN cookie de set edilir
+}
+
+// 2) Güvenli olmayan isteklerde header olarak gönder
+async function postJson(url, body) {
+  const token = await fetchCsrfToken();
+  return fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-TOKEN": token,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+// Kullanım:
+// await postJson('/api/orders', { cartId: '...' });
+```
+
+- ✅ **XSS Koruması:** Sunucu tarafında gelen metin girdileri için basit HTML-encode uygulayan bir global filter eklendi (reflected/stored XSS azaltılır)
+
+### Content Security Policy (CSP)
+
+Sunucu tarafında per-request nonce üreten ve sıkı bir CSP header ekleyen middleware uygulandı. Razor/Views içinde nonce kullanmak için örnek:
+
+```cshtml
+@{
+  var nonce = Context.Items["CSPNonce"] as string ?? string.Empty;
+}
+<script nonce="@nonce">/* güvenli inline script */</script>
+<style nonce="@nonce">/* güvenli inline style */</style>
+```
+
+Not: CSP politikası conservative (self + nonce) olarak ayarlandı; CDN veya ek kaynak gereksinimleriniz varsa politikayı güncelleyin.
 
 ---
+
+### E-posta bildirimleri & frontend kargo takibi
+
+Backend'de order confirmation ve shipment notification servisleri eklendi. Admin/test amaçlı endpointler:
+
+- POST /api/notifications/order-confirmation/{orderId}
+- POST /api/notifications/shipment/{orderId}?tracking=TRACK123
+
+Basit kullanıcı paneli örneği (frontend) — orderId ile kargo durumunu çekip gösterir:
+
+```javascript
+// Basit order tracking panel
+async function fetchOrder(orderId) {
+  const res = await fetch(`/api/orders/${orderId}`);
+  if (!res.ok) throw new Error("Order fetch failed");
+  return res.json();
+}
+
+async function showOrder(orderId) {
+  const order = await fetchOrder(orderId);
+  document.getElementById("status").textContent = order.status;
+  document.getElementById("order-number").textContent = order.orderNumber;
+}
+
+// Admin/test: elle e-posta tetikleme (kısa)
+async function triggerConfirmation(orderId) {
+  await fetch(`/api/notifications/order-confirmation/${orderId}`, {
+    method: "POST",
+  });
+}
+
+async function triggerShipment(orderId, tracking) {
+  await fetch(
+    `/api/notifications/shipment/${orderId}?tracking=${encodeURIComponent(
+      tracking
+    )}`,
+    { method: "POST" }
+  );
+}
+```
 
 ## 🟡 ORTA ÖNCELİKLİ EKSİKLER
 
 ### 5. **Bildirimler**
 
-- ❌ **E-posta Bildirimleri:** Sipariş onayı, kargo takibi eksik
-- ❌ **Push Bildirimleri:** Web push notifications yok
+- ✅ **E-posta Bildirimleri:** Sipariş onayı ve kargo bildirimleri için backend servis eklendi; test/admin endpointleri ve frontend için kısa kullanım örneği eklenecek
+- ✅ **Push Bildirimleri:** Basit Web Push desteği eklendi
+  - Neler yapıldı: backend tarafında `WebPush` (VAPID) tabanlı `PushService` ve kontrolcü eklendi; endpointler:
+    - `POST /api/push/subscribe?userId={userId}` — istemci aboneliğini kaydeder (geliştirme: bellek içi store)
+    - `GET  /api/push/vapidPublicKey` — istemcinin abone olurken kullanacağı VAPID public key
+    - `POST /api/push/send/{userId}` — admin/test amaçlı kullanıcıya push gönderir
+    - Frontend'de `frontend/public/sw.js` eklendi ve `OrderTracking` bileşeninde abonelik UI'sı mevcut.
+  - Üretim notları / eksikler:
+    - VAPID anahtarlarını `appsettings`/env/CI secret olarak ayarlayın (`Push:VapidSubject`, `Push:VapidPublicKey`, `Push:VapidPrivateKey`).
+    - Şu anda abonelikler bellek içinde (ephemeral). Üretimde abonelikleri veritabanına veya kalıcı bir depoya taşıyın ve unsubscribe yönetimi ekleyin.
+    - `POST /api/push/send` şu an admin/test amaçlı; erişim kontrolü, kuyruklama ve retry mekanizmaları eklenmeli.
 - ❌ **SMS Bildirimleri:** Sipariş durumu SMS'i yok
 
 ### 6. **Admin Paneli**
@@ -59,7 +153,7 @@
 
 ### 8. **SEO ve Performans**
 
-- ✅ **Meta Tags:** Dinamik SEO meta tags eksik
+- ✅ **Meta Tags:** Dinamik SEO meta tags eksik //Bu kısma bakılacak
 - ❌ **Sitemap:** XML sitemap yok
 - ❌ **Lazy Loading:** Görsellerde lazy loading eksik
 - ❌ **CDN:** Statik dosyalar CDN'de değil

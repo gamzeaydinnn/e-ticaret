@@ -15,7 +15,10 @@ const OrderTracking = () => {
     try {
       // getUserId from localStorage veya context'ten alınmalı
       const userId = localStorage.getItem("userId");
-      const userOrders = await OrderService.list(userId);
+      // If userId is available, pass it. Otherwise call list() and rely on server auth/context
+      const userOrders = userId
+        ? await OrderService.list(userId)
+        : await OrderService.list();
       setOrders(userOrders || []);
     } catch (error) {
       console.error("Siparişler yüklenemedi:", error);
@@ -49,12 +52,26 @@ const OrderTracking = () => {
   };
 
   const trackOrderByCode = () => {
-    const order = orders.find((o) => o.trackingCode === trackingCode);
+    // Try local list first (match by trackingCode or numeric id)
+    const order = orders.find(
+      (o) =>
+        o.trackingCode === trackingCode || String(o.id) === String(trackingCode)
+    );
     if (order) {
       setSelectedOrder(order);
-    } else {
-      alert("Sipariş bulunamadı! Lütfen takip kodunu kontrol edin.");
+      return;
     }
+
+    // Fallback: try fetching by id from server
+    (async () => {
+      try {
+        const fetched = await OrderService.getById(trackingCode);
+        if (fetched) setSelectedOrder(fetched);
+        else alert("Sipariş bulunamadı! Lütfen takip kodunu kontrol edin.");
+      } catch (err) {
+        alert("Sipariş bulunamadı veya sunucuya erişilemiyor.");
+      }
+    })();
   };
 
   if (loading) {
@@ -84,6 +101,71 @@ const OrderTracking = () => {
     >
       <div className="container">
         {/* Takip Kodu ile Arama */}
+        <div style={{ marginBottom: 12 }}>
+          <button
+            className="btn btn-sm btn-outline-primary"
+            onClick={async () => {
+              try {
+                if (!("serviceWorker" in navigator))
+                  return alert("Tarayıcınız service worker desteklemiyor");
+                const reg = await navigator.serviceWorker.register("/sw.js");
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted")
+                  return alert("Bildirime izin verilmedi");
+                // Fetch VAPID public key from server to avoid embedding placeholders in client build
+                let vapidPublicKey = "PLACEHOLDER_VAPID_PUBLIC_KEY";
+                try {
+                  const vk = await fetch("/api/push/vapidPublicKey");
+                  if (vk.ok) {
+                    const json = await vk.json();
+                    vapidPublicKey = json.publicKey || vapidPublicKey;
+                  }
+                } catch (e) {
+                  // ignore: fall back to placeholder
+                }
+                function urlBase64ToUint8Array(base64String) {
+                  const padding = "=".repeat(
+                    (4 - (base64String.length % 4)) % 4
+                  );
+                  const base64 = (base64String + padding)
+                    .replace(/-/g, "+")
+                    .replace(/_/g, "/");
+                  const rawData = atob(base64);
+                  const outputArray = new Uint8Array(rawData.length);
+                  for (let i = 0; i < rawData.length; ++i) {
+                    outputArray[i] = rawData.charCodeAt(i);
+                  }
+                  return outputArray;
+                }
+
+                const sub = await reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+                });
+
+                const userId =
+                  localStorage.getItem("userId") || prompt("Test userId girin");
+                await fetch(
+                  `/api/push/subscribe?userId=${encodeURIComponent(userId)}`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      endpoint: sub.endpoint,
+                      keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
+                    }),
+                  }
+                );
+                alert("Push aboneliği kaydedildi");
+              } catch (err) {
+                console.error(err);
+                alert("Push aboneliği başarısız: " + (err.message || err));
+              }
+            }}
+          >
+            Push Bildirimlerini Etkinleştir
+          </button>
+        </div>
         <div
           className="card shadow-lg border-0 mb-4"
           style={{ borderRadius: "20px" }}

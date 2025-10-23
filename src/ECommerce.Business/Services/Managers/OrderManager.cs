@@ -17,11 +17,13 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly ECommerceDbContext _context;
         private readonly IInventoryService _inventoryService;
+        private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
 
-        public OrderManager(ECommerceDbContext context, IInventoryService inventoryService)
+        public OrderManager(ECommerceDbContext context, IInventoryService inventoryService, ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
+            _notificationService = notificationService;
         }
 
         // Siparişin tam detayını getir (fatura için)
@@ -191,6 +193,13 @@ namespace ECommerce.Business.Services.Managers
                     if (!ok) throw new Exception("Stok düşümü başarısız");
                 }
                 await transaction.CommitAsync();
+
+                // Fire-and-forget notification (do not block checkout)
+                if (_notificationService != null)
+                {
+                    _ = _notificationService.SendOrderConfirmationAsync(order.Id);
+                }
+
                 return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");
             }
             catch
@@ -253,8 +262,16 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders.FindAsync(id);
             if (order != null && Enum.TryParse<OrderStatus>(status, out var statusEnum))
             {
+                var previous = order.Status;
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
+
+                // If status transitioned to Delivered, notify customer (if available)
+                if (previous != OrderStatus.Delivered && statusEnum == OrderStatus.Delivered && _notificationService != null)
+                {
+                    // If you have a tracking number in real flow, pass it; here we pass empty string
+                    _ = _notificationService.SendShipmentNotificationAsync(order.Id, trackingNumber: string.Empty);
+                }
             }
         }
 

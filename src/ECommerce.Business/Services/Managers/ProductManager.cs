@@ -1,12 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces; // IProductService
 using ECommerce.Entities.Concrete;            // Product
 using ECommerce.Core.Interfaces;              // IProductRepository
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
-
-
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -14,31 +15,40 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly IProductRepository _productRepository;
         private readonly IReviewRepository _reviewRepository;
-        // Yeni Eklenen: Genel Arama Metodu
-        public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string query, int page = 1, int size = 10)
+        private readonly IMemoryCache _cache;
+    private const string ProductCacheKeysKey = "products_cache_keys";
+
+        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository, IMemoryCache cache)
+        {
+            _productRepository = productRepository;
+            _reviewRepository = reviewRepository;
+            _cache = cache;
+        }
+
+        // Backwards-compatible constructor for tests or callers that don't provide an IMemoryCache.
+        // This avoids breaking existing unit tests that construct ProductManager without cache.
+        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository)
+            : this(productRepository, reviewRepository, new MemoryCache(new MemoryCacheOptions()))
+        {
+        }
+
+    public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string? query, int page = 1, int size = 10)
         {
             if (string.IsNullOrWhiteSpace(query))
-            {
-                // Arama sorgusu yoksa boş liste dönüyoruz veya aktif ürünleri dönebilirsiniz.
                 return Enumerable.Empty<ProductListDto>();
-            }
 
-            // Tüm ürünleri çek
             var allProducts = await _productRepository.GetAllAsync();
 
-            // Arama sorgusuna göre filtrele (isimde veya açıklamada içeriyorsa)
             var filteredProducts = allProducts.Where(p =>
                 p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (p.Description != null && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
+                (!string.IsNullOrEmpty(p.Description) && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
                 .ToList();
 
-            // Sayfalama uygula
             var pagedProducts = filteredProducts
-                .OrderBy(p => p.Name) // Sonuçları isme göre sırala
+                .OrderBy(p => p.Name)
                 .Skip((page - 1) * size)
                 .Take(size);
 
-            // DTO'ya dönüştür
             return pagedProducts.Select(p => new ProductListDto
             {
                 Id = p.Id,
@@ -52,15 +62,8 @@ namespace ECommerce.Business.Services.Managers
                 CategoryName = p.Category?.Name ?? string.Empty
             });
         }
-        
 
-        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository)
-        {
-            _productRepository = productRepository;
-            _reviewRepository = reviewRepository;
-        }
-
-        public async Task<IEnumerable<ProductListDto>> GetProductsAsync(string query = null, int? categoryId = null, int page = 1, int pageSize = 20)
+    public async Task<IEnumerable<ProductListDto>> GetProductsAsync(string? query = null, int? categoryId = null, int page = 1, int pageSize = 20)
         {
             var products = await _productRepository.GetAllAsync();
 
@@ -68,7 +71,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 products = products.Where(p =>
                     p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    p.Description.Contains(query, StringComparison.OrdinalIgnoreCase));
+                    (!string.IsNullOrEmpty(p.Description) && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)));
             }
 
             if (categoryId.HasValue)
@@ -82,7 +85,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = p.Id,
                 Name = p.Name,
-                Description = p.Description,
+                Slug = p.Slug ?? string.Empty,
+                Description = p.Description ?? string.Empty,
                 Price = p.Price,
                 SpecialPrice = p.SpecialPrice,
                 StockQuantity = p.StockQuantity,
@@ -101,7 +105,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
@@ -126,12 +131,15 @@ namespace ECommerce.Business.Services.Managers
             };
 
             await _productRepository.AddAsync(product);
+            // Invalidate product-related caches so subsequent reads reflect the new product
+            InvalidateProductCaches();
 
             return new ProductListDto
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
@@ -156,6 +164,7 @@ namespace ECommerce.Business.Services.Managers
             product.BrandId = productDto.BrandId;
 
             await _productRepository.UpdateAsync(product);
+            InvalidateProductCaches();
         }
 
         public async Task DeleteProductAsync(int id)
@@ -163,6 +172,7 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return;
             await _productRepository.DeleteAsync(product);
+            InvalidateProductCaches();
         }
 
         public async Task UpdateStockAsync(int id, int stock)
@@ -172,6 +182,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 product.StockQuantity = stock;
                 await _productRepository.UpdateAsync(product);
+                InvalidateProductCaches();
             }
         }
 
@@ -183,45 +194,70 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
         {
-            var products = (await _productRepository.GetAllAsync())
-                .OrderBy(p => p.Name)
-                .Skip((page - 1) * size)
-                .Take(size);
-
-            return products.Select(p => new ProductListDto
+            var cacheKey = $"all_products_{page}_{size}";
+            if (!_cache.TryGetValue(cacheKey, out object? cachedObj) || !(cachedObj is IEnumerable<ProductListDto> cached))
             {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.Description,
-                Price = p.Price,
-                SpecialPrice = p.SpecialPrice,
-                StockQuantity = p.StockQuantity,
-                ImageUrl = p.ImageUrl,
-                Brand = p.Brand?.Name ?? string.Empty,
-                CategoryName = p.Category?.Name ?? string.Empty
-            });
+                var products = (await _productRepository.GetAllAsync())
+                    .OrderBy(p => p.Name)
+                    .Skip((page - 1) * size)
+                    .Take(size);
+
+                cached = products.Select(p => new ProductListDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Slug = p.Slug ?? string.Empty,
+                    Description = p.Description ?? string.Empty,
+                    Price = p.Price,
+                    SpecialPrice = p.SpecialPrice,
+                    StockQuantity = p.StockQuantity,
+                    ImageUrl = p.ImageUrl,
+                    Brand = p.Brand?.Name ?? string.Empty,
+                    CategoryName = p.Category?.Name ?? string.Empty
+                }).ToList();
+
+                _cache.Set(cacheKey, cached, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)
+                });
+                TrackCacheKey(cacheKey);
+            }
+
+            return cached;
         }
 
         public async Task<IEnumerable<ProductListDto>> GetActiveProductsAsync(int page = 1, int size = 10, int? categoryId = null)
         {
-            var products = await _productRepository.GetAllAsync();
-            if (categoryId.HasValue)
-                products = products.Where(p => p.CategoryId == categoryId.Value);
-
-            products = products.Skip((page - 1) * size).Take(size);
-
-            return products.Select(p => new ProductListDto
+            var cacheKey = $"active_products_{categoryId ?? 0}_{page}_{size}";
+            if (!_cache.TryGetValue(cacheKey, out object? cachedObj) || !(cachedObj is IEnumerable<ProductListDto> cached))
             {
-                Id = p.Id,
-                Name = p.Name,
-                Description = p.Description,
-                Price = p.Price,
-                SpecialPrice = p.SpecialPrice,
-                StockQuantity = p.StockQuantity,
-                ImageUrl = p.ImageUrl,
-                Brand = p.Brand?.Name ?? string.Empty,
-                CategoryName = p.Category?.Name ?? string.Empty
-            });
+                var products = await _productRepository.GetAllAsync();
+                if (categoryId.HasValue)
+                    products = products.Where(p => p.CategoryId == categoryId.Value);
+
+                products = products.Skip((page - 1) * size).Take(size);
+
+                cached = products.Select(p => new ProductListDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Description = p.Description,
+                    Price = p.Price,
+                    SpecialPrice = p.SpecialPrice,
+                    StockQuantity = p.StockQuantity,
+                    ImageUrl = p.ImageUrl,
+                    Brand = p.Brand?.Name ?? string.Empty,
+                    CategoryName = p.Category?.Name ?? string.Empty
+                }).ToList();
+
+                _cache.Set(cacheKey, cached, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)
+                });
+                TrackCacheKey(cacheKey);
+            }
+
+            return cached;
         }
 
         public async Task<ProductListDto?> GetProductByIdAsync(int id)
@@ -233,7 +269,8 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = product.Id,
                 Name = product.Name,
-                Description = product.Description,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
@@ -264,5 +301,41 @@ namespace ECommerce.Business.Services.Managers
             return Task.CompletedTask;
         }
 
+        // Track and invalidate cache keys created by this manager.
+        private void TrackCacheKey(string key)
+        {
+            try
+            {
+                var keys = _cache.GetOrCreate(ProductCacheKeysKey, entry => new HashSet<string>());
+                if (keys is HashSet<string> set)
+                {
+                    set.Add(key);
+                    _cache.Set(ProductCacheKeysKey, set, new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5) });
+                }
+            }
+            catch
+            {
+                // swallow: tracking is best-effort
+            }
+        }
+
+        private void InvalidateProductCaches()
+        {
+            try
+            {
+                if (_cache.TryGetValue(ProductCacheKeysKey, out object? keysObj) && keysObj is HashSet<string> keys)
+                {
+                    foreach (var k in keys)
+                    {
+                        _cache.Remove(k);
+                    }
+                    _cache.Remove(ProductCacheKeysKey);
+                }
+            }
+            catch
+            {
+                // swallow
+            }
+        }
     }
 }
