@@ -13,7 +13,13 @@ const PaymentPage = () => {
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("creditCard");
   const [products, setProducts] = useState({});
-  const [shippingMethod, setShippingMethod] = useState("standard"); // standard | express
+  const [shippingMethod, setShippingMethod] = useState(() => {
+    try {
+      return CartService.getShippingMethod() || "motorcycle";
+    } catch {
+      return "motorcycle";
+    }
+  }); // 'motorcycle' (motokurye) | 'car' (araç)
   const [errors, setErrors] = useState({});
   const [deliverySlot, setDeliverySlot] = useState("standard");
   const [deliveryNote, setDeliveryNote] = useState("");
@@ -74,18 +80,102 @@ const PaymentPage = () => {
         } catch (error) {
           // Mock ürünler (CartPage ile tutarlı)
           allProducts = [
-            { id: 1, name: "Cif Krem Doğanın Gücü Hijyen 675Ml", price: 204.95, specialPrice: 129.95, categoryId: 7, imageUrl: "/images/yeşil-cif-krem.jpg" },
-            { id: 2, name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr", price: 18.0, specialPrice: 14.9, categoryId: 6, imageUrl: "/images/tahil-cipsi.jpg" },
-            { id: 3, name: "Lipton Ice Tea Limon 330 Ml", price: 60.0, specialPrice: 40.9, categoryId: 5, imageUrl: "/images/lipton-ice-tea.jpg" },
-            { id: 4, name: "Dana But Tas Kebaplık Et Çiftlik Kg", price: 375.95, specialPrice: 279.0, categoryId: 2, imageUrl: "/images/dana-kusbasi.jpg" },
-            { id: 5, name: "Kuzu İncik Kg", price: 1399.95, specialPrice: 699.95, categoryId: 2, imageUrl: "/images/kuzu-incik.webp" },
-            { id: 6, name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g", price: 145.55, specialPrice: 84.5, categoryId: 5, imageUrl: "/images/nescafe.jpg" },
-            { id: 7, name: "Domates Kg", price: 45.9, specialPrice: 45.9, categoryId: 1, imageUrl: "/images/domates.webp" },
-            { id: 8, name: "Pınar Süt 1L", price: 28.5, specialPrice: 28.5, categoryId: 3, imageUrl: "/images/pınar-süt.jpg" },
-            { id: 9, name: "Sek Kaşar Peyniri 200 G", price: 75.9, specialPrice: 64.5, categoryId: 3, imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg" },
-            { id: 10, name: "Mis Bulgur Pilavlık 1Kg", price: 32.9, specialPrice: 32.9, categoryId: 4, imageUrl: "/images/bulgur.png" },
-            { id: 11, name: "Coca-Cola Orijinal Tat Kutu 330ml", price: 12.5, specialPrice: 10.0, categoryId: 5, imageUrl: "/images/coca-cola.jpg" },
-            { id: 12, name: "Salatalık Kg", price: 28.9, specialPrice: 28.9, categoryId: 1, imageUrl: "/images/salatalik.jpg" },
+            {
+              id: 1,
+              name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
+              price: 204.95,
+              specialPrice: 129.95,
+              categoryId: 7,
+              imageUrl: "/images/yeşil-cif-krem.jpg",
+            },
+            {
+              id: 2,
+              name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
+              price: 18.0,
+              specialPrice: 14.9,
+              categoryId: 6,
+              imageUrl: "/images/tahil-cipsi.jpg",
+            },
+            {
+              id: 3,
+              name: "Lipton Ice Tea Limon 330 Ml",
+              price: 60.0,
+              specialPrice: 40.9,
+              categoryId: 5,
+              imageUrl: "/images/lipton-ice-tea.jpg",
+            },
+            {
+              id: 4,
+              name: "Dana But Tas Kebaplık Et Çiftlik Kg",
+              price: 375.95,
+              specialPrice: 279.0,
+              categoryId: 2,
+              imageUrl: "/images/dana-kusbasi.jpg",
+            },
+            {
+              id: 5,
+              name: "Kuzu İncik Kg",
+              price: 1399.95,
+              specialPrice: 699.95,
+              categoryId: 2,
+              imageUrl: "/images/kuzu-incik.webp",
+            },
+            {
+              id: 6,
+              name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
+              price: 145.55,
+              specialPrice: 84.5,
+              categoryId: 5,
+              imageUrl: "/images/nescafe.jpg",
+            },
+            {
+              id: 7,
+              name: "Domates Kg",
+              price: 45.9,
+              specialPrice: 45.9,
+              categoryId: 1,
+              imageUrl: "/images/domates.webp",
+            },
+            {
+              id: 8,
+              name: "Pınar Süt 1L",
+              price: 28.5,
+              specialPrice: 28.5,
+              categoryId: 3,
+              imageUrl: "/images/pınar-süt.jpg",
+            },
+            {
+              id: 9,
+              name: "Sek Kaşar Peyniri 200 G",
+              price: 75.9,
+              specialPrice: 64.5,
+              categoryId: 3,
+              imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+            },
+            {
+              id: 10,
+              name: "Mis Bulgur Pilavlık 1Kg",
+              price: 32.9,
+              specialPrice: 32.9,
+              categoryId: 4,
+              imageUrl: "/images/bulgur.png",
+            },
+            {
+              id: 11,
+              name: "Coca-Cola Orijinal Tat Kutu 330ml",
+              price: 12.5,
+              specialPrice: 10.0,
+              categoryId: 5,
+              imageUrl: "/images/coca-cola.jpg",
+            },
+            {
+              id: 12,
+              name: "Salatalık Kg",
+              price: 28.9,
+              specialPrice: 28.9,
+              categoryId: 1,
+              imageUrl: "/images/salatalik.jpg",
+            },
           ];
         }
 
@@ -106,8 +196,8 @@ const PaymentPage = () => {
       const price = p ? p.specialPrice || p.price : 0;
       return sum + price * item.quantity;
     }, 0);
-    const baseShipping = shippingMethod === "express" ? 30 : 15;
-    const shipping = subtotal > 150 ? 0 : baseShipping; // 150 TL üzeri ücretsiz kargo
+    const baseShipping = shippingMethod === "car" ? 30 : 15;
+    const shipping = baseShipping; // Always apply chosen shipping cost (frontend choice)
     const tax = subtotal * 0.18; // KDV %18
     const total = subtotal + shipping + tax;
 
@@ -125,7 +215,10 @@ const PaymentPage = () => {
   // Kart doğrulama yardımcıları (Luhn ve alan kontrolleri)
   const onlyDigits = (s) => (s || "").replace(/\D/g, "");
   const luhnCheck = (num) => {
-    const arr = onlyDigits(num).split("").reverse().map((n) => parseInt(n, 10));
+    const arr = onlyDigits(num)
+      .split("")
+      .reverse()
+      .map((n) => parseInt(n, 10));
     if (!arr.length) return false;
     let sum = 0;
     for (let i = 0; i < arr.length; i++) {
@@ -247,6 +340,8 @@ const PaymentPage = () => {
         userId: user ? user.id : null,
         totalPrice: total, // sunucu yeniden hesaplayacak
         orderItems,
+        shippingMethod: shippingMethod === "car" ? "car" : "motorcycle",
+        shippingCost: Number(shipping.toFixed(2)),
         customerName: `${formData.firstName} ${formData.lastName}`.trim(),
         customerPhone: formData.phone,
         customerEmail: formData.email,
@@ -270,7 +365,9 @@ const PaymentPage = () => {
           "Ödeme başarıyla tamamlandı! Sipariş numaranız: " + result.orderNumber
         );
         // Sepeti temizle (guest ise)
-        try { CartService.clearGuestCart(); } catch {}
+        try {
+          CartService.clearGuestCart();
+        } catch {}
         // Başarı sayfasına yönlendir
         window.location.href =
           "/order-success?orderNumber=" + result.orderNumber;
@@ -317,7 +414,10 @@ const PaymentPage = () => {
         <div className="container">
           <div className="row justify-content-center">
             <div className="col-lg-8">
-              <div className="card shadow-lg border-0" style={{ borderRadius: 20 }}>
+              <div
+                className="card shadow-lg border-0"
+                style={{ borderRadius: 20 }}
+              >
                 <div className="card-body text-center p-5">
                   <div
                     className="mx-auto d-flex align-items-center justify-content-center mb-4"
@@ -395,7 +495,11 @@ const PaymentPage = () => {
               >
                 <i className="fas fa-sign-in-alt me-1"></i> Giriş Yap
               </button>
-              <a href="#checkout-form" className="btn btn-sm btn-warning text-white" style={{ borderRadius: 20 }}>
+              <a
+                href="#checkout-form"
+                className="btn btn-sm btn-warning text-white"
+                style={{ borderRadius: 20 }}
+              >
                 Misafir Olarak Devam Et
               </a>
             </div>
@@ -521,7 +625,9 @@ const PaymentPage = () => {
                           required
                         />
                         {errors.cardNumber && (
-                          <small className="text-danger">{errors.cardNumber}</small>
+                          <small className="text-danger">
+                            {errors.cardNumber}
+                          </small>
                         )}
                       </div>
                       <div className="col-md-6 mb-3">
@@ -543,7 +649,9 @@ const PaymentPage = () => {
                           required
                         />
                         {errors.cardName && (
-                          <small className="text-danger">{errors.cardName}</small>
+                          <small className="text-danger">
+                            {errors.cardName}
+                          </small>
                         )}
                       </div>
                     </div>
@@ -575,7 +683,9 @@ const PaymentPage = () => {
                           ))}
                         </select>
                         {errors.expiryMonth && (
-                          <small className="text-danger">{errors.expiryMonth}</small>
+                          <small className="text-danger">
+                            {errors.expiryMonth}
+                          </small>
                         )}
                       </div>
                       <div className="col-md-4 mb-3">
@@ -605,7 +715,9 @@ const PaymentPage = () => {
                           })}
                         </select>
                         {errors.expiryYear && (
-                          <small className="text-danger">{errors.expiryYear}</small>
+                          <small className="text-danger">
+                            {errors.expiryYear}
+                          </small>
                         )}
                       </div>
                       <div className="col-md-4 mb-3">
@@ -638,7 +750,10 @@ const PaymentPage = () => {
 
               {/* Havale/EFT Bilgi Kartı */}
               {paymentMethod === "bankTransfer" && (
-                <div className="card shadow-lg border-0 mb-4" style={{ borderRadius: 20 }}>
+                <div
+                  className="card shadow-lg border-0 mb-4"
+                  style={{ borderRadius: 20 }}
+                >
                   <div
                     className="card-header text-white border-0"
                     style={{
@@ -649,7 +764,8 @@ const PaymentPage = () => {
                     }}
                   >
                     <h5 className="mb-0 fw-bold">
-                      <i className="fas fa-university me-2"></i>Havale/EFT Bilgileri
+                      <i className="fas fa-university me-2"></i>Havale/EFT
+                      Bilgileri
                     </h5>
                   </div>
                   <div className="card-body" style={{ padding: "1.5rem" }}>
@@ -670,20 +786,31 @@ const PaymentPage = () => {
                         <div className="p-3 bg-light rounded d-flex justify-content-between align-items-center">
                           <div>
                             <div className="text-muted">IBAN</div>
-                            <div className="fw-bold">TR00 0000 0000 0000 0000 0000 00</div>
+                            <div className="fw-bold">
+                              TR00 0000 0000 0000 0000 0000 00
+                            </div>
                           </div>
                           <button
                             type="button"
                             className="btn btn-outline-primary"
-                            onClick={() => navigator.clipboard.writeText("TR0000000000000000000000")}
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                "TR0000000000000000000000"
+                              )
+                            }
                           >
                             <i className="fas fa-copy me-2"></i>Kopyala
                           </button>
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 text-muted" style={{ fontSize: "0.95rem" }}>
-                      Lütfen açıklama kısmına sipariş numaranızı yazınız. Sipariş tamamlandıktan sonra “Sipariş Başarı” sayfasında sipariş numaranız görüntülenecektir.
+                    <div
+                      className="mt-3 text-muted"
+                      style={{ fontSize: "0.95rem" }}
+                    >
+                      Lütfen açıklama kısmına sipariş numaranızı yazınız.
+                      Sipariş tamamlandıktan sonra “Sipariş Başarı” sayfasında
+                      sipariş numaranız görüntülenecektir.
                     </div>
                   </div>
                 </div>
@@ -860,7 +987,10 @@ const PaymentPage = () => {
               </div>
 
               {/* Teslimat Zamanı */}
-              <div className="card shadow-lg border-0 mb-4" style={{ borderRadius: "20px" }}>
+              <div
+                className="card shadow-lg border-0 mb-4"
+                style={{ borderRadius: "20px" }}
+              >
                 <div
                   className="card-header text-white border-0"
                   style={{
@@ -885,7 +1015,10 @@ const PaymentPage = () => {
                         checked={deliverySlot === "standard"}
                         onChange={() => setDeliverySlot("standard")}
                       />
-                      <label className="form-check-label" htmlFor="slotStandard">
+                      <label
+                        className="form-check-label"
+                        htmlFor="slotStandard"
+                      >
                         Gün içinde (Standart)
                       </label>
                     </div>
@@ -911,7 +1044,10 @@ const PaymentPage = () => {
                         checked={deliverySlot === "13:00-16:00"}
                         onChange={() => setDeliverySlot("13:00-16:00")}
                       />
-                      <label className="form-check-label" htmlFor="slotAfternoon">
+                      <label
+                        className="form-check-label"
+                        htmlFor="slotAfternoon"
+                      >
                         13:00 - 16:00
                       </label>
                     </div>
@@ -936,7 +1072,11 @@ const PaymentPage = () => {
                     </label>
                     <textarea
                       className="form-control form-control-lg border-0 shadow-sm"
-                      style={{ backgroundColor: "#fff8f0", borderRadius: 15, padding: "1rem 1.5rem" }}
+                      style={{
+                        backgroundColor: "#fff8f0",
+                        borderRadius: 15,
+                        padding: "1rem 1.5rem",
+                      }}
                       rows="3"
                       placeholder="Örn. Kapı önüne bırakın, güvenlikte bırakın vb."
                       value={deliveryNote}
@@ -977,17 +1117,33 @@ const PaymentPage = () => {
                         key={item.id}
                         className="d-flex align-items-center mb-3 pb-3 border-bottom"
                       >
-                        <div className="me-3 d-flex align-items-center justify-content-center"
-                          style={{ width: 50, height: 50, backgroundColor: "#fff8f0", borderRadius: 10 }}>
+                        <div
+                          className="me-3 d-flex align-items-center justify-content-center"
+                          style={{
+                            width: 50,
+                            height: 50,
+                            backgroundColor: "#fff8f0",
+                            borderRadius: 10,
+                          }}
+                        >
                           {products[item.productId]?.imageUrl ? (
                             <img
                               src={products[item.productId].imageUrl}
                               alt={products[item.productId]?.name || "Ürün"}
-                              style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, objectFit: "contain" }}
-                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              style={{
+                                maxWidth: "100%",
+                                maxHeight: "100%",
+                                borderRadius: 8,
+                                objectFit: "contain",
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
                             />
                           ) : (
-                            <span role="img" aria-label="box">📦</span>
+                            <span role="img" aria-label="box">
+                              📦
+                            </span>
                           )}
                         </div>
                         <div className="flex-grow-1">
@@ -995,11 +1151,22 @@ const PaymentPage = () => {
                             {products[item.productId]?.name || "Ürün"}
                           </h6>
                           <small className="text-muted">
-                            {item.quantity} x ₺{Number((products[item.productId]?.specialPrice || products[item.productId]?.price || 0)).toFixed(2)}
+                            {item.quantity} x ₺
+                            {Number(
+                              products[item.productId]?.specialPrice ||
+                                products[item.productId]?.price ||
+                                0
+                            ).toFixed(2)}
                           </small>
                         </div>
                         <strong className="text-warning">
-                          ₺{Number(item.quantity * (products[item.productId]?.specialPrice || products[item.productId]?.price || 0)).toFixed(2)}
+                          ₺
+                          {Number(
+                            item.quantity *
+                              (products[item.productId]?.specialPrice ||
+                                products[item.productId]?.price ||
+                                0)
+                          ).toFixed(2)}
                         </strong>
                       </div>
                     ))}
@@ -1007,7 +1174,9 @@ const PaymentPage = () => {
 
                   {/* Teslimat Yöntemi */}
                   <div className="mb-4">
-                    <h6 className="text-warning fw-bold mb-2">Teslimat Yöntemi</h6>
+                    <h6 className="text-warning fw-bold mb-2">
+                      Teslimat Yöntemi
+                    </h6>
                     <div className="form-check">
                       <input
                         className="form-check-input"
@@ -1017,7 +1186,10 @@ const PaymentPage = () => {
                         checked={shippingMethod === "standard"}
                         onChange={() => setShippingMethod("standard")}
                       />
-                      <label className="form-check-label" htmlFor="shipStandard">
+                      <label
+                        className="form-check-label"
+                        htmlFor="shipStandard"
+                      >
                         Standart Teslimat (₺15) — 2-3 gün
                       </label>
                     </div>
