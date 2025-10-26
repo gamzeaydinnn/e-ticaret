@@ -7,8 +7,7 @@ export const CartService = {
   getCartItems: () => api.get(base),
 
   // Sepete ürün ekle
-  addItem: (productId, quantity = 1) =>
-    api.post(base, { productId, quantity }),
+  addItem: (productId, quantity = 1) => api.post(base, { productId, quantity }),
 
   // Sepet ürününü güncelle
   updateItem: async (id, productId, quantity) => {
@@ -88,5 +87,14 @@ export const CartService = {
   getGuestCartCount: () => {
     const cart = CartService.getGuestCart();
     return cart.reduce((total, item) => total + item.quantity, 0);
+  },
+
+  // Shipping method persistence for guest flow (frontend only)
+  getShippingMethod: () => {
+    return localStorage.getItem("shippingMethod") || "motorcycle"; // default motokurye
+  },
+
+  setShippingMethod: (method) => {
+    localStorage.setItem("shippingMethod", method);
   },
 };

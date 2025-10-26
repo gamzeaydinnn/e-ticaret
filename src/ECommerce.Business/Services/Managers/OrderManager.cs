@@ -90,7 +90,10 @@ namespace ECommerce.Business.Services.Managers
             {
                 UserId = dto.UserId,
                 OrderNumber = GenerateOrderNumber(),
-                TotalPrice = total,
+                // Shipping will be computed server-side (do not trust client-provided cost)
+                ShippingMethod = NormalizeShippingMethod(dto.ShippingMethod),
+                ShippingCost = ComputeShippingCost(NormalizeShippingMethod(dto.ShippingMethod)),
+                TotalPrice = total + ComputeShippingCost(NormalizeShippingMethod(dto.ShippingMethod)),
                 Status = OrderStatus.Pending,
                 OrderDate = DateTime.UtcNow,
                 ShippingAddress = string.IsNullOrWhiteSpace(dto.ShippingAddress) ? "-" : dto.ShippingAddress,
@@ -164,6 +167,11 @@ namespace ECommerce.Business.Services.Managers
                         UnitPrice = unitPrice
                     });
                 }
+                // Compute shipping server-side (whitelist + fixed costs)
+                var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
+                var shippingCost = ComputeShippingCost(shippingMethod);
+                total += shippingCost;
+
                 var order = new Order
                 {
                     UserId = dto.UserId,
@@ -177,7 +185,9 @@ namespace ECommerce.Business.Services.Managers
                     CustomerPhone = dto.CustomerPhone,
                     CustomerEmail = dto.CustomerEmail,
                     DeliveryNotes = dto.DeliveryNotes,
-                    OrderItems = items
+                    OrderItems = items,
+                    ShippingMethod = shippingMethod,
+                    ShippingCost = shippingCost
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
@@ -310,6 +320,25 @@ namespace ECommerce.Business.Services.Managers
                     UnitPrice = oi.UnitPrice
                 }).ToList() ?? new List<OrderItemDto>()
             };
+        }
+
+        // Normalize incoming shipping method and map to a known key
+        private static string NormalizeShippingMethod(string? method)
+        {
+            if (string.IsNullOrWhiteSpace(method)) return "car";
+            var m = method.Trim().ToLowerInvariant();
+            // accept some common variants (english/turkish)
+            if (m == "motokurye" || m == "motorcycle" || m == "motor") return "motorcycle";
+            if (m == "araç" || m == "arac" || m == "car") return "car";
+            // default fallback
+            return "car";
+        }
+
+        // Fixed shipping cost mapping for allowed shipping methods
+        private static decimal ComputeShippingCost(string method)
+        {
+            var m = method?.Trim().ToLowerInvariant() ?? "car";
+            return m == "motorcycle" ? 15m : 30m;
         }
 
         private static string GenerateOrderNumber()

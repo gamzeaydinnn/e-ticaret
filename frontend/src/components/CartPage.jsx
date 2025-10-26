@@ -12,6 +12,13 @@ const CartPage = () => {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState({});
   const { user } = useAuth();
+  const [shippingMethod, setShippingMethod] = useState(() => {
+    try {
+      return CartService.getShippingMethod();
+    } catch {
+      return "motorcycle";
+    }
+  });
 
   useEffect(() => {
     loadCartData();
@@ -259,6 +266,11 @@ const CartPage = () => {
     }, 0);
   };
 
+  const getShippingCost = () => {
+    // motorcycle (motokurye) cheaper, car (araç) more expensive
+    return shippingMethod === "car" ? 30 : 15;
+  };
+
   return (
     <div
       style={{
@@ -488,10 +500,51 @@ const CartPage = () => {
                                 ₺{getTotalPrice().toFixed(2)}
                               </span>
                             </div>
+                            <div className="mb-3">
+                              <h6 className="text-muted mb-2">Kargo Seçimi</h6>
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="shipping"
+                                  id="shipMoto"
+                                  checked={shippingMethod === "motorcycle"}
+                                  onChange={() => {
+                                    setShippingMethod("motorcycle");
+                                    CartService.setShippingMethod("motorcycle");
+                                  }}
+                                />
+                                <label
+                                  className="form-check-label"
+                                  htmlFor="shipMoto"
+                                >
+                                  Motokurye (₺15) — Hızlı teslimat
+                                </label>
+                              </div>
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="shipping"
+                                  id="shipCar"
+                                  checked={shippingMethod === "car"}
+                                  onChange={() => {
+                                    setShippingMethod("car");
+                                    CartService.setShippingMethod("car");
+                                  }}
+                                />
+                                <label
+                                  className="form-check-label"
+                                  htmlFor="shipCar"
+                                >
+                                  Araç (₺30) — Daha büyük/yoğun siparişler için
+                                </label>
+                              </div>
+                            </div>
                             <div className="d-flex justify-content-between mb-2">
                               <span>Kargo:</span>
                               <span className="text-success fw-bold">
-                                {getTotalPrice() > 100 ? "Ücretsiz" : "₺15.00"}
+                                ₺{getShippingCost().toFixed(2)}
                               </span>
                             </div>
                             <hr style={{ borderColor: "#ffe0b2" }} />
@@ -499,10 +552,9 @@ const CartPage = () => {
                               <span>Toplam:</span>
                               <span className="text-warning">
                                 ₺
-                                {(
-                                  getTotalPrice() +
-                                  (getTotalPrice() > 100 ? 0 : 15)
-                                ).toFixed(2)}
+                                {(getTotalPrice() + getShippingCost()).toFixed(
+                                  2
+                                )}
                               </span>
                             </div>
                             <button
