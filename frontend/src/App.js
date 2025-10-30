@@ -124,7 +124,7 @@ function Header() {
                       style={{
                         height: "180px",
                         width: "auto",
-                        marginLeft: "-40px",
+                        marginLeft: "-70px",
                         marginTop: "-15px",
                         marginBottom: "-15px",
                         filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.2))",
