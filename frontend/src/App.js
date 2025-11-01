@@ -481,28 +481,60 @@ function Header() {
       <nav className="single-line-categories">
         <div className="container-fluid">
           <div className="category-scroll-container">
-            <button className="category-btn active" type="button" onClick={() => navigate("/")}>
+            <button
+              className="category-btn active"
+              type="button"
+              onClick={() => navigate("/")}
+            >
               KATEGORİLER
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/meyve-sebze")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/meyve-sebze")}
+            >
               MEYVE &amp; SEBZE
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/et-tavuk-balik")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/et-tavuk-balik")}
+            >
               ET &amp; TAVUK &amp; BALIK
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/sut-urunleri")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/sut-urunleri")}
+            >
               SÜT ÜRÜNLERİ
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/temel-gida")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/temel-gida")}
+            >
               TEMEL GIDA
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/icecekler")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/icecekler")}
+            >
               İÇECEKLER
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/atistirmalik")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/atistirmalik")}
+            >
               ATIŞTIRMALIK
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/temizlik")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/category/temizlik")}
+            >
               TEMİZLİK
             </button>
             <button
@@ -512,7 +544,11 @@ function Header() {
             >
               FAVORİLERİM
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/campaigns")}>
+            <button
+              className="category-btn"
+              type="button"
+              onClick={() => navigate("/campaigns")}
+            >
               KAMPANYALAR
             </button>
           </div>
@@ -658,6 +694,8 @@ function App() {
 
 function HomePage() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
+  const [isPaused, setIsPaused] = React.useState(false);
+
   const slides = [
     {
       id: 1,
@@ -685,13 +723,16 @@ function HomePage() {
     },
   ];
 
-  // Auto-slide effect
+  // Auto-slide effect with pause functionality
   React.useEffect(() => {
+    if (isPaused) return;
+
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 4000); // 4 saniyede bir değişir
+    }, 4000);
+
     return () => clearInterval(interval);
-  }, [slides.length]);
+  }, [slides.length, isPaused]);
 
   return (
     <>
@@ -699,12 +740,73 @@ function HomePage() {
       <section
         className="campaign-carousel py-4"
         style={{ overflowX: "hidden" }}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        role="region"
+        aria-label="Kampanya Carousel"
       >
         <div
           className="container-fluid"
           style={{ padding: "0 15px", maxWidth: "100vw" }}
         >
           <div className="position-relative">
+            {/* Navigation Arrows */}
+            <button
+              className="carousel-nav carousel-nav-prev position-absolute top-50 start-0 translate-middle-y ms-3"
+              style={{
+                width: "50px",
+                height: "50px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255,255,255,0.95)",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                cursor: "pointer",
+                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.3s ease",
+              }}
+              onClick={() =>
+                setCurrentSlide(
+                  (prev) => (prev - 1 + slides.length) % slides.length
+                )
+              }
+              aria-label="Önceki Slayt"
+            >
+              <i
+                className="fas fa-chevron-left"
+                style={{ fontSize: "18px", color: "#ff6b35" }}
+              ></i>
+            </button>
+
+            <button
+              className="carousel-nav carousel-nav-next position-absolute top-50 end-0 translate-middle-y me-3"
+              style={{
+                width: "50px",
+                height: "50px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255,255,255,0.95)",
+                boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                cursor: "pointer",
+                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.3s ease",
+              }}
+              onClick={() =>
+                setCurrentSlide((prev) => (prev + 1) % slides.length)
+              }
+              aria-label="Sonraki Slayt"
+            >
+              <i
+                className="fas fa-chevron-right"
+                style={{ fontSize: "18px", color: "#ff6b35" }}
+              ></i>
+            </button>
+
             {/* Carousel Container */}
             <div
               className="carousel-container"
@@ -736,15 +838,26 @@ function HomePage() {
                     transition: "opacity 0.8s ease-in-out",
                     zIndex: index === currentSlide ? 2 : 1,
                     backgroundImage: `url(${slide.image})`,
-                    backgroundSize: "100% auto",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center center",
+                    backgroundRepeat: "no-repeat",
                   }}
+                  role="group"
+                  aria-label={`Slayt ${index + 1} / ${slides.length}: ${
+                    slide.title
+                  }`}
+                  aria-hidden={index !== currentSlide}
                 >
                   {/* Slide content (title, subtitle, etc.) eklenebilir */}
                 </div>
               ))}
               {/* Slide Indicators */}
               <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
-                <div className="d-flex gap-2">
+                <div
+                  className="d-flex gap-2"
+                  role="tablist"
+                  aria-label="Slayt Göstergeleri"
+                >
                   {slides.map((_, indicatorIndex) => (
                     <button
                       key={indicatorIndex}
@@ -764,6 +877,9 @@ function HomePage() {
                         cursor: "pointer",
                       }}
                       onClick={() => setCurrentSlide(indicatorIndex)}
+                      role="tab"
+                      aria-label={`Slayt ${indicatorIndex + 1}`}
+                      aria-selected={indicatorIndex === currentSlide}
                     />
                   ))}
                 </div>
@@ -790,6 +906,224 @@ function HomePage() {
         ></div>
 
         <div className="container-fluid px-4 position-relative">
+          {/* 5 Özel Resim Section - Özel Seçimler'den ÖNCE */}
+          <div className="special-images-container mb-5 pt-3">
+            <div
+              className="d-flex flex-wrap justify-content-center"
+              style={{ gap: "15px" }}
+            >
+              {/* Resim 1 - Temizlik Malzemeleri */}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: "calc(20% - 12px)",
+                  minWidth: "180px",
+                  maxWidth: "250px",
+                }}
+              >
+                <div
+                  className="special-image-card h-100"
+                  style={{
+                    borderRadius: "15px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-10px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 25px rgba(0,0,0,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 15px rgba(0,0,0,0.1)";
+                  }}
+                >
+                  <img
+                    src="/images/temizlik-malzemeleri.png"
+                    alt="Temizlik Malzemelerimizi İnceleyin"
+                    className="img-fluid w-100"
+                    style={{
+                      display: "block",
+                      objectFit: "cover",
+                      height: "100%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Resim 2 - Taze ve Doğal */}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: "calc(20% - 12px)",
+                  minWidth: "180px",
+                  maxWidth: "250px",
+                }}
+              >
+                <div
+                  className="special-image-card h-100"
+                  style={{
+                    borderRadius: "15px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-10px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 25px rgba(0,0,0,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 15px rgba(0,0,0,0.1)";
+                  }}
+                >
+                  <img
+                    src="/images/taze-dogal-urunler.png"
+                    alt="Taze ve Doğal"
+                    className="img-fluid w-100"
+                    style={{
+                      display: "block",
+                      objectFit: "cover",
+                      height: "100%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Resim 3 - Taze Günlük Lezzetli */}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: "calc(20% - 12px)",
+                  minWidth: "180px",
+                  maxWidth: "250px",
+                }}
+              >
+                <div
+                  className="special-image-card h-100"
+                  style={{
+                    borderRadius: "15px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-10px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 25px rgba(0,0,0,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 15px rgba(0,0,0,0.1)";
+                  }}
+                >
+                  <img
+                    src="/images/taze-gunluk-lezzetli.png"
+                    alt="Taze Günlük Lezzetli"
+                    className="img-fluid w-100"
+                    style={{
+                      display: "block",
+                      objectFit: "cover",
+                      height: "100%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Resim 4 - Özel Fiyat Köy Sütü */}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: "calc(20% - 12px)",
+                  minWidth: "180px",
+                  maxWidth: "250px",
+                }}
+              >
+                <div
+                  className="special-image-card h-100"
+                  style={{
+                    borderRadius: "15px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-10px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 25px rgba(0,0,0,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 15px rgba(0,0,0,0.1)";
+                  }}
+                >
+                  <img
+                    src="/images/ozel-fiyat-koy-sutu.png"
+                    alt="Özel Fiyat Köy Sütü %50 İndirim"
+                    className="img-fluid w-100"
+                    style={{
+                      display: "block",
+                      objectFit: "cover",
+                      height: "100%",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Resim 5 - CIF Jel Serisi */}
+              <div
+                style={{
+                  flex: "0 0 auto",
+                  width: "calc(20% - 12px)",
+                  minWidth: "180px",
+                  maxWidth: "250px",
+                }}
+              >
+                <div
+                  className="special-image-card h-100"
+                  style={{
+                    borderRadius: "15px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-10px)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 25px rgba(0,0,0,0.15)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 15px rgba(0,0,0,0.1)";
+                  }}
+                >
+                  <img
+                    src="/images/cif-jel-serisi.png"
+                    alt="CIF Jel Serisi - Tüm Yüzeyler"
+                    className="img-fluid w-100"
+                    style={{
+                      display: "block",
+                      objectFit: "cover",
+                      height: "100%",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Modern Section Header */}
           <div className="text-center mb-5">
             <div
