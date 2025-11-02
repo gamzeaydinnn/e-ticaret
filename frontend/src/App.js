@@ -148,7 +148,7 @@ function Header() {
                       borderRadius: "25px 0 0 25px",
                       fontSize: "0.9rem",
                       paddingLeft: "20px",
-                      height: "44px",
+                      height: "38px",
                       backgroundColor: "#f5f5f5",
                       border: "none",
                     }}
@@ -158,15 +158,15 @@ function Header() {
                     style={{
                       background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
                       borderRadius: "0 25px 25px 0",
-                      height: "44px",
-                      minWidth: "70px",
-                      padding: "0 20px",
-                      fontSize: "0.9rem",
+                      height: "38px",
+                      minWidth: "50px",
+                      padding: "0 15px",
+                      fontSize: "0.85rem",
                       fontWeight: "600",
                       color: "white",
                     }}
                   >
-                    Ara
+                    <i className="fas fa-search"></i>
                   </button>
                 </div>
               </div>
