@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CourierService } from "../../services/courierService";
+import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
+import "./CourierOrders.css";
 
 export default function CourierOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updating, setUpdating] = useState(false);
-  const [weightReports, setWeightReports] = useState([]);
+  const [weightReports, setWeightReports] = useState({});
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,20 +31,22 @@ export default function CourierOrders() {
       const orderData = await CourierService.getAssignedOrders(courierId);
       setOrders(orderData);
 
-      // Ağırlık raporlarını yükle (demo)
-      const mockWeightReports = orderData
-        .map((order) => ({
-          orderId: order.id,
-          hasOverage: Math.random() > 0.7,
-          overageAmount:
-            Math.random() > 0.7 ? (Math.random() * 50 + 10).toFixed(2) : 0,
-          overageGrams:
-            Math.random() > 0.7 ? Math.floor(Math.random() * 200 + 50) : 0,
-          status: Math.random() > 0.5 ? "Approved" : "Pending",
-        }))
-        .filter((r) => r.hasOverage);
-
-      setWeightReports(mockWeightReports);
+      // Her sipariş için ağırlık raporlarını yükle
+      const reportsMap = {};
+      for (const order of orderData) {
+        try {
+          const reports = await CourierService.getOrderWeightReports(order.id);
+          if (reports && reports.length > 0) {
+            reportsMap[order.id] = reports[0]; // İlk raporu al
+          }
+        } catch (error) {
+          console.error(
+            `Sipariş ${order.id} için ağırlık raporu yüklenemedi:`,
+            error
+          );
+        }
+      }
+      setWeightReports(reportsMap);
     } catch (error) {
       console.error("Sipariş yükleme hatası:", error);
     } finally {
@@ -48,24 +54,103 @@ export default function CourierOrders() {
     }
   };
 
-  const updateOrderStatus = async (orderId, newStatus, notes = "") => {
+  const handleDeliveryAttempt = (order) => {
+    const report = weightReports[order.id];
+
+    // Ağırlık raporu varsa ve onay bekleniyorsa uyarı göster
+    if (report && report.status === "Pending") {
+      setPendingDeliveryOrder(order);
+      setShowWeightModal(true);
+      return;
+    }
+
+    // Onaylı rapor varsa veya rapor yoksa modal ile bilgilendirip onayla
+    setPendingDeliveryOrder(order);
+    setShowWeightModal(true);
+  };
+
+  const confirmDelivery = async () => {
+    if (!pendingDeliveryOrder) return;
+
     setUpdating(true);
+    setShowWeightModal(false);
+
     try {
-      // Eğer teslim ediliyorsa ve ağırlık fazlalığı varsa ödeme al
-      if (newStatus === "delivered") {
-        const report = weightReports.find(
-          (r) => r.orderId === orderId && r.status === "Approved"
-        );
-        if (report && report.overageAmount > 0) {
-          setProcessingPayment(true);
-          await new Promise((resolve) => setTimeout(resolve, 2000)); // Ödeme simülasyonu
-          alert(
-            `✅ Ek ödeme alındı: ${report.overageAmount} ₺\n${report.overageGrams}g fazlalık için`
-          );
-          setProcessingPayment(false);
+      const orderId = pendingDeliveryOrder.id;
+
+      // Backend'e teslimat isteği gönder - ödeme otomatik yapılacak
+      const response = await CourierService.updateOrderStatus(
+        orderId,
+        "delivered"
+      );
+
+      if (response.success) {
+        // Başarılı yanıt
+        let message = "✅ Teslimat Başarıyla Tamamlandı!\n\n";
+        message += `Sipariş: #${orderId}\n`;
+        message += `Müşteri: ${pendingDeliveryOrder.customerName}\n`;
+        message += `Tutar: ${pendingDeliveryOrder.totalAmount.toFixed(2)} ₺\n`;
+
+        if (response.paymentProcessed && response.paymentAmount > 0) {
+          message += `\n💰 EK ÖDEME TAHSİLATI:\n`;
+          message += `Ağırlık Farkı Ücreti: +${response.paymentAmount.toFixed(
+            2
+          )} ₺\n`;
+          message += `\n📊 Toplam Tahsilat: ${(
+            parseFloat(pendingDeliveryOrder.totalAmount) +
+            parseFloat(response.paymentAmount)
+          ).toFixed(2)} ₺`;
+
+          if (response.paymentDetails && response.paymentDetails.length > 0) {
+            message += `\n\nDetaylar:\n${response.paymentDetails.join("\n")}`;
+          }
         }
+
+        message += response.message ? `\n\n${response.message}` : "";
+
+        alert(message);
+      } else {
+        alert(
+          `⚠️ Uyarı!\n\n${
+            response.message ||
+            "Teslimat tamamlandı ancak bazı ödemeler başarısız oldu."
+          }`
+        );
       }
 
+      // Siparişleri yeniden yükle
+      const courierData = JSON.parse(localStorage.getItem("courierData"));
+      await loadOrders(courierData.id);
+
+      setSelectedOrder(null);
+      setPendingDeliveryOrder(null);
+    } catch (error) {
+      console.error("Teslimat hatası:", error);
+      alert(
+        `❌ Teslimat Hatası!\n\n${
+          error.response?.data?.message ||
+          error.message ||
+          "Bilinmeyen bir hata oluştu"
+        }`
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const updateOrderStatus = async (orderId, newStatus, notes = "") => {
+    // Teslim durumu için özel kontrol
+    if (newStatus === "delivered") {
+      const order = orders.find((o) => o.id === orderId);
+      if (order) {
+        handleDeliveryAttempt(order);
+        return;
+      }
+    }
+
+    // Diğer durum güncellemeleri normal devam eder
+    setUpdating(true);
+    try {
       await CourierService.updateOrderStatus(orderId, newStatus, notes);
 
       const courierData = JSON.parse(localStorage.getItem("courierData"));
@@ -183,29 +268,57 @@ export default function CourierOrders() {
                       </thead>
                       <tbody>
                         {orders.map((order) => {
-                          const weightReport = weightReports.find(
-                            (r) => r.orderId === order.id
-                          );
-                          const hasApprovedOverage =
+                          const weightReport = weightReports[order.id];
+                          const hasPendingWeight =
+                            weightReport?.status === "Pending";
+                          const hasApprovedWeight =
                             weightReport?.status === "Approved";
 
                           return (
                             <tr
                               key={order.id}
                               className={
-                                hasApprovedOverage ? "table-warning" : ""
+                                hasPendingWeight
+                                  ? "table-warning"
+                                  : hasApprovedWeight
+                                  ? "table-info"
+                                  : ""
                               }
                             >
                               <td>
                                 <div>
                                   <span className="fw-bold">#{order.id}</span>
-                                  {hasApprovedOverage && (
-                                    <span
-                                      className="badge bg-warning text-dark ms-2"
-                                      title="Ağırlık fazlalığı onaylandı"
-                                    >
-                                      ⚠️ +{weightReport.overageGrams}g
-                                    </span>
+                                  {hasPendingWeight && (
+                                    <div className="mt-1">
+                                      <span
+                                        className="badge bg-warning text-dark fw-bold px-3 py-2"
+                                        style={{
+                                          fontSize: "0.85rem",
+                                          boxShadow:
+                                            "0 2px 8px rgba(255, 193, 7, 0.4)",
+                                        }}
+                                        title="Ağırlık fazlalığı admin onayı bekliyor"
+                                      >
+                                        <i className="fas fa-clock me-1"></i>
+                                        ADMİN ONAYI BEKLİYOR
+                                      </span>
+                                    </div>
+                                  )}
+                                  {hasApprovedWeight && (
+                                    <div className="mt-1">
+                                      <span
+                                        className="badge bg-success fw-bold px-3 py-2"
+                                        style={{
+                                          fontSize: "0.85rem",
+                                          boxShadow:
+                                            "0 2px 8px rgba(40, 167, 69, 0.4)",
+                                        }}
+                                        title="Ağırlık fazlalığı onaylandı"
+                                      >
+                                        <i className="fas fa-check-circle me-1"></i>
+                                        ONAYLANDI +{weightReport.overageGrams}g
+                                      </span>
+                                    </div>
                                   )}
                                   <br />
                                   <small className="text-muted">
@@ -240,10 +353,18 @@ export default function CourierOrders() {
                                 <span className="fw-bold text-success">
                                   {order.totalAmount.toFixed(2)} ₺
                                 </span>
-                                {hasApprovedOverage && (
+                                {hasApprovedWeight && (
                                   <div>
-                                    <small className="text-warning fw-bold">
+                                    <small className="text-success fw-bold">
                                       +{weightReport.overageAmount} ₺ ek
+                                    </small>
+                                  </div>
+                                )}
+                                {hasPendingWeight && (
+                                  <div>
+                                    <small className="text-warning">
+                                      <i className="fas fa-clock"></i> Onay
+                                      bekliyor
                                     </small>
                                   </div>
                                 )}
@@ -286,14 +407,22 @@ export default function CourierOrders() {
                                       disabled={updating || processingPayment}
                                       className={`btn btn-sm ${
                                         getNextStatus(order.status) ===
-                                          "delivered" && hasApprovedOverage
-                                          ? "btn-warning"
-                                          : "btn-success"
+                                        "delivered"
+                                          ? hasPendingWeight
+                                            ? "btn-warning"
+                                            : hasApprovedWeight
+                                            ? "btn-success"
+                                            : "btn-primary"
+                                          : "btn-primary"
                                       }`}
                                       title={
                                         getNextStatus(order.status) ===
-                                          "delivered" && hasApprovedOverage
-                                          ? `Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
+                                        "delivered"
+                                          ? hasPendingWeight
+                                            ? "⚠️ Admin onayı bekleniyor"
+                                            : hasApprovedWeight
+                                            ? `Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
+                                            : "Teslim Et"
                                           : getNextStatusText(order.status)
                                       }
                                     >
@@ -302,9 +431,14 @@ export default function CourierOrders() {
                                       ) : (
                                         <>
                                           {getNextStatus(order.status) ===
-                                            "delivered" &&
-                                          hasApprovedOverage ? (
-                                            <>💰</>
+                                          "delivered" ? (
+                                            hasPendingWeight ? (
+                                              <i className="fas fa-clock"></i>
+                                            ) : hasApprovedWeight ? (
+                                              <i className="fas fa-hand-holding-usd"></i>
+                                            ) : (
+                                              <i className="fas fa-check"></i>
+                                            )
                                           ) : (
                                             <i className="fas fa-arrow-right"></i>
                                           )}
@@ -347,62 +481,205 @@ export default function CourierOrders() {
                 ></button>
               </div>
               <div className="modal-body">
+                {/* Ağırlık Onay Durumu - Belirgin Uyarı */}
+                {(() => {
+                  const report = weightReports[selectedOrder.id];
+                  if (report && report.status === "Pending") {
+                    return (
+                      <div
+                        className="alert alert-warning border-warning border-3 mb-4"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%)",
+                          boxShadow: "0 4px 12px rgba(255, 193, 7, 0.3)",
+                        }}
+                      >
+                        <div className="d-flex align-items-center">
+                          <div className="flex-shrink-0">
+                            <i
+                              className="fas fa-exclamation-triangle fa-3x text-warning"
+                              style={{ animation: "pulse 2s infinite" }}
+                            ></i>
+                          </div>
+                          <div className="flex-grow-1 ms-3">
+                            <h5 className="alert-heading mb-2">
+                              <i className="fas fa-clock me-2"></i>
+                              ADMİN ONAYI BEKLENİYOR
+                            </h5>
+                            <p className="mb-2">
+                              <strong>
+                                Bu siparişte ağırlık fazlalığı tespit edildi!
+                              </strong>
+                            </p>
+                            <div className="d-flex gap-3 mb-0">
+                              <div>
+                                <small className="text-muted">Fazlalık:</small>
+                                <strong className="ms-1 text-warning">
+                                  +{report.overageGrams}g
+                                </strong>
+                              </div>
+                              <div>
+                                <small className="text-muted">Ek Ücret:</small>
+                                <strong className="ms-1 text-warning">
+                                  +{report.overageAmount} ₺
+                                </strong>
+                              </div>
+                            </div>
+                            <hr className="my-2" />
+                            <small className="text-muted">
+                              <i className="fas fa-info-circle me-1"></i>
+                              Admin onayından sonra teslimat yapabilir ve ek
+                              ücreti tahsil edebilirsiniz.
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  } else if (report && report.status === "Approved") {
+                    return (
+                      <div
+                        className="alert alert-success border-success border-3 mb-4"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #d1f2eb 0%, #a8e6cf 100%)",
+                          boxShadow: "0 4px 12px rgba(40, 167, 69, 0.3)",
+                        }}
+                      >
+                        <div className="d-flex align-items-center">
+                          <div className="flex-shrink-0">
+                            <i className="fas fa-check-circle fa-3x text-success"></i>
+                          </div>
+                          <div className="flex-grow-1 ms-3">
+                            <h5 className="alert-heading mb-2">
+                              <i className="fas fa-thumbs-up me-2"></i>
+                              ADMİN ONAYI VERİLDİ
+                            </h5>
+                            <p className="mb-2">
+                              Ağırlık fazlalığı onaylandı. Teslimat yapıp ek
+                              ücreti tahsil edebilirsiniz.
+                            </p>
+                            <div className="d-flex gap-3 mb-0">
+                              <div>
+                                <small className="text-muted">
+                                  Onaylanan Fazlalık:
+                                </small>
+                                <strong className="ms-1 text-success">
+                                  +{report.overageGrams}g
+                                </strong>
+                              </div>
+                              <div>
+                                <small className="text-muted">
+                                  Tahsil Edilecek:
+                                </small>
+                                <strong className="ms-1 text-success">
+                                  +{report.overageAmount} ₺
+                                </strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <div className="row">
                   <div className="col-md-6">
-                    <h6 className="fw-bold">Müşteri Bilgileri</h6>
-                    <p>
-                      <strong>Ad:</strong> {selectedOrder.customerName}
-                    </p>
-                    <p>
-                      <strong>Telefon:</strong> {selectedOrder.customerPhone}
-                    </p>
-                    <p>
-                      <strong>Adres:</strong> {selectedOrder.address}
-                    </p>
+                    <h6 className="fw-bold mb-3">
+                      <i className="fas fa-user me-2 text-primary"></i>
+                      Müşteri Bilgileri
+                    </h6>
+                    <div className="mb-2">
+                      <small className="text-muted">Ad Soyad</small>
+                      <p className="mb-0 fw-semibold">
+                        {selectedOrder.customerName}
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <small className="text-muted">Telefon</small>
+                      <p className="mb-0 fw-semibold">
+                        <a
+                          href={`tel:${selectedOrder.customerPhone}`}
+                          className="text-decoration-none"
+                        >
+                          <i className="fas fa-phone me-1"></i>
+                          {selectedOrder.customerPhone}
+                        </a>
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <small className="text-muted">Adres</small>
+                      <p className="mb-0">{selectedOrder.address}</p>
+                    </div>
                   </div>
                   <div className="col-md-6">
-                    <h6 className="fw-bold">Sipariş Bilgileri</h6>
-                    <p>
-                      <strong>Sipariş Zamanı:</strong>{" "}
-                      {new Date(selectedOrder.orderTime).toLocaleString(
-                        "tr-TR"
-                      )}
-                    </p>
-                    <p>
-                      <strong>Tutar:</strong>{" "}
-                      {selectedOrder.totalAmount.toFixed(2)} ₺
-                    </p>
-                    <p>
-                      <strong>Teslimat Türü:</strong>{" "}
-                      <span className="badge bg-light text-dark border ms-2">
-                        {selectedOrder.shippingMethod === "car"
-                          ? "Araç"
-                          : selectedOrder.shippingMethod === "motorcycle"
-                          ? "Motosiklet"
-                          : selectedOrder.shippingMethod || "-"}
-                      </span>
-                    </p>
-                    <p>
-                      <strong>Durum:</strong>
-                      <span
-                        className={`badge bg-${getStatusColor(
-                          selectedOrder.status
-                        )} ms-2`}
-                      >
-                        {getStatusText(selectedOrder.status)}
-                      </span>
-                    </p>
+                    <h6 className="fw-bold mb-3">
+                      <i className="fas fa-box me-2 text-primary"></i>
+                      Sipariş Bilgileri
+                    </h6>
+                    <div className="mb-2">
+                      <small className="text-muted">Sipariş Zamanı</small>
+                      <p className="mb-0 fw-semibold">
+                        {new Date(selectedOrder.orderTime).toLocaleString(
+                          "tr-TR"
+                        )}
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <small className="text-muted">Tutar</small>
+                      <p className="mb-0 fw-semibold text-success">
+                        {selectedOrder.totalAmount.toFixed(2)} ₺
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <small className="text-muted">Teslimat Türü</small>
+                      <p className="mb-0">
+                        <span className="badge bg-light text-dark border">
+                          <i
+                            className={`fas fa-${
+                              selectedOrder.shippingMethod === "car"
+                                ? "car"
+                                : "motorcycle"
+                            } me-1`}
+                          ></i>
+                          {selectedOrder.shippingMethod === "car"
+                            ? "Araç"
+                            : "Motosiklet"}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="mb-2">
+                      <small className="text-muted">Durum</small>
+                      <p className="mb-0">
+                        <span
+                          className={`badge bg-${getStatusColor(
+                            selectedOrder.status
+                          )}`}
+                        >
+                          {getStatusText(selectedOrder.status)}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <h6 className="fw-bold mt-3">Ürünler</h6>
+                <hr className="my-3" />
+
+                <h6 className="fw-bold mb-3">
+                  <i className="fas fa-shopping-basket me-2 text-primary"></i>
+                  Ürünler
+                </h6>
                 <ul className="list-group">
                   {selectedOrder.items.map((item, index) => (
                     <li
                       key={index}
-                      className="list-group-item d-flex justify-content-between"
+                      className="list-group-item d-flex justify-content-between align-items-center"
                     >
-                      <span>{item}</span>
+                      <span>
+                        <i className="fas fa-check text-success me-2"></i>
+                        {item}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -410,19 +687,27 @@ export default function CourierOrders() {
                 {getNextStatus(selectedOrder.status) && (
                   <div className="mt-4 text-center">
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        setSelectedOrder(null);
                         updateOrderStatus(
                           selectedOrder.id,
                           getNextStatus(selectedOrder.status)
-                        )
-                      }
+                        );
+                      }}
                       disabled={updating}
-                      className="btn btn-success"
+                      className={`btn btn-lg ${
+                        getNextStatus(selectedOrder.status) === "delivered"
+                          ? weightReports[selectedOrder.id]?.status ===
+                            "Pending"
+                            ? "btn-warning"
+                            : "btn-success"
+                          : "btn-primary"
+                      }`}
                     >
                       {updating ? (
                         <>
                           <span className="spinner-border spinner-border-sm me-2"></span>
-                          Güncelleniyor...
+                          İşleniyor...
                         </>
                       ) : (
                         <>
@@ -438,6 +723,20 @@ export default function CourierOrders() {
           </div>
         </div>
       )}
+
+      {/* Ağırlık Onay Uyarı Modal */}
+      <WeightApprovalWarningModal
+        isOpen={showWeightModal}
+        onClose={() => {
+          setShowWeightModal(false);
+          setPendingDeliveryOrder(null);
+        }}
+        onConfirm={confirmDelivery}
+        orderData={pendingDeliveryOrder}
+        weightReport={
+          pendingDeliveryOrder ? weightReports[pendingDeliveryOrder.id] : null
+        }
+      />
     </div>
   );
 }

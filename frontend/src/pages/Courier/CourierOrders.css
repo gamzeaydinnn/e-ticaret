@@ -1,0 +1,109 @@
+/* Kurye Siparişler Sayfası Özel Stiller */
+
+/* Pulse animasyonu - Admin onayı bekliyor uyarısı için */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* Belirgin uyarı badge'leri */
+.badge.bg-warning.fw-bold {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Satır vurgulama */
+.table-warning {
+  background-color: #fff3cd !important;
+  border-left: 4px solid #ffc107 !important;
+}
+
+.table-info {
+  background-color: #d1ecf1 !important;
+  border-left: 4px solid #0dcaf0 !important;
+}
+
+/* Hover efektleri */
+.table-hover tbody tr:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+/* Modal arka plan bulanıklığı */
+.modal.fade.show {
+  backdrop-filter: blur(4px);
+}
+
+/* Alert kutularının animasyonu */
+.alert {
+  animation: slideInDown 0.5s ease;
+}
+
+@keyframes slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Buton hover efektleri */
+.btn-warning:hover,
+.btn-success:hover,
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+/* Telefon linki stili */
+a[href^="tel:"] {
+  color: #0d6efd;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a[href^="tel:"]:hover {
+  color: #0a58ca;
+  text-decoration: underline;
+}
+
+/* Badge'lerdeki ikonlar */
+.badge i {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Responsive iyileştirmeler */
+@media (max-width: 768px) {
+  .table-responsive {
+    font-size: 0.9rem;
+  }
+
+  .badge {
+    font-size: 0.75rem !important;
+    padding: 0.35em 0.65em !important;
+  }
+
+  .alert {
+    font-size: 0.9rem;
+  }
+}

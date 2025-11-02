@@ -29,7 +29,7 @@ namespace ECommerce.Tests.Integration
         public async Task Scenario1_WeightReport_CanBeCreated()
         {
             // Arrange
-            _output.WriteLine("=== SENARYO 1: Ağırlık Raporu Oluşturma ===");
+            _output.WriteLine("=== SENARYO 1: Ağırlık Raporu Oluşturma (Fazlalık Yok) ===");
             
             var report = new WeightReport
             {
@@ -58,6 +58,7 @@ namespace ECommerce.Tests.Integration
             Assert.Equal(WeightReportStatus.AutoApproved, result.Status);
             
             _output.WriteLine($"✅ Rapor oluşturuldu: #{result.Id}");
+            _output.WriteLine($"✅ Fazlalık yok, otomatik onaylandı");
             _output.WriteLine($"✅ Durum: {result.Status}\n");
         }
 
@@ -65,7 +66,7 @@ namespace ECommerce.Tests.Integration
         public async Task Scenario2_OverageReport_RequiresApproval()
         {
             // Arrange
-            _output.WriteLine("=== SENARYO 2: Fazlalık Raporu - Onay Gerekli ===");
+            _output.WriteLine("=== SENARYO 2: 1 Gram Bile Fazla Olsa Manuel Onay ===");
             
             var report = new WeightReport
             {
@@ -73,9 +74,9 @@ namespace ECommerce.Tests.Integration
                 ExternalReportId = "SCALE_1002_TEST",
                 OrderId = 1002,
                 ExpectedWeightGrams = 2000,
-                ReportedWeightGrams = 2150,
-                OverageGrams = 150,
-                OverageAmount = 75.00m,
+                ReportedWeightGrams = 2001, // Sadece 1g fazla
+                OverageGrams = 1,
+                OverageAmount = 0.50m,
                 Status = WeightReportStatus.Pending,
                 ReceivedAt = DateTimeOffset.UtcNow
             };
@@ -87,13 +88,14 @@ namespace ECommerce.Tests.Integration
 
             // Assert
             Assert.NotNull(result);
-            Assert.Equal(150, result.OverageGrams);
-            Assert.Equal(75.00m, result.OverageAmount);
+            Assert.Equal(1, result.OverageGrams);
+            Assert.Equal(0.50m, result.OverageAmount);
             Assert.Equal(WeightReportStatus.Pending, result.Status);
             
             _output.WriteLine($"✅ Beklenen: {result.ExpectedWeightGrams}g");
             _output.WriteLine($"✅ Gelen: {result.ReportedWeightGrams}g");
             _output.WriteLine($"⏳ Fark: +{result.OverageGrams}g = {result.OverageAmount:C}");
+            _output.WriteLine($"⚠️ 1 gram bile fazla olduğu için manuel onay gerekli");
             _output.WriteLine($"⏳ Durum: {result.Status}\n");
         }
 
@@ -191,7 +193,7 @@ namespace ECommerce.Tests.Integration
                 ReportedWeightGrams = 2050,
                 OverageGrams = 50,
                 OverageAmount = 25.00m,
-                Status = WeightReportStatus.AutoApproved,
+                Status = WeightReportStatus.Pending, // Fazlalık olduğu için Pending
                 ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-5)
             };
 
@@ -206,7 +208,8 @@ namespace ECommerce.Tests.Integration
             Assert.Equal(5, result.Id);
             
             _output.WriteLine($"✅ Idempotency çalıştı");
-            _output.WriteLine($"📋 Mevcut rapor döndürüldü: #{result.Id}\n");
+            _output.WriteLine($"📋 Mevcut rapor döndürüldü: #{result.Id}");
+            _output.WriteLine($"⚠️ 50g fazlalık tespit edildiği için Pending durumda\n");
         }
 
         [Fact]

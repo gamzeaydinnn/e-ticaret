@@ -228,13 +228,14 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                // Status güncelleme - gerçek projede OrderService kullanın
                 if (string.IsNullOrWhiteSpace(request.Status))
                 {
                     return BadRequest(new { message = "Status gereklidir." });
                 }
 
-                var response = new 
+                _logger.LogInformation("Sipariş #{OrderId} durumu güncelleniyor: {Status}", orderId, request.Status);
+
+                object response = new 
                 { 
                     success = true, 
                     orderId, 
@@ -243,47 +244,83 @@ namespace ECommerce.API.Controllers
                     updatedAt = DateTime.Now,
                     paymentProcessed = false,
                     paymentAmount = 0m,
-                    paymentMessage = string.Empty
+                    paymentDetails = new List<string>(),
+                    message = string.Empty
                 };
 
-                // Eğer sipariş "delivered" (teslim edildi) durumuna geçiyorsa,
-                // onaylanmış ağırlık farkı raporu varsa ödeme al
+                // Eğer sipariş "delivered" (teslim edildi) durumuna geçiyorsa
                 if (request.Status.Equals("delivered", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogInformation("Sipariş #{OrderId} teslim edildi olarak işaretlendi. Ağırlık raporu kontrol ediliyor...", orderId);
+                    _logger.LogInformation("Sipariş #{OrderId} teslim edildi durumuna geçiyor. Ağırlık raporları kontrol ediliyor...", orderId);
 
-                    // Bu sipariş için onaylanmış (Approved) ağırlık raporu var mı?
-                    var approvedReports = await _weightReportRepository.GetByOrderIdAsync(orderId);
-                    var pendingPayment = approvedReports
+                    // Onaylanmış (Approved) ağırlık raporlarını kontrol et
+                    var reports = await _weightReportRepository.GetByOrderIdAsync(orderId);
+                    var approvedReports = reports
                         .Where(r => r.Status == WeightReportStatus.Approved && r.OverageAmount > 0)
                         .ToList();
 
-                    if (pendingPayment.Any())
+                    if (approvedReports.Any())
                     {
-                        _logger.LogInformation("Sipariş #{OrderId} için {Count} adet onaylanmış ağırlık raporu bulundu. Ödeme işlemi başlatılıyor...", 
-                            orderId, pendingPayment.Count);
+                        _logger.LogInformation("Sipariş #{OrderId} için {Count} adet onaylı ağırlık raporu bulundu. Ödeme tahsilatı başlatılıyor...", 
+                            orderId, approvedReports.Count);
 
                         decimal totalCharged = 0;
-                        var chargeResults = new List<string>();
+                        var paymentDetailsList = new List<string>();
+                        var allPaymentsSuccessful = true;
 
-                        foreach (var report in pendingPayment)
+                        foreach (var report in approvedReports)
                         {
                             try
                             {
-                                var chargeResult = await _weightService.ChargeOverageAsync(report.Id);
-                                totalCharged += report.OverageAmount;
-                                chargeResults.Add($"Rapor #{report.Id}: {report.OverageAmount:C} başarıyla tahsil edildi.");
+                                _logger.LogInformation("Ağırlık raporu #{ReportId} için ödeme tahsilatı yapılıyor...", report.Id);
                                 
-                                _logger.LogInformation("Ağırlık raporu #{ReportId} için {Amount:C} tahsil edildi.", 
-                                    report.Id, report.OverageAmount);
+                                // Ödeme servisini çağır
+                                var charged = await _weightService.ChargeOverageAsync(report.Id);
+                                
+                                if (charged)
+                                {
+                                    totalCharged += report.OverageAmount;
+                                    paymentDetailsList.Add($"Rapor #{report.Id}: +{report.OverageAmount:F2} ₺ tahsil edildi");
+                                    _logger.LogInformation("✅ Ağırlık raporu #{ReportId} için {Amount:C} başarıyla tahsil edildi.", 
+                                        report.Id, report.OverageAmount);
+                                }
+                                else
+                                {
+                                    allPaymentsSuccessful = false;
+                                    paymentDetailsList.Add($"Rapor #{report.Id}: Ödeme başarısız");
+                                    _logger.LogWarning("⚠️ Ağırlık raporu #{ReportId} için ödeme başarısız oldu.", report.Id);
+                                }
                             }
                             catch (Exception ex)
                             {
-                                _logger.LogError(ex, "Ağırlık raporu #{ReportId} için ödeme alınırken hata oluştu.", report.Id);
-                                chargeResults.Add($"Rapor #{report.Id}: Ödeme hatası - {ex.Message}");
+                                allPaymentsSuccessful = false;
+                                _logger.LogError(ex, "❌ Ağırlık raporu #{ReportId} için ödeme alınırken hata oluştu.", report.Id);
+                                paymentDetailsList.Add($"Rapor #{report.Id}: Hata - {ex.Message}");
                             }
                         }
 
+                        response = new
+                        {
+                            success = allPaymentsSuccessful,
+                            orderId,
+                            status = request.Status,
+                            notes = request.Notes,
+                            updatedAt = DateTime.Now,
+                            paymentProcessed = true,
+                            paymentAmount = totalCharged,
+                            paymentDetails = paymentDetailsList,
+                            message = allPaymentsSuccessful 
+                                ? $"✅ Teslimat tamamlandı. Toplam {totalCharged:F2} ₺ ek ücret tahsil edildi."
+                                : $"⚠️ Teslimat tamamlandı ancak bazı ödemeler başarısız oldu. Toplam {totalCharged:F2} ₺ tahsil edildi."
+                        };
+
+                        _logger.LogInformation("Sipariş #{OrderId} teslimat ve ödeme işlemi tamamlandı. Toplam tahsilat: {Amount:C}", 
+                            orderId, totalCharged);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Sipariş #{OrderId} için ödeme gerektiren onaylı ağırlık raporu bulunamadı. Normal teslimat işleniyor.", orderId);
+                        
                         response = new
                         {
                             success = true,
@@ -291,14 +328,11 @@ namespace ECommerce.API.Controllers
                             status = request.Status,
                             notes = request.Notes,
                             updatedAt = DateTime.Now,
-                            paymentProcessed = true,
-                            paymentAmount = totalCharged,
-                            paymentMessage = string.Join(" ", chargeResults)
+                            paymentProcessed = false,
+                            paymentAmount = 0m,
+                            paymentDetails = new List<string>(),
+                            message = "✅ Teslimat başarıyla tamamlandı."
                         };
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Sipariş #{OrderId} için ödeme gerektiren ağırlık raporu bulunamadı.", orderId);
                     }
                 }
 
@@ -306,8 +340,12 @@ namespace ECommerce.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Sipariş #{OrderId} durumu güncellenirken hata oluştu.", orderId);
-                return BadRequest(new { message = ex.Message });
+                _logger.LogError(ex, "Sipariş #{OrderId} durumu güncellenirken beklenmeyen hata oluştu.", orderId);
+                return StatusCode(500, new { 
+                    success = false,
+                    message = "Sipariş durumu güncellenirken hata oluştu.",
+                    error = ex.Message 
+                });
             }
         }
 
@@ -346,6 +384,48 @@ namespace ECommerce.API.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // GET: api/courier/orders/{orderId}/weight-reports
+        [HttpGet("orders/{orderId}/weight-reports")]
+        public async Task<IActionResult> GetOrderWeightReports(int orderId)
+        {
+            try
+            {
+                _logger.LogInformation("Sipariş #{OrderId} için ağırlık raporları istendi", orderId);
+
+                var reports = await _weightReportRepository.GetByOrderIdAsync(orderId);
+                
+                if (reports == null || !reports.Any())
+                {
+                    return Ok(new List<object>());
+                }
+
+                var reportDtos = reports.Select(r => new
+                {
+                    r.Id,
+                    r.OrderId,
+                    r.ExpectedWeightGrams,
+                    r.ReportedWeightGrams,
+                    r.OverageGrams,
+                    r.OverageAmount,
+                    r.Currency,
+                    Status = r.Status.ToString(),
+                    r.ReceivedAt,
+                    r.ProcessedAt,
+                    r.CourierNote
+                }).ToList();
+
+                _logger.LogInformation("Sipariş #{OrderId} için {Count} adet ağırlık raporu döndürüldü", 
+                    orderId, reportDtos.Count);
+
+                return Ok(reportDtos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} için ağırlık raporları alınırken hata oluştu", orderId);
+                return StatusCode(500, new { error = "Ağırlık raporları alınamadı", details = ex.Message });
             }
         }
     }

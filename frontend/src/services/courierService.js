@@ -147,6 +147,33 @@ export const CourierService = {
       .then((res) => res.data);
   },
 
+  // Sipariş ağırlık raporlarını getir
+  getOrderWeightReports: (orderId) => {
+    if (USE_MOCK_DATA) {
+      // Mock: Bazı siparişlerde ağırlık fazlalığı simüle et
+      const random = Math.random();
+      if (random > 0.6) {
+        return Promise.resolve([
+          {
+            id: orderId * 10,
+            orderId,
+            status: random > 0.8 ? "Approved" : "Pending",
+            overageGrams: Math.floor(Math.random() * 200 + 50),
+            overageAmount: (Math.random() * 50 + 10).toFixed(2),
+            reportedWeightGrams: 1100,
+            expectedWeightGrams: 1000,
+            receivedAt: new Date().toISOString(),
+          },
+        ]);
+      }
+      return Promise.resolve([]);
+    }
+    return api
+      .get(`${base}/orders/${orderId}/weight-reports`)
+      .then((res) => res.data)
+      .catch(() => []);
+  },
+
   // Mevcut metotlar korunuyor
   getById: (id) => api.get(`${base}/${id}`).then((res) => res.data),
   add: (courier) => api.post(base, courier).then((res) => res.data),

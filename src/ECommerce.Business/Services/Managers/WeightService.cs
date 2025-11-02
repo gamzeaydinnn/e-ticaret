@@ -34,8 +34,8 @@ namespace ECommerce.Business.Services.Managers
             _logger = logger;
             _configuration = configuration;
             
-            // Otomatik onay eşik değeri (varsayılan 50 gram)
-            _autoApproveThresholdGrams = _configuration.GetValue<int>("Micro:AutoApproveThresholdGrams", 50);
+            // Otomatik onay eşik değeri: 0 (her fazlalık için manuel onay gerekli)
+            _autoApproveThresholdGrams = 0;
         }
 
         public async Task<WeightReport> ProcessReportAsync(MicroWeightReportDto dto)
@@ -97,22 +97,24 @@ namespace ECommerce.Business.Services.Managers
                     OverageGrams = overageGrams,
                     OverageAmount = overageAmount,
                     Currency = order.Currency,
-                    Status = WeightReportStatus.Pending,
+                    Status = overageGrams > 0 ? WeightReportStatus.Pending : WeightReportStatus.AutoApproved,
                     Source = dto.Source,
                     ReceivedAt = dto.Timestamp,
                     Metadata = dto.Metadata,
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // Otomatik onay kontrolü (eşik değerin altında mı?)
-                if (overageGrams > 0 && overageGrams <= _autoApproveThresholdGrams)
+                // 1 gram bile fazlalık varsa manuel onay gerekli
+                if (overageGrams > 0)
                 {
-                    _logger.LogInformation($"Ağırlık farkı eşik değerin altında ({overageGrams}g <= {_autoApproveThresholdGrams}g), otomatik onaylanıyor.");
+                    _logger.LogInformation($"Ağırlık fazlalığı tespit edildi: {overageGrams}g = {overageAmount} {order.Currency}, manuel onay gerekli.");
+                    weightReport.Status = WeightReportStatus.Pending;
+                }
+                else
+                {
+                    _logger.LogInformation($"Ağırlık farkı yok, otomatik onaylandı.");
                     weightReport.Status = WeightReportStatus.AutoApproved;
                     weightReport.ProcessedAt = DateTimeOffset.UtcNow;
-                    
-                    // Otomatik tahsilat başlat
-                    // NOT: Bu işlem background job'da asenkron yapılmalı
                 }
 
                 await _weightReportRepository.AddAsync(weightReport);
