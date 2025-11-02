@@ -1352,42 +1352,42 @@ function HomePage() {
               <h6 className="footer-title">Kategoriler</h6>
               <ul className="footer-links">
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/meyve-sebze" className="footer-link">
                     Meyve & Sebze
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/et-tavuk-balik" className="footer-link">
                     Et & Tavuk & Balık
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/sut-urunleri" className="footer-link">
                     Süt Ürünleri
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/temel-gida" className="footer-link">
                     Temel Gıda
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/icecekler" className="footer-link">
                     İçecekler
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/atistirmalik" className="footer-link">
                     Atıştırmalık
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/category/temizlik" className="footer-link">
                     Temizlik
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/favorites" className="footer-link">
                     Favorilerim
                   </a>
                 </li>
@@ -1399,47 +1399,47 @@ function HomePage() {
               <h6 className="footer-title">Müşteri Hizmetleri</h6>
               <ul className="footer-links">
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/help" className="footer-link">
                     Yardım Merkezi
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link text-warning">
+                  <a href="/contact" className="footer-link text-warning">
                     İletişim
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/orders" className="footer-link">
                     Sipariş Takibi
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/returns" className="footer-link">
                     İade & Değişim
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/shipping" className="footer-link">
                     Kargo Bilgileri
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/payment-options" className="footer-link">
                     Ödeme Seçenekleri
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/secure-shopping" className="footer-link">
                     Güvenli Alışveriş
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/faq" className="footer-link">
                     S.S.S
                   </a>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <a href="/feedback" className="footer-link">
                     Geri Bildirim
                   </a>
                 </li>
@@ -1512,20 +1512,21 @@ function HomePage() {
               <div className="social-media mt-4">
                 <h6 className="footer-title">Sosyal Medya</h6>
                 <div className="social-links">
-                  <a href="#" className="social-link">
+                  <a
+                    href="https://www.facebook.com/golkoygurmebodrum"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="social-link"
+                  >
                     <i className="fab fa-facebook-f"></i>
                   </a>
-                  <a href="#" className="social-link">
+                  <a
+                    href="https://www.instagram.com/golkoygurmebodrum?igsh=aWJwMHJsbXdjYmt4"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="social-link"
+                  >
                     <i className="fab fa-instagram"></i>
-                  </a>
-                  <a href="#" className="social-link">
-                    <i className="fab fa-twitter"></i>
-                  </a>
-                  <a href="#" className="social-link">
-                    <i className="fab fa-youtube"></i>
-                  </a>
-                  <a href="#" className="social-link">
-                    <i className="fab fa-linkedin-in"></i>
                   </a>
                 </div>
               </div>
