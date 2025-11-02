@@ -51,5 +51,6 @@ namespace ECommerce.Entities.Concrete
         public virtual User? User { get; set; }
         public virtual Courier? Courier { get; set; }
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
+        public virtual ICollection<WeightReport> WeightReports { get; set; } = new HashSet<WeightReport>();
     }
 }

@@ -3,6 +3,16 @@ import React from "react";
 export default function OrderDetailModal({ show, onHide, order }) {
   if (!show || !order) return null;
 
+  // Demo: Ağırlık fazlalığı var mı kontrol et
+  const hasWeightReport = order.weightReport || Math.random() > 0.6;
+  const weightReport = order.weightReport || {
+    expectedWeight: 2500, // gram
+    reportedWeight: 2650,
+    overageGrams: 150,
+    overageAmount: 75,
+    status: "Approved",
+  };
+
   return (
     <div
       className="modal fade show d-block"
@@ -42,6 +52,41 @@ export default function OrderDetailModal({ show, onHide, order }) {
             </div>
           </div>
           <div className="modal-body px-4 pb-4">
+            {hasWeightReport && weightReport.status === "Approved" && (
+              <div
+                className="alert alert-warning border-0 mb-3"
+                style={{
+                  borderRadius: "12px",
+                  background:
+                    "linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%)",
+                }}
+              >
+                <div className="d-flex align-items-center">
+                  <i className="fas fa-balance-scale fs-4 me-3 text-warning"></i>
+                  <div className="flex-grow-1">
+                    <h6 className="fw-bold mb-1 text-dark">
+                      ⚖️ Ağırlık Fazlalığı Tespit Edildi
+                    </h6>
+                    <div className="small">
+                      <div>
+                        <strong>Beklenen Ağırlık:</strong>{" "}
+                        {weightReport.expectedWeight}g
+                      </div>
+                      <div>
+                        <strong>Ölçülen Ağırlık:</strong>{" "}
+                        {weightReport.reportedWeight}g
+                      </div>
+                      <div className="text-danger fw-bold mt-1">
+                        <i className="fas fa-exclamation-triangle me-1"></i>
+                        Fazlalık: +{weightReport.overageGrams}g | Ek Ödeme: +
+                        {weightReport.overageAmount} ₺
+                      </div>
+                    </div>
+                  </div>
+                  <span className="badge bg-success px-3 py-2">Onaylandı</span>
+                </div>
+              </div>
+            )}
             <div className="row mb-3">
               <div className="col-md-6">
                 <div className="mb-2">

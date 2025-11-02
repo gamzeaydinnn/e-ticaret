@@ -83,7 +83,8 @@ namespace ECommerce.Business.Services.Managers
                 {
                     ProductId = product.Id,
                     Quantity = i.Quantity,
-                    UnitPrice = unitPrice
+                    UnitPrice = unitPrice,
+                    ExpectedWeightGrams = product.UnitWeightGrams * i.Quantity
                 });
             }
             var order = new Order
@@ -164,7 +165,8 @@ namespace ECommerce.Business.Services.Managers
                     {
                         ProductId = product.Id,
                         Quantity = item.Quantity,
-                        UnitPrice = unitPrice
+                        UnitPrice = unitPrice,
+                        ExpectedWeightGrams = product.UnitWeightGrams * item.Quantity
                     });
                 }
                 // Compute shipping server-side (whitelist + fixed costs)

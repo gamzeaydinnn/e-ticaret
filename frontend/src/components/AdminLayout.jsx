@@ -27,6 +27,11 @@ export default function AdminLayout({ children }) {
     { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
     { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
     { path: "/admin/coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
+    {
+      path: "/admin/weight-reports",
+      icon: "fas fa-weight",
+      label: "Ağırlık Raporları",
+    },
   ];
 
   const handleLogout = () => {
@@ -90,38 +95,90 @@ export default function AdminLayout({ children }) {
         </div>
 
         <nav className="mt-2">
-          {menuItems.map((item) => (
+          {menuItems.map((item, index) => (
             <Link
               key={item.path}
               to={item.path}
-              className="d-block text-decoration-none px-3 py-3 text-white"
+              className="d-block text-decoration-none px-3 py-3 text-white position-relative"
               style={{
-                transition: "all 0.2s",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 background:
                   location.pathname === item.path
                     ? "linear-gradient(135deg, #f57c00, #ff9800)"
                     : "transparent",
                 borderLeft:
                   location.pathname === item.path
-                    ? "3px solid #fff"
-                    : "3px solid transparent",
+                    ? "4px solid #fff"
+                    : "4px solid transparent",
+                boxShadow:
+                  location.pathname === item.path
+                    ? "0 4px 15px rgba(245, 124, 0, 0.3)"
+                    : "none",
+                transform:
+                  location.pathname === item.path
+                    ? "translateX(3px)"
+                    : "translateX(0)",
+                animation: `slideIn 0.4s ease-out ${index * 0.05}s both`,
               }}
               onMouseEnter={(e) => {
                 if (location.pathname !== item.path) {
                   e.target.style.backgroundColor = "rgba(245, 124, 0, 0.1)";
+                  e.target.style.borderLeft =
+                    "4px solid rgba(245, 124, 0, 0.3)";
+                  e.target.style.transform = "translateX(5px)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (location.pathname !== item.path) {
                   e.target.style.backgroundColor = "transparent";
+                  e.target.style.borderLeft = "4px solid transparent";
+                  e.target.style.transform = "translateX(0)";
                 }
               }}
             >
               <i
                 className={`${item.icon} me-3`}
-                style={{ width: "20px", fontSize: "0.9rem" }}
+                style={{
+                  width: "20px",
+                  fontSize: "0.9rem",
+                  filter:
+                    location.pathname === item.path
+                      ? "drop-shadow(0 0 8px rgba(255,255,255,0.5))"
+                      : "none",
+                  transition: "filter 0.3s ease",
+                }}
               ></i>
-              <span style={{ fontSize: "0.9rem" }}>{item.label}</span>
+              <span
+                style={{
+                  fontSize: "0.9rem",
+                  fontWeight: location.pathname === item.path ? "600" : "400",
+                }}
+              >
+                {item.label}
+              </span>
+              {item.path === "/admin/weight-reports" && (
+                <span
+                  className="position-absolute"
+                  style={{
+                    right: "12px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background:
+                      "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
+                    color: "white",
+                    fontSize: "0.7rem",
+                    fontWeight: "700",
+                    padding: "3px 7px",
+                    borderRadius: "12px",
+                    boxShadow: "0 2px 8px rgba(255, 107, 107, 0.4)",
+                    animation: "pulse 2s infinite",
+                    minWidth: "22px",
+                    textAlign: "center",
+                  }}
+                >
+                  3
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -219,6 +276,28 @@ const styles = `
 .dropdown-item:hover {
   background-color: rgba(245, 124, 0, 0.1);
   color: #f57c00;
+  transform: translateX(3px);
+  transition: all 0.2s ease;
+}
+@keyframes pulse {
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);
+  }
+  50% {
+    transform: translateY(-50%) scale(1.08);
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.6);
+  }
+}
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 `;
 

@@ -22,6 +22,12 @@ namespace ECommerce.Entities.Concrete
         public string SKU { get; set; } = string.Empty;
         public string Currency { get; set; } = "TRY";
 
+        /// <summary>
+        /// Ürün birim ağırlığı (gram)
+        /// Tartı entegrasyonu için gerekli
+        /// </summary>
+        public int UnitWeightGrams { get; set; } = 0;
+
         // Navigation
         public virtual Category Category { get; set; } = null!;
         public ICollection<Category> Categories { get; set; } = new List<Category>();

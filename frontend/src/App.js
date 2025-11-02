@@ -32,6 +32,7 @@ import AdminCategories from "./pages/Admin/AdminCategories.jsx";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
 import CouponManagement from "./pages/Admin/CouponManagement";
+import AdminWeightReports from "./pages/Admin/AdminWeightReports";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -138,33 +139,35 @@ function Header() {
             {/* Modern Search Bar */}
             <div className="col-md-6">
               <div className="modern-search-container position-relative">
-                <div className="input-group shadow-sm">
+                <div className="input-group">
                   <input
                     type="text"
-                    className="form-control form-control-lg border-0"
-                    placeholder="Doğal ve kaliteli ürünler arasında ara..."
+                    className="form-control border-0"
+                    placeholder="Eve ne lazım?"
                     style={{
                       borderRadius: "25px 0 0 25px",
-                      fontSize: "0.95rem",
+                      fontSize: "0.9rem",
                       paddingLeft: "20px",
+                      height: "44px",
+                      backgroundColor: "#f5f5f5",
+                      border: "none",
                     }}
                   />
                   <button
-                    className="btn btn-lg border-0 px-4"
+                    className="btn border-0 d-flex align-items-center justify-content-center"
                     style={{
                       background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
                       borderRadius: "0 25px 25px 0",
-                      boxShadow: "0 2px 10px rgba(255,107,53,0.3)",
+                      height: "44px",
+                      minWidth: "70px",
+                      padding: "0 20px",
+                      fontSize: "0.9rem",
+                      fontWeight: "600",
+                      color: "white",
                     }}
                   >
-                    <i className="fas fa-search text-white"></i>
+                    Ara
                   </button>
-                </div>
-                <div className="search-suggestions position-absolute w-100 bg-white rounded-3 shadow-lg mt-1 p-2 d-none">
-                  <div className="suggestion-item p-2 rounded text-muted">
-                    <i className="fas fa-fire me-2 text-warning"></i>Popüler:
-                    Organik süt, Taze meyve, Doğal bal
-                  </div>
                 </div>
               </div>
             </div>
@@ -677,6 +680,14 @@ function App() {
               element={
                 <AdminGuard>
                   <CouponManagement />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/weight-reports"
+              element={
+                <AdminGuard>
+                  <AdminWeightReports />
                 </AdminGuard>
               }
             />

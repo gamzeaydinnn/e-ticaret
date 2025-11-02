@@ -37,6 +37,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Coupon> Coupons { get; set; }
         public virtual DbSet<InventoryLog> InventoryLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
+        public virtual DbSet<WeightReport> WeightReports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -192,6 +193,39 @@ modelBuilder.Entity<ProductVariant>()
                         .WithMany()
                         .HasForeignKey(r => r.UserId)
                         .OnDelete(DeleteBehavior.Restrict);
+
+            // -------------------
+            // WeightReport Configuration
+            // -------------------
+            modelBuilder.Entity<WeightReport>(entity =>
+            {
+                entity.ToTable("WeightReports");
+                
+                entity.Property(e => e.ExternalReportId).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Currency).HasMaxLength(10).IsRequired();
+                entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.OverageAmount).HasColumnType("decimal(18,2)");
+                
+                // Unique index for idempotency
+                entity.HasIndex(e => e.ExternalReportId).IsUnique();
+                entity.HasIndex(e => e.OrderId);
+                entity.HasIndex(e => e.Status);
+
+                entity.HasOne(e => e.Order)
+                      .WithMany(o => o.WeightReports)
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.OrderItem)
+                      .WithMany(oi => oi.WeightReports)
+                      .HasForeignKey(e => e.OrderItemId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ApprovedBy)
+                      .WithMany()
+                      .HasForeignKey(e => e.ApprovedByUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
 
             // -------------------
             // Seed Data

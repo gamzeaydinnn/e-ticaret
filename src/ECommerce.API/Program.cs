@@ -157,12 +157,14 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
+builder.Services.AddScoped<IWeightReportRepository, WeightReportRepository>();
 
 // Services  
 builder.Services.AddScoped<IUserService, UserManager>();
 builder.Services.AddScoped<IProductService, ProductManager>();
 builder.Services.AddScoped<IOrderService, OrderManager>();
 builder.Services.AddScoped<ICartService, CartManager>();
+builder.Services.AddScoped<IWeightService, WeightService>();
 // Payment provider selection by config
 var paymentProvider = builder.Configuration["Payment:Provider"]?.ToLowerInvariant();
 switch (paymentProvider)

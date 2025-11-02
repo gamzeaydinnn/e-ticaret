@@ -7,6 +7,8 @@ export default function CourierOrders() {
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [weightReports, setWeightReports] = useState([]);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,6 +26,21 @@ export default function CourierOrders() {
     try {
       const orderData = await CourierService.getAssignedOrders(courierId);
       setOrders(orderData);
+
+      // Ağırlık raporlarını yükle (demo)
+      const mockWeightReports = orderData
+        .map((order) => ({
+          orderId: order.id,
+          hasOverage: Math.random() > 0.7,
+          overageAmount:
+            Math.random() > 0.7 ? (Math.random() * 50 + 10).toFixed(2) : 0,
+          overageGrams:
+            Math.random() > 0.7 ? Math.floor(Math.random() * 200 + 50) : 0,
+          status: Math.random() > 0.5 ? "Approved" : "Pending",
+        }))
+        .filter((r) => r.hasOverage);
+
+      setWeightReports(mockWeightReports);
     } catch (error) {
       console.error("Sipariş yükleme hatası:", error);
     } finally {
@@ -34,9 +51,23 @@ export default function CourierOrders() {
   const updateOrderStatus = async (orderId, newStatus, notes = "") => {
     setUpdating(true);
     try {
+      // Eğer teslim ediliyorsa ve ağırlık fazlalığı varsa ödeme al
+      if (newStatus === "delivered") {
+        const report = weightReports.find(
+          (r) => r.orderId === orderId && r.status === "Approved"
+        );
+        if (report && report.overageAmount > 0) {
+          setProcessingPayment(true);
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Ödeme simülasyonu
+          alert(
+            `✅ Ek ödeme alındı: ${report.overageAmount} ₺\n${report.overageGrams}g fazlalık için`
+          );
+          setProcessingPayment(false);
+        }
+      }
+
       await CourierService.updateOrderStatus(orderId, newStatus, notes);
 
-      // Siparişleri yeniden yükle
       const courierData = JSON.parse(localStorage.getItem("courierData"));
       await loadOrders(courierData.id);
 
@@ -151,95 +182,141 @@ export default function CourierOrders() {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map((order) => (
-                          <tr key={order.id}>
-                            <td>
-                              <div>
-                                <span className="fw-bold">#{order.id}</span>
-                                <br />
-                                <small className="text-muted">
-                                  {new Date(order.orderTime).toLocaleString(
-                                    "tr-TR"
+                        {orders.map((order) => {
+                          const weightReport = weightReports.find(
+                            (r) => r.orderId === order.id
+                          );
+                          const hasApprovedOverage =
+                            weightReport?.status === "Approved";
+
+                          return (
+                            <tr
+                              key={order.id}
+                              className={
+                                hasApprovedOverage ? "table-warning" : ""
+                              }
+                            >
+                              <td>
+                                <div>
+                                  <span className="fw-bold">#{order.id}</span>
+                                  {hasApprovedOverage && (
+                                    <span
+                                      className="badge bg-warning text-dark ms-2"
+                                      title="Ağırlık fazlalığı onaylandı"
+                                    >
+                                      ⚠️ +{weightReport.overageGrams}g
+                                    </span>
                                   )}
-                                </small>
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className="fw-semibold">
-                                  {order.customerName}
-                                </span>
-                                <br />
-                                <small className="text-muted">
-                                  {order.customerPhone}
-                                </small>
-                              </div>
-                            </td>
-                            <td>
-                              <span
-                                className="text-muted"
-                                title={order.address}
-                              >
-                                {order.address.length > 40
-                                  ? order.address.substring(0, 40) + "..."
-                                  : order.address}
-                              </span>
-                            </td>
-                            <td>
-                              <span className="fw-bold text-success">
-                                {order.totalAmount.toFixed(2)} ₺
-                              </span>
-                            </td>
-                            <td>
-                              <span className="badge bg-light text-dark border px-2 py-1">
-                                {order.shippingMethod === "car"
-                                  ? "Araç"
-                                  : order.shippingMethod === "motorcycle"
-                                  ? "Motosiklet"
-                                  : order.shippingMethod || "-"}
-                              </span>
-                            </td>
-                            <td>
-                              <span
-                                className={`badge bg-${getStatusColor(
-                                  order.status
-                                )}`}
-                              >
-                                {getStatusText(order.status)}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="d-flex gap-2">
-                                <button
-                                  onClick={() => setSelectedOrder(order)}
-                                  className="btn btn-outline-primary btn-sm"
-                                  title="Detayları Gör"
-                                >
-                                  <i className="fas fa-eye"></i>
-                                </button>
-                                {getNextStatus(order.status) && (
-                                  <button
-                                    onClick={() =>
-                                      updateOrderStatus(
-                                        order.id,
-                                        getNextStatus(order.status)
-                                      )
-                                    }
-                                    disabled={updating}
-                                    className="btn btn-success btn-sm"
-                                    title={getNextStatusText(order.status)}
-                                  >
-                                    {updating ? (
-                                      <span className="spinner-border spinner-border-sm"></span>
-                                    ) : (
-                                      <i className="fas fa-arrow-right"></i>
+                                  <br />
+                                  <small className="text-muted">
+                                    {new Date(order.orderTime).toLocaleString(
+                                      "tr-TR"
                                     )}
-                                  </button>
+                                  </small>
+                                </div>
+                              </td>
+                              <td>
+                                <div>
+                                  <span className="fw-semibold">
+                                    {order.customerName}
+                                  </span>
+                                  <br />
+                                  <small className="text-muted">
+                                    {order.customerPhone}
+                                  </small>
+                                </div>
+                              </td>
+                              <td>
+                                <span
+                                  className="text-muted"
+                                  title={order.address}
+                                >
+                                  {order.address.length > 40
+                                    ? order.address.substring(0, 40) + "..."
+                                    : order.address}
+                                </span>
+                              </td>
+                              <td>
+                                <span className="fw-bold text-success">
+                                  {order.totalAmount.toFixed(2)} ₺
+                                </span>
+                                {hasApprovedOverage && (
+                                  <div>
+                                    <small className="text-warning fw-bold">
+                                      +{weightReport.overageAmount} ₺ ek
+                                    </small>
+                                  </div>
                                 )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td>
+                                <span className="badge bg-light text-dark border px-2 py-1">
+                                  {order.shippingMethod === "car"
+                                    ? "Araç"
+                                    : order.shippingMethod === "motorcycle"
+                                    ? "Motosiklet"
+                                    : order.shippingMethod || "-"}
+                                </span>
+                              </td>
+                              <td>
+                                <span
+                                  className={`badge bg-${getStatusColor(
+                                    order.status
+                                  )}`}
+                                >
+                                  {getStatusText(order.status)}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="d-flex gap-2">
+                                  <button
+                                    onClick={() => setSelectedOrder(order)}
+                                    className="btn btn-outline-primary btn-sm"
+                                    title="Detayları Gör"
+                                  >
+                                    <i className="fas fa-eye"></i>
+                                  </button>
+                                  {getNextStatus(order.status) && (
+                                    <button
+                                      onClick={() =>
+                                        updateOrderStatus(
+                                          order.id,
+                                          getNextStatus(order.status)
+                                        )
+                                      }
+                                      disabled={updating || processingPayment}
+                                      className={`btn btn-sm ${
+                                        getNextStatus(order.status) ===
+                                          "delivered" && hasApprovedOverage
+                                          ? "btn-warning"
+                                          : "btn-success"
+                                      }`}
+                                      title={
+                                        getNextStatus(order.status) ===
+                                          "delivered" && hasApprovedOverage
+                                          ? `Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
+                                          : getNextStatusText(order.status)
+                                      }
+                                    >
+                                      {updating || processingPayment ? (
+                                        <span className="spinner-border spinner-border-sm"></span>
+                                      ) : (
+                                        <>
+                                          {getNextStatus(order.status) ===
+                                            "delivered" &&
+                                          hasApprovedOverage ? (
+                                            <>💰</>
+                                          ) : (
+                                            <i className="fas fa-arrow-right"></i>
+                                          )}
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

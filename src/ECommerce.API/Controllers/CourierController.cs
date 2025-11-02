@@ -6,11 +6,13 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
-
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using System;
 
 
 namespace ECommerce.API.Controllers
@@ -22,12 +24,24 @@ namespace ECommerce.API.Controllers
     private readonly ICourierService _courierService;
     private readonly UserManager<User> _userManager;
     private readonly IHostEnvironment _env;
+    private readonly IWeightService _weightService;
+    private readonly IWeightReportRepository _weightReportRepository;
+    private readonly ILogger<CourierController> _logger;
 
-        public CourierController(ICourierService courierService, UserManager<User> userManager, IHostEnvironment env)
+        public CourierController(
+            ICourierService courierService, 
+            UserManager<User> userManager, 
+            IHostEnvironment env,
+            IWeightService weightService,
+            IWeightReportRepository weightReportRepository,
+            ILogger<CourierController> logger)
         {
             _courierService = courierService;
             _userManager = userManager;
             _env = env;
+            _weightService = weightService;
+            _weightReportRepository = weightReportRepository;
+            _logger = logger;
         }
         // DEVELOPMENT: Demo kurye ve user ekler
         [HttpPost("seed-demo")]
@@ -210,21 +224,89 @@ namespace ECommerce.API.Controllers
 
         // PATCH: api/courier/orders/{orderId}/status
         [HttpPatch("orders/{orderId}/status")]
-        public IActionResult UpdateOrderStatus(int orderId, [FromBody] UpdateOrderStatusRequest request)
+        public async Task<IActionResult> UpdateOrderStatus(int orderId, [FromBody] UpdateOrderStatusRequest request)
         {
             try
             {
-                // Mock update - gerçek projede OrderService kullanın
-                return Ok(new { 
+                // Status güncelleme - gerçek projede OrderService kullanın
+                if (string.IsNullOrWhiteSpace(request.Status))
+                {
+                    return BadRequest(new { message = "Status gereklidir." });
+                }
+
+                var response = new 
+                { 
                     success = true, 
                     orderId, 
                     status = request.Status,
                     notes = request.Notes,
-                    updatedAt = DateTime.Now
-                });
+                    updatedAt = DateTime.Now,
+                    paymentProcessed = false,
+                    paymentAmount = 0m,
+                    paymentMessage = string.Empty
+                };
+
+                // Eğer sipariş "delivered" (teslim edildi) durumuna geçiyorsa,
+                // onaylanmış ağırlık farkı raporu varsa ödeme al
+                if (request.Status.Equals("delivered", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Sipariş #{OrderId} teslim edildi olarak işaretlendi. Ağırlık raporu kontrol ediliyor...", orderId);
+
+                    // Bu sipariş için onaylanmış (Approved) ağırlık raporu var mı?
+                    var approvedReports = await _weightReportRepository.GetByOrderIdAsync(orderId);
+                    var pendingPayment = approvedReports
+                        .Where(r => r.Status == WeightReportStatus.Approved && r.OverageAmount > 0)
+                        .ToList();
+
+                    if (pendingPayment.Any())
+                    {
+                        _logger.LogInformation("Sipariş #{OrderId} için {Count} adet onaylanmış ağırlık raporu bulundu. Ödeme işlemi başlatılıyor...", 
+                            orderId, pendingPayment.Count);
+
+                        decimal totalCharged = 0;
+                        var chargeResults = new List<string>();
+
+                        foreach (var report in pendingPayment)
+                        {
+                            try
+                            {
+                                var chargeResult = await _weightService.ChargeOverageAsync(report.Id);
+                                totalCharged += report.OverageAmount;
+                                chargeResults.Add($"Rapor #{report.Id}: {report.OverageAmount:C} başarıyla tahsil edildi.");
+                                
+                                _logger.LogInformation("Ağırlık raporu #{ReportId} için {Amount:C} tahsil edildi.", 
+                                    report.Id, report.OverageAmount);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Ağırlık raporu #{ReportId} için ödeme alınırken hata oluştu.", report.Id);
+                                chargeResults.Add($"Rapor #{report.Id}: Ödeme hatası - {ex.Message}");
+                            }
+                        }
+
+                        response = new
+                        {
+                            success = true,
+                            orderId,
+                            status = request.Status,
+                            notes = request.Notes,
+                            updatedAt = DateTime.Now,
+                            paymentProcessed = true,
+                            paymentAmount = totalCharged,
+                            paymentMessage = string.Join(" ", chargeResults)
+                        };
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Sipariş #{OrderId} için ödeme gerektiren ağırlık raporu bulunamadı.", orderId);
+                    }
+                }
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Sipariş #{OrderId} durumu güncellenirken hata oluştu.", orderId);
                 return BadRequest(new { message = ex.Message });
             }
         }
