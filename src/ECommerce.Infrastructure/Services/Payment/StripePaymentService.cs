@@ -76,8 +76,8 @@ namespace ECommerce.Infrastructure.Services.Payment
             var options = new SessionCreateOptions
             {
                 Mode = "payment",
-                SuccessUrl = successUrl + "?session_id={CHECKOUT_SESSION_ID}",
-                CancelUrl = cancelUrl,
+                SuccessUrl = successUrl + (successUrl.Contains("?") ? "&" : "?") + $"session_id={{CHECKOUT_SESSION_ID}}&orderId={orderId}",
+                CancelUrl = cancelUrl + (cancelUrl.Contains("?") ? "&" : "?") + $"orderId={orderId}",
                 PaymentMethodTypes = new List<string> { "card" },
                 LineItems = new List<SessionLineItemOptions>
                 {
@@ -95,7 +95,8 @@ namespace ECommerce.Infrastructure.Services.Payment
                         }
                     }
                 },
-                Metadata = new Dictionary<string, string> { { "orderId", orderId.ToString() } }
+                Metadata = new Dictionary<string, string> { { "orderId", orderId.ToString() } },
+                ClientReferenceId = orderId.ToString()
             };
 
             var sessionService = new SessionService();

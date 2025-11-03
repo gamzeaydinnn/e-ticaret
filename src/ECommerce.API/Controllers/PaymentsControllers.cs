@@ -79,6 +79,14 @@ namespace ECommerce.API.Controllers
                         order.Status = OrderStatus.Paid;
                     }
                     await _db.SaveChangesAsync();
+
+                    // Başarılı işlemden sonra frontend başarı sayfasına yönlendir (varsa)
+                    var successUrl = _paymentOptions.Value.ReturnUrlSuccess;
+                    if (!string.IsNullOrWhiteSpace(successUrl))
+                    {
+                        var sep = successUrl.Contains("?") ? "&" : "?";
+                        return Redirect(successUrl + sep + $"orderId={payment.OrderId}");
+                    }
                 }
             }
             return Ok(new { token, status });

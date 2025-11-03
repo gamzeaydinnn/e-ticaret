@@ -1,10 +1,26 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { OrderService } from "../services/orderService";
 
 const OrderSuccess = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
-  const orderNumber = params.get("orderNumber");
+  const [orderNumber, setOrderNumber] = useState(params.get("orderNumber"));
+  const orderId = params.get("orderId");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!orderNumber && orderId) {
+          const order = await OrderService.getById(orderId);
+          if (order?.orderNumber) setOrderNumber(order.orderNumber);
+        }
+      } catch {
+        // sessiz geç
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
@@ -97,4 +113,3 @@ const OrderSuccess = () => {
 };
 
 export default OrderSuccess;
-

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { OrderService } from "../services/orderService";
+import { PaymentService } from "../services/paymentService";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 import { useAuth } from "../contexts/AuthContext";
@@ -358,22 +359,31 @@ const PaymentPage = () => {
           .join(" | "),
       };
 
-      const result = await OrderService.checkout(payload);
+      const orderRes = await OrderService.checkout(payload);
 
-      if (result.success) {
-        alert(
-          "Ödeme başarıyla tamamlandı! Sipariş numaranız: " + result.orderNumber
-        );
-        // Sepeti temizle (guest ise)
-        try {
-          CartService.clearGuestCart();
-        } catch {}
-        // Başarı sayfasına yönlendir
-        window.location.href =
-          "/order-success?orderNumber=" + result.orderNumber;
-      } else {
-        throw new Error(result.message || "Ödeme işlemi başarısız");
+      if (!orderRes?.success || !orderRes?.orderId) {
+        throw new Error(orderRes?.message || "Sipariş oluşturulamadı");
       }
+
+      // Ödeme sağlayıcıyı başlat (Stripe/Iyzico). Sunucu RedirectUrl döner.
+      const init = await PaymentService.initiate(
+        orderRes.orderId,
+        Number(total.toFixed(2)),
+        "TRY"
+      );
+
+      if (init?.requiresRedirect && init?.redirectUrl) {
+        // Stripe/Iyzico hosted checkout sayfasına yönlendir
+        window.location.href = init.redirectUrl;
+        return;
+      }
+
+      // Redirect gerekmiyorsa başarılı kabul et
+      alert(
+        "Ödeme tamamlandı! Sipariş numaranız: " + (orderRes.orderNumber || "-")
+      );
+      try { CartService.clearGuestCart(); } catch {}
+      window.location.href = "/order-success?orderNumber=" + (orderRes.orderNumber || "");
     } catch (error) {
       console.error("Ödeme hatası:", error);
       alert("Ödeme işlemi sırasında bir hata oluştu: " + error.message);
