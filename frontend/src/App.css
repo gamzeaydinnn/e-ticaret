@@ -2433,6 +2433,24 @@
   transform: translateY(-3px);
 }
 
+/* Ensure header action items look consistent (icons + labels) */
+.header-actions .modern-action-btn {
+  min-width: 92px; /* prevents label wrapping (e.g., "Giriş Yap") */
+}
+
+.header-actions .modern-action-btn small {
+  white-space: nowrap; /* keep label in one line */
+  display: block;
+}
+
+.header-actions .action-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .search-suggestions {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 107, 53, 0.1);

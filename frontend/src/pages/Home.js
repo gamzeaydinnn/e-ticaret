@@ -1,6 +1,7 @@
 // Hero banner, kategori grid, kampanyalar, öne çıkan ürünler
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
+import { ProductService } from "../services/productService";
 import { Helmet } from "react-helmet-async";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
@@ -8,16 +9,19 @@ import CategoryTile from "./components/CategoryTile";
 export default function Home() {
   const [categories, setCategories] = useState([]);
   const [featured, setFeatured] = useState([]);
+  const [productLoading, setProductLoading] = useState(true);
+  const [productError, setProductError] = useState(null);
 
   useEffect(() => {
     api
       .get("/api/Categories")
       .then((r) => setCategories(r.data))
       .catch(() => {});
-    api
-      .get("/api/Products")
-      .then((r) => setFeatured(r.data))
-      .catch(() => {});
+
+    ProductService.list()
+      .then((items) => setFeatured(items))
+      .catch((e) => setProductError(e?.message || "Ürünler yüklenemedi"))
+      .finally(() => setProductLoading(false));
   }, []);
 
   return (
@@ -76,11 +80,19 @@ export default function Home() {
 
       <section>
         <h2 className="text-xl font-semibold mb-4">Öne çıkanlar</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {featured.map((p) => (
-            <ProductCard key={p.id} product={p} />
-          ))}
-        </div>
+        {productLoading && (
+          <div className="text-gray-500">Ürünler yükleniyor…</div>
+        )}
+        {productError && !productLoading && (
+          <div className="text-red-600">Hata: {productError}</div>
+        )}
+        {!productLoading && !productError && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {featured.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

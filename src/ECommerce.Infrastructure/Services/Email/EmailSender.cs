@@ -1,8 +1,10 @@
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using System.Net;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using System.IO;
 
 
 namespace ECommerce.Infrastructure.Services.Email
@@ -11,10 +13,12 @@ namespace ECommerce.Infrastructure.Services.Email
     public class EmailSender
     {
         private readonly EmailSettings _settings;
+        private readonly IHostEnvironment _env;
 
-        public EmailSender(IOptions<EmailSettings> options)
+        public EmailSender(IOptions<EmailSettings> options, IHostEnvironment env)
         {
             _settings = options.Value;
+            _env = env;
         }
 
         public async Task<bool> SendEmailAsync(string toEmail, string subject, string body, bool isHtml = true)
@@ -31,8 +35,18 @@ namespace ECommerce.Infrastructure.Services.Email
                 using var client = new SmtpClient();
                 if (_settings.UsePickupFolder && !string.IsNullOrWhiteSpace(_settings.PickupDirectory))
                 {
+                    // Resolve to absolute path under ContentRoot if relative provided
+                    var dir = _settings.PickupDirectory;
+                    if (!Path.IsPathRooted(dir))
+                    {
+                        // Prefer ContentRootPath (API project root)
+                        var root = _env.ContentRootPath ?? Directory.GetCurrentDirectory();
+                        dir = Path.Combine(root, dir);
+                    }
+                    Directory.CreateDirectory(dir);
+
                     client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory;
-                    client.PickupDirectoryLocation = _settings.PickupDirectory;
+                    client.PickupDirectoryLocation = dir;
                 }
                 else
                 {
