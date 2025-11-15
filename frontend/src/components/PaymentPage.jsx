@@ -13,6 +13,7 @@ const PaymentPage = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("creditCard");
+  const [paymentProvider, setPaymentProvider] = useState("iyzico"); // stripe | iyzico | paypal
   const [products, setProducts] = useState({});
   const [shippingMethod, setShippingMethod] = useState(() => {
     try {
@@ -25,6 +26,7 @@ const PaymentPage = () => {
   const [deliverySlot, setDeliverySlot] = useState("standard");
   const [deliveryNote, setDeliveryNote] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -301,8 +303,8 @@ const PaymentPage = () => {
     return required.every((field) => formData[field].trim() !== "");
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const performCheckout = async () => {
+    setPaymentError("");
 
     if (!validateForm()) {
       alert("Lütfen tüm zorunlu alanları doldurun.");
@@ -365,31 +367,46 @@ const PaymentPage = () => {
         throw new Error(orderRes?.message || "Sipariş oluşturulamadı");
       }
 
-      // Ödeme sağlayıcıyı başlat (Stripe/Iyzico). Sunucu RedirectUrl döner.
-      const init = await PaymentService.initiate(
-        orderRes.orderId,
-        Number(total.toFixed(2)),
-        "TRY"
-      );
+      // Kredi kartı ile ödeme ise seçilen sağlayıcıyı başlat (Stripe/Iyzico/PayPal).
+      if (paymentMethod === "creditCard") {
+        const init = await PaymentService.initiate(
+          orderRes.orderId,
+          Number(total.toFixed(2)),
+          paymentProvider,
+          "TRY"
+        );
 
-      if (init?.requiresRedirect && init?.redirectUrl) {
-        // Stripe/Iyzico hosted checkout sayfasına yönlendir
-        window.location.href = init.redirectUrl;
-        return;
+        if (init?.requiresRedirect && init?.redirectUrl) {
+          // Stripe/Iyzico/PayPal hosted checkout sayfasına yönlendir (3D Secure vb.)
+          window.location.href = init.redirectUrl;
+          return;
+        }
       }
 
       // Redirect gerekmiyorsa başarılı kabul et
       alert(
         "Ödeme tamamlandı! Sipariş numaranız: " + (orderRes.orderNumber || "-")
       );
-      try { CartService.clearGuestCart(); } catch {}
-      window.location.href = "/order-success?orderNumber=" + (orderRes.orderNumber || "");
+      try {
+        CartService.clearGuestCart();
+      } catch {}
+      window.location.href =
+        "/order-success?orderNumber=" + (orderRes.orderNumber || "");
     } catch (error) {
-      console.error("Ödeme hatası:", error);
-      alert("Ödeme işlemi sırasında bir hata oluştu: " + error.message);
+      console.error("Ödeme sırasında hata:", error);
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Ödeme sırasında bir hata oluştu. Lütfen tekrar deneyin.";
+      setPaymentError(message);
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await performCheckout();
   };
 
   const { subtotal, shipping, tax, total } = calculateTotals();
@@ -519,6 +536,19 @@ const PaymentPage = () => {
           <div className="row">
             {/* Sol Taraf: Ödeme Formu */}
             <div className="col-lg-8">
+              {paymentError && (
+                <div className="alert alert-danger d-flex justify-content-between align-items-center">
+                  <span>{paymentError}</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-light"
+                    onClick={performCheckout}
+                    disabled={processing}
+                  >
+                    Tekrar Dene
+                  </button>
+                </div>
+              )}
               {/* Ödeme Yöntemi Seçimi */}
               <div
                 className="card shadow-lg border-0 mb-4"
@@ -591,6 +621,46 @@ const PaymentPage = () => {
                       </div>
                     </div>
                   </div>
+                  {paymentMethod === "creditCard" && (
+                    <div className="mt-4">
+                      <h6 className="fw-bold mb-2">Ödeme Altyapısı</h6>
+                      <div className="d-flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            paymentProvider === "iyzico"
+                              ? "btn-warning text-white"
+                              : "btn-outline-warning"
+                          }`}
+                          onClick={() => setPaymentProvider("iyzico")}
+                        >
+                          Iyzico
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            paymentProvider === "stripe"
+                              ? "btn-warning text-white"
+                              : "btn-outline-warning"
+                          }`}
+                          onClick={() => setPaymentProvider("stripe")}
+                        >
+                          Stripe
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${
+                            paymentProvider === "paypal"
+                              ? "btn-warning text-white"
+                              : "btn-outline-warning"
+                          }`}
+                          onClick={() => setPaymentProvider("paypal")}
+                        >
+                          PayPal
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

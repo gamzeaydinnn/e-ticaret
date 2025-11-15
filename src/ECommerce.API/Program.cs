@@ -169,23 +169,12 @@ builder.Services.AddScoped<IProductService, ProductManager>();
 builder.Services.AddScoped<IOrderService, OrderManager>();
 builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IWeightService, WeightService>();
-// Payment provider selection by config
-var paymentProvider = builder.Configuration["Payment:Provider"]?.ToLowerInvariant();
-switch (paymentProvider)
-{
-    case "stripe":
-        builder.Services.AddScoped<IPaymentService, StripePaymentService>();
-        break;
-    case "iyzico":
-        builder.Services.AddScoped<IPaymentService, IyzicoPaymentService>();
-        break;
-    case "paypal":
-        builder.Services.AddScoped<IPaymentService, PayPalPaymentService>();
-        break;
-    default:
-        builder.Services.AddScoped<IPaymentService, PaymentManager>();
-        break;
-}
+// Ödeme sağlayıcıları + PaymentManager (provider seçimi)
+builder.Services.AddScoped<StripePaymentService>();
+builder.Services.AddScoped<IyzicoPaymentService>();
+builder.Services.AddScoped<PayPalPaymentService>();
+builder.Services.AddScoped<PaymentManager>();
+builder.Services.AddScoped<IPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();

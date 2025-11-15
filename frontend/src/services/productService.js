@@ -1,16 +1,47 @@
 // src/services/productService.js
 import api from "./api";
 
-const mapProduct = (p = {}) => ({
-  id: p.id,
-  name: p.name || p.title || "",
-  category: p.category_name || p.category || "",
-  price: p.price ?? 0,
-  discountPrice: p.discount_price ?? null,
-  imageUrl: p.image_url || p.image || p.imageUrl || "",
-  stock: p.stock ?? p.stockQuantity ?? 0,
-  description: p.description || "",
-});
+const mapProduct = (p = {}) => {
+  const basePrice = p.price ?? p.unitPrice ?? 0;
+  const special =
+    p.specialPrice ??
+    p.discountPrice ??
+    p.discount_price ??
+    null;
+
+  let price = basePrice;
+  let originalPrice = null;
+  let discountPercentage = 0;
+
+  if (
+    special !== null &&
+    typeof special === "number" &&
+    special > 0 &&
+    basePrice > 0 &&
+    special < basePrice
+  ) {
+    price = special;
+    originalPrice = basePrice;
+    discountPercentage = Math.round(100 - (special / basePrice) * 100);
+  }
+
+  const stock = p.stock ?? p.stockQuantity ?? 0;
+
+  return {
+    id: p.id,
+    name: p.name || p.title || "",
+    category: p.category_name || p.category || "",
+    categoryName: p.categoryName || p.category_name || p.category || "",
+    price,
+    originalPrice,
+    discountPrice: special,
+    discountPercentage,
+    imageUrl: p.image_url || p.image || p.imageUrl || "",
+    stock,
+    stockQuantity: stock,
+    description: p.description || "",
+  };
+};
 
 export const ProductService = {
   // Public endpoints (mapped shape)

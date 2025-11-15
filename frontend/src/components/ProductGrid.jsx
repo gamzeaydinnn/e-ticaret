@@ -617,7 +617,29 @@ export default function ProductGrid({
         </div>
       ) : (
         <div className="row">
-          {filteredProducts.map((p, index) => (
+          {filteredProducts.map((p, index) => {
+            const stock = p.stock ?? p.stockQuantity ?? 0;
+            const isOutOfStock = stock <= 0;
+            const isLowStock = !isOutOfStock && stock <= 5;
+
+            const hasDiscount =
+              typeof p.originalPrice === "number" &&
+              p.originalPrice > 0 &&
+              typeof p.price === "number" &&
+              p.price < p.originalPrice;
+
+            const currentPrice =
+              typeof p.price === "number" ? p.price : 0;
+            const originalPrice =
+              typeof p.originalPrice === "number" ? p.originalPrice : null;
+            const discountPercentage =
+              typeof p.discountPercentage === "number" && p.discountPercentage > 0
+                ? p.discountPercentage
+                : hasDiscount && originalPrice
+                ? Math.round(100 - (currentPrice / originalPrice) * 100)
+                : 0;
+
+            return (
             <div key={p.id} className="col-lg-3 col-md-6 mb-4">
               <div
                 className="modern-product-card h-100"
@@ -675,6 +697,42 @@ export default function ProductGrid({
                       }}
                     >
                       {p.badge}
+                    </span>
+                  </div>
+                )}
+
+                {/* Stok Rozetleri */}
+                {isOutOfStock && (
+                  <div
+                    className="position-absolute top-0 end-0 p-2"
+                    style={{ zIndex: 3 }}
+                  >
+                    <span
+                      className="badge bg-danger text-white"
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "4px 10px",
+                        borderRadius: "15px",
+                      }}
+                    >
+                      Stokta Yok
+                    </span>
+                  </div>
+                )}
+                {isLowStock && !isOutOfStock && (
+                  <div
+                    className="position-absolute top-0 end-0 p-2"
+                    style={{ zIndex: 3 }}
+                  >
+                    <span
+                      className="badge bg-warning text-dark"
+                      style={{
+                        fontSize: "0.7rem",
+                        padding: "4px 10px",
+                        borderRadius: "15px",
+                      }}
+                    >
+                      Az Stok
                     </span>
                   </div>
                 )}
@@ -833,7 +891,7 @@ export default function ProductGrid({
                   <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
                     {/* Modern Fiyat Bilgileri */}
                     <div className="price-section mb-3">
-                      {p.originalPrice ? (
+                      {originalPrice ? (
                         <div className="price-container">
                           <div className="d-flex align-items-center mb-2">
                             <span
@@ -844,9 +902,9 @@ export default function ProductGrid({
                                 color: "#6c757d",
                               }}
                             >
-                              {p.originalPrice.toFixed(2)} TL
+                              {originalPrice.toFixed(2)} TL
                             </span>
-                            {p.discountPercentage > 0 && (
+                            {discountPercentage > 0 && (
                               <span
                                 className="discount-badge"
                                 style={{
@@ -860,7 +918,7 @@ export default function ProductGrid({
                                   animation: "bounce 2s infinite",
                                 }}
                               >
-                                -%{p.discountPercentage}
+                                -%{discountPercentage}
                               </span>
                             )}
                           </div>
@@ -878,7 +936,7 @@ export default function ProductGrid({
                               textShadow: "0 2px 4px rgba(255,107,53,0.3)",
                             }}
                           >
-                            {p.price.toFixed(2)} TL
+                            {currentPrice.toFixed(2)} TL
                           </div>
                         </div>
                       ) : (
@@ -895,7 +953,24 @@ export default function ProductGrid({
                             display: "inline-block",
                           }}
                         >
-                          {p.price.toFixed(2)} TL
+                          {currentPrice.toFixed(2)} TL
+                        </div>
+                      )}
+
+                      {(isLowStock || isOutOfStock) && (
+                        <div className="mt-2">
+                          <span
+                            className={`badge ${
+                              isOutOfStock ? "bg-danger" : "bg-warning text-dark"
+                            }`}
+                          >
+                            {isOutOfStock ? "Stokta Yok" : "Az Stok"}
+                          </span>
+                          {!isOutOfStock && (
+                            <small className="ms-2 text-muted">
+                              {stock} adet kaldı
+                            </small>
+                          )}
                         </div>
                       )}
                     </div>
@@ -922,8 +997,10 @@ export default function ProductGrid({
                           textTransform: "uppercase",
                           letterSpacing: "0.5px",
                         }}
+                        disabled={isOutOfStock}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (isOutOfStock) return;
                           // open modal to choose quantity
                           setSelectedProduct(p);
                           // find rule for this product
@@ -1009,14 +1086,15 @@ export default function ProductGrid({
                         }}
                       >
                         <i className="fas fa-shopping-cart me-2"></i>
-                        Sepete Ekle
+                        {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
