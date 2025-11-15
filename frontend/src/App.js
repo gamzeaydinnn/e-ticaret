@@ -47,6 +47,15 @@ import Profile from "./pages/Profile";
 import Addresses from "./pages/Addresses";
 import Campaigns from "./pages/Campaigns.jsx";
 import CampaignDetail from "./pages/CampaignDetail.jsx";
+import HelpCenter from "./pages/HelpCenter.jsx";
+import Contact from "./pages/Contact.jsx";
+import Returns from "./pages/Returns.jsx";
+import ShippingInfo from "./pages/ShippingInfo.jsx";
+import PaymentOptions from "./pages/PaymentOptions.jsx";
+import SecurityInfo from "./pages/SecurityInfo.jsx";
+import Faq from "./pages/Faq.jsx";
+import Feedback from "./pages/Feedback.jsx";
+import { GlobalToastContainer } from "./components/ToastProvider";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -85,6 +94,7 @@ function Header() {
 
   return (
     <div className="App">
+      <GlobalToastContainer />
       {/* Main Header */}
       <header className="main-header bg-white shadow-sm py-1">
         <div className="container-fluid px-4">
@@ -556,6 +566,16 @@ function App() {
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/addresses" element={<Addresses />} />
+            {/* Destek / Bilgi sayfaları */}
+            <Route path="/yardim" element={<HelpCenter />} />
+            <Route path="/iletisim" element={<Contact />} />
+            <Route path="/siparis-takibi" element={<OrderTracking />} />
+            <Route path="/iade-degisim" element={<Returns />} />
+            <Route path="/kargo-bilgileri" element={<ShippingInfo />} />
+            <Route path="/odeme-secenekleri" element={<PaymentOptions />} />
+            <Route path="/guvenli-alisveris" element={<SecurityInfo />} />
+            <Route path="/sss" element={<Faq />} />
+            <Route path="/geri-bildirim" element={<Feedback />} />
 
             {/* Admin giriş noktası */}
             <Route path="/admin" element={<AdminIndex />} />
@@ -1054,49 +1074,49 @@ function HomePage() {
               <h6 className="footer-title">Müşteri Hizmetleri</h6>
               <ul className="footer-links">
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/yardim" className="footer-link">
                     Yardım Merkezi
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link text-warning">
+                  <Link to="/iletisim" className="footer-link text-warning">
                     İletişim
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/siparis-takibi" className="footer-link">
                     Sipariş Takibi
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/iade-degisim" className="footer-link">
                     İade & Değişim
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/kargo-bilgileri" className="footer-link">
                     Kargo Bilgileri
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/odeme-secenekleri" className="footer-link">
                     Ödeme Seçenekleri
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/guvenli-alisveris" className="footer-link">
                     Güvenli Alışveriş
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/sss" className="footer-link">
                     S.S.S
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/geri-bildirim" className="footer-link">
                     Geri Bildirim
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
