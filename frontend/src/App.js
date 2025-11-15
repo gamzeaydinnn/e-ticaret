@@ -5,6 +5,7 @@ import {
   Route,
   Link,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
@@ -56,10 +57,12 @@ import SecurityInfo from "./pages/SecurityInfo.jsx";
 import Faq from "./pages/Faq.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import { GlobalToastContainer } from "./components/ToastProvider";
+import Footer from "./components/Footer";
 
 function Header() {
   const { count: cartCount } = useCartCount();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -491,28 +494,98 @@ function Header() {
       <nav className="single-line-categories">
         <div className="container-fluid">
           <div className="category-scroll-container">
-            <button className="category-btn active" type="button" onClick={() => navigate("/")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname === "/" ? " active" : "")
+              }
+              type="button"
+              onClick={() => navigate("/")}
+            >
               KATEGORİLER
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/meyve-sebze")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/meyve-sebze")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/meyve-sebze")}
+            >
               MEYVE &amp; SEBZE
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/et-tavuk-balik")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/et-tavuk-balik")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/et-tavuk-balik")}
+            >
               ET &amp; TAVUK &amp; BALIK
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/sut-urunleri")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/sut-urunleri")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/sut-urunleri")}
+            >
               SÜT ÜRÜNLERİ
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/temel-gida")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/temel-gida")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/temel-gida")}
+            >
               TEMEL GIDA
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/icecekler")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/icecekler")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/icecekler")}
+            >
               İÇECEKLER
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/atistirmalik")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/atistirmalik")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/atistirmalik")}
+            >
               ATIŞTIRMALIK
             </button>
-            <button className="category-btn" type="button" onClick={() => navigate("/category/temizlik")}>
+            <button
+              className={
+                "category-btn" +
+                (location.pathname.startsWith("/category/temizlik")
+                  ? " active"
+                  : "")
+              }
+              type="button"
+              onClick={() => navigate("/category/temizlik")}
+            >
               TEMİZLİK
             </button>
             <button
@@ -543,12 +616,13 @@ function Header() {
 }
 
 function App() {
+  const location = useLocation();
+  const showGlobalFooter = location.pathname !== "/";
+
   return (
-    <AuthProvider>
-      <Router>
-        <div className="App">
-          <Header />
-          <Routes>
+    <div className="App">
+      <Header />
+      <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/cart" element={<CartPage />} />
@@ -670,7 +744,16 @@ function App() {
             <Route path="/courier/dashboard" element={<CourierDashboard />} />
             <Route path="/courier/orders" element={<CourierOrders />} />
           </Routes>
-        </div>
+      {showGlobalFooter && <Footer />}
+    </div>
+  );
+}
+
+function AppWithProviders() {
+  return (
+    <AuthProvider>
+      <Router>
+        <App />
       </Router>
     </AuthProvider>
   );
@@ -1249,4 +1332,4 @@ function HomePage() {
   );
 }
 
-export default App;
+export default AppWithProviders;
