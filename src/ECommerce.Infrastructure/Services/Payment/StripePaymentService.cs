@@ -25,13 +25,13 @@ namespace ECommerce.Infrastructure.Services.Payment
                 StripeConfiguration.ApiKey = _settings.StripeSecretKey;
             }
         }
-        public async Task<bool> ProcessPaymentAsync(int orderId, decimal amount)
+        public virtual async Task<bool> ProcessPaymentAsync(int orderId, decimal amount)
         {
             var init = await InitiateAsync(orderId, amount, "TRY");
             return init != null;
         }
 
-        public async Task<bool> CheckPaymentStatusAsync(string paymentId)
+        public virtual async Task<bool> CheckPaymentStatusAsync(string paymentId)
         {
             if (string.IsNullOrWhiteSpace(paymentId)) return false;
             var sessionService = new SessionService();
@@ -53,21 +53,21 @@ namespace ECommerce.Infrastructure.Services.Payment
             }
         }
 
-        public Task<int> GetPaymentCountAsync() => Task.FromResult(_db.Payments.Count());
+        public virtual Task<int> GetPaymentCountAsync() => Task.FromResult(_db.Payments.Count());
 
-        public async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
+        public virtual async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
         {
             var ok = await ProcessPaymentAsync(orderId, amount);
             return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
         }
 
-        public async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)
+        public virtual async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)
         {
             var ok = await CheckPaymentStatusAsync(paymentId);
             return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
         }
 
-        public async Task<PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency)
+        public virtual async Task<PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency)
         {
             // Create checkout session
             var successUrl = _settings.ReturnUrlSuccess ?? "https://example.com/success";

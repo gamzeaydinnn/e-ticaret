@@ -221,7 +221,59 @@ export default function ProductDetail() {
           <div>
             <h1 className="text-2xl font-bold mb-4">{product.name}</h1>
             <p className="mb-4">{product.description}</p>
-            <div className="text-xl font-semibold mb-4">₺{product.price}</div>
+            {(() => {
+              const basePrice = Number(product.price || 0);
+              const special = Number(
+                product.specialPrice ?? product.discountPrice ?? basePrice
+              );
+              const hasDiscount =
+                !Number.isNaN(special) &&
+                special > 0 &&
+                special < basePrice;
+              const currentPrice = hasDiscount ? special : basePrice;
+              const discountPct = hasDiscount
+                ? Math.round(100 - (currentPrice / basePrice) * 100)
+                : 0;
+
+              const stock =
+                product.stock ?? product.stockQuantity ?? null;
+              const isOutOfStock = typeof stock === "number" && stock <= 0;
+              const isLowStock =
+                typeof stock === "number" && stock > 0 && stock <= 5;
+
+              return (
+                <>
+                  <div className="mb-2">
+                    {hasDiscount && (
+                      <div className="mb-1">
+                        <span className="line-through text-gray-500 mr-2">
+                          ₺{basePrice.toFixed(2)}
+                        </span>
+                        <span className="inline-block bg-red-600 text-white text-xs px-2 py-1 rounded-full">
+                          -%{discountPct}
+                        </span>
+                      </div>
+                    )}
+                    <div className="text-2xl font-bold text-orange-600">
+                      ₺{currentPrice.toFixed(2)}
+                    </div>
+                  </div>
+                  {isOutOfStock && (
+                    <div className="text-red-600 font-semibold mb-3">
+                      Stokta Yok
+                    </div>
+                  )}
+                  {isLowStock && !isOutOfStock && (
+                    <div className="text-yellow-600 font-semibold mb-3">
+                      Az Stok{" "}
+                      {typeof stock === "number" && stock > 0
+                        ? `(${stock} adet kaldı)`
+                        : ""}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {variants.length > 0 && (
               <div className="mb-3">

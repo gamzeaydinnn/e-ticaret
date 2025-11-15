@@ -8,8 +8,8 @@ export const PaymentService = {
     api.post(`${base}/process`, { orderId, amount }),
 
   // Hosted checkout (Stripe Checkout / Iyzico) başlatır
-  initiate: (orderId, amount, currency = "TRY") =>
-    api.post(`${base}/init`, { orderId, amount, currency }),
+  initiate: (orderId, amount, paymentMethod, currency = "TRY") =>
+    api.post(`${base}/initiate`, { orderId, amount, paymentMethod, currency }),
 
   // Ödeme durumunu kontrol et
   checkPaymentStatus: (paymentId) =>
