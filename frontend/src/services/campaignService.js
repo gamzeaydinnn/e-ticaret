@@ -49,7 +49,20 @@ export const CampaignService = {
       debugLog("Campaigns - Mock data kullanılıyor");
       return mockCampaigns;
     }
-    return api.get("/api/campaigns");
+
+    try {
+      const data = await api.get("/api/campaigns");
+      // Backend hazır değilse ya da farklı shape dönerse güvenli tarafta kal
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      return mockCampaigns;
+    } catch (e) {
+      // Backend kampanya endpoint'i henüz yoksa (404 vb.) sessizce mock'a düş
+      debugLog("Campaigns API başarısız, mock'a düşülüyor", {
+        error: e?.message,
+      });
+      return mockCampaigns;
+    }
   },
 
   getBySlug: async (slug) => {
@@ -59,7 +72,19 @@ export const CampaignService = {
       if (!c) throw new Error("Kampanya bulunamadı");
       return c;
     }
-    return api.get(`/api/campaigns/${encodeURIComponent(slug)}`);
+
+    try {
+      const data = await api.get(`/api/campaigns/${encodeURIComponent(slug)}`);
+      if (data) return data.data || data;
+    } catch (e) {
+      debugLog("Campaign detail API başarısız, mock'a düşülüyor", {
+        slug,
+        error: e?.message,
+      });
+    }
+
+    const fallback = findMockBySlug(slug);
+    if (!fallback) throw new Error("Kampanya bulunamadı");
+    return fallback;
   },
 };
-
