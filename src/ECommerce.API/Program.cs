@@ -27,6 +27,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
+using ECommerce.Core.Interfaces;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -76,6 +77,9 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
         });
     }
 });
+
+// Global LoggerService (ILogService)
+builder.Services.AddScoped<ILogService, LoggerService>();
 
 builder.Services
     .AddIdentityCore<User>(options =>
@@ -414,6 +418,9 @@ app.MapGet("/api/csrf/token", (IAntiforgery antiforgery, HttpContext http) =>
 
 // Centralized CSRF validation + logging middleware
 app.UseMiddleware<ECommerce.API.Infrastructure.CsrfLoggingMiddleware>();
+
+// Global exception handler (en sonda değil, controller'lardan önce)
+app.UseMiddleware<ECommerce.API.Infrastructure.GlobalExceptionMiddleware>();
 
 app.MapControllers();
 app.Run();
