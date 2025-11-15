@@ -86,27 +86,33 @@ cd src/ECommerce.API
 dotnet restore
 ```
 
-3. Veritabanı sağlayıcısı ve ilk kurulum
+3. Docker ile lokal SQL Server çalıştırın:
 
-- Varsayılan: SQL Server. `src/ECommerce.API/appsettings.json` içinde:
-
-```
-"Database": { "Provider": "SqlServer" },
-"ConnectionStrings": { "DefaultConnection": "Server=localhost;Database=ECommerceDb;Trusted_Connection=True;TrustServerCertificate=True;" }
+```bash
+cd /Users/dilarasara/e-ticaret   # proje kökü
+docker compose up -d sqlserver
 ```
 
- 
+- Docker servisi: `ecommerce-sql`
+- Port: `1433`
+- Varsayılan kullanıcı: `sa`
+- Varsayılan şifre: `EComLocal!12345` (hem `docker-compose.yml` hem de `appsettings*.json` içinde aynı olmalı)
 
-- İlk şema seçenekleri:
-  - Migration ile:
-    ```bash
-    cd src/ECommerce.API
-    dotnet ef migrations add InitialCreate -p ../ECommerce.Data -s .
-    dotnet ef database update -p ../ECommerce.Data -s .
-    ```
-  - Geliştirme kolaylığı: Migration yoksa Development ortamında uygulama açılışında şema `EnsureCreated` ile oluşturulur.
+4. Veritabanı ve ilk kurulum
 
-4. Backend'i çalıştırın:
+- Backend ilk kez ayağa kalktığında:
+  - SQL Server üzerinde `ECommerceDb` veritabanı otomatik oluşturulur.
+  - EF Core migrations çalıştırılır.
+  - `IdentitySeeder` ile admin kullanıcı ve roller oluşturulur.
+
+Elle migration çalıştırmak isterseniz:
+
+```bash
+cd src/ECommerce.API
+dotnet ef database update -p ../ECommerce.Data -s .
+```
+
+5. Backend'i çalıştırın:
 
 ```bash
 dotnet run

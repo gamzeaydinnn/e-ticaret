@@ -69,10 +69,7 @@ export const CourierService = {
     if (USE_MOCK_DATA) {
       return Promise.resolve(mockCouriers);
     }
-    return api
-      .get(base)
-      .then((res) => res.data)
-      .catch(() => mockCouriers);
+    return api.get(base).catch(() => mockCouriers);
   },
 
   // Kurye giriş
@@ -87,9 +84,7 @@ export const CourierService = {
       }
       return Promise.reject({ message: "Geçersiz giriş bilgileri" });
     }
-    return api
-      .post(`${base}/login`, { email, password })
-      .then((res) => res.data);
+    return api.post(`${base}/login`, { email, password });
   },
 
   // Kurye siparişlerini listele
@@ -97,10 +92,7 @@ export const CourierService = {
     if (USE_MOCK_DATA) {
       return Promise.resolve(mockOrders);
     }
-    return api
-      .get(`${base}/${courierId}/orders`)
-      .then((res) => res.data)
-      .catch(() => mockOrders);
+    return api.get(`${base}/${courierId}/orders`).catch(() => mockOrders);
   },
 
   // Sipariş durumunu güncelle
@@ -114,9 +106,7 @@ export const CourierService = {
       }
       return Promise.resolve({ success: true, order });
     }
-    return api
-      .patch(`${base}/orders/${orderId}/status`, { status, notes })
-      .then((res) => res.data);
+    return api.patch(`${base}/orders/${orderId}/status`, { status, notes });
   },
 
   // Admin için kurye performans raporu
@@ -142,9 +132,7 @@ export const CourierService = {
         ],
       });
     }
-    return api
-      .get(`${base}/${courierId}/performance`, { params: { period } })
-      .then((res) => res.data);
+    return api.get(`${base}/${courierId}/performance`, { params: { period } });
   },
 
   // Sipariş ağırlık raporlarını getir
@@ -175,14 +163,11 @@ export const CourierService = {
   },
 
   // Mevcut metotlar korunuyor
-  getById: (id) => api.get(`${base}/${id}`).then((res) => res.data),
-  add: (courier) => api.post(base, courier).then((res) => res.data),
-  update: (id, courier) =>
-    api.put(`${base}/${id}`, courier).then((res) => res.data),
-  remove: (id) => api.delete(`${base}/${id}`).then((res) => res.data),
-  myOrders: () => api.get("/courier/orders").then((res) => res.data),
+  getById: (id) => api.get(`${base}/${id}`),
+  add: (courier) => api.post(base, courier),
+  update: (id, courier) => api.put(`${base}/${id}`, courier),
+  remove: (id) => api.delete(`${base}/${id}`),
+  myOrders: () => api.get("/api/courier/orders"),
   updateStatus: (orderId, status) =>
-    api
-      .post(`/courier/orders/${orderId}/status`, { status })
-      .then((res) => res.data),
+    api.post(`/api/courier/orders/${orderId}/status`, { status }),
 };

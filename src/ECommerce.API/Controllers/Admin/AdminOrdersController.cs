@@ -56,6 +56,21 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(order);
         }
 
-      
+        [HttpPut("{id}/status")]
+        public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] OrderStatusUpdateDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
+                return BadRequest(new { message = "Status alanı zorunludur." });
+
+            await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            return NoContent();
+        }
+
+        [HttpGet("recent")]
+        public async Task<IActionResult> GetRecentOrders([FromQuery] int count = 5)
+        {
+            var orders = await _orderService.GetRecentOrdersAsync(count);
+            return Ok(orders);
+        }
     }
 }

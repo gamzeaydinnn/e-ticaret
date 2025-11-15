@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Constants;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Extensions;
 using ECommerce.API.Infrastructure;
@@ -17,6 +18,50 @@ namespace ECommerce.API.Controllers
         public OrdersController(IOrderService orderService)
         {
             _orderService = orderService;
+        }
+
+        /// <summary>
+        /// Kullanıcının siparişlerini listeler.
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> GetOrders([FromQuery] int? userId = null)
+        {
+            var effectiveUserId = ResolveUserId(userId);
+            if (!effectiveUserId.HasValue)
+                return BadRequest(new { message = "userId bulunamadı. Giriş yapın veya userId parametresi gönderin." });
+
+            var orders = await _orderService.GetOrdersAsync(effectiveUserId);
+            return Ok(orders);
+        }
+
+        /// <summary>
+        /// Tek bir siparişin detayını döner.
+        /// </summary>
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetOrder(int id, [FromQuery] int? userId = null)
+        {
+            var order = await _orderService.GetByIdAsync(id);
+            if (order == null)
+                return NotFound();
+
+            var effectiveUserId = ResolveUserId(userId);
+            if (effectiveUserId.HasValue && order.UserId != effectiveUserId.Value)
+                return Forbid();
+
+            return Ok(order);
+        }
+
+        /// <summary>
+        /// Admin panelinden manuel sipariş oluşturma senaryoları için basit endpoint.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
+        {
+            if (dto == null)
+                return BadRequest(new { message = "Geçersiz istek gövdesi" });
+
+            var order = await _orderService.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
         }
 
         /// <summary>
@@ -74,6 +119,31 @@ namespace ECommerce.API.Controllers
             var pdfBytes = InvoiceGenerator.Generate(orderDetail);
             return File(pdfBytes, "application/pdf", $"invoice-{orderId}.pdf");
         }
+
+        /// <summary>
+        /// Sipariş durumunu günceller (sadece adminler).
+        /// </summary>
+        [HttpPatch("{id:int}/status")]
+        [Authorize(Roles = Roles.Admin)]
+        public async Task<IActionResult> UpdateStatus(int id, [FromBody] OrderStatusUpdateDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
+                return BadRequest(new { message = "Status alanı zorunludur." });
+
+            await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            return NoContent();
+        }
+
+        private int? ResolveUserId(int? incomingUserId)
+        {
+            if (incomingUserId.HasValue && incomingUserId.Value > 0)
+                return incomingUserId;
+
+            var claimUserId = User.GetUserId();
+            if (claimUserId > 0)
+                return claimUserId;
+
+            return null;
+        }
     }
 }
-
