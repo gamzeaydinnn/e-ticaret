@@ -56,6 +56,11 @@ import PaymentOptions from "./pages/PaymentOptions.jsx";
 import SecurityInfo from "./pages/SecurityInfo.jsx";
 import Faq from "./pages/Faq.jsx";
 import Feedback from "./pages/Feedback.jsx";
+import About from "./pages/About.jsx";
+import VisionMission from "./pages/VisionMission.jsx";
+import Career from "./pages/Career.jsx";
+import PressKit from "./pages/PressKit.jsx";
+import Sustainability from "./pages/Sustainability.jsx";
 import { GlobalToastContainer } from "./components/ToastProvider";
 import Footer from "./components/Footer";
 
@@ -650,6 +655,11 @@ function App() {
             <Route path="/guvenli-alisveris" element={<SecurityInfo />} />
             <Route path="/sss" element={<Faq />} />
             <Route path="/geri-bildirim" element={<Feedback />} />
+            <Route path="/hakkimizda" element={<About />} />
+            <Route path="/vizyon-misyon" element={<VisionMission />} />
+            <Route path="/kariyer" element={<Career />} />
+            <Route path="/basin-kiti" element={<PressKit />} />
+            <Route path="/surdurulebilirlik" element={<Sustainability />} />
 
             {/* Admin giriş noktası */}
             <Route path="/admin" element={<AdminIndex />} />
@@ -1251,29 +1261,29 @@ function HomePage() {
               <h6 className="footer-title">Kurumsal</h6>
               <ul className="footer-links">
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/hakkimizda" className="footer-link">
                     Hakkımızda
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/vizyon-misyon" className="footer-link">
                     Vizyon & Misyon
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/kariyer" className="footer-link">
                     Kariyer (Yakında)
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/basin-kiti" className="footer-link">
                     Basın Kiti
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="footer-link">
+                  <Link to="/surdurulebilirlik" className="footer-link">
                     Sürdürülebilirlik
-                  </a>
+                  </Link>
                 </li>
               </ul>
 

@@ -190,34 +190,34 @@ export default function Footer() {
 
           {/* Corporate */}
           <div className="col-lg-3 col-md-6 mb-4">
-            <h6 className="footer-title">Kurumsal</h6>
-            <ul className="footer-links">
-              <li>
-                <a href="#" className="footer-link">
-                  Hakkımızda
-                </a>
-              </li>
-              <li>
-                <a href="#" className="footer-link">
-                  Vizyon & Misyon
-                </a>
-              </li>
-              <li>
-                <a href="#" className="footer-link">
-                  Kariyer (Yakında)
-                </a>
-              </li>
-              <li>
-                <a href="#" className="footer-link">
-                  Basın Kiti
-                </a>
-              </li>
-              <li>
-                <a href="#" className="footer-link">
-                  Sürdürülebilirlik
-                </a>
-              </li>
-            </ul>
+              <h6 className="footer-title">Kurumsal</h6>
+              <ul className="footer-links">
+                <li>
+                  <Link to="/hakkimizda" className="footer-link">
+                    Hakkımızda
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/vizyon-misyon" className="footer-link">
+                    Vizyon & Misyon
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/kariyer" className="footer-link">
+                    Kariyer (Yakında)
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/basin-kiti" className="footer-link">
+                    Basın Kiti
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/surdurulebilirlik" className="footer-link">
+                    Sürdürülebilirlik
+                  </Link>
+                </li>
+              </ul>
 
             {/* Social Media */}
             <div className="social-media mt-4">
@@ -284,4 +284,3 @@ export default function Footer() {
     </footer>
   );
 }
-
