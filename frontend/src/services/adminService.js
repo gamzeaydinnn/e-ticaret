@@ -203,6 +203,167 @@ let mockProducts = [
   },
 ];
 
+let mockCoupons = [
+  {
+    id: 1,
+    code: "WELCOME10",
+    isPercentage: true,
+    value: 10,
+    expirationDate: "2024-12-31T00:00:00Z",
+    minOrderAmount: 200,
+    usageLimit: 500,
+    isActive: true,
+  },
+  {
+    id: 2,
+    code: "KARGO50",
+    isPercentage: false,
+    value: 50,
+    expirationDate: "2024-11-15T00:00:00Z",
+    minOrderAmount: 300,
+    usageLimit: 100,
+    isActive: true,
+  },
+  {
+    id: 3,
+    code: "VIP20",
+    isPercentage: true,
+    value: 20,
+    expirationDate: "2024-10-30T00:00:00Z",
+    minOrderAmount: 500,
+    usageLimit: 50,
+    isActive: false,
+  },
+];
+
+const mockLowStockReport = {
+  threshold: 5,
+  products: [
+    { id: 6, name: "Domates Kg", stockQuantity: 4 },
+    { id: 7, name: "Salatalık Kg", stockQuantity: 3 },
+    { id: 13, name: "Cif Krem Temizleyici", stockQuantity: 2 },
+  ],
+};
+
+const mockInventoryMovements = [
+  {
+    id: 1,
+    productId: 4,
+    productName: "Pınar Süt 1L",
+    changeQuantity: 25,
+    changeType: "Inbound",
+    createdAt: "2024-10-08T08:30:00Z",
+    note: "Depo girişi",
+  },
+  {
+    id: 2,
+    productId: 1,
+    productName: "Dana Kuşbaşı",
+    changeQuantity: -5,
+    changeType: "Outbound",
+    createdAt: "2024-10-08T11:45:00Z",
+    note: "Online satış",
+  },
+  {
+    id: 3,
+    productId: 12,
+    productName: "Tahıl Cipsi 150gr",
+    changeQuantity: 40,
+    changeType: "Inbound",
+    createdAt: "2024-10-07T14:10:00Z",
+    note: "Tedarikçi teslimatı",
+  },
+  {
+    id: 4,
+    productId: 6,
+    productName: "Domates Kg",
+    changeQuantity: -12,
+    changeType: "Outbound",
+    createdAt: "2024-10-06T09:20:00Z",
+    note: "Mağaza satışı",
+  },
+];
+
+const mockSalesReports = {
+  daily: {
+    ordersCount: 38,
+    revenue: 12450.75,
+    itemsSold: 92,
+    topProducts: [
+      { productId: 4, quantity: 18 },
+      { productId: 7, quantity: 15 },
+      { productId: 1, quantity: 11 },
+    ],
+  },
+  weekly: {
+    ordersCount: 210,
+    revenue: 86540.1,
+    itemsSold: 476,
+    topProducts: [
+      { productId: 6, quantity: 62 },
+      { productId: 2, quantity: 55 },
+      { productId: 13, quantity: 48 },
+    ],
+  },
+  monthly: {
+    ordersCount: 840,
+    revenue: 342980.44,
+    itemsSold: 1904,
+    topProducts: [
+      { productId: 4, quantity: 210 },
+      { productId: 6, quantity: 198 },
+      { productId: 1, quantity: 156 },
+    ],
+  },
+};
+
+const mockErpSyncStatus = {
+  groups: [
+    {
+      entity: "Products",
+      direction: "Outbound",
+      lastAttemptAt: "2024-10-09T10:32:00Z",
+      lastStatus: "Success",
+      lastSuccessAt: "2024-10-09T10:32:00Z",
+      updatedCount: 32,
+      recentCount: 124,
+      lastError: "",
+    },
+    {
+      entity: "Stocks",
+      direction: "Inbound",
+      lastAttemptAt: "2024-10-09T09:15:00Z",
+      lastStatus: "Success",
+      lastSuccessAt: "2024-10-09T09:15:00Z",
+      updatedCount: 68,
+      recentCount: 68,
+      lastError: "",
+    },
+    {
+      entity: "Prices",
+      direction: "Inbound",
+      lastAttemptAt: "2024-10-08T21:00:00Z",
+      lastStatus: "Failed",
+      lastSuccessAt: "2024-10-08T08:20:00Z",
+      updatedCount: 0,
+      recentCount: 40,
+      lastError: "ERP bağlantısı zaman aşımına uğradı",
+    },
+    {
+      entity: "Orders",
+      direction: "Outbound",
+      lastAttemptAt: "2024-10-09T07:45:00Z",
+      lastStatus: "Success",
+      lastSuccessAt: "2024-10-09T07:45:00Z",
+      updatedCount: 23,
+      recentCount: 23,
+      lastError: "",
+    },
+  ],
+};
+
+const clone = (data) => JSON.parse(JSON.stringify(data));
+
 const ensureBackend = () => {
   if (!isBackendAvailable()) {
     throw new Error(
@@ -453,10 +614,30 @@ export const AdminService = {
 
   // Reports
   getLowStockProducts: async () => {
+    if (shouldUseMockData()) {
+      return clone(mockLowStockReport);
+    }
+    ensureBackend();
     const res = await api.get("/api/admin/reports/stock/low");
     return res;
   },
   getInventoryMovements: async ({ from, to } = {}) => {
+    if (shouldUseMockData()) {
+      const fromDate = from ? new Date(`${from}T00:00:00`) : null;
+      const toDate = to ? new Date(`${to}T23:59:59`) : null;
+      const filtered = mockInventoryMovements.filter((m) => {
+        const ts = new Date(m.createdAt).getTime();
+        if (fromDate && ts < fromDate.getTime()) return false;
+        if (toDate && ts > toDate.getTime()) return false;
+        return true;
+      });
+      return {
+        start: fromDate ? fromDate.toISOString() : null,
+        end: toDate ? toDate.toISOString() : null,
+        movements: clone(filtered),
+      };
+    }
+    ensureBackend();
     const params = [];
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
@@ -465,10 +646,24 @@ export const AdminService = {
     return res;
   },
   getSalesReport: async (period = "daily") => {
+    if (shouldUseMockData()) {
+      const key = String(period || "daily").toLowerCase();
+      const data = mockSalesReports[key] || mockSalesReports.daily;
+      return clone(data);
+    }
+    ensureBackend();
     const res = await api.get(`/api/admin/reports/sales?period=${encodeURIComponent(period)}`);
     return res;
   },
   getErpSyncStatus: async ({ from, to } = {}) => {
+    if (shouldUseMockData()) {
+      return {
+        from,
+        to,
+        groups: clone(mockErpSyncStatus.groups),
+      };
+    }
+    ensureBackend();
     const params = [];
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
@@ -477,11 +672,65 @@ export const AdminService = {
   },
   
   // Coupons
-  getCoupons: async () => api.get("/api/admin/coupons"),
-  getCoupon: async (id) => api.get(`/api/admin/coupons/${id}`),
-  createCoupon: async (coupon) => api.post("/api/admin/coupons", coupon),
-  updateCoupon: async (id, coupon) => api.put(`/api/admin/coupons/${id}`, coupon),
-  deleteCoupon: async (id) => api.delete(`/api/admin/coupons/${id}`),
+  getCoupons: async () => {
+    if (shouldUseMockData()) {
+      debugLog("Admin Coupons - Mock data kullanılıyor");
+      return clone(mockCoupons);
+    }
+    ensureBackend();
+    return api.get("/api/admin/coupons");
+  },
+  getCoupon: async (id) => {
+    if (shouldUseMockData()) {
+      const coupon = mockCoupons.find((c) => c.id === Number(id));
+      if (!coupon) throw new Error("Kupon bulunamadı");
+      return { ...coupon };
+    }
+    ensureBackend();
+    return api.get(`/api/admin/coupons/${id}`);
+  },
+  createCoupon: async (coupon) => {
+    if (shouldUseMockData()) {
+      const nextId =
+        mockCoupons.length > 0 ? Math.max(...mockCoupons.map((c) => c.id)) + 1 : 1;
+      const prepared = {
+        ...coupon,
+        id: nextId,
+        usageLimit:
+          coupon.usageLimit == null || Number.isNaN(coupon.usageLimit)
+            ? 1
+            : Number(coupon.usageLimit),
+      };
+      mockCoupons.push(prepared);
+      return { ...prepared };
+    }
+    ensureBackend();
+    return api.post("/api/admin/coupons", coupon);
+  },
+  updateCoupon: async (id, coupon) => {
+    if (shouldUseMockData()) {
+      const idx = mockCoupons.findIndex((c) => c.id === Number(id));
+      if (idx === -1) throw new Error("Kupon bulunamadı");
+      mockCoupons[idx] = {
+        ...mockCoupons[idx],
+        ...coupon,
+        id: mockCoupons[idx].id,
+      };
+      return { ...mockCoupons[idx] };
+    }
+    ensureBackend();
+    return api.put(`/api/admin/coupons/${id}`, coupon);
+  },
+  deleteCoupon: async (id) => {
+    if (shouldUseMockData()) {
+      const idx = mockCoupons.findIndex((c) => c.id === Number(id));
+      if (idx === -1) throw new Error("Kupon bulunamadı");
+      mockCoupons.splice(idx, 1);
+      return { success: true };
+    }
+    ensureBackend();
+    return api.delete(`/api/admin/coupons/${id}`);
+  },
 };
 
 export default AdminService;
