@@ -9,6 +9,9 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  const isAdminLike =
+    user?.role === "Admin" || user?.role === "SuperAdmin";
+
   const menuItems = [
     {
       path: "/admin/dashboard",
@@ -95,7 +98,11 @@ export default function AdminLayout({ children }) {
         </div>
 
         <nav className="mt-2">
-          {menuItems.map((item, index) => (
+          {menuItems.map((item, index) => {
+            if (item.path === "/admin/users" && !isAdminLike) {
+              return null;
+            }
+            return (
             <Link
               key={item.path}
               to={item.path}
@@ -180,7 +187,8 @@ export default function AdminLayout({ children }) {
                 </span>
               )}
             </Link>
-          ))}
+            );
+          })}
         </nav>
       </div>
 

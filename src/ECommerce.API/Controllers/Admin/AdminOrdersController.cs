@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = Roles.Admin)] // sadece admin erişebilir
+    [Authorize(Roles = Roles.AdminLike)] // sadece admin erişebilir
     [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {

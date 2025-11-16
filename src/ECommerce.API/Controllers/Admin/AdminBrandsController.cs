@@ -8,7 +8,7 @@ using ECommerce.Core.Interfaces;
 
 namespace ECommerce.API.Controllers.Admin
 {
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.AdminLike)]
     [ApiController]
     [Route("api/admin/brands")] // api/admin/brands
     public class AdminBrandsController : ControllerBase

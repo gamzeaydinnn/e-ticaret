@@ -13,7 +13,7 @@ namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]
 [Route("api/admin/products")]
-    [Authorize(Roles = Roles.AdminAll)]
+    [Authorize(Roles = Roles.AdminLike)]
 
 public class AdminProductsController : ControllerBase
 {

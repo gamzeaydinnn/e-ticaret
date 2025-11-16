@@ -15,7 +15,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/reports")]
-    [Authorize(Roles = Roles.AdminAll)]
+    [Authorize(Roles = Roles.AdminLike)]
     public class AdminReportsController : ControllerBase
     {
         private readonly ECommerceDbContext _context;

@@ -468,6 +468,14 @@ export const AdminService = {
       throw error;
     }
   },
+  createUser: async (payload) => {
+    ensureBackend();
+    return api.post("/api/admin/users", payload);
+  },
+  updateUserRole: async (id, role) => {
+    ensureBackend();
+    return api.put(`/api/admin/users/${id}/role`, { role });
+  },
 
   // Categories
   getCategories: async () => {

@@ -9,7 +9,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/categories")]
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.AdminLike)]
     public class AdminCategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;

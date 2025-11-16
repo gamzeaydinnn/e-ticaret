@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ECommerce.Core.Constants;
 using ECommerce.Core.DTOs.Inventory;
 using ECommerce.Core.Interfaces;
 
@@ -9,7 +10,7 @@ namespace ECommerce.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "SuperAdmin,Admin,Manager")] // Market personeli için ayrı rol eklenebilir
+    [Authorize(Roles = Roles.AdminLike)]
     public class POSController : ControllerBase
     {
         private readonly IProductRepository _products;
@@ -71,4 +72,3 @@ namespace ECommerce.API.Controllers
         }
     }
 }
-

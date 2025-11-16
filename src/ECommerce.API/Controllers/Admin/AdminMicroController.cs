@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 namespace ECommerce.API.Controllers.Admin
 {
-    // Sadece "Admin" rolüne sahip kullanıcıların erişimine izin verir
-    [Authorize(Roles = Roles.Admin)]
+    // Sadece yönetici rollerinin erişimine izin verir
+    [Authorize(Roles = Roles.AdminLike)]
     [ApiController]
     // Rota: api/admin/micro
     [Route("api/admin/micro")] 
