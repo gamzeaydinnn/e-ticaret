@@ -38,6 +38,9 @@ namespace ECommerce.Data.Context
         public virtual DbSet<InventoryLog> InventoryLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
+        public virtual DbSet<Campaign> Campaigns { get; set; }
+        public virtual DbSet<CampaignRule> CampaignRules { get; set; }
+        public virtual DbSet<CampaignReward> CampaignRewards { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -193,6 +196,33 @@ modelBuilder.Entity<ProductVariant>()
                         .WithMany()
                         .HasForeignKey(r => r.UserId)
                         .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Campaign>(entity =>
+            {
+                entity.ToTable("Campaigns");
+                entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(1000);
+            });
+
+            modelBuilder.Entity<CampaignRule>(entity =>
+            {
+                entity.ToTable("CampaignRules");
+                entity.Property(e => e.ConditionJson).IsRequired();
+                entity.HasOne(e => e.Campaign)
+                      .WithMany(c => c.Rules)
+                      .HasForeignKey(e => e.CampaignId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CampaignReward>(entity =>
+            {
+                entity.ToTable("CampaignRewards");
+                entity.Property(e => e.RewardType).HasMaxLength(50).IsRequired();
+                entity.HasOne(e => e.Campaign)
+                      .WithMany(c => c.Rewards)
+                      .HasForeignKey(e => e.CampaignId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
 
             modelBuilder.Entity<RefreshToken>(entity =>
             {

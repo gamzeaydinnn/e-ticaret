@@ -6,6 +6,7 @@ using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Validators;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using ECommerce.Core.Interfaces;
 
 
 namespace ECommerce.API.Controllers
@@ -15,7 +16,13 @@ namespace ECommerce.API.Controllers
     public class CartItemsController : ControllerBase
     {
         private readonly ECommerceDbContext _context;
-        public CartItemsController(ECommerceDbContext context) => _context = context;
+        private readonly IPricingEngine _pricingEngine;
+
+        public CartItemsController(ECommerceDbContext context, IPricingEngine pricingEngine)
+        {
+            _context = context;
+            _pricingEngine = pricingEngine;
+        }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<CartItem>>> GetCartItems()
@@ -78,6 +85,32 @@ namespace ECommerce.API.Controllers
             _context.CartItems.Remove(item);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        public class CartPricePreviewRequest
+        {
+            public List<Core.DTOs.Pricing.CartItemInputDto> Items { get; set; } = new();
+            public string? CouponCode { get; set; }
+        }
+
+        [HttpPost("price-preview")]
+        public async Task<IActionResult> PricePreview([FromBody] CartPricePreviewRequest request)
+        {
+            if (request == null || request.Items == null || request.Items.Count == 0)
+            {
+                return BadRequest(new { message = "Geçersiz sepet verisi." });
+            }
+
+            int? userId = null;
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+            if (!string.IsNullOrEmpty(userIdClaim) && int.TryParse(userIdClaim, out var parsed))
+            {
+                userId = parsed;
+            }
+
+            var pricingResult = await _pricingEngine.CalculateCartAsync(userId, request.Items, request.CouponCode);
+            return Ok(pricingResult);
         }
     }
 }

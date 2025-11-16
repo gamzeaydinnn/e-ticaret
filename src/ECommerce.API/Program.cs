@@ -163,6 +163,7 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<ICampaignRepository, CampaignRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 
 // Services  
@@ -191,6 +192,7 @@ builder.Services.AddScoped<IDiscountRepository, DiscountRepository>();
 builder.Services.AddScoped<IReviewRepository, ReviewRepository>();
 builder.Services.AddScoped<IAddressRepository, AddressRepository>();
 builder.Services.AddScoped<ICouponRepository, CouponRepository>();
+builder.Services.AddScoped<IPricingEngine, PricingEngine>();
 
 builder.Services.AddScoped<IBannerRepository, ECommerce.Infrastructure.Services.BannerRepository>();
 
@@ -204,6 +206,7 @@ builder.Services.AddScoped<ICouponService, CouponManager>();
 builder.Services.AddScoped<ICategoryService, CategoryManager>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
+builder.Services.AddScoped<ICampaignService, CampaignManager>();
 
 // vs.
 

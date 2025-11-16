@@ -97,4 +97,7 @@ export const CartService = {
   setShippingMethod: (method) => {
     localStorage.setItem("shippingMethod", method);
   },
+
+  previewPrice: (payload) =>
+    api.post("/api/cartitems/price-preview", payload).then((res) => res.data),
 };

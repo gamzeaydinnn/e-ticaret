@@ -33,6 +33,7 @@ import AdminCategories from "./pages/Admin/AdminCategories.jsx";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
 import CouponManagement from "./pages/Admin/CouponManagement";
+import AdminCampaigns from "./pages/Admin/AdminCampaigns";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -745,6 +746,14 @@ function App() {
               element={
                 <AdminGuard>
                   <CouponManagement />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/campaigns"
+              element={
+                <AdminGuard>
+                  <AdminCampaigns />
                 </AdminGuard>
               }
             />

@@ -10,7 +10,7 @@ export default function AdminLayout({ children }) {
   const { user, logout } = useAuth();
 
   const isAdminLike =
-    user?.role === "Admin" || user?.role === "SuperAdmin";
+    user?.role === "Admin" || user?.role === "SuperAdmin" || user?.isAdmin;
 
   const menuItems = [
     {
@@ -25,11 +25,22 @@ export default function AdminLayout({ children }) {
       icon: "fas fa-shopping-cart",
       label: "Siparişler",
     },
-    { path: "/admin/users", icon: "fas fa-users", label: "Kullanıcılar" },
+    {
+      path: "/admin/users",
+      icon: "fas fa-users",
+      label: "Kullanıcılar",
+      adminOnly: true,
+    },
     { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
     { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
     { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
     { path: "/admin/coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
+    {
+      path: "/admin/campaigns",
+      icon: "fas fa-gift",
+      label: "Kampanya Yönetimi",
+      adminOnly: true,
+    },
   ];
 
   const handleLogout = () => {
@@ -94,42 +105,42 @@ export default function AdminLayout({ children }) {
 
         <nav className="mt-2">
           {menuItems.map((item) => {
-            if (item.path === "/admin/users" && !isAdminLike) {
+            if (item.adminOnly && !isAdminLike) {
               return null;
             }
             return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="d-block text-decoration-none px-3 py-3 text-white"
-              style={{
-                transition: "all 0.2s",
-                background:
-                  location.pathname === item.path
-                    ? "linear-gradient(135deg, #f57c00, #ff9800)"
-                    : "transparent",
-                borderLeft:
-                  location.pathname === item.path
-                    ? "3px solid #fff"
-                    : "3px solid transparent",
-              }}
-              onMouseEnter={(e) => {
-                if (location.pathname !== item.path) {
-                  e.target.style.backgroundColor = "rgba(245, 124, 0, 0.1)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (location.pathname !== item.path) {
-                  e.target.style.backgroundColor = "transparent";
-                }
-              }}
-            >
-              <i
-                className={`${item.icon} me-3`}
-                style={{ width: "20px", fontSize: "0.9rem" }}
-              ></i>
-              <span style={{ fontSize: "0.9rem" }}>{item.label}</span>
-            </Link>
+              <Link
+                key={item.path}
+                to={item.path}
+                className="d-block text-decoration-none px-3 py-3 text-white"
+                style={{
+                  transition: "all 0.2s",
+                  background:
+                    location.pathname === item.path
+                      ? "linear-gradient(135deg, #f57c00, #ff9800)"
+                      : "transparent",
+                  borderLeft:
+                    location.pathname === item.path
+                      ? "3px solid #fff"
+                      : "3px solid transparent",
+                }}
+                onMouseEnter={(e) => {
+                  if (location.pathname !== item.path) {
+                    e.target.style.backgroundColor = "rgba(245, 124, 0, 0.1)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (location.pathname !== item.path) {
+                    e.target.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                <i
+                  className={`${item.icon} me-3`}
+                  style={{ width: "20px", fontSize: "0.9rem" }}
+                ></i>
+                <span style={{ fontSize: "0.9rem" }}>{item.label}</span>
+              </Link>
             );
           })}
         </nav>
