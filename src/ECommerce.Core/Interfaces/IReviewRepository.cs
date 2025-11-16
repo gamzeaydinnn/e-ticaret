@@ -7,8 +7,9 @@ namespace ECommerce.Core.Interfaces
     // DEĞİŞİKLİK: IRepository<Review> yerine IRepository<ProductReview> kullanıldı.
     public interface IReviewRepository : IRepository<ProductReview>
     {
-        // DEĞİŞİKLİK: Dönüş tipi IEnumerable<Review> yerine IEnumerable<ProductReview> oldu.
         Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId);
+        Task<IEnumerable<ProductReview>> GetPendingReviewsAsync();
         Task<double> GetAverageRatingAsync(int productId);
+        Task<bool> HasUserReviewAsync(int productId, int userId);
     }
 }

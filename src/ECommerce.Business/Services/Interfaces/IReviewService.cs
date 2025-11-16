@@ -14,6 +14,10 @@ namespace ECommerce.Business.Services.Interfaces
         Task UpdateAsync(int id, ProductReview reviewDto);
         Task DeleteAsync(int id);
         Task<double> GetAverageRatingAsync(int productId);
+        Task<IEnumerable<ProductReview>> GetApprovedReviewsByProductAsync(int productId);
         Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId);
+        Task<IEnumerable<ProductReview>> GetPendingReviewsAsync();
+        Task ApproveReviewAsync(int id);
+        Task RejectReviewAsync(int id);
     }
 }

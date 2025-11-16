@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces; // IReviewService
 using ECommerce.Entities.Concrete;            // ProductReview
@@ -43,6 +45,11 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<ProductReview> AddAsync(ProductReview reviewDto, int userId)
         {
+            if (await _reviewRepository.HasUserReviewAsync(reviewDto.ProductId, userId))
+            {
+                throw new InvalidOperationException("Bu ürün için zaten bir yorumunuz bulunuyor.");
+            }
+
             var entity = new ProductReview
             {
                 ProductId = reviewDto.ProductId,
@@ -77,10 +84,40 @@ namespace ECommerce.Business.Services.Managers
         public Task<double> GetAverageRatingAsync(int productId) =>
             _reviewRepository.GetAverageRatingAsync(productId);
 
+        public Task<IEnumerable<ProductReview>> GetApprovedReviewsByProductAsync(int productId) =>
+            GetByProductIdAsync(productId);
+
         public async Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId)
         {
             var entities = await _reviewRepository.GetByProductIdAsync(productId);
             return entities.Select(MapToDto);
+        }
+
+        public async Task<IEnumerable<ProductReview>> GetPendingReviewsAsync()
+        {
+            var entities = await _reviewRepository.GetPendingReviewsAsync();
+            return entities.Select(MapToDto);
+        }
+
+        public async Task ApproveReviewAsync(int id)
+        {
+            var review = await _reviewRepository.GetByIdAsync(id);
+            if (review == null) throw new KeyNotFoundException("Review bulunamadı.");
+
+            review.IsApproved = true;
+            review.UpdatedAt = DateTime.UtcNow;
+            await _reviewRepository.UpdateAsync(review);
+        }
+
+        public async Task RejectReviewAsync(int id)
+        {
+            var review = await _reviewRepository.GetByIdAsync(id);
+            if (review == null) throw new KeyNotFoundException("Review bulunamadı.");
+
+            review.IsApproved = false;
+            review.IsActive = false;
+            review.UpdatedAt = DateTime.UtcNow;
+            await _reviewRepository.UpdateAsync(review);
         }
     }
 }

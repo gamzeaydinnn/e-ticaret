@@ -282,6 +282,11 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task AddProductReviewAsync(int productId, int userId, ProductReviewCreateDto reviewDto)
         {
+            if (await _reviewRepository.HasUserReviewAsync(productId, userId))
+            {
+                throw new InvalidOperationException("Bu ürüne zaten bir yorum eklemişsiniz.");
+            }
+
             var review = new ProductReview
             {
                 ProductId = productId,

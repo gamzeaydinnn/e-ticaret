@@ -1,3 +1,4 @@
+using System;
 using ECommerce.Business.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
@@ -62,8 +63,15 @@ namespace ECommerce.API.Controllers
             // user id extension metodunu kullan (User.GetUserId())
             var userId = User.GetUserId();
 
-            await _productService.AddProductReviewAsync(id, userId, reviewDto);
-            return Ok();
+            try
+            {
+                await _productService.AddProductReviewAsync(id, userId, reviewDto);
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPost("{id}/favorite")]

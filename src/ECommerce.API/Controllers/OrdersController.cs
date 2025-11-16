@@ -116,6 +116,14 @@ namespace ECommerce.API.Controllers
             if (orderDetail == null)
                 return NotFound();
 
+            // Sadece sipariş sahibi veya admin/super admin fatura indirebilsin
+            var currentUserId = User.GetUserId();
+            var isAdminLike = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SuperAdmin);
+            if (!isAdminLike && orderDetail.UserId != currentUserId)
+            {
+                return Forbid();
+            }
+
             var pdfBytes = InvoiceGenerator.Generate(orderDetail);
             return File(pdfBytes, "application/pdf", $"invoice-{orderId}.pdf");
         }
