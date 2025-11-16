@@ -208,12 +208,14 @@ builder.Services.AddScoped<ICategoryService, CategoryManager>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
 builder.Services.AddScoped<ICampaignService, CampaignManager>();
+builder.Services.AddScoped<IAdminLogService, LogManager>();
 
 // vs.
 
 // Stock sync job as hosted service and injectable singleton
 builder.Services.AddSingleton<StockSyncJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
+builder.Services.AddHostedService<StockReservationCleanupJob>();
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {

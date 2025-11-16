@@ -513,6 +513,20 @@ export const AdminService = {
     return api.put(`/api/admin/users/${id}/role`, { role });
   },
 
+  // Logs
+  getAuditLogs: async (params = {}) => {
+    ensureBackend();
+    return api.get("/api/admin/logs/audit", { params });
+  },
+  getErrorLogs: async (params = {}) => {
+    ensureBackend();
+    return api.get("/api/admin/logs/errors", { params });
+  },
+  getSystemLogs: async (params = {}) => {
+    ensureBackend();
+    return api.get("/api/admin/logs/system", { params });
+  },
+
   // Categories
   getCategories: async () => {
     if (shouldUseMockData()) {

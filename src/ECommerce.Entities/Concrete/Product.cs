@@ -32,6 +32,7 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<ProductReview> ProductReviews { get; set; } = new HashSet<ProductReview>();
         public virtual ICollection<Favorite> Favorites { get; set; } = new HashSet<Favorite>();
         public virtual ICollection<ProductImage> ProductImages { get; set; } = new HashSet<ProductImage>();
+        public virtual ICollection<StockReservation> StockReservations { get; set; } = new HashSet<StockReservation>();
     }
 
 }

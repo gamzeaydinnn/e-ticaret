@@ -2,11 +2,13 @@ using System;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Data.Context;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Infrastructure.Services.Email;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -21,6 +23,7 @@ namespace ECommerce.Tests.Services
         {
             var options = new DbContextOptionsBuilder<ECommerceDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
             return new ECommerceDbContext(options);
         }
@@ -296,6 +299,72 @@ namespace ECommerce.Tests.Services
             // Assert
             Assert.Equal(15, stock);
         }
+
+        [Fact]
+        public async Task ReserveStockAsync_ShouldCreateAndReleaseReservation()
+        {
+            using var context = CreateInMemoryDbContext();
+            var manager = CreateManager(context);
+
+            var product = new Product
+            {
+                Name = "Reservable Product",
+                StockQuantity = 10,
+                Price = 10m
+            };
+            context.Products.Add(product);
+            await context.SaveChangesAsync();
+
+            var clientOrderId = Guid.NewGuid();
+            var success = await manager.ReserveStockAsync(clientOrderId, new[]
+            {
+                new CartItemDto { ProductId = product.Id, Quantity = 3 }
+            });
+
+            Assert.True(success);
+            var reservation = await context.StockReservations.FirstOrDefaultAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.NotNull(reservation);
+            Assert.False(reservation!.IsReleased);
+
+            await manager.ReleaseReservationAsync(clientOrderId);
+            var releasedReservation = await context.StockReservations.FirstAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.True(releasedReservation.IsReleased);
+        }
+
+        [Fact]
+        public async Task ReserveStockAsync_ShouldFail_WhenNotEnoughAvailableAfterExistingReservations()
+        {
+            using var context = CreateInMemoryDbContext();
+            var manager = CreateManager(context);
+
+            var product = new Product
+            {
+                Name = "Limited Product",
+                StockQuantity = 5
+            };
+            context.Products.Add(product);
+            await context.SaveChangesAsync();
+
+            context.StockReservations.Add(new StockReservation
+            {
+                ClientOrderId = Guid.NewGuid(),
+                ProductId = product.Id,
+                Quantity = 4,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(5),
+                IsReleased = false
+            });
+            await context.SaveChangesAsync();
+
+            var clientOrderId = Guid.NewGuid();
+            var success = await manager.ReserveStockAsync(clientOrderId, new[]
+            {
+                new CartItemDto { ProductId = product.Id, Quantity = 2 }
+            });
+
+            Assert.False(success);
+            var clientReservations = await context.StockReservations.CountAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.Equal(0, clientReservations);
+        }
     }
 }
-

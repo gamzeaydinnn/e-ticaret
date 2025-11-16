@@ -1,10 +1,11 @@
 // src/components/AdminLayout.jsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openMenus, setOpenMenus] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -41,7 +42,38 @@ export default function AdminLayout({ children }) {
       label: "Kampanya Yönetimi",
       adminOnly: true,
     },
+    {
+      label: "Loglar",
+      icon: "fas fa-clipboard-list",
+      adminOnly: true,
+      children: [
+        { path: "/admin/logs/audit", label: "Audit Logs" },
+        { path: "/admin/logs/errors", label: "Error Logs" },
+        { path: "/admin/logs/system", label: "System Logs" },
+      ],
+    },
   ];
+
+  useEffect(() => {
+    const parentWithChild = menuItems.find(
+      (item) =>
+        item.children &&
+        item.children.some((child) => location.pathname.startsWith(child.path))
+    );
+    if (parentWithChild) {
+      setOpenMenus((prev) => ({
+        ...prev,
+        [parentWithChild.label]: true,
+      }));
+    }
+  }, [location.pathname]);
+
+  const toggleMenu = (label) => {
+    setOpenMenus((prev) => ({
+      ...prev,
+      [label]: !prev[label],
+    }));
+  };
 
   const handleLogout = () => {
     logout();
@@ -107,6 +139,65 @@ export default function AdminLayout({ children }) {
           {menuItems.map((item) => {
             if (item.adminOnly && !isAdminLike) {
               return null;
+            }
+            if (item.children && item.children.length > 0) {
+              const isActiveChild = item.children.some((child) =>
+                location.pathname.startsWith(child.path)
+              );
+              return (
+                <div key={item.label}>
+                  <button
+                    type="button"
+                    className="d-flex align-items-center w-100 border-0 bg-transparent px-3 py-3 text-white"
+                    style={{
+                      transition: "all 0.2s",
+                      background: isActiveChild
+                        ? "linear-gradient(135deg, #f57c00, #ff9800)"
+                        : "transparent",
+                      borderLeft: isActiveChild
+                        ? "3px solid #fff"
+                        : "3px solid transparent",
+                    }}
+                    onClick={() => toggleMenu(item.label)}
+                  >
+                    <i
+                      className={`${item.icon} me-3`}
+                      style={{ width: "20px", fontSize: "0.9rem" }}
+                    ></i>
+                    <span style={{ fontSize: "0.9rem" }}>{item.label}</span>
+                    <i
+                      className={`fas ms-auto ${
+                        openMenus[item.label] ? "fa-chevron-up" : "fa-chevron-down"
+                      }`}
+                      style={{ fontSize: "0.75rem" }}
+                    ></i>
+                  </button>
+                  {openMenus[item.label] && (
+                    <div className="ms-4">
+                      {item.children.map((child) => (
+                        <Link
+                          key={child.path}
+                          to={child.path}
+                          className="d-block text-decoration-none px-3 py-2 text-white"
+                          style={{
+                            borderLeft:
+                              location.pathname === child.path
+                                ? "3px solid #fff"
+                                : "3px solid transparent",
+                            background:
+                              location.pathname === child.path
+                                ? "rgba(245, 124, 0, 0.2)"
+                                : "transparent",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          {child.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
             }
             return (
               <Link

@@ -34,6 +34,9 @@ import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
 import CouponManagement from "./pages/Admin/CouponManagement";
 import AdminCampaigns from "./pages/Admin/AdminCampaigns";
+import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
+import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
+import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -754,6 +757,30 @@ function App() {
               element={
                 <AdminGuard>
                   <AdminCampaigns />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/logs/audit"
+              element={
+                <AdminGuard>
+                  <AuditLogsPage />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/logs/errors"
+              element={
+                <AdminGuard>
+                  <ErrorLogsPage />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/logs/system"
+              element={
+                <AdminGuard>
+                  <SystemLogsPage />
                 </AdminGuard>
               }
             />

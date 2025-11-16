@@ -1,16 +1,20 @@
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
+using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
-using System;
-using ECommerce.Data.Context;
-using ECommerce.Infrastructure.Config;
-using Microsoft.Extensions.Options;
-using ECommerce.Infrastructure.Services.Email;
-using Microsoft.Extensions.Configuration;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.DTOs.Order;
-using System.Linq;
+using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
+using ECommerce.Entities.Concrete;
+using ECommerce.Infrastructure.Config;
+using ECommerce.Infrastructure.Services.Email;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 
 namespace ECommerce.Business.Services.Managers
@@ -110,20 +114,276 @@ namespace ECommerce.Business.Services.Managers
                 {
                     return (false, "Geçersiz miktar");
                 }
+            }
 
-                var product = await _productRepository.GetByIdAsync(item.ProductId);
+            var grouped = materialized
+                .GroupBy(i => i.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .ToList();
+
+            var now = DateTime.UtcNow;
+            foreach (var entry in grouped)
+            {
+                var product = await _productRepository.GetByIdAsync(entry.ProductId);
                 if (product == null)
                 {
-                    return (false, $"Ürün bulunamadı: {item.ProductId}");
+                    return (false, $"Ürün bulunamadı: {entry.ProductId}");
                 }
 
-                if (product.StockQuantity < item.Quantity)
+                var reservedQuantity = await GetActiveReservedQuantityAsync(entry.ProductId, now);
+                var available = product.StockQuantity - reservedQuantity;
+                if (available < entry.Quantity)
                 {
                     return (false, $"Yetersiz stok: {product.Name}");
                 }
             }
 
             return (true, null);
+        }
+
+        public async Task<bool> ReserveStockAsync(Guid clientOrderId, IEnumerable<CartItemDto> items)
+        {
+            if (items == null)
+            {
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            var now = DateTime.UtcNow;
+            var normalizedItems = items
+                .Where(i => i.Quantity > 0)
+                .GroupBy(i => i.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .ToList();
+            if (normalizedItems.Count == 0)
+            {
+                return false;
+            }
+
+            var expiration = now.AddMinutes(Math.Max(1, _inventorySettings.ReservationExpiryMinutes));
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var existing = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (existing.Count > 0)
+                {
+                    foreach (var reservation in existing)
+                    {
+                        reservation.IsReleased = true;
+                        reservation.ExpiresAt = now;
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                foreach (var item in normalizedItems)
+                {
+                    await EnsureProductRowLockedAsync(item.ProductId);
+
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        await RollbackIfNeededAsync(transaction, ownsTransaction);
+                        return false;
+                    }
+
+                    var reservedQuantity = await GetActiveReservedQuantityAsync(item.ProductId, now);
+                    var available = product.StockQuantity - reservedQuantity;
+                    if (available < item.Quantity)
+                    {
+                        await RollbackIfNeededAsync(transaction, ownsTransaction);
+                        return false;
+                    }
+
+                    _context.StockReservations.Add(new StockReservation
+                    {
+                        ClientOrderId = clientOrderId,
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        CreatedAt = now,
+                        ExpiresAt = expiration,
+                        IsReleased = false
+                    });
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+                return true;
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        public async Task ReleaseReservationAsync(Guid clientOrderId)
+        {
+            var now = DateTime.UtcNow;
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var reservations = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (reservations.Count == 0)
+                {
+                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    return;
+                }
+
+                foreach (var reservation in reservations)
+                {
+                    reservation.IsReleased = true;
+                    reservation.ExpiresAt = now;
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        public async Task CommitReservationAsync(Guid clientOrderId)
+        {
+            var now = DateTime.UtcNow;
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var reservations = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (reservations.Count == 0)
+                {
+                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    return;
+                }
+
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
+
+                foreach (var group in reservations.GroupBy(r => r.ProductId))
+                {
+                    await EnsureProductRowLockedAsync(group.Key);
+
+                    var totalQuantity = group.Sum(r => r.Quantity);
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == group.Key);
+                    if (product == null || product.StockQuantity < totalQuantity)
+                    {
+                        throw new InvalidOperationException("Stok rezervasyonu onaylanamadı.");
+                    }
+
+                    product.StockQuantity -= totalQuantity;
+                    await LogAsync(
+                        product.Id,
+                        -totalQuantity,
+                        InventoryChangeType.Sale,
+                        order != null ? $"Online Order #{order.OrderNumber}" : $"Client Order {clientOrderId}",
+                        order?.UserId);
+                    await CheckThresholdAndNotifyAsync(product);
+                }
+
+                foreach (var reservation in reservations)
+                {
+                    reservation.IsReleased = true;
+                    reservation.ExpiresAt = now;
+                    if (order != null)
+                    {
+                        reservation.OrderId = order.Id;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        private async Task<int> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)
+        {
+            var reserved = await _context.StockReservations
+                .Where(r => r.ProductId == productId && !r.IsReleased && r.ExpiresAt > utcNow)
+                .SumAsync(r => (int?)r.Quantity);
+            return reserved ?? 0;
+        }
+
+        private Task EnsureProductRowLockedAsync(int productId)
+        {
+            if (_context.Database.IsSqlServer())
+            {
+                return _context.Database.ExecuteSqlRawAsync(
+                    "SELECT 1 FROM [Products] WITH (UPDLOCK, ROWLOCK) WHERE [Id] = {0}",
+                    productId);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private static Task CommitIfNeededAsync(IDbContextTransaction? transaction, bool ownsTransaction)
+        {
+            return ownsTransaction && transaction != null
+                ? transaction.CommitAsync()
+                : Task.CompletedTask;
+        }
+
+        private static Task RollbackIfNeededAsync(IDbContextTransaction? transaction, bool ownsTransaction)
+        {
+            return ownsTransaction && transaction != null
+                ? transaction.RollbackAsync()
+                : Task.CompletedTask;
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            }
+            catch (InvalidOperationException ex)
+            {
+                if (ex.Message.Contains("Transactions are not supported", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                throw;
+            }
         }
 
         private async Task LogAsync(int productId, int changeQty, InventoryChangeType type, string? note = null, int? byUserId = null)

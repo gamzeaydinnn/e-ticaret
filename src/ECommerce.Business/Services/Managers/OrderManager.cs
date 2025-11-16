@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Data.Context;
@@ -218,15 +219,32 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<OrderListDto> CheckoutAsync(OrderCreateDto dto)
         {
+            var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
+            if (!stockCheck.Success)
+            {
+                throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
+            }
+
+            var clientOrderId = dto.ClientOrderId ?? Guid.NewGuid();
+            dto.ClientOrderId = clientOrderId;
+
+            var reservationItems = dto.OrderItems
+                .Select(i => new CartItemDto
+                {
+                    ProductId = i.ProductId,
+                    Quantity = i.Quantity
+                })
+                .ToList();
+
+            var reservationSucceeded = await _inventoryService.ReserveStockAsync(clientOrderId, reservationItems);
+            if (!reservationSucceeded)
+            {
+                throw new Exception("Insufficient stock");
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
-                if (!stockCheck.Success)
-                {
-                    throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
-                }
-
                 var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
                 decimal total = 0m;
                 var items = new List<OrderItem>();
@@ -270,17 +288,8 @@ namespace ECommerce.Business.Services.Managers
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
-                foreach (var item in order.OrderItems)
-                {
-                    var ok = await _inventoryService.DecreaseStockAsync(
-                        item.ProductId,
-                        item.Quantity,
-                        InventoryChangeType.Sale,
-                        note: $"Online Order #{order.OrderNumber}",
-                        performedByUserId: order.UserId
-                    );
-                    if (!ok) throw new Exception("Stok düşümü başarısız");
-                }
+
+                await _inventoryService.CommitReservationAsync(clientOrderId);
                 await transaction.CommitAsync();
 
                 // Fire-and-forget notification (do not block checkout)
@@ -294,6 +303,10 @@ namespace ECommerce.Business.Services.Managers
             catch
             {
                 await transaction.RollbackAsync();
+                if (reservationSucceeded)
+                {
+                    await _inventoryService.ReleaseReservationAsync(clientOrderId);
+                }
                 throw;
             }
         }

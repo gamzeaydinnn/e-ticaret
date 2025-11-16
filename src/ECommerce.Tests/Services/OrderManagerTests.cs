@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Moq;
 using Xunit;
 
@@ -20,6 +22,7 @@ namespace ECommerce.Tests.Services
         {
             var options = new DbContextOptionsBuilder<ECommerceDbContext>()
                 .UseInMemoryDatabase(databaseName: System.Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
             return new ECommerceDbContext(options);
         }
@@ -31,8 +34,14 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             inventoryMock
-                .Setup(s => s.DecreaseStockAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<InventoryChangeType>(), It.IsAny<string?>(), It.IsAny<int?>()))
+                .Setup(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()))
                 .ReturnsAsync(true);
+            inventoryMock
+                .Setup(s => s.CommitReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
+            inventoryMock
+                .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
             var orderManager = new OrderManager(context, inventoryMock.Object);
             
             var user = new User 
@@ -83,8 +92,14 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((true, null));
             inventoryMock
-                .Setup(s => s.DecreaseStockAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<InventoryChangeType>(), It.IsAny<string?>(), It.IsAny<int?>()))
+                .Setup(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()))
                 .ReturnsAsync(true);
+             inventoryMock
+                .Setup(s => s.CommitReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
+            inventoryMock
+                .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
 
             var notificationMock = new Mock<INotificationService>();
             var orderManager = new OrderManager(context, inventoryMock.Object, notificationMock.Object);
@@ -142,13 +157,12 @@ namespace ECommerce.Tests.Services
             Assert.Equal(OrderStatus.Pending, orderInDb!.Status);
 
             inventoryMock.Verify(s =>
-                    s.DecreaseStockAsync(
-                        product.Id,
-                        2,
-                        InventoryChangeType.Sale,
-                        It.IsAny<string?>(),
-                        dto.UserId),
+                s.ReserveStockAsync(
+                    It.IsAny<Guid>(),
+                    It.IsAny<IEnumerable<CartItemDto>>()),
                 Times.Once);
+            inventoryMock.Verify(s => s.CommitReservationAsync(It.IsAny<Guid>()), Times.Once);
+            inventoryMock.Verify(s => s.ReleaseReservationAsync(It.IsAny<Guid>()), Times.Never);
 
             notificationMock.Verify(n => n.SendOrderConfirmationAsync(orderInDb.Id), Times.Once);
         }
@@ -220,6 +234,44 @@ namespace ECommerce.Tests.Services
         }
 
         [Fact]
+        public async Task CheckoutAsync_ShouldReleaseReservation_WhenOrderCreationFails()
+        {
+            using var context = GetInMemoryDbContext();
+            var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((true, null));
+            inventoryMock
+                .Setup(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()))
+                .ReturnsAsync(true);
+            inventoryMock
+                .Setup(s => s.CommitReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
+            inventoryMock
+                .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
+                .Returns(Task.CompletedTask);
+
+            var orderManager = new OrderManager(context, inventoryMock.Object);
+
+            var dto = new OrderCreateDto
+            {
+                UserId = 4,
+                ShippingAddress = "Adres",
+                ShippingCity = "Samsun",
+                OrderItems = new List<OrderItemDto>
+                {
+                    new OrderItemDto { ProductId = 1234, Quantity = 1 }
+                }
+            };
+
+            await Assert.ThrowsAsync<Exception>(() => orderManager.CheckoutAsync(dto));
+
+            inventoryMock.Verify(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()), Times.Once);
+            inventoryMock.Verify(s => s.ReleaseReservationAsync(It.IsAny<Guid>()), Times.Once);
+            inventoryMock.Verify(s => s.CommitReservationAsync(It.IsAny<Guid>()), Times.Never);
+        }
+
+        [Fact]
         public async Task CheckoutAsync_ShouldThrow_WhenStockIsInsufficient()
         {
             // Arrange
@@ -259,6 +311,47 @@ namespace ECommerce.Tests.Services
 
             // Assert
             Assert.Equal($"Yetersiz stok: {product.Name}", ex.Message);
+        }
+
+        [Fact]
+        public async Task CheckoutAsync_ShouldThrow_WhenReservationFails()
+        {
+            using var context = GetInMemoryDbContext();
+            var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((true, null));
+            inventoryMock
+                .Setup(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()))
+                .ReturnsAsync(false);
+
+            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var product = new Product
+            {
+                Name = "Concurrent Product",
+                Price = 20m,
+                StockQuantity = 5
+            };
+            context.Products.Add(product);
+            await context.SaveChangesAsync();
+
+            var dto = new OrderCreateDto
+            {
+                UserId = 3,
+                ShippingAddress = "Adres",
+                ShippingCity = "Bursa",
+                OrderItems = new List<OrderItemDto>
+                {
+                    new OrderItemDto { ProductId = product.Id, Quantity = 3 }
+                }
+            };
+
+            var ex = await Assert.ThrowsAsync<Exception>(() => orderManager.CheckoutAsync(dto));
+
+            Assert.Equal("Insufficient stock", ex.Message);
+            inventoryMock.Verify(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()), Times.Once);
+            inventoryMock.Verify(s => s.CommitReservationAsync(It.IsAny<Guid>()), Times.Never);
+            inventoryMock.Verify(s => s.ReleaseReservationAsync(It.IsAny<Guid>()), Times.Never);
         }
 
         [Fact]
