@@ -16,18 +16,36 @@ namespace ECommerce.Data.Repositories
         public async Task<IEnumerable<ProductReview>> GetByProductIdAsync(int productId)
         {
             return await _dbSet
-                .Where(r => r.ProductId == productId && r.IsApproved) // Sadece onaylı yorumları göstermek daha mantıklı.
+                .Where(r => r.ProductId == productId && r.IsApproved && r.IsActive)
                 .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<ProductReview>> GetPendingReviewsAsync()
+        {
+            return await _dbSet
+                .Include(r => r.Product)
+                .Include(r => r.User)
+                .Where(r => !r.IsApproved && r.IsActive)
+                .OrderBy(r => r.CreatedAt)
                 .ToListAsync();
         }
 
         public async Task<double> GetAverageRatingAsync(int productId)
         {
             var reviews = await _dbSet
-                .Where(r => r.ProductId == productId && r.IsApproved) // Ortalama da onaylılardan hesaplanmalı.
+                .Where(r => r.ProductId == productId && r.IsApproved && r.IsActive)
                 .ToListAsync();
-                
+
             return reviews.Any() ? reviews.Average(r => r.Rating) : 0;
+        }
+
+        public Task<bool> HasUserReviewAsync(int productId, int userId)
+        {
+            return _dbSet.AnyAsync(r =>
+                r.ProductId == productId &&
+                r.UserId == userId &&
+                r.IsActive);
         }
 
         // DEĞİŞİKLİK: Aşağıdaki tüm NotImplementedException fırlatan hatalı ve gereksiz kod blokları silindi.
