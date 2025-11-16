@@ -340,7 +340,6 @@ const PaymentPage = () => {
       });
 
       const payload = {
-        userId: user ? user.id : null,
         totalPrice: total, // sunucu yeniden hesaplayacak
         orderItems,
         shippingMethod: shippingMethod === "car" ? "car" : "motorcycle",

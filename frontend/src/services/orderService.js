@@ -28,6 +28,7 @@ const normalizeOrder = (order = {}) => {
     orderDate: order.orderDate || new Date().toISOString(),
     totalAmount: order.totalAmount ?? order.totalPrice ?? 0,
     totalPrice: order.totalPrice ?? order.totalAmount ?? 0,
+    isGuestOrder: Boolean(order.isGuestOrder),
     customerName: order.customerName || "",
     customerPhone: order.customerPhone || "",
     deliveryAddress:
@@ -70,4 +71,3 @@ export const OrderService = {
     window.URL.revokeObjectURL(url);
   },
 };
-

@@ -60,6 +60,9 @@ namespace ECommerce.API.Controllers
             if (dto == null)
                 return BadRequest(new { message = "Geçersiz istek gövdesi" });
 
+            var authenticatedUserId = User.GetUserId();
+            dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
+
             var order = await _orderService.CreateAsync(dto);
             return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
         }
@@ -80,6 +83,9 @@ namespace ECommerce.API.Controllers
 
             if (dto.OrderItems == null || dto.OrderItems.Count == 0)
                 return BadRequest(new { message = "Sepet boş olamaz." });
+
+            var authenticatedUserId = User.GetUserId();
+            dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
 
             var result = await _orderService.CheckoutAsync(dto);
 

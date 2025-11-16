@@ -78,6 +78,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
+                IsGuestOrder = order.IsGuestOrder,
                 TotalPrice = order.TotalPrice,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
@@ -110,6 +111,7 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<OrderListDto> CreateAsync(OrderCreateDto dto)
         {
+            var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
             decimal total = 0m;
             var items = new List<OrderItem>();
             foreach (var i in dto.OrderItems)
@@ -128,7 +130,8 @@ namespace ECommerce.Business.Services.Managers
             }
             var order = new Order
             {
-                UserId = dto.UserId,
+                UserId = effectiveUserId,
+                IsGuestOrder = !effectiveUserId.HasValue,
                 OrderNumber = GenerateOrderNumber(),
                 // Shipping will be computed server-side (do not trust client-provided cost)
                 ShippingMethod = NormalizeShippingMethod(dto.ShippingMethod),
@@ -187,6 +190,7 @@ namespace ECommerce.Business.Services.Managers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
                 decimal total = 0m;
                 var items = new List<OrderItem>();
                 foreach (var item in dto.OrderItems)
@@ -214,8 +218,9 @@ namespace ECommerce.Business.Services.Managers
 
                 var order = new Order
                 {
-                    UserId = dto.UserId,
-                    OrderNumber = GenerateOrderNumber(),
+                    UserId = effectiveUserId,
+                    IsGuestOrder = !effectiveUserId.HasValue,
+                OrderNumber = GenerateOrderNumber(),
                     TotalPrice = total,
                     Status = OrderStatus.Pending,
                     OrderDate = DateTime.UtcNow,
@@ -355,6 +360,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
+                IsGuestOrder = order.IsGuestOrder,
                 OrderNumber = order.OrderNumber,
                 TotalPrice = order.TotalPrice,
                 Status = order.Status.ToString(),
