@@ -14,12 +14,14 @@ namespace ECommerce.Entities.Enums
         Assigned,       // Kuryeye atandı
         PickedUp,       // Kurye tarafından teslim alındı
         InTransit,      // Yolda
+        OutForDelivery, // Dağıtımda
         Delivered,      // Teslim edildi
         Cancelled,      // İptal edildi
         Processing,     // İşleniyor (eski)
         Shipped,        // Kargoya verildi (eski)
         Paid,           // Ödendi
         Completed,      // Tamamlandı
-        PaymentFailed   // Ödeme başarısız
+        PaymentFailed,  // Ödeme başarısız
+        Refunded        // İade edildi
     }
 }
