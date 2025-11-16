@@ -2,10 +2,10 @@ using System;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
-using ECommerce.Core.Interfaces;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using System.Threading.Tasks;
+using System.Security.Claims;
 /*OrdersController
 •	POST /api/orders (guest veya userId ile) -> sipariş oluşturma. Eğer guest ise, zorunlu alanlar: name, phone, email, address, paymentMethod
 •	GET /api/orders/{id} -> sipariş detay (admin, ilgili kullanıcı veya kurye görmeli)
@@ -19,10 +19,12 @@ namespace ECommerce.API.Controllers.Admin
     public class AdminOrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IAuditLogService _auditLogService;
 
-        public AdminOrdersController(IOrderService orderService)
+        public AdminOrdersController(IOrderService orderService, IAuditLogService auditLogService)
         {
             _orderService = orderService;
+            _auditLogService = auditLogService;
         }
 
         [HttpGet]
@@ -38,6 +40,18 @@ namespace ECommerce.API.Controllers.Admin
             var existing = await _orderService.GetByIdAsync(id);
             if (existing == null) return NotFound();
             await _orderService.DeleteAsync(id);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "OrderDeleted",
+                "Order",
+                id.ToString(),
+                new
+                {
+                    existing.Status,
+                    existing.TotalPrice,
+                    existing.OrderNumber
+                },
+                null);
             return NoContent();
         }
 
@@ -63,38 +77,51 @@ namespace ECommerce.API.Controllers.Admin
             if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
                 return BadRequest(new { message = "Status alanı zorunludur." });
 
+            var oldOrder = await _orderService.GetByIdAsync(id);
+
             await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            if (oldOrder != null)
+            {
+                var updatedOrder = await _orderService.GetByIdAsync(id);
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    "OrderStatusChanged",
+                    "Order",
+                    id.ToString(),
+                    new { oldOrder.Status },
+                    updatedOrder != null ? new { updatedOrder.Status } : null);
+            }
             return NoContent();
         }
 
         [HttpPost("{id:int}/prepare")]
         public Task<IActionResult> PrepareOrder(int id)
         {
-            return HandleStatusChange(() => _orderService.MarkOrderAsPreparingAsync(id));
+            return HandleStatusChange(id, () => _orderService.MarkOrderAsPreparingAsync(id), "OrderStatusChanged");
         }
 
         [HttpPost("{id:int}/out-for-delivery")]
         public Task<IActionResult> MarkOutForDelivery(int id)
         {
-            return HandleStatusChange(() => _orderService.MarkOrderOutForDeliveryAsync(id));
+            return HandleStatusChange(id, () => _orderService.MarkOrderOutForDeliveryAsync(id), "OrderStatusChanged");
         }
 
         [HttpPost("{id:int}/deliver")]
         public Task<IActionResult> DeliverOrder(int id)
         {
-            return HandleStatusChange(() => _orderService.MarkOrderAsDeliveredAsync(id));
+            return HandleStatusChange(id, () => _orderService.MarkOrderAsDeliveredAsync(id), "OrderStatusChanged");
         }
 
         [HttpPost("{id:int}/cancel")]
         public Task<IActionResult> CancelOrder(int id)
         {
-            return HandleStatusChange(() => _orderService.CancelOrderByAdminAsync(id));
+            return HandleStatusChange(id, () => _orderService.CancelOrderByAdminAsync(id), "OrderStatusChanged");
         }
 
         [HttpPost("{id:int}/refund")]
         public Task<IActionResult> RefundOrder(int id)
         {
-            return HandleStatusChange(() => _orderService.RefundOrderAsync(id));
+            return HandleStatusChange(id, () => _orderService.RefundOrderAsync(id), "OrderStatusChanged");
         }
 
         [HttpGet("recent")]
@@ -104,19 +131,37 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(orders);
         }
 
-        private async Task<IActionResult> HandleStatusChange(Func<Task<OrderListDto?>> action)
+        private async Task<IActionResult> HandleStatusChange(int orderId, Func<Task<OrderListDto?>> action, string auditAction)
         {
+            var oldOrder = await _orderService.GetByIdAsync(orderId);
+            if (oldOrder == null)
+                return NotFound();
+
             try
             {
                 var order = await action();
                 if (order == null)
                     return NotFound();
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    auditAction,
+                    "Order",
+                    orderId.ToString(),
+                    new { oldOrder.Status },
+                    new { order.Status });
                 return Ok(order);
             }
             catch (InvalidOperationException ex)
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private int GetAdminUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+            return int.TryParse(userIdValue, out var adminId) ? adminId : 0;
         }
     }
 }

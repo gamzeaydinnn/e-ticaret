@@ -4,6 +4,7 @@ using ECommerce.Core.Constants;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using System.Threading.Tasks;
+using System.Security.Claims;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -13,10 +14,12 @@ namespace ECommerce.API.Controllers.Admin
     public class AdminCouponsController : ControllerBase
     {
         private readonly ICouponService _couponService;
+        private readonly IAuditLogService _auditLogService;
 
-        public AdminCouponsController(ICouponService couponService)
+        public AdminCouponsController(ICouponService couponService, IAuditLogService auditLogService)
         {
             _couponService = couponService;
+            _auditLogService = auditLogService;
         }
         
         // GET, GET(id), POST metodları doğru görünüyor, onları koruyoruz.
@@ -42,6 +45,22 @@ namespace ECommerce.API.Controllers.Admin
         {
             coupon.Id = 0;
             await _couponService.AddAsync(coupon);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "CouponCreated",
+                "Coupon",
+                coupon.Id.ToString(),
+                null,
+                new
+                {
+                    coupon.Code,
+                    coupon.Value,
+                    coupon.IsPercentage,
+                    coupon.MinOrderAmount,
+                    coupon.UsageLimit,
+                    coupon.ExpirationDate,
+                    coupon.IsActive
+                });
             return CreatedAtAction(nameof(GetCouponById), new { id = coupon.Id }, coupon);
         }
 
@@ -55,6 +74,17 @@ namespace ECommerce.API.Controllers.Admin
             var existingCoupon = await _couponService.GetByIdAsync(id);
             if (existingCoupon == null)
                 return NotFound();
+
+            var oldSnapshot = new
+            {
+                existingCoupon.Code,
+                existingCoupon.Value,
+                existingCoupon.IsPercentage,
+                existingCoupon.MinOrderAmount,
+                existingCoupon.UsageLimit,
+                existingCoupon.ExpirationDate,
+                existingCoupon.IsActive
+            };
 
             // Tüm güncellenebilir alanları kopyala
             existingCoupon.Code = coupon.Code;
@@ -73,6 +103,22 @@ namespace ECommerce.API.Controllers.Admin
             // BaseEntity'den gelen güncellemeler de yapılabilir (örneğin UpdateDate)
 
             await _couponService.UpdateAsync(existingCoupon);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "CouponUpdated",
+                "Coupon",
+                id.ToString(),
+                oldSnapshot,
+                new
+                {
+                    existingCoupon.Code,
+                    existingCoupon.Value,
+                    existingCoupon.IsPercentage,
+                    existingCoupon.MinOrderAmount,
+                    existingCoupon.UsageLimit,
+                    existingCoupon.ExpirationDate,
+                    existingCoupon.IsActive
+                });
             return NoContent();
         }
 
@@ -84,7 +130,30 @@ namespace ECommerce.API.Controllers.Admin
                 return NotFound();
 
             await _couponService.DeleteAsync(id);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "CouponDeleted",
+                "Coupon",
+                id.ToString(),
+                new
+                {
+                    existingCoupon.Code,
+                    existingCoupon.Value,
+                    existingCoupon.IsPercentage,
+                    existingCoupon.MinOrderAmount,
+                    existingCoupon.UsageLimit,
+                    existingCoupon.ExpirationDate,
+                    existingCoupon.IsActive
+                },
+                null);
             return NoContent();
+        }
+
+        private int GetAdminUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+            return int.TryParse(userIdValue, out var adminId) ? adminId : 0;
         }
     }
 }

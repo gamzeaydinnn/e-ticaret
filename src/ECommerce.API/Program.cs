@@ -80,6 +80,7 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
 
 // Global LoggerService (ILogService)
 builder.Services.AddScoped<ILogService, LoggerService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 
 builder.Services
     .AddIdentityCore<User>(options =>
