@@ -17,6 +17,11 @@ namespace ECommerce.Business.Services.Interfaces
         Task<OrderListDto> CheckoutAsync(OrderCreateDto dto);
         Task<bool> CancelOrderAsync(int orderId, int userId);
         Task<bool> MarkPaymentFailedAsync(int orderId);
+        Task<OrderListDto?> MarkOrderAsPreparingAsync(int orderId);
+        Task<OrderListDto?> MarkOrderOutForDeliveryAsync(int orderId);
+        Task<OrderListDto?> MarkOrderAsDeliveredAsync(int orderId);
+        Task<OrderListDto?> CancelOrderByAdminAsync(int orderId);
+        Task<OrderListDto?> RefundOrderAsync(int orderId);
         Task<int> GetOrderCountAsync();
         Task<int> GetTodayOrderCountAsync();
         Task<decimal> GetTotalRevenueAsync();

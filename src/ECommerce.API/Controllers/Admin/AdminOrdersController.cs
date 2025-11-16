@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
@@ -66,11 +67,56 @@ namespace ECommerce.API.Controllers.Admin
             return NoContent();
         }
 
+        [HttpPost("{id:int}/prepare")]
+        public Task<IActionResult> PrepareOrder(int id)
+        {
+            return HandleStatusChange(() => _orderService.MarkOrderAsPreparingAsync(id));
+        }
+
+        [HttpPost("{id:int}/out-for-delivery")]
+        public Task<IActionResult> MarkOutForDelivery(int id)
+        {
+            return HandleStatusChange(() => _orderService.MarkOrderOutForDeliveryAsync(id));
+        }
+
+        [HttpPost("{id:int}/deliver")]
+        public Task<IActionResult> DeliverOrder(int id)
+        {
+            return HandleStatusChange(() => _orderService.MarkOrderAsDeliveredAsync(id));
+        }
+
+        [HttpPost("{id:int}/cancel")]
+        public Task<IActionResult> CancelOrder(int id)
+        {
+            return HandleStatusChange(() => _orderService.CancelOrderByAdminAsync(id));
+        }
+
+        [HttpPost("{id:int}/refund")]
+        public Task<IActionResult> RefundOrder(int id)
+        {
+            return HandleStatusChange(() => _orderService.RefundOrderAsync(id));
+        }
+
         [HttpGet("recent")]
         public async Task<IActionResult> GetRecentOrders([FromQuery] int count = 5)
         {
             var orders = await _orderService.GetRecentOrdersAsync(count);
             return Ok(orders);
+        }
+
+        private async Task<IActionResult> HandleStatusChange(Func<Task<OrderListDto?>> action)
+        {
+            try
+            {
+                var order = await action();
+                if (order == null)
+                    return NotFound();
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

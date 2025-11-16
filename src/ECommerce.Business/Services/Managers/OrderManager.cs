@@ -29,7 +29,8 @@ namespace ECommerce.Business.Services.Managers
                 {
                     OrderStatus.Paid,
                     OrderStatus.Cancelled,
-                    OrderStatus.Delivered
+                    OrderStatus.Delivered,
+                    OrderStatus.Preparing
                 },
                 // Paid → Preparing/Cancelled
                 [OrderStatus.Paid] = new HashSet<OrderStatus>
@@ -37,20 +38,38 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Preparing,
                     OrderStatus.Cancelled
                 },
-                // Preparing → Shipped
+                // Preparing → Shipped/OutForDelivery
                 [OrderStatus.Preparing] = new HashSet<OrderStatus>
                 {
-                    OrderStatus.Shipped
+                    OrderStatus.Shipped,
+                    OrderStatus.OutForDelivery,
+                    OrderStatus.Cancelled
                 },
                 // Shipped → Delivered
                 [OrderStatus.Shipped] = new HashSet<OrderStatus>
                 {
+                    OrderStatus.Delivered,
+                    OrderStatus.OutForDelivery
+                },
+                // OutForDelivery → Delivered
+                [OrderStatus.OutForDelivery] = new HashSet<OrderStatus>
+                {
                     OrderStatus.Delivered
                 },
                 // Terminal durumlar
-                [OrderStatus.Delivered] = new HashSet<OrderStatus>(),
-                [OrderStatus.Cancelled] = new HashSet<OrderStatus>(),
-                [OrderStatus.Completed] = new HashSet<OrderStatus>(),
+                [OrderStatus.Delivered] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Refunded
+                },
+                [OrderStatus.Cancelled] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Refunded
+                },
+                [OrderStatus.Completed] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Refunded
+                },
+                [OrderStatus.Refunded] = new HashSet<OrderStatus>(),
                 [OrderStatus.PaymentFailed] = new HashSet<OrderStatus>(),
                 // Eski/alternatif akışlar için makul geçişler
                 [OrderStatus.Processing] = new HashSet<OrderStatus>
@@ -310,6 +329,31 @@ namespace ECommerce.Business.Services.Managers
             return true;
         }
 
+        public Task<OrderListDto?> MarkOrderAsPreparingAsync(int orderId)
+        {
+            return MoveOrderToStatusAsync(orderId, OrderStatus.Preparing);
+        }
+
+        public Task<OrderListDto?> MarkOrderOutForDeliveryAsync(int orderId)
+        {
+            return MoveOrderToStatusAsync(orderId, OrderStatus.OutForDelivery);
+        }
+
+        public Task<OrderListDto?> MarkOrderAsDeliveredAsync(int orderId)
+        {
+            return MoveOrderToStatusAsync(orderId, OrderStatus.Delivered);
+        }
+
+        public Task<OrderListDto?> CancelOrderByAdminAsync(int orderId)
+        {
+            return MoveOrderToStatusAsync(orderId, OrderStatus.Cancelled);
+        }
+
+        public Task<OrderListDto?> RefundOrderAsync(int orderId)
+        {
+            return MoveOrderToStatusAsync(orderId, OrderStatus.Refunded);
+        }
+
         public async Task<int> GetOrderCountAsync()
         {
             return await _context.Orders.CountAsync();
@@ -386,6 +430,39 @@ namespace ECommerce.Business.Services.Managers
                 .Take(count)
                 .ToListAsync();
             return orders.Select(o => MapToDto(o));
+        }
+
+        private async Task<OrderListDto?> MoveOrderToStatusAsync(int orderId, OrderStatus targetStatus)
+        {
+            var order = await _context.Orders.FindAsync(orderId);
+            if (order == null)
+            {
+                return null;
+            }
+
+            var previousStatus = order.Status;
+            if (previousStatus == targetStatus)
+            {
+                return await GetByIdAsync(orderId);
+            }
+
+            if (AllowedTransitions.TryGetValue(previousStatus, out var allowedTargets) &&
+                !allowedTargets.Contains(targetStatus))
+            {
+                throw new InvalidOperationException($"Geçersiz durum geçişi: {previousStatus} -> {targetStatus}");
+            }
+
+            order.Status = targetStatus;
+            await _context.SaveChangesAsync();
+
+            if (previousStatus != OrderStatus.Delivered &&
+                targetStatus == OrderStatus.Delivered &&
+                _notificationService != null)
+            {
+                _ = _notificationService.SendShipmentNotificationAsync(order.Id, trackingNumber: string.Empty);
+            }
+
+            return await GetByIdAsync(orderId);
         }
 
         private OrderListDto MapToDto(Order order)
