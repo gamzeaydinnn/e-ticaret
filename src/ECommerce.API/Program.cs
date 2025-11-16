@@ -209,6 +209,7 @@ builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
 builder.Services.AddScoped<ICampaignService, CampaignManager>();
 builder.Services.AddScoped<IAdminLogService, LogManager>();
+builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 
 // vs.
 

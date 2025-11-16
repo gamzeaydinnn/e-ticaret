@@ -39,5 +39,12 @@ namespace ECommerce.API.Controllers.Admin
             var result = await _logService.GetSystemLogsAsync(query ?? new SystemLogQueryParameters());
             return Ok(result);
         }
+
+        [HttpGet("inventory")]
+        public async Task<IActionResult> GetInventoryLogs([FromQuery] InventoryLogQueryParameters query)
+        {
+            var result = await _logService.GetInventoryLogsAsync(query ?? new InventoryLogQueryParameters());
+            return Ok(result);
+        }
     }
 }

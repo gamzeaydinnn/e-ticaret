@@ -91,10 +91,11 @@ namespace ECommerce.API.Controllers.Admin
                     l.Id,
                     l.ProductId,
                     ProductName = l.Product != null ? l.Product.Name : "",
-                    l.ChangeQuantity,
-                    l.ChangeType,
-                    l.Note,
-                    l.PerformedByUserId,
+                    l.Action,
+                    l.Quantity,
+                    l.OldStock,
+                    l.NewStock,
+                    l.ReferenceId,
                     l.CreatedAt
                 })
                 .ToListAsync();
