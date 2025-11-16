@@ -526,6 +526,10 @@ export const AdminService = {
     ensureBackend();
     return api.get("/api/admin/logs/system", { params });
   },
+  getInventoryLogs: async (params = {}) => {
+    ensureBackend();
+    return api.get("/api/admin/logs/inventory", { params });
+  },
 
   // Categories
   getCategories: async () => {

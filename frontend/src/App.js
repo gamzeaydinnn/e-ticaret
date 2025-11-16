@@ -37,6 +37,7 @@ import AdminCampaigns from "./pages/Admin/AdminCampaigns";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
+import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -781,6 +782,14 @@ function App() {
               element={
                 <AdminGuard>
                   <SystemLogsPage />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/logs/inventory"
+              element={
+                <AdminGuard>
+                  <InventoryLogsPage />
                 </AdminGuard>
               }
             />

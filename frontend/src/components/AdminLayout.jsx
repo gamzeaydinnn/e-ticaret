@@ -50,6 +50,7 @@ export default function AdminLayout({ children }) {
         { path: "/admin/logs/audit", label: "Audit Logs" },
         { path: "/admin/logs/errors", label: "Error Logs" },
         { path: "/admin/logs/system", label: "System Logs" },
+        { path: "/admin/logs/inventory", label: "Inventory Logs" },
       ],
     },
   ];

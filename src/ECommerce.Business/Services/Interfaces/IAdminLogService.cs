@@ -9,5 +9,6 @@ namespace ECommerce.Business.Services.Interfaces
         Task<PagedResult<AuditLogDto>> GetAuditLogsAsync(AuditLogQueryParameters parameters);
         Task<PagedResult<ErrorLogDto>> GetErrorLogsAsync(ErrorLogQueryParameters parameters);
         Task<PagedResult<SystemLogDto>> GetSystemLogsAsync(SystemLogQueryParameters parameters);
+        Task<PagedResult<InventoryLogDto>> GetInventoryLogsAsync(InventoryLogQueryParameters parameters);
     }
 }

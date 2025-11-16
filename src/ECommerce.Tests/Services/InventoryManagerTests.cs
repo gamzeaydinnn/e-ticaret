@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Data.Context;
 using ECommerce.Core.DTOs.Cart;
@@ -54,12 +55,15 @@ namespace ECommerce.Tests.Services
             var configurationMock = new Mock<IConfiguration>();
             configurationMock.Setup(c => c["Admin:Email"]).Returns((string?)null);
 
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
+
             return new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
         }
 
         [Fact]
@@ -98,13 +102,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var managerWithRepoMock = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await managerWithRepoMock.IncreaseStockAsync(product.Id, 3);
@@ -149,13 +155,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(product.Id, 4);
@@ -190,13 +198,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(999, 5);
@@ -237,13 +247,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(product.Id, 5);
@@ -285,13 +297,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var stock = await manager.GetStockLevelAsync(product.Id);

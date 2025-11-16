@@ -38,4 +38,10 @@ namespace ECommerce.Core.DTOs.Logs
         public string? Status { get; set; }
         public string? Direction { get; set; }
     }
+
+    public class InventoryLogQueryParameters : LogQueryParameters
+    {
+        public int? ProductId { get; set; }
+        public string? Action { get; set; }
+    }
 }

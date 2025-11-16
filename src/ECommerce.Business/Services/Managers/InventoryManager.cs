@@ -26,30 +26,39 @@ namespace ECommerce.Business.Services.Managers
         private readonly EmailSender _emailSender;
         private readonly InventorySettings _inventorySettings;
         private readonly IConfiguration _configuration;
+        private readonly IInventoryLogService _inventoryLogService;
 
         public InventoryManager(
             IProductRepository productRepository,
             ECommerceDbContext context,
             EmailSender emailSender,
             IOptions<InventorySettings> inventoryOptions,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IInventoryLogService inventoryLogService)
         {
             _productRepository = productRepository;
             _context = context;
             _emailSender = emailSender;
             _inventorySettings = inventoryOptions.Value;
             _configuration = configuration;
+            _inventoryLogService = inventoryLogService;
         }
 
         public async Task<bool> IncreaseStockAsync(int productId, int quantity)
         {
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null) return false;
+            var oldStock = product.StockQuantity;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
 
-            // Log
-            await LogAsync(product.Id, quantity, InventoryChangeType.Purchase, "Manual increase");
+            await _inventoryLogService.WriteAsync(
+                product.Id,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                "ManualIncrease");
             return true;
         }
 
@@ -57,10 +66,17 @@ namespace ECommerce.Business.Services.Managers
         {
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null || product.StockQuantity < quantity) return false;
+            var oldStock = product.StockQuantity;
             product.StockQuantity -= quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(product.Id, -quantity, InventoryChangeType.Sale, "Manual decrease");
+            await _inventoryLogService.WriteAsync(
+                product.Id,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                "ManualDecrease");
             await CheckThresholdAndNotifyAsync(product);
             return true;
         }
@@ -75,10 +91,17 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null || product.StockQuantity < quantity) return false;
 
+            var oldStock = product.StockQuantity;
             product.StockQuantity -= quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(productId, -quantity, changeType, note, performedByUserId);
+            await _inventoryLogService.WriteAsync(
+                productId,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                BuildReference("Decrease", changeType, note, performedByUserId));
             await CheckThresholdAndNotifyAsync(product);
             return true;
         }
@@ -88,10 +111,17 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null) return false;
 
+            var oldStock = product.StockQuantity;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(productId, quantity, changeType, note, performedByUserId);
+            await _inventoryLogService.WriteAsync(
+                productId,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                BuildReference("Increase", changeType, note, performedByUserId));
             return true;
         }
 
@@ -213,6 +243,15 @@ namespace ECommerce.Business.Services.Managers
                         ExpiresAt = expiration,
                         IsReleased = false
                     });
+
+                    var availableAfter = available - item.Quantity;
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "Reserve",
+                        item.Quantity,
+                        available,
+                        availableAfter,
+                        clientOrderId.ToString());
                 }
 
                 await _context.SaveChangesAsync();
@@ -248,6 +287,34 @@ namespace ECommerce.Business.Services.Managers
                 {
                     await CommitIfNeededAsync(transaction, ownsTransaction);
                     return;
+                }
+
+                var releaseSummary = reservations
+                    .GroupBy(r => r.ProductId)
+                    .Select(g => new { ProductId = g.Key, Quantity = g.Sum(r => r.Quantity) })
+                    .ToList();
+
+                foreach (var item in releaseSummary)
+                {
+                    await EnsureProductRowLockedAsync(item.ProductId);
+
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        continue;
+                    }
+
+                    var reservedBefore = await GetActiveReservedQuantityAsync(item.ProductId, now);
+                    var availableBefore = product.StockQuantity - reservedBefore;
+                    var availableAfter = availableBefore + item.Quantity;
+
+                    await _inventoryLogService.WriteAsync(
+                        item.ProductId,
+                        "Release",
+                        item.Quantity,
+                        availableBefore,
+                        availableAfter,
+                        clientOrderId.ToString());
                 }
 
                 foreach (var reservation in reservations)
@@ -305,13 +372,18 @@ namespace ECommerce.Business.Services.Managers
                         throw new InvalidOperationException("Stok rezervasyonu onaylanamadı.");
                     }
 
+                    var oldStock = product.StockQuantity;
                     product.StockQuantity -= totalQuantity;
-                    await LogAsync(
+                    var reference = order != null
+                        ? $"Order:{order.OrderNumber ?? order.Id.ToString()}"
+                        : $"Client:{clientOrderId}";
+                    await _inventoryLogService.WriteAsync(
                         product.Id,
-                        -totalQuantity,
-                        InventoryChangeType.Sale,
-                        order != null ? $"Online Order #{order.OrderNumber}" : $"Client Order {clientOrderId}",
-                        order?.UserId);
+                        "Commit",
+                        totalQuantity,
+                        oldStock,
+                        product.StockQuantity,
+                        reference);
                     await CheckThresholdAndNotifyAsync(product);
                 }
 
@@ -386,20 +458,18 @@ namespace ECommerce.Business.Services.Managers
             }
         }
 
-        private async Task LogAsync(int productId, int changeQty, InventoryChangeType type, string? note = null, int? byUserId = null)
+        private static string BuildReference(string prefix, InventoryChangeType changeType, string? note, int? byUserId)
         {
-            var log = new InventoryLog
+            var parts = new List<string> { prefix, changeType.ToString() };
+            if (byUserId.HasValue)
             {
-                ProductId = productId,
-                ChangeQuantity = changeQty,
-                ChangeType = type,
-                Note = note,
-                PerformedByUserId = byUserId,
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true
-            };
-            _context.InventoryLogs.Add(log);
-            await _context.SaveChangesAsync();
+                parts.Add($"User:{byUserId.Value}");
+            }
+            if (!string.IsNullOrWhiteSpace(note))
+            {
+                parts.Add(note.Trim());
+            }
+            return string.Join("|", parts);
         }
 
         private async Task CheckThresholdAndNotifyAsync(Product product)

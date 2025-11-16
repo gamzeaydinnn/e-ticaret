@@ -18,6 +18,7 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly ECommerceDbContext _context;
         private readonly IInventoryService _inventoryService;
+        private readonly IInventoryLogService _inventoryLogService;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -80,10 +81,15 @@ namespace ECommerce.Business.Services.Managers
                 }
             };
 
-        public OrderManager(ECommerceDbContext context, IInventoryService inventoryService, ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
+        public OrderManager(
+            ECommerceDbContext context,
+            IInventoryService inventoryService,
+            IInventoryLogService inventoryLogService,
+            ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
+            _inventoryLogService = inventoryLogService;
             _notificationService = notificationService;
         }
 
@@ -313,14 +319,12 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<bool> CancelOrderAsync(int orderId, int userId)
         {
-            var order = await _context.Orders.FindAsync(orderId);
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null || order.UserId != userId)
                 return false;
-            if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Delivered)
-                return false;
-            order.Status = OrderStatus.Cancelled;
-            await _context.SaveChangesAsync();
-            return true;
+            return await CancelOrderInternalAsync(order);
         }
 
         public async Task<bool> MarkPaymentFailedAsync(int orderId)
@@ -365,6 +369,51 @@ namespace ECommerce.Business.Services.Managers
         public Task<OrderListDto?> RefundOrderAsync(int orderId)
         {
             return MoveOrderToStatusAsync(orderId, OrderStatus.Refunded);
+        }
+
+        private async Task<bool> CancelOrderInternalAsync(Order order)
+        {
+            if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Delivered)
+            {
+                return false;
+            }
+
+            await EnsureOrderItemsLoadedAsync(order);
+
+            if (order.OrderItems != null && order.OrderItems.Count > 0)
+            {
+                foreach (var item in order.OrderItems)
+                {
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        continue;
+                    }
+
+                    var oldStock = product.StockQuantity;
+                    product.StockQuantity += item.Quantity;
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "OrderCancelled",
+                        item.Quantity,
+                        oldStock,
+                        product.StockQuantity,
+                        order.OrderNumber ?? order.Id.ToString());
+                }
+            }
+
+            order.Status = OrderStatus.Cancelled;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private async Task EnsureOrderItemsLoadedAsync(Order order)
+        {
+            var entry = _context.Entry(order);
+            if (!entry.Collection(o => o.OrderItems).IsLoaded)
+            {
+                await entry.Collection(o => o.OrderItems).LoadAsync();
+            }
         }
 
         public async Task<int> GetOrderCountAsync()
@@ -422,6 +471,12 @@ namespace ECommerce.Business.Services.Managers
                     return;
                 }
 
+                if (statusEnum == OrderStatus.Cancelled)
+                {
+                    await CancelOrderInternalAsync(order);
+                    return;
+                }
+
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
 
@@ -463,6 +518,12 @@ namespace ECommerce.Business.Services.Managers
                 !allowedTargets.Contains(targetStatus))
             {
                 throw new InvalidOperationException($"Geçersiz durum geçişi: {previousStatus} -> {targetStatus}");
+            }
+
+            if (targetStatus == OrderStatus.Cancelled)
+            {
+                await CancelOrderInternalAsync(order);
+                return await GetByIdAsync(orderId);
             }
 
             order.Status = targetStatus;

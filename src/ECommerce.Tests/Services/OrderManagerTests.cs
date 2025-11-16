@@ -42,7 +42,8 @@ namespace ECommerce.Tests.Services
             inventoryMock
                 .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
                 .Returns(Task.CompletedTask);
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
             
             var user = new User 
             { 
@@ -102,7 +103,8 @@ namespace ECommerce.Tests.Services
                 .Returns(Task.CompletedTask);
 
             var notificationMock = new Mock<INotificationService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, notificationMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
 
             var product = new Product
             {
@@ -176,7 +178,8 @@ namespace ECommerce.Tests.Services
             inventoryMock
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Geçersiz miktar"));
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -209,7 +212,8 @@ namespace ECommerce.Tests.Services
             inventoryMock
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Ürün bulunamadı: 999"));
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -251,7 +255,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
                 .Returns(Task.CompletedTask);
 
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -280,7 +285,8 @@ namespace ECommerce.Tests.Services
             inventoryMock
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Yetersiz stok: Low Stock Product"));
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var product = new Product
             {
@@ -325,7 +331,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ReserveStockAsync(It.IsAny<Guid>(), It.IsAny<IEnumerable<CartItemDto>>()))
                 .ReturnsAsync(false);
 
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
             var product = new Product
             {
                 Name = "Concurrent Product",
@@ -361,7 +368,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, notificationMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
 
             var order = new Order
             {
@@ -395,7 +403,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, notificationMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
 
             // Act
             await orderManager.UpdateOrderStatusAsync(999, OrderStatus.Delivered.ToString());
@@ -413,7 +422,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, notificationMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
 
             var order = new Order
             {
@@ -446,7 +456,8 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var order = new Order
             {
@@ -476,7 +487,8 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             // Act
             var result = await orderManager.CancelOrderAsync(999, 1);
@@ -491,7 +503,8 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             var product = new Product
             {
@@ -544,7 +557,8 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
 
             // Act
             var ex = await Assert.ThrowsAsync<Exception>(() => orderManager.GetOrderByIdAsync(999));

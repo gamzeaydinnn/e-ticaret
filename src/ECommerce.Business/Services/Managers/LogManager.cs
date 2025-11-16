@@ -200,6 +200,66 @@ namespace ECommerce.Business.Services.Managers
             return new PagedResult<SystemLogDto>(items, total, skip, parameters.Take);
         }
 
+        public async Task<PagedResult<InventoryLogDto>> GetInventoryLogsAsync(InventoryLogQueryParameters parameters)
+        {
+            var query = _dbContext.InventoryLogs
+                .Include(l => l.Product)
+                .AsNoTracking();
+
+            if (parameters.ProductId.HasValue)
+            {
+                query = query.Where(l => l.ProductId == parameters.ProductId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(parameters.Action))
+            {
+                var action = parameters.Action.Trim();
+                query = query.Where(l => l.Action == action);
+            }
+
+            if (parameters.StartDate.HasValue)
+            {
+                var start = parameters.StartDate.Value;
+                query = query.Where(l => l.CreatedAt >= start);
+            }
+
+            if (parameters.EndDate.HasValue)
+            {
+                var end = parameters.EndDate.Value;
+                query = query.Where(l => l.CreatedAt <= end);
+            }
+
+            if (!string.IsNullOrWhiteSpace(parameters.Search))
+            {
+                var search = parameters.Search.Trim();
+                query = query.Where(l =>
+                    EF.Functions.Like(l.Action, $"%{search}%") ||
+                    (l.ReferenceId != null && EF.Functions.Like(l.ReferenceId, $"%{search}%")) ||
+                    (l.Product != null && EF.Functions.Like(l.Product.Name, $"%{search}%")));
+            }
+
+            var skip = NormalizeSkip(parameters.Skip);
+            var total = await query.CountAsync();
+            var items = await query.OrderByDescending(l => l.CreatedAt)
+                .Skip(skip)
+                .Take(parameters.Take)
+                .Select(l => new InventoryLogDto
+                {
+                    Id = l.Id,
+                    ProductId = l.ProductId,
+                    ProductName = l.Product != null ? l.Product.Name : null,
+                    Action = l.Action,
+                    Quantity = l.Quantity,
+                    OldStock = l.OldStock,
+                    NewStock = l.NewStock,
+                    ReferenceId = l.ReferenceId,
+                    CreatedAt = l.CreatedAt
+                })
+                .ToListAsync();
+
+            return new PagedResult<InventoryLogDto>(items, total, skip, parameters.Take);
+        }
+
         private static int NormalizeSkip(int skip) => skip < 0 ? 0 : skip;
     }
 }

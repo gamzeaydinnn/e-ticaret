@@ -1,21 +1,17 @@
 using System;
-using ECommerce.Entities.Concrete;
-using System.Collections.Generic;
-using System;
 
-namespace ECommerce.Entities.Concrete
+namespace ECommerce.Core.DTOs.Logs
 {
-    public enum InventoryChangeType { Purchase, Sale, Correction, Return, Transfer }
-
-    public class InventoryLog : BaseEntity
+    public class InventoryLogDto
     {
+        public int Id { get; set; }
         public int ProductId { get; set; }
         public string Action { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public int OldStock { get; set; }
         public int NewStock { get; set; }
         public string? ReferenceId { get; set; }
-
-        public virtual Product? Product { get; set; }
+        public string? ProductName { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }
