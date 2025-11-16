@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Order;
@@ -8,12 +9,14 @@ namespace ECommerce.Business.Services.Interfaces
     {
         Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null);
         Task<OrderListDto?> GetByIdAsync(int id);
+        Task<OrderListDto?> GetByClientOrderIdAsync(Guid clientOrderId);
         Task<OrderListDto> CreateAsync(OrderCreateDto dto);
         Task UpdateAsync(int id, OrderUpdateDto dto);
         Task DeleteAsync(int id);
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
         Task<OrderListDto> CheckoutAsync(OrderCreateDto dto);
         Task<bool> CancelOrderAsync(int orderId, int userId);
+        Task<bool> MarkPaymentFailedAsync(int orderId);
         Task<int> GetOrderCountAsync();
         Task<int> GetTodayOrderCountAsync();
         Task<decimal> GetTotalRevenueAsync();

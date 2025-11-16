@@ -22,11 +22,25 @@ const PaymentPage = () => {
       return "motorcycle";
     }
   }); // 'motorcycle' (motokurye) | 'car' (araç)
+  const [couponCode, setCouponCode] = useState("");
+  const [pricing, setPricing] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingError, setPricingError] = useState("");
   const [errors, setErrors] = useState({});
   const [deliverySlot, setDeliverySlot] = useState("standard");
   const [deliveryNote, setDeliveryNote] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [clientOrderId] = useState(() => {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  });
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -207,6 +221,29 @@ const PaymentPage = () => {
     return { subtotal, shipping, tax, total };
   };
 
+  const handleApplyCoupon = async () => {
+    if (!cartItems || cartItems.length === 0) return;
+    setPricingLoading(true);
+    setPricingError("");
+    try {
+      const itemsPayload = cartItems.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+      }));
+      const result = await CartService.previewPrice({
+        items: itemsPayload,
+        couponCode: couponCode?.trim() || null,
+      });
+      setPricing(result);
+    } catch (error) {
+      console.error("Kupon uygulanırken hata:", error);
+      setPricing(null);
+      setPricingError("Kupon geçersiz veya kullanılamıyor.");
+    } finally {
+      setPricingLoading(false);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -340,7 +377,6 @@ const PaymentPage = () => {
       });
 
       const payload = {
-        userId: user ? user.id : null,
         totalPrice: total, // sunucu yeniden hesaplayacak
         orderItems,
         shippingMethod: shippingMethod === "car" ? "car" : "motorcycle",
@@ -359,6 +395,7 @@ const PaymentPage = () => {
         ]
           .filter(Boolean)
           .join(" | "),
+        clientOrderId,
       };
 
       const orderRes = await OrderService.checkout(payload);
@@ -1288,6 +1325,33 @@ const PaymentPage = () => {
                     </div>
                   </div>
 
+                  {/* Kupon Kodu */}
+                  <div className="mb-4">
+                    <h6 className="text-warning fw-bold mb-2">Kupon Kodu</h6>
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="Kupon kodunuzu girin"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value)}
+                      />
+                      <button
+                        className="btn btn-warning fw-bold"
+                        type="button"
+                        disabled={pricingLoading || cartItems.length === 0}
+                        onClick={handleApplyCoupon}
+                      >
+                        {pricingLoading ? "Uygulanıyor..." : "Kupon Uygula"}
+                      </button>
+                    </div>
+                    {pricingError && (
+                      <div className="alert alert-danger mt-2 py-2 mb-0">
+                        {pricingError}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Toplam Hesapları */}
                   <div className="mb-4">
                     <div className="d-flex justify-content-between mb-2">
@@ -1311,6 +1375,61 @@ const PaymentPage = () => {
                       <span>Toplam:</span>
                       <span className="text-warning">₺{total.toFixed(2)}</span>
                     </div>
+
+                    {pricing && (
+                      <div className="mt-3">
+                        <div className="d-flex justify-content-between mb-1">
+                          <span>Ara Toplam</span>
+                          <span>
+                            ₺{Number(pricing.subtotal || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="d-flex justify-content-between mb-1">
+                          <span>Kampanya İndirimi</span>
+                          <span className="text-success">
+                            -₺
+                            {Number(
+                              pricing.campaignDiscountTotal || 0
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="d-flex justify-content-between mb-1">
+                          <span>Kupon İndirimi</span>
+                          <span className="text-success">
+                            -₺
+                            {Number(
+                              pricing.couponDiscountTotal || 0
+                            ).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="d-flex justify-content-between mb-1">
+                          <span>Kargo Ücreti</span>
+                          <span>
+                            ₺{Number(pricing.deliveryFee || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <hr />
+                        <div className="d-flex justify-content-between fw-bold">
+                          <span>Genel Toplam</span>
+                          <span className="text-warning">
+                            ₺{Number(pricing.grandTotal || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        {pricing.appliedCouponCode && (
+                          <div className="small text-muted mt-1">
+                            Uygulanan Kupon:{" "}
+                            <strong>{pricing.appliedCouponCode}</strong>
+                          </div>
+                        )}
+                        {Array.isArray(pricing.appliedCampaignNames) &&
+                          pricing.appliedCampaignNames.length > 0 && (
+                            <div className="small text-muted">
+                              Kampanyalar:{" "}
+                              {pricing.appliedCampaignNames.join(", ")}
+                            </div>
+                          )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Ödeme Butonu */}

@@ -21,7 +21,9 @@ namespace ECommerce.Entities.Concrete
     public class Order : BaseEntity
     {
         public string OrderNumber { get; set; } = string.Empty;
+        public Guid? ClientOrderId { get; set; }
         public int? UserId { get; set; }
+        public bool IsGuestOrder { get; set; }
         public string ShippingAddress { get; set; } = string.Empty;
         public string ShippingCity { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;

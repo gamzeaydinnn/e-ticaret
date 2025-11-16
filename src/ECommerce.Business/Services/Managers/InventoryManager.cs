@@ -9,6 +9,8 @@ using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Services.Email;
 using Microsoft.Extensions.Configuration;
+using ECommerce.Core.DTOs.Order;
+using System.Linq;
 
 
 namespace ECommerce.Business.Services.Managers
@@ -87,6 +89,41 @@ namespace ECommerce.Business.Services.Managers
 
             await LogAsync(productId, quantity, changeType, note, performedByUserId);
             return true;
+        }
+
+        public async Task<(bool Success, string? ErrorMessage)> ValidateStockForOrderAsync(IEnumerable<OrderItemDto> items)
+        {
+            if (items == null)
+            {
+                return (false, "Sepet öğeleri gerekli");
+            }
+
+            var materialized = items.ToList();
+            if (materialized.Count == 0)
+            {
+                return (false, "Sepet boş olamaz.");
+            }
+
+            foreach (var item in materialized)
+            {
+                if (item.Quantity <= 0)
+                {
+                    return (false, "Geçersiz miktar");
+                }
+
+                var product = await _productRepository.GetByIdAsync(item.ProductId);
+                if (product == null)
+                {
+                    return (false, $"Ürün bulunamadı: {item.ProductId}");
+                }
+
+                if (product.StockQuantity < item.Quantity)
+                {
+                    return (false, $"Yetersiz stok: {product.Name}");
+                }
+            }
+
+            return (true, null);
         }
 
         private async Task LogAsync(int productId, int changeQty, InventoryChangeType type, string? note = null, int? byUserId = null)

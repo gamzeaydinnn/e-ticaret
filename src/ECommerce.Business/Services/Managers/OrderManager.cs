@@ -51,6 +51,7 @@ namespace ECommerce.Business.Services.Managers
                 [OrderStatus.Delivered] = new HashSet<OrderStatus>(),
                 [OrderStatus.Cancelled] = new HashSet<OrderStatus>(),
                 [OrderStatus.Completed] = new HashSet<OrderStatus>(),
+                [OrderStatus.PaymentFailed] = new HashSet<OrderStatus>(),
                 // Eski/alternatif akışlar için makul geçişler
                 [OrderStatus.Processing] = new HashSet<OrderStatus>
                 {
@@ -78,6 +79,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
+                IsGuestOrder = order.IsGuestOrder,
                 TotalPrice = order.TotalPrice,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
@@ -108,8 +110,19 @@ namespace ECommerce.Business.Services.Managers
             return order != null ? MapToDto(order) : null;
         }
 
+        public async Task<OrderListDto?> GetByClientOrderIdAsync(Guid clientOrderId)
+        {
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
+
+            return order != null ? MapToDto(order) : null;
+        }
+
         public async Task<OrderListDto> CreateAsync(OrderCreateDto dto)
         {
+            var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
             decimal total = 0m;
             var items = new List<OrderItem>();
             foreach (var i in dto.OrderItems)
@@ -129,7 +142,9 @@ namespace ECommerce.Business.Services.Managers
             }
             var order = new Order
             {
-                UserId = dto.UserId,
+                ClientOrderId = dto.ClientOrderId,
+                UserId = effectiveUserId,
+                IsGuestOrder = !effectiveUserId.HasValue,
                 OrderNumber = GenerateOrderNumber(),
                 // Shipping will be computed server-side (do not trust client-provided cost)
                 ShippingMethod = NormalizeShippingMethod(dto.ShippingMethod),
@@ -188,17 +203,20 @@ namespace ECommerce.Business.Services.Managers
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
+                if (!stockCheck.Success)
+                {
+                    throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
+                }
+
+                var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
                 decimal total = 0m;
                 var items = new List<OrderItem>();
                 foreach (var item in dto.OrderItems)
                 {
-                    if (item.Quantity <= 0)
-                        throw new Exception("Geçersiz miktar");
                     var product = await _context.Products.FindAsync(item.ProductId);
                     if (product == null)
                         throw new Exception($"Ürün bulunamadı: {item.ProductId}");
-                    if (product.StockQuantity < item.Quantity)
-                        throw new Exception($"Yetersiz stok: {product.Name}");
                     var unitPrice = product.SpecialPrice ?? product.Price;
                     total += unitPrice * item.Quantity;
                     items.Add(new OrderItem
@@ -216,7 +234,9 @@ namespace ECommerce.Business.Services.Managers
 
                 var order = new Order
                 {
-                    UserId = dto.UserId,
+                    ClientOrderId = dto.ClientOrderId,
+                    UserId = effectiveUserId,
+                    IsGuestOrder = !effectiveUserId.HasValue,
                     OrderNumber = GenerateOrderNumber(),
                     TotalPrice = total,
                     Status = OrderStatus.Pending,
@@ -269,6 +289,25 @@ namespace ECommerce.Business.Services.Managers
             if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Delivered)
                 return false;
             order.Status = OrderStatus.Cancelled;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> MarkPaymentFailedAsync(int orderId)
+        {
+            var order = await _context.Orders.FindAsync(orderId);
+            if (order == null)
+            {
+                return false;
+            }
+
+            // Ödeme başarısız olduğunda sipariş Paid durumunda olmamalı
+            if (order.Status == OrderStatus.PaymentFailed || order.Status == OrderStatus.Cancelled)
+            {
+                return true;
+            }
+
+            order.Status = OrderStatus.PaymentFailed;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -357,6 +396,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
+                IsGuestOrder = order.IsGuestOrder,
                 OrderNumber = order.OrderNumber,
                 TotalPrice = order.TotalPrice,
                 Status = order.Status.ToString(),

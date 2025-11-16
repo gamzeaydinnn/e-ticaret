@@ -16,17 +16,19 @@ namespace ECommerce.Core.Helpers
             string key,
             string issuer,
             string audience,
-            int expiresMinutes = 120)
+            int expiresMinutes = 120,
+            string? jti = null)
         {
             if (string.IsNullOrWhiteSpace(key) || Encoding.UTF8.GetByteCount(key) < 32)
                 throw new ArgumentException("JWT signing key must be at least 256 bits (32 bytes)", nameof(key));
+            var jwtId = string.IsNullOrWhiteSpace(jti) ? Guid.NewGuid().ToString() : jti;
             var claims = new List<Claim>
             {
                 new Claim(JwtRegisteredClaimNames.Sub, email),
                 new Claim(JwtRegisteredClaimNames.Email, email),
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Role, role),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                new Claim(JwtRegisteredClaimNames.Jti, jwtId)
             };
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));

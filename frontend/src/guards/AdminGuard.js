@@ -30,7 +30,7 @@ export const AdminGuard = ({ children }) => {
       const token = localStorage.getItem("authToken") || localStorage.getItem("adminToken") || localStorage.getItem("token");
       if (storedUser && token) {
         const parsed = JSON.parse(storedUser);
-        if (parsed && (parsed.isAdmin || parsed.role === "Admin")) {
+        if (parsed && (parsed.isAdmin || parsed.role === "Admin" || parsed.role === "SuperAdmin")) {
           setUser?.(parsed);
           return children;
         }
@@ -40,7 +40,7 @@ export const AdminGuard = ({ children }) => {
   }
 
   // Admin yetkisi yoksa ana sayfaya yönlendir
-  if (!user.isAdmin && user.role !== "Admin") {
+  if (!user.isAdmin && user.role !== "Admin" && user.role !== "SuperAdmin") {
     return <Navigate to="/" replace />;
   }
 
@@ -68,7 +68,7 @@ export const AdminLoginGuard = ({ children }) => {
   }
 
   // Admin girişi yapmışsa dashboard'a yönlendir
-  if (user && (user.isAdmin || user.role === "Admin")) {
+  if (user && (user.isAdmin || user.role === "Admin" || user.role === "SuperAdmin")) {
     return <Navigate to="/admin/dashboard" replace />;
   }
 

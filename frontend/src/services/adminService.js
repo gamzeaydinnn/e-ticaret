@@ -236,6 +236,42 @@ let mockCoupons = [
   },
 ];
 
+let mockCampaigns = [
+  {
+    id: 1,
+    name: "Sepette %10 İndirim",
+    description: "200 TL üzeri alışverişte geçerli.",
+    startDate: "2024-10-01T00:00:00Z",
+    endDate: "2024-10-31T23:59:59Z",
+    isActive: true,
+    conditionJson: '{"minSubtotal":200}',
+    rewardType: "Percent",
+    rewardValue: 10,
+  },
+  {
+    id: 2,
+    name: "150 TL İade",
+    description: "1000 TL üzeri alışverişlerde 150 TL indirim",
+    startDate: "2024-11-01T00:00:00Z",
+    endDate: "2024-11-30T23:59:59Z",
+    isActive: false,
+    conditionJson: '{"minSubtotal":1000}',
+    rewardType: "Amount",
+    rewardValue: 150,
+  },
+  {
+    id: 3,
+    name: "Ücretsiz Kargo Haftası",
+    description: "Kasım ayı ilk haftasında tüm siparişlere ücretsiz kargo",
+    startDate: "2024-11-04T00:00:00Z",
+    endDate: "2024-11-10T23:59:59Z",
+    isActive: true,
+    conditionJson: null,
+    rewardType: "FreeShipping",
+    rewardValue: 0,
+  },
+];
+
 const mockLowStockReport = {
   threshold: 5,
   products: [
@@ -738,6 +774,66 @@ export const AdminService = {
     }
     ensureBackend();
     return api.delete(`/api/admin/coupons/${id}`);
+  },
+
+  // Campaigns
+  getCampaigns: async () => {
+    if (shouldUseMockData()) {
+      return clone(mockCampaigns);
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns");
+  },
+  getCampaignById: async (id) => {
+    if (shouldUseMockData()) {
+      const found = mockCampaigns.find((c) => c.id === Number(id));
+      if (!found) throw new Error("Kampanya bulunamadı");
+      return { ...found };
+    }
+    ensureBackend();
+    return api.get(`/api/admin/campaigns/${id}`);
+  },
+  createCampaign: async (payload) => {
+    if (shouldUseMockData()) {
+      const nextId =
+        mockCampaigns.length > 0 ? Math.max(...mockCampaigns.map((c) => c.id)) + 1 : 1;
+      const prepared = {
+        ...payload,
+        id: nextId,
+        startDate: payload.startDate instanceof Date ? payload.startDate.toISOString() : payload.startDate,
+        endDate: payload.endDate instanceof Date ? payload.endDate.toISOString() : payload.endDate,
+      };
+      mockCampaigns.push(prepared);
+      return { ...prepared };
+    }
+    ensureBackend();
+    return api.post("/api/admin/campaigns", payload);
+  },
+  updateCampaign: async (id, payload) => {
+    if (shouldUseMockData()) {
+      const idx = mockCampaigns.findIndex((c) => c.id === Number(id));
+      if (idx === -1) throw new Error("Kampanya bulunamadı");
+      mockCampaigns[idx] = {
+        ...mockCampaigns[idx],
+        ...payload,
+        startDate: payload.startDate instanceof Date ? payload.startDate.toISOString() : payload.startDate,
+        endDate: payload.endDate instanceof Date ? payload.endDate.toISOString() : payload.endDate,
+        id: mockCampaigns[idx].id,
+      };
+      return { ...mockCampaigns[idx] };
+    }
+    ensureBackend();
+    return api.put(`/api/admin/campaigns/${id}`, payload);
+  },
+  deleteCampaign: async (id) => {
+    if (shouldUseMockData()) {
+      const idx = mockCampaigns.findIndex((c) => c.id === Number(id));
+      if (idx === -1) throw new Error("Kampanya bulunamadı");
+      mockCampaigns.splice(idx, 1);
+      return { success: true };
+    }
+    ensureBackend();
+    return api.delete(`/api/admin/campaigns/${id}`);
   },
 };
 

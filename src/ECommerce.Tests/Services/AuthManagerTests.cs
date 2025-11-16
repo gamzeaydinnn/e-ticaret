@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Core.DTOs.Auth;
 using ECommerce.Data.Context;
+using ECommerce.Data.Repositories;
 using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Infrastructure.Services.Email;
@@ -21,6 +22,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
 using Xunit;
+using Microsoft.AspNetCore.Http;
+using System.Net;
 
 namespace ECommerce.Tests.Services
 {
@@ -102,23 +105,37 @@ namespace ECommerce.Tests.Services
             return userManager;
         }
 
-        private static AuthManager CreateAuthManager(ECommerceDbContext context)
+        private static AuthManager CreateAuthManager(
+            UserManager<User> userManager,
+            IConfiguration config,
+            EmailSender emailSender,
+            ECommerceDbContext context,
+            string ipAddress = "127.0.0.1")
         {
-            var userManager = CreateUserManager(context);
-            var config = BuildConfiguration();
-            var emailSender = CreateEmailSender();
+            var refreshRepository = new RefreshTokenRepository(context);
+            var httpContextAccessor = new HttpContextAccessor();
+            var defaultContext = new DefaultHttpContext();
+            if (IPAddress.TryParse(ipAddress, out var parsed))
+            {
+                defaultContext.Connection.RemoteIpAddress = parsed;
+            }
+            httpContextAccessor.HttpContext = defaultContext;
 
-            return new AuthManager(userManager, config, emailSender);
+            return new AuthManager(userManager, config, emailSender, refreshRepository, httpContextAccessor);
         }
 
-        private static string GenerateTestTokenWithName(string email, string key)
+        private static string GenerateExpiredToken(int userId, string email, string role, string key, string jti)
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
             var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {
-                new Claim(ClaimTypes.Name, email)
+                new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, email),
+                new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+                new Claim(ClaimTypes.Role, role),
+                new Claim(JwtRegisteredClaimNames.Jti, jti)
             };
 
             var token = new JwtSecurityToken(
@@ -153,7 +170,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var existingUser = new User
             {
@@ -188,7 +205,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             // Intentionally use an invalid password (too short) to force Identity failure
             var dto = new RegisterDto
@@ -214,7 +231,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var dto = new RegisterDto
             {
@@ -247,7 +264,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var dto = new LoginDto
             {
@@ -270,7 +287,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var user = new User
             {
@@ -304,7 +321,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var user = new User
             {
@@ -338,7 +355,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var user = new User
             {
@@ -360,13 +377,14 @@ namespace ECommerce.Tests.Services
             };
 
             // Act
-            var token = await authManager.LoginAsync(dto);
+            var tokens = await authManager.LoginAsync(dto);
 
             // Assert
-            Assert.False(string.IsNullOrWhiteSpace(token));
+            Assert.False(string.IsNullOrWhiteSpace(tokens.accessToken));
+            Assert.False(string.IsNullOrWhiteSpace(tokens.refreshToken));
 
             var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(token);
+            var jwt = handler.ReadJwtToken(tokens.accessToken);
 
             Assert.Equal("TestIssuer", jwt.Issuer);
             Assert.Equal("TestAudience", jwt.Audiences is null ? null : Assert.Single(jwt.Audiences));
@@ -384,7 +402,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var invalidToken = "this_is_not_a_valid_jwt";
 
@@ -396,23 +414,35 @@ namespace ECommerce.Tests.Services
         }
 
         [Fact]
-        public async Task RefreshTokenAsync_ShouldThrow_WhenUserNotFound()
+        public async Task RefreshTokenAsync_ShouldThrow_WhenRefreshTokenMissing()
         {
             // Arrange
             using var context = CreateInMemoryDbContext();
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
-            var email = "unknown@test.com";
-            var token = GenerateTestTokenWithName(email, config["Jwt:Key"]!);
+            var user = new User
+            {
+                Email = "unknown@test.com",
+                UserName = "unknown@test.com",
+                FirstName = "Unknown",
+                LastName = "User",
+                Role = "User",
+                EmailConfirmed = true
+            };
+
+            await userManager.CreateAsync(user, "Password123");
+
+            var jti = Guid.NewGuid().ToString();
+            var token = GenerateExpiredToken(user.Id, user.Email!, user.Role!, config["Jwt:Key"]!, jti);
 
             // Act
             var exception = await Assert.ThrowsAsync<Exception>(() => authManager.RefreshTokenAsync(token, "refresh-token"));
 
             // Assert
-            Assert.Equal("User not found", exception.Message);
+            Assert.Equal("Refresh token bulunamadı.", exception.Message);
         }
 
         [Fact]
@@ -423,7 +453,7 @@ namespace ECommerce.Tests.Services
             var userManager = CreateUserManager(context);
             var config = BuildConfiguration();
             var emailSender = CreateEmailSender();
-            var authManager = new AuthManager(userManager, config, emailSender);
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
 
             var user = new User
             {
@@ -437,10 +467,22 @@ namespace ECommerce.Tests.Services
 
             await userManager.CreateAsync(user, "Password123");
 
-            var token = GenerateTestTokenWithName(user.Email, config["Jwt:Key"]!);
+            var refreshTokenValue = "refresh-token";
+            var jti = Guid.NewGuid().ToString();
+            var token = GenerateExpiredToken(user.Id, user.Email!, user.Role!, config["Jwt:Key"]!, jti);
+
+            context.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = user.Id,
+                Token = refreshTokenValue,
+                JwtId = jti,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                CreatedIp = "127.0.0.1"
+            });
+            await context.SaveChangesAsync();
 
             // Act
-            var newToken = await authManager.RefreshTokenAsync(token, "refresh-token");
+            var newToken = await authManager.RefreshTokenAsync(token, refreshTokenValue);
 
             // Assert
             Assert.False(string.IsNullOrWhiteSpace(newToken));
@@ -452,7 +494,9 @@ namespace ECommerce.Tests.Services
             Assert.Contains(jwt.Claims, c => c.Type == JwtRegisteredClaimNames.Email && c.Value == user.Email);
             Assert.Contains(jwt.Claims, c => c.Type == ClaimTypes.Role && c.Value == user.Role);
             Assert.Contains(jwt.Claims, c => c.Type == ClaimTypes.NameIdentifier && c.Value == user.Id.ToString());
+
+            var storedToken = await context.RefreshTokens.FirstAsync();
+            Assert.NotEqual(jti, storedToken.JwtId);
         }
     }
 }
-

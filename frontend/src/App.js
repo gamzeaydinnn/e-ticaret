@@ -34,6 +34,7 @@ import AdminCouriers from "./pages/Admin/AdminCouriers";
 import AdminReports from "./pages/Admin/AdminReports";
 import CouponManagement from "./pages/Admin/CouponManagement";
 import AdminWeightReports from "./pages/Admin/AdminWeightReports";
+import AdminCampaigns from "./pages/Admin/AdminCampaigns";
 // Kurye sayfaları
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -760,6 +761,14 @@ function App() {
               element={
                 <AdminGuard>
                   <AdminWeightReports />
+                </AdminGuard>
+              }
+            />
+            <Route
+              path="/admin/campaigns"
+              element={
+                <AdminGuard>
+                  <AdminCampaigns />
                 </AdminGuard>
               }
             />

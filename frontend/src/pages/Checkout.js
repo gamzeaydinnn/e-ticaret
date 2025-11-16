@@ -16,6 +16,16 @@ export default function Checkout() {
   const [shippingMethod, setShippingMethod] = useState("car"); // car veya motorcycle
   const [shippingCost, setShippingCost] = useState(30); // Varsayılan araç ücreti
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [clientOrderId] = useState(() => {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  });
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -52,6 +62,7 @@ export default function Checkout() {
         paymentMethod,
         shippingMethod,
         shippingCost,
+        clientOrderId,
       };
 
       const res = await api.post("/orders", payload);

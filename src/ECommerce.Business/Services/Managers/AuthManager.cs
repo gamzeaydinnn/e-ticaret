@@ -2,11 +2,12 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
-using ECommerce.Data.Context;
-using ECommerce.Infrastructure;
+using Microsoft.AspNetCore.Http;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Helpers;
 using ECommerce.Core.DTOs.Auth;
@@ -15,6 +16,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Infrastructure.Services.Email;
 using System.Net;
 using Microsoft.AspNetCore.WebUtilities;
+using ECommerce.Core.Interfaces;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -23,12 +25,21 @@ namespace ECommerce.Business.Services.Managers
         private readonly UserManager<User> _userManager;
         private readonly IConfiguration _config;
         private readonly EmailSender _emailSender;
+        private readonly IRefreshTokenRepository _refreshTokenRepository;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public AuthManager(UserManager<User> userManager, IConfiguration config, EmailSender emailSender)
+        public AuthManager(
+            UserManager<User> userManager,
+            IConfiguration config,
+            EmailSender emailSender,
+            IRefreshTokenRepository refreshTokenRepository,
+            IHttpContextAccessor httpContextAccessor)
         {
             _userManager = userManager;
             _config = config;
             _emailSender = emailSender;
+            _refreshTokenRepository = refreshTokenRepository;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<string> RegisterAsync(RegisterDto dto)
@@ -64,7 +75,7 @@ namespace ECommerce.Business.Services.Managers
             return string.Empty;
         }
 
-        public async Task<string> LoginAsync(LoginDto dto)
+        public async Task<(string accessToken, string refreshToken)> LoginAsync(LoginDto dto)
         {
             var user = await _userManager.FindByEmailAsync(dto.Email);
             if (user == null)
@@ -83,7 +94,7 @@ namespace ECommerce.Business.Services.Managers
                 throw new Exception("Şifre yanlış");
             }
 
-            return GenerateJwtToken(user);
+            return await IssueTokensForUserAsync(user, GetClientIpAddress());
         }
 
         public async Task<UserLoginDto> GetUserByIdAsync(int userId)
@@ -118,45 +129,138 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
-        private string GenerateJwtToken(User user)
+        public async Task<(string accessToken, string refreshToken)> IssueTokensForUserAsync(User user, string? ipAddress = null)
         {
+            if (user == null) throw new ArgumentNullException(nameof(user));
+            return await CreateTokenPairAsync(user, ipAddress);
+        }
+
+        private string GenerateJwtToken(User user, string? jti = null)
+        {
+            var key = _config["Jwt:Key"] ?? throw new Exception("JWT anahtarı tanımlı değil.");
+            var issuer = _config["Jwt:Issuer"] ?? string.Empty;
+            var audience = _config["Jwt:Audience"] ?? string.Empty;
+
             return JwtTokenHelper.GenerateToken(
                 user.Id,
-                user.Email,
-                user.Role,
-                _config["Jwt:Key"],
-                _config["Jwt:Issuer"],
-                _config["Jwt:Audience"],
-                expiresMinutes: 120
+                user.Email ?? string.Empty,
+                user.Role ?? "User",
+                key,
+                issuer,
+                audience,
+                expiresMinutes: GetAccessTokenLifetimeMinutes(),
+                jti: jti
             );
+        }
+
+        private async Task<(string accessToken, string refreshToken)> CreateTokenPairAsync(User user, string? ipAddress)
+        {
+            var jti = Guid.NewGuid().ToString();
+            var accessToken = GenerateJwtToken(user, jti);
+            var refreshTokenValue = GenerateSecureRefreshToken();
+            var refreshToken = new RefreshToken
+            {
+                UserId = user.Id,
+                Token = refreshTokenValue,
+                JwtId = jti,
+                ExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenLifetimeDays()),
+                CreatedIp = ipAddress
+            };
+            await _refreshTokenRepository.AddAsync(refreshToken);
+            return (accessToken, refreshTokenValue);
+        }
+
+        private int GetAccessTokenLifetimeMinutes()
+        {
+            var minutes = _config.GetValue<int?>("AppSettings:JwtExpirationInMinutes");
+            return minutes.HasValue && minutes.Value > 0 ? minutes.Value : 120;
+        }
+
+        private int GetRefreshTokenLifetimeDays()
+        {
+            var refreshDays = _config.GetValue<int?>("Jwt:RefreshTokenDays")
+                             ?? _config.GetValue<int?>("AppSettings:RefreshTokenDays");
+            return refreshDays.HasValue && refreshDays.Value > 0 ? refreshDays.Value : 14;
+        }
+
+        private static string GenerateSecureRefreshToken()
+        {
+            var bytes = new byte[64];
+            RandomNumberGenerator.Fill(bytes);
+            return WebEncoders.Base64UrlEncode(bytes);
+        }
+
+        private string? GetClientIpAddress()
+        {
+            return _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
         }
 
         public async Task<string> RefreshTokenAsync(string token, string refreshToken)
         {
-            var principal = JwtTokenHelper.GetPrincipalFromExpiredToken(token, _config["Jwt:Key"]);
+            var key = _config["Jwt:Key"] ?? throw new Exception("JWT anahtarı tanımlı değil.");
+            var principal = JwtTokenHelper.GetPrincipalFromExpiredToken(token, key);
             if (principal == null)
             {
                 throw new Exception("Invalid token");
             }
 
-            var userEmail = principal.Identity?.Name;
-            if (string.IsNullOrWhiteSpace(userEmail))
+            var userIdClaim = principal.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value
+                              ?? principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+            if (string.IsNullOrWhiteSpace(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
             {
                 throw new Exception("Invalid token payload");
             }
 
-            var user = await _userManager.Users.SingleOrDefaultAsync(u => u.Email == userEmail);
+            var jti = principal.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Jti)?.Value;
+            if (string.IsNullOrWhiteSpace(jti))
+            {
+                throw new Exception("Invalid token payload");
+            }
+
+            var storedRefreshToken = await _refreshTokenRepository.GetByTokenAsync(refreshToken);
+            if (storedRefreshToken == null || storedRefreshToken.UserId != userId)
+            {
+                throw new Exception("Refresh token bulunamadı.");
+            }
+
+            if (storedRefreshToken.RevokedAt.HasValue)
+            {
+                throw new Exception("Refresh token iptal edilmiş.");
+            }
+
+            if (storedRefreshToken.ExpiresAt <= DateTime.UtcNow)
+            {
+                throw new Exception("Refresh token süresi dolmuş.");
+            }
+
+            if (!string.Equals(storedRefreshToken.JwtId, jti, StringComparison.Ordinal))
+            {
+                throw new Exception("Token eşleşmiyor.");
+            }
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
             {
                 throw new Exception("User not found");
             }
 
-            return GenerateJwtToken(user);
+            var newJti = Guid.NewGuid().ToString();
+            var newAccessToken = GenerateJwtToken(user, newJti);
+            storedRefreshToken.JwtId = newJti;
+            await _refreshTokenRepository.UpdateAsync(storedRefreshToken);
+
+            return newAccessToken;
         }
 
-        public async Task RevokeRefreshTokenAsync(int userId)
+        public async Task InvalidateUserTokensAsync(int userId)
         {
-            await Task.CompletedTask;
+            var activeTokens = await _refreshTokenRepository.GetActiveTokensByUserAsync(userId);
+            var now = DateTime.UtcNow;
+            foreach (var token in activeTokens)
+            {
+                token.RevokedAt = now;
+                await _refreshTokenRepository.UpdateAsync(token);
+            }
         }
 
         public async Task ForgotPasswordAsync(ForgotPasswordDto dto)
