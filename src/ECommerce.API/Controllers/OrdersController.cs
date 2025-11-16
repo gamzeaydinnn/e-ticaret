@@ -124,7 +124,7 @@ namespace ECommerce.API.Controllers
         /// Sipariş durumunu günceller (sadece adminler).
         /// </summary>
         [HttpPatch("{id:int}/status")]
-        [Authorize(Roles = Roles.Admin)]
+        [Authorize(Roles = Roles.AdminLike)]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] OrderStatusUpdateDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Status))

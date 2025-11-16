@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace ECommerce.API.Controllers.Admin
 {
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.AdminLike)]
     [ApiController]
     [Route("api/admin/coupons")] // api/admin/coupons
     public class AdminCouponsController : ControllerBase

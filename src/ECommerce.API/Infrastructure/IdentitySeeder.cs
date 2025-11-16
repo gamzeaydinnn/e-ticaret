@@ -20,8 +20,6 @@ namespace ECommerce.API.Infrastructure
             {
                 Roles.SuperAdmin,
                 Roles.Admin,
-                Roles.Manager,
-                Roles.Editor,
                 Roles.User
             };
 
@@ -48,13 +46,12 @@ namespace ECommerce.API.Infrastructure
                     LastName = "User",
                     EmailConfirmed = true,
                     IsActive = true,
-                    Role = Roles.Admin
+                    Role = Roles.SuperAdmin
                 };
 
                 var createResult = await userManager.CreateAsync(adminUser, adminPassword);
                 if (createResult.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(adminUser, Roles.Admin);
                     await userManager.AddToRoleAsync(adminUser, Roles.SuperAdmin);
                 }
                 else
@@ -62,7 +59,35 @@ namespace ECommerce.API.Infrastructure
                     // Hata durumunda sessiz geçmek yerine loglanması önerilir
                 }
             }
+            else
+            {
+                var requiresUpdate = false;
+                if (!adminUser.EmailConfirmed)
+                {
+                    adminUser.EmailConfirmed = true;
+                    requiresUpdate = true;
+                }
+                if (!adminUser.IsActive)
+                {
+                    adminUser.IsActive = true;
+                    requiresUpdate = true;
+                }
+                if (adminUser.Role != Roles.SuperAdmin)
+                {
+                    adminUser.Role = Roles.SuperAdmin;
+                    requiresUpdate = true;
+                }
+
+                if (requiresUpdate)
+                {
+                    await userManager.UpdateAsync(adminUser);
+                }
+
+                if (!await userManager.IsInRoleAsync(adminUser, Roles.SuperAdmin))
+                {
+                    await userManager.AddToRoleAsync(adminUser, Roles.SuperAdmin);
+                }
+            }
         }
     }
 }
-

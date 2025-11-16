@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = Roles.Admin)]
+    [Authorize(Roles = Roles.AdminLike)]
     [Route("api/admin/dashboard")]
     public class AdminDashboardController : ControllerBase
     {
