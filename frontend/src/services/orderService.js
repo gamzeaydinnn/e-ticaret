@@ -2,6 +2,17 @@ import api from "./api";
 
 const base = "/api/Orders";
 
+const generateClientOrderId = () => {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // no-op, fallback below
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 const normalizeOrder = (order = {}) => {
   const itemsSource = Array.isArray(order.orderItems)
     ? order.orderItems
@@ -46,7 +57,25 @@ const normalizeList = (payload) =>
   Array.isArray(payload) ? payload.map(normalizeOrder) : [];
 
 export const OrderService = {
-  create: (payload) => api.post(base, payload).then(normalizeOrder),
+  create: async (payload) => {
+    const finalPayload = {
+      ...payload,
+      clientOrderId: payload?.clientOrderId || generateClientOrderId(),
+    };
+
+    try {
+      const data = await api.post(base, finalPayload);
+      return normalizeOrder(data);
+    } catch (error) {
+      if (error.status === 409 && error.raw?.response?.data) {
+        const existing = error.raw.response.data;
+        // Beklenen şema: doğrudan sipariş DTO'su veya { order: dto }
+        const orderPayload = existing.order || existing;
+        return normalizeOrder(orderPayload);
+      }
+      throw error;
+    }
+  },
   list: (userId) =>
     api
       .get(base, { params: userId ? { userId } : undefined })
@@ -54,7 +83,22 @@ export const OrderService = {
   getById: (id) => api.get(`${base}/${id}`).then(normalizeOrder),
   updateStatus: (id, status) => api.patch(`${base}/${id}/status`, { status }),
   cancel: (id) => api.post(`${base}/${id}/cancel`),
-  checkout: (payload) => api.post(`${base}/checkout`, payload),
+  checkout: async (payload) => {
+    const finalPayload = {
+      ...payload,
+      clientOrderId: payload?.clientOrderId || generateClientOrderId(),
+    };
+
+    try {
+      return await api.post(`${base}/checkout`, finalPayload);
+    } catch (error) {
+      if (error.status === 409 && error.raw?.response?.data) {
+        // Idempotent sipariş: mevcut order yanıtını döndür
+        return error.raw.response.data;
+      }
+      throw error;
+    }
+  },
   downloadInvoice: async (id) => {
     const blob = await api.get(`${base}/${id}/invoice`, {
       responseType: "blob",

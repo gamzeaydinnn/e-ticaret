@@ -31,6 +31,16 @@ const PaymentPage = () => {
   const [deliveryNote, setDeliveryNote] = useState("");
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [clientOrderId] = useState(() => {
+    try {
+      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+        return crypto.randomUUID();
+      }
+    } catch {
+      // ignore
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  });
   const [formData, setFormData] = useState({
     // Kredi Kartı Bilgileri
     cardNumber: "",
@@ -385,6 +395,7 @@ const PaymentPage = () => {
         ]
           .filter(Boolean)
           .join(" | "),
+        clientOrderId,
       };
 
       const orderRes = await OrderService.checkout(payload);

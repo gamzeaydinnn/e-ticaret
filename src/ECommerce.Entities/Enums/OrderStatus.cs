@@ -19,6 +19,7 @@ namespace ECommerce.Entities.Enums
         Processing,     // İşleniyor (eski)
         Shipped,        // Kargoya verildi (eski)
         Paid,           // Ödendi
-        Completed       // Tamamlandı
+        Completed,      // Tamamlandı
+        PaymentFailed   // Ödeme başarısız
     }
 }

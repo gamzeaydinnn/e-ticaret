@@ -80,6 +80,9 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((true, null));
+            inventoryMock
                 .Setup(s => s.DecreaseStockAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<InventoryChangeType>(), It.IsAny<string?>(), It.IsAny<int?>()))
                 .ReturnsAsync(true);
 
@@ -156,6 +159,9 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((false, "Geçersiz miktar"));
             var orderManager = new OrderManager(context, inventoryMock.Object);
 
             var dto = new OrderCreateDto
@@ -186,6 +192,9 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((false, "Ürün bulunamadı: 999"));
             var orderManager = new OrderManager(context, inventoryMock.Object);
 
             var dto = new OrderCreateDto
@@ -216,6 +225,9 @@ namespace ECommerce.Tests.Services
             // Arrange
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
+            inventoryMock
+                .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
+                .ReturnsAsync((false, "Yetersiz stok: Low Stock Product"));
             var orderManager = new OrderManager(context, inventoryMock.Object);
 
             var product = new Product

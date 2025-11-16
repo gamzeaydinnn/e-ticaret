@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using ECommerce.Core.DTOs;
-
 using System;
 using System.Collections.Generic;
 
@@ -13,6 +10,9 @@ namespace ECommerce.Core.DTOs.Order
         public int? UserId { get; set; } // Backend oturum açmış kullanıcıdan doldurur, guest siparişlerde null kalır
         public decimal TotalPrice { get; set; } // Toplam tutar (sunucuda yeniden hesaplanır)
         public List<OrderItemDto> OrderItems { get; set; } = new(); // Sipariş kalemleri (ortak DTO)
+
+        // İstemci tarafı idempotent sipariş oluşturma anahtarı
+        public Guid? ClientOrderId { get; set; }
 
         // Müşteri bilgileri
         public string? CustomerName { get; set; }
@@ -34,4 +34,3 @@ namespace ECommerce.Core.DTOs.Order
     }
 }
  
-

@@ -118,6 +118,7 @@ namespace ECommerce.Data.Context
                       .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasIndex(o => o.OrderNumber).IsUnique();
+                entity.HasIndex(o => o.ClientOrderId).IsUnique();
             });
 
             // -------------------

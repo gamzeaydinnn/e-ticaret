@@ -60,6 +60,25 @@ namespace ECommerce.API.Controllers
             if (dto == null)
                 return BadRequest(new { message = "Geçersiz istek gövdesi" });
 
+            if (dto.ClientOrderId.HasValue)
+            {
+                var existing = await _orderService.GetByClientOrderIdAsync(dto.ClientOrderId.Value);
+                if (existing != null)
+                {
+                    return Conflict(new
+                    {
+                        success = true,
+                        message = "Bu işlem için zaten bir sipariş oluşturulmuş.",
+                        orderId = existing.Id,
+                        orderNumber = existing.OrderNumber,
+                        status = existing.Status,
+                        totalPrice = existing.TotalPrice,
+                        clientOrderId = dto.ClientOrderId,
+                        order = existing
+                    });
+                }
+            }
+
             var authenticatedUserId = User.GetUserId();
             dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
 
@@ -84,19 +103,45 @@ namespace ECommerce.API.Controllers
             if (dto.OrderItems == null || dto.OrderItems.Count == 0)
                 return BadRequest(new { message = "Sepet boş olamaz." });
 
+            if (dto.ClientOrderId.HasValue)
+            {
+                var existing = await _orderService.GetByClientOrderIdAsync(dto.ClientOrderId.Value);
+                if (existing != null)
+                {
+                    return Conflict(new
+                    {
+                        success = true,
+                        message = "Bu işlem için zaten bir sipariş oluşturulmuş.",
+                        orderId = existing.Id,
+                        orderNumber = existing.OrderNumber,
+                        status = existing.Status,
+                        totalPrice = existing.TotalPrice,
+                        clientOrderId = dto.ClientOrderId,
+                        order = existing
+                    });
+                }
+            }
+
             var authenticatedUserId = User.GetUserId();
             dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
 
-            var result = await _orderService.CheckoutAsync(dto);
-
-            return Ok(new
+            try
             {
-                success = true,
-                orderId = result.Id,
-                orderNumber = result.OrderNumber,
-                status = result.Status,
-                totalPrice = result.TotalPrice
-            });
+                var result = await _orderService.CheckoutAsync(dto);
+
+                return Ok(new
+                {
+                    success = true,
+                    orderId = result.Id,
+                    orderNumber = result.OrderNumber,
+                    status = result.Status,
+                    totalPrice = result.TotalPrice
+                });
+            }
+            catch (System.Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
         /// <summary>
         /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
@@ -110,6 +155,23 @@ namespace ECommerce.API.Controllers
             if (!result)
                 return BadRequest(new { message = "Sipariş iptal edilemedi veya yetkiniz yok." });
             return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
+        }
+
+        /// <summary>
+        /// Ödeme sağlayıcısından veya frontend'den tetiklenen ödeme başarısız senaryosu.
+        /// Sipariş durumu PaymentFailed olarak işaretlenir.
+        /// </summary>
+        [HttpPost("{orderId:int}/payment-failed")]
+        [AllowAnonymous]
+        public async Task<IActionResult> PaymentFailed(int orderId)
+        {
+            var ok = await _orderService.MarkPaymentFailedAsync(orderId);
+            if (!ok)
+            {
+                return NotFound(new { message = "Sipariş bulunamadı.", orderId });
+            }
+
+            return BadRequest(new { message = "Ödeme işlemi başarısız oldu.", orderId });
         }
         /// <summary>
         /// Sipariş için PDF fatura indir
