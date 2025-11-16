@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Google.Apis.Auth;
 using ECommerce.Entities.Concrete;
-using ECommerce.Core.Helpers;
+using System.Security.Claims;
 
 //		○ Auth: JWT + refresh token. UsersController ve AuthController.
 //		○ CORS, Rate limiting, HSTS, HTTPS redirection.
@@ -135,18 +135,11 @@ namespace ECommerce.API.Controllers
                 }
 
                 // JWT üret
-                var token = JwtTokenHelper.GenerateToken(
-                    user.Id,
-                    user.Email!,
-                    user.Role ?? "User",
-                    _config["Jwt:Key"],
-                    _config["Jwt:Issuer"],
-                    _config["Jwt:Audience"],
-                    120);
+                var (token, refreshToken) = await _authService.IssueTokensForUserAsync(user, HttpContext.Connection.RemoteIpAddress?.ToString());
 
                 var respUser = new { id = user.Id, email = user.Email, firstName = user.FirstName, lastName = user.LastName, name = user.FullName, role = user.Role };
 
-                return Ok(new { token, user = respUser, success = true });
+                return Ok(new { token, refreshToken, user = respUser, success = true });
             }
             catch (Exception ex)
             {
@@ -159,9 +152,10 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                var token = await _authService.LoginAsync(dto);
+                var (token, refreshToken) = await _authService.LoginAsync(dto);
                 return Ok(new { 
                     Token = token,
+                    RefreshToken = refreshToken,
                     Message = "Giriş başarılı!"
                 });
             }
@@ -171,10 +165,18 @@ namespace ECommerce.API.Controllers
             }
         }
         [HttpPost("refresh")]
+        [AllowAnonymous]
         public async Task<IActionResult> Refresh(TokenRefreshDto dto)
         {
-            var newToken = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
-            return Ok(new { Token = newToken });
+            try
+            {
+                var newToken = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
+                return Ok(new { Token = newToken });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
         }
 
         [HttpGet("me")]
@@ -223,18 +225,17 @@ namespace ECommerce.API.Controllers
 
         [HttpPost("logout")]
         [Authorize]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
             try
             {
                 // JWT token'ı geçersiz kılma işlemi
                 // Gerçek projede token blacklist'e eklenebilir veya refresh token silinebilir
-                var userIdString = User.FindFirst("sub")?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.FindFirst("sub")?.Value;
 
                 if (!string.IsNullOrEmpty(userIdString) && int.TryParse(userIdString, out var userId))
                 {
-                    // Kullanıcının tüm aktif sessionlarını sonlandırabilirsiniz
-                    // await _authService.InvalidateUserTokensAsync(userId);
+                    await _authService.InvalidateUserTokensAsync(userId);
                 }
 
                 return Ok(new { success = true, message = "Başarıyla çıkış yapıldı!" });

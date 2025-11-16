@@ -96,6 +96,8 @@ builder.Services
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+builder.Services.AddHttpContextAccessor();
+
 // Hangfire - SQL Server kullan (Geçici olarak devre dışı - Azure bağlantı sorunu)
 // builder.Services.AddHangfire(config => 
 //     config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
@@ -160,6 +162,7 @@ builder.Services.AddScoped<ICartRepository, CartRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IFavoriteRepository, FavoriteRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 
 // Services  

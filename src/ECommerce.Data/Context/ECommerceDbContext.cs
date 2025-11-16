@@ -37,6 +37,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Coupon> Coupons { get; set; }
         public virtual DbSet<InventoryLog> InventoryLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
+        public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -192,6 +193,20 @@ modelBuilder.Entity<ProductVariant>()
                         .WithMany()
                         .HasForeignKey(r => r.UserId)
                         .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<RefreshToken>(entity =>
+            {
+                entity.ToTable("RefreshTokens");
+                entity.Property(e => e.Token).HasMaxLength(512).IsRequired();
+                entity.Property(e => e.JwtId).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.CreatedIp).HasMaxLength(64);
+                entity.HasIndex(e => e.Token).IsUnique();
+
+                entity.HasOne(e => e.User)
+                      .WithMany(u => u.RefreshTokens)
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
 
             // -------------------
             // Seed Data
