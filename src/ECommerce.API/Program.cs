@@ -155,6 +155,10 @@ builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("
 builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<IFileStorage>(sp =>
     new LocalFileStorage(builder.Environment.ContentRootPath));
+// Queues and background worker for messages
+builder.Services.AddSingleton<ECommerce.Core.Messaging.MailQueue>();
+builder.Services.AddSingleton<ECommerce.Core.Messaging.SmsQueue>();
+builder.Services.AddHostedService<ECommerce.API.Services.MessageWorker>();
 
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();

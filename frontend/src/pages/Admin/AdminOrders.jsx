@@ -212,15 +212,15 @@ export default function AdminOrders() {
                       </div>
                     </td>
                     <td>
-                      <span className="text-muted" title={order.address}>
-                        {order.address.length > 30
-                          ? order.address.substring(0, 30) + "..."
-                          : order.address}
+                      <span className="text-muted" title={order.address || ""}>
+                        {(order.address || "").length > 30
+                          ? (order.address || "").substring(0, 30) + "..."
+                          : (order.address || "")}
                       </span>
                     </td>
                     <td>
                       <span className="fw-bold text-success">
-                        {order.totalAmount.toFixed(2)} ₺
+                        {(order.totalAmount ?? 0).toFixed(2)} ₺
                       </span>
                     </td>
                     <td>
@@ -300,7 +300,7 @@ export default function AdminOrders() {
               </div>
               <div className="modal-body">
                 <div className="row">
-                  <div className="col-md-6">
+                    <div className="col-md-6">
                     <h6 className="fw-bold">Müşteri Bilgileri</h6>
                     <p>
                       <strong>Ad:</strong> {selectedOrder.customerName}
@@ -312,20 +312,22 @@ export default function AdminOrders() {
                       <strong>Telefon:</strong> {selectedOrder.customerPhone}
                     </p>
                     <p>
-                      <strong>Adres:</strong> {selectedOrder.address}
+                      <strong>Adres:</strong> {selectedOrder.address || "-"}
                     </p>
                   </div>
                   <div className="col-md-6">
                     <h6 className="fw-bold">Sipariş Bilgileri</h6>
                     <p>
                       <strong>Sipariş Zamanı:</strong>{" "}
-                      {new Date(selectedOrder.orderDate).toLocaleString(
-                        "tr-TR"
-                      )}
+                      {selectedOrder.orderDate
+                        ? new Date(selectedOrder.orderDate).toLocaleString(
+                            "tr-TR"
+                          )
+                        : "-"}
                     </p>
                     <p>
                       <strong>Tutar:</strong>{" "}
-                      {selectedOrder.totalAmount.toFixed(2)} ₺
+                      {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
                     </p>
                     <p>
                       <strong>Durum:</strong>
@@ -357,16 +359,18 @@ export default function AdminOrders() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedOrder.items.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.name}</td>
-                          <td>
-                            {item.quantity} {item.unit}
-                          </td>
-                          <td>{item.price.toFixed(2)} ₺</td>
-                          <td>{(item.quantity * item.price).toFixed(2)} ₺</td>
-                        </tr>
-                      ))}
+                      {(Array.isArray(selectedOrder.items) ? selectedOrder.items : []).map(
+                        (item, index) => (
+                          <tr key={index}>
+                            <td>{item.name}</td>
+                            <td>
+                              {item.quantity} {item.unit}
+                            </td>
+                            <td>{(item.price ?? 0).toFixed(2)} ₺</td>
+                            <td>{((item.quantity ?? 0) * (item.price ?? 0)).toFixed(2)} ₺</td>
+                          </tr>
+                        )
+                      )}
                     </tbody>
                   </table>
                 </div>
