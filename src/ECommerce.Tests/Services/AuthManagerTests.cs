@@ -24,6 +24,7 @@ using Moq;
 using Xunit;
 using Microsoft.AspNetCore.Http;
 using System.Net;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace ECommerce.Tests.Services
 {
@@ -74,36 +75,55 @@ namespace ECommerce.Tests.Services
         }
 
         private static UserManager<User> CreateUserManager(ECommerceDbContext context)
-        {
-            var store = new UserStore<User, IdentityRole<int>, ECommerceDbContext, int>(context);
+{
+    var store = new UserStore<User, IdentityRole<int>, ECommerceDbContext, int>(context);
 
-            var identityOptions = new IdentityOptions();
-            identityOptions.Password.RequireDigit = false;
-            identityOptions.Password.RequireLowercase = false;
-            identityOptions.Password.RequireUppercase = false;
-            identityOptions.Password.RequireNonAlphanumeric = false;
-            identityOptions.Password.RequiredLength = 6;
+    var identityOptions = new IdentityOptions();
+    identityOptions.Password.RequireDigit = false;
+    identityOptions.Password.RequireLowercase = false;
+    identityOptions.Password.RequireUppercase = false;
+    identityOptions.Password.RequireNonAlphanumeric = false;
+    identityOptions.Password.RequiredLength = 6;
 
-            var options = Options.Create(identityOptions);
+    var options = Options.Create(identityOptions);
 
-            var userValidators = new List<IUserValidator<User>>();
-            var passwordValidators = new List<IPasswordValidator<User>>();
+    var userValidators = new List<IUserValidator<User>>();
+    var passwordValidators = new List<IPasswordValidator<User>>
+    {
+        new PasswordValidator<User>()
+    };
 
-            var logger = new Mock<ILogger<UserManager<User>>>().Object;
+    var logger = new Mock<ILogger<UserManager<User>>>().Object;
 
-            var userManager = new UserManager<User>(
-                store,
-                options,
-                new PasswordHasher<User>(),
-                userValidators,
-                passwordValidators,
-                new SimpleLookupNormalizer(),
-                new IdentityErrorDescriber(),
-                null,
-                logger);
+    var userManager = new UserManager<User>(
+        store,
+        options,
+        new PasswordHasher<User>(),
+        userValidators,
+        passwordValidators,
+        new SimpleLookupNormalizer(),
+        new IdentityErrorDescriber(),
+        null,
+        logger
+    );
 
-            return userManager;
-        }
+    // ⭐ Email token provider'ı TEST ortamında manuel ekle
+    var dataProtectionProvider = new EphemeralDataProtectionProvider();
+    var protector = dataProtectionProvider.CreateProtector("Identity");
+    var tokenProviderOptions = Options.Create(new DataProtectionTokenProviderOptions());
+    var tokenProviderLogger = new Mock<ILogger<DataProtectorTokenProvider<User>>>().Object;
+
+    var provider = new DataProtectorTokenProvider<User>(
+        dataProtectionProvider,
+        tokenProviderOptions,
+        tokenProviderLogger
+    );
+
+    userManager.RegisterTokenProvider(TokenOptions.DefaultEmailProvider, provider);
+    userManager.Options.Tokens.EmailConfirmationTokenProvider = TokenOptions.DefaultEmailProvider;
+
+    return userManager;
+}
 
         private static AuthManager CreateAuthManager(
             UserManager<User> userManager,
