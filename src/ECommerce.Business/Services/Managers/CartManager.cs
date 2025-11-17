@@ -22,14 +22,21 @@ namespace ECommerce.Business.Services.Managers
         public async Task<CartSummaryDto> GetCartAsync(int userId)
         {
             var items = await _cartRepository.GetByUserIdAsync(userId);
-            return new CartSummaryDto
+            var cartItems = items.Select(i =>
             {
-                Items = items.Select(i => new CartItemDto
+                var unitPrice = i.Product?.SpecialPrice ?? i.Product?.Price ?? 0m;
+                return new CartItemDto
                 {
                     ProductId = i.ProductId,
-                    Quantity = i.Quantity
-                }).ToList(),
-                Total = items.Sum(i => (i.Product?.Price ?? 0) * i.Quantity)
+                    Quantity = i.Quantity,
+                    UnitPrice = unitPrice
+                };
+            }).ToList();
+
+            return new CartSummaryDto
+            {
+                Items = cartItems,
+                Total = cartItems.Sum(i => i.UnitPrice * i.Quantity)
             };
         }
 

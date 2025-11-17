@@ -218,6 +218,21 @@ const CartPage = () => {
     }
   };
 
+  const getItemUnitPrice = (item) => {
+    if (
+      item &&
+      item.unitPrice !== undefined &&
+      item.unitPrice !== null &&
+      !Number.isNaN(Number(item.unitPrice))
+    ) {
+      return Number(item.unitPrice);
+    }
+    const product = products[item.productId];
+    const fallback =
+      (product && (product.specialPrice || product.price)) || 0;
+    return Number(fallback) || 0;
+  };
+
   const updateQuantity = async (item, newQuantity) => {
     if (newQuantity < 1) {
       removeItem(item);
@@ -277,8 +292,7 @@ const CartPage = () => {
 
   const getTotalPrice = () => {
     return cartItems.reduce((total, item) => {
-      const product = products[item.productId];
-      const price = product ? product.specialPrice || product.price : 0;
+      const price = getItemUnitPrice(item);
       return total + price * item.quantity;
     }, 0);
   };
@@ -431,10 +445,7 @@ const CartPage = () => {
                                       {product?.category || ""}
                                     </p>
                                     <p className="text-warning fw-bold mb-0">
-                                      ₺
-                                      {product?.specialPrice ||
-                                        product?.price ||
-                                        "0.00"}
+                                      ₺{getItemUnitPrice(item).toFixed(2)}
                                     </p>
                                   </div>
                                 </div>
@@ -475,13 +486,7 @@ const CartPage = () => {
                               <div className="col-md-2 text-end">
                                 <div className="d-flex flex-column align-items-end">
                                   <p className="fw-bold text-warning mb-1">
-                                    ₺
-                                    {product
-                                      ? (
-                                          (product.specialPrice ||
-                                            product.price) * item.quantity
-                                        ).toFixed(2)
-                                      : "0.00"}
+                                    ₺{(getItemUnitPrice(item) * item.quantity).toFixed(2)}
                                   </p>
                                   <button
                                     className="btn btn-link text-danger p-0"
