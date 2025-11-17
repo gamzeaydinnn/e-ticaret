@@ -15,6 +15,7 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
 // using Hangfire;
 using ECommerce.Infrastructure.Services.MicroServices;
+using ECommerce.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Config;
@@ -27,7 +28,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
-using ECommerce.Core.Interfaces;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using ECommerce.API.Validators;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -143,12 +146,51 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration[ConfigKeys.JwtKey]))
         };
+        // Check revoked tokens (deny list) on token validation
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                try
+                {
+                    var denyList = ctx.HttpContext.RequestServices.GetService(typeof(ECommerce.Core.Interfaces.ITokenDenyList)) as ECommerce.Core.Interfaces.ITokenDenyList;
+                    if (denyList == null) return;
+
+                    var jti = ctx.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                    if (string.IsNullOrWhiteSpace(jti)) return;
+
+                    if (await denyList.IsDeniedAsync(jti))
+                    {
+                        ctx.Fail("Token revoked");
+                    }
+                }
+                catch
+                {
+                    // swallow exceptions here to avoid breaking auth pipeline unexpectedly
+                }
+            }
+        };
     });
 
 // Bind settings
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+// Environment-based sandbox switch: in Development mode prefer sandbox endpoints
+builder.Services.PostConfigure<PaymentSettings>(settings =>
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        if (string.IsNullOrWhiteSpace(settings.IyzicoBaseUrl) || !settings.IyzicoBaseUrl.Contains("sandbox"))
+            settings.IyzicoBaseUrl = "https://sandbox-api.iyzipay.com";
+        // PayTR callback / keys could be set via appsettings.Development.json as needed
+    }
+    else
+    {
+        if (string.IsNullOrWhiteSpace(settings.IyzicoBaseUrl))
+            settings.IyzicoBaseUrl = "https://api.iyzico.com/";
+    }
+});
 builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("Inventory"));
 
 // Email + FileStorage services
@@ -223,6 +265,9 @@ builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 builder.Services.AddSingleton<StockSyncJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
 builder.Services.AddHostedService<StockReservationCleanupJob>();
+// Reconciliation job: daily reconciliation between provider reports and Payments table
+builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
@@ -237,6 +282,10 @@ builder.Services.AddScoped<IAuthService, AuthManager>();
 builder.Services.AddAuthorization();
 // Add in-memory caching for read-heavy endpoints (prerender, products)
 builder.Services.AddMemoryCache();
+// Login rate-limit service (IMemoryCache-based)
+builder.Services.AddSingleton<ECommerce.Business.Services.Interfaces.ILoginRateLimitService, ECommerce.Business.Services.Managers.LoginRateLimitService>();
+// Token deny list (in-memory). Can be swapped with Redis implementation later.
+builder.Services.AddSingleton<ECommerce.Core.Interfaces.ITokenDenyList, ECommerce.Infrastructure.Services.MemoryTokenDenyList>();
 
 // CSRF protection (for cookie-based flows). For SPA using Authorization header this is not strictly
 // necessary, but we expose a token endpoint for cases where a cookie+header double-submit is used.
@@ -310,6 +359,10 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add(typeof(ECommerce.API.Infrastructure.SanitizeInputFilter));
 });
+
+// FluentValidation registration
+builder.Services.AddValidatorsFromAssemblyContaining<OrderCreateDtoValidator>();
+builder.Services.AddFluentValidationAutoValidation();
 
 // Push (Web Push) - dev-friendly VAPID keys. In production, set these via configuration/secrets.
 var vapidSubject = builder.Configuration["Push:VapidSubject"] ?? "mailto:admin@example.com";

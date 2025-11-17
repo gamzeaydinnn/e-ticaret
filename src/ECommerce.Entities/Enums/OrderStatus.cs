@@ -22,6 +22,7 @@ namespace ECommerce.Entities.Enums
         Paid,           // Ödendi
         Completed,      // Tamamlandı
         PaymentFailed,  // Ödeme başarısız
+        ChargebackPending, // Chargeback / itiraz bekleniyor
         Refunded        // İade edildi
     }
 }

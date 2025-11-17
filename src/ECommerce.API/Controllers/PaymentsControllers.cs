@@ -1,10 +1,14 @@
 using ECommerce.Core.DTOs.Payment;
 using ECommerce.Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq;
 using System.Threading.Tasks;
 using Stripe;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
+using ECommerce.Infrastructure.Services.Payment;
+using Polly;
+using System;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Entities.Enums;
@@ -87,30 +91,43 @@ namespace ECommerce.API.Controllers
         public async Task<IActionResult> IyzicoCallback([FromForm] string token)
         {
             if (string.IsNullOrWhiteSpace(token)) return BadRequest();
-            var status = await _paymentManager.GetPaymentStatusAsync(token);
-            if (status == PaymentStatus.Successful)
-            {
-                var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Provider == "iyzico" && p.ProviderPaymentId == token);
-                if (payment != null)
-                {
-                    payment.Status = "Success";
-                    var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
-                    if (order != null)
-                    {
-                        order.Status = OrderStatus.Paid;
-                    }
-                    await _db.SaveChangesAsync();
 
-                    // Başarılı işlemden sonra frontend başarı sayfasına yönlendir (varsa)
-                    var successUrl = _paymentOptions.Value.ReturnUrlSuccess;
-                    if (!string.IsNullOrWhiteSpace(successUrl))
+            var settings = _paymentOptions.Value;
+            // Validate signature/header for iyzico
+            var valid = IyzicoWebhookValidator.Validate(Request, settings);
+            if (!valid) return BadRequest("Invalid signature");
+
+            var policy = Policy.Handle<Exception>().WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            var result = await policy.ExecuteAsync<IActionResult>(async () =>
+            {
+                var status = await _paymentManager.GetPaymentStatusAsync(token);
+                if (status == PaymentStatus.Successful)
+                {
+                    var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Provider == "iyzico" && p.ProviderPaymentId == token);
+                    if (payment != null)
                     {
-                        var sep = successUrl.Contains("?") ? "&" : "?";
-                        return Redirect(successUrl + sep + $"orderId={payment.OrderId}");
+                        payment.Status = "Success";
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                        if (order != null)
+                        {
+                            order.Status = OrderStatus.Paid;
+                        }
+                        payment.RawResponse = (payment.RawResponse ?? string.Empty) + "\n[iyzico-callback]";
+                        await _db.SaveChangesAsync();
+
+                        var successUrl = settings.ReturnUrlSuccess;
+                        if (!string.IsNullOrWhiteSpace(successUrl))
+                        {
+                            var sep = successUrl.Contains("?") ? "&" : "?";
+                            return (IActionResult)Redirect(successUrl + sep + $"orderId={payment.OrderId}");
+                        }
                     }
                 }
-            }
-            return Ok(new { token, status });
+                return Ok(new { token });
+            });
+
+            return result;
         }
 
         /// <summary>
@@ -154,23 +171,145 @@ namespace ECommerce.API.Controllers
                 return BadRequest();
             }
 
-            if (stripeEvent.Type == "checkout.session.completed")
+            var policy = Policy.Handle<Exception>().WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+            await policy.ExecuteAsync(async () =>
             {
-                var session = (Stripe.Checkout.Session)stripeEvent.Data.Object;
-                var orderIdMeta = session.Metadata != null && session.Metadata.ContainsKey("orderId") ? session.Metadata["orderId"] : null;
-                if (int.TryParse(orderIdMeta, out var orderId))
+                if (stripeEvent.Type == "checkout.session.completed")
                 {
-                    var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
-                    if (order != null)
+                    var session = (Stripe.Checkout.Session)stripeEvent.Data.Object;
+                    var orderIdMeta = session.Metadata != null && session.Metadata.ContainsKey("orderId") ? session.Metadata["orderId"] : null;
+                    if (int.TryParse(orderIdMeta, out var orderId))
                     {
-                        order.Status = OrderStatus.Paid;
-                        await _db.SaveChangesAsync();
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                        if (order != null)
+                        {
+                            order.Status = OrderStatus.Paid;
+                            await _db.SaveChangesAsync();
+                        }
+                        var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == session.Id);
+                        if (payment != null)
+                        {
+                            payment.Status = "Success";
+                            payment.RawResponse = json;
+                            await _db.SaveChangesAsync();
+                        }
                     }
-                    var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == session.Id);
+                }
+
+                if (stripeEvent.Type == "charge.dispute.created" || stripeEvent.Type == "charge.dispute.updated")
+                {
+                    try
+                    {
+                        var charge = stripeEvent.Data.Object as Stripe.Charge;
+                        string providerPaymentId = charge?.PaymentIntent?.ToString() ?? charge?.Id ?? string.Empty;
+                        if (!string.IsNullOrWhiteSpace(providerPaymentId))
+                        {
+                            // Avoid complex expression tree by querying in two steps
+                            var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == providerPaymentId);
+                            var chargeId = charge?.Id;
+                            if (payment == null && !string.IsNullOrWhiteSpace(chargeId))
+                            {
+                                payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == chargeId);
+                            }
+
+                            if (payment != null)
+                            {
+                                payment.Status = "Chargeback";
+                                payment.RawResponse = json;
+                                var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                                if (order != null)
+                                {
+                                    order.Status = OrderStatus.ChargebackPending;
+                                }
+                                await _db.SaveChangesAsync();
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            });
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// PayTR callback endpoint (minimal signature validation)
+        /// </summary>
+        [HttpPost("paytr/callback")]
+        public async Task<IActionResult> PayTRCallback()
+        {
+            var settings = _paymentOptions.Value;
+            var valid = PayTRWebhookValidator.Validate(Request, settings);
+            if (!valid) return BadRequest("Invalid signature");
+
+            // Read body to extract provider payment id if included
+            Request.Body.Position = 0;
+            using var sr = new System.IO.StreamReader(Request.Body, leaveOpen: true);
+            var body = await sr.ReadToEndAsync();
+            Request.Body.Position = 0;
+
+            // Attempt to parse a payment id from body (best-effort)
+            string providerPaymentId = string.Empty;
+            if (body.Contains("token"))
+            {
+                // very naive extraction
+                var idx = body.IndexOf("token", StringComparison.OrdinalIgnoreCase);
+                var sub = body.Substring(idx);
+                var eq = sub.IndexOf('=');
+                if (eq > 0)
+                {
+                    var val = sub.Substring(eq + 1).Split('&').FirstOrDefault();
+                    providerPaymentId = val ?? string.Empty;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(providerPaymentId))
+            {
+                var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == providerPaymentId && p.Provider.ToLower() == "paytr");
+                if (payment != null)
+                {
+                    payment.RawResponse = (payment.RawResponse ?? string.Empty) + "\n[PayTR Callback] " + body;
+                    // We leave status changes to manual reconciliation for now
+                    await _db.SaveChangesAsync();
+                }
+            }
+
+            return Ok();
+        }
+
+        /// <summary>
+        /// Iyzipay notification endpoint for refund/chargeback callbacks (minimal)
+        /// </summary>
+        [HttpPost("iyzico/notification")]
+        public async Task<IActionResult> IyzicoNotification()
+        {
+            var settings = _paymentOptions.Value;
+            var valid = IyzicoWebhookValidator.Validate(Request, settings);
+            if (!valid) return BadRequest("Invalid signature");
+
+            // Read raw body
+            Request.Body.Position = 0;
+            using var sr = new System.IO.StreamReader(Request.Body, leaveOpen: true);
+            var body = await sr.ReadToEndAsync();
+            Request.Body.Position = 0;
+
+            // Very small heuristic: if body contains 'refund' or 'chargeback', mark accordingly
+            if (body.IndexOf("refund", StringComparison.OrdinalIgnoreCase) >= 0 || body.IndexOf("chargeback", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                // attempt to extract token/payment id
+                string token = string.Empty;
+                if (Request.HasFormContentType && Request.Form.ContainsKey("token")) token = Request.Form["token"].ToString();
+
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == token && p.Provider == "iyzico");
                     if (payment != null)
                     {
-                        payment.Status = "Success";
-                        payment.RawResponse = json;
+                        payment.Status = "Chargeback";
+                        payment.RawResponse = (payment.RawResponse ?? string.Empty) + "\n[iyzico-notification] " + body;
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                        if (order != null) order.Status = OrderStatus.ChargebackPending;
                         await _db.SaveChangesAsync();
                     }
                 }

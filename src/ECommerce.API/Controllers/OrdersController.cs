@@ -102,12 +102,7 @@ namespace ECommerce.API.Controllers
             if (dto == null)
                 return BadRequest(new { message = "Geçersiz istek gövdesi" });
 
-            // Basit alan doğrulamaları (adres, şehir zorunlu)
-            if (string.IsNullOrWhiteSpace(dto.ShippingAddress) || string.IsNullOrWhiteSpace(dto.ShippingCity))
-                return BadRequest(new { message = "Adres ve şehir zorunludur." });
-
-            if (dto.OrderItems == null || dto.OrderItems.Count == 0)
-                return BadRequest(new { message = "Sepet boş olamaz." });
+            // Validation handled by FluentValidation
 
             if (dto.ClientOrderId.HasValue)
             {

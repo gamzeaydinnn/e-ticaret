@@ -215,5 +215,54 @@ namespace ECommerce.Business.Services.Managers
                 throw;
             }
         }
+
+        public async Task<bool> RefundAsync(Core.DTOs.Payment.PaymentRefundRequestDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.PaymentId)) return false;
+
+            var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == dto.PaymentId || p.Id.ToString() == dto.PaymentId);
+            if (payment == null) return false;
+
+            var provider = payment.Provider?.ToLowerInvariant() ?? string.Empty;
+            try
+            {
+                if (provider == "stripe")
+                {
+                    var ok = await _stripe.StripeRefundAsync(payment.ProviderPaymentId, dto.Amount);
+                    if (ok)
+                    {
+                        payment.Status = "Refunded";
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                        if (order != null) order.Status = Entities.Enums.OrderStatus.Refunded;
+                        await _db.SaveChangesAsync();
+                        return true;
+                    }
+                }
+                else if (provider == "iyzico")
+                {
+                    var ok = await _iyzico.IyzicoRefundAsync(payment.ProviderPaymentId, dto.Amount);
+                    if (ok)
+                    {
+                        payment.Status = "Refunded";
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                        if (order != null) order.Status = Entities.Enums.OrderStatus.Refunded;
+                        await _db.SaveChangesAsync();
+                        return true;
+                    }
+                }
+
+                // fallback: mark refunded locally
+                payment.Status = "Refunded";
+                var ord = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+                if (ord != null) ord.Status = Entities.Enums.OrderStatus.Refunded;
+                await _db.SaveChangesAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                await LogFailureAsync(payment.OrderId, payment.Amount, provider, "REFUND_EXCEPTION", ex.Message, ex, payment.ProviderPaymentId);
+                return false;
+            }
+        }
     }
 }

@@ -27,8 +27,14 @@ namespace ECommerce.Infrastructure.Config
         // Ortak dönüş URL'leri
         public string? ReturnUrlSuccess { get; set; }
         public string? ReturnUrlCancel { get; set; }
+
+        // PayTR ayarları (gerekirse production/sandbox anahtarları burada tutulur)
+        public string PayTRMerchantId { get; set; } = string.Empty;
+        public string PayTRSecretKey { get; set; } = string.Empty;
+        public string? PayTRCallbackUrl { get; set; }
     }
 }
+
 //Bu class, ödeme servislerinin yapılandırma ayarlarını tutar.
 //Iyzico, PayPal, Stripe gibi farklı ödeme sağlayıcılarının API anahtarları, gizli anahtarları ve temel URL'leri burada saklanır.
 //Uygulama başlatılırken bu ayarlar konfigürasyon dosyasından (appsettings.json gibi) okunur ve ilgili ödeme servislerine enjekte edilir.
