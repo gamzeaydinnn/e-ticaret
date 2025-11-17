@@ -15,7 +15,8 @@ namespace ECommerce.Business.Services.Interfaces
         Task<UserLoginDto> GetUserByEmailAsync(string email);
 
         // Refresh token ve revoke token işlemleri
-        Task<string> RefreshTokenAsync(string token, string refreshToken);
+        // Returns a new access token and a new refresh token (rotation)
+        Task<(string accessToken, string refreshToken)> RefreshTokenAsync(string token, string refreshToken);
         Task InvalidateUserTokensAsync(int userId);
         Task<(string accessToken, string refreshToken)> IssueTokensForUserAsync(User user, string? ipAddress = null);
         Task ForgotPasswordAsync(ForgotPasswordDto dto);

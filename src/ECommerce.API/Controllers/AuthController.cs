@@ -3,6 +3,7 @@ using ECommerce.Core.DTOs.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -25,12 +26,16 @@ namespace ECommerce.API.Controllers
         private readonly IAuthService _authService;
         private readonly IConfiguration _config;
         private readonly UserManager<User> _userManager;
+        private readonly ECommerce.Core.Interfaces.ITokenDenyList _denyList;
+        private readonly ECommerce.Business.Services.Interfaces.ILoginRateLimitService _loginRateLimitService;
 
-        public AuthController(IAuthService authService, IConfiguration config, UserManager<User> userManager)
+        public AuthController(IAuthService authService, IConfiguration config, UserManager<User> userManager, ECommerce.Core.Interfaces.ITokenDenyList denyList, ECommerce.Business.Services.Interfaces.ILoginRateLimitService loginRateLimitService)
         {
             _authService = authService;
             _config = config;
             _userManager = userManager;
+            _denyList = denyList;
+            _loginRateLimitService = loginRateLimitService;
         }
 
         [HttpPost("register")]
@@ -152,7 +157,27 @@ namespace ECommerce.API.Controllers
         {
             try
             {
+                if (dto == null || string.IsNullOrWhiteSpace(dto.Email))
+                    return BadRequest(new { Message = "Geçersiz istek" });
+
+                if (_loginRateLimitService != null && _loginRateLimitService.IsBlocked(dto.Email, out var remaining))
+                {
+                    var mins = Math.Ceiling(remaining.TotalMinutes);
+                    return BadRequest(new { Message = $"Çok fazla başarısız deneme. Lütfen {mins} dakika sonra tekrar deneyin." });
+                }
+
                 var (token, refreshToken) = await _authService.LoginAsync(dto);
+
+                try
+                {
+                    // Başarılı girişte sayaç sıfırlanmalı
+                    _loginRateLimitService?.ResetAttempts(dto.Email);
+                }
+                catch
+                {
+                    // ignore cache errors
+                }
+
                 return Ok(new { 
                     Token = token,
                     RefreshToken = refreshToken,
@@ -161,6 +186,22 @@ namespace ECommerce.API.Controllers
             }
             catch (Exception ex)
             {
+                try
+                {
+                    if (dto != null && !string.IsNullOrWhiteSpace(dto.Email) && _loginRateLimitService != null)
+                    {
+                        var attempts = _loginRateLimitService.IncrementFailedAttempt(dto.Email);
+                        if (attempts >= 5)
+                        {
+                            return BadRequest(new { Message = "Çok fazla başarısız deneme. 15 dakika boyunca bloke edildiniz." });
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
                 return BadRequest(new { Message = ex.Message });
             }
         }
@@ -170,8 +211,12 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                var newToken = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
-                return Ok(new { Token = newToken });
+                var (newToken, newRefreshToken) = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
+                return Ok(new { Token = newToken, RefreshToken = newRefreshToken });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new { Message = ex.Message });
             }
             catch (Exception ex)
             {
@@ -236,6 +281,27 @@ namespace ECommerce.API.Controllers
                 if (!string.IsNullOrEmpty(userIdString) && int.TryParse(userIdString, out var userId))
                 {
                     await _authService.InvalidateUserTokensAsync(userId);
+                }
+
+                // Add current access token jti to deny list so subsequent requests with same token are rejected
+                try
+                {
+                    var jti = User.Claims.FirstOrDefault(c => c.Type == System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                    if (!string.IsNullOrWhiteSpace(jti) && _denyList != null)
+                    {
+                        var expClaim = User.Claims.FirstOrDefault(c => c.Type == "exp")?.Value;
+                        DateTimeOffset expiration = DateTimeOffset.UtcNow.AddMinutes(5);
+                        if (!string.IsNullOrWhiteSpace(expClaim) && long.TryParse(expClaim, out var expSeconds))
+                        {
+                            expiration = DateTimeOffset.FromUnixTimeSeconds(expSeconds);
+                        }
+
+                        await _denyList.AddAsync(jti, expiration);
+                    }
+                }
+                catch
+                {
+                    // ignore deny-list errors during logout to avoid blocking sign-out
                 }
 
                 return Ok(new { success = true, message = "Başarıyla çıkış yapıldı!" });

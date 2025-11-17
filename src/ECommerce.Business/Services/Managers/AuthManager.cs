@@ -195,7 +195,7 @@ namespace ECommerce.Business.Services.Managers
             return _httpContextAccessor.HttpContext?.Connection?.RemoteIpAddress?.ToString();
         }
 
-        public async Task<string> RefreshTokenAsync(string token, string refreshToken)
+        public async Task<(string accessToken, string refreshToken)> RefreshTokenAsync(string token, string refreshToken)
         {
             var key = _config["Jwt:Key"] ?? throw new Exception("JWT anahtarı tanımlı değil.");
             var principal = JwtTokenHelper.GetPrincipalFromExpiredToken(token, key);
@@ -223,9 +223,10 @@ namespace ECommerce.Business.Services.Managers
                 throw new Exception("Refresh token bulunamadı.");
             }
 
+            // If token is already revoked, it is a reuse attempt -> unauthorized
             if (storedRefreshToken.RevokedAt.HasValue)
             {
-                throw new Exception("Refresh token iptal edilmiş.");
+                throw new UnauthorizedAccessException("Refresh token tekrar kullanımı tespit edildi.");
             }
 
             if (storedRefreshToken.ExpiresAt <= DateTime.UtcNow)
@@ -244,12 +245,27 @@ namespace ECommerce.Business.Services.Managers
                 throw new Exception("User not found");
             }
 
-            var newJti = Guid.NewGuid().ToString();
-            var newAccessToken = GenerateJwtToken(user, newJti);
-            storedRefreshToken.JwtId = newJti;
+            // Rotate: revoke the old refresh token and create a new one
+            var now = DateTime.UtcNow;
+            storedRefreshToken.RevokedAt = now;
             await _refreshTokenRepository.UpdateAsync(storedRefreshToken);
 
-            return newAccessToken;
+            var newJti = Guid.NewGuid().ToString();
+            var newAccessToken = GenerateJwtToken(user, newJti);
+
+            var newRefreshTokenValue = GenerateSecureRefreshToken();
+            var newRefreshToken = new RefreshToken
+            {
+                UserId = user.Id,
+                Token = newRefreshTokenValue,
+                JwtId = newJti,
+                ExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenLifetimeDays()),
+                CreatedIp = GetClientIpAddress()
+            };
+
+            await _refreshTokenRepository.AddAsync(newRefreshToken);
+
+            return (newAccessToken, newRefreshTokenValue);
         }
 
         public async Task InvalidateUserTokensAsync(int userId)

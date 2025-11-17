@@ -24,6 +24,7 @@ using Moq;
 using Xunit;
 using Microsoft.AspNetCore.Http;
 using System.Net;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 
 namespace ECommerce.Tests.Services
@@ -167,6 +168,14 @@ namespace ECommerce.Tests.Services
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private static string ComputeSha256Hash(string raw)
+        {
+            using var sha = SHA256.Create();
+            var bytes = Encoding.UTF8.GetBytes(raw);
+            var hash = sha.ComputeHash(bytes);
+            return Convert.ToBase64String(hash);
         }
 
         private class SimpleLookupNormalizer : ILookupNormalizer
@@ -494,7 +503,7 @@ namespace ECommerce.Tests.Services
             context.RefreshTokens.Add(new RefreshToken
             {
                 UserId = user.Id,
-                Token = refreshTokenValue,
+                HashedToken = ComputeSha256Hash(refreshTokenValue),
                 JwtId = jti,
                 ExpiresAt = DateTime.UtcNow.AddDays(7),
                 CreatedIp = "127.0.0.1"
@@ -502,10 +511,11 @@ namespace ECommerce.Tests.Services
             await context.SaveChangesAsync();
 
             // Act
-            var newToken = await authManager.RefreshTokenAsync(token, refreshTokenValue);
+            var (newToken, newRefreshToken) = await authManager.RefreshTokenAsync(token, refreshTokenValue);
 
             // Assert
             Assert.False(string.IsNullOrWhiteSpace(newToken));
+            Assert.False(string.IsNullOrWhiteSpace(newRefreshToken));
             Assert.NotEqual(token, newToken);
 
             var handler = new JwtSecurityTokenHandler();
@@ -515,8 +525,63 @@ namespace ECommerce.Tests.Services
             Assert.Contains(jwt.Claims, c => c.Type == ClaimTypes.Role && c.Value == user.Role);
             Assert.Contains(jwt.Claims, c => c.Type == ClaimTypes.NameIdentifier && c.Value == user.Id.ToString());
 
-            var storedToken = await context.RefreshTokens.FirstAsync();
-            Assert.NotEqual(jti, storedToken.JwtId);
+            var allTokens = await context.RefreshTokens.ToListAsync();
+            // We should have the old token (revoked) and the new token (active)
+            Assert.Equal(2, allTokens.Count);
+
+            var oldStored = allTokens.First(t => t.HashedToken == ComputeSha256Hash(refreshTokenValue));
+            Assert.True(oldStored.RevokedAt.HasValue);
+
+            var newStored = allTokens.FirstOrDefault(t => t.HashedToken == ComputeSha256Hash(newRefreshToken));
+            Assert.NotNull(newStored);
+            Assert.False(newStored!.IsRevoked);
+            Assert.NotEqual(jti, newStored.JwtId);
+        }
+        [Fact]
+        public async Task RefreshTokenAsync_ShouldReturn401_WhenOldRefreshTokenReused()
+        {
+            // Arrange
+            using var context = CreateInMemoryDbContext();
+            var userManager = CreateUserManager(context);
+            var config = BuildConfiguration();
+            var emailSender = CreateEmailSender();
+            var authManager = CreateAuthManager(userManager, config, emailSender, context);
+
+            var user = new User
+            {
+                Email = "reuse@test.com",
+                UserName = "reuse@test.com",
+                FirstName = "Reuse",
+                LastName = "User",
+                Role = "User",
+                EmailConfirmed = true
+            };
+
+            await userManager.CreateAsync(user, "Password123");
+
+            var refreshTokenValue = "refresh-token-reuse";
+            var jti = Guid.NewGuid().ToString();
+            var token = GenerateExpiredToken(user.Id, user.Email!, user.Role!, config["Jwt:Key"]!, jti);
+
+            context.RefreshTokens.Add(new RefreshToken
+            {
+                UserId = user.Id,
+                HashedToken = ComputeSha256Hash(refreshTokenValue),
+                JwtId = jti,
+                ExpiresAt = DateTime.UtcNow.AddDays(7),
+                CreatedIp = "127.0.0.1"
+            });
+            await context.SaveChangesAsync();
+
+            // First rotation - should succeed and provide new refresh token
+            var (firstAccess, firstRefresh) = await authManager.RefreshTokenAsync(token, refreshTokenValue);
+            Assert.False(string.IsNullOrWhiteSpace(firstRefresh));
+
+            // Act: try to reuse the old refresh token again
+            var ex = await Assert.ThrowsAsync<UnauthorizedAccessException>(() => authManager.RefreshTokenAsync(token, refreshTokenValue));
+
+            // Assert
+            Assert.Contains("tekrar kullanımı", ex.Message);
         }
     }
 }

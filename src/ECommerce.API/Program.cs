@@ -15,6 +15,7 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
 // using Hangfire;
 using ECommerce.Infrastructure.Services.MicroServices;
+using ECommerce.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Config;
@@ -27,7 +28,6 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
-using ECommerce.Core.Interfaces;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -143,6 +143,30 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration[ConfigKeys.JwtKey]))
         };
+        // Check revoked tokens (deny list) on token validation
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async ctx =>
+            {
+                try
+                {
+                    var denyList = ctx.HttpContext.RequestServices.GetService(typeof(ECommerce.Core.Interfaces.ITokenDenyList)) as ECommerce.Core.Interfaces.ITokenDenyList;
+                    if (denyList == null) return;
+
+                    var jti = ctx.Principal?.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                    if (string.IsNullOrWhiteSpace(jti)) return;
+
+                    if (await denyList.IsDeniedAsync(jti))
+                    {
+                        ctx.Fail("Token revoked");
+                    }
+                }
+                catch
+                {
+                    // swallow exceptions here to avoid breaking auth pipeline unexpectedly
+                }
+            }
+        };
     });
 
 // Bind settings
@@ -253,6 +277,10 @@ builder.Services.AddScoped<IAuthService, AuthManager>();
 builder.Services.AddAuthorization();
 // Add in-memory caching for read-heavy endpoints (prerender, products)
 builder.Services.AddMemoryCache();
+// Login rate-limit service (IMemoryCache-based)
+builder.Services.AddSingleton<ECommerce.Business.Services.Interfaces.ILoginRateLimitService, ECommerce.Business.Services.Managers.LoginRateLimitService>();
+// Token deny list (in-memory). Can be swapped with Redis implementation later.
+builder.Services.AddSingleton<ECommerce.Core.Interfaces.ITokenDenyList, ECommerce.Infrastructure.Services.MemoryTokenDenyList>();
 
 // CSRF protection (for cookie-based flows). For SPA using Authorization header this is not strictly
 // necessary, but we expose a token endpoint for cases where a cookie+header double-submit is used.
