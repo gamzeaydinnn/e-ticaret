@@ -39,6 +39,15 @@ const normalizeOrder = (order = {}) => {
     orderDate: order.orderDate || new Date().toISOString(),
     totalAmount: order.totalAmount ?? order.totalPrice ?? 0,
     totalPrice: order.totalPrice ?? order.totalAmount ?? 0,
+    finalPrice: order.finalPrice ?? order.totalPrice ?? order.totalAmount ?? 0,
+    discountAmount: order.discountAmount ?? 0,
+    couponDiscountAmount: order.couponDiscountAmount ?? 0,
+    campaignDiscountAmount: order.campaignDiscountAmount ?? 0,
+    couponCode:
+      order.couponCode ||
+      order.appliedCouponCode ||
+      order.raw?.couponCode ||
+      null,
     isGuestOrder: Boolean(order.isGuestOrder),
     customerName: order.customerName || "",
     customerPhone: order.customerPhone || "",
@@ -47,6 +56,7 @@ const normalizeOrder = (order = {}) => {
     shippingCompany: order.shippingCompany || order.shippingMethod || "",
     estimatedDeliveryDate: order.estimatedDeliveryDate || null,
     shippingMethod: order.shippingMethod || "",
+    shippingCost: order.shippingCost ?? 0,
     items: normalizedItems,
     orderItems: normalizedItems,
     raw: order,
@@ -86,6 +96,9 @@ export const OrderService = {
   checkout: async (payload) => {
     const finalPayload = {
       ...payload,
+      couponCode: payload?.couponCode
+        ? payload.couponCode.trim()
+        : null,
       clientOrderId: payload?.clientOrderId || generateClientOrderId(),
     };
 

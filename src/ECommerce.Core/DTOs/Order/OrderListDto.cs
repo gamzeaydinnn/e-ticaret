@@ -10,7 +10,13 @@ namespace ECommerce.Core.DTOs.Order
         public int UserId { get; set; }
         public bool IsGuestOrder { get; set; }
         public string OrderNumber { get; set; } = string.Empty;
+        public decimal VatAmount { get; set; }
         public decimal TotalPrice { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal FinalPrice { get; set; }
+        public decimal CouponDiscountAmount { get; set; }
+        public decimal CampaignDiscountAmount { get; set; }
+        public string? CouponCode { get; set; }
         public string Status { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
     public int TotalItems { get; set; } // Toplam ürün sayısı

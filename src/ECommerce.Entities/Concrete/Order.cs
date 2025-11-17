@@ -24,10 +24,16 @@ namespace ECommerce.Entities.Concrete
         public Guid? ClientOrderId { get; set; }
         public int? UserId { get; set; }
         public bool IsGuestOrder { get; set; }
+        public decimal VatAmount { get; set; } = 0m;
         public string ShippingAddress { get; set; } = string.Empty;
         public string ShippingCity { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
         public decimal TotalPrice { get; set; } = 0m;
+        public decimal DiscountAmount { get; set; } = 0m;
+        public decimal FinalPrice { get; set; } = 0m;
+        public decimal CouponDiscountAmount { get; set; } = 0m;
+        public decimal CampaignDiscountAmount { get; set; } = 0m;
+        public string? AppliedCouponCode { get; set; }
         public string Currency { get; set; } = "TRY";
         public OrderStatus Status { get; set; } = OrderStatus.Pending;
         

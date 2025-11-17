@@ -29,6 +29,7 @@ const PaymentPage = () => {
   const [errors, setErrors] = useState({});
   const [deliverySlot, setDeliverySlot] = useState("standard");
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [serverVat, setServerVat] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [clientOrderId] = useState(() => {
@@ -67,9 +68,42 @@ const PaymentPage = () => {
     sameAsDelivery: true,
   });
 
+  const normalizeShippingChoice = (method) => {
+    const value = (method || "").toLowerCase();
+    if (value === "car" || value === "express" || value === "arac" || value === "araç") {
+      return "car";
+    }
+    return "motorcycle";
+  };
+
+  const getShippingCost = (method) =>
+    normalizeShippingChoice(method) === "car" ? 30 : 15;
+
+  const mergePricingWithShipping = (pricingResult, method) => {
+    if (!pricingResult) return null;
+
+    const shippingFee = getShippingCost(method);
+    const subtotal = Number(pricingResult.subtotal || 0);
+    const campaignDiscount = Number(pricingResult.campaignDiscountTotal || 0);
+    const couponDiscount = Number(pricingResult.couponDiscountTotal || 0);
+    const deliveryFee = shippingFee;
+    const discountTotal = campaignDiscount + couponDiscount;
+    const grandTotal = Math.max(0, subtotal - discountTotal + deliveryFee);
+
+    return {
+      ...pricingResult,
+      deliveryFee,
+      grandTotal,
+    };
+  };
+
   useEffect(() => {
     loadCartItems();
   }, []);
+
+  useEffect(() => {
+    setPricing((prev) => (prev ? mergePricingWithShipping(prev, shippingMethod) : null));
+  }, [shippingMethod]);
 
   const loadCartItems = async () => {
     try {
@@ -213,9 +247,13 @@ const PaymentPage = () => {
       const price = p ? p.specialPrice || p.price : 0;
       return sum + price * item.quantity;
     }, 0);
-    const baseShipping = shippingMethod === "car" ? 30 : 15;
+    const baseShipping = getShippingCost(shippingMethod);
     const shipping = baseShipping; // Always apply chosen shipping cost (frontend choice)
-    const tax = subtotal * 0.18; // KDV %18
+    const fallbackTax = subtotal * 0.18; // KDV %18 (frontend fallback)
+    const tax =
+      serverVat != null && !Number.isNaN(Number(serverVat))
+        ? Number(serverVat)
+        : fallbackTax;
     const total = subtotal + shipping + tax;
 
     return { subtotal, shipping, tax, total };
@@ -234,7 +272,7 @@ const PaymentPage = () => {
         items: itemsPayload,
         couponCode: couponCode?.trim() || null,
       });
-      setPricing(result);
+      setPricing(mergePricingWithShipping(result, shippingMethod));
     } catch (error) {
       console.error("Kupon uygulanırken hata:", error);
       setPricing(null);
@@ -363,7 +401,9 @@ const PaymentPage = () => {
     setProcessing(true);
 
     try {
-      const { total } = calculateTotals();
+      const { total, shipping } = calculateTotals();
+      const normalizedShippingMethod = normalizeShippingChoice(shippingMethod);
+      const shippingCost = shipping;
 
       // Backend DTO'suna uygun payload
       const orderItems = cartItems.map((ci) => {
@@ -379,8 +419,8 @@ const PaymentPage = () => {
       const payload = {
         totalPrice: total, // sunucu yeniden hesaplayacak
         orderItems,
-        shippingMethod: shippingMethod === "car" ? "car" : "motorcycle",
-        shippingCost: Number(shipping.toFixed(2)),
+        shippingMethod: normalizedShippingMethod,
+        shippingCost: Number(shippingCost.toFixed(2)),
         customerName: `${formData.firstName} ${formData.lastName}`.trim(),
         customerPhone: formData.phone,
         customerEmail: formData.email,
@@ -396,6 +436,7 @@ const PaymentPage = () => {
           .filter(Boolean)
           .join(" | "),
         clientOrderId,
+        couponCode: couponCode?.trim() || null,
       };
 
       const orderRes = await OrderService.checkout(payload);
@@ -404,11 +445,20 @@ const PaymentPage = () => {
         throw new Error(orderRes?.message || "Sipariş oluşturulamadı");
       }
 
+      // Backend'den gelen KDV (varsa) state'e yaz
+      if (typeof orderRes?.vatAmount !== "undefined") {
+        setServerVat(Number(orderRes.vatAmount || 0));
+      }
+
       // Kredi kartı ile ödeme ise seçilen sağlayıcıyı başlat (Stripe/Iyzico/PayPal).
+      const amountToCharge = Number(
+        (orderRes.finalPrice ?? orderRes.totalPrice ?? total).toFixed(2)
+      );
+
       if (paymentMethod === "creditCard") {
         const init = await PaymentService.initiate(
           orderRes.orderId,
-          Number(total.toFixed(2)),
+          amountToCharge,
           paymentProvider,
           "TRY"
         );
@@ -420,15 +470,24 @@ const PaymentPage = () => {
         }
       }
 
+      const vatForAlert =
+        typeof orderRes?.vatAmount !== "undefined"
+          ? Number(orderRes.vatAmount || 0)
+          : tax;
+
       // Redirect gerekmiyorsa başarılı kabul et
       alert(
-        "Ödeme tamamlandı! Sipariş numaranız: " + (orderRes.orderNumber || "-")
+        `Ödeme tamamlandı! Sipariş numaranız: ${orderRes.orderNumber || "-"} • Tahsil edilen tutar: ₺${amountToCharge.toFixed(
+          2
+        )} • KDV: ₺${vatForAlert.toFixed(2)}`
       );
       try {
         CartService.clearGuestCart();
       } catch {}
-      window.location.href =
-        "/order-success?orderNumber=" + (orderRes.orderNumber || "");
+      const successParams = new URLSearchParams();
+      if (orderRes.orderNumber) successParams.set("orderNumber", orderRes.orderNumber);
+      if (orderRes.orderId) successParams.set("orderId", orderRes.orderId);
+      window.location.href = `/order-success?${successParams.toString()}`;
     } catch (error) {
       console.error("Ödeme sırasında hata:", error);
       const message =

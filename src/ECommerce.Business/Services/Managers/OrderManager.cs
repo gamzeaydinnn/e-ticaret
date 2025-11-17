@@ -8,6 +8,7 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.DTOs.Pricing;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Entities.Enums;
@@ -19,7 +20,9 @@ namespace ECommerce.Business.Services.Managers
         private readonly ECommerceDbContext _context;
         private readonly IInventoryService _inventoryService;
         private readonly IInventoryLogService _inventoryLogService;
+        private readonly IPricingEngine _pricingEngine;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
+        private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
         private static readonly IReadOnlyDictionary<OrderStatus, HashSet<OrderStatus>> AllowedTransitions =
@@ -85,11 +88,13 @@ namespace ECommerce.Business.Services.Managers
             ECommerceDbContext context,
             IInventoryService inventoryService,
             IInventoryLogService inventoryLogService,
+            IPricingEngine pricingEngine,
             ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
             _inventoryLogService = inventoryLogService;
+            _pricingEngine = pricingEngine;
             _notificationService = notificationService;
         }
 
@@ -106,7 +111,13 @@ namespace ECommerce.Business.Services.Managers
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
                 IsGuestOrder = order.IsGuestOrder,
+                VatAmount = order.VatAmount,
                 TotalPrice = order.TotalPrice,
+                DiscountAmount = order.DiscountAmount,
+                FinalPrice = order.FinalPrice,
+                CouponDiscountAmount = order.CouponDiscountAmount,
+                CampaignDiscountAmount = order.CampaignDiscountAmount,
+                CouponCode = order.AppliedCouponCode,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
@@ -166,16 +177,23 @@ namespace ECommerce.Business.Services.Managers
                     ExpectedWeightGrams = product.UnitWeightGrams * i.Quantity
                 });
             }
+            var normalizedShipping = NormalizeShippingMethod(dto.ShippingMethod);
+            var shippingCost = ComputeShippingCost(normalizedShipping);
+
             var order = new Order
             {
                 ClientOrderId = dto.ClientOrderId,
                 UserId = effectiveUserId,
                 IsGuestOrder = !effectiveUserId.HasValue,
                 OrderNumber = GenerateOrderNumber(),
-                // Shipping will be computed server-side (do not trust client-provided cost)
-                ShippingMethod = NormalizeShippingMethod(dto.ShippingMethod),
-                ShippingCost = ComputeShippingCost(NormalizeShippingMethod(dto.ShippingMethod)),
-                TotalPrice = total + ComputeShippingCost(NormalizeShippingMethod(dto.ShippingMethod)),
+                ShippingMethod = normalizedShipping,
+                ShippingCost = shippingCost,
+                TotalPrice = total + shippingCost,
+                DiscountAmount = 0m,
+                CouponDiscountAmount = 0m,
+                CampaignDiscountAmount = 0m,
+                FinalPrice = total + shippingCost,
+                AppliedCouponCode = dto.CouponCode,
                 Status = OrderStatus.Pending,
                 OrderDate = DateTime.UtcNow,
                 ShippingAddress = string.IsNullOrWhiteSpace(dto.ShippingAddress) ? "-" : dto.ShippingAddress,
@@ -253,7 +271,7 @@ namespace ECommerce.Business.Services.Managers
             try
             {
                 var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
-                decimal total = 0m;
+                decimal itemsTotal = 0m;
                 var items = new List<OrderItem>();
                 foreach (var item in dto.OrderItems)
                 {
@@ -261,7 +279,7 @@ namespace ECommerce.Business.Services.Managers
                     if (product == null)
                         throw new Exception($"Ürün bulunamadı: {item.ProductId}");
                     var unitPrice = product.SpecialPrice ?? product.Price;
-                    total += unitPrice * item.Quantity;
+                    itemsTotal += unitPrice * item.Quantity;
                     items.Add(new OrderItem
                     {
                         ProductId = product.Id,
@@ -273,7 +291,45 @@ namespace ECommerce.Business.Services.Managers
                 // Compute shipping server-side (whitelist + fixed costs)
                 var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
                 var shippingCost = ComputeShippingCost(shippingMethod);
-                total += shippingCost;
+
+                var cartInputs = dto.OrderItems.Select(i => new CartItemInputDto
+                {
+                    ProductId = i.ProductId,
+                    Quantity = i.Quantity
+                }).ToList();
+
+                var normalizedCoupon = string.IsNullOrWhiteSpace(dto.CouponCode)
+                    ? null
+                    : dto.CouponCode!.Trim();
+
+                var pricingResult = await _pricingEngine.CalculateCartAsync(
+                    effectiveUserId,
+                    cartInputs,
+                    normalizedCoupon);
+
+                if (pricingResult == null)
+                {
+                    throw new Exception("Sepet fiyatı hesaplanamadı.");
+                }
+
+                if (pricingResult.Subtotal <= 0m)
+                {
+                    pricingResult.Subtotal = itemsTotal;
+                }
+
+                var discountTotal = pricingResult.CampaignDiscountTotal + pricingResult.CouponDiscountTotal;
+                if (discountTotal < 0m)
+                {
+                    discountTotal = 0m;
+                }
+
+                pricingResult.DeliveryFee = shippingCost;
+                var grandTotalBeforeVat = pricingResult.Subtotal - discountTotal + shippingCost;
+                pricingResult.GrandTotal = grandTotalBeforeVat < 0m ? 0m : grandTotalBeforeVat;
+
+                var vatAmount = Math.Round(pricingResult.Subtotal * VatRate, 2, MidpointRounding.AwayFromZero);
+                var totalPrice = pricingResult.Subtotal + shippingCost + vatAmount;
+                var finalPrice = pricingResult.GrandTotal + vatAmount;
 
                 var order = new Order
                 {
@@ -281,7 +337,13 @@ namespace ECommerce.Business.Services.Managers
                     UserId = effectiveUserId,
                     IsGuestOrder = !effectiveUserId.HasValue,
                     OrderNumber = GenerateOrderNumber(),
-                    TotalPrice = total,
+                    VatAmount = vatAmount,
+                    TotalPrice = totalPrice,
+                    DiscountAmount = discountTotal,
+                    CouponDiscountAmount = pricingResult.CouponDiscountTotal,
+                    CampaignDiscountAmount = pricingResult.CampaignDiscountTotal,
+                    FinalPrice = finalPrice,
+                    AppliedCouponCode = pricingResult.AppliedCouponCode ?? normalizedCoupon,
                     Status = OrderStatus.Pending,
                     OrderDate = DateTime.UtcNow,
                     ShippingAddress = dto.ShippingAddress,
@@ -549,7 +611,13 @@ namespace ECommerce.Business.Services.Managers
                 UserId = order.UserId ?? 0,
                 IsGuestOrder = order.IsGuestOrder,
                 OrderNumber = order.OrderNumber,
+                VatAmount = order.VatAmount,
                 TotalPrice = order.TotalPrice,
+                DiscountAmount = order.DiscountAmount,
+                FinalPrice = order.FinalPrice,
+                CouponDiscountAmount = order.CouponDiscountAmount,
+                CampaignDiscountAmount = order.CampaignDiscountAmount,
+                CouponCode = order.AppliedCouponCode,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
