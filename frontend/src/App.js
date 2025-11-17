@@ -68,6 +68,8 @@ import PressKit from "./pages/PressKit.jsx";
 import Sustainability from "./pages/Sustainability.jsx";
 import { GlobalToastContainer } from "./components/ToastProvider";
 import Footer from "./components/Footer";
+import OrderHistory from "./pages/OrderHistory";
+import ResetPassword from "./pages/ResetPassword.jsx";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -396,6 +398,51 @@ function Header() {
                           </div>
                         </button>
 
+                        <button
+                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
+                          style={{
+                            transition: "all 0.2s ease",
+                            fontSize: "14px",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background =
+                              "linear-gradient(135deg, #f8f9ff, #e3f2fd)";
+                            e.target.style.transform = "translateX(5px)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = "transparent";
+                            e.target.style.transform = "translateX(0)";
+                          }}
+                          onClick={() => {
+                            setShowUserDropdown(false);
+                            navigate("/orders/history");
+                          }}
+                        >
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                            style={{
+                              width: "32px",
+                              height: "32px",
+                              background:
+                                "linear-gradient(135deg, #6c5ce7, #a363d9)",
+                              color: "white",
+                            }}
+                          >
+                            <i
+                              className="fas fa-history"
+                              style={{ fontSize: "14px" }}
+                            ></i>
+                          </div>
+                          <div>
+                            <div className="fw-semibold text-dark">
+                              Sipariş Geçmişi
+                            </div>
+                            <small className="text-muted">
+                              Önceki siparişlerim
+                            </small>
+                          </div>
+                        </button>
+
                         <hr className="mx-3 my-2" style={{ opacity: 0.1 }} />
 
                         <button
@@ -638,8 +685,10 @@ function App() {
             <Route path="/cart" element={<CartPage />} />
             <Route path="/favorites" element={<FavoritesPage />} />
             <Route path="/orders" element={<OrderTracking />} />
+            <Route path="/orders/history" element={<OrderHistory />} />
             <Route path="/payment" element={<PaymentPage />} />
             <Route path="/order-success" element={<OrderSuccess />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* Ana site rotaları */}
             <Route path="/pages/home" element={<Home />} />
             <Route path="/pages/cart" element={<Cart />} />
