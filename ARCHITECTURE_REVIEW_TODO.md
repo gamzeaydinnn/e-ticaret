@@ -29,8 +29,7 @@ Bu dosya proje genelindeki eksiklikleri, tutarsızlıkları ve ileride ele alın
 - **Payment provider abstraction:** Payment gateway entegrasyonları için soyutlama, test double ve simulasyon yoksa riskli.
 
 **Frontend (eksik/yarım kalan akışlar ve iyileştirmeler)**
-- **Checkout akışı:** Tam bir checkout flow (adres yönetimi, kargo seçenekleri ve fiyatları, ödeme sayfası, 3D Secure redirect, ödeme başarılı/başarısız geri dönüşleri, sipariş özeti, idempotency) eksik olabilir.
-- **Kullanıcı hesap & oturum:** Sosyal login, password reset, e‑posta doğrulama, adres defteri, sipariş geçmişi sayfası, kullanıcı profil sayfası eksikleri olabilir.
+
 - **Cart & stok görünürlüğü:** Sepette ürünün stok kontrolü, snapshot fiyat, kupon uygulama, vergi ve kargo hesaplama anlık mantığı net değil.
 - **Order tracking:** Siparişin durumu, takip numarası, kurye güncellemeleri, bildirimler yok veya yetersiz.
 - **Admin tarafı:** Ürün yönetimi, stok yönetimi, sipariş yönetimi, iade yönetimi, raporlama, kullanıcı yetkilendirme (RBAC) tam değilse tamamlanmalı.

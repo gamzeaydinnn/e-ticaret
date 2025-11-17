@@ -68,6 +68,21 @@ namespace ECommerce.API.Controllers
             if (!CartValidator.Validate(dto, out string error))
                 return BadRequest(new { message = error });
 
+            // Stok kontrolü: istenen miktar mevcut stoktan fazla olamaz
+            var product = await _context.Products.FindAsync(dto.ProductId);
+            if (product == null)
+            {
+                return BadRequest(new { message = "Ürün bulunamadı." });
+            }
+
+            if (dto.Quantity > product.StockQuantity)
+            {
+                return BadRequest(new
+                {
+                    message = $"Yetersiz stok. Maksimum {product.StockQuantity} adet ekleyebilirsiniz."
+                });
+            }
+
             // Entity güncelleme
             item.ProductId = dto.ProductId;
             item.Quantity = dto.Quantity;

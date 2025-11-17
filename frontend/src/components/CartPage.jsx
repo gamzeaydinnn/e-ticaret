@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 import { useAuth } from "../contexts/AuthContext";
+import api from "../services/api";
 
 const CartPage = () => {
   const { count: cartCount, refresh: refreshCartCount } = useCartCount();
@@ -226,9 +227,21 @@ const CartPage = () => {
     try {
       if (user) {
         try {
-          await CartService.updateItem(item.id, item.productId, newQuantity);
+          // Backend üzerinden güncelle ve stok hatasını kullanıcıya göster
+          await api.put(`/api/cartitems/${item.id}`, {
+            productId: item.productId,
+            quantity: newQuantity,
+          });
         } catch (error) {
-          // Backend hatası durumunda localStorage'e fallback
+          // Yetersiz stok vb. 400 hatalarında backend mesajını göster
+          if (error && error.status === 400) {
+            const message = error.message || "Ürün stokta yeterli değil.";
+            alert(message);
+            return;
+          }
+
+          // Diğer hatalarda (ör. backend kapalı) mevcut localStorage fallback davranışını koru
+          console.log("Backend hatası, localStorage kullanılıyor", error);
           CartService.updateGuestCartItem(item.productId, newQuantity);
         }
       } else {
