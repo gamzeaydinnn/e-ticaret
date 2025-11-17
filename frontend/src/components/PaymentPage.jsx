@@ -29,6 +29,7 @@ const PaymentPage = () => {
   const [errors, setErrors] = useState({});
   const [deliverySlot, setDeliverySlot] = useState("standard");
   const [deliveryNote, setDeliveryNote] = useState("");
+  const [serverVat, setServerVat] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [clientOrderId] = useState(() => {
@@ -248,7 +249,11 @@ const PaymentPage = () => {
     }, 0);
     const baseShipping = getShippingCost(shippingMethod);
     const shipping = baseShipping; // Always apply chosen shipping cost (frontend choice)
-    const tax = subtotal * 0.18; // KDV %18
+    const fallbackTax = subtotal * 0.18; // KDV %18 (frontend fallback)
+    const tax =
+      serverVat != null && !Number.isNaN(Number(serverVat))
+        ? Number(serverVat)
+        : fallbackTax;
     const total = subtotal + shipping + tax;
 
     return { subtotal, shipping, tax, total };
@@ -440,6 +445,11 @@ const PaymentPage = () => {
         throw new Error(orderRes?.message || "Sipariş oluşturulamadı");
       }
 
+      // Backend'den gelen KDV (varsa) state'e yaz
+      if (typeof orderRes?.vatAmount !== "undefined") {
+        setServerVat(Number(orderRes.vatAmount || 0));
+      }
+
       // Kredi kartı ile ödeme ise seçilen sağlayıcıyı başlat (Stripe/Iyzico/PayPal).
       const amountToCharge = Number(
         (orderRes.finalPrice ?? orderRes.totalPrice ?? total).toFixed(2)
@@ -460,11 +470,16 @@ const PaymentPage = () => {
         }
       }
 
+      const vatForAlert =
+        typeof orderRes?.vatAmount !== "undefined"
+          ? Number(orderRes.vatAmount || 0)
+          : tax;
+
       // Redirect gerekmiyorsa başarılı kabul et
       alert(
         `Ödeme tamamlandı! Sipariş numaranız: ${orderRes.orderNumber || "-"} • Tahsil edilen tutar: ₺${amountToCharge.toFixed(
           2
-        )}`
+        )} • KDV: ₺${vatForAlert.toFixed(2)}`
       );
       try {
         CartService.clearGuestCart();

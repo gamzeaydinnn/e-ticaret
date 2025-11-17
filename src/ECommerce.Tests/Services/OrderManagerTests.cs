@@ -184,8 +184,10 @@ namespace ECommerce.Tests.Services
             Assert.Equal(15m, result.ShippingCost); // motorcycle → 15
 
             var expectedItemsTotal = 2 * (product.SpecialPrice ?? product.Price);
-            Assert.Equal(expectedItemsTotal + 15m, result.TotalPrice);
-            Assert.Equal(expectedItemsTotal + 15m, result.FinalPrice);
+            var expectedVat = Math.Round(expectedItemsTotal * 0.18m, 2, MidpointRounding.AwayFromZero);
+            Assert.Equal(expectedVat, result.VatAmount);
+            Assert.Equal(expectedItemsTotal + 15m + expectedVat, result.TotalPrice);
+            Assert.Equal(expectedItemsTotal + 15m + expectedVat, result.FinalPrice);
             Assert.Equal(0m, result.DiscountAmount);
 
             Assert.Single(result.OrderItems);

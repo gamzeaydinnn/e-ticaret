@@ -24,6 +24,7 @@ namespace ECommerce.Entities.Concrete
         public Guid? ClientOrderId { get; set; }
         public int? UserId { get; set; }
         public bool IsGuestOrder { get; set; }
+        public decimal VatAmount { get; set; } = 0m;
         public string ShippingAddress { get; set; } = string.Empty;
         public string ShippingCity { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;

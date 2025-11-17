@@ -22,6 +22,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly IInventoryLogService _inventoryLogService;
         private readonly IPricingEngine _pricingEngine;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
+        private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
         private static readonly IReadOnlyDictionary<OrderStatus, HashSet<OrderStatus>> AllowedTransitions =
@@ -110,6 +111,7 @@ namespace ECommerce.Business.Services.Managers
                 Id = order.Id,
                 UserId = order.UserId ?? 0,
                 IsGuestOrder = order.IsGuestOrder,
+                VatAmount = order.VatAmount,
                 TotalPrice = order.TotalPrice,
                 DiscountAmount = order.DiscountAmount,
                 FinalPrice = order.FinalPrice,
@@ -320,8 +322,12 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 pricingResult.DeliveryFee = shippingCost;
-                var grandTotal = pricingResult.Subtotal - discountTotal + shippingCost;
-                pricingResult.GrandTotal = grandTotal < 0m ? 0m : grandTotal;
+                var grandTotalBeforeVat = pricingResult.Subtotal - discountTotal + shippingCost;
+                pricingResult.GrandTotal = grandTotalBeforeVat < 0m ? 0m : grandTotalBeforeVat;
+
+                var vatAmount = Math.Round(pricingResult.Subtotal * VatRate, 2, MidpointRounding.AwayFromZero);
+                var totalPrice = pricingResult.Subtotal + shippingCost + vatAmount;
+                var finalPrice = pricingResult.GrandTotal + vatAmount;
 
                 var order = new Order
                 {
@@ -329,11 +335,12 @@ namespace ECommerce.Business.Services.Managers
                     UserId = effectiveUserId,
                     IsGuestOrder = !effectiveUserId.HasValue,
                     OrderNumber = GenerateOrderNumber(),
-                    TotalPrice = pricingResult.Subtotal + shippingCost,
+                    VatAmount = vatAmount,
+                    TotalPrice = totalPrice,
                     DiscountAmount = discountTotal,
                     CouponDiscountAmount = pricingResult.CouponDiscountTotal,
                     CampaignDiscountAmount = pricingResult.CampaignDiscountTotal,
-                    FinalPrice = pricingResult.GrandTotal,
+                    FinalPrice = finalPrice,
                     AppliedCouponCode = pricingResult.AppliedCouponCode ?? normalizedCoupon,
                     Status = OrderStatus.Pending,
                     OrderDate = DateTime.UtcNow,
@@ -602,6 +609,7 @@ namespace ECommerce.Business.Services.Managers
                 UserId = order.UserId ?? 0,
                 IsGuestOrder = order.IsGuestOrder,
                 OrderNumber = order.OrderNumber,
+                VatAmount = order.VatAmount,
                 TotalPrice = order.TotalPrice,
                 DiscountAmount = order.DiscountAmount,
                 FinalPrice = order.FinalPrice,
