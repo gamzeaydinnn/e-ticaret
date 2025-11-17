@@ -1,16 +1,20 @@
-using ECommerce.Core.Interfaces;
-using ECommerce.Entities.Concrete;
+using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
-using System;
-using ECommerce.Data.Context;
-using ECommerce.Infrastructure.Config;
-using Microsoft.Extensions.Options;
-using ECommerce.Infrastructure.Services.Email;
-using Microsoft.Extensions.Configuration;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.DTOs.Order;
-using System.Linq;
+using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
+using ECommerce.Entities.Concrete;
+using ECommerce.Infrastructure.Config;
+using ECommerce.Infrastructure.Services.Email;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 
 namespace ECommerce.Business.Services.Managers
@@ -22,30 +26,39 @@ namespace ECommerce.Business.Services.Managers
         private readonly EmailSender _emailSender;
         private readonly InventorySettings _inventorySettings;
         private readonly IConfiguration _configuration;
+        private readonly IInventoryLogService _inventoryLogService;
 
         public InventoryManager(
             IProductRepository productRepository,
             ECommerceDbContext context,
             EmailSender emailSender,
             IOptions<InventorySettings> inventoryOptions,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IInventoryLogService inventoryLogService)
         {
             _productRepository = productRepository;
             _context = context;
             _emailSender = emailSender;
             _inventorySettings = inventoryOptions.Value;
             _configuration = configuration;
+            _inventoryLogService = inventoryLogService;
         }
 
         public async Task<bool> IncreaseStockAsync(int productId, int quantity)
         {
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null) return false;
+            var oldStock = product.StockQuantity;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
 
-            // Log
-            await LogAsync(product.Id, quantity, InventoryChangeType.Purchase, "Manual increase");
+            await _inventoryLogService.WriteAsync(
+                product.Id,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                "ManualIncrease");
             return true;
         }
 
@@ -53,10 +66,17 @@ namespace ECommerce.Business.Services.Managers
         {
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null || product.StockQuantity < quantity) return false;
+            var oldStock = product.StockQuantity;
             product.StockQuantity -= quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(product.Id, -quantity, InventoryChangeType.Sale, "Manual decrease");
+            await _inventoryLogService.WriteAsync(
+                product.Id,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                "ManualDecrease");
             await CheckThresholdAndNotifyAsync(product);
             return true;
         }
@@ -71,10 +91,17 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null || product.StockQuantity < quantity) return false;
 
+            var oldStock = product.StockQuantity;
             product.StockQuantity -= quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(productId, -quantity, changeType, note, performedByUserId);
+            await _inventoryLogService.WriteAsync(
+                productId,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                BuildReference("Decrease", changeType, note, performedByUserId));
             await CheckThresholdAndNotifyAsync(product);
             return true;
         }
@@ -84,10 +111,17 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(productId);
             if (product == null) return false;
 
+            var oldStock = product.StockQuantity;
             product.StockQuantity += quantity;
             await _productRepository.UpdateAsync(product);
 
-            await LogAsync(productId, quantity, changeType, note, performedByUserId);
+            await _inventoryLogService.WriteAsync(
+                productId,
+                "Adjust",
+                quantity,
+                oldStock,
+                product.StockQuantity,
+                BuildReference("Increase", changeType, note, performedByUserId));
             return true;
         }
 
@@ -110,14 +144,25 @@ namespace ECommerce.Business.Services.Managers
                 {
                     return (false, "Geçersiz miktar");
                 }
+            }
 
-                var product = await _productRepository.GetByIdAsync(item.ProductId);
+            var grouped = materialized
+                .GroupBy(i => i.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .ToList();
+
+            var now = DateTime.UtcNow;
+            foreach (var entry in grouped)
+            {
+                var product = await _productRepository.GetByIdAsync(entry.ProductId);
                 if (product == null)
                 {
-                    return (false, $"Ürün bulunamadı: {item.ProductId}");
+                    return (false, $"Ürün bulunamadı: {entry.ProductId}");
                 }
 
-                if (product.StockQuantity < item.Quantity)
+                var reservedQuantity = await GetActiveReservedQuantityAsync(entry.ProductId, now);
+                var available = product.StockQuantity - reservedQuantity;
+                if (available < entry.Quantity)
                 {
                     return (false, $"Yetersiz stok: {product.Name}");
                 }
@@ -126,20 +171,305 @@ namespace ECommerce.Business.Services.Managers
             return (true, null);
         }
 
-        private async Task LogAsync(int productId, int changeQty, InventoryChangeType type, string? note = null, int? byUserId = null)
+        public async Task<bool> ReserveStockAsync(Guid clientOrderId, IEnumerable<CartItemDto> items)
         {
-            var log = new InventoryLog
+            if (items == null)
             {
-                ProductId = productId,
-                ChangeQuantity = changeQty,
-                ChangeType = type,
-                Note = note,
-                PerformedByUserId = byUserId,
-                CreatedAt = DateTime.UtcNow,
-                IsActive = true
-            };
-            _context.InventoryLogs.Add(log);
-            await _context.SaveChangesAsync();
+                throw new ArgumentNullException(nameof(items));
+            }
+
+            var now = DateTime.UtcNow;
+            var normalizedItems = items
+                .Where(i => i.Quantity > 0)
+                .GroupBy(i => i.ProductId)
+                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .ToList();
+            if (normalizedItems.Count == 0)
+            {
+                return false;
+            }
+
+            var expiration = now.AddMinutes(Math.Max(1, _inventorySettings.ReservationExpiryMinutes));
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var existing = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (existing.Count > 0)
+                {
+                    foreach (var reservation in existing)
+                    {
+                        reservation.IsReleased = true;
+                        reservation.ExpiresAt = now;
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                foreach (var item in normalizedItems)
+                {
+                    await EnsureProductRowLockedAsync(item.ProductId);
+
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        await RollbackIfNeededAsync(transaction, ownsTransaction);
+                        return false;
+                    }
+
+                    var reservedQuantity = await GetActiveReservedQuantityAsync(item.ProductId, now);
+                    var available = product.StockQuantity - reservedQuantity;
+                    if (available < item.Quantity)
+                    {
+                        await RollbackIfNeededAsync(transaction, ownsTransaction);
+                        return false;
+                    }
+
+                    _context.StockReservations.Add(new StockReservation
+                    {
+                        ClientOrderId = clientOrderId,
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        CreatedAt = now,
+                        ExpiresAt = expiration,
+                        IsReleased = false
+                    });
+
+                    var availableAfter = available - item.Quantity;
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "Reserve",
+                        item.Quantity,
+                        available,
+                        availableAfter,
+                        clientOrderId.ToString());
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+                return true;
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        public async Task ReleaseReservationAsync(Guid clientOrderId)
+        {
+            var now = DateTime.UtcNow;
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var reservations = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (reservations.Count == 0)
+                {
+                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    return;
+                }
+
+                var releaseSummary = reservations
+                    .GroupBy(r => r.ProductId)
+                    .Select(g => new { ProductId = g.Key, Quantity = g.Sum(r => r.Quantity) })
+                    .ToList();
+
+                foreach (var item in releaseSummary)
+                {
+                    await EnsureProductRowLockedAsync(item.ProductId);
+
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        continue;
+                    }
+
+                    var reservedBefore = await GetActiveReservedQuantityAsync(item.ProductId, now);
+                    var availableBefore = product.StockQuantity - reservedBefore;
+                    var availableAfter = availableBefore + item.Quantity;
+
+                    await _inventoryLogService.WriteAsync(
+                        item.ProductId,
+                        "Release",
+                        item.Quantity,
+                        availableBefore,
+                        availableAfter,
+                        clientOrderId.ToString());
+                }
+
+                foreach (var reservation in reservations)
+                {
+                    reservation.IsReleased = true;
+                    reservation.ExpiresAt = now;
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        public async Task CommitReservationAsync(Guid clientOrderId)
+        {
+            var now = DateTime.UtcNow;
+            var ownsTransaction = _context.Database.CurrentTransaction == null;
+            IDbContextTransaction? transaction = null;
+            if (ownsTransaction)
+            {
+                transaction = await TryBeginTransactionAsync();
+                if (transaction == null)
+                {
+                    ownsTransaction = false;
+                }
+            }
+            try
+            {
+                var reservations = await _context.StockReservations
+                    .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
+                    .ToListAsync();
+                if (reservations.Count == 0)
+                {
+                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    return;
+                }
+
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
+
+                foreach (var group in reservations.GroupBy(r => r.ProductId))
+                {
+                    await EnsureProductRowLockedAsync(group.Key);
+
+                    var totalQuantity = group.Sum(r => r.Quantity);
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == group.Key);
+                    if (product == null || product.StockQuantity < totalQuantity)
+                    {
+                        throw new InvalidOperationException("Stok rezervasyonu onaylanamadı.");
+                    }
+
+                    var oldStock = product.StockQuantity;
+                    product.StockQuantity -= totalQuantity;
+                    var reference = order != null
+                        ? $"Order:{order.OrderNumber ?? order.Id.ToString()}"
+                        : $"Client:{clientOrderId}";
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "Commit",
+                        totalQuantity,
+                        oldStock,
+                        product.StockQuantity,
+                        reference);
+                    await CheckThresholdAndNotifyAsync(product);
+                }
+
+                foreach (var reservation in reservations)
+                {
+                    reservation.IsReleased = true;
+                    reservation.ExpiresAt = now;
+                    if (order != null)
+                    {
+                        reservation.OrderId = order.Id;
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+                await CommitIfNeededAsync(transaction, ownsTransaction);
+            }
+            catch
+            {
+                await RollbackIfNeededAsync(transaction, ownsTransaction);
+                throw;
+            }
+        }
+
+        private async Task<int> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)
+        {
+            var reserved = await _context.StockReservations
+                .Where(r => r.ProductId == productId && !r.IsReleased && r.ExpiresAt > utcNow)
+                .SumAsync(r => (int?)r.Quantity);
+            return reserved ?? 0;
+        }
+
+        private Task EnsureProductRowLockedAsync(int productId)
+        {
+            if (_context.Database.IsSqlServer())
+            {
+                return _context.Database.ExecuteSqlRawAsync(
+                    "SELECT 1 FROM [Products] WITH (UPDLOCK, ROWLOCK) WHERE [Id] = {0}",
+                    productId);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        private static Task CommitIfNeededAsync(IDbContextTransaction? transaction, bool ownsTransaction)
+        {
+            return ownsTransaction && transaction != null
+                ? transaction.CommitAsync()
+                : Task.CompletedTask;
+        }
+
+        private static Task RollbackIfNeededAsync(IDbContextTransaction? transaction, bool ownsTransaction)
+        {
+            return ownsTransaction && transaction != null
+                ? transaction.RollbackAsync()
+                : Task.CompletedTask;
+        }
+
+        private async Task<IDbContextTransaction?> TryBeginTransactionAsync()
+        {
+            try
+            {
+                return await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            }
+            catch (InvalidOperationException ex)
+            {
+                if (ex.Message.Contains("Transactions are not supported", StringComparison.OrdinalIgnoreCase))
+                {
+                    return null;
+                }
+
+                throw;
+            }
+        }
+
+        private static string BuildReference(string prefix, InventoryChangeType changeType, string? note, int? byUserId)
+        {
+            var parts = new List<string> { prefix, changeType.ToString() };
+            if (byUserId.HasValue)
+            {
+                parts.Add($"User:{byUserId.Value}");
+            }
+            if (!string.IsNullOrWhiteSpace(note))
+            {
+                parts.Add(note.Trim());
+            }
+            return string.Join("|", parts);
         }
 
         private async Task CheckThresholdAndNotifyAsync(Product product)

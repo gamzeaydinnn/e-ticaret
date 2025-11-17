@@ -16,19 +16,28 @@ namespace ECommerce.Business.Services.Managers
         private readonly IProductRepository _productRepository;
         private readonly IReviewRepository _reviewRepository;
         private readonly IMemoryCache _cache;
-    private const string ProductCacheKeysKey = "products_cache_keys";
+        private readonly IInventoryLogService _inventoryLogService;
+        private const string ProductCacheKeysKey = "products_cache_keys";
 
-        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository, IMemoryCache cache)
+        public ProductManager(
+            IProductRepository productRepository,
+            IReviewRepository reviewRepository,
+            IMemoryCache cache,
+            IInventoryLogService inventoryLogService)
         {
             _productRepository = productRepository;
             _reviewRepository = reviewRepository;
             _cache = cache;
+            _inventoryLogService = inventoryLogService;
         }
 
         // Backwards-compatible constructor for tests or callers that don't provide an IMemoryCache.
         // This avoids breaking existing unit tests that construct ProductManager without cache.
-        public ProductManager(IProductRepository productRepository, IReviewRepository reviewRepository)
-            : this(productRepository, reviewRepository, new MemoryCache(new MemoryCacheOptions()))
+        public ProductManager(
+            IProductRepository productRepository,
+            IReviewRepository reviewRepository,
+            IInventoryLogService inventoryLogService)
+            : this(productRepository, reviewRepository, new MemoryCache(new MemoryCacheOptions()), inventoryLogService)
         {
         }
 
@@ -154,6 +163,7 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return;
 
+            var oldStock = product.StockQuantity;
             product.Name = productDto.Name;
             product.Description = productDto.Description;
             product.Price = productDto.Price;
@@ -164,6 +174,17 @@ namespace ECommerce.Business.Services.Managers
             product.BrandId = productDto.BrandId;
 
             await _productRepository.UpdateAsync(product);
+            if (oldStock != product.StockQuantity)
+            {
+                var quantity = Math.Abs(product.StockQuantity - oldStock);
+                await _inventoryLogService.WriteAsync(
+                    product.Id,
+                    "ProductUpdated",
+                    quantity,
+                    oldStock,
+                    product.StockQuantity,
+                    $"Product:{product.Id}");
+            }
             InvalidateProductCaches();
         }
 
@@ -180,8 +201,19 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(id);
             if (product != null)
             {
+                var oldStock = product.StockQuantity;
                 product.StockQuantity = stock;
                 await _productRepository.UpdateAsync(product);
+                if (oldStock != product.StockQuantity)
+                {
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "ProductUpdated",
+                        Math.Abs(stock - oldStock),
+                        oldStock,
+                        product.StockQuantity,
+                        $"Product:{product.Id}");
+                }
                 InvalidateProductCaches();
             }
         }

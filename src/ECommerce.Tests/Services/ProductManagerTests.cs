@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.Interfaces;
@@ -15,7 +16,8 @@ namespace ECommerce.Tests.Services
         private static ProductManager CreateManager(Mock<IProductRepository> productRepositoryMock)
         {
             var reviewRepositoryMock = new Mock<IReviewRepository>();
-            return new ProductManager(productRepositoryMock.Object, reviewRepositoryMock.Object);
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            return new ProductManager(productRepositoryMock.Object, reviewRepositoryMock.Object, inventoryLogMock.Object);
         }
 
         [Fact]

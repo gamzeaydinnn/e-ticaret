@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Data.Context;
@@ -17,6 +18,7 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly ECommerceDbContext _context;
         private readonly IInventoryService _inventoryService;
+        private readonly IInventoryLogService _inventoryLogService;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -79,10 +81,15 @@ namespace ECommerce.Business.Services.Managers
                 }
             };
 
-        public OrderManager(ECommerceDbContext context, IInventoryService inventoryService, ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
+        public OrderManager(
+            ECommerceDbContext context,
+            IInventoryService inventoryService,
+            IInventoryLogService inventoryLogService,
+            ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
+            _inventoryLogService = inventoryLogService;
             _notificationService = notificationService;
         }
 
@@ -219,15 +226,32 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<OrderListDto> CheckoutAsync(OrderCreateDto dto)
         {
+            var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
+            if (!stockCheck.Success)
+            {
+                throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
+            }
+
+            var clientOrderId = dto.ClientOrderId ?? Guid.NewGuid();
+            dto.ClientOrderId = clientOrderId;
+
+            var reservationItems = dto.OrderItems
+                .Select(i => new CartItemDto
+                {
+                    ProductId = i.ProductId,
+                    Quantity = i.Quantity
+                })
+                .ToList();
+
+            var reservationSucceeded = await _inventoryService.ReserveStockAsync(clientOrderId, reservationItems);
+            if (!reservationSucceeded)
+            {
+                throw new Exception("Insufficient stock");
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
-                if (!stockCheck.Success)
-                {
-                    throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
-                }
-
                 var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
                 decimal total = 0m;
                 var items = new List<OrderItem>();
@@ -272,17 +296,8 @@ namespace ECommerce.Business.Services.Managers
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
-                foreach (var item in order.OrderItems)
-                {
-                    var ok = await _inventoryService.DecreaseStockAsync(
-                        item.ProductId,
-                        item.Quantity,
-                        InventoryChangeType.Sale,
-                        note: $"Online Order #{order.OrderNumber}",
-                        performedByUserId: order.UserId
-                    );
-                    if (!ok) throw new Exception("Stok düşümü başarısız");
-                }
+
+                await _inventoryService.CommitReservationAsync(clientOrderId);
                 await transaction.CommitAsync();
 
                 // Fire-and-forget notification (do not block checkout)
@@ -296,20 +311,22 @@ namespace ECommerce.Business.Services.Managers
             catch
             {
                 await transaction.RollbackAsync();
+                if (reservationSucceeded)
+                {
+                    await _inventoryService.ReleaseReservationAsync(clientOrderId);
+                }
                 throw;
             }
         }
 
         public async Task<bool> CancelOrderAsync(int orderId, int userId)
         {
-            var order = await _context.Orders.FindAsync(orderId);
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
             if (order == null || order.UserId != userId)
                 return false;
-            if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Delivered)
-                return false;
-            order.Status = OrderStatus.Cancelled;
-            await _context.SaveChangesAsync();
-            return true;
+            return await CancelOrderInternalAsync(order);
         }
 
         public async Task<bool> MarkPaymentFailedAsync(int orderId)
@@ -354,6 +371,51 @@ namespace ECommerce.Business.Services.Managers
         public Task<OrderListDto?> RefundOrderAsync(int orderId)
         {
             return MoveOrderToStatusAsync(orderId, OrderStatus.Refunded);
+        }
+
+        private async Task<bool> CancelOrderInternalAsync(Order order)
+        {
+            if (order.Status == OrderStatus.Cancelled || order.Status == OrderStatus.Delivered)
+            {
+                return false;
+            }
+
+            await EnsureOrderItemsLoadedAsync(order);
+
+            if (order.OrderItems != null && order.OrderItems.Count > 0)
+            {
+                foreach (var item in order.OrderItems)
+                {
+                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    if (product == null)
+                    {
+                        continue;
+                    }
+
+                    var oldStock = product.StockQuantity;
+                    product.StockQuantity += item.Quantity;
+                    await _inventoryLogService.WriteAsync(
+                        product.Id,
+                        "OrderCancelled",
+                        item.Quantity,
+                        oldStock,
+                        product.StockQuantity,
+                        order.OrderNumber ?? order.Id.ToString());
+                }
+            }
+
+            order.Status = OrderStatus.Cancelled;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private async Task EnsureOrderItemsLoadedAsync(Order order)
+        {
+            var entry = _context.Entry(order);
+            if (!entry.Collection(o => o.OrderItems).IsLoaded)
+            {
+                await entry.Collection(o => o.OrderItems).LoadAsync();
+            }
         }
 
         public async Task<int> GetOrderCountAsync()
@@ -411,6 +473,12 @@ namespace ECommerce.Business.Services.Managers
                     return;
                 }
 
+                if (statusEnum == OrderStatus.Cancelled)
+                {
+                    await CancelOrderInternalAsync(order);
+                    return;
+                }
+
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
 
@@ -452,6 +520,12 @@ namespace ECommerce.Business.Services.Managers
                 !allowedTargets.Contains(targetStatus))
             {
                 throw new InvalidOperationException($"Geçersiz durum geçişi: {previousStatus} -> {targetStatus}");
+            }
+
+            if (targetStatus == OrderStatus.Cancelled)
+            {
+                await CancelOrderInternalAsync(order);
+                return await GetByIdAsync(orderId);
             }
 
             order.Status = targetStatus;

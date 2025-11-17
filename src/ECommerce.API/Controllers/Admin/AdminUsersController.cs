@@ -7,6 +7,7 @@ using ECommerce.Entities.Concrete;
 using Microsoft.AspNetCore.Identity;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Security.Claims;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -16,10 +17,12 @@ namespace ECommerce.API.Controllers.Admin
     public class AdminUsersController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly IAuditLogService _auditLogService;
 
-        public AdminUsersController(IUserService userService)
+        public AdminUsersController(IUserService userService, IAuditLogService auditLogService)
         {
             _userService = userService;
+            _auditLogService = auditLogService;
         }
 
         [HttpGet]
@@ -94,6 +97,15 @@ namespace ECommerce.API.Controllers.Admin
             if (user == null)
                 return NotFound();
 
+            var oldSnapshot = new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Role,
+                user.IsActive
+            };
+
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
             user.Email = dto.Email;
@@ -115,6 +127,20 @@ namespace ECommerce.API.Controllers.Admin
             // şifre güncelleme opsiyonel olarak eklenebilir
 
             await _userService.UpdateAsync(user);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "UserUpdated",
+                "User",
+                id.ToString(),
+                oldSnapshot,
+                new
+                {
+                    user.FirstName,
+                    user.LastName,
+                    user.Email,
+                    user.Role,
+                    user.IsActive
+                });
             return NoContent();
         }
 
@@ -125,7 +151,26 @@ namespace ECommerce.API.Controllers.Admin
             if (user == null)
                 return NotFound();
 
+            var oldSnapshot = new
+            {
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Role,
+                user.IsActive
+            };
+
             await _userService.DeleteAsync(user);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "UserDisabled",
+                "User",
+                id.ToString(),
+                oldSnapshot,
+                new
+                {
+                    user.IsActive
+                });
             return NoContent();
         }
 
@@ -152,8 +197,16 @@ namespace ECommerce.API.Controllers.Admin
                 return Forbid();
             }
 
+            var oldRole = user.Role;
             user.Role = dto.Role;
             await _userService.UpdateAsync(user);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "UserRoleUpdated",
+                "User",
+                id.ToString(),
+                new { OldRole = oldRole },
+                new { NewRole = user.Role });
             return Ok(new { success = true, id = user.Id, role = user.Role });
         }
 
@@ -161,5 +214,12 @@ namespace ECommerce.API.Controllers.Admin
             role == Roles.SuperAdmin ||
             role == Roles.Admin ||
             role == Roles.User;
+
+        private int GetAdminUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+            return int.TryParse(userIdValue, out var adminId) ? adminId : 0;
+        }
     }
 }

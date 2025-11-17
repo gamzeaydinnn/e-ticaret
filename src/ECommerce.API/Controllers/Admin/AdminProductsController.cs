@@ -4,6 +4,7 @@ using ECommerce.Core.DTOs.Product;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
+using System.Security.Claims;
 /*ProductsController
 •	GET /api/products -> ürün listesi (kategori, pagination destekleyin)
 •	GET /api/products/{id}
@@ -19,11 +20,13 @@ public class AdminProductsController : ControllerBase
 {
     private readonly IProductService _productService;
     private readonly StockSyncJob _stockSyncJob;
+    private readonly IAuditLogService _auditLogService;
 
-    public AdminProductsController(IProductService productService, StockSyncJob stockSyncJob)
+    public AdminProductsController(IProductService productService, StockSyncJob stockSyncJob, IAuditLogService auditLogService)
     {
         _productService = productService;
         _stockSyncJob = stockSyncJob;
+        _auditLogService = auditLogService;
     }
 
     [HttpGet]
@@ -43,14 +46,62 @@ public class AdminProductsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductUpdateDto productDto)
     {
+        var oldProduct = await _productService.GetByIdAsync(id);
+
         await _productService.UpdateProductAsync(id, productDto);
+        if (oldProduct != null)
+        {
+            var updatedProduct = await _productService.GetByIdAsync(id);
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "ProductUpdated",
+                "Product",
+                id.ToString(),
+                new
+                {
+                    oldProduct.Name,
+                    oldProduct.Price,
+                    oldProduct.SpecialPrice,
+                    oldProduct.StockQuantity,
+                    oldProduct.CategoryName
+                },
+                updatedProduct != null
+                    ? new
+                    {
+                        updatedProduct.Name,
+                        updatedProduct.Price,
+                        updatedProduct.SpecialPrice,
+                        updatedProduct.StockQuantity,
+                        updatedProduct.CategoryName
+                    }
+                    : null);
+        }
         return NoContent();
     }
 
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteProduct(int id)
     {
+        var existingProduct = await _productService.GetByIdAsync(id);
+
         await _productService.DeleteProductAsync(id);
+        if (existingProduct != null)
+        {
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "ProductDeleted",
+                "Product",
+                id.ToString(),
+                new
+                {
+                    existingProduct.Name,
+                    existingProduct.Price,
+                    existingProduct.SpecialPrice,
+                    existingProduct.StockQuantity,
+                    existingProduct.CategoryName
+                },
+                null);
+        }
         return NoContent();
     }
 
@@ -76,5 +127,12 @@ public class AdminProductsController : ControllerBase
     {
         await _stockSyncJob.RunOnce();
         return Ok("Stok senkronizasyonu başlatıldı.");
+    }
+
+    private int GetAdminUserId()
+    {
+        var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                          ?? User.FindFirst("sub")?.Value;
+        return int.TryParse(userIdValue, out var adminId) ? adminId : 0;
     }
 }

@@ -1,12 +1,15 @@
 using System;
 using System.Threading.Tasks;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Data.Context;
+using ECommerce.Core.DTOs.Cart;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Infrastructure.Services.Email;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -21,6 +24,7 @@ namespace ECommerce.Tests.Services
         {
             var options = new DbContextOptionsBuilder<ECommerceDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
                 .Options;
             return new ECommerceDbContext(options);
         }
@@ -51,12 +55,15 @@ namespace ECommerce.Tests.Services
             var configurationMock = new Mock<IConfiguration>();
             configurationMock.Setup(c => c["Admin:Email"]).Returns((string?)null);
 
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
+
             return new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
         }
 
         [Fact]
@@ -95,13 +102,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var managerWithRepoMock = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await managerWithRepoMock.IncreaseStockAsync(product.Id, 3);
@@ -146,13 +155,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(product.Id, 4);
@@ -187,13 +198,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(999, 5);
@@ -234,13 +247,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var result = await manager.DecreaseStockAsync(product.Id, 5);
@@ -282,13 +297,15 @@ namespace ECommerce.Tests.Services
             var emailSender = new EmailSender(options, envMock.Object);
             var inventorySettings = Options.Create(new InventorySettings { CriticalStockThreshold = 1 });
             var configurationMock = new Mock<IConfiguration>();
+            var inventoryLogServiceMock = new Mock<IInventoryLogService>();
 
             var manager = new InventoryManager(
                 productRepositoryMock.Object,
                 context,
                 emailSender,
                 inventorySettings,
-                configurationMock.Object);
+                configurationMock.Object,
+                inventoryLogServiceMock.Object);
 
             // Act
             var stock = await manager.GetStockLevelAsync(product.Id);
@@ -296,6 +313,72 @@ namespace ECommerce.Tests.Services
             // Assert
             Assert.Equal(15, stock);
         }
+
+        [Fact]
+        public async Task ReserveStockAsync_ShouldCreateAndReleaseReservation()
+        {
+            using var context = CreateInMemoryDbContext();
+            var manager = CreateManager(context);
+
+            var product = new Product
+            {
+                Name = "Reservable Product",
+                StockQuantity = 10,
+                Price = 10m
+            };
+            context.Products.Add(product);
+            await context.SaveChangesAsync();
+
+            var clientOrderId = Guid.NewGuid();
+            var success = await manager.ReserveStockAsync(clientOrderId, new[]
+            {
+                new CartItemDto { ProductId = product.Id, Quantity = 3 }
+            });
+
+            Assert.True(success);
+            var reservation = await context.StockReservations.FirstOrDefaultAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.NotNull(reservation);
+            Assert.False(reservation!.IsReleased);
+
+            await manager.ReleaseReservationAsync(clientOrderId);
+            var releasedReservation = await context.StockReservations.FirstAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.True(releasedReservation.IsReleased);
+        }
+
+        [Fact]
+        public async Task ReserveStockAsync_ShouldFail_WhenNotEnoughAvailableAfterExistingReservations()
+        {
+            using var context = CreateInMemoryDbContext();
+            var manager = CreateManager(context);
+
+            var product = new Product
+            {
+                Name = "Limited Product",
+                StockQuantity = 5
+            };
+            context.Products.Add(product);
+            await context.SaveChangesAsync();
+
+            context.StockReservations.Add(new StockReservation
+            {
+                ClientOrderId = Guid.NewGuid(),
+                ProductId = product.Id,
+                Quantity = 4,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(5),
+                IsReleased = false
+            });
+            await context.SaveChangesAsync();
+
+            var clientOrderId = Guid.NewGuid();
+            var success = await manager.ReserveStockAsync(clientOrderId, new[]
+            {
+                new CartItemDto { ProductId = product.Id, Quantity = 2 }
+            });
+
+            Assert.False(success);
+            var clientReservations = await context.StockReservations.CountAsync(r => r.ClientOrderId == clientOrderId);
+            Assert.Equal(0, clientReservations);
+        }
     }
 }
-

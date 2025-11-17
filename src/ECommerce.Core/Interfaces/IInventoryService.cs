@@ -1,7 +1,9 @@
+using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Order;
-using System.Collections.Generic;
+using ECommerce.Core.DTOs.Cart;
 
 namespace ECommerce.Core.Interfaces
 {
@@ -17,6 +19,11 @@ namespace ECommerce.Core.Interfaces
 
         // Sepet/checkout öncesi merkezi stok doğrulaması
         Task<(bool Success, string? ErrorMessage)> ValidateStockForOrderAsync(IEnumerable<OrderItemDto> items);
+
+        // Stok rezervasyon yönetimi
+        Task<bool> ReserveStockAsync(Guid clientOrderId, IEnumerable<CartItemDto> items);
+        Task ReleaseReservationAsync(Guid clientOrderId);
+        Task CommitReservationAsync(Guid clientOrderId);
     }
 }
 //stok artır/azalt.

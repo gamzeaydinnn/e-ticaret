@@ -28,6 +28,8 @@ namespace ECommerce.Data.Context
         public virtual DbSet<ProductImage> ProductImages { get; set; }
         public virtual DbSet<ProductVariant> ProductVariants { get; set; }
         public virtual DbSet<Stocks> Stocks { get; set; }
+        public virtual DbSet<StockReservation> StockReservations { get; set; }
+        public virtual DbSet<ErrorLog> ErrorLogs { get; set; }
 
         public virtual DbSet<Brand> Brands { get; set; }
         public virtual DbSet<Discount> Discounts { get; set; }
@@ -98,10 +100,35 @@ namespace ECommerce.Data.Context
             });
 
             // Product-Discount Many-to-Many
-            modelBuilder.Entity<Product>()
+            modelBuilder.Entity<Product>()  
                         .HasMany(p => p.Discounts)
                         .WithMany(d => d.Products)
                         .UsingEntity(j => j.ToTable("ProductDiscounts"));
+
+            modelBuilder.Entity<StockReservation>(entity =>
+            {
+                entity.ToTable("StockReservations");
+                entity.Property(e => e.ClientOrderId)
+                      .IsRequired();
+                entity.Property(e => e.Quantity)
+                      .IsRequired();
+                entity.Property(e => e.CreatedAt)
+                      .HasColumnType("datetime2");
+                entity.Property(e => e.ExpiresAt)
+                      .HasColumnType("datetime2");
+                entity.HasIndex(e => e.ClientOrderId);
+                entity.HasIndex(e => new { e.ProductId, e.IsReleased, e.ExpiresAt });
+
+                entity.HasOne(e => e.Product)
+                      .WithMany(p => p.StockReservations)
+                      .HasForeignKey(e => e.ProductId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Order)
+                      .WithMany(o => o.StockReservations)
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
 
             // -------------------
             // Order Configuration
