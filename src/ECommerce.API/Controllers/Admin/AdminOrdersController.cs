@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
@@ -25,6 +26,25 @@ namespace ECommerce.API.Controllers.Admin
         {
             _orderService = orderService;
             _auditLogService = auditLogService;
+        }
+
+        [HttpPatch("{id:int}/tracking-number")]
+        public async Task<IActionResult> UpdateTrackingNumber(int id, [FromBody] Dictionary<string, string>? body)
+        {
+            // Sadece TrackingNumber alanını güncelle
+            var db = HttpContext.RequestServices.GetService(typeof(ECommerce.Data.Context.ECommerceDbContext)) as ECommerce.Data.Context.ECommerceDbContext;
+            if (db == null) return StatusCode(500, new { message = "Database context not available" });
+
+            var order = await db.Orders.FindAsync(id);
+            if (order == null) return NotFound();
+
+            string? tracking = null;
+            if (body != null && body.TryGetValue("trackingNumber", out var val)) tracking = val;
+
+            order.TrackingNumber = tracking;
+            await db.SaveChangesAsync();
+
+            return Ok();
         }
 
         [HttpGet]

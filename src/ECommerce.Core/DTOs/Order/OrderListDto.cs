@@ -25,6 +25,7 @@ namespace ECommerce.Core.DTOs.Order
     public string ShippingMethod { get; set; } = string.Empty;
     public decimal ShippingCost { get; set; }
     public string ShippingAddress { get; set; } = string.Empty;
+        public string? TrackingNumber { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string DeliveryNotes { get; set; } = string.Empty;

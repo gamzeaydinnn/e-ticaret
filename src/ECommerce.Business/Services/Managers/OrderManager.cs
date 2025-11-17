@@ -118,6 +118,7 @@ namespace ECommerce.Business.Services.Managers
                 CouponDiscountAmount = order.CouponDiscountAmount,
                 CampaignDiscountAmount = order.CampaignDiscountAmount,
                 CouponCode = order.AppliedCouponCode,
+                TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
@@ -616,6 +617,7 @@ namespace ECommerce.Business.Services.Managers
                 CouponDiscountAmount = order.CouponDiscountAmount,
                 CampaignDiscountAmount = order.CampaignDiscountAmount,
                 CouponCode = order.AppliedCouponCode,
+                TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,

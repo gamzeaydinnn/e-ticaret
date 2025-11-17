@@ -53,6 +53,9 @@ namespace ECommerce.Entities.Concrete
         public string? DeliveryNotes { get; set; }
         public string Priority { get; set; } = "normal"; // normal, urgent, low
 
+        // Gerçek kargo takip numarası
+        public string? TrackingNumber { get; set; }
+
         public ICollection<OrderItem> Items { get; set; } = new HashSet<OrderItem>();
 
         // Navigation Properties

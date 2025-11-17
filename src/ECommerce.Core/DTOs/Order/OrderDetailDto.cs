@@ -17,6 +17,7 @@ namespace ECommerce.Core.DTOs.Order
         public decimal CouponDiscountAmount { get; set; }
         public decimal CampaignDiscountAmount { get; set; }
         public string? CouponCode { get; set; }
+        public string? TrackingNumber { get; set; }
         public string Status { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
 
