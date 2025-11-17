@@ -34,7 +34,11 @@ const normalizeOrder = (order = {}) => {
   return {
     id: order.id ?? order.orderId ?? null,
     orderNumber: order.orderNumber || fallbackOrderNo,
-    trackingCode: order.trackingCode || order.orderNumber || fallbackOrderNo,
+    // Yeni backend alanı: trackingNumber. Eski client kodları için trackingCode de bırakılıyor.
+    trackingNumber:
+      order.trackingNumber || order.trackingCode || order.orderNumber || fallbackOrderNo,
+    trackingCode:
+      order.trackingNumber || order.trackingCode || order.orderNumber || fallbackOrderNo,
     status: (order.status || "").toLowerCase(),
     orderDate: order.orderDate || new Date().toISOString(),
     totalAmount: order.totalAmount ?? order.totalPrice ?? 0,

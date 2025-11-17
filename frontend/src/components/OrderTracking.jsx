@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { OrderService } from "../services/orderService";
 
 const OrderTracking = () => {
@@ -55,7 +55,7 @@ const OrderTracking = () => {
     // Try local list first (match by trackingCode or numeric id)
     const order = orders.find(
       (o) =>
-        o.trackingCode === trackingCode || String(o.id) === String(trackingCode)
+        o.trackingNumber === trackingCode || String(o.id) === String(trackingCode)
     );
     if (order) {
       setSelectedOrder(order);
@@ -326,7 +326,7 @@ const OrderTracking = () => {
 
                           <p className="text-muted mb-2">
                             <i className="fas fa-barcode me-2"></i>
-                            Takip: {order.trackingCode}
+                            Takip: {order.trackingNumber}
                           </p>
 
                           <p className="fw-bold text-warning mb-3">
@@ -406,7 +406,7 @@ const OrderTrackingTimeline = ({ order }) => {
             <strong>Sipariş No:</strong> {order.orderNumber}
           </p>
           <p className="mb-1">
-            <strong>Takip Kodu:</strong> {order.trackingCode}
+            <strong>Takip Kodu:</strong> {order.trackingNumber}
           </p>
           <p className="mb-1">
             <strong>Toplam Tutar:</strong> ₺

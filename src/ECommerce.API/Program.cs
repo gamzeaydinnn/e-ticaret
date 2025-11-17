@@ -312,6 +312,8 @@ var vapidSubject = builder.Configuration["Push:VapidSubject"] ?? "mailto:admin@e
 var vapidPublic = builder.Configuration["Push:VapidPublicKey"] ?? "<YOUR_PUBLIC_VAPID_KEY_PLACEHOLDER>";
 var vapidPrivate = builder.Configuration["Push:VapidPrivateKey"] ?? "<YOUR_PRIVATE_VAPID_KEY_PLACEHOLDER>";
 builder.Services.AddSingleton<IPushService>(sp => new PushService(sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PushService>>(), vapidSubject, vapidPublic, vapidPrivate));
+// SMS service (stub)
+builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.ISmsService, ECommerce.Business.Services.Managers.SmsService>();
 
 // Swagger (isteğe bağlı)
 builder.Services.AddEndpointsApiExplorer();

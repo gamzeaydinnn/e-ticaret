@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using System.Text.Json;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Interfaces;
@@ -22,6 +23,8 @@ namespace ECommerce.Business.Services.Managers
         private readonly IInventoryLogService _inventoryLogService;
         private readonly IPricingEngine _pricingEngine;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
+        private readonly ECommerce.Business.Services.Interfaces.IPushService? _pushService;
+        private readonly ECommerce.Business.Services.Interfaces.ISmsService? _smsService;
         private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -89,13 +92,17 @@ namespace ECommerce.Business.Services.Managers
             IInventoryService inventoryService,
             IInventoryLogService inventoryLogService,
             IPricingEngine pricingEngine,
-            ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null)
+            ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null,
+            ECommerce.Business.Services.Interfaces.IPushService? pushService = null,
+            ECommerce.Business.Services.Interfaces.ISmsService? smsService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
             _inventoryLogService = inventoryLogService;
             _pricingEngine = pricingEngine;
             _notificationService = notificationService;
+            _pushService = pushService;
+            _smsService = smsService;
         }
 
         // Siparişin tam detayını getir (fatura için)
@@ -118,6 +125,7 @@ namespace ECommerce.Business.Services.Managers
                 CouponDiscountAmount = order.CouponDiscountAmount,
                 CampaignDiscountAmount = order.CampaignDiscountAmount,
                 CouponCode = order.AppliedCouponCode,
+                TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
@@ -237,6 +245,21 @@ namespace ECommerce.Business.Services.Managers
             {
                 order.Status = statusEnum;
                 await _context.SaveChangesAsync();
+
+                // Push bildirimi: sipariş durumu başarıyla güncellendiğinde kullanıcıya bildir
+                if (_pushService != null && order.UserId.HasValue)
+                {
+                    try
+                    {
+                        var userIdStr = order.UserId.Value.ToString();
+                        var payload = JsonSerializer.Serialize(new { action = "OrderStatusChanged", status = statusEnum.ToString() });
+                        await _pushService.SendNotificationAsync(userIdStr, payload);
+                    }
+                    catch
+                    {
+                        // Push hataları burada loglanabilir; mevcut akışı bozmayalım
+                    }
+                }
                 return true;
             }
             return false;
@@ -550,6 +573,20 @@ namespace ECommerce.Business.Services.Managers
                     // If you have a tracking number in real flow, pass it; here we pass empty string
                     _ = _notificationService.SendShipmentNotificationAsync(order.Id, trackingNumber: string.Empty);
                 }
+
+                // SMS bildirimi: eğer durum Delivered ise ve telefon varsa, stub ISmsService ile gönder
+                if (previous != OrderStatus.Delivered && statusEnum == OrderStatus.Delivered && _smsService != null && !string.IsNullOrWhiteSpace(order.CustomerPhone))
+                {
+                    try
+                    {
+                        var msg = $"Siparişiniz teslim edildi. Sipariş No: {order.OrderNumber}";
+                        await _smsService.SendAsync(order.CustomerPhone!, msg);
+                    }
+                    catch
+                    {
+                        // ignore SMS errors to avoid breaking flow
+                    }
+                }
             }
         }
 
@@ -618,6 +655,7 @@ namespace ECommerce.Business.Services.Managers
                 CouponDiscountAmount = order.CouponDiscountAmount,
                 CampaignDiscountAmount = order.CampaignDiscountAmount,
                 CouponCode = order.AppliedCouponCode,
+                TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
                 OrderDate = order.OrderDate,
                 TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
