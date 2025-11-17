@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { OrderService } from "../../services/orderService";
-import { CourierService } from "../../services/courierService";
+import { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
+import { AdminService } from "../../services/adminService";
+import { CourierService } from "../../services/courierService";
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -17,53 +17,9 @@ export default function AdminOrders() {
   const loadData = async () => {
     try {
       const couriersData = await CourierService.getAll();
-
-      // Mock sipariş verileri
-      const mockOrders = [
-        {
-          id: 1,
-          customerName: "Ayşe Kaya",
-          customerEmail: "ayse@email.com",
-          customerPhone: "0534 555 1234",
-          address: "Atatürk Cad. No: 45/3 Kadıköy, İstanbul",
-          items: [
-            { name: "Domates", quantity: 1, unit: "kg", price: 12.5 },
-            { name: "Ekmek", quantity: 2, unit: "adet", price: 4.0 },
-            { name: "Süt", quantity: 1, unit: "lt", price: 8.5 },
-          ],
-          totalAmount: 25.0,
-          status: "pending",
-          orderDate: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-          estimatedDelivery: new Date(
-            Date.now() + 1000 * 60 * 90
-          ).toISOString(),
-          courierId: null,
-          courierName: null,
-          priority: "normal",
-        },
-        {
-          id: 2,
-          customerName: "Mehmet Demir",
-          customerEmail: "mehmet@email.com",
-          customerPhone: "0532 444 5678",
-          address: "Bağdat Cad. No: 123/7 Maltepe, İstanbul",
-          items: [
-            { name: "Et", quantity: 0.5, unit: "kg", price: 75.0 },
-            { name: "Patates", quantity: 2, unit: "kg", price: 8.0 },
-          ],
-          totalAmount: 89.0,
-          status: "assigned",
-          orderDate: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-          estimatedDelivery: new Date(
-            Date.now() + 1000 * 60 * 60
-          ).toISOString(),
-          courierId: 1,
-          courierName: "Ahmet Yılmaz",
-          priority: "urgent",
-        },
-      ];
-
-      setOrders(mockOrders);
+      // Gerçek siparişleri backend'den çek
+      const ordersData = await AdminService.getOrders();
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
       setCouriers(couriersData);
     } catch (error) {
       console.error("Veri yükleme hatası:", error);
@@ -74,15 +30,10 @@ export default function AdminOrders() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const orderIndex = orders.findIndex((o) => o.id === orderId);
-      if (orderIndex !== -1) {
-        const updatedOrders = [...orders];
-        updatedOrders[orderIndex] = {
-          ...updatedOrders[orderIndex],
-          status: newStatus,
-        };
-        setOrders(updatedOrders);
-      }
+      // Backend'e durumu güncelle ve listiyi yeniden çek
+      await AdminService.updateOrderStatus(orderId, newStatus);
+      const updated = await AdminService.getOrders();
+      setOrders(Array.isArray(updated) ? updated : []);
     } catch (error) {
       console.error("Durum güncelleme hatası:", error);
     }
