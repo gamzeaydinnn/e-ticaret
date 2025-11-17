@@ -138,6 +138,7 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.OrderNumber).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.ShippingAddress).HasMaxLength(500).IsRequired();
                 entity.Property(e => e.ShippingCity).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.AppliedCouponCode).HasMaxLength(50);
 
                 entity.HasOne(o => o.User)
                       .WithMany(u => u.Orders)

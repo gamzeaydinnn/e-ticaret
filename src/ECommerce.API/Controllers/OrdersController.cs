@@ -73,6 +73,11 @@ namespace ECommerce.API.Controllers
                         orderNumber = existing.OrderNumber,
                         status = existing.Status,
                         totalPrice = existing.TotalPrice,
+                        finalPrice = existing.FinalPrice,
+                        discountAmount = existing.DiscountAmount,
+                        couponDiscountAmount = existing.CouponDiscountAmount,
+                        campaignDiscountAmount = existing.CampaignDiscountAmount,
+                        couponCode = existing.CouponCode,
                         clientOrderId = dto.ClientOrderId,
                         order = existing
                     });
@@ -116,6 +121,11 @@ namespace ECommerce.API.Controllers
                         orderNumber = existing.OrderNumber,
                         status = existing.Status,
                         totalPrice = existing.TotalPrice,
+                        finalPrice = existing.FinalPrice,
+                        discountAmount = existing.DiscountAmount,
+                        couponDiscountAmount = existing.CouponDiscountAmount,
+                        campaignDiscountAmount = existing.CampaignDiscountAmount,
+                        couponCode = existing.CouponCode,
                         clientOrderId = dto.ClientOrderId,
                         order = existing
                     });
@@ -135,7 +145,12 @@ namespace ECommerce.API.Controllers
                     orderId = result.Id,
                     orderNumber = result.OrderNumber,
                     status = result.Status,
-                    totalPrice = result.TotalPrice
+                    totalPrice = result.TotalPrice,
+                    finalPrice = result.FinalPrice,
+                    discountAmount = result.DiscountAmount,
+                    couponDiscountAmount = result.CouponDiscountAmount,
+                    campaignDiscountAmount = result.CampaignDiscountAmount,
+                    couponCode = result.CouponCode
                 });
             }
             catch (System.Exception ex)

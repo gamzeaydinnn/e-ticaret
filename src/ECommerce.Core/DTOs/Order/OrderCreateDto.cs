@@ -13,6 +13,7 @@ namespace ECommerce.Core.DTOs.Order
 
         // İstemci tarafı idempotent sipariş oluşturma anahtarı
         public Guid? ClientOrderId { get; set; }
+        public string? CouponCode { get; set; }
 
         // Müşteri bilgileri
         public string? CustomerName { get; set; }

@@ -6,21 +6,58 @@ const OrderSuccess = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const [orderNumber, setOrderNumber] = useState(params.get("orderNumber"));
+  const [orderSummary, setOrderSummary] = useState(null);
+  const [loadingOrder, setLoadingOrder] = useState(Boolean(params.get("orderId")));
+  const [loadError, setLoadError] = useState("");
   const orderId = params.get("orderId");
 
   useEffect(() => {
+    let mounted = true;
+    if (!orderId) {
+      setLoadingOrder(false);
+      return undefined;
+    }
+
     (async () => {
       try {
-        if (!orderNumber && orderId) {
-          const order = await OrderService.getById(orderId);
-          if (order?.orderNumber) setOrderNumber(order.orderNumber);
-        }
+        setLoadingOrder(true);
+        const order = await OrderService.getById(orderId);
+        if (!mounted) return;
+        if (order?.orderNumber) setOrderNumber(order.orderNumber);
+        setOrderSummary(order);
+        setLoadError("");
       } catch {
-        // sessiz geç
+        if (!mounted) return;
+        setLoadError("Sipariş özeti yüklenemedi.");
+      } finally {
+        if (mounted) setLoadingOrder(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    return () => {
+      mounted = false;
+    };
+  }, [orderId]);
+
+  const toCurrency = (value) => `₺${Number(value || 0).toFixed(2)}`;
+  const summaryData = orderSummary
+    ? {
+        subtotal:
+          Number(orderSummary.totalPrice || 0) -
+          Number(orderSummary.shippingCost || 0),
+        shipping: Number(orderSummary.shippingCost || 0),
+        coupon: Number(orderSummary.couponDiscountAmount || 0),
+        campaign: Number(orderSummary.campaignDiscountAmount || 0),
+        discount: Number(
+          orderSummary.discountAmount ??
+            Number(orderSummary.couponDiscountAmount || 0) +
+              Number(orderSummary.campaignDiscountAmount || 0)
+        ),
+        finalTotal: Number(
+          orderSummary.finalPrice || orderSummary.totalPrice || 0
+        ),
+      }
+    : null;
 
   return (
     <div
@@ -103,6 +140,62 @@ const OrderSuccess = () => {
                   Siparişinizle ilgili bilgilendirmeleri e‑posta veya telefon
                   yoluyla ileteceğiz.
                 </div>
+
+                {loadingOrder && (
+                  <div className="mt-4 text-muted">
+                    <i className="fas fa-spinner fa-spin me-2"></i>
+                    Sipariş özeti yükleniyor...
+                  </div>
+                )}
+
+                {loadError && (
+                  <div className="alert alert-warning mt-4 mb-0">
+                    {loadError}
+                  </div>
+                )}
+
+                {summaryData && (
+                  <div className="card shadow-sm border-0 mt-4">
+                    <div className="card-body text-start">
+                      <h5 className="fw-bold text-success mb-3">
+                        <i className="fas fa-receipt me-2"></i>Ödeme Özeti
+                      </h5>
+                      <div className="d-flex justify-content-between mb-1">
+                        <span>Ara Toplam</span>
+                        <strong>{toCurrency(summaryData.subtotal)}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between mb-1">
+                        <span>Kargo</span>
+                        <strong>{toCurrency(summaryData.shipping)}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between text-success mb-1">
+                        <span>Kampanya İndirimi</span>
+                        <strong>-{toCurrency(summaryData.campaign)}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between text-success mb-1">
+                        <span>Kupon İndirimi</span>
+                        <strong>-{toCurrency(summaryData.coupon)}</strong>
+                      </div>
+                      <div className="d-flex justify-content-between text-success mb-2">
+                        <span>Toplam İndirim</span>
+                        <strong>-{toCurrency(summaryData.discount)}</strong>
+                      </div>
+                      <hr />
+                      <div className="d-flex justify-content-between fw-bold">
+                        <span>Ödenecek Tutar</span>
+                        <span className="text-warning">
+                          {toCurrency(summaryData.finalTotal)}
+                        </span>
+                      </div>
+                      {orderSummary?.couponCode && (
+                        <div className="small text-muted mt-2">
+                          Uygulanan Kupon:{" "}
+                          <strong>{orderSummary.couponCode}</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

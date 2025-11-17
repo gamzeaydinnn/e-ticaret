@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.DTOs.Pricing;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -27,6 +29,37 @@ namespace ECommerce.Tests.Services
             return new ECommerceDbContext(options);
         }
 
+        private Mock<IPricingEngine> CreatePricingEngineMock(ECommerceDbContext context)
+        {
+            var mock = new Mock<IPricingEngine>();
+            mock.Setup(p => p.CalculateCartAsync(
+                    It.IsAny<int?>(),
+                    It.IsAny<IEnumerable<CartItemInputDto>>(),
+                    It.IsAny<string?>()))
+                .ReturnsAsync((int? userId, IEnumerable<CartItemInputDto> items, string? coupon) =>
+                {
+                    decimal subtotal = 0m;
+                    foreach (var item in items ?? Array.Empty<CartItemInputDto>())
+                    {
+                        var product = context.Products.FirstOrDefault(p => p.Id == item.ProductId);
+                        if (product != null)
+                        {
+                            var unitPrice = product.SpecialPrice ?? product.Price;
+                            subtotal += unitPrice * item.Quantity;
+                        }
+                    }
+
+                    return new CartPricingResultDto
+                    {
+                        Subtotal = subtotal,
+                        CouponDiscountTotal = 0m,
+                        CampaignDiscountTotal = 0m,
+                        AppliedCouponCode = coupon
+                    };
+                });
+            return mock;
+        }
+
         [Fact]
         public async Task CreateOrderAsync_ShouldCreateOrder()
         {
@@ -43,7 +76,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ReleaseReservationAsync(It.IsAny<Guid>()))
                 .Returns(Task.CompletedTask);
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
             
             var user = new User 
             { 
@@ -104,7 +138,13 @@ namespace ECommerce.Tests.Services
 
             var notificationMock = new Mock<INotificationService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(
+                context,
+                inventoryMock.Object,
+                inventoryLogMock.Object,
+                pricingMock.Object,
+                notificationMock.Object);
 
             var product = new Product
             {
@@ -145,6 +185,8 @@ namespace ECommerce.Tests.Services
 
             var expectedItemsTotal = 2 * (product.SpecialPrice ?? product.Price);
             Assert.Equal(expectedItemsTotal + 15m, result.TotalPrice);
+            Assert.Equal(expectedItemsTotal + 15m, result.FinalPrice);
+            Assert.Equal(0m, result.DiscountAmount);
 
             Assert.Single(result.OrderItems);
             var item = Assert.Single(result.OrderItems);
@@ -179,7 +221,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Geçersiz miktar"));
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -213,7 +256,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Ürün bulunamadı: 999"));
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -256,7 +300,8 @@ namespace ECommerce.Tests.Services
                 .Returns(Task.CompletedTask);
 
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var dto = new OrderCreateDto
             {
@@ -286,7 +331,8 @@ namespace ECommerce.Tests.Services
                 .Setup(s => s.ValidateStockForOrderAsync(It.IsAny<IEnumerable<OrderItemDto>>()))
                 .ReturnsAsync((false, "Yetersiz stok: Low Stock Product"));
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var product = new Product
             {
@@ -332,7 +378,8 @@ namespace ECommerce.Tests.Services
                 .ReturnsAsync(false);
 
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
             var product = new Product
             {
                 Name = "Concurrent Product",
@@ -369,7 +416,13 @@ namespace ECommerce.Tests.Services
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(
+                context,
+                inventoryMock.Object,
+                inventoryLogMock.Object,
+                pricingMock.Object,
+                notificationMock.Object);
 
             var order = new Order
             {
@@ -404,7 +457,13 @@ namespace ECommerce.Tests.Services
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(
+                context,
+                inventoryMock.Object,
+                inventoryLogMock.Object,
+                pricingMock.Object,
+                notificationMock.Object);
 
             // Act
             await orderManager.UpdateOrderStatusAsync(999, OrderStatus.Delivered.ToString());
@@ -423,7 +482,13 @@ namespace ECommerce.Tests.Services
             var inventoryMock = new Mock<IInventoryService>();
             var notificationMock = new Mock<INotificationService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, notificationMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(
+                context,
+                inventoryMock.Object,
+                inventoryLogMock.Object,
+                pricingMock.Object,
+                notificationMock.Object);
 
             var order = new Order
             {
@@ -457,7 +522,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var order = new Order
             {
@@ -488,7 +554,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             // Act
             var result = await orderManager.CancelOrderAsync(999, 1);
@@ -504,7 +571,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             var product = new Product
             {
@@ -558,7 +626,8 @@ namespace ECommerce.Tests.Services
             using var context = GetInMemoryDbContext();
             var inventoryMock = new Mock<IInventoryService>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
-            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object);
+            var pricingMock = CreatePricingEngineMock(context);
+            var orderManager = new OrderManager(context, inventoryMock.Object, inventoryLogMock.Object, pricingMock.Object);
 
             // Act
             var ex = await Assert.ThrowsAsync<Exception>(() => orderManager.GetOrderByIdAsync(999));
