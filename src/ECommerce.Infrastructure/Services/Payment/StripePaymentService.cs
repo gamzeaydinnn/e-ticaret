@@ -2,12 +2,16 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using ECommerce.Entities.Enums;
-using System.Threading.Tasks;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Payment;
 using Stripe;
 using Stripe.Checkout;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System;
+using Polly;
+using System.Threading;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {
@@ -100,7 +104,8 @@ namespace ECommerce.Infrastructure.Services.Payment
             };
 
             var sessionService = new SessionService();
-            var session = await sessionService.CreateAsync(options);
+            var policy = Policy.Handle<Exception>().WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+            var session = await policy.ExecuteAsync(async () => await sessionService.CreateAsync(options));
 
             // Payment kaydı
             var pay = new Payments
@@ -127,6 +132,28 @@ namespace ECommerce.Infrastructure.Services.Payment
                 OrderId = orderId,
                 ProviderPaymentId = session.Id
             };
+        }
+
+        public async Task<bool> StripeRefundAsync(string providerPaymentId, decimal? amount = null)
+        {
+            if (string.IsNullOrWhiteSpace(providerPaymentId)) return false;
+            try
+            {
+                var refundService = new RefundService();
+                var options = new RefundCreateOptions();
+                // try to refund by payment intent/charge id
+                options.PaymentIntent = providerPaymentId;
+                if (amount.HasValue) options.Amount = (long?)(amount.Value * 100);
+
+                var policy = Policy.Handle<Exception>().WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+                var refund = await policy.ExecuteAsync(async () => await refundService.CreateAsync(options));
+
+                return refund != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

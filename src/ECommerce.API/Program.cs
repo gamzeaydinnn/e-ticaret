@@ -149,6 +149,21 @@ builder.Services.AddAuthentication(options =>
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+// Environment-based sandbox switch: in Development mode prefer sandbox endpoints
+builder.Services.PostConfigure<PaymentSettings>(settings =>
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        if (string.IsNullOrWhiteSpace(settings.IyzicoBaseUrl) || !settings.IyzicoBaseUrl.Contains("sandbox"))
+            settings.IyzicoBaseUrl = "https://sandbox-api.iyzipay.com";
+        // PayTR callback / keys could be set via appsettings.Development.json as needed
+    }
+    else
+    {
+        if (string.IsNullOrWhiteSpace(settings.IyzicoBaseUrl))
+            settings.IyzicoBaseUrl = "https://api.iyzico.com/";
+    }
+});
 builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("Inventory"));
 
 // Email + FileStorage services
@@ -221,6 +236,9 @@ builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 builder.Services.AddSingleton<StockSyncJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
 builder.Services.AddHostedService<StockReservationCleanupJob>();
+// Reconciliation job: daily reconciliation between provider reports and Payments table
+builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {

@@ -25,6 +25,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Favorite> Favorites { get; set; }
         public virtual DbSet<MicroSyncLog> MicroSyncLogs { get; set; }
         public virtual DbSet<Payments> Payments { get; set; }
+        public virtual DbSet<ReconciliationLog> ReconciliationLogs { get; set; }
         public virtual DbSet<ProductImage> ProductImages { get; set; }
         public virtual DbSet<ProductVariant> ProductVariants { get; set; }
         public virtual DbSet<Stocks> Stocks { get; set; }
@@ -265,6 +266,16 @@ modelBuilder.Entity<ProductVariant>()
                       .WithMany(u => u.RefreshTokens)
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ReconciliationLog>(entity =>
+            {
+                entity.ToTable("ReconciliationLogs");
+                entity.Property(e => e.Provider).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.ProviderPaymentId).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.CheckedAt).HasColumnType("datetime2");
+                entity.Property(e => e.Issue).HasMaxLength(1000);
+                entity.Property(e => e.Details).HasMaxLength(4000);
             });
 
             // -------------------

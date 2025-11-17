@@ -9,6 +9,9 @@ using ECommerce.Core.DTOs.Payment;
 using Iyzipay;
 using Iyzipay.Model;
 using Iyzipay.Request;
+using Microsoft.EntityFrameworkCore;
+using Polly;
+using System;
 
 namespace ECommerce.Infrastructure.Services.Payment
 {
@@ -116,7 +119,10 @@ namespace ECommerce.Infrastructure.Services.Payment
                 }
             };
 
-            var initialize = await CheckoutFormInitialize.Create(request, options);
+            var policy = Policy.Handle<Exception>().WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+            var initialize = await policy.ExecuteAsync(async () => await CheckoutFormInitialize.Create(request, options));
+
+            // Kayıt
 
             // Kayıt
             var pay = new Payments
@@ -141,6 +147,26 @@ namespace ECommerce.Infrastructure.Services.Payment
                 Amount = amount,
                 OrderId = orderId
             };
+        }
+
+        public async Task<bool> IyzicoRefundAsync(string providerPaymentId, decimal? amount = null)
+        {
+            try
+            {
+                // Basit/mock uygulama: gerçek iyzico refund entegrasyonu daha ayrıntılıdır.
+                // Burada en azından DB tarafında durumu güncelliyoruz.
+                var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == providerPaymentId && p.Provider == "iyzico");
+                if (payment == null) return false;
+
+                payment.Status = "Refunded";
+                payment.RawResponse = (payment.RawResponse ?? "") + "\n[Refunded by API]";
+                await _db.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
