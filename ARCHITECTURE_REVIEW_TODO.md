@@ -10,7 +10,6 @@ Bu dosya proje genelindeki eksiklikleri, tutarsızlıkları ve ileride ele alın
 **Entities / DB (Model seviyesinde eksikler ve öneriler)**
 - **Order model tutarsızlıkları:** `Order` içinde hem `Items` hem `OrderItems` koleksiyonları var — duplicate property. Bu kafa karıştırır; tek bir ilişki kullanın. Ayrıca `TotalPrice` var ama ödeme durumu (`PaymentStatus`), rezervasyon ID's (ör. `ReservationId` GUID?), fatura/adres normalizasyonu (Address tablosu/`AddressId`) yok.
 - **Normalizasyon:** `ShippingAddress` gibi string'ler doğrudan entityde saklanmış. Adresleri normalize edip `Addresses` tablosu/`AddressId` ile ilişkilendirin — bir kullanıcı birden fazla adrese sahip olabilir.
-- **Ödeme tablosu eksik:** Ödeme işlemleri için ayrı `Payments` tablosu (provider, amount, currency, providerTransactionId, PaymentStatus, RefundedAmount, CreatedAt, GatewayResponse) yok. Refund, chargeback, partial refund mantığı eksik.
 - **Sipariş durum geçmişi (audit):** `OrderStatus` enumu var ama geçmiş tutulmuyor. `OrderStatusHistory` tablosu (kimin, hangi zamanda, neden) ekleyin.
 - **Stok rezervasyonu ve tutarlılık:** Projede `StockReservation` referansları var gibi görünüyor. Ancak stok tutarlılığı için rezervasyon süresi, expirations, rollback mantığı, cleanup job ve distributed lock/optimistic concurrency yok veya eksik.
 - **Concurrency & Tekrarlanabilirlik:** Ödeme + stok decrement işleminde transaction ve idempotency key yok. Aynı ödeme webhook'ı birden çok gelirse double-charge riski var.
@@ -18,7 +17,6 @@ Bu dosya proje genelindeki eksiklikleri, tutarsızlıkları ve ileride ele alın
 - **Audit ve Soft Delete:** `BaseEntity` yapısında `CreatedAt`, `UpdatedAt`, `DeletedAt` varsa iyi; yoksa ekleyin. Soft delete ve audit trail eksikse eklenmeli.
 
 **Backend (API, servisler, repository, mantık)**
-- **DTO / Validation:** Controller'larda gelen DTO'lar için kapsamlı validation (FluentValidation veya data annotations) eksik olabilir. `OrdersController` örneğinde `dto.OrderItems` kontrolü var, ama daha kapsamlı validasyon ve model binding hataları yönetimi gerekiyor.
 - **Transaction boundary:** Checkout akışı (create order, reserve stock, create payment, confirm payment, reduce stock, mark order paid) için tekil transaction ya da saga pattern/kompensasyon mekanizması yok.
 - **Idempotency:** Payment webhook ve checkout çağrıları için idempotency-key header desteği yok — tekrar eden çağrılarda güvenli davranış eksik.
 - **Error handling & HTTP responses:** Tutarlı hata dönüşleri (problem details), merkezi exception handling, spesifik hata kodları eksik veya düzensiz.
@@ -30,23 +28,30 @@ Bu dosya proje genelindeki eksiklikleri, tutarsızlıkları ve ileride ele alın
 
 **Frontend (eksik/yarım kalan akışlar ve iyileştirmeler)**
 
-- **Cart & stok görünürlüğü:** Sepette ürünün stok kontrolü, snapshot fiyat, kupon uygulama, vergi ve kargo hesaplama anlık mantığı net değil.
-- **Order tracking:** Siparişin durumu, takip numarası, kurye güncellemeleri, bildirimler yok veya yetersiz.
-- **Admin tarafı:** Ürün yönetimi, stok yönetimi, sipariş yönetimi, iade yönetimi, raporlama, kullanıcı yetkilendirme (RBAC) tam değilse tamamlanmalı.
+**Güncelleme (17 Kasım 2025):** Aşağıdaki maddeler bugün yapılan commitlerle projeye eklendi ve bu dosyadan çıkarıldı/ayrıştırıldı:
+
+- DTO/Validation (FluentValidation) entegrasyonu eklendi — commit: `a163ab3`
+- Login rate-limit ve brute-force koruması eklendi — commit: `0448398`
+- Ödeme sistemi geliştirmeleri, webhook imza doğrulama, retry ve reconciliation job (Payments tablosu ve ReconciliationLog migration'ları dahil) — commit: `f7f2176`
+- Mail & SMS in-memory queue + retry background worker eklendi — commit: `69569ff`
+- Admin sipariş yönetimi ekranı API ile entegre edildi — commit: `b228733`
+- Order tracking (takip numarası + frontend) eklendi — commit: `8906bae`
+- Kupon/kampanya entegrasyonu, fiyat snapshot ve vergi (KDV) backend'e taşındı — commits: `3bd3095`, `9de497e`, `0ea5f2f`
+
+Bu güncelleme dosyanın güncel durumunu yansıtır; kalan eksikler aşağıda korunmuştur.
 - **İ18n ve locale:** `Currency` backend'de var ama frontend'de çoklu dil/para formatlama, tarih formatları, RTL/locale eksik olabilir.
 - **E2E ve UI testleri:** Critical flows için Cypress/Playwright ile e2e testleri eksik.
 
 **Entegrasyonlar (kargo, ödeme, bildirimler)**
 - **Kargo sağlayıcıları:** Kargo API adaptörleri, rate-limits, test/sandbox, signature doğrulama ve webhook işleme (retries, verification) kontrol edilmeli.
 - **Ödeme sağlayıcıları:** Gateway'ler (iyzico/stripe/paytr vb.) için sandbox, webhook signature, retry, chargeback handling ve settlement reconciliation eksik olabilir.
-- **Mail & SMS:** Sipariş onayı, kargo bildirimi, 2FA için mail/SMS entegrasyonu yoksa ekleyin. Queue ile gönderim ve retry mantığı olmalı.
 - **3. parti microservice'ler:** Harici servis çağrıları için circuit breaker, timeout ve bulkhead pattern'leri yoksa implement edin.
 
 **Güvenlik**
 - **Secret yönetimi:** API key, payment secret, SMTP password vs. `.env` veya config içinde açıksa, gizli yönetimi (vault/KeyVault) yok.
 - **Auth & RBAC:** JWT expiry, refresh token, revoke, role-based access control (admin vs user vs courier) eksik veya yetersiz.
 - **Input validation & SQL injection:** ORM kullanılıyor olabilir, ama raw SQL varsa parametrize kontrolü; ayrıca XSS/CSRF korumaları frontend/backend uyumlu olmalı.
-- **Rate limiting:** API için rate limit yoksa brute-force/DoS riski var.
+
 
 **Test / CI / CD**
 - **Unit & Integration tests:** Services, repositories ve critical business logic için test eksikliği. Payment ve courier entegrasyonları için integration test harness gerekli.
