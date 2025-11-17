@@ -28,6 +28,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using ECommerce.API.Validators;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -354,6 +357,10 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add(typeof(ECommerce.API.Infrastructure.SanitizeInputFilter));
 });
+
+// FluentValidation registration
+builder.Services.AddValidatorsFromAssemblyContaining<OrderCreateDtoValidator>();
+builder.Services.AddFluentValidationAutoValidation();
 
 // Push (Web Push) - dev-friendly VAPID keys. In production, set these via configuration/secrets.
 var vapidSubject = builder.Configuration["Push:VapidSubject"] ?? "mailto:admin@example.com";
