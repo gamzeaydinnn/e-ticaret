@@ -8,8 +8,7 @@ Bu dosya proje genelindeki eksiklikleri, tutarsızlıkları ve ileride ele alın
 - **Düşük:** Performans optimizasyonları, ön yüz UX iyileştirmeleri ve SEO.
 
 **Entities / DB (Model seviyesinde eksikler ve öneriler)**
-- **Order model tutarsızlıkları:** `Order` içinde hem `Items` hem `OrderItems` koleksiyonları var — duplicate property. Bu kafa karıştırır; tek bir ilişki kullanın. Ayrıca `TotalPrice` var ama ödeme durumu (`PaymentStatus`), rezervasyon ID's (ör. `ReservationId` GUID?), fatura/adres normalizasyonu (Address tablosu/`AddressId`) yok.
-- **Normalizasyon:** `ShippingAddress` gibi string'ler doğrudan entityde saklanmış. Adresleri normalize edip `Addresses` tablosu/`AddressId` ile ilişkilendirin — bir kullanıcı birden fazla adrese sahip olabilir.
+
 - **Sipariş durum geçmişi (audit):** `OrderStatus` enumu var ama geçmiş tutulmuyor. `OrderStatusHistory` tablosu (kimin, hangi zamanda, neden) ekleyin.
 - **Stok rezervasyonu ve tutarlılık:** Projede `StockReservation` referansları var gibi görünüyor. Ancak stok tutarlılığı için rezervasyon süresi, expirations, rollback mantığı, cleanup job ve distributed lock/optimistic concurrency yok veya eksik.
 - **Concurrency & Tekrarlanabilirlik:** Ödeme + stok decrement işleminde transaction ve idempotency key yok. Aynı ödeme webhook'ı birden çok gelirse double-charge riski var.

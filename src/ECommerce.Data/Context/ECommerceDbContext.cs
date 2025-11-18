@@ -60,6 +60,11 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.LastName).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.Address).HasMaxLength(500);
                 entity.Property(e => e.City).HasMaxLength(100);
+                // User -> Addresses (1 : N)
+                entity.HasMany(u => u.Addresses)
+                      .WithOne(a => a.User)
+                      .HasForeignKey(a => a.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // -------------------
@@ -129,6 +134,26 @@ namespace ECommerce.Data.Context
                       .WithMany(o => o.StockReservations)
                       .HasForeignKey(e => e.OrderId)
                       .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // -------------------
+            // Address Configuration
+            // -------------------
+            modelBuilder.Entity<Address>(entity =>
+            {
+                entity.ToTable("Addresses");
+                entity.Property(a => a.Title).HasMaxLength(100);
+                entity.Property(a => a.FullName).HasMaxLength(200);
+                entity.Property(a => a.Phone).HasMaxLength(64);
+                entity.Property(a => a.City).HasMaxLength(100);
+                entity.Property(a => a.District).HasMaxLength(100);
+                entity.Property(a => a.Street).HasMaxLength(500);
+                entity.Property(a => a.PostalCode).HasMaxLength(20);
+
+                entity.HasOne(a => a.User)
+                      .WithMany(u => u.Addresses)
+                      .HasForeignKey(a => a.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             // -------------------
