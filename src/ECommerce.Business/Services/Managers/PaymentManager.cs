@@ -179,7 +179,7 @@ namespace ECommerce.Business.Services.Managers
         public async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
         {
             var ok = await ProcessPaymentAsync(orderId, amount);
-            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+            return ok ? PaymentStatus.Paid : PaymentStatus.Failed;
         }
 
         public async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)

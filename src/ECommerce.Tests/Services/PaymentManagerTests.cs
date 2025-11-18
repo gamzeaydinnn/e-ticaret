@@ -166,13 +166,13 @@ namespace ECommerce.Tests.Services
 
             iyzicoMock
                 .Setup(s => s.GetPaymentStatusAsync(token))
-                .ReturnsAsync(PaymentStatus.Successful);
+                .ReturnsAsync(PaymentStatus.Paid);
 
             // Act
             var status = await manager.GetPaymentStatusAsync(token);
 
             // Assert
-            Assert.Equal(PaymentStatus.Successful, status);
+            Assert.Equal(PaymentStatus.Paid, status);
             iyzicoMock.Verify(s => s.GetPaymentStatusAsync(token), Times.Once);
         }
     }

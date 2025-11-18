@@ -102,7 +102,7 @@ namespace ECommerce.API.Controllers
             var result = await policy.ExecuteAsync<IActionResult>(async () =>
             {
                 var status = await _paymentManager.GetPaymentStatusAsync(token);
-                if (status == PaymentStatus.Successful)
+                if (status == PaymentStatus.Paid)
                 {
                     var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Provider == "iyzico" && p.ProviderPaymentId == token);
                     if (payment != null)

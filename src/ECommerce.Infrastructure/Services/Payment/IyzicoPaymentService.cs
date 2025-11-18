@@ -58,13 +58,13 @@ namespace ECommerce.Infrastructure.Services.Payment
         public virtual async Task<PaymentStatus> ProcessPaymentDetailedAsync(int orderId, decimal amount)
         {
             var ok = await ProcessPaymentAsync(orderId, amount);
-            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+            return ok ? PaymentStatus.Paid : PaymentStatus.Failed;
         }
 
         public virtual async Task<PaymentStatus> GetPaymentStatusAsync(string paymentId)
         {
             var ok = await CheckPaymentStatusAsync(paymentId);
-            return ok ? PaymentStatus.Successful : PaymentStatus.Failed;
+            return ok ? PaymentStatus.Paid : PaymentStatus.Failed;
         }
 
         public virtual async Task<PaymentInitResult> InitiateAsync(int orderId, decimal amount, string currency)

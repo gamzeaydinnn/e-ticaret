@@ -149,6 +149,12 @@ namespace ECommerce.Data.Context
 
                 entity.HasIndex(o => o.OrderNumber).IsUnique();
                 entity.HasIndex(o => o.ClientOrderId).IsUnique();
+
+                    // Address relationship (optional)
+                    entity.HasOne(o => o.Address)
+                        .WithMany()
+                        .HasForeignKey(o => o.AddressId)
+                        .OnDelete(DeleteBehavior.Restrict);
             });
 
             // -------------------

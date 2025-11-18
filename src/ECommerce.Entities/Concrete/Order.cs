@@ -56,7 +56,13 @@ namespace ECommerce.Entities.Concrete
         // Gerçek kargo takip numarası
         public string? TrackingNumber { get; set; }
 
-        public ICollection<OrderItem> Items { get; set; } = new HashSet<OrderItem>();
+        // Payment / reservation metadata
+        public ECommerce.Entities.Enums.PaymentStatus PaymentStatus { get; set; } = ECommerce.Entities.Enums.PaymentStatus.Pending;
+        public Guid? ReservationId { get; set; }
+
+        // Address normalization
+        public int? AddressId { get; set; }
+        public virtual Address? Address { get; set; }
 
         // Navigation Properties
         public virtual User? User { get; set; }
