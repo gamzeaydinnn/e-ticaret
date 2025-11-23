@@ -1,0 +1,10 @@
+bin
+obj
+*.user
+*.userosscache
+*.suo
+.vs
+appsettings.Development.json
+node_modules
+*.log
+.git

@@ -118,7 +118,7 @@ function Header() {
             {/* Logo */}
             <div className="col-md-3">
               <Link to="/" className="text-decoration-none">
-                <div className="d-flex align-items-center">
+                <div className="d-flex align-items-center logo-stack">
                   <div className="logo-container me-2">
                     <img
                       src="/images/golkoy-logo.png"
@@ -145,6 +145,7 @@ function Header() {
                   </div>
                   <div style={{ display: "flex", alignItems: "center" }}>
                     <img
+                      className="secondary-logo"
                       src="/images/dogadan-sofranza-logo.png"
                       alt="Doğadan Sofranza"
                       style={{
@@ -1023,8 +1024,8 @@ function HomePage() {
                     index === currentSlide ? "active" : ""
                   }`}
                   style={{
-                    minHeight: "500px",
-                    height: "500px",
+                    minHeight: "260px",
+                    height: "min(500px, 70vw)",
                     position: index === currentSlide ? "relative" : "absolute",
                     top: index === currentSlide ? "auto" : "0",
                     left: index === currentSlide ? "auto" : "0",
@@ -1106,17 +1107,11 @@ function HomePage() {
           {/* 5 Özel Resim Section - Özel Seçimler'den ÖNCE */}
           <div className="special-images-container mb-5 pt-3">
             <div
-              className="d-flex flex-wrap justify-content-center"
-              style={{ gap: "15px" }}
+              className="d-flex flex-wrap justify-content-center special-images-row"
             >
               {/* Resim 1 - Temizlik Malzemeleri */}
               <div
-                style={{
-                  flex: "0 0 auto",
-                  width: "calc(20% - 12px)",
-                  minWidth: "180px",
-                  maxWidth: "250px",
-                }}
+                className="special-image-col"
               >
                 <div
                   className="special-image-card h-100"
@@ -1153,12 +1148,7 @@ function HomePage() {
 
               {/* Resim 2 - Taze ve Doğal */}
               <div
-                style={{
-                  flex: "0 0 auto",
-                  width: "calc(20% - 12px)",
-                  minWidth: "180px",
-                  maxWidth: "250px",
-                }}
+                className="special-image-col"
               >
                 <div
                   className="special-image-card h-100"
@@ -1195,12 +1185,7 @@ function HomePage() {
 
               {/* Resim 3 - Taze Günlük Lezzetli */}
               <div
-                style={{
-                  flex: "0 0 auto",
-                  width: "calc(20% - 12px)",
-                  minWidth: "180px",
-                  maxWidth: "250px",
-                }}
+                className="special-image-col"
               >
                 <div
                   className="special-image-card h-100"
@@ -1237,12 +1222,7 @@ function HomePage() {
 
               {/* Resim 4 - Özel Fiyat Köy Sütü */}
               <div
-                style={{
-                  flex: "0 0 auto",
-                  width: "calc(20% - 12px)",
-                  minWidth: "180px",
-                  maxWidth: "250px",
-                }}
+                className="special-image-col"
               >
                 <div
                   className="special-image-card h-100"
@@ -1279,12 +1259,7 @@ function HomePage() {
 
               {/* Resim 5 - CIF Jel Serisi */}
               <div
-                style={{
-                  flex: "0 0 auto",
-                  width: "calc(20% - 12px)",
-                  minWidth: "180px",
-                  maxWidth: "250px",
-                }}
+                className="special-image-col"
               >
                 <div
                   className="special-image-card h-100"

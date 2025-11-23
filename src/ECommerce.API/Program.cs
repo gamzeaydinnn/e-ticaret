@@ -61,7 +61,12 @@ builder.Services.AddCors(options =>
 });
 
 // DbContext ekle - SQL Server (varsayılan) veya SQLite (dev) kullan
-var useSqlite = builder.Configuration.GetValue<bool>("Database:UseSqlite");
+var sqlConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var forceSqlite = builder.Configuration.GetValue<bool>("Database:UseSqlite");
+var useSqlite = forceSqlite || (string.IsNullOrWhiteSpace(sqlConnectionString) && builder.Environment.IsDevelopment());
+
+if (!useSqlite && string.IsNullOrWhiteSpace(sqlConnectionString))
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is missing. Provide a SQL Server connection string or enable Database:UseSqlite for development.");
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
 {
     if (useSqlite)
@@ -73,7 +78,7 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
     {
         // Enable transient error resiliency for SQL Server connections to reduce 500s
         // caused by transient network errors (e.g. pre-login handshake failures).
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"), sqlOptions =>
+        options.UseSqlServer(sqlConnectionString, sqlOptions =>
         {
                 // stronger retry policy: retry up to 8 times with a larger max delay (helps absorb transient pre-login handshake errors)
                 sqlOptions.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
@@ -111,7 +116,7 @@ builder.Services.AddHttpContextAccessor();
 // builder.Services.AddHangfireServer();
 
 // Hangfire (tek seferde)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = sqlConnectionString;
 /*builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
 builder.Services.AddHangfireServer();
 

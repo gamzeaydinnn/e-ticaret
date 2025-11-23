@@ -86,6 +86,8 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(1000);
                 entity.Property(e => e.SKU).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Price).HasPrecision(18, 2);
+                entity.Property(e => e.SpecialPrice).HasPrecision(18, 2);
 
                 entity.HasOne(p => p.Category)
                       .WithMany(c => c.Products)
@@ -141,6 +143,13 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.ShippingAddress).HasMaxLength(500).IsRequired();
                 entity.Property(e => e.ShippingCity).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.AppliedCouponCode).HasMaxLength(50);
+                entity.Property(e => e.VatAmount).HasPrecision(18, 2);
+                entity.Property(e => e.TotalPrice).HasPrecision(18, 2);
+                entity.Property(e => e.DiscountAmount).HasPrecision(18, 2);
+                entity.Property(e => e.FinalPrice).HasPrecision(18, 2);
+                entity.Property(e => e.CouponDiscountAmount).HasPrecision(18, 2);
+                entity.Property(e => e.CampaignDiscountAmount).HasPrecision(18, 2);
+                entity.Property(e => e.ShippingCost).HasPrecision(18, 2);
 
                 entity.HasOne(o => o.User)
                       .WithMany(u => u.Orders)
@@ -163,6 +172,7 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<OrderItem>(entity =>
             {
                 entity.ToTable("OrderItems");
+                entity.Property(oi => oi.UnitPrice).HasPrecision(18, 2);
 
                 entity.HasOne(oi => oi.Order)
                       .WithMany(o => o.OrderItems)
@@ -197,18 +207,22 @@ namespace ECommerce.Data.Context
             });
 
             // ProductImage Configuration
-modelBuilder.Entity<ProductImage>()
-            .HasOne(pi => pi.Product)
-            .WithMany(p => p.ProductImages) // ✅ Product'ta 'ProductImages' varsa bunu kullan
-            .HasForeignKey(pi => pi.ProductId)
-            .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProductImage>()
+                        .HasOne(pi => pi.Product)
+                        .WithMany(p => p.ProductImages)
+                        .HasForeignKey(pi => pi.ProductId)
+                        .OnDelete(DeleteBehavior.Cascade);
  
-// ProductVariant Configuration
-modelBuilder.Entity<ProductVariant>()
-            .HasOne(v => v.Product)
-            .WithMany(p => p.ProductVariants) 
-            .HasForeignKey(v => v.ProductId)
-            .OnDelete(DeleteBehavior.Cascade);
+            // ProductVariant Configuration
+            modelBuilder.Entity<ProductVariant>()
+                        .HasOne(v => v.Product)
+                        .WithMany(p => p.ProductVariants)
+                        .HasForeignKey(v => v.ProductId)
+                        .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ProductVariant>()
+                        .Property(v => v.Price)
+                        .HasPrecision(18, 2);
 
             // -------------------
             // Stocks Configuration
@@ -255,6 +269,7 @@ modelBuilder.Entity<ProductVariant>()
             {
                 entity.ToTable("CampaignRewards");
                 entity.Property(e => e.RewardType).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Value).HasPrecision(18, 2);
                 entity.HasOne(e => e.Campaign)
                       .WithMany(c => c.Rewards)
                       .HasForeignKey(e => e.CampaignId)
@@ -283,6 +298,22 @@ modelBuilder.Entity<ProductVariant>()
                 entity.Property(e => e.CheckedAt).HasColumnType("datetime2");
                 entity.Property(e => e.Issue).HasMaxLength(1000);
                 entity.Property(e => e.Details).HasMaxLength(4000);
+            });
+
+            modelBuilder.Entity<Payments>(entity =>
+            {
+                entity.Property(p => p.Amount).HasPrecision(18, 2);
+            });
+
+            modelBuilder.Entity<Coupon>(entity =>
+            {
+                entity.Property(c => c.Value).HasPrecision(18, 2);
+                entity.Property(c => c.MinOrderAmount).HasPrecision(18, 2);
+            });
+
+            modelBuilder.Entity<Discount>(entity =>
+            {
+                entity.Property(d => d.Value).HasPrecision(18, 2);
             });
 
             // -------------------
