@@ -171,25 +171,29 @@ function Header() {
                     className="form-control border-0"
                     placeholder="Eve ne lazım?"
                     style={{
-                      borderRadius: "25px 0 0 25px",
+                      borderRadius: "25px",
                       fontSize: "0.9rem",
                       paddingLeft: "20px",
+                      paddingRight: "45px",
                       height: "38px",
-                      backgroundColor: "#f5f5f5",
-                      border: "none",
+                      backgroundColor: "white",
+                      border: "1px solid #e0e0e0",
                     }}
                   />
                   <button
-                    className="btn border-0 d-flex align-items-center justify-content-center"
+                    className="btn border-0 d-flex align-items-center justify-content-center search-icon-btn"
                     style={{
-                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                      borderRadius: "0 25px 25px 0",
-                      height: "38px",
-                      minWidth: "50px",
-                      padding: "0 15px",
-                      fontSize: "0.85rem",
-                      fontWeight: "600",
-                      color: "white",
+                      position: "absolute",
+                      right: "5px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "transparent",
+                      height: "30px",
+                      width: "30px",
+                      padding: "0",
+                      fontSize: "0.9rem",
+                      color: "#ff6b35",
+                      zIndex: 10,
                     }}
                   >
                     <i className="fas fa-search"></i>
