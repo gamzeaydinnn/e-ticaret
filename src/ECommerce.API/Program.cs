@@ -397,26 +397,16 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = services.GetRequiredService<ECommerceDbContext>();
-        // Dev/SQLite: şemayı oluştur; SQL Server: migrate/ensure
-        try
+        // Dev/SQLite: şemayı oluştur; SQL Server: migrate
+        var useSqliteAtRuntime = builder.Configuration.GetValue<bool>("Database:UseSqlite");
+        if (useSqliteAtRuntime)
         {
-            var useSqliteAtRuntime = builder.Configuration.GetValue<bool>("Database:UseSqlite");
-            if (useSqliteAtRuntime)
-            {
-                db.Database.EnsureCreated();
-            }
-            else
-            {
-                var pending = db.Database.GetPendingMigrations();
-                if (pending != null && pending.Any())
-                    db.Database.Migrate();
-                else
-                    db.Database.EnsureCreated();
-            }
+            db.Database.EnsureCreated();
         }
-        catch
+        else
         {
-            // Yine de devam et
+            // SQL Server: her zaman migrate çalıştır
+            db.Database.Migrate();
         }
 
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
@@ -425,7 +415,8 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-        logger.LogError(ex, "Seed sırasında hata oluştu");
+        logger.LogError(ex, "Database migration veya seed sırasında hata oluştu");
+        throw; // Hatayı yeniden fırlat - uygulama başlamasın
     }
 }
 
