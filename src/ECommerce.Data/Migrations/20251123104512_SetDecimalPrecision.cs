@@ -23,13 +23,6 @@ namespace ECommerce.Data.Migrations
                 name: "OrderId1",
                 table: "OrderItems");
 
-            migrationBuilder.AddColumn<string>(
-                name: "HashedToken",
-                table: "RefreshTokens",
-                type: "nvarchar(max)",
-                nullable: false,
-                defaultValue: "");
-
             migrationBuilder.AddColumn<int>(
                 name: "AddressId",
                 table: "Orders",
@@ -73,10 +66,6 @@ namespace ECommerce.Data.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_Orders_AddressId",
                 table: "Orders");
-
-            migrationBuilder.DropColumn(
-                name: "HashedToken",
-                table: "RefreshTokens");
 
             migrationBuilder.DropColumn(
                 name: "AddressId",
