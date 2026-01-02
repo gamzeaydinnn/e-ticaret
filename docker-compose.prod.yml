@@ -51,6 +51,9 @@ services:
       dockerfile: Dockerfile
       args:
         - REACT_APP_API_URL=http://${SERVER_DOMAIN:-31.186.24.78}:5000
+      cache_from:
+        - ecommerce-frontend:latest
+    image: ecommerce-frontend:latest
     container_name: ecommerce-frontend-prod
     restart: always
     ports:

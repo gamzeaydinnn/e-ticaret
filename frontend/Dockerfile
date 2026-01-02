@@ -1,19 +1,18 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# Install dependencies (use npm install when lockfile may be absent)
+# Install dependencies with better caching and retry logic
 COPY package.json ./
-# Ensure registry and retry settings to be more tolerant on flaky/mobile networks
 RUN npm config set registry https://registry.npmjs.org/ \
- && npm config set fetch-retries 5 \
- && npm config set fetch-retry-factor 2 \
- && npm config set fetch-retry-maxtimeout 60000 \
- && npm config set fetch-retry-mintimeout 2000 \
- && npm install --no-audit --no-fund --verbose --legacy-peer-deps
+ && npm config set fetch-retries 10 \
+ && npm config set fetch-retry-factor 3 \
+ && npm config set fetch-retry-maxtimeout 120000 \
+ && npm config set fetch-retry-mintimeout 5000 \
+ && npm install --no-audit --no-fund --legacy-peer-deps --prefer-offline --no-optional 2>&1 | tail -100 || npm install --no-audit --no-fund --legacy-peer-deps
 
 # Copy sources and build
 COPY . .
-RUN npx react-scripts build
+RUN npx react-scripts build --max_old_space_size=2048
 
 FROM nginx:stable-alpine
 COPY --from=build /app/build /usr/share/nginx/html
