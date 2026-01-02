@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using System.Text.Json;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Cart;
@@ -25,6 +27,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
         private readonly ECommerce.Business.Services.Interfaces.IPushService? _pushService;
         private readonly ECommerce.Business.Services.Interfaces.ISmsService? _smsService;
+        private readonly IHttpContextAccessor? _httpContextAccessor;
         private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -94,7 +97,8 @@ namespace ECommerce.Business.Services.Managers
             IPricingEngine pricingEngine,
             ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null,
             ECommerce.Business.Services.Interfaces.IPushService? pushService = null,
-            ECommerce.Business.Services.Interfaces.ISmsService? smsService = null)
+            ECommerce.Business.Services.Interfaces.ISmsService? smsService = null,
+            IHttpContextAccessor? httpContextAccessor = null)
         {
             _context = context;
             _inventoryService = inventoryService;
@@ -103,6 +107,7 @@ namespace ECommerce.Business.Services.Managers
             _notificationService = notificationService;
             _pushService = pushService;
             _smsService = smsService;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         // Siparişin tam detayını getir (fatura için)
@@ -223,7 +228,13 @@ namespace ECommerce.Business.Services.Managers
             if (order == null) return;
             if (Enum.TryParse<OrderStatus>(dto.Status, out var statusEnum))
             {
-                order.Status = statusEnum;
+                var previous = order.Status;
+                if (previous != statusEnum)
+                {
+                    order.Status = statusEnum;
+                    // add history entry
+                    AddStatusHistory(order, previous, statusEnum);
+                }
             }
             order.TotalPrice = dto.TotalPrice;
             await _context.SaveChangesAsync();
@@ -243,7 +254,12 @@ namespace ECommerce.Business.Services.Managers
             if (order == null) return false;
             if (Enum.TryParse<OrderStatus>(newStatus, out var statusEnum))
             {
-                order.Status = statusEnum;
+                var previous = order.Status;
+                if (previous != statusEnum)
+                {
+                    order.Status = statusEnum;
+                    AddStatusHistory(order, previous, statusEnum);
+                }
                 await _context.SaveChangesAsync();
 
                 // Push bildirimi: sipariş durumu başarıyla güncellendiğinde kullanıcıya bildir
@@ -428,7 +444,9 @@ namespace ECommerce.Business.Services.Managers
                 return true;
             }
 
+            var previous = order.Status;
             order.Status = OrderStatus.PaymentFailed;
+            AddStatusHistory(order, previous, OrderStatus.PaymentFailed);
             await _context.SaveChangesAsync();
             return true;
         }
@@ -489,7 +507,9 @@ namespace ECommerce.Business.Services.Managers
                 }
             }
 
+            var previous = order.Status;
             order.Status = OrderStatus.Cancelled;
+            AddStatusHistory(order, previous, OrderStatus.Cancelled);
             await _context.SaveChangesAsync();
             return true;
         }
@@ -565,6 +585,7 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 order.Status = statusEnum;
+                AddStatusHistory(order, previous, statusEnum);
                 await _context.SaveChangesAsync();
 
                 // If status transitioned to Delivered, notify customer (if available)
@@ -627,7 +648,9 @@ namespace ECommerce.Business.Services.Managers
                 return await GetByIdAsync(orderId);
             }
 
+            previousStatus = order.Status;
             order.Status = targetStatus;
+            AddStatusHistory(order, previousStatus, targetStatus);
             await _context.SaveChangesAsync();
 
             if (previousStatus != OrderStatus.Delivered &&
@@ -672,6 +695,46 @@ namespace ECommerce.Business.Services.Managers
                     UnitPrice = oi.UnitPrice
                 }).ToList() ?? new List<OrderItemDto>()
             };
+        }
+
+        private string? GetCurrentUserIdentifier()
+        {
+            try
+            {
+                var user = _httpContextAccessor?.HttpContext?.User;
+                if (user == null) return null;
+                var id = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrWhiteSpace(id)) return id;
+                var name = user.Identity?.Name;
+                if (!string.IsNullOrWhiteSpace(name)) return name;
+                var email = user.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+                return email;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private void AddStatusHistory(Order order, OrderStatus previous, OrderStatus current, string? reason = null)
+        {
+            try
+            {
+                var hist = new OrderStatusHistory
+                {
+                    OrderId = order.Id,
+                    PreviousStatus = previous,
+                    NewStatus = current,
+                    ChangedBy = GetCurrentUserIdentifier(),
+                    Reason = reason,
+                    ChangedAt = DateTime.UtcNow
+                };
+                _context.OrderStatusHistories.Add(hist);
+            }
+            catch
+            {
+                // Ensure that history logging does not break main flow
+            }
         }
 
         // Normalize incoming shipping method and map to a known key

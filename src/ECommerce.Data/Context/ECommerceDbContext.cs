@@ -41,6 +41,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<InventoryLog> InventoryLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
         public virtual DbSet<WeightReport> WeightReports { get; set; }
+      public virtual DbSet<OrderStatusHistory> OrderStatusHistories { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<Campaign> Campaigns { get; set; }
         public virtual DbSet<CampaignRule> CampaignRules { get; set; }
@@ -181,6 +182,24 @@ namespace ECommerce.Data.Context
                         .HasForeignKey(o => o.AddressId)
                         .OnDelete(DeleteBehavior.Restrict);
             });
+
+                  // -------------------
+                  // OrderStatusHistory Configuration
+                  // -------------------
+                  modelBuilder.Entity<OrderStatusHistory>(entity =>
+                  {
+                        entity.ToTable("OrderStatusHistories");
+                        entity.Property(e => e.ChangedAt).HasColumnType("datetime2").IsRequired();
+                        entity.Property(e => e.ChangedBy).HasMaxLength(200);
+                        entity.Property(e => e.Reason).HasMaxLength(2000);
+
+                        entity.HasOne(h => h.Order)
+                                .WithMany(o => o.OrderStatusHistories)
+                                .HasForeignKey(h => h.OrderId)
+                                .OnDelete(DeleteBehavior.Cascade);
+
+                        entity.HasIndex(h => h.OrderId);
+                  });
 
             // -------------------
             // OrderItem Configuration

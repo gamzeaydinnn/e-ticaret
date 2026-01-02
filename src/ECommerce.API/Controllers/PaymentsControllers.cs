@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Entities.Enums;
 using ECommerce.Business.Services.Managers;
 using Microsoft.AspNetCore.Http;
+using ECommerce.Entities.Concrete;
+using System.Security.Claims;
 
 namespace ECommerce.API.Controllers
 {
@@ -111,7 +113,16 @@ namespace ECommerce.API.Controllers
                         var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
                         if (order != null)
                         {
+                            var previous = order.Status;
                             order.Status = OrderStatus.Paid;
+                            _db.OrderStatusHistories.Add(new OrderStatusHistory
+                            {
+                                OrderId = order.Id,
+                                PreviousStatus = previous,
+                                NewStatus = OrderStatus.Paid,
+                                ChangedBy = HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? HttpContext?.User?.Identity?.Name,
+                                ChangedAt = DateTime.UtcNow
+                            });
                         }
                         payment.RawResponse = (payment.RawResponse ?? string.Empty) + "\n[iyzico-callback]";
                         await _db.SaveChangesAsync();
@@ -184,7 +195,16 @@ namespace ECommerce.API.Controllers
                         var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
                         if (order != null)
                         {
+                            var previous = order.Status;
                             order.Status = OrderStatus.Paid;
+                            _db.OrderStatusHistories.Add(new OrderStatusHistory
+                            {
+                                OrderId = order.Id,
+                                PreviousStatus = previous,
+                                NewStatus = OrderStatus.Paid,
+                                ChangedBy = HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? HttpContext?.User?.Identity?.Name,
+                                ChangedAt = DateTime.UtcNow
+                            });
                             await _db.SaveChangesAsync();
                         }
                         var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == session.Id);
@@ -220,7 +240,17 @@ namespace ECommerce.API.Controllers
                                 var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
                                 if (order != null)
                                 {
+                                    var previous = order.Status;
                                     order.Status = OrderStatus.ChargebackPending;
+                                    _db.OrderStatusHistories.Add(new OrderStatusHistory
+                                    {
+                                        OrderId = order.Id,
+                                        PreviousStatus = previous,
+                                        NewStatus = OrderStatus.ChargebackPending,
+                                        ChangedBy = HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? HttpContext?.User?.Identity?.Name,
+                                        Reason = "Chargeback/Dispute",
+                                        ChangedAt = DateTime.UtcNow
+                                    });
                                 }
                                 await _db.SaveChangesAsync();
                             }

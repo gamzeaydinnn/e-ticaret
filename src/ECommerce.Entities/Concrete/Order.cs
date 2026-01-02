@@ -70,5 +70,6 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new HashSet<OrderItem>();
         public virtual ICollection<StockReservation> StockReservations { get; set; } = new HashSet<StockReservation>();
         public virtual ICollection<WeightReport> WeightReports { get; set; } = new HashSet<WeightReport>();
+        public virtual ICollection<OrderStatusHistory> OrderStatusHistories { get; set; } = new HashSet<OrderStatusHistory>();
     }
 }
