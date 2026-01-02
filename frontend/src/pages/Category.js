@@ -32,38 +32,33 @@ export default function Category() {
             error: e?.message,
           });
           const map = {
-            "meyve-sebze": {
-              id: 1,
-              name: "Meyve & Sebze",
-              description: "Taze meyve sebze ürünleri",
-            },
-            "et-tavuk-balik": {
-              id: 2,
-              name: "Et & Tavuk & Balık",
-              description: "Kırmızı et, tavuk ve balık",
-            },
-            "sut-urunleri": {
+            "meyve-ve-sebze": {
               id: 3,
-              name: "Süt Ürünleri",
-              description: "Süt, peynir, yoğurt",
+              name: "Meyve ve Sebze",
+              description: "Taze meyve ve sebzeler",
             },
-            "temel-gida": {
-              id: 4,
-              name: "Temel Gıda",
-              description: "Bakliyat, temel ihtiyaç",
+            "et-ve-et-urunleri": {
+              id: 1,
+              name: "Et ve Et Ürünleri",
+              description: "Taze et ve şarküteri ürünleri",
+            },
+            "sut-ve-sut-urunleri": {
+              id: 2,
+              name: "Süt ve Süt Ürünleri",
+              description: "Süt, peynir, yoğurt ve türevleri",
             },
             icecekler: {
-              id: 5,
+              id: 4,
               name: "İçecekler",
               description: "Soğuk ve sıcak içecekler",
             },
             atistirmalik: {
-              id: 6,
+              id: 5,
               name: "Atıştırmalık",
-              description: "Cips, kraker ve atıştırmalıklar",
+              description: "Cipsi, kraker ve atıştırmalıklar",
             },
             temizlik: {
-              id: 7,
+              id: 6,
               name: "Temizlik",
               description: "Ev temizlik ürünleri",
             },

@@ -572,36 +572,36 @@ function Header() {
             <button
               className={
                 "category-btn" +
-                (location.pathname.startsWith("/category/meyve-sebze")
+                (location.pathname.startsWith("/category/meyve-ve-sebze")
                   ? " active"
                   : "")
               }
               type="button"
-              onClick={() => navigate("/category/meyve-sebze")}
+              onClick={() => navigate("/category/meyve-ve-sebze")}
             >
               MEYVE &amp; SEBZE
             </button>
             <button
               className={
                 "category-btn" +
-                (location.pathname.startsWith("/category/et-tavuk-balik")
+                (location.pathname.startsWith("/category/et-ve-et-urunleri")
                   ? " active"
                   : "")
               }
               type="button"
-              onClick={() => navigate("/category/et-tavuk-balik")}
+              onClick={() => navigate("/category/et-ve-et-urunleri")}
             >
               ET &amp; TAVUK &amp; BALIK
             </button>
             <button
               className={
                 "category-btn" +
-                (location.pathname.startsWith("/category/sut-urunleri")
+                (location.pathname.startsWith("/category/sut-ve-sut-urunleri")
                   ? " active"
                   : "")
               }
               type="button"
-              onClick={() => navigate("/category/sut-urunleri")}
+              onClick={() => navigate("/category/sut-ve-sut-urunleri")}
             >
               SÜT ÜRÜNLERİ
             </button>
