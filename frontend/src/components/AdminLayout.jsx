@@ -1,5 +1,5 @@
 // src/components/AdminLayout.jsx
-import React, { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -13,7 +13,7 @@ export default function AdminLayout({ children }) {
   const isAdminLike =
     user?.role === "Admin" || user?.role === "SuperAdmin" || user?.isAdmin;
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     {
       path: "/admin/dashboard",
       icon: "fas fa-tachometer-alt",
@@ -58,7 +58,7 @@ export default function AdminLayout({ children }) {
         { path: "/admin/logs/inventory", label: "Inventory Logs" },
       ],
     },
-  ];
+  ], []);
 
   useEffect(() => {
     const parentWithChild = menuItems.find(
@@ -72,7 +72,7 @@ export default function AdminLayout({ children }) {
         [parentWithChild.label]: true,
       }));
     }
-  }, [location.pathname]);
+  }, [location.pathname, menuItems]);
 
   const toggleMenu = (label) => {
     setOpenMenus((prev) => ({
@@ -312,12 +312,11 @@ export default function AdminLayout({ children }) {
 
             <div className="navbar-nav ms-auto">
               <div className="nav-item dropdown">
-                <a
-                  className="nav-link dropdown-toggle d-flex align-items-center text-dark"
-                  href="#"
-                  role="button"
+                <button
+                  className="nav-link dropdown-toggle d-flex align-items-center text-dark btn btn-link border-0"
+                  type="button"
                   data-bs-toggle="dropdown"
-                  style={{ fontSize: "0.9rem" }}
+                  style={{ fontSize: "0.9rem", textDecoration: "none" }}
                 >
                   <div
                     className="rounded-circle d-flex align-items-center justify-content-center me-2"
@@ -333,25 +332,25 @@ export default function AdminLayout({ children }) {
                     ></i>
                   </div>
                   {user?.name || "Admin"}
-                </a>
+                </button>
                 <ul className="dropdown-menu dropdown-menu-end shadow">
                   <li>
-                    <a className="dropdown-item" href="#">
+                    <button className="dropdown-item" type="button">
                       <i
                         className="fas fa-user me-2"
                         style={{ color: "#f57c00" }}
                       ></i>
                       Profil
-                    </a>
+                    </button>
                   </li>
                   <li>
-                    <a className="dropdown-item" href="#">
+                    <button className="dropdown-item" type="button">
                       <i
                         className="fas fa-cog me-2"
                         style={{ color: "#f57c00" }}
                       ></i>
                       Ayarlar
-                    </a>
+                    </button>
                   </li>
                   <li>
                     <hr className="dropdown-divider" />

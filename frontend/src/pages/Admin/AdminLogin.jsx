@@ -1,5 +1,5 @@
 // src/pages/Admin/AdminLogin.jsx
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -11,7 +11,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { login, setUser } = useAuth();
+  const { setUser } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {

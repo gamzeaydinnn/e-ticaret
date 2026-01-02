@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { useCartCount } from "../hooks/useCartCount";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { useCartCount } from "../hooks/useCartCount";
+import api from "../services/api";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
-import { useAuth } from "../contexts/AuthContext";
-import api from "../services/api";
 
 const CartPage = () => {
-  const { count: cartCount, refresh: refreshCartCount } = useCartCount();
+  const { refresh: refreshCartCount } = useCartCount();
   const navigate = useNavigate();
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,11 +25,7 @@ const CartPage = () => {
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState("");
 
-  useEffect(() => {
-    loadCartData();
-  }, []);
-
-  const loadCartData = async () => {
+  const loadCartData = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -187,7 +183,7 @@ const CartPage = () => {
         }
 
         for (const item of items) {
-          const product = allProducts.find((p) => p.id == item.productId); // == kullandım çünkü tip uyumsuzluğu olabilir
+          const product = allProducts.find((p) => p.id === item.productId || String(p.id) === String(item.productId));
 
           if (product) {
             productData[item.productId] = {
@@ -216,7 +212,11 @@ const CartPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    loadCartData();
+  }, [loadCartData]);
 
   const getItemUnitPrice = (item) => {
     if (

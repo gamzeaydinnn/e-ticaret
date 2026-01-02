@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { AuthService } from "../services/authService";
 
 const AuthContext = createContext();
@@ -48,11 +48,12 @@ export const AuthProvider = ({ children }) => {
         setUser(JSON.parse(userData));
       } catch (error) {
         console.error("User data parsing error:", error);
-        logout();
+        clearUserData();
       }
     }
 
     setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = async (email, password) => {

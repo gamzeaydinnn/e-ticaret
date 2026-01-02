@@ -1,10 +1,9 @@
-import React, { useEffect } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 
 export default function AdminIndex() {
   const { user, loading, setUser } = useAuth();
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) {

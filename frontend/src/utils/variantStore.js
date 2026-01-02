@@ -68,10 +68,12 @@ export function moveVariants(sourceKey, targetProductId) {
   writeStore(store);
   return moved;
 }
-export default {
+const variantStore = {
   getVariantsForProduct,
   addVariant,
   removeVariant,
   updateVariant,
   moveVariants,
 };
+
+export default variantStore;

@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
-import { AdminService } from "../../services/adminService";
+import { useEffect, useState } from "react";
 import AdminLayout from "../../components/AdminLayout";
-import BannerManagement from "./BannerManagement";
+import { AdminService } from "../../services/adminService";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({

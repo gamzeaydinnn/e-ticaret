@@ -1,9 +1,9 @@
-import api from "./api";
 import {
-  isBackendAvailable,
-  shouldUseMockData,
-  debugLog,
+    debugLog,
+    isBackendAvailable,
+    shouldUseMockData,
 } from "../config/apiConfig";
+import api from "./api";
 
 // Mock data storage
 let mockCategories = [
@@ -587,7 +587,7 @@ export const AdminService = {
   createProduct: async (payload) => {
     if (shouldUseMockData()) {
       const newId = Math.max(...mockProducts.map((p) => p.id)) + 1;
-      const category = mockCategories.find((c) => c.id == payload.categoryId);
+      const category = mockCategories.find((c) => c.id === Number(payload.categoryId));
       const newProduct = {
         ...payload,
         id: newId,
@@ -603,7 +603,7 @@ export const AdminService = {
     if (shouldUseMockData()) {
       const index = mockProducts.findIndex((p) => p.id === id);
       if (index !== -1) {
-        const category = mockCategories.find((c) => c.id == payload.categoryId);
+        const category = mockCategories.find((c) => c.id === Number(payload.categoryId));
         mockProducts[index] = {
           ...mockProducts[index],
           ...payload,

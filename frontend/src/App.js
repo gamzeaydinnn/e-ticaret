@@ -1,76 +1,76 @@
-import React, { useState } from "react";
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Link,
-  useNavigate,
-  useLocation,
-} from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
+import React, { useState } from "react";
+import {
+    Link,
+    Route,
+    BrowserRouter as Router,
+    Routes,
+    useLocation,
+    useNavigate,
+} from "react-router-dom";
+import AdminPanel from "./admin/AdminPanel";
 import "./App.css";
-import ProductGrid from "./components/ProductGrid";
 import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
 import FavoritesPage from "./components/FavoritesPage";
+import LoginModal from "./components/LoginModal";
+import OrderSuccess from "./components/OrderSuccess";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
-import OrderSuccess from "./components/OrderSuccess";
-import AdminPanel from "./admin/AdminPanel";
-import AdminIndex from "./pages/Admin/AdminIndex.jsx";
-import LoginModal from "./components/LoginModal";
-import { useCartCount } from "./hooks/useCartCount";
+import ProductGrid from "./components/ProductGrid";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { useCartCount } from "./hooks/useCartCount";
+import AdminIndex from "./pages/Admin/AdminIndex.jsx";
 import AdminMicro from "./pages/Admin/AdminMicro";
 // Admin sayfaları
-import AdminLogin from "./pages/Admin/AdminLogin";
-import Dashboard from "./pages/Admin/Dashboard";
-import AdminUsers from "./pages/Admin/AdminUsers";
-import AdminOrders from "./pages/Admin/AdminOrders";
-import AdminProducts from "./pages/Admin/AdminProducts";
+import AdminCampaigns from "./pages/Admin/AdminCampaigns";
 import AdminCategories from "./pages/Admin/AdminCategories.jsx";
 import AdminCouriers from "./pages/Admin/AdminCouriers";
+import AdminLogin from "./pages/Admin/AdminLogin";
+import AdminOrders from "./pages/Admin/AdminOrders";
+import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
-import CouponManagement from "./pages/Admin/CouponManagement";
+import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminWeightReports from "./pages/Admin/AdminWeightReports";
-import AdminCampaigns from "./pages/Admin/AdminCampaigns";
+import CouponManagement from "./pages/Admin/CouponManagement";
+import Dashboard from "./pages/Admin/Dashboard";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
-import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
+import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
 // Kurye sayfaları
-import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
+import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierOrders from "./pages/Courier/CourierOrders";
 // Admin guards
+import Footer from "./components/Footer";
+import { GlobalToastContainer } from "./components/ToastProvider";
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
-import Home from "./pages/Home";
+import About from "./pages/About.jsx";
+import Addresses from "./pages/Addresses";
+import CampaignDetail from "./pages/CampaignDetail.jsx";
+import Campaigns from "./pages/Campaigns.jsx";
+import Career from "./pages/Career.jsx";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
-import Product from "./pages/Product";
 import Checkout from "./pages/Checkout";
-import Profile from "./pages/Profile";
-import Addresses from "./pages/Addresses";
-import Campaigns from "./pages/Campaigns.jsx";
-import CampaignDetail from "./pages/CampaignDetail.jsx";
-import HelpCenter from "./pages/HelpCenter.jsx";
 import Contact from "./pages/Contact.jsx";
-import Returns from "./pages/Returns.jsx";
-import ShippingInfo from "./pages/ShippingInfo.jsx";
-import PaymentOptions from "./pages/PaymentOptions.jsx";
-import SecurityInfo from "./pages/SecurityInfo.jsx";
 import Faq from "./pages/Faq.jsx";
 import Feedback from "./pages/Feedback.jsx";
-import About from "./pages/About.jsx";
-import VisionMission from "./pages/VisionMission.jsx";
-import Career from "./pages/Career.jsx";
-import PressKit from "./pages/PressKit.jsx";
-import Sustainability from "./pages/Sustainability.jsx";
-import { GlobalToastContainer } from "./components/ToastProvider";
-import Footer from "./components/Footer";
+import HelpCenter from "./pages/HelpCenter.jsx";
+import Home from "./pages/Home";
 import OrderHistory from "./pages/OrderHistory";
+import PaymentOptions from "./pages/PaymentOptions.jsx";
+import PressKit from "./pages/PressKit.jsx";
+import Product from "./pages/Product";
+import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import Returns from "./pages/Returns.jsx";
+import SecurityInfo from "./pages/SecurityInfo.jsx";
+import ShippingInfo from "./pages/ShippingInfo.jsx";
+import Sustainability from "./pages/Sustainability.jsx";
+import VisionMission from "./pages/VisionMission.jsx";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -944,7 +944,6 @@ function HomePage() {
         style={{ overflowX: "hidden" }}
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
-        role="region"
         aria-label="Kampanya Carousel"
       >
         <div
@@ -1708,18 +1707,18 @@ function HomePage() {
                   <span>
                     Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
                   </span>
-                  <a href="#" className="footer-bottom-link">
+                  <button type="button" className="footer-bottom-link btn btn-link">
                     Gizlilik Politikası
-                  </a>
-                  <a href="#" className="footer-bottom-link">
+                  </button>
+                  <button type="button" className="footer-bottom-link btn btn-link">
                     Kullanım Şartları
-                  </a>
-                  <a href="#" className="footer-bottom-link">
+                  </button>
+                  <button type="button" className="footer-bottom-link btn btn-link">
                     KVKK
-                  </a>
-                  <a href="#" className="footer-bottom-link">
+                  </button>
+                  <button type="button" className="footer-bottom-link btn btn-link">
                     Çerez Politikası
-                  </a>
+                  </button>
                 </div>
               </div>
               <div className="col-md-4 text-end">

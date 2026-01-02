@@ -1,7 +1,6 @@
+import { debugLog, shouldUseMockData } from "../config/apiConfig";
 import api from "./api";
-import { shouldUseMockData, debugLog } from "../config/apiConfig";
 
-const basePublic = "/api/micro"; // readonly endpoints
 const baseAdmin = "/api/admin/micro"; // admin-only actions
 
 let mockMicroProducts = [

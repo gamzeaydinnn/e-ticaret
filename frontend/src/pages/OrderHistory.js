@@ -1,9 +1,4 @@
-/*1. Amaç
-Kullanıcının daha önce verdiği siparişleri listelemek.
-Siparişin tarihini, toplam tutarını, durumunu göstermek.
-İstenirse sipariş detayına tıklama imkânı sağlamak (örn. fatura indirme, ürün detayları).*/
-
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { OrderService } from "../services/orderService";
 import OrderDetailModal from "./OrderDetailModal";
 
@@ -18,7 +13,6 @@ async function cancelOrder(orderId, onSuccess, onError) {
 
 export default function OrderHistory() {
   const [orders, setOrders] = useState([]);
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -30,7 +24,6 @@ export default function OrderHistory() {
   }, []);
 
   const handleShowDetail = async (orderId) => {
-    setSelectedOrderId(orderId);
     setLoadingDetail(true);
     try {
       const { data } = await OrderService.getById(orderId);
@@ -96,7 +89,6 @@ export default function OrderHistory() {
         onHide={() => {
           setModalOpen(false);
           setSelectedOrder(null);
-          setSelectedOrderId(null);
         }}
         order={selectedOrder}
       />

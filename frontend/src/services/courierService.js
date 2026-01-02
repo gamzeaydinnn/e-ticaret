@@ -1,5 +1,4 @@
 import api from "./api";
-import { API_CONFIG } from "../config/apiConfig";
 
 const base = "/api/courier"; // courier (tekil) olmalı - backend'deki route ile eşleşmeli
 const USE_MOCK_DATA = true; // DEMO: Her zaman mock veri kullan

@@ -1,8 +1,7 @@
-﻿import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ProductService } from "../services/productService";
-import { useAuth } from "../contexts/AuthContext";
 import { useFavorite } from "../hooks/useFavorite";
+import { ProductService } from "../services/productService";
 
 /**
  * FavoritesPage.jsx
@@ -14,7 +13,6 @@ import { useFavorite } from "../hooks/useFavorite";
 const FavoritesPage = () => {
   const [productsMap, setProductsMap] = useState({}); // { [id]: product }
   const [productsLoading, setProductsLoading] = useState(true);
-  const { user } = useAuth(); // Kullanıcı bilgisine gerek varsa kullanabilirsiniz
   const {
     favorites = [],
     loading: favoritesLoading,

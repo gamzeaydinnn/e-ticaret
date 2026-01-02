@@ -1,12 +1,12 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { ProductService } from "../services/productService";
+import { useEffect, useMemo, useState } from "react";
+import { debugLog, shouldUseMockData } from "../config/apiConfig";
+import getProductCategoryRules from "../config/productCategoryRules";
+import { useAuth } from "../contexts/AuthContext";
 import { CartService } from "../services/cartService";
 import { FavoriteService } from "../services/favoriteService";
-import { useAuth } from "../contexts/AuthContext";
+import { ProductService } from "../services/productService";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
-import { shouldUseMockData, debugLog } from "../config/apiConfig";
-import getProductCategoryRules from "../config/productCategoryRules";
 
 const DEMO_PRODUCTS = [
   {
@@ -497,6 +497,7 @@ export default function ProductGrid({
     return () => {
       isMounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, initialProducts]);
 
   // Kullanıcı giriş/çıkış yapınca favorileri yükle
@@ -504,6 +505,7 @@ export default function ProductGrid({
     if (!loading) {
       loadFavorites();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loading]);
 
   if (loading) {
@@ -861,8 +863,6 @@ export default function ProductGrid({
                       fontWeight: "600",
                       lineHeight: "1.4",
                       color: "#2c3e50",
-                      display: "flex",
-                      alignItems: "flex-start",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       display: "-webkit-box",

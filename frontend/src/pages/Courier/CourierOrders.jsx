@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CourierService } from "../../services/courierService";
 import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
+import { CourierService } from "../../services/courierService";
 import "./CourierOrders.css";
 
 export default function CourierOrders() {
@@ -10,7 +10,6 @@ export default function CourierOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [weightReports, setWeightReports] = useState({});
-  const [processingPayment, setProcessingPayment] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
   const navigate = useNavigate();
@@ -404,7 +403,7 @@ export default function CourierOrders() {
                                           getNextStatus(order.status)
                                         )
                                       }
-                                      disabled={updating || processingPayment}
+                                      disabled={updating}
                                       className={`btn btn-sm ${
                                         getNextStatus(order.status) ===
                                         "delivered"
@@ -426,7 +425,7 @@ export default function CourierOrders() {
                                           : getNextStatusText(order.status)
                                       }
                                     >
-                                      {updating || processingPayment ? (
+                                      {updating ? (
                                         <span className="spinner-border spinner-border-sm"></span>
                                       ) : (
                                         <>

@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { CartService } from "../services/cartService";
 import { OrderService } from "../services/orderService";
 import { PaymentService } from "../services/paymentService";
-import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
-import { useAuth } from "../contexts/AuthContext";
 import LoginModal from "./LoginModal";
 
 const PaymentPage = () => {
@@ -99,10 +99,12 @@ const PaymentPage = () => {
 
   useEffect(() => {
     loadCartItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     setPricing((prev) => (prev ? mergePricingWithShipping(prev, shippingMethod) : null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shippingMethod]);
 
   const loadCartItems = async () => {
