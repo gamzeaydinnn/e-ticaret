@@ -3,11 +3,7 @@ import api from "./api";
 
 const mapProduct = (p = {}) => {
   const basePrice = p.price ?? p.unitPrice ?? 0;
-  const special =
-    p.specialPrice ??
-    p.discountPrice ??
-    p.discount_price ??
-    null;
+  const special = p.specialPrice ?? p.discountPrice ?? p.discount_price ?? null;
 
   let price = basePrice;
   let originalPrice = null;
@@ -60,5 +56,6 @@ export const ProductService = {
   createAdmin: (formData) => api.post(`/api/Admin/products`, formData),
   updateAdmin: (id, formData) => api.put(`/api/Admin/products/${id}`, formData),
   deleteAdmin: (id) => api.delete(`/api/Admin/products/${id}`),
-  updateStockAdmin: (id, stock) => api.patch(`/api/Admin/products/${id}/stock`, { stock }),
+  updateStockAdmin: (id, stock) =>
+    api.patch(`/api/Admin/products/${id}/stock`, { stock }),
 };

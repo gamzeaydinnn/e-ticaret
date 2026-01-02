@@ -15,14 +15,23 @@ namespace ECommerce.API.Infrastructure
         {
             var dbContext = services.GetRequiredService<ECommerceDbContext>();
 
-            // Eğer ürünler zaten varsa çıkış yap
-            if (dbContext.Products.Any())
+            // Eğer doğru kategoriler ve ürünler varsa çıkış yap
+            var existingCategories = await dbContext.Categories.ToListAsync();
+            var hasCorrectCategories = existingCategories.Any(c => c.Slug == "et-ve-et-urunleri" || c.Slug == "meyve-ve-sebze");
+            
+            if (hasCorrectCategories && dbContext.Products.Any())
                 return;
 
-            // Kategoriler yoksa ekle
-            if (!dbContext.Categories.Any())
+            // Yanlış kategorileri ve ürünleri temizle
+            if (!hasCorrectCategories)
             {
-                var categories = new List<Category>
+                dbContext.Products.RemoveRange(dbContext.Products);
+                dbContext.Categories.RemoveRange(dbContext.Categories);
+                await dbContext.SaveChangesAsync();
+            }
+
+            // Kategorileri ekle
+            var categories = new List<Category>
             {
                 new Category
                 {
@@ -92,29 +101,25 @@ namespace ECommerce.API.Infrastructure
                 }
             };
 
-                await dbContext.Categories.AddRangeAsync(categories);
-                await dbContext.SaveChangesAsync();
-            }
+            await dbContext.Categories.AddRangeAsync(categories);
+            await dbContext.SaveChangesAsync();
 
-            // Kategorileri ID'leriyle birlikte al
-            var savedCategories = await dbContext.Categories.ToListAsync();
+            // Kategorileri slug'a göre dictionary yap
+            var catBySlug = await dbContext.Categories.ToDictionaryAsync(c => c.Slug, c => c.Id);
             
-            // Ürünleri slug'a göre değil, mevcut kategorilerin ilk 2'sine ekle
-            var categoryList = savedCategories.OrderBy(c => c.Id).Take(6).ToList();
-            if (categoryList.Count < 2)
-                return; // En az 2 kategori yoksa ürün ekleme
+            // Eğer ürünler zaten varsa ekleme
+            if (await dbContext.Products.AnyAsync())
+                return;
 
-            // Ürünleri ekle - mevcut kategorilere göre
-            var cat1 = categoryList[0].Id;
-            var cat2 = categoryList.Count > 1 ? categoryList[1].Id : cat1;
-            
+            // Ürünleri ekle - doğru kategorilere göre
             var products = new List<Product>
             {
+                // Et ve Et Ürünleri
                 new Product
                 {
                     Name = "Dana Kuşbaşı",
                     Description = "Taze dana eti kuşbaşı",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["et-ve-et-urunleri"],
                     Price = 89.90m,
                     StockQuantity = 25,
                     ImageUrl = "/images/dana-kusbasi.jpg",
@@ -129,7 +134,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Kuzu İncik",
                     Description = "Taze kuzu incik eti",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["et-ve-et-urunleri"],
                     Price = 95.50m,
                     StockQuantity = 15,
                     ImageUrl = "/images/kuzu-incik.webp",
@@ -144,7 +149,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Sucuk 250gr",
                     Description = "Geleneksel sucuk",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["et-ve-et-urunleri"],
                     Price = 24.90m,
                     StockQuantity = 30,
                     ImageUrl = "/images/sucuk.jpg",
@@ -155,11 +160,12 @@ namespace ECommerce.API.Infrastructure
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 },
+                // Süt ve Süt Ürünleri
                 new Product
                 {
                     Name = "Pınar Süt 1L",
                     Description = "Taze tam yağlı süt",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["sut-ve-sut-urunleri"],
                     Price = 12.50m,
                     StockQuantity = 50,
                     ImageUrl = "/images/ozel-fiyat-koy-sutu.png",
@@ -174,7 +180,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Şek Kaşar Peyniri 200gr",
                     Description = "Eski kaşar peynir",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["sut-ve-sut-urunleri"],
                     Price = 35.90m,
                     StockQuantity = 20,
                     ImageUrl = "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
@@ -185,11 +191,12 @@ namespace ECommerce.API.Infrastructure
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 },
+                // Meyve ve Sebze
                 new Product
                 {
                     Name = "Domates Kg",
                     Description = "Taze domates",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["meyve-ve-sebze"],
                     Price = 8.75m,
                     StockQuantity = 100,
                     ImageUrl = "/images/domates.webp",
@@ -204,7 +211,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Salatalık Kg",
                     Description = "Taze salatalık",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["meyve-ve-sebze"],
                     Price = 6.50m,
                     StockQuantity = 80,
                     ImageUrl = "/images/salatalik.jpg",
@@ -219,7 +226,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Bulgur 1 Kg",
                     Description = "Pilavlık bulgur",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["meyve-ve-sebze"],
                     Price = 15.90m,
                     StockQuantity = 40,
                     ImageUrl = "/images/bulgur.png",
@@ -230,11 +237,12 @@ namespace ECommerce.API.Infrastructure
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 },
+                // İçecekler
                 new Product
                 {
                     Name = "Coca Cola 330ml",
                     Description = "Coca Cola teneke kutu",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["icecekler"],
                     Price = 5.50m,
                     StockQuantity = 75,
                     ImageUrl = "/images/coca-cola.jpg",
@@ -249,7 +257,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Lipton Ice Tea 330ml",
                     Description = "Şeftali aromalı ice tea",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["icecekler"],
                     Price = 4.75m,
                     StockQuantity = 60,
                     ImageUrl = "/images/lipton-ice-tea.jpg",
@@ -264,7 +272,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Nescafe 200gr",
                     Description = "Klasik nescafe",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["icecekler"],
                     Price = 45.90m,
                     StockQuantity = 25,
                     ImageUrl = "/images/nescafe.jpg",
@@ -275,11 +283,12 @@ namespace ECommerce.API.Infrastructure
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 },
+                // Atıştırmalık
                 new Product
                 {
                     Name = "Tahıl Cipsi 150gr",
                     Description = "Çıtır tahıl cipsi",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["atistirmalik"],
                     Price = 12.90m,
                     StockQuantity = 35,
                     ImageUrl = "/images/tahil-cipsi.jpg",
@@ -290,18 +299,19 @@ namespace ECommerce.API.Infrastructure
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 },
+                // Temizlik
                 new Product
                 {
                     Name = "Cif Krem Temizleyici",
                     Description = "Mutfak temizleyici",
-                    CategoryId = cat1,
+                    CategoryId = catBySlug["temizlik"],
                     Price = 15.90m,
                     StockQuantity = 5,
                     ImageUrl = "/images/yeşil-cif-krem.jpg",
                     Slug = "cif-krem-temizleyici",
                     SKU = "TEM-001",
                     Currency = "TRY",
-                    IsActive = false,
+                    IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 }

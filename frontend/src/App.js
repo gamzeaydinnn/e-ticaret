@@ -2,12 +2,12 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import React, { useState } from "react";
 import {
-    Link,
-    Route,
-    BrowserRouter as Router,
-    Routes,
-    useLocation,
-    useNavigate,
+  Link,
+  Route,
+  BrowserRouter as Router,
+  Routes,
+  useLocation,
+  useNavigate,
 } from "react-router-dom";
 import AdminPanel from "./admin/AdminPanel";
 import "./App.css";
@@ -561,8 +561,7 @@ function Header() {
           <div className="category-scroll-container">
             <button
               className={
-                "category-btn" +
-                (location.pathname === "/" ? " active" : "")
+                "category-btn" + (location.pathname === "/" ? " active" : "")
               }
               type="button"
               onClick={() => navigate("/")}
@@ -692,182 +691,182 @@ function App() {
     <div className="App">
       <Header />
       <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/account" element={<AccountPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/favorites" element={<FavoritesPage />} />
-            <Route path="/orders" element={<OrderTracking />} />
-            <Route path="/orders/history" element={<OrderHistory />} />
-            <Route path="/payment" element={<PaymentPage />} />
-            <Route path="/order-success" element={<OrderSuccess />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            {/* Ana site rotaları */}
-            <Route path="/pages/home" element={<Home />} />
-            <Route path="/pages/cart" element={<Cart />} />
-            <Route path="/category/:slug" element={<Category />} />
-            <Route path="/campaigns" element={<Campaigns />} />
-            <Route path="/campaigns/:slug" element={<CampaignDetail />} />
-            <Route path="/product/:id" element={<Product />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/addresses" element={<Addresses />} />
-            {/* Destek / Bilgi sayfaları */}
-            <Route path="/yardim" element={<HelpCenter />} />
-            <Route path="/iletisim" element={<Contact />} />
-            <Route path="/siparis-takibi" element={<OrderTracking />} />
-            <Route path="/iade-degisim" element={<Returns />} />
-            <Route path="/kargo-bilgileri" element={<ShippingInfo />} />
-            <Route path="/odeme-secenekleri" element={<PaymentOptions />} />
-            <Route path="/guvenli-alisveris" element={<SecurityInfo />} />
-            <Route path="/sss" element={<Faq />} />
-            <Route path="/geri-bildirim" element={<Feedback />} />
-            <Route path="/hakkimizda" element={<About />} />
-            <Route path="/vizyon-misyon" element={<VisionMission />} />
-            <Route path="/kariyer" element={<Career />} />
-            <Route path="/basin-kiti" element={<PressKit />} />
-            <Route path="/surdurulebilirlik" element={<Sustainability />} />
+        <Route path="/" element={<HomePage />} />
+        <Route path="/account" element={<AccountPage />} />
+        <Route path="/cart" element={<CartPage />} />
+        <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/orders" element={<OrderTracking />} />
+        <Route path="/orders/history" element={<OrderHistory />} />
+        <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Ana site rotaları */}
+        <Route path="/pages/home" element={<Home />} />
+        <Route path="/pages/cart" element={<Cart />} />
+        <Route path="/category/:slug" element={<Category />} />
+        <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/campaigns/:slug" element={<CampaignDetail />} />
+        <Route path="/product/:id" element={<Product />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/addresses" element={<Addresses />} />
+        {/* Destek / Bilgi sayfaları */}
+        <Route path="/yardim" element={<HelpCenter />} />
+        <Route path="/iletisim" element={<Contact />} />
+        <Route path="/siparis-takibi" element={<OrderTracking />} />
+        <Route path="/iade-degisim" element={<Returns />} />
+        <Route path="/kargo-bilgileri" element={<ShippingInfo />} />
+        <Route path="/odeme-secenekleri" element={<PaymentOptions />} />
+        <Route path="/guvenli-alisveris" element={<SecurityInfo />} />
+        <Route path="/sss" element={<Faq />} />
+        <Route path="/geri-bildirim" element={<Feedback />} />
+        <Route path="/hakkimizda" element={<About />} />
+        <Route path="/vizyon-misyon" element={<VisionMission />} />
+        <Route path="/kariyer" element={<Career />} />
+        <Route path="/basin-kiti" element={<PressKit />} />
+        <Route path="/surdurulebilirlik" element={<Sustainability />} />
 
-            {/* Admin giriş noktası */}
-            <Route path="/admin" element={<AdminIndex />} />
-            {/* Eski admin (geçici) */}
-            <Route path="/admin/legacy" element={<AdminPanel />} />
+        {/* Admin giriş noktası */}
+        <Route path="/admin" element={<AdminIndex />} />
+        {/* Eski admin (geçici) */}
+        <Route path="/admin/legacy" element={<AdminPanel />} />
 
-            {/* Yeni Admin Panel Rotaları */}
-            <Route
-              path="/admin/login"
-              element={
-                <AdminLoginGuard>
-                  <AdminLogin />
-                </AdminLoginGuard>
-              }
-            />
-            <Route
-              path="/admin/dashboard"
-              element={
-                <AdminGuard>
-                  <Dashboard />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/micro"
-              element={
-                <AdminGuard>
-                  <AdminMicro />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/users"
-              element={
-                <AdminGuard>
-                  <AdminUsers />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/orders"
-              element={
-                <AdminGuard>
-                  <AdminOrders />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/products"
-              element={
-                <AdminGuard>
-                  <AdminProducts />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/categories"
-              element={
-                <AdminGuard>
-                  <AdminCategories />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/couriers"
-              element={
-                <AdminGuard>
-                  <AdminCouriers />
-                </AdminGuard>
-              }
-            />
+        {/* Yeni Admin Panel Rotaları */}
+        <Route
+          path="/admin/login"
+          element={
+            <AdminLoginGuard>
+              <AdminLogin />
+            </AdminLoginGuard>
+          }
+        />
+        <Route
+          path="/admin/dashboard"
+          element={
+            <AdminGuard>
+              <Dashboard />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/micro"
+          element={
+            <AdminGuard>
+              <AdminMicro />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminGuard>
+              <AdminUsers />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/orders"
+          element={
+            <AdminGuard>
+              <AdminOrders />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <AdminGuard>
+              <AdminProducts />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <AdminGuard>
+              <AdminCategories />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/couriers"
+          element={
+            <AdminGuard>
+              <AdminCouriers />
+            </AdminGuard>
+          }
+        />
 
-            <Route
-              path="/admin/reports"
-              element={
-                <AdminGuard>
-                  <AdminReports />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/coupons"
-              element={
-                <AdminGuard>
-                  <CouponManagement />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/weight-reports"
-              element={
-                <AdminGuard>
-                  <AdminWeightReports />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/campaigns"
-              element={
-                <AdminGuard>
-                  <AdminCampaigns />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/logs/audit"
-              element={
-                <AdminGuard>
-                  <AuditLogsPage />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/logs/errors"
-              element={
-                <AdminGuard>
-                  <ErrorLogsPage />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/logs/system"
-              element={
-                <AdminGuard>
-                  <SystemLogsPage />
-                </AdminGuard>
-              }
-            />
-            <Route
-              path="/admin/logs/inventory"
-              element={
-                <AdminGuard>
-                  <InventoryLogsPage />
-                </AdminGuard>
-              }
-            />
+        <Route
+          path="/admin/reports"
+          element={
+            <AdminGuard>
+              <AdminReports />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/coupons"
+          element={
+            <AdminGuard>
+              <CouponManagement />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/weight-reports"
+          element={
+            <AdminGuard>
+              <AdminWeightReports />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/campaigns"
+          element={
+            <AdminGuard>
+              <AdminCampaigns />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/logs/audit"
+          element={
+            <AdminGuard>
+              <AuditLogsPage />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/logs/errors"
+          element={
+            <AdminGuard>
+              <ErrorLogsPage />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/logs/system"
+          element={
+            <AdminGuard>
+              <SystemLogsPage />
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/logs/inventory"
+          element={
+            <AdminGuard>
+              <InventoryLogsPage />
+            </AdminGuard>
+          }
+        />
 
-            {/* Kurye Panel Rotaları */}
-            <Route path="/courier/login" element={<CourierLogin />} />
-            <Route path="/courier/dashboard" element={<CourierDashboard />} />
-            <Route path="/courier/orders" element={<CourierOrders />} />
-          </Routes>
+        {/* Kurye Panel Rotaları */}
+        <Route path="/courier/login" element={<CourierLogin />} />
+        <Route path="/courier/dashboard" element={<CourierDashboard />} />
+        <Route path="/courier/orders" element={<CourierOrders />} />
+      </Routes>
       {showGlobalFooter && <Footer />}
     </div>
   );
@@ -1109,13 +1108,9 @@ function HomePage() {
         <div className="container-fluid px-4 position-relative">
           {/* 5 Özel Resim Section - Özel Seçimler'den ÖNCE */}
           <div className="special-images-container mb-5 pt-3">
-            <div
-              className="d-flex flex-wrap justify-content-center special-images-row"
-            >
+            <div className="d-flex flex-wrap justify-content-center special-images-row">
               {/* Resim 1 - Temizlik Malzemeleri */}
-              <div
-                className="special-image-col"
-              >
+              <div className="special-image-col">
                 <div
                   className="special-image-card h-100"
                   style={{
@@ -1150,9 +1145,7 @@ function HomePage() {
               </div>
 
               {/* Resim 2 - Taze ve Doğal */}
-              <div
-                className="special-image-col"
-              >
+              <div className="special-image-col">
                 <div
                   className="special-image-card h-100"
                   style={{
@@ -1187,9 +1180,7 @@ function HomePage() {
               </div>
 
               {/* Resim 3 - Taze Günlük Lezzetli */}
-              <div
-                className="special-image-col"
-              >
+              <div className="special-image-col">
                 <div
                   className="special-image-card h-100"
                   style={{
@@ -1224,9 +1215,7 @@ function HomePage() {
               </div>
 
               {/* Resim 4 - Özel Fiyat Köy Sütü */}
-              <div
-                className="special-image-col"
-              >
+              <div className="special-image-col">
                 <div
                   className="special-image-card h-100"
                   style={{
@@ -1261,9 +1250,7 @@ function HomePage() {
               </div>
 
               {/* Resim 5 - CIF Jel Serisi */}
-              <div
-                className="special-image-col"
-              >
+              <div className="special-image-col">
                 <div
                   className="special-image-card h-100"
                   style={{
@@ -1707,16 +1694,28 @@ function HomePage() {
                   <span>
                     Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
                   </span>
-                  <button type="button" className="footer-bottom-link btn btn-link">
+                  <button
+                    type="button"
+                    className="footer-bottom-link btn btn-link"
+                  >
                     Gizlilik Politikası
                   </button>
-                  <button type="button" className="footer-bottom-link btn btn-link">
+                  <button
+                    type="button"
+                    className="footer-bottom-link btn btn-link"
+                  >
                     Kullanım Şartları
                   </button>
-                  <button type="button" className="footer-bottom-link btn btn-link">
+                  <button
+                    type="button"
+                    className="footer-bottom-link btn btn-link"
+                  >
                     KVKK
                   </button>
-                  <button type="button" className="footer-bottom-link btn btn-link">
+                  <button
+                    type="button"
+                    className="footer-bottom-link btn btn-link"
+                  >
                     Çerez Politikası
                   </button>
                 </div>
