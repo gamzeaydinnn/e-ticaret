@@ -420,11 +420,12 @@ using (var scope = app.Services.CreateScope())
         }
 
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
+        ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-        logger.LogError(ex, "Identity seed sırasında hata oluştu");
+        logger.LogError(ex, "Seed sırasında hata oluştu");
     }
 }
 
