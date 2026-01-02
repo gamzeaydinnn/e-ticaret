@@ -15,12 +15,14 @@ namespace ECommerce.API.Infrastructure
         {
             var dbContext = services.GetRequiredService<ECommerceDbContext>();
 
-            // Kategoriler zaten varsa çıkış yap
-            if (dbContext.Categories.Any())
+            // Eğer ürünler zaten varsa çıkış yap
+            if (dbContext.Products.Any())
                 return;
 
-            // Kategorileri ekle
-            var categories = new List<Category>
+            // Kategoriler yoksa ekle
+            if (!dbContext.Categories.Any())
+            {
+                var categories = new List<Category>
             {
                 new Category
                 {
@@ -90,21 +92,29 @@ namespace ECommerce.API.Infrastructure
                 }
             };
 
-            await dbContext.Categories.AddRangeAsync(categories);
-            await dbContext.SaveChangesAsync();
+                await dbContext.Categories.AddRangeAsync(categories);
+                await dbContext.SaveChangesAsync();
+            }
 
             // Kategorileri ID'leriyle birlikte al
             var savedCategories = await dbContext.Categories.ToListAsync();
-            var catById = savedCategories.ToDictionary(c => c.Slug, c => c.Id);
+            
+            // Ürünleri slug'a göre değil, mevcut kategorilerin ilk 2'sine ekle
+            var categoryList = savedCategories.OrderBy(c => c.Id).Take(6).ToList();
+            if (categoryList.Count < 2)
+                return; // En az 2 kategori yoksa ürün ekleme
 
-            // Ürünleri ekle
+            // Ürünleri ekle - mevcut kategorilere göre
+            var cat1 = categoryList[0].Id;
+            var cat2 = categoryList.Count > 1 ? categoryList[1].Id : cat1;
+            
             var products = new List<Product>
             {
                 new Product
                 {
                     Name = "Dana Kuşbaşı",
                     Description = "Taze dana eti kuşbaşı",
-                    CategoryId = catById["et-ve-et-urunleri"],
+                    CategoryId = cat1,
                     Price = 89.90m,
                     StockQuantity = 25,
                     ImageUrl = "/images/dana-kusbasi.jpg",
@@ -119,7 +129,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Kuzu İncik",
                     Description = "Taze kuzu incik eti",
-                    CategoryId = catById["et-ve-et-urunleri"],
+                    CategoryId = cat1,
                     Price = 95.50m,
                     StockQuantity = 15,
                     ImageUrl = "/images/kuzu-incik.webp",
@@ -134,7 +144,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Sucuk 250gr",
                     Description = "Geleneksel sucuk",
-                    CategoryId = catById["et-ve-et-urunleri"],
+                    CategoryId = cat1,
                     Price = 24.90m,
                     StockQuantity = 30,
                     ImageUrl = "/images/sucuk.jpg",
@@ -149,7 +159,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Pınar Süt 1L",
                     Description = "Taze tam yağlı süt",
-                    CategoryId = catById["sut-ve-sut-urunleri"],
+                    CategoryId = cat1,
                     Price = 12.50m,
                     StockQuantity = 50,
                     ImageUrl = "/images/ozel-fiyat-koy-sutu.png",
@@ -164,7 +174,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Şek Kaşar Peyniri 200gr",
                     Description = "Eski kaşar peynir",
-                    CategoryId = catById["sut-ve-sut-urunleri"],
+                    CategoryId = cat1,
                     Price = 35.90m,
                     StockQuantity = 20,
                     ImageUrl = "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
@@ -179,7 +189,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Domates Kg",
                     Description = "Taze domates",
-                    CategoryId = catById["meyve-ve-sebze"],
+                    CategoryId = cat1,
                     Price = 8.75m,
                     StockQuantity = 100,
                     ImageUrl = "/images/domates.webp",
@@ -194,7 +204,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Salatalık Kg",
                     Description = "Taze salatalık",
-                    CategoryId = catById["meyve-ve-sebze"],
+                    CategoryId = cat1,
                     Price = 6.50m,
                     StockQuantity = 80,
                     ImageUrl = "/images/salatalik.jpg",
@@ -209,7 +219,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Bulgur 1 Kg",
                     Description = "Pilavlık bulgur",
-                    CategoryId = catById["meyve-ve-sebze"],
+                    CategoryId = cat1,
                     Price = 15.90m,
                     StockQuantity = 40,
                     ImageUrl = "/images/bulgur.png",
@@ -224,7 +234,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Coca Cola 330ml",
                     Description = "Coca Cola teneke kutu",
-                    CategoryId = catById["icecekler"],
+                    CategoryId = cat1,
                     Price = 5.50m,
                     StockQuantity = 75,
                     ImageUrl = "/images/coca-cola.jpg",
@@ -239,7 +249,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Lipton Ice Tea 330ml",
                     Description = "Şeftali aromalı ice tea",
-                    CategoryId = catById["icecekler"],
+                    CategoryId = cat1,
                     Price = 4.75m,
                     StockQuantity = 60,
                     ImageUrl = "/images/lipton-ice-tea.jpg",
@@ -254,7 +264,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Nescafe 200gr",
                     Description = "Klasik nescafe",
-                    CategoryId = catById["icecekler"],
+                    CategoryId = cat1,
                     Price = 45.90m,
                     StockQuantity = 25,
                     ImageUrl = "/images/nescafe.jpg",
@@ -269,7 +279,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Tahıl Cipsi 150gr",
                     Description = "Çıtır tahıl cipsi",
-                    CategoryId = catById["atistirmalik"],
+                    CategoryId = cat1,
                     Price = 12.90m,
                     StockQuantity = 35,
                     ImageUrl = "/images/tahil-cipsi.jpg",
@@ -284,7 +294,7 @@ namespace ECommerce.API.Infrastructure
                 {
                     Name = "Cif Krem Temizleyici",
                     Description = "Mutfak temizleyici",
-                    CategoryId = catById["temizlik"],
+                    CategoryId = cat1,
                     Price = 15.90m,
                     StockQuantity = 5,
                     ImageUrl = "/images/yeşil-cif-krem.jpg",
