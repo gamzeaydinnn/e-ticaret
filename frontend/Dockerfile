@@ -16,11 +16,25 @@ FROM nginx:stable-alpine
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/build .
 
-# Copy nginx config for React Router support
-RUN echo 'server { \
+# Copy nginx config for React Router support and API proxy
+RUN echo 'upstream api { \
+    server ecommerce-api-prod:5000; \
+} \
+server { \
     listen 80; \
     root /usr/share/nginx/html; \
     index index.html; \
+    location /api { \
+        proxy_pass http://api; \
+        proxy_http_version 1.1; \
+        proxy_set_header Upgrade $http_upgrade; \
+        proxy_set_header Connection '"'"'upgrade'"'"'; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
+        proxy_cache_bypass $http_upgrade; \
+    } \
     location / { \
         try_files $uri /index.html; \
     } \
