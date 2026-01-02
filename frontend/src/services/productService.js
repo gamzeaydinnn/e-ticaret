@@ -45,8 +45,9 @@ const mapProduct = (p = {}) => {
 
 export const ProductService = {
   // Public endpoints (mapped shape)
-  list: async () => {
-    const data = await api.get(`/api/products`);
+  list: async (query = "") => {
+    const url = `/api/products${query}`;
+    const data = await api.get(url);
     const items = Array.isArray(data) ? data : data?.data || [];
     return items.map(mapProduct);
   },
