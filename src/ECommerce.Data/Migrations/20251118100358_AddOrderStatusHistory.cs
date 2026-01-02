@@ -11,17 +11,18 @@ namespace ECommerce.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_OrderItems_Orders_OrderId1",
-                table: "OrderItems");
+            // Commented out - constraint may not exist on fresh database
+            // migrationBuilder.DropForeignKey(
+            //     name: "FK_OrderItems_Orders_OrderId1",
+            //     table: "OrderItems");
 
-            migrationBuilder.DropIndex(
-                name: "IX_OrderItems_OrderId1",
-                table: "OrderItems");
+            // migrationBuilder.DropIndex(
+            //     name: "IX_OrderItems_OrderId1",
+            //     table: "OrderItems");
 
-            migrationBuilder.DropColumn(
-                name: "OrderId1",
-                table: "OrderItems");
+            // migrationBuilder.DropColumn(
+            //     name: "OrderId1",
+            //     table: "OrderItems");
 
             migrationBuilder.AddColumn<string>(
                 name: "HashedToken",

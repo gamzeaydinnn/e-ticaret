@@ -16,6 +16,7 @@ Bu dokümanda projenizi **31.186.24.78** IP adresli sunucuya nasıl deploy edece
 En güvenli ve pratik yöntem budur.
 
 #### Adım 1: Kodu GitHub'a Push Edin
+
 ```powershell
 # Local bilgisayarınızda
 cd C:\Users\GAMZE\Desktop\eticaret
@@ -25,12 +26,14 @@ git push origin main
 ```
 
 #### Adım 2: Sunucuya SSH ile Bağlanın
+
 ```powershell
 ssh huseyinadm@31.186.24.78
 # Şifre: Passwd1122FFGG
 ```
 
 #### Adım 3: Sunucuda Projeyi Clone Edin
+
 ```bash
 # Sunucuda çalıştırın
 cd /home/huseyinadm
@@ -43,12 +46,14 @@ cd ecommerce
 ### Yöntem 2: SCP ile Dosya Transferi
 
 #### Windows'ta SCP Kullanımı
+
 ```powershell
 # PowerShell'de çalıştırın
 scp -r C:\Users\GAMZE\Desktop\eticaret huseyinadm@31.186.24.78:/home/huseyinadm/ecommerce
 ```
 
 #### WinSCP ile Transfer (GUI)
+
 1. WinSCP'yi açın
 2. Yeni bağlantı oluşturun:
    - **Host**: 31.186.24.78
@@ -77,11 +82,13 @@ scp -r C:\Users\GAMZE\Desktop\eticaret huseyinadm@31.186.24.78:/home/huseyinadm/
 ## 🔧 Sunucu Kurulumu
 
 ### Adım 1: Sunucuya Bağlanın
+
 ```powershell
 ssh huseyinadm@31.186.24.78
 ```
 
 ### Adım 2: Setup Script'ini Çalıştırın
+
 ```bash
 cd /home/huseyinadm/ecommerce
 
@@ -93,6 +100,7 @@ chmod +x deploy/server-setup.sh
 ```
 
 Bu script şunları yapacak:
+
 - ✅ Sistem güncellemesi
 - ✅ Docker kurulumu
 - ✅ Docker Compose kurulumu
@@ -124,6 +132,7 @@ nano src/ECommerce.API/appsettings.Production.json
 ```
 
 Şunları güncelleyin:
+
 - ✅ JWT Secret
 - ✅ Email SMTP ayarları
 - ✅ Ödeme gateway API key'leri (Iyzico, Stripe vb.)
@@ -138,6 +147,7 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ```
 
 Bu işlem 10-15 dakika sürebilir. İşlemler:
+
 - 📦 SQL Server container'ı oluşturma
 - 🔨 .NET API build etme
 - ⚛️ React uygulamasını build etme
@@ -186,31 +196,37 @@ Deployment başarılı olduktan sonra:
 ## 🔍 Container Yönetimi
 
 ### Container'ları Durdurma
+
 ```bash
 docker-compose -f docker-compose.prod.yml stop
 ```
 
 ### Container'ları Başlatma
+
 ```bash
 docker-compose -f docker-compose.prod.yml start
 ```
 
 ### Container'ları Yeniden Başlatma
+
 ```bash
 docker-compose -f docker-compose.prod.yml restart
 ```
 
 ### Container'ları Silme
+
 ```bash
 docker-compose -f docker-compose.prod.yml down
 ```
 
 ### Container'ları ve Volume'leri Silme
+
 ```bash
 docker-compose -f docker-compose.prod.yml down -v
 ```
 
 ### Kod Güncellemesi Sonrası Rebuild
+
 ```bash
 # Git ile güncelleme
 git pull origin main
@@ -226,11 +242,13 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ### Problem: Container'lar başlamıyor
 
 **Çözüm 1**: Log'ları kontrol edin
+
 ```bash
 docker-compose -f docker-compose.prod.yml logs
 ```
 
 **Çözüm 2**: Container'ları temiz başlatın
+
 ```bash
 docker-compose -f docker-compose.prod.yml down
 docker-compose -f docker-compose.prod.yml up -d --build
@@ -239,6 +257,7 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ### Problem: Database bağlantı hatası
 
 **Kontrol edilecekler**:
+
 ```bash
 # SQL Server container'ının çalıştığından emin olun
 docker-compose -f docker-compose.prod.yml ps sqlserver
@@ -253,6 +272,7 @@ nano src/ECommerce.API/appsettings.Production.json
 ### Problem: Frontend API'ye bağlanamıyor
 
 **Çözüm**:
+
 ```bash
 # .env dosyasını kontrol edin
 cat .env
@@ -267,6 +287,7 @@ docker-compose -f docker-compose.prod.yml up -d --build frontend
 ### Problem: Port'lar zaten kullanımda
 
 **Çözüm**:
+
 ```bash
 # Hangi process port'u kullanıyor?
 sudo lsof -i :3000
@@ -283,6 +304,7 @@ nano .env
 ### Problem: Disk doldu
 
 **Çözüm**:
+
 ```bash
 # Disk kullanımını kontrol edin
 df -h
@@ -299,6 +321,7 @@ docker-compose -f docker-compose.prod.yml logs --tail=0 -f
 ## 🔒 Güvenlik Önerileri
 
 ### 1. Firewall Yapılandırması
+
 ```bash
 # UFW firewall'ı etkinleştirin
 sudo ufw enable
@@ -315,6 +338,7 @@ sudo ufw status
 ```
 
 ### 2. SSH Anahtarı ile Giriş (Önerilir)
+
 ```bash
 # Local bilgisayarınızda SSH key oluşturun
 ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
@@ -324,6 +348,7 @@ ssh-copy-id huseyinadm@31.186.24.78
 ```
 
 ### 3. Şifre Güvenliği
+
 - ✅ JWT_SECRET'i mutlaka değiştirin
 - ✅ DB_PASSWORD'u güçlü yapın
 - ✅ appsettings.Production.json'daki tüm secret'ları güncelleyin
@@ -348,6 +373,7 @@ sudo systemctl enable certbot.timer
 ## 📊 Monitoring ve Bakım
 
 ### Log'ları İzleme
+
 ```bash
 # Tüm log'lar
 docker-compose -f docker-compose.prod.yml logs -f
@@ -360,6 +386,7 @@ docker-compose -f docker-compose.prod.yml logs -f api
 ```
 
 ### Database Backup
+
 ```bash
 # Backup klasörünü oluşturun
 mkdir -p /home/huseyinadm/ecommerce/backups
@@ -371,12 +398,14 @@ docker-compose -f docker-compose.prod.yml exec sqlserver /opt/mssql-tools/bin/sq
 ```
 
 ### Otomatik Backup Script
+
 ```bash
 # Backup script oluşturun
 nano /home/huseyinadm/backup.sh
 ```
 
 İçeriği:
+
 ```bash
 #!/bin/bash
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -395,6 +424,7 @@ crontab -e
 ```
 
 ### Sistem Kaynakları İzleme
+
 ```bash
 # Container kaynak kullanımı
 docker stats
@@ -445,6 +475,7 @@ Uygulamanız artık çalışıyor olmalı:
 🔌 **API**: http://31.186.24.78:5000
 
 Sorularınız için:
+
 - 📧 GitHub Issues
 - 💬 Project documentation
 
