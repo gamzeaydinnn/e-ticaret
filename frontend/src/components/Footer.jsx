@@ -1,4 +1,3 @@
-import React from "react";
 import { Link } from "react-router-dom";
 
 export default function Footer() {
@@ -254,18 +253,18 @@ export default function Footer() {
                 <span>
                   Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
                 </span>
-                <a href="#" className="footer-bottom-link">
+                <Link to="/gizlilik-politikasi" className="footer-bottom-link">
                   Gizlilik Politikası
-                </a>
-                <a href="#" className="footer-bottom-link">
+                </Link>
+                <Link to="/kullanim-sartlari" className="footer-bottom-link">
                   Kullanım Şartları
-                </a>
-                <a href="#" className="footer-bottom-link">
+                </Link>
+                <Link to="/kvkk" className="footer-bottom-link">
                   KVKK
-                </a>
-                <a href="#" className="footer-bottom-link">
+                </Link>
+                <Link to="/cerez-politikasi" className="footer-bottom-link">
                   Çerez Politikası
-                </a>
+                </Link>
               </div>
             </div>
             <div className="col-md-4 text-end">

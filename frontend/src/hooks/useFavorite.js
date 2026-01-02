@@ -1,11 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FavoriteService } from "../services/favoriteService";
-import { useAuth } from "../contexts/AuthContext";
 
 export const useFavorite = () => {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
 
   // Favorileri yükle
   const loadFavorites = useCallback(async () => {
@@ -38,7 +36,8 @@ export const useFavorite = () => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Favori durumunu kontrol et
   const isFavorite = useCallback(
