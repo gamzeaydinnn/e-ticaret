@@ -640,7 +640,7 @@ export default function ProductGrid({
                 : 0;
 
             return (
-            <div key={p.id} className="col-lg-3 col-md-6 mb-4">
+            <div key={p.id} className="col-6 col-md-4 col-lg-3 mb-3">
               <div
                 className="modern-product-card h-100"
                 style={{
@@ -651,7 +651,7 @@ export default function ProductGrid({
                   position: "relative",
                   animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
                   cursor: "pointer",
-                  minHeight: "520px",
+                  minHeight: "380px",
                   display: "flex",
                   flexDirection: "column",
                   boxShadow: "0 5px 15px rgba(0, 0, 0, 0.08)",
@@ -687,9 +687,9 @@ export default function ProductGrid({
                             ? "linear-gradient(135deg, #28a745, #20c997)"
                             : "linear-gradient(135deg, #ffc107, #fd7e14)",
                         color: "white",
-                        padding: "4px 12px",
-                        borderRadius: "15px",
-                        fontSize: "0.7rem",
+                        padding: "3px 10px",
+                        borderRadius: "12px",
+                        fontSize: "0.65rem",
                         fontWeight: "700",
                         textTransform: "uppercase",
                         boxShadow: "0 2px 8px rgba(255, 107, 53, 0.3)",
@@ -702,23 +702,6 @@ export default function ProductGrid({
                 )}
 
                 {/* Stok Rozetleri */}
-                {isOutOfStock && (
-                  <div
-                    className="position-absolute top-0 end-0 p-2"
-                    style={{ zIndex: 3 }}
-                  >
-                    <span
-                      className="badge bg-danger text-white"
-                      style={{
-                        fontSize: "0.7rem",
-                        padding: "4px 10px",
-                        borderRadius: "15px",
-                      }}
-                    >
-                      Stokta Yok
-                    </span>
-                  </div>
-                )}
                 {isLowStock && !isOutOfStock && (
                   <div
                     className="position-absolute top-0 end-0 p-2"
@@ -727,9 +710,9 @@ export default function ProductGrid({
                     <span
                       className="badge bg-warning text-dark"
                       style={{
-                        fontSize: "0.7rem",
-                        padding: "4px 10px",
-                        borderRadius: "15px",
+                        fontSize: "0.65rem",
+                        padding: "3px 8px",
+                        borderRadius: "12px",
                       }}
                     >
                       Az Stok
@@ -739,13 +722,13 @@ export default function ProductGrid({
 
                 {/* Favori Butonu - Sağ Üst */}
                 <div
-                  className="position-absolute top-0 end-0 p-2"
-                  style={{ zIndex: 3 }}
-                >
-                  <button
-                    className="btn-favorite"
-                    type="button"
-                    onClick={(e) => {
+                    className="position-absolute top-0 end-0 p-2"
+                    style={{ zIndex: 3 }}
+                  >
+                    <button
+                      className="btn-favorite"
+                      type="button"
+                      onClick={(e) => {
                       e.stopPropagation(); // Ürün detay modalının açılmasını engelle
                       handleAddToFavorites(p.id);
                     }}
@@ -755,8 +738,8 @@ export default function ProductGrid({
                         : "rgba(255, 255, 255, 0.9)",
                       border: "none",
                       borderRadius: "50%",
-                      width: "35px",
-                      height: "35px",
+                      width: "30px",
+                      height: "30px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -793,7 +776,7 @@ export default function ProductGrid({
                 <div
                   className="product-image-container"
                   style={{
-                    height: 200,
+                    height: 160,
                     background: "#ffffff",
                     position: "relative",
                     overflow: "hidden",
@@ -818,8 +801,8 @@ export default function ProductGrid({
                         alt={p.name}
                         className="product-image"
                         style={{
-                          maxHeight: "160px",
-                          maxWidth: "160px",
+                          maxHeight: "130px",
+                          maxWidth: "130px",
                           objectFit: "contain",
                           filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
                           transition: "all 0.3s ease",
@@ -829,8 +812,8 @@ export default function ProductGrid({
                       <div
                         className="d-flex align-items-center justify-content-center"
                         style={{
-                          width: "120px",
-                          height: "120px",
+                          width: "100px",
+                          height: "100px",
                           background: "#ffffff",
                           borderRadius: "15px",
                           fontSize: "2.5rem",
@@ -844,10 +827,10 @@ export default function ProductGrid({
                 </div>
 
                 <div
-                  className="card-body p-4 d-flex flex-column"
+                  className="card-body p-3 d-flex flex-column"
                   style={{
                     background: "#ffffff",
-                    minHeight: "280px",
+                    minHeight: "180px",
                   }}
                 >
                   {/* Rating */}
@@ -871,17 +854,20 @@ export default function ProductGrid({
                   )}
 
                   <h6
-                    className="product-title mb-3"
+                    className="product-title mb-2"
                     style={{
-                      height: "50px",
-                      fontSize: "0.95rem",
+                      height: "44px",
+                      fontSize: "0.88rem",
                       fontWeight: "600",
                       lineHeight: "1.4",
                       color: "#2c3e50",
                       display: "flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
                     }}
                   >
                     {p.name}
@@ -890,14 +876,17 @@ export default function ProductGrid({
                   {/* Content Area - Flexible */}
                   <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
                     {/* Modern Fiyat Bilgileri */}
-                    <div className="price-section mb-3">
+                    <div
+                      className="price-section mb-3"
+                      style={{ minHeight: "72px" }}
+                    >
                       {originalPrice ? (
                         <div className="price-container">
                           <div className="d-flex align-items-center mb-2">
                             <span
                               className="old-price me-2"
                               style={{
-                                fontSize: "0.85rem",
+                                fontSize: "0.8rem",
                                 textDecoration: "line-through",
                                 color: "#6c757d",
                               }}
@@ -911,9 +900,9 @@ export default function ProductGrid({
                                   background:
                                     "linear-gradient(135deg, #dc3545, #c82333)",
                                   color: "white",
-                                  padding: "3px 8px",
-                                  borderRadius: "12px",
-                                  fontSize: "0.7rem",
+                                  padding: "3px 7px",
+                                  borderRadius: "10px",
+                                  fontSize: "0.65rem",
                                   fontWeight: "700",
                                   animation: "bounce 2s infinite",
                                 }}
@@ -925,7 +914,7 @@ export default function ProductGrid({
                           <div
                             className="current-price"
                             style={{
-                              fontSize: "1.4rem",
+                              fontSize: "1.15rem",
                               fontWeight: "800",
                               background:
                                 "linear-gradient(135deg, #ff6b35, #ff8c00)",
@@ -957,20 +946,21 @@ export default function ProductGrid({
                         </div>
                       )}
 
-                      {(isLowStock || isOutOfStock) && (
+                      {isLowStock && (
                         <div className="mt-2">
                           <span
-                            className={`badge ${
-                              isOutOfStock ? "bg-danger" : "bg-warning text-dark"
-                            }`}
+                            className="badge bg-warning text-dark"
+                            style={{
+                              fontSize: "0.6rem",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                            }}
                           >
-                            {isOutOfStock ? "Stokta Yok" : "Az Stok"}
+                            Az Stok
                           </span>
-                          {!isOutOfStock && (
-                            <small className="ms-2 text-muted">
-                              {stock} adet kaldı
-                            </small>
-                          )}
+                          <small className="ms-2 text-muted">
+                            {stock} adet kaldı
+                          </small>
                         </div>
                       )}
                     </div>
@@ -984,13 +974,13 @@ export default function ProductGrid({
                           background:
                             "linear-gradient(135deg, #ff6b35, #ff8c00)",
                           border: "none",
-                          borderRadius: "25px",
-                          padding: "12px 24px",
-                          fontSize: "0.9rem",
+                          borderRadius: "16px",
+                          padding: "6px 12px",
+                          fontSize: "0.78rem",
                           fontWeight: "700",
                           color: "white",
                           transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                          boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
+                          boxShadow: "0 2px 8px rgba(255, 107, 53, 0.18)",
                           position: "relative",
                           overflow: "hidden",
                           width: "100%",
@@ -1918,7 +1908,7 @@ export default function ProductGrid({
                               }}
                               style={{
                                 borderRadius: "20px",
-                                fontSize: "0.85rem",
+                                fontSize: "0.8rem",
                                 background:
                                   "linear-gradient(135deg, #10b981, #059669)",
                                 border: "none",
