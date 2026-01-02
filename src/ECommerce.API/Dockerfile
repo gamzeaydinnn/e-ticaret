@@ -4,16 +4,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy csproj files
-COPY ECommerce.API/ECommerce.API.csproj ECommerce.API/
-COPY ECommerce.Business/ECommerce.Business.csproj ECommerce.Business/
-COPY ECommerce.Core/ECommerce.Core.csproj ECommerce.Core/
-COPY ECommerce.Data/ECommerce.Data.csproj ECommerce.Data/
-COPY ECommerce.Entities/ECommerce.Entities.csproj ECommerce.Entities/
-COPY ECommerce.Infrastructure/ECommerce.Infrastructure.csproj ECommerce.Infrastructure/
+# Copy csproj files (context is ./src, so paths are relative to src/)
+COPY ./ECommerce.API/ECommerce.API.csproj ./ECommerce.API/
+COPY ./ECommerce.Business/ECommerce.Business.csproj ./ECommerce.Business/
+COPY ./ECommerce.Core/ECommerce.Core.csproj ./ECommerce.Core/
+COPY ./ECommerce.Data/ECommerce.Data.csproj ./ECommerce.Data/
+COPY ./ECommerce.Entities/ECommerce.Entities.csproj ./ECommerce.Entities/
+COPY ./ECommerce.Infrastructure/ECommerce.Infrastructure.csproj ./ECommerce.Infrastructure/
 
 # Restore
-RUN dotnet restore ECommerce.API/ECommerce.API.csproj
+RUN dotnet restore ./ECommerce.API/ECommerce.API.csproj
 
 # Copy everything
 COPY . .
