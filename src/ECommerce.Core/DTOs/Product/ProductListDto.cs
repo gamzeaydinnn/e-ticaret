@@ -14,6 +14,7 @@ namespace ECommerce.Core.DTOs.Product
         public int StockQuantity { get; set; }
         public string? ImageUrl { get; set; }
         public string? Brand { get; set; }
+        public int? CategoryId { get; set; }
         public string? CategoryName { get; set; }
     }
 }

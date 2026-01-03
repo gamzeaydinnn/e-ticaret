@@ -68,6 +68,7 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = p.StockQuantity,
                 ImageUrl = p.ImageUrl,
                 Brand = p.Brand?.Name ?? string.Empty,
+                CategoryId = p.CategoryId,
                 CategoryName = p.Category?.Name ?? string.Empty
             });
         }
@@ -101,6 +102,7 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = p.StockQuantity,
                 ImageUrl = p.ImageUrl,
                 Brand = p.Brand?.Name ?? string.Empty,
+                CategoryId = p.CategoryId,
                 CategoryName = p.Category?.Name ?? string.Empty
             });
         }
@@ -121,6 +123,7 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = product.StockQuantity,
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
                 CategoryName = product.Category?.Name ?? string.Empty
             };
         }
@@ -154,6 +157,7 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = product.StockQuantity,
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
                 CategoryName = product.Category?.Name ?? string.Empty
             };
         }
@@ -245,6 +249,7 @@ namespace ECommerce.Business.Services.Managers
                     StockQuantity = p.StockQuantity,
                     ImageUrl = p.ImageUrl,
                     Brand = p.Brand?.Name ?? string.Empty,
+                    CategoryId = p.CategoryId,
                     CategoryName = p.Category?.Name ?? string.Empty
                 }).ToList();
 
@@ -279,6 +284,7 @@ namespace ECommerce.Business.Services.Managers
                     StockQuantity = p.StockQuantity,
                     ImageUrl = p.ImageUrl,
                     Brand = p.Brand?.Name ?? string.Empty,
+                    CategoryId = p.CategoryId,
                     CategoryName = p.Category?.Name ?? string.Empty
                 }).ToList();
 
@@ -308,6 +314,7 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = product.StockQuantity,
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
                 CategoryName = product.Category?.Name ?? string.Empty
             };
         }

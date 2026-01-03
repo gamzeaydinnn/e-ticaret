@@ -27,6 +27,7 @@ const mapProduct = (p = {}) => {
     id: p.id,
     name: p.name || p.title || "",
     category: p.category_name || p.category || "",
+    categoryId: p.categoryId ?? p.category_id ?? null,
     categoryName: p.categoryName || p.category_name || p.category || "",
     price,
     originalPrice,
