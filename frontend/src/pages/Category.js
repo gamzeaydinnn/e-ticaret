@@ -62,6 +62,11 @@ export default function Category() {
               name: "Temizlik",
               description: "Ev temizlik ürünleri",
             },
+            "temel-gida": {
+              id: 7,
+              name: "Temel Gıda",
+              description: "Temel gıda ürünleri",
+            },
           };
           const mockCat = map[slug];
           if (mockCat) {
