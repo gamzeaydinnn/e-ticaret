@@ -136,7 +136,7 @@ const CartPage = () => {
               price: 28.5,
               categoryId: 3,
               categoryName: "Süt Ürünleri",
-              imageUrl: "/images/pınar-süt.jpg",
+              imageUrl: "/images/pinar-nestle-sut.jpg",
               specialPrice: 28.5,
             },
             {

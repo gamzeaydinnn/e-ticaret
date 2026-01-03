@@ -195,7 +195,7 @@ const PaymentPage = () => {
               price: 28.5,
               specialPrice: 28.5,
               categoryId: 3,
-              imageUrl: "/images/pınar-süt.jpg",
+              imageUrl: "/images/pinar-nestle-sut.jpg",
             },
             {
               id: 9,

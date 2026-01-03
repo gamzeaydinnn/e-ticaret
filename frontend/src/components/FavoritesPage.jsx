@@ -151,7 +151,7 @@ const FavoritesPage = () => {
             price: 28.5,
             categoryId: 3,
             categoryName: "Süt Ürünleri",
-            imageUrl: "/images/pınar-süt.jpg",
+            imageUrl: "/images/pinar-nestle-sut.jpg",
             isNew: false,
             discountPercentage: 0,
             rating: 4.6,
