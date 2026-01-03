@@ -194,7 +194,7 @@ const PaymentPage = () => {
               name: "Pınar Süt 1L",
               price: 28.5,
               specialPrice: 28.5,
-              categoryId: 3,
+              categoryId: 2,
               imageUrl: "/images/pinar-nestle-sut.jpg",
             },
             {
@@ -210,7 +210,7 @@ const PaymentPage = () => {
               name: "Mis Bulgur Pilavlık 1Kg",
               price: 32.9,
               specialPrice: 32.9,
-              categoryId: 4,
+              categoryId: 7,
               imageUrl: "/images/bulgur.png",
             },
             {
