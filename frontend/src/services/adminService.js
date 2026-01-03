@@ -1,7 +1,7 @@
 import {
-    debugLog,
-    isBackendAvailable,
-    shouldUseMockData,
+  debugLog,
+  isBackendAvailable,
+  shouldUseMockData,
 } from "../config/apiConfig";
 import api from "./api";
 
@@ -138,8 +138,8 @@ let mockProducts = [
   {
     id: 8,
     name: "Bulgur 1 Kg",
-    categoryId: 3,
-    categoryName: "Meyve ve Sebze",
+    categoryId: 7,
+    categoryName: "Temel Gıda",
     price: 15.9,
     stock: 40,
     description: "Pilavlık bulgur",
@@ -587,7 +587,9 @@ export const AdminService = {
   createProduct: async (payload) => {
     if (shouldUseMockData()) {
       const newId = Math.max(...mockProducts.map((p) => p.id)) + 1;
-      const category = mockCategories.find((c) => c.id === Number(payload.categoryId));
+      const category = mockCategories.find(
+        (c) => c.id === Number(payload.categoryId)
+      );
       const newProduct = {
         ...payload,
         id: newId,
@@ -603,7 +605,9 @@ export const AdminService = {
     if (shouldUseMockData()) {
       const index = mockProducts.findIndex((p) => p.id === id);
       if (index !== -1) {
-        const category = mockCategories.find((c) => c.id === Number(payload.categoryId));
+        const category = mockCategories.find(
+          (c) => c.id === Number(payload.categoryId)
+        );
         mockProducts[index] = {
           ...mockProducts[index],
           ...payload,
@@ -671,8 +675,7 @@ export const AdminService = {
   getOrder: (id) => api.get(`/api/admin/orders/${id}`),
   updateOrderStatus: (id, status) =>
     api.put(`/api/admin/orders/${id}/status`, { status }),
-  getRecentOrders: () =>
-    api.get("/api/admin/orders/recent"),
+  getRecentOrders: () => api.get("/api/admin/orders/recent"),
 
   // Reports
   getLowStockProducts: async () => {
@@ -714,7 +717,9 @@ export const AdminService = {
       return clone(data);
     }
     ensureBackend();
-    const res = await api.get(`/api/admin/reports/sales?period=${encodeURIComponent(period)}`);
+    const res = await api.get(
+      `/api/admin/reports/sales?period=${encodeURIComponent(period)}`
+    );
     return res;
   },
   getErpSyncStatus: async ({ from, to } = {}) => {
@@ -732,7 +737,7 @@ export const AdminService = {
     const qs = params.length ? `?${params.join("&")}` : "";
     return api.get(`/api/admin/reports/erp/sync-status${qs}`);
   },
-  
+
   // Coupons
   getCoupons: async () => {
     if (shouldUseMockData()) {
@@ -754,7 +759,9 @@ export const AdminService = {
   createCoupon: async (coupon) => {
     if (shouldUseMockData()) {
       const nextId =
-        mockCoupons.length > 0 ? Math.max(...mockCoupons.map((c) => c.id)) + 1 : 1;
+        mockCoupons.length > 0
+          ? Math.max(...mockCoupons.map((c) => c.id)) + 1
+          : 1;
       const prepared = {
         ...coupon,
         id: nextId,
@@ -814,12 +821,20 @@ export const AdminService = {
   createCampaign: async (payload) => {
     if (shouldUseMockData()) {
       const nextId =
-        mockCampaigns.length > 0 ? Math.max(...mockCampaigns.map((c) => c.id)) + 1 : 1;
+        mockCampaigns.length > 0
+          ? Math.max(...mockCampaigns.map((c) => c.id)) + 1
+          : 1;
       const prepared = {
         ...payload,
         id: nextId,
-        startDate: payload.startDate instanceof Date ? payload.startDate.toISOString() : payload.startDate,
-        endDate: payload.endDate instanceof Date ? payload.endDate.toISOString() : payload.endDate,
+        startDate:
+          payload.startDate instanceof Date
+            ? payload.startDate.toISOString()
+            : payload.startDate,
+        endDate:
+          payload.endDate instanceof Date
+            ? payload.endDate.toISOString()
+            : payload.endDate,
       };
       mockCampaigns.push(prepared);
       return { ...prepared };
@@ -834,8 +849,14 @@ export const AdminService = {
       mockCampaigns[idx] = {
         ...mockCampaigns[idx],
         ...payload,
-        startDate: payload.startDate instanceof Date ? payload.startDate.toISOString() : payload.startDate,
-        endDate: payload.endDate instanceof Date ? payload.endDate.toISOString() : payload.endDate,
+        startDate:
+          payload.startDate instanceof Date
+            ? payload.startDate.toISOString()
+            : payload.startDate,
+        endDate:
+          payload.endDate instanceof Date
+            ? payload.endDate.toISOString()
+            : payload.endDate,
         id: mockCampaigns[idx].id,
       };
       return { ...mockCampaigns[idx] };

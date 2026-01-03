@@ -98,6 +98,17 @@ namespace ECommerce.API.Infrastructure
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
+                },
+                new Category
+                {
+                    Name = "Temel Gıda",
+                    Description = "Temel gıda ürünleri",
+                    ImageUrl = "/images/bulgur.png",
+                    Slug = "temel-gida",
+                    SortOrder = 7,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 }
             };
 
@@ -169,7 +180,7 @@ namespace ECommerce.API.Infrastructure
                     CategoryId = catBySlug["sut-ve-sut-urunleri"],
                     Price = 12.50m,
                     StockQuantity = 50,
-                    ImageUrl = "/images/ozel-fiyat-koy-sutu.png",
+                    ImageUrl = "/images/pinar-nestle-sut.jpg",
                     Slug = "pinar-sut-1l",
                     SKU = "SUT-001",
                     Currency = "TRY",
@@ -218,21 +229,6 @@ namespace ECommerce.API.Infrastructure
                     ImageUrl = "/images/salatalik.jpg",
                     Slug = "salatalik-kg",
                     SKU = "SEB-002",
-                    Currency = "TRY",
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                },
-                new Product
-                {
-                    Name = "Bulgur 1 Kg",
-                    Description = "Pilavlık bulgur",
-                    CategoryId = catBySlug["meyve-ve-sebze"],
-                    Price = 15.90m,
-                    StockQuantity = 40,
-                    ImageUrl = "/images/bulgur.png",
-                    Slug = "bulgur-1-kg",
-                    SKU = "BAK-001",
                     Currency = "TRY",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
@@ -311,6 +307,22 @@ namespace ECommerce.API.Infrastructure
                     ImageUrl = "/images/yeşil-cif-krem.jpg",
                     Slug = "cif-krem-temizleyici",
                     SKU = "TEM-001",
+                    Currency = "TRY",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                },
+                // Temel Gıda
+                new Product
+                {
+                    Name = "Bulgur 1 Kg",
+                    Description = "Pilavlık bulgur",
+                    CategoryId = catBySlug["temel-gida"],
+                    Price = 15.90m,
+                    StockQuantity = 40,
+                    ImageUrl = "/images/bulgur.png",
+                    Slug = "bulgur-1-kg",
+                    SKU = "BAK-001",
                     Currency = "TRY",
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
