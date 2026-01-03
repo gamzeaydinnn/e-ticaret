@@ -116,13 +116,14 @@ function Header() {
         <div className="container-fluid px-4">
           <div className="row align-items-center">
             {/* Logo */}
-            <div className="col-md-3">
+            <div className="col-md-3 col-auto">
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center logo-stack">
-                  <div className="logo-container me-2">
+                  <div className="logo-container">
                     <img
                       src="/images/golkoy-logo.png"
                       alt="Gölköy Gourmet Market"
+                      className="main-logo"
                       style={{
                         height: "150px",
                         width: "auto",
@@ -143,7 +144,7 @@ function Header() {
                       }}
                     />
                   </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
+                  <div className="secondary-logo-container" style={{ display: "flex", alignItems: "center" }}>
                     <img
                       className="secondary-logo"
                       src="/images/dogadan-sofranza-logo.png"
@@ -162,8 +163,8 @@ function Header() {
               </Link>
             </div>
 
-            {/* Modern Search Bar */}
-            <div className="col-md-6">
+            {/* Modern Search Bar - Mobilde gizlenir */}
+            <div className="col-md-6 d-none d-md-block">
               <div className="modern-search-container position-relative">
                 <div className="input-group">
                   <input
@@ -203,7 +204,7 @@ function Header() {
             </div>
 
             {/* Modern Action Buttons */}
-            <div className="col-md-3">
+            <div className="col-md-3 col-auto ms-auto">
               <div className="header-actions d-flex justify-content-end align-items-center gap-3">
                 <div className="position-relative">
                   <button
