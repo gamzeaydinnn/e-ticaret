@@ -1,36 +1,14 @@
-import { useState, useEffect } from "react";
-import { CartService } from "../services/cartService";
+import { useCart } from "../contexts/CartContext";
 
+/**
+ * useCartCount Hook - CartContext'i sarmalayan hook
+ * Geriye dönük uyumluluk için mevcut API'yi korur
+ */
 export const useCartCount = () => {
-  const [count, setCount] = useState(0);
+  const { getCartCount, loadCart } = useCart();
 
-  const updateCount = async () => {
-    try {
-      const userId = localStorage.getItem("userId");
-      let items = [];
-
-      if (userId) {
-        // Giriş yapmış kullanıcı için backend'den sepeti getir
-        try {
-          items = await CartService.getCartItems();
-        } catch (error) {
-          // Backend bağlantısı yoksa localStorage kullan
-          items = CartService.getGuestCart();
-        }
-      } else {
-        // Misafir kullanıcı için localStorage'dan sepeti getir
-        items = CartService.getGuestCart();
-      }
-
-      setCount(items.reduce((sum, item) => sum + (item.quantity || 1), 0));
-    } catch {
-      setCount(0);
-    }
+  return {
+    count: getCartCount(),
+    refresh: loadCart,
   };
-
-  useEffect(() => {
-    updateCount();
-  }, []);
-
-  return { count, refresh: updateCount };
 };

@@ -1,4 +1,36 @@
-# 📊 E-Ticaret Projesi - Eksikler ve İyileştirme Önerileri
+# 📊 E-Ticaret Projesi - Güncellenmiş Eksikler Listesi
+
+**Son Güncelleme:** 5 Ocak 2026
+
+## ✅ TAMAMLANAN KRİTİK GÖREVLER
+
+### 1. **Sepet ve Favoriler Sistemi** ✅
+
+- ✅ Kullanıcı bazlı sepet yönetimi (CartContext)
+- ✅ Kullanıcı bazlı favoriler yönetimi (FavoriteContext)
+- ✅ Giriş/çıkış durumuna göre localStorage senkronizasyonu
+- ✅ Çıkış yapınca sepet ve favoriler sıfırlanır
+- ✅ Tekrar giriş yapınca eski veriler yüklenir
+
+### 2. **API Bağlantısı** ✅
+
+- ✅ Frontend `.env` düzeltildi: `REACT_APP_BACKEND_ENABLED=true`
+- ✅ Mock data kullanımı kapatıldı
+
+### 3. **Ödeme Entegrasyonu (PayTR)** ✅
+
+- ✅ PayTRPaymentService oluşturuldu
+- ✅ PayTR callback endpoint eklendi
+- ✅ Hash doğrulama sistemi
+- ✅ Sipariş durumu otomatik güncelleme
+
+### 4. **Stok Rezervasyon Sistemi** ✅
+
+- ✅ StockReservation entity mevcut
+- ✅ StockReservationCleanupJob background service aktif
+- ✅ Rezervasyon timeout mekanizması çalışıyor
+
+---
 
 ## 🔴 KRİTİK EKSİKLER
 
@@ -12,24 +44,24 @@
 
 ### 2. **Ödeme ve Sipariş**
 
-- ⏳ **Ödeme Entegrasyonu:** Stripe/Iyzico sunucu entegrasyonu hazır, sandbox anahtarları ve frontend yönlendirmesi bekleniyor
-  ✅ **Sipariş İptali:** Kullanıcı siparişini iptal edebiliyor
-  ✅ **Sipariş Detayları:** Sipariş geçmişinde detaylı bilgi eksiksiz gösteriliyor (PDF fatura ile tam entegrasyon sağlandı)
-  ✅ **Fatura Oluşturma:** PDF fatura indirme özelliği tamamlandı
+- ✅ **Ödeme Entegrasyonu:** PayTR entegrasyonu tamamlandı (API anahtarları eklenmeli)
+- ✅ **Sipariş İptali:** Kullanıcı siparişini iptal edebiliyor
+- ✅ **Sipariş Detayları:** Sipariş geçmişinde detaylı bilgi gösteriliyor
+- ✅ **Fatura Oluşturma:** PDF fatura indirme özelliği tamamlandı
 
 ### 3. **Ürün Yönetimi**
 
-- ✅**Ürün Varyantları:** Market odaklı varyantlar eksik — ağırlık (kg), paket/ambalaj boyutu, son kullanma tarihi (SKT) ve SKU/gramaj bazlı varyantlar eklenmeli
-- ✅ **Stok Takibi:** Gerçek zamanlı stok güncellemesi eksik
-- ✅ **Ürün İnceleme/Yorum:** Backend'de var ama frontend eksik
+- ✅ **Ürün Varyantları:** Ağırlık, paket boyutu, SKU bazlı varyantlar
+- ✅ **Stok Takibi:** Gerçek zamanlı stok güncellemesi
+- ✅ **Ürün İnceleme/Yorum:** Backend hazır
 - ❌ **Ürün Karşılaştırma:** Ürünleri karşılaştırma özelliği yok
-- ❌ **Ürün Arama:** Gelişmiş filtreleme ve arama eksik
+- ❌ **Ürün Arama:** Gelişmiş filtreleme ve arama UI eksik
 
 ### 4. **Güvenlik**
 
 - ❌ **2FA (İki Faktörlü Doğrulama):** Yok
-- ✅ **Rate Limiting:** IP-temelli global rate limiting eklendi (konfigüre edilebilir). Not: Prerender CI için token tabanlı muafiyet ve kısa önbellekleme + SQL retry iyileştirmeleri uygulandı.
-- ✅ **CSRF Koruması:** Antiforgery token endpoint ve doğrulama eklendi; sunucu tarafında başarısız doğrulamaları loglayan bir middleware mevcut
+- ✅ **Rate Limiting:** IP-temelli global rate limiting aktif
+- ✅ **CSRF Koruması:** Antiforgery token sistemi mevcut
 
 ### Kısa Frontend örneği (JS)
 

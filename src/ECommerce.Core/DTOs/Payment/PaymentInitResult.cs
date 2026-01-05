@@ -5,7 +5,12 @@ namespace ECommerce.Core.DTOs.Payment
     // Ödeme başlatma sonucu: hosted sayfa yönlendirmesi veya Stripe client secret gibi bilgiler taşır
     public class PaymentInitResult
     {
-        public string Provider { get; set; } = string.Empty; // stripe | iyzico | paypal
+        public bool Success { get; set; }
+        public string? ErrorMessage { get; set; }
+        public string? Token { get; set; }
+        public string? CheckoutUrl { get; set; }
+        
+        public string Provider { get; set; } = string.Empty; // stripe | iyzico | paypal | paytr
         public bool RequiresRedirect { get; set; }
         public string? RedirectUrl { get; set; } // Stripe Checkout URL / Iyzico form URL
 

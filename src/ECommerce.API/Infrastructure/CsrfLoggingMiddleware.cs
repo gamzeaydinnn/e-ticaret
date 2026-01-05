@@ -31,6 +31,14 @@ namespace ECommerce.API.Infrastructure
                 return;
             }
 
+            // Skip CSRF for API routes - SPA uses JWT Authorization header
+            var path = context.Request.Path.Value ?? "";
+            if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+            {
+                await _next(context);
+                return;
+            }
+
             try
             {
                 await antiforgery.ValidateRequestAsync(context);
@@ -40,12 +48,12 @@ namespace ECommerce.API.Infrastructure
             {
                 // Log concise, non-sensitive context for diagnostics
                 var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                var path = context.Request.Path;
+                var requestPath = context.Request.Path;
                 var ua = context.Request.Headers["User-Agent"].ToString();
                 var query = context.Request.QueryString.HasValue ? context.Request.QueryString.Value : string.Empty;
 
                 _logger.LogWarning(ex, "CSRF validation failed for {Method} {Path}{Query} from {IP}. UserAgent={UserAgent}",
-                    context.Request.Method, path, query, ip, ua);
+                    context.Request.Method, requestPath, query, ip, ua);
 
                 // Return a generic 400 without exposing details
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;

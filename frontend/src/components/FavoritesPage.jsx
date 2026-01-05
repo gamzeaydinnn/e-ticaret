@@ -2,17 +2,23 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useFavorite } from "../hooks/useFavorite";
 import { ProductService } from "../services/productService";
+import { useAuth } from "../contexts/AuthContext";
 
 /**
  * FavoritesPage.jsx
- * - Temiz, BOM içermeyen bir dosya olacak şekilde hazırlandı.
- * - useFavorite hook'u favorites dizisini ve removeFavorite fonksiyonunu sağlamalı.
- * - ProductService.list() metodu tüm ürünleri döndürmeli veya hata atmalı.
+ * - Kullanıcı bazlı favori yönetimi
+ * - Giriş yapılmadıysa favoriler boş gösterilir
  */
+
+// Kullanıcıya özel localStorage key
+const getUserFavoriteKey = (userId) => {
+  return userId ? `favorites_user_${userId}` : null;
+};
 
 const FavoritesPage = () => {
   const [productsMap, setProductsMap] = useState({}); // { [id]: product }
   const [productsLoading, setProductsLoading] = useState(true);
+  const { user } = useAuth();
   const {
     favorites = [],
     loading: favoritesLoading,

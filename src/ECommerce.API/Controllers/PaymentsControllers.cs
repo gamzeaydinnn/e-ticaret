@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Services.Payment;
 using Polly;
 using System;
+using System.Text;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Entities.Enums;
@@ -264,48 +265,86 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
-        /// PayTR callback endpoint (minimal signature validation)
+        /// PayTR callback endpoint - Ödeme sonucu bildirim
         /// </summary>
         [HttpPost("paytr/callback")]
-        public async Task<IActionResult> PayTRCallback()
+        [HttpPost("callback/paytr")]
+        public async Task<IActionResult> PayTRCallback(
+            [FromForm] string merchant_oid,
+            [FromForm] string status,
+            [FromForm] string total_amount,
+            [FromForm] string hash,
+            [FromForm] string failed_reason_code = "",
+            [FromForm] string failed_reason_msg = "")
         {
-            var settings = _paymentOptions.Value;
-            var valid = PayTRWebhookValidator.Validate(Request, settings);
-            if (!valid) return BadRequest("Invalid signature");
-
-            // Read body to extract provider payment id if included
-            Request.Body.Position = 0;
-            using var sr = new System.IO.StreamReader(Request.Body, leaveOpen: true);
-            var body = await sr.ReadToEndAsync();
-            Request.Body.Position = 0;
-
-            // Attempt to parse a payment id from body (best-effort)
-            string providerPaymentId = string.Empty;
-            if (body.Contains("token"))
+            try
             {
-                // very naive extraction
-                var idx = body.IndexOf("token", StringComparison.OrdinalIgnoreCase);
-                var sub = body.Substring(idx);
-                var eq = sub.IndexOf('=');
-                if (eq > 0)
+                var settings = _paymentOptions.Value;
+                
+                // Hash doğrulama
+                var merchantKey = settings.PayTRSecretKey ?? "";
+                var merchantSalt = Environment.GetEnvironmentVariable("PAYTR_MERCHANT_SALT") ?? "";
+                
+                var hashStr = string.Concat(merchant_oid, merchantSalt, status, total_amount);
+                using var hmac = new System.Security.Cryptography.HMACSHA256(Encoding.UTF8.GetBytes(merchantKey));
+                var expectedHash = Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(hashStr)));
+                
+                if (!string.Equals(hash, expectedHash, StringComparison.Ordinal))
                 {
-                    var val = sub.Substring(eq + 1).Split('&').FirstOrDefault();
-                    providerPaymentId = val ?? string.Empty;
+                    return Content("PAYTR notification failed: invalid hash");
                 }
-            }
 
-            if (!string.IsNullOrWhiteSpace(providerPaymentId))
-            {
-                var payment = await _db.Payments.FirstOrDefaultAsync(p => p.ProviderPaymentId == providerPaymentId && p.Provider.ToLower() == "paytr");
+                // Order ID'yi merchantOid'den çıkar (ORDER_{id}_{ticks})
+                var parts = merchant_oid?.Split('_') ?? Array.Empty<string>();
+                if (parts.Length < 2 || !int.TryParse(parts[1], out var orderId))
+                {
+                    return Content("PAYTR notification failed: invalid merchant_oid");
+                }
+
+                var payment = await _db.Payments
+                    .FirstOrDefaultAsync(p => p.OrderId == orderId && p.Provider == "PayTR");
+
                 if (payment != null)
                 {
-                    payment.RawResponse = (payment.RawResponse ?? string.Empty) + "\n[PayTR Callback] " + body;
-                    // We leave status changes to manual reconciliation for now
+                    if (status == "success")
+                    {
+                        payment.Status = "Success";
+                        payment.PaidAt = DateTime.UtcNow;
+                        payment.RawResponse = (payment.RawResponse ?? "") + $"\n[PayTR Callback Success] {DateTime.UtcNow}";
+
+                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                        if (order != null)
+                        {
+                            var previousStatus = order.Status;
+                            order.Status = OrderStatus.Paid;
+                            
+                            _db.OrderStatusHistories.Add(new OrderStatusHistory
+                            {
+                                OrderId = order.Id,
+                                PreviousStatus = previousStatus,
+                                NewStatus = OrderStatus.Paid,
+                                ChangedAt = DateTime.UtcNow,
+                                ChangedBy = "PayTR Callback"
+                            });
+                        }
+                    }
+                    else
+                    {
+                        payment.Status = "Failed";
+                        payment.RawResponse = (payment.RawResponse ?? "") + 
+                            $"\n[PayTR Callback Failed] {DateTime.UtcNow} - Code: {failed_reason_code}, Msg: {failed_reason_msg}";
+                    }
+
                     await _db.SaveChangesAsync();
                 }
-            }
 
-            return Ok();
+                // PayTR'a başarılı yanıt
+                return Content("OK");
+            }
+            catch (Exception ex)
+            {
+                return Content($"PAYTR notification failed: {ex.Message}");
+            }
         }
 
         /// <summary>

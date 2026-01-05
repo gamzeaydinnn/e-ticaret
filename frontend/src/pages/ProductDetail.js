@@ -19,14 +19,30 @@ import { useAuth } from "../contexts/AuthContext"; // ✅ kullanıcı giriş kon
 export default function ProductDetail() {
   const { id } = useParams();
   const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [reviews, setReviews] = useState([]);
   const { user } = useAuth(); // kullanıcı giriş yapmış mı kontrol eder
 
   // Ürün detayını getir
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     ProductService.get(id)
-      .then(setProduct)
-      .catch(() => {});
+      .then((data) => {
+        if (data && data.id) {
+          setProduct(data);
+        } else {
+          setError("Ürün bulunamadı");
+        }
+      })
+      .catch((err) => {
+        console.error("Ürün yüklenirken hata:", err);
+        setError("Ürün yüklenirken bir hata oluştu");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [id]);
 
   // Yorumları getir
@@ -63,7 +79,7 @@ export default function ProductDetail() {
 
   const [quantity, setQuantity] = useState(1);
   const [rule, setRule] = useState(null);
-  const [error, setError] = useState("");
+  const [validationError, setValidationError] = useState("");
   const [variants, setVariants] = useState([]);
   const [selectedVariantId, setSelectedVariantId] = useState(null);
 
@@ -142,26 +158,33 @@ export default function ProductDetail() {
   }, [product]);
 
   const validateAndAdd = () => {
-    setError("");
+    setValidationError("");
     const q = parseFloat(quantity);
-    if (isNaN(q) || q <= 0) return setError("Geçerli miktar girin.");
+    if (isNaN(q) || q <= 0) return setValidationError("Geçerli miktar girin.");
     if (rule) {
       const min = parseFloat(rule.min_quantity ?? -Infinity);
       const max = parseFloat(rule.max_quantity ?? Infinity);
       const step = parseFloat(rule.step ?? (rule.unit === "kg" ? 0.25 : 1));
-      if (q < min) return setError(`Minimum ${min} ${rule.unit} olmalıdır.`);
+      if (q < min)
+        return setValidationError(`Minimum ${min} ${rule.unit} olmalıdır.`);
       if (q > max)
-        return setError(`Maksimum ${max} ${rule.unit} ile sınırlıdır.`);
+        return setValidationError(
+          `Maksimum ${max} ${rule.unit} ile sınırlıdır.`
+        );
       // step validation: allow small float rounding
       const remainder = Math.abs(
         (q - min) / step - Math.round((q - min) / step)
       );
       if (remainder > 1e-6)
-        return setError(`Miktar ${step} ${rule.unit} adımlarıyla olmalıdır.`);
+        return setValidationError(
+          `Miktar ${step} ${rule.unit} adımlarıyla olmalıdır.`
+        );
     } else {
       // default business rule: do not allow >5 units for regular (non-weighted) items
       if (!product.isWeighted && q > 5)
-        return setError("Bu üründen en fazla 5 adet ekleyebilirsiniz.");
+        return setValidationError(
+          "Bu üründen en fazla 5 adet ekleyebilirsiniz."
+        );
     }
     // pass validation
     CartService.addItem(product.id, q)
@@ -169,7 +192,50 @@ export default function ProductDetail() {
       .catch(() => alert("Hata oluştu"));
   };
 
-  if (!product) return <p>Yükleniyor...</p>;
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <div
+          className="spinner-border text-warning"
+          role="status"
+          style={{ width: "3rem", height: "3rem" }}
+        >
+          <span className="visually-hidden">Yükleniyor...</span>
+        </div>
+        <p className="mt-3 text-muted">Ürün yükleniyor...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <div className="alert alert-warning" style={{ borderRadius: "15px" }}>
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          {error}
+        </div>
+        <a href="/" className="btn btn-outline-warning mt-3">
+          <i className="fas fa-home me-2"></i>
+          Ana Sayfaya Dön
+        </a>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="container mx-auto px-4 py-8 text-center">
+        <div className="alert alert-info" style={{ borderRadius: "15px" }}>
+          <i className="fas fa-info-circle me-2"></i>
+          Ürün bulunamadı
+        </div>
+        <a href="/" className="btn btn-outline-primary mt-3">
+          <i className="fas fa-home me-2"></i>
+          Ana Sayfaya Dön
+        </a>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -227,16 +293,13 @@ export default function ProductDetail() {
                 product.specialPrice ?? product.discountPrice ?? basePrice
               );
               const hasDiscount =
-                !Number.isNaN(special) &&
-                special > 0 &&
-                special < basePrice;
+                !Number.isNaN(special) && special > 0 && special < basePrice;
               const currentPrice = hasDiscount ? special : basePrice;
               const discountPct = hasDiscount
                 ? Math.round(100 - (currentPrice / basePrice) * 100)
                 : 0;
 
-              const stock =
-                product.stock ?? product.stockQuantity ?? null;
+              const stock = product.stock ?? product.stockQuantity ?? null;
               const isOutOfStock = typeof stock === "number" && stock <= 0;
               const isLowStock =
                 typeof stock === "number" && stock > 0 && stock <= 5;
@@ -331,7 +394,9 @@ export default function ProductDetail() {
               </div>
             )}
 
-            {error && <div className="text-sm text-danger mb-2">{error}</div>}
+            {validationError && (
+              <div className="text-sm text-danger mb-2">{validationError}</div>
+            )}
 
             <button
               onClick={validateAndAdd}

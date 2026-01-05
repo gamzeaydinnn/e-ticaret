@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { useCartCount } from "../hooks/useCartCount";
+import { useCart } from "../contexts/CartContext";
 import api from "../services/api";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 
 const CartPage = () => {
-  const { refresh: refreshCartCount } = useCartCount();
+  const {
+    cartItems,
+    loading: cartLoading,
+    updateQuantity,
+    removeFromCart,
+    getCartTotal,
+  } = useCart();
   const navigate = useNavigate();
-  const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState({});
   const { user } = useAuth();
@@ -25,198 +30,146 @@ const CartPage = () => {
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState("");
 
-  const loadCartData = useCallback(async () => {
+  // Ürün detaylarını yükle
+  const loadProductData = useCallback(async () => {
+    if (cartItems.length === 0) {
+      setProducts({});
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
-
     try {
-      let items = [];
+      let allProducts = [];
+      let productData = {};
 
-      if (user) {
-        // Kayıtlı kullanıcı için backend'den sepeti getir
-        try {
-          items = await CartService.getCartItems();
-        } catch (error) {
-          console.log("Backend bağlantısı yok, localStorage kullanılıyor");
-          items = CartService.getGuestCart();
-        }
-      } else {
-        // Misafir kullanıcı için localStorage'dan sepeti getir
-        items = CartService.getGuestCart();
-      }
-
-      setCartItems(items);
-
-      // Ürün detaylarını getir - sahte verilerle test
       try {
-        let allProducts = [];
-        let productData = {};
-
-        try {
-          allProducts = await ProductService.list();
-        } catch (error) {
-          // Sahte ürün verileri - ProductGrid'dekilerle TAMAMEN aynı
-          allProducts = [
-            {
-              id: 1,
-              name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
-              description: "Yüzey temizleyici, çok amaçlı temizlik",
-              price: 204.95,
-              originalPrice: 229.95,
-              categoryId: 7,
-              categoryName: "Temizlik",
-              imageUrl: "/images/yeşil-cif-krem.jpg",
-              specialPrice: 129.95,
-            },
-            {
-              id: 2,
-              name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
-              description: "Taco aromalı & çıtır tahıl cipsi",
-              price: 18.0,
-              categoryId: 6,
-              categoryName: "Atıştırmalık",
-              imageUrl: "/images/tahil-cipsi.jpg",
-              specialPrice: 14.9,
-            },
-            {
-              id: 3,
-              name: "Lipton Ice Tea Limon 330 Ml",
-              description: "Soğuk çay, kutu 330ml",
-              price: 60.0,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/lipton-ice-tea.jpg",
-              specialPrice: 40.9,
-            },
-            {
-              id: 4,
-              name: "Dana But Tas Kebaplık Et Çiftlik Kg",
-              description: "Taze dana eti, kuşbaşı doğranmış 500g",
-              price: 375.95,
-              originalPrice: 429.95,
-              categoryId: 2,
-              categoryName: "Et & Tavuk & Balık",
-              imageUrl: "/images/dana-kusbasi.jpg",
-              specialPrice: 279.0,
-            },
-            {
-              id: 5,
-              name: "Kuzu İncik Kg",
-              description: "Taze kuzu incik, kilogram",
-              price: 1399.95,
-              categoryId: 2,
-              categoryName: "Et & Tavuk & Balık",
-              imageUrl: "/images/kuzu-incik.webp",
-              specialPrice: 699.95,
-            },
-            {
-              id: 6,
-              name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
-              description: "Kahve karışımı, paket 15 x 10g",
-              price: 145.55,
-              originalPrice: 169.99,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/nescafe.jpg",
-              specialPrice: 84.5,
-            },
-            {
-              id: 7,
-              name: "Domates Kg",
-              description: "Taze domates, kilogram",
-              price: 45.9,
-              categoryId: 1,
-              categoryName: "Meyve & Sebze",
-              imageUrl: "/images/domates.webp",
-              specialPrice: 45.9,
-            },
-            {
-              id: 8,
-              name: "Pınar Süt 1L",
-              description: "Tam yağlı UHT süt 1 litre",
-              price: 28.5,
-              categoryId: 2,
-              categoryName: "Süt ve Süt Ürünleri",
-              imageUrl: "/images/pinar-nestle-sut.jpg",
-              specialPrice: 28.5,
-            },
-            {
-              id: 9,
-              name: "Sek Kaşar Peyniri 200 G",
-              description: "Dilimli kaşar peyniri 200g",
-              price: 75.9,
-              categoryId: 3,
-              categoryName: "Süt Ürünleri",
-              imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-              specialPrice: 64.5,
-            },
-            {
-              id: 10,
-              name: "Mis Bulgur Pilavlık 1Kg",
-              description: "Birinci sınıf bulgur 1kg",
-              price: 32.9,
-              categoryId: 7,
-              categoryName: "Temel Gıda",
-              imageUrl: "/images/bulgur.png",
-              specialPrice: 32.9,
-            },
-            {
-              id: 11,
-              name: "Coca-Cola Orijinal Tat Kutu 330ml",
-              description: "Kola gazlı içecek kutu",
-              price: 12.5,
-              categoryId: 5,
-              categoryName: "İçecekler",
-              imageUrl: "/images/coca-cola.jpg",
-              specialPrice: 10.0,
-            },
-            {
-              id: 12,
-              name: "Salatalık Kg",
-              description: "Taze salatalık, kilogram",
-              price: 28.9,
-              categoryId: 1,
-              categoryName: "Meyve & Sebze",
-              imageUrl: "/images/salatalik.jpg",
-              specialPrice: 28.9,
-            },
-          ];
-        }
-
-        for (const item of items) {
-          const product = allProducts.find((p) => p.id === item.productId || String(p.id) === String(item.productId));
-
-          if (product) {
-            productData[item.productId] = {
-              ...product,
-              imageUrl: product.imageUrl || `/images/placeholder.png`,
-            };
-          } else {
-            // Ürün bulunamadıysa placeholder kullan
-            productData[item.productId] = {
-              id: item.productId,
-              name: "Bilinmeyen Ürün",
-              price: 0,
-              category: "Genel",
-              imageUrl: "/images/placeholder.png",
-            };
-          }
-        }
-
-        console.log("💾 Final productData:", productData);
-        setProducts(productData);
+        allProducts = await ProductService.list();
       } catch (error) {
-        console.error("Ürün bilgileri alınırken hata:", error);
+        // Fallback ürün verileri
+        allProducts = [
+          {
+            id: 1,
+            name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
+            price: 204.95,
+            specialPrice: 129.95,
+            imageUrl: "/images/yeşil-cif-krem.jpg",
+          },
+          {
+            id: 2,
+            name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
+            price: 18.0,
+            specialPrice: 14.9,
+            imageUrl: "/images/tahil-cipsi.jpg",
+          },
+          {
+            id: 3,
+            name: "Lipton Ice Tea Limon 330 Ml",
+            price: 60.0,
+            specialPrice: 40.9,
+            imageUrl: "/images/lipton-ice-tea.jpg",
+          },
+          {
+            id: 4,
+            name: "Dana But Tas Kebaplık Et Çiftlik Kg",
+            price: 375.95,
+            specialPrice: 279.0,
+            imageUrl: "/images/dana-kusbasi.jpg",
+          },
+          {
+            id: 5,
+            name: "Kuzu İncik Kg",
+            price: 1399.95,
+            specialPrice: 699.95,
+            imageUrl: "/images/kuzu-incik.webp",
+          },
+          {
+            id: 6,
+            name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
+            price: 145.55,
+            specialPrice: 84.5,
+            imageUrl: "/images/nescafe.jpg",
+          },
+          {
+            id: 7,
+            name: "Domates Kg",
+            price: 45.9,
+            specialPrice: 45.9,
+            imageUrl: "/images/domates.webp",
+          },
+          {
+            id: 8,
+            name: "Pınar Süt 1L",
+            price: 28.5,
+            specialPrice: 28.5,
+            imageUrl: "/images/pinar-nestle-sut.jpg",
+          },
+          {
+            id: 9,
+            name: "Sek Kaşar Peyniri 200 G",
+            price: 75.9,
+            specialPrice: 64.5,
+            imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
+          },
+          {
+            id: 10,
+            name: "Mis Bulgur Pilavlık 1Kg",
+            price: 32.9,
+            specialPrice: 32.9,
+            imageUrl: "/images/bulgur.png",
+          },
+          {
+            id: 11,
+            name: "Coca-Cola Orijinal Tat Kutu 330ml",
+            price: 12.5,
+            specialPrice: 10.0,
+            imageUrl: "/images/coca-cola.jpg",
+          },
+          {
+            id: 12,
+            name: "Salatalık Kg",
+            price: 28.9,
+            specialPrice: 28.9,
+            imageUrl: "/images/salatalik.jpg",
+          },
+        ];
       }
+
+      for (const item of cartItems) {
+        const pid = item.productId || item.id;
+        const product = allProducts.find(
+          (p) => p.id === pid || String(p.id) === String(pid)
+        );
+
+        if (product) {
+          productData[pid] = {
+            ...product,
+            imageUrl: product.imageUrl || `/images/placeholder.png`,
+          };
+        } else if (item.product) {
+          // CartContext'den gelen product bilgisini kullan
+          productData[pid] = item.product;
+        } else {
+          productData[pid] = {
+            id: pid,
+            name: "Bilinmeyen Ürün",
+            price: 0,
+            imageUrl: "/images/placeholder.png",
+          };
+        }
+      }
+
+      setProducts(productData);
     } catch (error) {
-      console.error("Sepet verileri yüklenirken hata:", error);
+      console.error("Ürün bilgileri alınırken hata:", error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [cartItems]);
 
   useEffect(() => {
-    loadCartData();
-  }, [loadCartData]);
+    loadProductData();
+  }, [loadProductData]);
 
   const getItemUnitPrice = (item) => {
     if (
@@ -227,74 +180,28 @@ const CartPage = () => {
     ) {
       return Number(item.unitPrice);
     }
-    const product = products[item.productId];
-    const fallback =
-      (product && (product.specialPrice || product.price)) || 0;
+    const pid = item.productId || item.id;
+    const product = products[pid] || item.product;
+    const fallback = (product && (product.specialPrice || product.price)) || 0;
     return Number(fallback) || 0;
   };
 
-  const updateQuantity = async (item, newQuantity) => {
+  const handleUpdateQuantity = (item, newQuantity) => {
     if (newQuantity < 1) {
-      removeItem(item);
+      handleRemoveItem(item);
       return;
     }
-
-    try {
-      if (user) {
-        try {
-          // Backend üzerinden güncelle ve stok hatasını kullanıcıya göster
-          await api.put(`/api/cartitems/${item.id}`, {
-            productId: item.productId,
-            quantity: newQuantity,
-          });
-        } catch (error) {
-          // Yetersiz stok vb. 400 hatalarında backend mesajını göster
-          if (error && error.status === 400) {
-            const message = error.message || "Ürün stokta yeterli değil.";
-            alert(message);
-            return;
-          }
-
-          // Diğer hatalarda (ör. backend kapalı) mevcut localStorage fallback davranışını koru
-          console.log("Backend hatası, localStorage kullanılıyor", error);
-          CartService.updateGuestCartItem(item.productId, newQuantity);
-        }
-      } else {
-        CartService.updateGuestCartItem(item.productId, newQuantity);
-      }
-      await loadCartData();
-      await refreshCartCount();
-    } catch (error) {
-      console.error("Miktar güncellenirken hata:", error);
-      alert("Miktar güncellenirken bir hata oluştu.");
-    }
+    const pid = item.productId || item.id;
+    updateQuantity(pid, newQuantity);
   };
 
-  const removeItem = async (item) => {
-    try {
-      if (user) {
-        try {
-          await CartService.removeItem(item.id, item.productId);
-        } catch (error) {
-          // Backend hatası durumunda localStorage'e fallback
-          CartService.removeFromGuestCart(item.productId);
-        }
-      } else {
-        CartService.removeFromGuestCart(item.productId);
-      }
-      await loadCartData();
-      await refreshCartCount();
-    } catch (error) {
-      console.error("Ürün silinirken hata:", error);
-      alert("Ürün silinirken bir hata oluştu.");
-    }
+  const handleRemoveItem = (item) => {
+    const pid = item.productId || item.id;
+    removeFromCart(pid);
   };
 
   const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => {
-      const price = getItemUnitPrice(item);
-      return total + price * item.quantity;
-    }, 0);
+    return getCartTotal();
   };
 
   const getShippingCost = () => {
@@ -307,7 +214,7 @@ const CartPage = () => {
     setPricingLoading(true);
     try {
       const itemsPayload = cartItems.map((item) => ({
-        productId: item.productId,
+        productId: item.productId || item.id,
         quantity: item.quantity,
       }));
       const result = await CartService.previewPrice({
@@ -455,7 +362,10 @@ const CartPage = () => {
                                   <button
                                     className="btn btn-outline-warning btn-sm me-2"
                                     onClick={() =>
-                                      updateQuantity(item, item.quantity - 1)
+                                      handleUpdateQuantity(
+                                        item,
+                                        item.quantity - 1
+                                      )
                                     }
                                     style={{
                                       width: "30px",
@@ -471,7 +381,10 @@ const CartPage = () => {
                                   <button
                                     className="btn btn-outline-warning btn-sm ms-2"
                                     onClick={() =>
-                                      updateQuantity(item, item.quantity + 1)
+                                      handleUpdateQuantity(
+                                        item,
+                                        item.quantity + 1
+                                      )
                                     }
                                     style={{
                                       width: "30px",
@@ -486,13 +399,15 @@ const CartPage = () => {
                               <div className="col-md-2 text-end">
                                 <div className="d-flex flex-column align-items-end">
                                   <p className="fw-bold text-warning mb-1">
-                                    ₺{(getItemUnitPrice(item) * item.quantity).toFixed(2)}
+                                    ₺
+                                    {(
+                                      getItemUnitPrice(item) * item.quantity
+                                    ).toFixed(2)}
                                   </p>
                                   <button
                                     className="btn btn-link text-danger p-0"
                                     onClick={() => {
-                                      console.log("Delete clicked!", item);
-                                      removeItem(item);
+                                      handleRemoveItem(item);
                                     }}
                                   >
                                     <i className="fas fa-trash"></i>
@@ -528,10 +443,10 @@ const CartPage = () => {
                             backgroundColor: "#fff8f0",
                           }}
                         >
-                        <div
-                          className="card-body"
-                          style={{ padding: "1.5rem" }}
-                        >
+                          <div
+                            className="card-body"
+                            style={{ padding: "1.5rem" }}
+                          >
                             <h6 className="text-warning fw-bold mb-3">
                               <i className="fas fa-calculator me-2"></i>Sipariş
                               Özeti
@@ -554,7 +469,9 @@ const CartPage = () => {
                                   className="form-control"
                                   placeholder="Kupon kodunuzu girin"
                                   value={couponCode}
-                                  onChange={(e) => setCouponCode(e.target.value)}
+                                  onChange={(e) =>
+                                    setCouponCode(e.target.value)
+                                  }
                                 />
                                 <button
                                   className="btn btn-warning fw-bold"
@@ -581,8 +498,7 @@ const CartPage = () => {
                                 <div className="d-flex justify-content-between mb-1">
                                   <span>Ara Toplam</span>
                                   <span>
-                                    ₺
-                                    {Number(pricing.subtotal || 0).toFixed(2)}
+                                    ₺{Number(pricing.subtotal || 0).toFixed(2)}
                                   </span>
                                 </div>
                                 <div className="d-flex justify-content-between mb-1">
@@ -626,9 +542,7 @@ const CartPage = () => {
                                     <strong>{pricing.appliedCouponCode}</strong>
                                   </div>
                                 )}
-                                {Array.isArray(
-                                  pricing.appliedCampaignNames
-                                ) &&
+                                {Array.isArray(pricing.appliedCampaignNames) &&
                                   pricing.appliedCampaignNames.length > 0 && (
                                     <div className="mt-1 small text-muted">
                                       Kampanyalar:{" "}

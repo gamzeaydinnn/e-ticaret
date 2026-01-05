@@ -20,6 +20,8 @@ import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
 import ProductGrid from "./components/ProductGrid";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { CartProvider, useCart } from "./contexts/CartContext";
+import { FavoriteProvider, useFavorites } from "./contexts/FavoriteContext";
 import { useCartCount } from "./hooks/useCartCount";
 import AdminIndex from "./pages/Admin/AdminIndex.jsx";
 import AdminMicro from "./pages/Admin/AdminMicro";
@@ -47,6 +49,7 @@ import CourierOrders from "./pages/Courier/CourierOrders";
 import Footer from "./components/Footer";
 import { GlobalToastContainer } from "./components/ToastProvider";
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
+import { CompareProvider, useCompare } from "./contexts/CompareContext";
 import About from "./pages/About.jsx";
 import Addresses from "./pages/Addresses";
 import CampaignDetail from "./pages/CampaignDetail.jsx";
@@ -55,6 +58,7 @@ import Career from "./pages/Career.jsx";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
 import Checkout from "./pages/Checkout";
+import ComparePage from "./pages/ComparePage";
 import Contact from "./pages/Contact.jsx";
 import Faq from "./pages/Faq.jsx";
 import Feedback from "./pages/Feedback.jsx";
@@ -67,10 +71,12 @@ import Product from "./pages/Product";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Returns from "./pages/Returns.jsx";
+import SearchPage from "./pages/SearchPage";
 import SecurityInfo from "./pages/SecurityInfo.jsx";
 import ShippingInfo from "./pages/ShippingInfo.jsx";
 import Sustainability from "./pages/Sustainability.jsx";
 import VisionMission from "./pages/VisionMission.jsx";
+import SearchAutocomplete from "./components/SearchAutocomplete";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -144,7 +150,10 @@ function Header() {
                       }}
                     />
                   </div>
-                  <div className="secondary-logo-container" style={{ display: "flex", alignItems: "center" }}>
+                  <div
+                    className="secondary-logo-container"
+                    style={{ display: "flex", alignItems: "center" }}
+                  >
                     <img
                       className="secondary-logo"
                       src="/images/dogadan-sofranza-logo.png"
@@ -165,42 +174,7 @@ function Header() {
 
             {/* Modern Search Bar - Mobilde gizlenir */}
             <div className="col-md-6 d-none d-md-block">
-              <div className="modern-search-container position-relative">
-                <div className="input-group">
-                  <input
-                    type="text"
-                    className="form-control border-0"
-                    placeholder="Eve ne lazım?"
-                    style={{
-                      borderRadius: "25px",
-                      fontSize: "0.9rem",
-                      paddingLeft: "20px",
-                      paddingRight: "45px",
-                      height: "38px",
-                      backgroundColor: "white",
-                      border: "1px solid #e0e0e0",
-                    }}
-                  />
-                  <button
-                    className="btn border-0 d-flex align-items-center justify-content-center search-icon-btn"
-                    style={{
-                      position: "absolute",
-                      right: "5px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background: "transparent",
-                      height: "30px",
-                      width: "30px",
-                      padding: "0",
-                      fontSize: "0.9rem",
-                      color: "#ff6b35",
-                      zIndex: 10,
-                    }}
-                  >
-                    <i className="fas fa-search"></i>
-                  </button>
-                </div>
-              </div>
+              <SearchAutocomplete />
             </div>
 
             {/* Modern Action Buttons */}
@@ -696,6 +670,8 @@ function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/cart" element={<CartPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/compare" element={<ComparePage />} />
+        <Route path="/search" element={<SearchPage />} />
         <Route path="/orders" element={<OrderTracking />} />
         <Route path="/orders/history" element={<OrderHistory />} />
         <Route path="/payment" element={<PaymentPage />} />
@@ -876,11 +852,51 @@ function App() {
 function AppWithProviders() {
   return (
     <AuthProvider>
-      <Router>
-        <ScrollToTop />
-        <App />
-      </Router>
+      <CartProvider>
+        <FavoriteProvider>
+          <CompareProvider>
+            <Router>
+              <ScrollToTop />
+              <App />
+              <CompareFloatingButton />
+            </Router>
+          </CompareProvider>
+        </FavoriteProvider>
+      </CartProvider>
     </AuthProvider>
+  );
+}
+
+// Karşılaştırma Floating Button
+function CompareFloatingButton() {
+  const { compareItems } = useCompare();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Admin veya kurye sayfalarında gösterme
+  if (location.pathname.startsWith("/admin") || location.pathname.startsWith("/courier")) {
+    return null;
+  }
+
+  if (compareItems.length === 0) return null;
+
+  return (
+    <button
+      onClick={() => navigate("/compare")}
+      className="btn btn-warning shadow-lg"
+      style={{
+        position: "fixed",
+        bottom: "100px",
+        right: "20px",
+        zIndex: 1000,
+        borderRadius: "50px",
+        padding: "12px 20px",
+        fontWeight: "bold",
+      }}
+    >
+      <i className="fas fa-balance-scale me-2"></i>
+      Karşılaştır ({compareItems.length})
+    </button>
   );
 }
 

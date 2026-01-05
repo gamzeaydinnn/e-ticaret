@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { debugLog, shouldUseMockData } from "../config/apiConfig";
 import getProductCategoryRules from "../config/productCategoryRules";
 import { useAuth } from "../contexts/AuthContext";
-import { CartService } from "../services/cartService";
-import { FavoriteService } from "../services/favoriteService";
+import { useCart } from "../contexts/CartContext";
+import { useCompare } from "../contexts/CompareContext";
+import { useFavorites } from "../contexts/FavoriteContext";
 import { ProductService } from "../services/productService";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
@@ -224,8 +225,14 @@ export default function ProductGrid({
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
   const [cartNotification, setCartNotification] = useState(null);
-  const [favorites, setFavorites] = useState([]);
   const { user } = useAuth();
+  const { addToCart: ctxAddToCart } = useCart();
+  const {
+    toggleFavorite: ctxToggleFavorite,
+    isFavorite: ctxIsFavorite,
+    favorites,
+  } = useFavorites();
+  const { toggleCompare, isInCompare } = useCompare();
 
   // Kategori filtresi (varsa)
   const filteredProducts = useMemo(() => {
@@ -234,28 +241,13 @@ export default function ProductGrid({
     return data.filter((p) => Number(p.categoryId) === cid);
   }, [data, categoryId]);
 
-  const handleAddToCart = async (productId) => {
-    // Demo modunda veya kullanıcı giriş yapmamışsa misafir sepetine ekle
-    if (usingMockData || !user) {
-      const product = data.find((p) => p.id === productId);
-      CartService.addToGuestCart(parseInt(productId), 1);
-      showCartNotification(product, "guest");
-      return;
-    }
-    // Example usage (developer-only, not rendered):
-    // const rules = getProductCategoryRules().slice(0,2);
-    // Giriş yapmışsa backend API'ye sepete ekle
-    try {
-      await CartService.addItem(productId, 1);
-      const product = data.find((p) => p.id === productId);
-      showCartNotification(product, "registered");
-    } catch (error) {
-      console.error("Sepete ekleme hatası:", error);
-      // Hata durumunda localStorage'e ekle
-      const product = data.find((p) => p.id === productId);
-      CartService.addToGuestCart(parseInt(productId), 1);
-      showCartNotification(product, "guest");
-    }
+  const handleAddToCart = (productId) => {
+    const product = data.find((p) => p.id === productId);
+    if (!product) return;
+
+    // Context üzerinden sepete ekle (hem misafir hem kullanıcı için çalışır)
+    ctxAddToCart(product, 1);
+    showCartNotification(product, user ? "registered" : "guest");
   };
 
   // load rules once
@@ -278,15 +270,17 @@ export default function ProductGrid({
     if (loginAction === "cart") {
       const productId = localStorage.getItem("tempProductId");
       if (productId) {
-        CartService.addToGuestCart(parseInt(productId), 1);
         const product = data.find((p) => p.id === parseInt(productId));
-        showCartNotification(product, "guest");
+        if (product) {
+          ctxAddToCart(product, 1);
+          showCartNotification(product, "guest");
+        }
         localStorage.removeItem("tempProductId");
       }
     } else if (loginAction === "favorite") {
       const productId = localStorage.getItem("tempFavoriteProductId");
       if (productId) {
-        addToGuestFavorites(parseInt(productId));
+        ctxToggleFavorite(parseInt(productId));
         localStorage.removeItem("tempFavoriteProductId");
       }
     }
@@ -306,102 +300,27 @@ export default function ProductGrid({
   };
 
   // Favoriler için fonksiyonlar
-  const handleAddToFavorites = async (productId) => {
-    // Demo modunda veya kullanıcı giriş yapmamışsa localStorage'e ekle
-    if (usingMockData || !user) {
-      const product = data.find((p) => p.id === productId);
-      if (product) {
-        addToGuestFavorites(productId);
-        showFavoriteNotification(product);
-      }
-      return;
-    }
+  const handleAddToFavorites = (productId) => {
+    const product = data.find((p) => p.id === productId);
+    if (!product) return;
 
-    // Giriş yapmışsa backend API'ye favorilere ekle
-    try {
-      const result = await FavoriteService.toggleFavorite(productId);
-
-      // Favoriler listesini güncelle
-      await loadFavorites();
-
-      // Ürün bilgisini bul ve bildirim göster
-      const product = data.find((p) => p.id === productId);
-      if (product) {
-        showFavoriteNotification(product);
-      }
-
-      console.log("Favori işlemi başarılı:", result);
-    } catch (error) {
-      console.error("Favorilere ekleme hatası:", error);
-
-      // Hata durumunda localStorage'e ekle ve bildirim göster
-      const product = data.find((p) => p.id === productId);
-      if (product) {
-        addToGuestFavorites(productId);
-        showFavoriteNotification(product);
-      }
-    }
+    // Context üzerinden favori toggle (hem misafir hem kullanıcı için çalışır)
+    ctxToggleFavorite(productId);
+    showFavoriteNotification(product);
   };
 
   const handleFavoriteGuestContinue = () => {
     setShowFavoriteAlert(false);
-    const productId = localStorage.getItem("tempFavoriteProductId");
-
-    if (productId) {
-      addToGuestFavorites(parseInt(productId));
-      localStorage.removeItem("tempFavoriteProductId");
-    }
   };
 
   const handleFavoriteGoToLogin = () => {
     setShowFavoriteAlert(false);
-    window.location.href = "/cart";
+    setShowLoginModal(true);
   };
 
-  const addToGuestFavorites = (productId) => {
-    const guestFavorites = JSON.parse(
-      localStorage.getItem("guestFavorites") || "[]"
-    );
-    if (!guestFavorites.includes(productId)) {
-      guestFavorites.push(productId);
-      localStorage.setItem("guestFavorites", JSON.stringify(guestFavorites));
-      setFavorites(guestFavorites);
-
-      // Başarı bildirimi göster
-      const product = data.find((p) => p.id === productId);
-      showFavoriteNotification(product);
-    }
-  };
-
-  const loadFavorites = async () => {
-    if (user) {
-      try {
-        const userFavorites = await FavoriteService.getFavorites();
-        // Backend'den gelen favori listesini işle
-        if (Array.isArray(userFavorites)) {
-          // Eğer backend favori objeleri dönüyorsa ID'leri çıkar
-          const favoriteIds = userFavorites.map((f) =>
-            typeof f === "object" ? f.id : f
-          );
-          setFavorites(favoriteIds);
-        } else {
-          setFavorites([]);
-        }
-      } catch (error) {
-        console.error("Favoriler yüklenirken hata:", error);
-        // Hata durumunda localStorage'dan yükle
-        const guestFavorites = JSON.parse(
-          localStorage.getItem("guestFavorites") || "[]"
-        );
-        setFavorites(guestFavorites);
-      }
-    } else {
-      // Misafir kullanıcı için localStorage'dan yükle
-      const guestFavorites = JSON.parse(
-        localStorage.getItem("guestFavorites") || "[]"
-      );
-      setFavorites(guestFavorites);
-    }
+  // isFavorite artık context'ten geliyor
+  const isFavorite = (productId) => {
+    return ctxIsFavorite(productId);
   };
 
   const showFavoriteNotification = (product) => {
@@ -415,10 +334,6 @@ export default function ProductGrid({
     setTimeout(() => {
       setCartNotification(null);
     }, 3000);
-  };
-
-  const isFavorite = (productId) => {
-    return favorites.includes(productId);
   };
 
   const showCartNotification = (product, userType) => {
@@ -463,7 +378,6 @@ export default function ProductGrid({
           setData(initialProducts);
           setError("");
           setUsingMockData(false);
-          await loadFavorites();
           return;
         }
 
@@ -484,7 +398,6 @@ export default function ProductGrid({
         setData(products);
         setError("");
         setUsingMockData(false);
-        await loadFavorites();
       } catch (err) {
         if (!isMounted) {
           return;
@@ -496,7 +409,6 @@ export default function ProductGrid({
           setData(DEMO_PRODUCTS);
           setError("");
           setUsingMockData(true);
-          await loadFavorites();
         } else {
           setError(
             err?.message ||
@@ -518,14 +430,6 @@ export default function ProductGrid({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, initialProducts]);
-
-  // Kullanıcı giriş/çıkış yapınca favorileri yükle
-  useEffect(() => {
-    if (!loading) {
-      loadFavorites();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, loading]);
 
   if (loading) {
     return (
@@ -743,9 +647,9 @@ export default function ProductGrid({
                     </div>
                   )}
 
-                  {/* Favori Butonu - Sağ Üst */}
+                  {/* Favori ve Karşılaştırma Butonları - Sağ Üst */}
                   <div
-                    className="position-absolute top-0 end-0 p-2"
+                    className="position-absolute top-0 end-0 p-2 d-flex flex-column gap-1"
                     style={{ zIndex: 3 }}
                   >
                     <button
@@ -794,6 +698,40 @@ export default function ProductGrid({
                           isFavorite(p.id) ? "fas fa-heart" : "far fa-heart"
                         }
                       ></i>
+                    </button>
+                    {/* Karşılaştırma Butonu */}
+                    <button
+                      className="btn-compare"
+                      type="button"
+                      title="Karşılaştır"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const result = toggleCompare(p);
+                        if (result.action === "limit") {
+                          alert(result.message);
+                        }
+                      }}
+                      style={{
+                        background: isInCompare(p.id)
+                          ? "linear-gradient(135deg, #17a2b8, #20c997)"
+                          : "rgba(255, 255, 255, 0.9)",
+                        border: "none",
+                        borderRadius: "50%",
+                        width: "30px",
+                        height: "30px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: isInCompare(p.id) ? "white" : "#17a2b8",
+                        transition: "all 0.3s ease",
+                        backdropFilter: "blur(10px)",
+                        boxShadow: isInCompare(p.id)
+                          ? "0 4px 15px rgba(23, 162, 184, 0.4)"
+                          : "none",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      <i className="fas fa-balance-scale"></i>
                     </button>
                   </div>
 
@@ -1408,14 +1346,14 @@ export default function ProductGrid({
                                 localStorage.setItem("tempProductQty", q);
                                 return;
                               }
-                              await CartService.addItem(selectedProduct.id, q);
+                              ctxAddToCart(selectedProduct, q);
                               showCartNotification(
                                 selectedProduct,
                                 "registered"
                               );
                             } catch (err) {
                               console.error("Sepete ekleme hatası:", err);
-                              CartService.addToGuestCart(selectedProduct.id, q);
+                              ctxAddToCart(selectedProduct, q);
                               showCartNotification(selectedProduct, "guest");
                             }
 
