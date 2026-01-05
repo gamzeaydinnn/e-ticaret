@@ -19,14 +19,17 @@ import {
   DialogContent,
   Box,
 } from "@mui/material";
-import AdminLayout from "../../../components/AdminLayout";
 import { AdminService } from "../../../services/adminService";
 
 const SystemLogsPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [pagination, setPagination] = useState({ page: 0, pageSize: 20, total: 0 });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    pageSize: 20,
+    total: 0,
+  });
   const [filters, setFilters] = useState({
     entityType: "",
     status: "",
@@ -85,7 +88,7 @@ const SystemLogsPage = () => {
     value ? new Date(value).toLocaleString("tr-TR") : "-";
 
   return (
-    <AdminLayout>
+    <Box>
       <Typography variant="h4" gutterBottom>
         System Logs
       </Typography>
@@ -131,7 +134,11 @@ const SystemLogsPage = () => {
             onChange={(e) => handleFilterChange("search", e.target.value)}
             size="small"
           />
-          <Button variant="contained" onClick={fetchLogs} sx={{ whiteSpace: "nowrap" }}>
+          <Button
+            variant="contained"
+            onClick={fetchLogs}
+            sx={{ whiteSpace: "nowrap" }}
+          >
             Filtreyi Uygula
           </Button>
         </Stack>
@@ -172,7 +179,11 @@ const SystemLogsPage = () => {
                   <TableCell>{log.attempts}</TableCell>
                   <TableCell>{log.message}</TableCell>
                   <TableCell>
-                    <Button variant="outlined" size="small" onClick={() => setDetailLog(log)}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => setDetailLog(log)}
+                    >
                       İncele
                     </Button>
                   </TableCell>
@@ -210,7 +221,12 @@ const SystemLogsPage = () => {
         </Box>
       )}
 
-      <Dialog open={Boolean(detailLog)} onClose={() => setDetailLog(null)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={Boolean(detailLog)}
+        onClose={() => setDetailLog(null)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>Log Detayı</DialogTitle>
         <DialogContent>
           <Stack spacing={1}>
@@ -221,7 +237,8 @@ const SystemLogsPage = () => {
               <strong>Attempts:</strong> {detailLog?.attempts}
             </Typography>
             <Typography variant="body2">
-              <strong>Son Deneme:</strong> {formatDate(detailLog?.lastAttemptAt)}
+              <strong>Son Deneme:</strong>{" "}
+              {formatDate(detailLog?.lastAttemptAt)}
             </Typography>
             <Typography variant="body2">
               <strong>Oluşturma:</strong> {formatDate(detailLog?.createdAt)}
@@ -232,11 +249,13 @@ const SystemLogsPage = () => {
             <Typography variant="body2">
               <strong>Son Hata:</strong>
             </Typography>
-            <pre style={{ whiteSpace: "pre-wrap" }}>{detailLog?.lastError || "(boş)"}</pre>
+            <pre style={{ whiteSpace: "pre-wrap" }}>
+              {detailLog?.lastError || "(boş)"}
+            </pre>
           </Stack>
         </DialogContent>
       </Dialog>
-    </AdminLayout>
+    </Box>
   );
 };
 

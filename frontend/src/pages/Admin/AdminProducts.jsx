@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import AdminLayout from "../../components/AdminLayout";
 import { AdminService } from "../../services/adminService";
 import variantStore from "../../utils/variantStore";
 
@@ -133,37 +132,33 @@ const AdminProducts = () => {
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ height: "60vh" }}
-        >
-          <div className="text-center">
-            <div
-              className="spinner-border mb-3"
-              style={{ color: "#f57c00" }}
-              role="status"
-            ></div>
-            <p className="text-muted">Ürünler yükleniyor...</p>
-          </div>
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ height: "60vh" }}
+      >
+        <div className="text-center">
+          <div
+            className="spinner-border mb-3"
+            style={{ color: "#f57c00" }}
+            role="status"
+          ></div>
+          <p className="text-muted">Ürünler yükleniyor...</p>
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <AdminLayout>
-        <div className="alert alert-danger border-0 rounded-4" role="alert">
-          <i className="fas fa-exclamation-triangle me-2"></i>
-          {error}
-        </div>
-      </AdminLayout>
+      <div className="alert alert-danger border-0 rounded-4" role="alert">
+        <i className="fas fa-exclamation-triangle me-2"></i>
+        {error}
+      </div>
     );
   }
 
   return (
-    <AdminLayout>
+    <div>
       <div className="container-fluid p-4">
         {/* Header */}
         <div className="d-flex justify-content-between align-items-center mb-5">
@@ -638,7 +633,7 @@ const AdminProducts = () => {
           </div>
         )}
       </div>
-    </AdminLayout>
+    </div>
   );
 };
 

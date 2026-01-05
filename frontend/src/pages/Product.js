@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
-import api from "../services/api";
+import { useCart } from "../contexts/CartContext";
 
 export default function Product() {
   const { id } = useParams();
@@ -11,6 +11,7 @@ export default function Product() {
   const [error, setError] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedVariant, setSelectedVariant] = useState(null);
+  const { addToCart: ctxAddToCart } = useCart();
 
   useEffect(() => {
     setLoading(true);
@@ -30,18 +31,9 @@ export default function Product() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  const addToCart = async () => {
-    try {
-      await api.post("/api/CartItems", {
-        productId: product.id,
-        qty: quantity,
-        variant: selectedVariant,
-      });
-      window.dispatchEvent(new CustomEvent("cart:updated"));
-      alert("Sepete eklendi");
-    } catch (err) {
-      alert("Sepete eklenirken hata oluştu");
-    }
+  const handleAddToCart = () => {
+    if (!product) return;
+    ctxAddToCart(product, quantity);
   };
 
   // Görsel URL'ini normalize et
@@ -132,263 +124,137 @@ export default function Product() {
   const imageUrl = getImageUrl(product.imageUrl || product.image);
 
   return (
-    <div className="container py-4">
-      <div className="row g-4">
+    <div className="container py-3">
+      <div className="row g-3">
         {/* Sol Taraf - Ürün Görseli */}
-        <div className="col-lg-6">
-          <div
-            className="card border-0 shadow-sm"
-            style={{ borderRadius: "20px", overflow: "hidden" }}
-          >
-            <div className="position-relative">
-              {hasDiscount && (
-                <span
-                  className="position-absolute badge"
-                  style={{
-                    top: "15px",
-                    left: "15px",
-                    background: "linear-gradient(135deg, #e74c3c, #c0392b)",
-                    fontSize: "0.9rem",
-                    padding: "8px 15px",
-                    borderRadius: "20px",
-                    zIndex: 10,
-                  }}
-                >
-                  %{discountPercent} İNDİRİM
-                </span>
-              )}
-              <img
-                src={imageUrl}
-                alt={product.name}
-                className="w-100"
-                style={{
-                  height: "450px",
-                  objectFit: "contain",
-                  background: "#f8f9fa",
-                  padding: "20px",
-                }}
-                onError={(e) => {
-                  e.target.src = "/images/placeholder.png";
-                }}
-              />
-            </div>
+        <div className="col-12 col-md-5">
+          <div className="bg-white rounded-3 shadow-sm p-2 position-relative">
+            {hasDiscount && (
+              <span className="badge bg-danger position-absolute" style={{ top: "10px", left: "10px", zIndex: 10 }}>
+                %{discountPercent}
+              </span>
+            )}
+            <img
+              src={imageUrl}
+              alt={product.name}
+              className="w-100"
+              style={{ height: "250px", objectFit: "contain" }}
+              onError={(e) => { e.target.src = "/images/placeholder.png"; }}
+            />
           </div>
         </div>
 
         {/* Sağ Taraf - Ürün Bilgileri */}
-        <div className="col-lg-6">
-          <div
-            className="card border-0 shadow-sm h-100"
-            style={{ borderRadius: "20px" }}
-          >
-            <div className="card-body p-4">
-              {/* Kategori */}
-              {product.categoryName && (
-                <span
-                  className="badge mb-3"
-                  style={{
-                    background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                    fontSize: "0.8rem",
-                    padding: "6px 12px",
-                    borderRadius: "15px",
-                  }}
-                >
-                  {product.categoryName}
-                </span>
-              )}
+        <div className="col-12 col-md-7">
+          <div className="bg-white rounded-3 shadow-sm p-3">
+            {product.categoryName && (
+              <span className="badge bg-warning text-dark mb-2" style={{ fontSize: "0.7rem" }}>
+                {product.categoryName}
+              </span>
+            )}
 
-              {/* Ürün Adı */}
-              <h1
-                className="fw-bold mb-3"
-                style={{ fontSize: "1.8rem", color: "#2c3e50" }}
+            <h1 className="h5 fw-bold mb-2">{product.name}</h1>
+            
+            {product.description && (
+              <p className="text-muted small mb-3">{product.description}</p>
+            )}
+
+            {/* Fiyat */}
+            <div className="mb-3">
+              {hasDiscount && (
+                <span className="text-decoration-line-through text-muted me-2">₺{basePrice.toFixed(2)}</span>
+              )}
+              <span className="fs-4 fw-bold text-warning">₺{currentPrice.toFixed(2)}</span>
+              {product.unit && <span className="text-muted ms-1">/ {product.unit}</span>}
+            </div>
+
+            {/* Stok */}
+            <div className="mb-3">
+              {isOutOfStock ? (
+                <span className="badge bg-danger"><i className="fas fa-times-circle me-1"></i>Stokta Yok</span>
+              ) : isLowStock ? (
+                <span className="badge bg-warning text-dark"><i className="fas fa-exclamation-triangle me-1"></i>Son {stock} Adet</span>
+              ) : (
+                <span className="badge bg-success"><i className="fas fa-check-circle me-1"></i>Stokta Var</span>
+              )}
+            </div>
+
+            <hr className="my-2" />
+
+            {/* Miktar */}
+            <div className="mb-3">
+              <label className="form-label small text-muted mb-1">Miktar</label>
+              <div className="d-flex align-items-center gap-2">
+                <div className="input-group" style={{ width: "120px" }}>
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    type="button"
+                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                    disabled={isOutOfStock}
+                  >
+                    <i className="fas fa-minus"></i>
+                  </button>
+                  <input
+                    type="number"
+                    className="form-control form-control-sm text-center"
+                    value={quantity}
+                    min={1}
+                    onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
+                    disabled={isOutOfStock}
+                  />
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    type="button"
+                    onClick={() => setQuantity(quantity + 1)}
+                    disabled={isOutOfStock}
+                  >
+                    <i className="fas fa-plus"></i>
+                  </button>
+                </div>
+                <span className="text-muted small">{product.unit || "adet"}</span>
+              </div>
+            </div>
+
+            {/* Varyant */}
+            {product.variants?.length > 0 && (
+              <div className="mb-3">
+                <label className="form-label small text-muted mb-1">Varyant</label>
+                <select
+                  className="form-select form-select-sm"
+                  onChange={(e) => setSelectedVariant(e.target.value)}
+                >
+                  <option value="">Seçiniz</option>
+                  {product.variants.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Butonlar */}
+            <div className="d-grid gap-2">
+              <button
+                onClick={handleAddToCart}
+                disabled={isOutOfStock}
+                className="btn btn-warning fw-bold"
               >
-                {product.name}
-              </h1>
+                <i className="fas fa-shopping-cart me-2"></i>
+                {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
+              </button>
 
-              {/* Açıklama */}
-              {product.description && (
-                <p className="text-muted mb-4" style={{ lineHeight: "1.7" }}>
-                  {product.description}
-                </p>
-              )}
-
-              {/* Fiyat */}
-              <div className="mb-4">
-                {hasDiscount && (
-                  <div className="mb-1">
-                    <span
-                      className="text-decoration-line-through text-muted me-2"
-                      style={{ fontSize: "1.1rem" }}
-                    >
-                      ₺{basePrice.toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                <div className="d-flex align-items-center gap-2">
-                  <span
-                    className="fw-bold"
-                    style={{
-                      fontSize: "2rem",
-                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                      WebkitBackgroundClip: "text",
-                      WebkitTextFillColor: "transparent",
-                    }}
-                  >
-                    ₺{currentPrice.toFixed(2)}
-                  </span>
-                  {product.unit && (
-                    <span className="text-muted">/ {product.unit}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Stok Durumu */}
-              <div className="mb-4">
-                {isOutOfStock ? (
-                  <span
-                    className="badge bg-danger"
-                    style={{
-                      fontSize: "0.85rem",
-                      padding: "8px 15px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    <i className="fas fa-times-circle me-1"></i>Stokta Yok
-                  </span>
-                ) : isLowStock ? (
-                  <span
-                    className="badge bg-warning text-dark"
-                    style={{
-                      fontSize: "0.85rem",
-                      padding: "8px 15px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    <i className="fas fa-exclamation-triangle me-1"></i>Son{" "}
-                    {stock} Adet
-                  </span>
-                ) : (
-                  <span
-                    className="badge bg-success"
-                    style={{
-                      fontSize: "0.85rem",
-                      padding: "8px 15px",
-                      borderRadius: "10px",
-                    }}
-                  >
-                    <i className="fas fa-check-circle me-1"></i>Stokta Var
-                  </span>
-                )}
-              </div>
-
-              <hr className="my-4" />
-
-              {/* Miktar Seçimi */}
-              <div className="mb-4">
-                <label className="form-label fw-semibold text-muted mb-2">
-                  Miktar
-                </label>
-                <div className="d-flex align-items-center gap-3">
-                  <div className="input-group" style={{ maxWidth: "150px" }}>
-                    <button
-                      className="btn btn-outline-secondary"
-                      type="button"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      disabled={isOutOfStock}
-                    >
-                      <i className="fas fa-minus"></i>
-                    </button>
-                    <input
-                      type="number"
-                      className="form-control text-center"
-                      value={quantity}
-                      min={1}
-                      onChange={(e) =>
-                        setQuantity(Math.max(1, Number(e.target.value)))
-                      }
-                      disabled={isOutOfStock}
-                      style={{ borderLeft: 0, borderRight: 0 }}
-                    />
-                    <button
-                      className="btn btn-outline-secondary"
-                      type="button"
-                      onClick={() => setQuantity(quantity + 1)}
-                      disabled={isOutOfStock}
-                    >
-                      <i className="fas fa-plus"></i>
-                    </button>
-                  </div>
-                  <span className="text-muted">{product.unit || "adet"}</span>
-                </div>
-              </div>
-
-              {/* Varyant Seçimi */}
-              {product.variants?.length > 0 && (
-                <div className="mb-4">
-                  <label className="form-label fw-semibold text-muted mb-2">
-                    Varyant
-                  </label>
-                  <select
-                    className="form-select"
-                    onChange={(e) => setSelectedVariant(e.target.value)}
-                    style={{ borderRadius: "10px", padding: "12px" }}
-                  >
-                    <option value="">Seçiniz</option>
-                    {product.variants.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Butonlar */}
-              <div className="d-grid gap-2">
-                <button
-                  onClick={addToCart}
-                  disabled={isOutOfStock}
-                  className="btn btn-lg text-white"
-                  style={{
-                    background: isOutOfStock
-                      ? "#ccc"
-                      : "linear-gradient(135deg, #27ae60, #2ecc71)",
-                    border: "none",
-                    borderRadius: "15px",
-                    padding: "15px",
-                    fontSize: "1.1rem",
-                    fontWeight: "600",
-                    boxShadow: isOutOfStock
-                      ? "none"
-                      : "0 4px 15px rgba(39, 174, 96, 0.3)",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  <i className="fas fa-shopping-cart me-2"></i>
-                  {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
-                </button>
-
-                <button
-                  className="btn btn-outline-secondary"
-                  style={{ borderRadius: "15px", padding: "12px" }}
-                  onClick={() => {
-                    const url = `${window.location.origin}/product/${product.id}`;
-                    const title = product.name;
-                    const text = `${product.name} - ₺${currentPrice.toFixed(
-                      2
-                    )}`;
-                    if (navigator.share) {
-                      navigator.share({ title, text, url }).catch(() => {});
-                    } else {
-                      navigator.clipboard
-                        .writeText(url)
-                        .then(() => alert("Bağlantı kopyalandı"));
-                    }
-                  }}
-                >
-                  <i className="fas fa-share-alt me-2"></i>Paylaş
-                </button>
-              </div>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => {
+                  const url = `${window.location.origin}/product/${product.id}`;
+                  if (navigator.share) {
+                    navigator.share({ title: product.name, url }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(url).then(() => alert("Bağlantı kopyalandı"));
+                  }
+                }}
+              >
+                <i className="fas fa-share-alt me-1"></i>Paylaş
+              </button>
             </div>
           </div>
         </div>

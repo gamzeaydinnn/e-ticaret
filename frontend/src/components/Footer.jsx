@@ -251,7 +251,7 @@ export default function Footer() {
             <div className="col-md-8">
               <div className="footer-bottom-links">
                 <span>
-                  Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
+                  Tüm haklar Gölköy Gurme Markete aittir.
                 </span>
                 <Link to="/gizlilik-politikasi" className="footer-bottom-link">
                   Gizlilik Politikası

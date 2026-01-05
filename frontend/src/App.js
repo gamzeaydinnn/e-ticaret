@@ -49,6 +49,7 @@ import CourierOrders from "./pages/Courier/CourierOrders";
 import Footer from "./components/Footer";
 import { GlobalToastContainer } from "./components/ToastProvider";
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
+import AdminLayout from "./components/AdminLayout";
 import { CompareProvider, useCompare } from "./contexts/CompareContext";
 import About from "./pages/About.jsx";
 import Addresses from "./pages/Addresses";
@@ -179,15 +180,15 @@ function Header() {
 
             {/* Modern Action Buttons */}
             <div className="col-md-3 col-auto ms-auto">
-              <div className="header-actions d-flex justify-content-end align-items-center gap-3">
+              <div className="header-actions d-flex justify-content-end align-items-center gap-1 gap-md-2">
                 <div className="position-relative">
                   <button
                     onClick={handleAccountClick}
-                    className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                    className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
                     title={user ? `Hoş geldin, ${user.name}` : "Giriş Yap"}
                   >
                     <div
-                      className="action-icon p-2 rounded-circle"
+                      className="action-icon p-1 p-md-2 rounded-circle"
                       style={{
                         background: user
                           ? "linear-gradient(135deg, #27ae60, #58d68d)"
@@ -200,9 +201,13 @@ function Header() {
                         className={`fas ${
                           user ? "fa-user-check" : "fa-user"
                         } text-white`}
+                        style={{ fontSize: "0.8rem" }}
                       ></i>
                     </div>
-                    <small className="text-muted fw-semibold mt-1">
+                    <small
+                      className="text-muted fw-semibold mt-1 d-none d-md-block"
+                      style={{ fontSize: "0.7rem" }}
+                    >
                       {user ? user.name.split(" ")[0] : "Giriş Yap"}
                     </small>
                   </button>
@@ -474,47 +479,56 @@ function Header() {
 
                 <button
                   onClick={() => navigate("/orders")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent"
+                  className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
                   title="Siparişlerim"
                 >
                   <div
-                    className="action-icon p-2 rounded-circle"
+                    className="action-icon p-1 p-md-2 rounded-circle"
                     style={{
                       background: "linear-gradient(135deg, #ff6b35, #ffa500)",
                       boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
                       transition: "all 0.3s ease",
                     }}
                   >
-                    <i className="fas fa-truck text-white"></i>
+                    <i
+                      className="fas fa-truck text-white"
+                      style={{ fontSize: "0.8rem" }}
+                    ></i>
                   </div>
-                  <small className="text-muted fw-semibold mt-1">
+                  <small
+                    className="text-muted fw-semibold mt-1 d-none d-md-block"
+                    style={{ fontSize: "0.7rem" }}
+                  >
                     Siparişlerim
                   </small>
                 </button>
 
                 <button
                   onClick={() => navigate("/cart")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-2 border-0 bg-transparent position-relative"
+                  className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent position-relative"
                   title="Sepetim"
                 >
                   <div
-                    className="action-icon p-2 rounded-circle position-relative"
+                    className="action-icon p-1 p-md-2 rounded-circle position-relative"
                     style={{
                       background: "linear-gradient(135deg, #27ae60, #58d68d)",
                       boxShadow: "0 2px 8px rgba(39,174,96,0.3)",
                       transition: "all 0.3s ease",
                     }}
                   >
-                    <i className="fas fa-shopping-cart text-white"></i>
+                    <i
+                      className="fas fa-shopping-cart text-white"
+                      style={{ fontSize: "0.8rem" }}
+                    ></i>
                     {cartCount > 0 && (
                       <span
                         className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                         style={{
                           background:
                             "linear-gradient(135deg, #e74c3c, #ec7063)",
-                          fontSize: "0.65rem",
-                          minWidth: "18px",
-                          height: "18px",
+                          fontSize: "0.6rem",
+                          minWidth: "16px",
+                          height: "16px",
                           animation: "pulse 2s infinite",
                         }}
                       >
@@ -522,9 +536,21 @@ function Header() {
                       </span>
                     )}
                   </div>
-                  <small className="text-muted fw-semibold mt-1">Sepetim</small>
+                  <small
+                    className="text-muted fw-semibold mt-1 d-none d-md-block"
+                    style={{ fontSize: "0.7rem" }}
+                  >
+                    Sepetim
+                  </small>
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Mobil Arama - Sadece mobilde görünür */}
+          <div className="row d-md-none mt-2">
+            <div className="col-12">
+              <SearchAutocomplete />
             </div>
           </div>
         </div>
@@ -662,9 +688,14 @@ function App() {
   const location = useLocation();
   const showGlobalFooter = location.pathname !== "/";
 
+  // Admin ve kurye sayfalarında Header'ı gizle
+  const isAdminPage = location.pathname.startsWith("/admin");
+  const isCourierPage = location.pathname.startsWith("/courier");
+  const showHeader = !isAdminPage && !isCourierPage;
+
   return (
     <div className="App">
-      <Header />
+      {showHeader && <Header />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/account" element={<AccountPage />} />
@@ -721,7 +752,9 @@ function App() {
           path="/admin/dashboard"
           element={
             <AdminGuard>
-              <Dashboard />
+              <AdminLayout>
+                <Dashboard />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -729,7 +762,9 @@ function App() {
           path="/admin/micro"
           element={
             <AdminGuard>
-              <AdminMicro />
+              <AdminLayout>
+                <AdminMicro />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -737,7 +772,9 @@ function App() {
           path="/admin/users"
           element={
             <AdminGuard>
-              <AdminUsers />
+              <AdminLayout>
+                <AdminUsers />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -745,7 +782,9 @@ function App() {
           path="/admin/orders"
           element={
             <AdminGuard>
-              <AdminOrders />
+              <AdminLayout>
+                <AdminOrders />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -753,7 +792,9 @@ function App() {
           path="/admin/products"
           element={
             <AdminGuard>
-              <AdminProducts />
+              <AdminLayout>
+                <AdminProducts />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -761,7 +802,9 @@ function App() {
           path="/admin/categories"
           element={
             <AdminGuard>
-              <AdminCategories />
+              <AdminLayout>
+                <AdminCategories />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -769,7 +812,9 @@ function App() {
           path="/admin/couriers"
           element={
             <AdminGuard>
-              <AdminCouriers />
+              <AdminLayout>
+                <AdminCouriers />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -778,7 +823,9 @@ function App() {
           path="/admin/reports"
           element={
             <AdminGuard>
-              <AdminReports />
+              <AdminLayout>
+                <AdminReports />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -786,7 +833,9 @@ function App() {
           path="/admin/coupons"
           element={
             <AdminGuard>
-              <CouponManagement />
+              <AdminLayout>
+                <CouponManagement />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -794,7 +843,9 @@ function App() {
           path="/admin/weight-reports"
           element={
             <AdminGuard>
-              <AdminWeightReports />
+              <AdminLayout>
+                <AdminWeightReports />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -802,7 +853,9 @@ function App() {
           path="/admin/campaigns"
           element={
             <AdminGuard>
-              <AdminCampaigns />
+              <AdminLayout>
+                <AdminCampaigns />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -810,7 +863,9 @@ function App() {
           path="/admin/logs/audit"
           element={
             <AdminGuard>
-              <AuditLogsPage />
+              <AdminLayout>
+                <AuditLogsPage />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -818,7 +873,9 @@ function App() {
           path="/admin/logs/errors"
           element={
             <AdminGuard>
-              <ErrorLogsPage />
+              <AdminLayout>
+                <ErrorLogsPage />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -826,7 +883,9 @@ function App() {
           path="/admin/logs/system"
           element={
             <AdminGuard>
-              <SystemLogsPage />
+              <AdminLayout>
+                <SystemLogsPage />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -834,7 +893,9 @@ function App() {
           path="/admin/logs/inventory"
           element={
             <AdminGuard>
-              <InventoryLogsPage />
+              <AdminLayout>
+                <InventoryLogsPage />
+              </AdminLayout>
             </AdminGuard>
           }
         />
@@ -844,7 +905,7 @@ function App() {
         <Route path="/courier/dashboard" element={<CourierDashboard />} />
         <Route path="/courier/orders" element={<CourierOrders />} />
       </Routes>
-      {showGlobalFooter && <Footer />}
+      {showGlobalFooter && showHeader && <Footer />}
     </div>
   );
 }
@@ -874,7 +935,10 @@ function CompareFloatingButton() {
   const location = useLocation();
 
   // Admin veya kurye sayfalarında gösterme
-  if (location.pathname.startsWith("/admin") || location.pathname.startsWith("/courier")) {
+  if (
+    location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/courier")
+  ) {
     return null;
   }
 
@@ -1708,9 +1772,7 @@ function HomePage() {
             <div className="row align-items-center">
               <div className="col-md-8">
                 <div className="footer-bottom-links">
-                  <span>
-                    Copyright ©2022 - 2024 Tüm Hakları İdol Media'ya Aittir.
-                  </span>
+                  <span>Tüm haklar Gölköy Gurme Markete aittir.</span>
                   <button
                     type="button"
                     className="footer-bottom-link btn btn-link"

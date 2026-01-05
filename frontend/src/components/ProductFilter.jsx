@@ -9,6 +9,7 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
     sortBy: "name",
     sortOrder: "asc",
   });
+  const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
     onFilterChange(filters);
@@ -16,10 +17,7 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFilters((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
   const clearFilters = () => {
@@ -34,169 +32,113 @@ const ProductFilter = ({ onFilterChange, categories = [] }) => {
   };
 
   return (
-    <div
-      className="card shadow-lg border-0 mb-4"
-      style={{
-        borderRadius: "20px",
-        background: "linear-gradient(135deg, #fff8f0 0%, #fff3e0 100%)",
-      }}
-    >
+    <div className="card shadow-sm border-0 mb-3" style={{ borderRadius: "12px" }}>
       <div
-        className="card-header text-white border-0"
-        style={{
-          background: "linear-gradient(45deg, #ff6f00, #ff8f00, #ffa000)",
-          borderTopLeftRadius: "20px",
-          borderTopRightRadius: "20px",
-          padding: "1rem 1.5rem",
-        }}
+        className="card-header bg-warning text-white border-0 d-flex justify-content-between align-items-center"
+        style={{ borderTopLeftRadius: "12px", borderTopRightRadius: "12px", padding: "0.75rem 1rem", cursor: "pointer" }}
+        onClick={() => setIsExpanded(!isExpanded)}
       >
-        <h5 className="mb-0 fw-bold">
-          <i className="fas fa-filter me-2"></i>Ürün Filtreleme
-        </h5>
+        <h6 className="mb-0 fw-bold">
+          <i className="fas fa-filter me-2"></i>Filtreler
+        </h6>
+        <button className="btn btn-sm btn-link text-white p-0" type="button">
+          <i className={`fas fa-chevron-${isExpanded ? "up" : "down"}`}></i>
+        </button>
       </div>
 
-      <div className="card-body" style={{ padding: "1.5rem" }}>
-        <div className="row g-3">
-          {/* Arama */}
-          <div className="col-md-4">
-            <label className="form-label fw-bold text-warning">
-              <i className="fas fa-search me-2"></i>Ürün Ara
-            </label>
-            <input
-              type="text"
-              name="search"
-              className="form-control border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              placeholder="Ürün adı veya açıklama..."
-              value={filters.search}
-              onChange={handleInputChange}
-            />
+      {isExpanded && (
+        <div className="card-body p-3">
+          <div className="row g-2">
+            {/* Arama */}
+            <div className="col-12 col-md-6 col-lg-3">
+              <input
+                type="text"
+                name="search"
+                className="form-control form-control-sm"
+                placeholder="Ürün ara..."
+                value={filters.search}
+                onChange={handleInputChange}
+              />
+            </div>
+
+            {/* Kategori */}
+            <div className="col-12 col-md-6 col-lg-3">
+              <select
+                name="category"
+                className="form-select form-select-sm"
+                value={filters.category}
+                onChange={handleInputChange}
+              >
+                <option value="">Tüm Kategoriler</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Fiyat */}
+            <div className="col-6 col-md-3 col-lg-2">
+              <input
+                type="number"
+                name="minPrice"
+                className="form-control form-control-sm"
+                placeholder="Min ₺"
+                value={filters.minPrice}
+                onChange={handleInputChange}
+              />
+            </div>
+
+            <div className="col-6 col-md-3 col-lg-2">
+              <input
+                type="number"
+                name="maxPrice"
+                className="form-control form-control-sm"
+                placeholder="Max ₺"
+                value={filters.maxPrice}
+                onChange={handleInputChange}
+              />
+            </div>
+
+            {/* Sıralama */}
+            <div className="col-12 col-md-6 col-lg-2">
+              <select
+                name="sortBy"
+                className="form-select form-select-sm"
+                value={filters.sortBy}
+                onChange={handleInputChange}
+              >
+                <option value="name">İsim</option>
+                <option value="price">Fiyat</option>
+                <option value="createdDate">Tarih</option>
+              </select>
+            </div>
           </div>
 
-          {/* Kategori */}
-          <div className="col-md-3">
-            <label className="form-label fw-bold text-warning">
-              <i className="fas fa-tags me-2"></i>Kategori
-            </label>
-            <select
-              name="category"
-              className="form-select border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              value={filters.category}
-              onChange={handleInputChange}
-            >
-              <option value="">Tüm Kategoriler</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="row g-2 mt-2">
+            <div className="col-12 col-md-6 col-lg-3">
+              <select
+                name="sortOrder"
+                className="form-select form-select-sm"
+                value={filters.sortOrder}
+                onChange={handleInputChange}
+              >
+                <option value="asc">A-Z / Düşük-Yüksek</option>
+                <option value="desc">Z-A / Yüksek-Düşük</option>
+              </select>
+            </div>
 
-          {/* Fiyat Aralığı */}
-          <div className="col-md-2">
-            <label className="form-label fw-bold text-warning">
-              <i className="fas fa-tag me-2"></i>Min Fiyat
-            </label>
-            <input
-              type="number"
-              name="minPrice"
-              className="form-control border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              placeholder="₺0"
-              value={filters.minPrice}
-              onChange={handleInputChange}
-            />
-          </div>
-
-          <div className="col-md-2">
-            <label className="form-label fw-bold text-warning">
-              <i className="fas fa-tag me-2"></i>Max Fiyat
-            </label>
-            <input
-              type="number"
-              name="maxPrice"
-              className="form-control border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              placeholder="₺999999"
-              value={filters.maxPrice}
-              onChange={handleInputChange}
-            />
-          </div>
-
-          {/* Sıralama */}
-          <div className="col-md-1">
-            <label className="form-label fw-bold text-warning">
-              <i className="fas fa-sort me-2"></i>Sırala
-            </label>
-            <select
-              name="sortBy"
-              className="form-select border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              value={filters.sortBy}
-              onChange={handleInputChange}
-            >
-              <option value="name">İsim</option>
-              <option value="price">Fiyat</option>
-              <option value="createdDate">Tarih</option>
-            </select>
+            <div className="col-12 col-md-6 col-lg-9 d-flex justify-content-end">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-warning"
+                onClick={clearFilters}
+              >
+                <i className="fas fa-eraser me-1"></i>Temizle
+              </button>
+            </div>
           </div>
         </div>
-
-        <div className="row mt-3">
-          <div className="col-md-3">
-            <select
-              name="sortOrder"
-              className="form-select border-0 shadow-sm"
-              style={{
-                backgroundColor: "#fff8f0",
-                borderRadius: "15px",
-                padding: "0.75rem 1rem",
-              }}
-              value={filters.sortOrder}
-              onChange={handleInputChange}
-            >
-              <option value="asc">A-Z / Düşük-Yüksek</option>
-              <option value="desc">Z-A / Yüksek-Düşük</option>
-            </select>
-          </div>
-
-          <div className="col-md-9 d-flex justify-content-end align-items-end">
-            <button
-              type="button"
-              className="btn btn-outline-warning fw-bold shadow-sm"
-              style={{
-                borderRadius: "15px",
-                padding: "0.75rem 2rem",
-              }}
-              onClick={clearFilters}
-            >
-              <i className="fas fa-eraser me-2"></i>Filtreleri Temizle
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 };

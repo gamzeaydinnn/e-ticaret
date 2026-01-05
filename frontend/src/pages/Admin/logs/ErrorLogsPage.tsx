@@ -18,14 +18,17 @@ import {
   DialogContent,
   Box,
 } from "@mui/material";
-import AdminLayout from "../../../components/AdminLayout";
 import { AdminService } from "../../../services/adminService";
 
 const ErrorLogsPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [pagination, setPagination] = useState({ page: 0, pageSize: 20, total: 0 });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    pageSize: 20,
+    total: 0,
+  });
   const [filters, setFilters] = useState({
     path: "",
     method: "",
@@ -82,7 +85,7 @@ const ErrorLogsPage = () => {
     value ? new Date(value).toLocaleString("tr-TR") : "-";
 
   return (
-    <AdminLayout>
+    <Box>
       <Typography variant="h4" gutterBottom>
         Error Logs
       </Typography>
@@ -122,7 +125,11 @@ const ErrorLogsPage = () => {
             onChange={(e) => handleFilterChange("search", e.target.value)}
             size="small"
           />
-          <Button variant="contained" onClick={fetchLogs} sx={{ whiteSpace: "nowrap" }}>
+          <Button
+            variant="contained"
+            onClick={fetchLogs}
+            sx={{ whiteSpace: "nowrap" }}
+          >
             Filtreyi Uygula
           </Button>
         </Stack>
@@ -195,13 +202,20 @@ const ErrorLogsPage = () => {
         </Box>
       )}
 
-      <Dialog open={Boolean(selectedLog)} onClose={() => setSelectedLog(null)} maxWidth="md" fullWidth>
+      <Dialog
+        open={Boolean(selectedLog)}
+        onClose={() => setSelectedLog(null)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle>Stack Trace</DialogTitle>
         <DialogContent>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{selectedLog?.stackTrace || "(boş)"}</pre>
+          <pre style={{ whiteSpace: "pre-wrap" }}>
+            {selectedLog?.stackTrace || "(boş)"}
+          </pre>
         </DialogContent>
       </Dialog>
-    </AdminLayout>
+    </Box>
   );
 };
 

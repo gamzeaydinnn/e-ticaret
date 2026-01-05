@@ -63,7 +63,9 @@ const WeightReportsPanel = () => {
     setReports(
       filter === "all"
         ? demoReports
-        : demoReports.filter((r) => r.status === filter)
+        : demoReports.filter(
+            (r) => r.status.toLowerCase() === filter.toLowerCase()
+          )
     );
     setLoading(false);
   }, [filter]);

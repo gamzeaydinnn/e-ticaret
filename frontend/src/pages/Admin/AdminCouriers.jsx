@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { CourierService } from "../../services/courierService";
-import AdminLayout from "../../components/AdminLayout";
 
 export default function AdminCouriers() {
   const [couriers, setCouriers] = useState([]);
@@ -58,19 +57,17 @@ export default function AdminCouriers() {
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ minHeight: "60vh" }}
-        >
-          <div className="spinner-border text-primary"></div>
-        </div>
-      </AdminLayout>
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ minHeight: "60vh" }}
+      >
+        <div className="spinner-border text-primary"></div>
+      </div>
     );
   }
 
   return (
-    <AdminLayout>
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold text-dark mb-1">Kurye Yönetimi</h2>
@@ -377,6 +374,6 @@ export default function AdminCouriers() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </div>
   );
 }

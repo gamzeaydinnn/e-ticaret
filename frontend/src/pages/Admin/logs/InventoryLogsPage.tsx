@@ -16,7 +16,6 @@ import {
   TablePagination,
   Chip,
 } from "@mui/material";
-import AdminLayout from "../../../components/AdminLayout";
 import { AdminService } from "../../../services/adminService";
 
 const InventoryLogsPage = () => {
@@ -90,7 +89,7 @@ const InventoryLogsPage = () => {
   );
 
   return (
-    <AdminLayout>
+    <Box>
       <Typography variant="h4" gutterBottom>
         Inventory Logs
       </Typography>
@@ -207,7 +206,7 @@ const InventoryLogsPage = () => {
           rowsPerPageOptions={[10, 20, 50, 100]}
         />
       </Paper>
-    </AdminLayout>
+    </Box>
   );
 };
 

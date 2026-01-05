@@ -19,14 +19,17 @@ import {
   DialogTitle,
   DialogContent,
 } from "@mui/material";
-import AdminLayout from "../../../components/AdminLayout";
 import { AdminService } from "../../../services/adminService";
 
 const AuditLogsPage = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [pagination, setPagination] = useState({ page: 0, pageSize: 20, total: 0 });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    pageSize: 20,
+    total: 0,
+  });
   const [filters, setFilters] = useState({
     entityType: "",
     action: "",
@@ -34,7 +37,11 @@ const AuditLogsPage = () => {
     endDate: "",
     search: "",
   });
-  const [viewer, setViewer] = useState({ open: false, payload: null, mode: "old" });
+  const [viewer, setViewer] = useState({
+    open: false,
+    payload: null,
+    mode: "old",
+  });
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -83,7 +90,8 @@ const AuditLogsPage = () => {
     setViewer({ open: true, payload: log, mode });
   };
 
-  const closeViewer = () => setViewer({ open: false, payload: null, mode: "old" });
+  const closeViewer = () =>
+    setViewer({ open: false, payload: null, mode: "old" });
 
   const renderJson = (value) => {
     if (!value) return "(boş)";
@@ -99,7 +107,7 @@ const AuditLogsPage = () => {
     value ? new Date(value).toLocaleString("tr-TR") : "-";
 
   return (
-    <AdminLayout>
+    <Box>
       <Typography variant="h4" gutterBottom>
         Audit Logs
       </Typography>
@@ -139,7 +147,11 @@ const AuditLogsPage = () => {
             onChange={(e) => handleFilterChange("search", e.target.value)}
             size="small"
           />
-          <Button variant="contained" onClick={fetchLogs} sx={{ whiteSpace: "nowrap" }}>
+          <Button
+            variant="contained"
+            onClick={fetchLogs}
+            sx={{ whiteSpace: "nowrap" }}
+          >
             Filtreyi Uygula
           </Button>
         </Stack>
@@ -247,7 +259,7 @@ const AuditLogsPage = () => {
           </pre>
         </DialogContent>
       </Dialog>
-    </AdminLayout>
+    </Box>
   );
 };
 

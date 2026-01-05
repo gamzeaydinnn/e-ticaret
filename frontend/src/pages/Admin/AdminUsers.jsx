@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from "react";
-import AdminLayout from "../../components/AdminLayout";
 import { AdminService } from "../../services/adminService";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -8,8 +7,7 @@ const ROLE_DESCRIPTIONS = {
     "Tüm sistemi yönetir. Diğer adminleri ve rolleri yönetebilir, kritik ayarları değiştirebilir.",
   Admin:
     "Ürün, kategori, kampanya, kupon, sipariş ve kullanıcı yönetimi yapabilir. Sistem ayarlarını değiştiremez.",
-  User:
-    "Normal müşteri hesabıdır. Sadece alışveriş ve kendi hesap işlemlerini yapabilir, admin paneline erişemez.",
+  User: "Normal müşteri hesabıdır. Sadece alışveriş ve kendi hesap işlemlerini yapabilir, admin paneline erişemez.",
 };
 
 const AdminUsers = () => {
@@ -153,7 +151,9 @@ const AdminUsers = () => {
           "Bu işlemi gerçekleştirmek için yetkiniz yok. Lütfen tekrar giriş yapın."
         );
       } else {
-        setCreateError("Kullanıcı eklenirken bir hata oluştu. Lütfen tekrar deneyin.");
+        setCreateError(
+          "Kullanıcı eklenirken bir hata oluştu. Lütfen tekrar deneyin."
+        );
       }
     } finally {
       setCreating(false);
@@ -192,31 +192,27 @@ const AdminUsers = () => {
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ height: "400px" }}
-        >
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Yükleniyor...</span>
-          </div>
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ height: "400px" }}
+      >
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Yükleniyor...</span>
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <AdminLayout>
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
-      </AdminLayout>
+      <div className="alert alert-danger" role="alert">
+        {error}
+      </div>
     );
   }
 
   return (
-    <AdminLayout>
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Kullanıcı Yönetimi</h2>
         {isAdminLike && (
@@ -494,7 +490,11 @@ const AdminUsers = () => {
                   >
                     İptal
                   </button>
-                  <button type="submit" className="btn btn-primary" disabled={creating}>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={creating}
+                  >
                     {creating ? "Kaydediliyor..." : "Kullanıcı Ekle"}
                   </button>
                 </div>
@@ -503,7 +503,7 @@ const AdminUsers = () => {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </div>
   );
 };
 

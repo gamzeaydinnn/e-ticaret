@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import AdminLayout from "../../components/AdminLayout";
 import { AdminService } from "../../services/adminService";
 import { CourierService } from "../../services/courierService";
 
@@ -92,19 +91,17 @@ export default function AdminOrders() {
 
   if (loading) {
     return (
-      <AdminLayout>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ minHeight: "60vh" }}
-        >
-          <div className="spinner-border text-primary"></div>
-        </div>
-      </AdminLayout>
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ minHeight: "60vh" }}
+      >
+        <div className="spinner-border text-primary"></div>
+      </div>
     );
   }
 
   return (
-    <AdminLayout>
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
           <h2 className="fw-bold text-dark mb-1">Sipariş Yönetimi</h2>
@@ -215,7 +212,7 @@ export default function AdminOrders() {
                       <span className="text-muted" title={order.address || ""}>
                         {(order.address || "").length > 30
                           ? (order.address || "").substring(0, 30) + "..."
-                          : (order.address || "")}
+                          : order.address || ""}
                       </span>
                     </td>
                     <td>
@@ -300,7 +297,7 @@ export default function AdminOrders() {
               </div>
               <div className="modal-body">
                 <div className="row">
-                    <div className="col-md-6">
+                  <div className="col-md-6">
                     <h6 className="fw-bold">Müşteri Bilgileri</h6>
                     <p>
                       <strong>Ad:</strong> {selectedOrder.customerName}
@@ -359,18 +356,24 @@ export default function AdminOrders() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(Array.isArray(selectedOrder.items) ? selectedOrder.items : []).map(
-                        (item, index) => (
-                          <tr key={index}>
-                            <td>{item.name}</td>
-                            <td>
-                              {item.quantity} {item.unit}
-                            </td>
-                            <td>{(item.price ?? 0).toFixed(2)} ₺</td>
-                            <td>{((item.quantity ?? 0) * (item.price ?? 0)).toFixed(2)} ₺</td>
-                          </tr>
-                        )
-                      )}
+                      {(Array.isArray(selectedOrder.items)
+                        ? selectedOrder.items
+                        : []
+                      ).map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.name}</td>
+                          <td>
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td>{(item.price ?? 0).toFixed(2)} ₺</td>
+                          <td>
+                            {((item.quantity ?? 0) * (item.price ?? 0)).toFixed(
+                              2
+                            )}{" "}
+                            ₺
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -408,6 +411,6 @@ export default function AdminOrders() {
           </div>
         </div>
       )}
-    </AdminLayout>
+    </div>
   );
 }

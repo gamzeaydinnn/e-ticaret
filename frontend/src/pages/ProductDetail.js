@@ -8,13 +8,13 @@ import React, { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
-import { CartService } from "../services/cartService";
 import getProductCategoryRules from "../config/productCategoryRules";
-import variantStore, { getVariantsForProduct } from "../utils/variantStore";
-import reviewService from "../services/reviewService"; // ✅ yorum servisi
-import ReviewList from "../components/ReviewList"; // ✅ yorumları listeleyen component
-import ReviewForm from "../components/ReviewForm"; // ✅ yorum formu
-import { useAuth } from "../contexts/AuthContext"; // ✅ kullanıcı giriş kontrolü
+import { getVariantsForProduct } from "../utils/variantStore";
+import reviewService from "../services/reviewService";
+import ReviewList from "../components/ReviewList";
+import ReviewForm from "../components/ReviewForm";
+import { useAuth } from "../contexts/AuthContext";
+import { useCart } from "../contexts/CartContext";
 
 export default function ProductDetail() {
   const { id } = useParams();
@@ -22,7 +22,8 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [reviews, setReviews] = useState([]);
-  const { user } = useAuth(); // kullanıcı giriş yapmış mı kontrol eder
+  const { user } = useAuth();
+  const { addToCart: ctxAddToCart } = useCart();
 
   // Ürün detayını getir
   useEffect(() => {
@@ -68,13 +69,6 @@ export default function ProductDetail() {
   // Yorum gönderilince listeyi yenile
   const handleReviewSubmitted = () => {
     fetchReviews();
-  };
-
-  const addToCart = () => {
-    // normalize to existing API wrapper
-    CartService.addItem(product.id, quantity)
-      .then(() => alert("Sepete eklendi"))
-      .catch(() => alert("Hata oluştu"));
   };
 
   const [quantity, setQuantity] = useState(1);
@@ -187,9 +181,8 @@ export default function ProductDetail() {
         );
     }
     // pass validation
-    CartService.addItem(product.id, q)
-      .then(() => alert("Sepete eklendi"))
-      .catch(() => alert("Hata oluştu"));
+    ctxAddToCart(product, q);
+    setValidationError("");
   };
 
   if (loading) {
@@ -276,17 +269,20 @@ export default function ProductDetail() {
           );
         })()}
       </Helmet>
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-4 py-md-8">
         {/* ÜRÜN DETAYI */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full rounded shadow"
-          />
-          <div>
-            <h1 className="text-2xl font-bold mb-4">{product.name}</h1>
-            <p className="mb-4">{product.description}</p>
+        <div className="row g-4 mb-4">
+          <div className="col-12 col-md-6">
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-100 rounded shadow"
+              style={{ maxHeight: "500px", objectFit: "contain" }}
+            />
+          </div>
+          <div className="col-12 col-md-6">
+            <h1 className="h3 h2-md fw-bold mb-3">{product.name}</h1>
+            <p className="mb-3 text-muted">{product.description}</p>
             {(() => {
               const basePrice = Number(product.price || 0);
               const special = Number(
@@ -306,28 +302,29 @@ export default function ProductDetail() {
 
               return (
                 <>
-                  <div className="mb-2">
+                  <div className="mb-3">
                     {hasDiscount && (
-                      <div className="mb-1">
-                        <span className="line-through text-gray-500 mr-2">
+                      <div className="mb-2">
+                        <span className="text-decoration-line-through text-muted me-2 fs-5">
                           ₺{basePrice.toFixed(2)}
                         </span>
-                        <span className="inline-block bg-red-600 text-white text-xs px-2 py-1 rounded-full">
+                        <span className="badge bg-danger rounded-pill">
                           -%{discountPct}
                         </span>
                       </div>
                     )}
-                    <div className="text-2xl font-bold text-orange-600">
+                    <div className="fs-2 fw-bold text-warning">
                       ₺{currentPrice.toFixed(2)}
                     </div>
                   </div>
                   {isOutOfStock && (
-                    <div className="text-red-600 font-semibold mb-3">
-                      Stokta Yok
+                    <div className="alert alert-danger py-2 mb-3">
+                      <i className="fas fa-times-circle me-2"></i>Stokta Yok
                     </div>
                   )}
                   {isLowStock && !isOutOfStock && (
-                    <div className="text-yellow-600 font-semibold mb-3">
+                    <div className="alert alert-warning py-2 mb-3">
+                      <i className="fas fa-exclamation-triangle me-2"></i>
                       Az Stok{" "}
                       {typeof stock === "number" && stock > 0
                         ? `(${stock} adet kaldı)`
@@ -340,23 +337,19 @@ export default function ProductDetail() {
 
             {variants.length > 0 && (
               <div className="mb-3">
-                <label className="block text-sm mb-1">Varyant</label>
+                <label className="form-label fw-semibold">
+                  <i className="fas fa-boxes me-2 text-warning"></i>Varyant
+                </label>
                 <select
-                  className="form-control"
+                  className="form-select"
                   value={selectedVariantId || ""}
                   onChange={(e) => {
                     const vid = e.target.value;
                     setSelectedVariantId(vid);
-                    const v = variants.find(
-                      (x) => String(x.id) === String(vid)
-                    );
+                    const v = variants.find((x) => String(x.id) === String(vid));
                     if (v) {
-                      // adjust price/stock locally
                       if (v.priceAdjustment) {
-                        // we don't mutate product here; just set displayed price
-                        // store original price in a ref would be better; simple approach:
-                        product.price =
-                          (product.price || 0) + (v.priceAdjustment || 0);
+                        product.price = (product.price || 0) + (v.priceAdjustment || 0);
                       }
                       if (v.quantity) setQuantity(v.quantity);
                     }
@@ -372,38 +365,83 @@ export default function ProductDetail() {
               </div>
             )}
 
-            <div className="flex items-center gap-3 mb-3">
-              <label className="block text-sm">Miktar</label>
-              <input
-                type="number"
-                step={rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="border rounded px-2 py-1"
-                style={{ width: 120 }}
-              />
-              <div className="text-sm text-gray-600">
-                {rule ? rule.unit : product.unit || "adet"}
+            <div className="row g-2 mb-3 align-items-center">
+              <div className="col-auto">
+                <label className="form-label fw-semibold mb-0">
+                  <i className="fas fa-sort-numeric-up me-2 text-warning"></i>Miktar
+                </label>
+              </div>
+              <div className="col-auto">
+                <div className="input-group" style={{ width: "140px" }}>
+                  <button
+                    className="btn btn-outline-warning"
+                    type="button"
+                    onClick={() => {
+                      const step = rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1;
+                      const newQty = Math.max((parseFloat(quantity) || 0) - step, rule?.min_quantity || step);
+                      setQuantity(newQty);
+                    }}
+                  >
+                    <i className="fas fa-minus"></i>
+                  </button>
+                  <input
+                    type="number"
+                    step={rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1}
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="form-control text-center"
+                  />
+                  <button
+                    className="btn btn-outline-warning"
+                    type="button"
+                    onClick={() => {
+                      const step = rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1;
+                      const newQty = (parseFloat(quantity) || 0) + step;
+                      if (!rule || newQty <= rule.max_quantity) {
+                        setQuantity(newQty);
+                      }
+                    }}
+                  >
+                    <i className="fas fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+              <div className="col-auto">
+                <span className="text-muted">
+                  {rule ? rule.unit : product.unit || "adet"}
+                </span>
               </div>
             </div>
 
             {rule && (
-              <div className="text-sm text-muted mb-2">
+              <div className="alert alert-info py-2 mb-3 small">
+                <i className="fas fa-info-circle me-2"></i>
                 Min: {rule.min_quantity} — Max: {rule.max_quantity} — Adım:{" "}
                 {rule.step ?? (rule.unit === "kg" ? 0.25 : 1)} {rule.unit}
               </div>
             )}
 
             {validationError && (
-              <div className="text-sm text-danger mb-2">{validationError}</div>
+              <div className="alert alert-danger py-2 mb-3">
+                <i className="fas fa-exclamation-circle me-2"></i>
+                {validationError}
+              </div>
             )}
 
-            <button
-              onClick={validateAndAdd}
-              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
-            >
-              Sepete Ekle
-            </button>
+            {(() => {
+              const stock = product.stock ?? product.stockQuantity ?? null;
+              const isOutOfStock = typeof stock === "number" && stock <= 0;
+              return (
+                <button
+                  onClick={validateAndAdd}
+                  className="btn btn-warning btn-lg w-100 fw-bold shadow"
+                  disabled={isOutOfStock}
+                >
+                  <i className="fas fa-shopping-cart me-2"></i>
+                  {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
+                </button>
+              );
+            })()}
           </div>
         </div>
 

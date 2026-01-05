@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import AdminLayout from "../../components/AdminLayout";
 import { AdminService } from "../../services/adminService";
 
 export default function Dashboard() {
@@ -17,7 +16,7 @@ export default function Dashboard() {
   const loadDashboardStats = async () => {
     try {
       setLoading(true);
-      setError(null); // Tekrar denemeden önce hatayı sıfırla
+      setError(null);
       const dashboardData = await AdminService.getDashboardStats();
       setStats(dashboardData);
     } catch (err) {
@@ -30,53 +29,45 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 1. Yüklenme durumu varsa, sadece yüklenme ekranını göster ve dur.
   if (loading) {
     return (
-      <AdminLayout>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ height: "60vh" }}
-        >
-          <div className="text-center">
-            <div
-              className="spinner-border mb-3"
-              style={{ color: "#f57c00" }}
-              role="status"
-            ></div>
-            <p className="text-muted">Dashboard yükleniyor...</p>
-          </div>
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ height: "60vh" }}
+      >
+        <div className="text-center">
+          <div
+            className="spinner-border mb-3"
+            style={{ color: "#f57c00" }}
+            role="status"
+          ></div>
+          <p className="text-muted">Dashboard yükleniyor...</p>
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
-  // 2. Hata durumu varsa, sadece hata ekranını göster ve dur.
   if (error) {
     return (
-      <AdminLayout>
-        <div className="container mt-5">
-          <div className="alert alert-danger border-0 rounded-4" role="alert">
-            <i className="fas fa-exclamation-triangle me-2"></i>
-            {error}
-            <button
-              className="btn btn-outline-danger ms-3"
-              onClick={loadDashboardStats}
-            >
-              <i className="fas fa-redo me-1"></i>Tekrar Dene
-            </button>
-          </div>
+      <div className="container mt-5">
+        <div className="alert alert-danger border-0 rounded-4" role="alert">
+          <i className="fas fa-exclamation-triangle me-2"></i>
+          {error}
+          <button
+            className="btn btn-outline-danger ms-3"
+            onClick={loadDashboardStats}
+          >
+            <i className="fas fa-redo me-1"></i>Tekrar Dene
+          </button>
         </div>
-      </AdminLayout>
+      </div>
     );
   }
 
-  // 3. Yüklenme ve hata yoksa, ana dashboard içeriğini göster.
   return (
-    <AdminLayout>
+    <div>
       <div className="container-fluid py-4">
         {/* Sayfa Başlığı (Orijinal kodunuzda bu bölüm eksikti, yapıya uygun olarak eklendi) */}
         <div className="d-flex justify-content-between align-items-center mb-4">
@@ -361,10 +352,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-
-        {/* Banner Yönetimini burada gösterebilirsin */}
-        {/* <BannerManagement /> */}
       </div>
-    </AdminLayout>
+    </div>
   );
 }
