@@ -67,196 +67,216 @@ export default function AdminCouriers() {
   }
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
+      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 px-1">
         <div>
-          <h2 className="fw-bold text-dark mb-1">Kurye Yönetimi</h2>
-          <p className="text-muted mb-0">
-            Kuryelerin durumu ve performans takibi
+          <h5 className="fw-bold text-dark mb-0" style={{ fontSize: "1rem" }}>
+            <i
+              className="fas fa-motorcycle me-2"
+              style={{ color: "#f97316" }}
+            ></i>
+            Kurye Yönetimi
+          </h5>
+          <p
+            className="text-muted mb-0 d-none d-sm-block"
+            style={{ fontSize: "0.75rem" }}
+          >
+            Durum ve performans takibi
           </p>
         </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-outline-primary">
-            <i className="fas fa-plus me-2"></i>
-            Yeni Kurye
+        <div className="d-flex gap-1">
+          <button
+            className="btn btn-outline-primary btn-sm px-2 py-1"
+            style={{ fontSize: "0.7rem" }}
+          >
+            <i className="fas fa-plus me-1"></i>Yeni
           </button>
-          <button onClick={loadCouriers} className="btn btn-outline-secondary">
-            <i className="fas fa-sync-alt me-2"></i>
-            Yenile
+          <button
+            onClick={loadCouriers}
+            className="btn btn-outline-secondary btn-sm px-2 py-1"
+            style={{ fontSize: "0.7rem" }}
+          >
+            <i className="fas fa-sync-alt"></i>
           </button>
         </div>
       </div>
 
-      {/* Özet Kartlar */}
-      <div className="row mb-4">
-        <div className="col-md-3 mb-3">
-          <div className="card border-0 shadow-sm bg-success text-white">
-            <div className="card-body text-center">
-              <div className="mb-2">
-                <i className="fas fa-user-check fs-1"></i>
-              </div>
-              <h4 className="fw-bold mb-1">
+      {/* Özet Kartlar - 2x2 mobil grid */}
+      <div className="row g-2 mb-3 px-1">
+        <div className="col-6 col-md-3">
+          <div
+            className="card border-0 shadow-sm bg-success text-white"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="card-body text-center p-2">
+              <h5 className="fw-bold mb-0">
                 {couriers.filter((c) => c.status === "active").length}
-              </h4>
-              <small>Aktif Kurye</small>
+              </h5>
+              <small style={{ fontSize: "0.65rem" }}>Aktif</small>
             </div>
           </div>
         </div>
-        <div className="col-md-3 mb-3">
-          <div className="card border-0 shadow-sm bg-warning text-white">
-            <div className="card-body text-center">
-              <div className="mb-2">
-                <i className="fas fa-clock fs-1"></i>
-              </div>
-              <h4 className="fw-bold mb-1">
+        <div className="col-6 col-md-3">
+          <div
+            className="card border-0 shadow-sm bg-warning text-white"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="card-body text-center p-2">
+              <h5 className="fw-bold mb-0">
                 {couriers.filter((c) => c.status === "busy").length}
-              </h4>
-              <small>Meşgul Kurye</small>
+              </h5>
+              <small style={{ fontSize: "0.65rem" }}>Meşgul</small>
             </div>
           </div>
         </div>
-        <div className="col-md-3 mb-3">
-          <div className="card border-0 shadow-sm bg-primary text-white">
-            <div className="card-body text-center">
-              <div className="mb-2">
-                <i className="fas fa-motorcycle fs-1"></i>
-              </div>
-              <h4 className="fw-bold mb-1">
+        <div className="col-6 col-md-3">
+          <div
+            className="card border-0 shadow-sm bg-primary text-white"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="card-body text-center p-2">
+              <h5 className="fw-bold mb-0">
                 {couriers.reduce((sum, c) => sum + c.activeOrders, 0)}
-              </h4>
-              <small>Toplam Aktif Sipariş</small>
+              </h5>
+              <small style={{ fontSize: "0.65rem" }}>Aktif Sipariş</small>
             </div>
           </div>
         </div>
-        <div className="col-md-3 mb-3">
-          <div className="card border-0 shadow-sm bg-info text-white">
-            <div className="card-body text-center">
-              <div className="mb-2">
-                <i className="fas fa-star fs-1"></i>
-              </div>
-              <h4 className="fw-bold mb-1">
+        <div className="col-6 col-md-3">
+          <div
+            className="card border-0 shadow-sm bg-info text-white"
+            style={{ borderRadius: "8px" }}
+          >
+            <div className="card-body text-center p-2">
+              <h5 className="fw-bold mb-0">
                 {(
                   couriers.reduce((sum, c) => sum + c.rating, 0) /
-                  couriers.length
+                    couriers.length || 0
                 ).toFixed(1)}
-              </h4>
-              <small>Ortalama Puan</small>
+              </h5>
+              <small style={{ fontSize: "0.65rem" }}>Ort. Puan</small>
             </div>
           </div>
         </div>
       </div>
 
       {/* Kurye Listesi */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white border-0 py-3">
-          <h5 className="fw-bold mb-0">
+      <div
+        className="card border-0 shadow-sm mx-1"
+        style={{ borderRadius: "10px" }}
+      >
+        <div className="card-header bg-white border-0 py-2 px-2 px-md-3">
+          <h6 className="fw-bold mb-0" style={{ fontSize: "0.85rem" }}>
             <i className="fas fa-users me-2 text-primary"></i>
-            Kurye Listesi ({couriers.length})
-          </h5>
+            Kuryeler ({couriers.length})
+          </h6>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive">
-            <table className="table table-hover mb-0">
+            <table
+              className="table table-sm mb-0"
+              style={{ fontSize: "0.7rem" }}
+            >
               <thead className="bg-light">
                 <tr>
-                  <th>Kurye</th>
-                  <th>İletişim</th>
-                  <th>Araç</th>
-                  <th>Durum</th>
-                  <th>Aktif Sipariş</th>
-                  <th>Bugün Teslim</th>
-                  <th>Puan</th>
-                  <th>İşlemler</th>
+                  <th className="px-1 py-2">Kurye</th>
+                  <th className="px-1 py-2 d-none d-md-table-cell">İletişim</th>
+                  <th className="px-1 py-2">Durum</th>
+                  <th className="px-1 py-2">Sipariş</th>
+                  <th className="px-1 py-2 d-none d-sm-table-cell">Puan</th>
+                  <th className="px-1 py-2">İşlem</th>
                 </tr>
               </thead>
               <tbody>
                 {couriers.map((courier) => (
                   <tr key={courier.id}>
-                    <td>
+                    <td className="px-1 py-2">
                       <div className="d-flex align-items-center">
                         <div
-                          className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
-                          style={{ width: "40px", height: "40px" }}
+                          className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-1"
+                          style={{
+                            width: "24px",
+                            height: "24px",
+                            minWidth: "24px",
+                            fontSize: "0.6rem",
+                          }}
                         >
                           <i className="fas fa-user"></i>
                         </div>
-                        <div>
-                          <div className="fw-semibold">{courier.name}</div>
-                          <small className="text-muted">
-                            {courier.location}
+                        <div className="overflow-hidden">
+                          <div
+                            className="fw-semibold text-truncate"
+                            style={{ maxWidth: "70px" }}
+                          >
+                            {courier.name}
+                          </div>
+                          <small
+                            className="text-muted d-none d-sm-block"
+                            style={{ fontSize: "0.6rem" }}
+                          >
+                            {courier.vehicle}
                           </small>
                         </div>
                       </div>
                     </td>
-                    <td>
-                      <div>
-                        <div className="text-muted small">{courier.email}</div>
-                        <div className="text-muted small">{courier.phone}</div>
+                    <td className="px-1 py-2 d-none d-md-table-cell">
+                      <div
+                        className="text-muted"
+                        style={{ fontSize: "0.65rem" }}
+                      >
+                        {courier.phone}
                       </div>
                     </td>
-                    <td>
-                      <span className="badge bg-light text-dark">
-                        {courier.vehicle}
-                      </span>
-                    </td>
-                    <td>
+                    <td className="px-1 py-2">
                       <span
                         className={`badge bg-${getStatusColor(courier.status)}`}
+                        style={{ fontSize: "0.55rem", padding: "0.2em 0.4em" }}
                       >
-                        {getStatusText(courier.status)}
+                        {getStatusText(courier.status).substring(0, 5)}
                       </span>
                     </td>
-                    <td>
-                      <span className="badge bg-primary">
+                    <td className="px-1 py-2">
+                      <span
+                        className="badge bg-primary"
+                        style={{ fontSize: "0.6rem" }}
+                      >
                         {courier.activeOrders}
                       </span>
-                    </td>
-                    <td>
-                      <span className="badge bg-success">
+                      <span
+                        className="badge bg-success ms-1 d-none d-sm-inline"
+                        style={{ fontSize: "0.6rem" }}
+                      >
                         {courier.completedToday}
                       </span>
                     </td>
-                    <td>
-                      <div className="d-flex align-items-center">
-                        <span className="me-2">{courier.rating}</span>
-                        <div className="text-warning">
-                          {[...Array(5)].map((_, i) => (
-                            <i
-                              key={i}
-                              className={`fas fa-star ${
-                                i < Math.floor(courier.rating)
-                                  ? "text-warning"
-                                  : "text-muted"
-                              }`}
-                              style={{ fontSize: "0.8rem" }}
-                            ></i>
-                          ))}
-                        </div>
-                      </div>
+                    <td className="px-1 py-2 d-none d-sm-table-cell">
+                      <span style={{ fontSize: "0.7rem" }}>
+                        {courier.rating}
+                      </span>
+                      <i
+                        className="fas fa-star text-warning ms-1"
+                        style={{ fontSize: "0.6rem" }}
+                      ></i>
                     </td>
-                    <td>
-                      <div className="d-flex gap-2">
+                    <td className="px-1 py-2">
+                      <div className="d-flex gap-1">
                         <button
                           onClick={() => {
                             setSelectedCourier(courier);
                             loadCourierPerformance(courier.id);
                           }}
-                          className="btn btn-outline-primary btn-sm"
-                          title="Performans Görüntüle"
+                          className="btn btn-outline-primary p-1"
+                          style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                          title="Performans"
                         >
                           <i className="fas fa-chart-line"></i>
                         </button>
                         <button
-                          className="btn btn-outline-secondary btn-sm"
+                          className="btn btn-outline-secondary p-1 d-none d-sm-inline-block"
+                          style={{ fontSize: "0.6rem", lineHeight: 1 }}
                           title="Düzenle"
                         >
                           <i className="fas fa-edit"></i>
-                        </button>
-                        <button
-                          className="btn btn-outline-danger btn-sm"
-                          title="Deaktif Et"
-                        >
-                          <i className="fas fa-ban"></i>
                         </button>
                       </div>
                     </td>
@@ -275,98 +295,125 @@ export default function AdminCouriers() {
           tabIndex="-1"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <div className="modal-dialog modal-xl">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
+          <div className="modal-dialog modal-dialog-centered mx-2">
+            <div className="modal-content" style={{ borderRadius: "12px" }}>
+              <div className="modal-header py-2 px-3">
+                <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
                   <i className="fas fa-chart-line me-2"></i>
-                  {selectedCourier.name} - Performans Raporu
-                </h5>
+                  {selectedCourier.name} - Performans
+                </h6>
                 <button
                   onClick={() => {
                     setSelectedCourier(null);
                     setPerformance(null);
                   }}
-                  className="btn-close"
+                  className="btn-close btn-close-sm"
                 ></button>
               </div>
-              <div className="modal-body">
+              <div
+                className="modal-body p-2 p-md-3"
+                style={{ maxHeight: "70vh", overflowY: "auto" }}
+              >
                 {loadingPerformance ? (
-                  <div className="text-center py-5">
-                    <div className="spinner-border text-primary mb-3"></div>
-                    <p>Performans verileri yükleniyor...</p>
+                  <div className="text-center py-4">
+                    <div className="spinner-border spinner-border-sm text-primary mb-2"></div>
+                    <p className="small mb-0">Yükleniyor...</p>
                   </div>
                 ) : performance ? (
-                  <div className="row">
-                    <div className="col-md-4">
-                      <div className="card border-0 bg-light">
-                        <div className="card-body text-center">
-                          <h3 className="text-primary">
-                            {performance.deliveries.total}
-                          </h3>
-                          <p className="text-muted mb-0">Toplam Teslimat</p>
+                  <div>
+                    <div className="row g-2 mb-3">
+                      <div className="col-4">
+                        <div
+                          className="card border-0 bg-light"
+                          style={{ borderRadius: "8px" }}
+                        >
+                          <div className="card-body text-center p-2">
+                            <h5 className="text-primary mb-0">
+                              {performance.deliveries.total}
+                            </h5>
+                            <small
+                              className="text-muted"
+                              style={{ fontSize: "0.6rem" }}
+                            >
+                              Toplam
+                            </small>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card border-0 bg-light">
-                        <div className="card-body text-center">
-                          <h3 className="text-success">
-                            {performance.deliveries.onTime}
-                          </h3>
-                          <p className="text-muted mb-0">Zamanında Teslimat</p>
+                      <div className="col-4">
+                        <div
+                          className="card border-0 bg-light"
+                          style={{ borderRadius: "8px" }}
+                        >
+                          <div className="card-body text-center p-2">
+                            <h5 className="text-success mb-0">
+                              {performance.deliveries.onTime}
+                            </h5>
+                            <small
+                              className="text-muted"
+                              style={{ fontSize: "0.6rem" }}
+                            >
+                              Zamanında
+                            </small>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="card border-0 bg-light">
-                        <div className="card-body text-center">
-                          <h3 className="text-warning">
-                            {performance.deliveries.delayed}
-                          </h3>
-                          <p className="text-muted mb-0">Geç Teslimat</p>
+                      <div className="col-4">
+                        <div
+                          className="card border-0 bg-light"
+                          style={{ borderRadius: "8px" }}
+                        >
+                          <div className="card-body text-center p-2">
+                            <h5 className="text-warning mb-0">
+                              {performance.deliveries.delayed}
+                            </h5>
+                            <small
+                              className="text-muted"
+                              style={{ fontSize: "0.6rem" }}
+                            >
+                              Geç
+                            </small>
+                          </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="col-12 mt-4">
-                      <h6 className="fw-bold">Bugünkü Aktiviteler</h6>
-                      <div className="timeline">
-                        {performance.timeline.map((item, index) => (
-                          <div key={index} className="d-flex mb-3">
-                            <div className="flex-shrink-0">
-                              <div
-                                className={`rounded-circle bg-${getStatusColor(
-                                  item.status
-                                )} text-white d-flex align-items-center justify-content-center`}
-                                style={{ width: "30px", height: "30px" }}
-                              >
-                                <i
-                                  className="fas fa-clock"
-                                  style={{ fontSize: "0.7rem" }}
-                                ></i>
-                              </div>
-                            </div>
-                            <div className="flex-grow-1 ms-3">
-                              <div className="d-flex justify-content-between">
-                                <span className="fw-semibold">
-                                  {item.action}
-                                </span>
-                                <small className="text-muted">
-                                  {item.time}
-                                </small>
-                              </div>
-                            </div>
+                    <h6 className="fw-bold mb-2" style={{ fontSize: "0.8rem" }}>
+                      Bugünkü Aktiviteler
+                    </h6>
+                    <div>
+                      {performance.timeline.map((item, index) => (
+                        <div
+                          key={index}
+                          className="d-flex mb-2 align-items-center"
+                        >
+                          <div
+                            className={`rounded-circle bg-${getStatusColor(
+                              item.status
+                            )} text-white d-flex align-items-center justify-content-center`}
+                            style={{
+                              width: "20px",
+                              height: "20px",
+                              minWidth: "20px",
+                              fontSize: "0.5rem",
+                            }}
+                          >
+                            <i className="fas fa-clock"></i>
                           </div>
-                        ))}
-                      </div>
+                          <div
+                            className="flex-grow-1 ms-2 d-flex justify-content-between"
+                            style={{ fontSize: "0.7rem" }}
+                          >
+                            <span>{item.action}</span>
+                            <small className="text-muted">{item.time}</small>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-5">
-                    <p className="text-muted">
-                      Performans verileri yüklenemedi.
-                    </p>
+                  <div className="text-center py-4">
+                    <p className="text-muted small mb-0">Veri yüklenemedi.</p>
                   </div>
                 )}
               </div>

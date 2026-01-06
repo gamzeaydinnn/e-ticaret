@@ -150,7 +150,7 @@ const AdminProducts = () => {
 
   if (error) {
     return (
-      <div className="alert alert-danger border-0 rounded-4" role="alert">
+      <div className="alert alert-danger border-0 rounded-3" role="alert">
         <i className="fas fa-exclamation-triangle me-2"></i>
         {error}
       </div>
@@ -159,24 +159,35 @@ const AdminProducts = () => {
 
   return (
     <div>
-      <div className="container-fluid p-4">
-        {/* Header */}
-        <div className="d-flex justify-content-between align-items-center mb-5">
+      {/* Mobil için CSS */}
+      <style>{`
+        @media (max-width: 576px) {
+          .admin-product-card img { height: 60px !important; }
+          .admin-product-card .p-2 { padding: 0.4rem !important; }
+          .admin-product-card h6 { font-size: 0.7rem !important; }
+          .admin-product-card .badge { font-size: 0.5rem !important; padding: 1px 3px !important; }
+          .admin-product-card .btn { font-size: 0.6rem !important; padding: 2px 4px !important; }
+          .admin-product-card .fw-bold { font-size: 0.7rem !important; }
+        }
+      `}</style>
+      <div className="container-fluid px-2">
+        {/* Header - Mobil Uyumlu */}
+        <div className="d-flex justify-content-between align-items-center mb-3">
           <div>
-            <h1 className="h2 mb-1 fw-bold" style={{ color: "#2d3748" }}>
-              <i className="fas fa-box me-3" style={{ color: "#f57c00" }}></i>
-              Ürün Yönetimi
-            </h1>
-            <p className="text-muted mb-0">
-              Mağaza ürünlerini düzenleyin ve yönetin
-            </p>
+            <h5
+              className="mb-0 fw-bold"
+              style={{ color: "#1e293b", fontSize: "1rem" }}
+            >
+              <i className="fas fa-box me-1" style={{ color: "#f97316" }}></i>
+              Ürünler
+            </h5>
           </div>
           <button
-            className="btn btn-lg border-0 text-white fw-semibold px-4 py-2"
+            className="btn border-0 text-white fw-medium px-2 py-1"
             style={{
-              background: "linear-gradient(135deg, #f57c00, #ff9800)",
-              borderRadius: "12px",
-              boxShadow: "0 4px 15px rgba(245, 124, 0, 0.3)",
+              background: "linear-gradient(135deg, #f97316, #fb923c)",
+              borderRadius: "6px",
+              fontSize: "0.75rem",
             }}
             onClick={() => {
               setEditingProduct(null);
@@ -189,7 +200,6 @@ const AdminProducts = () => {
                 imageUrl: "",
                 isActive: true,
               });
-              // create temporary editing id so admin can add local variants before saving
               const tempId = `temp-${Date.now()}`;
               setEditingProductId(tempId);
               setProductVariants(
@@ -198,104 +208,70 @@ const AdminProducts = () => {
               setShowModal(true);
             }}
           >
-            <i className="fas fa-plus me-2"></i>
-            Yeni Ürün
+            <i className="fas fa-plus me-1"></i>Ekle
           </button>
         </div>
 
-        {/* Products Grid */}
-        <div className="row g-3">
+        {/* Products Grid - Mobil 2'li */}
+        <div className="row g-2">
           {products.map((product) => (
-            <div key={product.id} className="col-xl-3 col-lg-4 col-md-6">
+            <div key={product.id} className="col-6 col-md-4 col-lg-3">
               <div
                 className="admin-product-card h-100"
                 style={{
-                  borderRadius: "12px",
-                  transition: "all 0.3s ease",
+                  borderRadius: "8px",
                   border: "1px solid #e2e8f0",
-                  backgroundColor: "#ffffff",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+                  backgroundColor: "#fff",
                   overflow: "hidden",
-                }}
-                onMouseEnter={(e) => {
-                  e.target.closest(".admin-product-card").style.transform =
-                    "translateY(-5px)";
-                  e.target.closest(".admin-product-card").style.boxShadow =
-                    "0 8px 25px rgba(245, 124, 0, 0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.target.closest(".admin-product-card").style.transform =
-                    "translateY(0)";
-                  e.target.closest(".admin-product-card").style.boxShadow =
-                    "0 2px 10px rgba(0,0,0,0.08)";
                 }}
               >
                 <div
                   className="position-relative"
-                  style={{
-                    overflow: "hidden",
-                    borderTopLeftRadius: "12px",
-                    borderTopRightRadius: "12px",
-                    backgroundColor: "#f8f9fa",
-                  }}
+                  style={{ backgroundColor: "#f8f9fa" }}
                 >
                   <img
                     src={product.imageUrl || "/images/placeholder.png"}
                     alt={product.name}
-                    className="card-img-top"
                     style={{
-                      height: "140px",
+                      height: "80px",
                       objectFit: "contain",
-                      objectPosition: "center",
                       width: "100%",
-                      padding: "10px",
+                      padding: "5px",
                     }}
                     onError={(e) => {
                       e.target.src = "/images/placeholder.png";
                     }}
                   />
-                  <div className="position-absolute top-0 end-0 m-2">
-                    <span
-                      className={`badge rounded-pill ${
-                        product.isActive ? "bg-success" : "bg-secondary"
-                      }`}
-                      style={{ fontSize: "0.7rem", padding: "5px 10px" }}
-                    >
-                      {product.isActive ? "Aktif" : "Pasif"}
-                    </span>
-                  </div>
+                  <span
+                    className={`badge position-absolute top-0 end-0 m-1 ${
+                      product.isActive ? "bg-success" : "bg-secondary"
+                    }`}
+                    style={{ fontSize: "0.55rem", padding: "2px 5px" }}
+                  >
+                    {product.isActive ? "Aktif" : "Pasif"}
+                  </span>
                 </div>
 
-                <div className="card-body p-3">
-                  <div className="d-flex justify-content-between align-items-start mb-2">
-                    <h5
-                      className="card-title fw-bold mb-0"
-                      style={{ color: "#2d3748", fontSize: "1rem" }}
-                    >
-                      {product.name}
-                    </h5>
-                    <small
-                      className="badge bg-light text-muted"
-                      style={{ fontSize: "0.7rem" }}
-                    >
-                      #{product.id}
-                    </small>
-                  </div>
-
-                  <p className="text-muted mb-2" style={{ fontSize: "0.8rem" }}>
-                    {product.categoryName || "Kategori Yok"}
+                <div className="p-2">
+                  <h6
+                    className="fw-bold mb-1 text-truncate"
+                    style={{ fontSize: "0.75rem", color: "#2d3748" }}
+                  >
+                    {product.name}
+                  </h6>
+                  <p
+                    className="text-muted mb-1 text-truncate"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    {product.categoryName || "-"}
                   </p>
-
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span
                       className="fw-bold"
-                      style={{ color: "#f57c00", fontSize: "1.1rem" }}
+                      style={{ color: "#f57c00", fontSize: "0.8rem" }}
                     >
-                      ₺
-                      {product.price?.toLocaleString("tr-TR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </div>
+                      ₺{product.price?.toFixed(2)}
+                    </span>
                     <span
                       className={`badge ${
                         product.stock > 10
@@ -304,24 +280,22 @@ const AdminProducts = () => {
                           ? "bg-warning"
                           : "bg-danger"
                       }`}
-                      style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                      style={{ fontSize: "0.55rem", padding: "2px 4px" }}
                     >
-                      Stok: {product.stock || 0}
+                      {product.stock}
                     </span>
                   </div>
-
-                  <div className="d-flex gap-2">
+                  <div className="d-flex gap-1">
                     <button
                       className="btn btn-outline-primary btn-sm flex-fill"
-                      style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
                       onClick={() => handleEdit(product)}
                     >
-                      <i className="fas fa-edit me-1"></i>
-                      Düzenle
+                      <i className="fas fa-edit"></i>
                     </button>
                     <button
                       className="btn btn-outline-danger btn-sm"
-                      style={{ fontSize: "0.8rem", padding: "6px 10px" }}
+                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
                       onClick={() => handleDelete(product.id)}
                     >
                       <i className="fas fa-trash"></i>
@@ -492,10 +466,10 @@ const AdminProducts = () => {
 
                       <div className="col-12">
                         <label className="form-label fw-semibold mb-2">
-                          Ürün Resmi URL
+                          Ürün Resmi
                         </label>
                         <input
-                          type="url"
+                          type="text"
                           className="form-control border-0 py-3"
                           style={{
                             background: "rgba(245, 124, 0, 0.05)",
@@ -508,7 +482,7 @@ const AdminProducts = () => {
                               imageUrl: e.target.value,
                             })
                           }
-                          placeholder="https://example.com/image.jpg"
+                          placeholder="/images/urun.jpg veya https://..."
                         />
                       </div>
 

@@ -1,5 +1,7 @@
 // src/services/productService.js
 import api from "./api";
+import { shouldUseMockData } from "../config/apiConfig";
+import mockDataStore from "./mockDataStore";
 
 const mapProduct = (p = {}) => {
   const basePrice = p.price ?? p.unitPrice ?? 0;
@@ -37,21 +39,34 @@ const mapProduct = (p = {}) => {
     stock,
     stockQuantity: stock,
     description: p.description || "",
+    isActive: p.isActive !== false,
   };
 };
 
 export const ProductService = {
   // Public endpoints (mapped shape)
   list: async (query = "") => {
+    // Mock data kullanılıyorsa mockDataStore'dan al
+    if (shouldUseMockData()) {
+      const items = mockDataStore.getProducts();
+      return items.map(mapProduct);
+    }
     const url = `/api/products${query}`;
     const data = await api.get(url);
     const items = Array.isArray(data) ? data : data?.data || [];
     return items.map(mapProduct);
   },
   get: async (id) => {
+    if (shouldUseMockData()) {
+      const product = mockDataStore.getProductById(id);
+      return product ? mapProduct(product) : null;
+    }
     const data = await api.get(`/api/products/${id}`);
     return mapProduct(data);
   },
+  
+  // Subscribe to product changes (for real-time updates)
+  subscribe: (callback) => mockDataStore.subscribe("products", callback),
 
   // Admin endpoints (kept for compatibility)
   createAdmin: (formData) => api.post(`/api/Admin/products`, formData),

@@ -67,205 +67,175 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
-      <div className="container-fluid py-4">
-        {/* Sayfa Başlığı (Orijinal kodunuzda bu bölüm eksikti, yapıya uygun olarak eklendi) */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h2 className="fw-bold mb-1" style={{ color: "#2d3748" }}>
-              Yönetim Paneli
-            </h2>
-            <p className="text-muted mb-0">
-              Sistemin genel durumu ve son aktiviteler
-            </p>
-          </div>
-          <div className="text-end">
-            <small className="text-muted d-block">Son güncelleme</small>
-            <small className="fw-semibold" style={{ color: "#f57c00" }}>
-              {new Date().toLocaleString("tr-TR")}
-            </small>
-          </div>
-        </div>
-
+    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
+      <div className="container-fluid px-2 px-md-3">
         {/* Modern Stats Cards */}
-        <div className="row g-4 mb-5">
+        <div className="row g-2 g-md-3 mb-3 mb-md-4">
           {/* Kullanıcılar */}
-          <div className="col-xl-3 col-md-6">
+          <div className="col-6 col-xl-3">
             <div
-              className="card border-0 h-100 position-relative overflow-hidden"
+              className="card border-0 h-100"
               style={{
-                borderRadius: "20px",
+                borderRadius: "10px",
                 background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                 color: "white",
-                boxShadow: "0 10px 30px rgba(102, 126, 234, 0.3)",
-                transition: "all 0.3s ease",
+                boxShadow: "0 4px 15px rgba(102, 126, 234, 0.25)",
               }}
             >
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <p
-                      className="mb-1 opacity-75 fw-semibold text-uppercase"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      Kullanıcılar
-                    </p>
-                    <h3 className="mb-0 fw-bold">{stats.totalUsers}</h3>
-                  </div>
-                  <i className="fas fa-users fa-2x opacity-75"></i>
-                </div>
+              <div className="card-body p-2 p-md-3">
+                <p
+                  className="mb-0 opacity-75 text-uppercase"
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  Kullanıcılar
+                </p>
+                <h5 className="mb-0 fw-bold">{stats.totalUsers}</h5>
               </div>
             </div>
           </div>
 
           {/* Ürünler */}
-          <div className="col-xl-3 col-md-6">
+          <div className="col-6 col-xl-3">
             <div
-              className="card border-0 h-100 position-relative overflow-hidden"
+              className="card border-0 h-100"
               style={{
-                borderRadius: "20px",
+                borderRadius: "10px",
                 background: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
                 color: "white",
-                boxShadow: "0 10px 30px rgba(17, 153, 142, 0.3)",
-                transition: "all 0.3s ease",
+                boxShadow: "0 4px 15px rgba(17, 153, 142, 0.25)",
               }}
             >
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <p
-                      className="mb-1 opacity-75 fw-semibold text-uppercase"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      Ürünler
-                    </p>
-                    <h3 className="mb-0 fw-bold">{stats.totalProducts}</h3>
-                  </div>
-                  <i className="fas fa-box fa-2x opacity-75"></i>
-                </div>
+              <div className="card-body p-2 p-md-3">
+                <p
+                  className="mb-0 opacity-75 text-uppercase"
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  Ürünler
+                </p>
+                <h5 className="mb-0 fw-bold">{stats.totalProducts}</h5>
               </div>
             </div>
           </div>
 
           {/* Siparişler */}
-          <div className="col-xl-3 col-md-6">
+          <div className="col-6 col-xl-3">
             <div
-              className="card border-0 h-100 position-relative overflow-hidden"
+              className="card border-0 h-100"
               style={{
-                borderRadius: "20px",
+                borderRadius: "10px",
                 background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
                 color: "white",
-                boxShadow: "0 10px 30px rgba(240, 147, 251, 0.3)",
-                transition: "all 0.3s ease",
+                boxShadow: "0 4px 15px rgba(240, 147, 251, 0.25)",
               }}
             >
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <p
-                      className="mb-1 opacity-75 fw-semibold text-uppercase"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      Siparişler
-                    </p>
-                    <h3 className="mb-0 fw-bold">{stats.totalOrders}</h3>
-                  </div>
-                  <i className="fas fa-shopping-cart fa-2x opacity-75"></i>
-                </div>
+              <div className="card-body p-2 p-md-3">
+                <p
+                  className="mb-0 opacity-75 text-uppercase"
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  Siparişler
+                </p>
+                <h5 className="mb-0 fw-bold">{stats.totalOrders}</h5>
               </div>
             </div>
           </div>
 
           {/* Toplam Gelir */}
-          <div className="col-xl-3 col-md-6">
+          <div className="col-6 col-xl-3">
             <div
-              className="card border-0 h-100 position-relative overflow-hidden"
+              className="card border-0 h-100"
               style={{
-                borderRadius: "20px",
-                background: "linear-gradient(135deg, #f57c00 0%, #ff9800 100%)",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
                 color: "white",
-                boxShadow: "0 10px 30px rgba(245, 124, 0, 0.3)",
-                transition: "all 0.3s ease",
+                boxShadow: "0 4px 15px rgba(249, 115, 22, 0.25)",
               }}
             >
-              <div className="card-body p-4">
-                <div className="d-flex align-items-center justify-content-between">
-                  <div>
-                    <p
-                      className="mb-1 opacity-75 fw-semibold text-uppercase"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      Toplam Gelir
-                    </p>
-                    <h3 className="mb-0 fw-bold">
-                      ₺
-                      {stats.totalRevenue?.toLocaleString("tr-TR", {
-                        minimumFractionDigits: 2,
-                      })}
-                    </h3>
-                  </div>
-                  <i className="fas fa-lira-sign fa-2x opacity-75"></i>
-                </div>
+              <div className="card-body p-2 p-md-3">
+                <p
+                  className="mb-0 opacity-75 text-uppercase"
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  Toplam Gelir
+                </p>
+                <h5 className="mb-0 fw-bold" style={{ fontSize: "1rem" }}>
+                  ₺
+                  {stats.totalRevenue?.toLocaleString("tr-TR", {
+                    minimumFractionDigits: 0,
+                  })}
+                </h5>
               </div>
             </div>
           </div>
         </div>
 
         {/* Son Siparişler ve En Çok Satan Ürünler */}
-        <div className="row g-4">
+        <div className="row g-2 g-md-3">
           {/* Son Siparişler */}
-          <div className="col-lg-8">
+          <div className="col-12 col-lg-8">
             <div
               className="card border-0 shadow-sm"
-              style={{ borderRadius: "20px" }}
+              style={{ borderRadius: "10px" }}
             >
-              <div className="card-header bg-transparent border-0 p-4 pb-0">
-                <h5
+              <div className="card-header bg-transparent border-0 p-2 p-md-3 pb-0">
+                <h6
                   className="card-title mb-0 fw-bold"
-                  style={{ color: "#2d3748" }}
+                  style={{ color: "#1e293b", fontSize: "0.9rem" }}
                 >
                   <i
                     className="fas fa-clock me-2"
-                    style={{ color: "#f57c00" }}
+                    style={{ color: "#f97316" }}
                   ></i>
                   Son Siparişler
-                </h5>
+                </h6>
               </div>
-              <div className="card-body p-4">
+              <div className="card-body p-2 p-md-3">
                 {stats.recentOrders?.length > 0 ? (
-                  <div className="table-responsive">
-                    <table className="table table-hover">
+                  <div
+                    className="table-responsive"
+                    style={{ margin: "0 -0.25rem" }}
+                  >
+                    <table
+                      className="table table-sm mb-0"
+                      style={{ fontSize: "0.75rem" }}
+                    >
                       <thead>
-                        <tr style={{ borderBottom: "2px solid #f8f9fa" }}>
-                          <th className="fw-bold text-muted border-0">
+                        <tr style={{ borderBottom: "2px solid #f1f5f9" }}>
+                          <th className="fw-semibold text-muted border-0 px-1">
                             Müşteri
                           </th>
-                          <th className="fw-bold text-muted border-0">Tutar</th>
-                          <th className="fw-bold text-muted border-0">Durum</th>
-                          <th className="fw-bold text-muted border-0">Tarih</th>
+                          <th className="fw-semibold text-muted border-0 px-1">
+                            Tutar
+                          </th>
+                          <th className="fw-semibold text-muted border-0 px-1">
+                            Durum
+                          </th>
+                          <th className="fw-semibold text-muted border-0 px-1 d-none d-sm-table-cell">
+                            Tarih
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {stats.recentOrders.map((order) => (
-                          <tr
-                            key={order.id}
-                            style={{ borderBottom: "1px solid #f8f9fa" }}
-                          >
-                            <td className="fw-semibold border-0">
+                          <tr key={order.id}>
+                            <td
+                              className="fw-medium border-0 px-1 text-truncate"
+                              style={{ maxWidth: "80px" }}
+                            >
                               {order.customerName}
                             </td>
-                            <td className="border-0">
+                            <td className="border-0 px-1">
                               <span
                                 className="fw-bold"
-                                style={{ color: "#f57c00" }}
+                                style={{ color: "#f97316" }}
                               >
                                 ₺
                                 {order.amount?.toLocaleString("tr-TR", {
-                                  minimumFractionDigits: 2,
+                                  minimumFractionDigits: 0,
                                 })}
                               </span>
                             </td>
-                            <td className="border-0">
+                            <td className="border-0 px-1">
                               <span
                                 className={`badge rounded-pill ${
                                   order.status === "Completed"
@@ -274,15 +244,19 @@ export default function Dashboard() {
                                     ? "bg-warning"
                                     : "bg-info"
                                 }`}
+                                style={{
+                                  fontSize: "0.6rem",
+                                  padding: "0.2em 0.5em",
+                                }}
                               >
                                 {order.status === "Completed"
-                                  ? "Tamamlandı"
+                                  ? "Tamam"
                                   : order.status === "Processing"
-                                  ? "İşleniyor"
-                                  : "Kargoda"}
+                                  ? "İşlem"
+                                  : "Kargo"}
                               </span>
                             </td>
-                            <td className="text-muted border-0">
+                            <td className="text-muted border-0 px-1 d-none d-sm-table-cell">
                               {order.date}
                             </td>
                           </tr>
@@ -291,9 +265,11 @@ export default function Dashboard() {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-center py-4">
-                    <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
-                    <p className="text-muted">Henüz sipariş bulunmuyor.</p>
+                  <div className="text-center py-3">
+                    <i className="fas fa-inbox fa-2x text-muted mb-2"></i>
+                    <p className="text-muted small mb-0">
+                      Henüz sipariş bulunmuyor.
+                    </p>
                   </div>
                 )}
               </div>
@@ -301,41 +277,48 @@ export default function Dashboard() {
           </div>
 
           {/* En Çok Satan Ürünler */}
-          <div className="col-lg-4">
+          <div className="col-12 col-lg-4">
             <div
               className="card border-0 shadow-sm"
-              style={{ borderRadius: "20px" }}
+              style={{ borderRadius: "10px" }}
             >
-              <div className="card-header bg-transparent border-0 p-4 pb-0">
-                <h5
+              <div className="card-header bg-transparent border-0 p-2 p-md-3 pb-0">
+                <h6
                   className="card-title mb-0 fw-bold"
-                  style={{ color: "#2d3748" }}
+                  style={{ color: "#1e293b", fontSize: "0.9rem" }}
                 >
                   <i
                     className="fas fa-trophy me-2"
-                    style={{ color: "#f57c00" }}
+                    style={{ color: "#f97316" }}
                   ></i>
-                  En Çok Satan Ürünler
-                </h5>
+                  En Çok Satan
+                </h6>
               </div>
-              <div className="card-body p-4">
+              <div className="card-body p-2 p-md-3">
                 {stats.topProducts?.length > 0 ? (
                   <div>
                     {stats.topProducts.map((product, index) => (
                       <div
                         key={index}
-                        className="d-flex align-items-center mb-3 pb-3"
+                        className="d-flex align-items-center py-1"
                         style={{
                           borderBottom:
                             index !== stats.topProducts.length - 1
-                              ? "1px solid #f8f9fa"
+                              ? "1px solid #f1f5f9"
                               : "none",
                         }}
                       >
-                        {/* Bu bölüm orijinal kodda eksikti, örnek bir yapı eklendi */}
-                        <div className="flex-grow-1">
-                          <h6 className="mb-0 fw-semibold">{product.name}</h6>
-                          <small className="text-muted">
+                        <div className="flex-grow-1 overflow-hidden">
+                          <p
+                            className="mb-0 fw-medium text-truncate"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            {product.name}
+                          </p>
+                          <small
+                            className="text-muted"
+                            style={{ fontSize: "0.7rem" }}
+                          >
                             {product.sales} satış
                           </small>
                         </div>
@@ -343,9 +326,9 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-4">
-                    <i className="fas fa-chart-pie fa-3x text-muted mb-3"></i>
-                    <p className="text-muted">Veri bulunmuyor.</p>
+                  <div className="text-center py-3">
+                    <i className="fas fa-chart-pie fa-2x text-muted mb-2"></i>
+                    <p className="text-muted small mb-0">Veri bulunmuyor.</p>
                   </div>
                 )}
               </div>

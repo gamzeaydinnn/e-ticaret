@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminDashboard from "../pages/Admin/Dashboard";
 import AdminProducts from "../pages/Admin/AdminProducts";
+import AdminCategories from "../pages/Admin/AdminCategories";
 import AdminOrders from "../pages/Admin/AdminOrders";
 import AdminUsers from "../pages/Admin/AdminUsers";
 import CouponManagement from "../pages/Admin/CouponManagement";
@@ -101,168 +102,288 @@ function AdminPanel() {
   }
 
   const sidebarItems = [
-    { id: "dashboard", icon: "📊", label: "Dashboard", color: "orange" },
-    { id: "products", icon: "📦", label: "Ürünler", color: "orange" },
-    { id: "orders", icon: "🛍️", label: "Siparişler", color: "orange" },
-    { id: "users", icon: "👥", label: "Kullanıcılar", color: "orange" },
-    { id: "coupons", icon: "🏷️", label: "Kuponlar", color: "orange" },
-    {
-      id: "weights",
-      icon: "⚖️",
-      label: "Ağırlık Raporları",
-      color: "purple",
-      badge: 3,
-    },
+    { id: "dashboard", icon: "fas fa-chart-pie", label: "Dashboard" },
+    { id: "products", icon: "fas fa-box", label: "Ürünler" },
+    { id: "categories", icon: "fas fa-tags", label: "Kategoriler" },
+    { id: "orders", icon: "fas fa-shopping-bag", label: "Siparişler" },
+    { id: "users", icon: "fas fa-users", label: "Kullanıcılar" },
+    { id: "coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
+    { id: "weights", icon: "fas fa-balance-scale", label: "Ağırlık Raporları", color: "purple" },
   ];
 
   return (
-    <div className="d-flex" style={{ minHeight: "100vh" }}>
+    <div className="d-flex admin-panel-root" style={{ minHeight: "100vh" }}>
       <style>{`
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7); }
-          50% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(255, 107, 107, 0); }
+        .admin-sidebar {
+          width: 240px;
+          min-width: 240px;
+          background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+          color: white;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 2px 0 15px rgba(0,0,0,0.1);
         }
-        @keyframes slideIn {
-          from { transform: translateX(-10px); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
+        .admin-logo {
+          padding: 1.25rem;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
-        .menu-item-hover:hover {
-          transform: translateX(5px);
-          background: rgba(255, 255, 255, 0.15) !important;
+        .admin-logo-icon {
+          width: 36px;
+          height: 36px;
+          background: linear-gradient(135deg, #f97316, #fb923c);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.1rem;
         }
-        .weight-menu-active {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-          box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-          border-left: 4px solid #fff !important;
+        .admin-logo-text {
+          font-weight: 700;
+          font-size: 1.1rem;
+          color: #fff;
         }
-        .weight-menu-hover:hover {
-          background: rgba(102, 126, 234, 0.2) !important;
+        .admin-logo-sub {
+          font-size: 0.7rem;
+          color: rgba(255,255,255,0.5);
+          margin-top: 2px;
+        }
+        .admin-user-info {
+          padding: 1rem 1.25rem;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .admin-user-avatar {
+          width: 38px;
+          height: 38px;
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1rem;
+          font-weight: 600;
+          color: white;
+        }
+        .admin-user-name {
+          font-weight: 600;
+          font-size: 0.9rem;
+          color: #fff;
+        }
+        .admin-user-role {
+          font-size: 0.7rem;
+          color: rgba(255,255,255,0.5);
+        }
+        .admin-nav {
+          flex: 1;
+          padding: 0.75rem;
+          overflow-y: auto;
+        }
+        .admin-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0.7rem 0.9rem;
+          border-radius: 8px;
+          border: none;
+          background: transparent;
+          color: rgba(255,255,255,0.7);
+          font-size: 0.85rem;
+          font-weight: 500;
+          width: 100%;
+          text-align: left;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 2px;
+        }
+        .admin-nav-item:hover {
+          background: rgba(255,255,255,0.08);
+          color: #fff;
+        }
+        .admin-nav-item.active {
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          color: #fff;
+          box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+        }
+        .admin-nav-item.active.purple {
+          background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+          box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+        .admin-nav-icon {
+          font-size: 1rem;
+          width: 22px;
+          text-align: center;
+        }
+        .admin-logout-section {
+          padding: 1rem;
+          border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .admin-logout-btn {
+          width: 100%;
+          padding: 0.6rem;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.2);
+          background: transparent;
+          color: rgba(255,255,255,0.7);
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .admin-logout-btn:hover {
+          background: rgba(239, 68, 68, 0.15);
+          border-color: #ef4444;
+          color: #ef4444;
+        }
+        .admin-content {
+          flex: 1;
+          background: #f1f5f9;
+          overflow-y: auto;
+        }
+        .admin-header {
+          background: #fff;
+          padding: 1rem 1.5rem;
+          border-bottom: 1px solid #e2e8f0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .admin-header-title {
+          font-weight: 600;
+          font-size: 1.1rem;
+          color: #1e293b;
+        }
+        .admin-header-time {
+          font-size: 0.8rem;
+          color: #64748b;
+        }
+        .admin-main {
+          padding: 1.5rem;
+        }
+        @media (max-width: 768px) {
+          .admin-panel-root {
+            flex-direction: column;
+          }
+          .admin-sidebar {
+            width: 100%;
+            min-width: 0;
+          }
+          .admin-content {
+            width: 100%;
+          }
+          .admin-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+          }
+          .admin-main {
+            padding: 1rem;
+          }
+          .admin-users-header h2 {
+            font-size: 1.25rem;
+          }
+          .admin-users-actions,
+          .admin-users-actions .btn {
+            width: 100%;
+          }
+          .admin-users-page .table-responsive {
+            overflow-x: visible;
+          }
+          .admin-users-page .admin-users-table thead {
+            display: none;
+          }
+          .admin-users-page .admin-users-table tbody tr {
+            display: block;
+            margin-bottom: 0.75rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.75rem;
+            background: #fff;
+          }
+          .admin-users-page .admin-users-table tbody td {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.35rem 0;
+            border: 0;
+          }
+          .admin-users-page .admin-users-table tbody td::before {
+            content: attr(data-label);
+            font-weight: 600;
+            color: #475569;
+            padding-right: 1rem;
+          }
+          .admin-users-page .admin-users-action-btn {
+            width: 100%;
+          }
         }
       `}</style>
-      <div
-        className="sidebar"
-        style={{
-          width: "260px",
-          background: "linear-gradient(180deg, #2d3748 0%, #1a202c 100%)",
-          color: "white",
-          boxShadow: "4px 0 20px rgba(0,0,0,0.15)",
-        }}
-      >
-        <div
-          className="p-4 border-bottom"
-          style={{ borderColor: "rgba(255,255,255,0.1)" }}
-        >
-          <h4 className="fw-bold mb-0 d-flex align-items-center">
-            <span
-              style={{
-                background: "linear-gradient(135deg, #ff6f00, #ff9800)",
-                padding: "8px 12px",
-                borderRadius: "8px",
-                marginRight: "10px",
-              }}
+      
+      {/* Sidebar */}
+      <div className="admin-sidebar">
+        {/* Logo */}
+        <div className="admin-logo">
+          <div className="admin-logo-icon"><i className="fas fa-shield-alt"></i></div>
+          <div>
+            <div className="admin-logo-text">Admin Panel</div>
+            <div className="admin-logo-sub">Yönetim Merkezi</div>
+          </div>
+        </div>
+        
+        {/* User Info */}
+        <div className="admin-user-info">
+          <div className="admin-user-avatar">A</div>
+          <div>
+            <div className="admin-user-name">Admin User</div>
+            <div className="admin-user-role">Yönetici</div>
+          </div>
+        </div>
+        
+        {/* Navigation */}
+        <nav className="admin-nav">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              className={`admin-nav-item ${activeTab === item.id ? 'active' : ''} ${item.color === 'purple' ? 'purple' : ''}`}
+              onClick={() => setActiveTab(item.id)}
             >
-              🛡️
-            </span>
-            Admin Panel
-          </h4>
-        </div>
-        <div className="p-3">
-          <nav className="nav flex-column">
-            {sidebarItems.map((item, index) => (
-              <button
-                key={item.id}
-                className={`nav-link text-white border-0 rounded mb-2 p-3 position-relative menu-item-hover ${
-                  item.color === "purple" && activeTab !== item.id
-                    ? "weight-menu-hover"
-                    : ""
-                } ${
-                  activeTab === item.id && item.color === "purple"
-                    ? "weight-menu-active"
-                    : ""
-                }`}
-                onClick={() => setActiveTab(item.id)}
-                style={{
-                  backgroundColor:
-                    activeTab === item.id && item.color === "orange"
-                      ? "rgba(255, 140, 0, 0.3)"
-                      : "transparent",
-                  textAlign: "left",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  borderLeft:
-                    activeTab === item.id && item.color === "orange"
-                      ? "4px solid #ff8f00"
-                      : "4px solid transparent",
-                  fontWeight: activeTab === item.id ? "600" : "400",
-                  animation: `slideIn 0.3s ease-out ${index * 0.05}s both`,
-                }}
-              >
-                <span
-                  className="me-2"
-                  style={{
-                    fontSize: "1.1rem",
-                    filter:
-                      activeTab === item.id
-                        ? "drop-shadow(0 0 8px rgba(255,255,255,0.4))"
-                        : "none",
-                  }}
-                >
-                  {item.icon}
-                </span>
-                <span style={{ fontSize: "0.92rem" }}>{item.label}</span>
-                {item.badge && (
-                  <span
-                    style={{
-                      position: "absolute",
-                      right: "12px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background:
-                        "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
-                      color: "white",
-                      fontSize: "0.7rem",
-                      fontWeight: "700",
-                      padding: "3px 7px",
-                      borderRadius: "12px",
-                      animation: "pulse 2s infinite",
-                      minWidth: "24px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="mt-auto p-4">
-          <button
-            className="btn btn-outline-light w-100 py-2"
-            onClick={handleLogout}
-            style={{
-              borderRadius: "8px",
-              fontWeight: "600",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = "rgba(255, 140, 0, 0.2)";
-              e.target.style.borderColor = "#ff8f00";
-              e.target.style.transform = "translateY(-2px)";
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = "transparent";
-              e.target.style.borderColor = "rgba(255,255,255,0.5)";
-              e.target.style.transform = "translateY(0)";
-            }}
-          >
-            🚪 Çıkış Yap
+              <i className={`admin-nav-icon ${item.icon}`}></i>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        
+        {/* Logout */}
+        <div className="admin-logout-section">
+          <button className="admin-logout-btn" onClick={handleLogout}>
+            <i className="fas fa-sign-out-alt"></i>
+            <span>Çıkış Yap</span>
           </button>
         </div>
       </div>
-      <div className="flex-grow-1" style={{ background: "#f8f9fa" }}>
-        <div className="p-4">
+      
+      {/* Content */}
+      <div className="admin-content">
+        <div className="admin-header">
+          <div className="admin-header-title">
+            {sidebarItems.find(i => i.id === activeTab)?.label || 'Dashboard'}
+          </div>
+          <div className="admin-header-time">
+            {new Date().toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </div>
+        </div>
+        <div className="admin-main">
           {activeTab === "dashboard" && <AdminDashboard />}
           {activeTab === "products" && <AdminProducts />}
+          {activeTab === "categories" && <AdminCategories />}
           {activeTab === "orders" && <AdminOrders />}
           {activeTab === "users" && <AdminUsers />}
           {activeTab === "coupons" && <CouponManagement />}

@@ -212,13 +212,15 @@ const AdminUsers = () => {
   }
 
   return (
-    <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div className="admin-users-page">
+      <div className="admin-users-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
         <h2>Kullanıcı Yönetimi</h2>
         {isAdminLike && (
-          <button className="btn btn-primary" onClick={openCreateModal}>
-            Yeni Kullanıcı Ekle
-          </button>
+          <div className="admin-users-actions">
+            <button className="btn btn-primary" onClick={openCreateModal}>
+              Yeni Kullanıcı Ekle
+            </button>
+          </div>
         )}
       </div>
 
@@ -228,7 +230,7 @@ const AdminUsers = () => {
         </div>
         <div className="card-body">
           <div className="table-responsive">
-            <table className="table table-striped align-middle">
+            <table className="table table-striped align-middle admin-users-table">
               <thead>
                 <tr>
                   <th>ID</th>
@@ -241,13 +243,13 @@ const AdminUsers = () => {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.id}</td>
-                    <td>
+                    <td data-label="ID">{u.id}</td>
+                    <td data-label="Ad Soyad">
                       {u.fullName ||
                         `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()}
                     </td>
-                    <td>{u.email}</td>
-                    <td>
+                    <td data-label="Email">{u.email}</td>
+                    <td data-label="Rol">
                       <span
                         className={`badge ${
                           u.role === "SuperAdmin"
@@ -260,10 +262,10 @@ const AdminUsers = () => {
                         {u.role === "User" ? "Kullanıcı" : u.role}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="İşlemler">
                       {canEditUserRole(u) && (
                         <button
-                          className="btn btn-sm btn-outline-primary"
+                          className="btn btn-sm btn-outline-primary admin-users-action-btn"
                           onClick={() => openRoleModal(u)}
                         >
                           Rolü Düzenle

@@ -35,7 +35,7 @@ import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminWeightReports from "./pages/Admin/AdminWeightReports";
-import CouponManagement from "./pages/Admin/CouponManagement";
+import PosterManagement from "./pages/Admin/PosterManagement";
 import Dashboard from "./pages/Admin/Dashboard";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
@@ -78,6 +78,8 @@ import ShippingInfo from "./pages/ShippingInfo.jsx";
 import Sustainability from "./pages/Sustainability.jsx";
 import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
+import mockDataStore from "./services/mockDataStore";
+import { shouldUseMockData } from "./config/apiConfig";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -86,6 +88,19 @@ function Header() {
   const { user, logout } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  // Kategorileri yükle
+  React.useEffect(() => {
+    if (shouldUseMockData()) {
+      setCategories(mockDataStore.getCategories());
+      // Subscribe to changes
+      const unsub = mockDataStore.subscribe("categories", () => {
+        setCategories(mockDataStore.getCategories());
+      });
+      return () => unsub && unsub();
+    }
+  }, []);
 
   const handleAccountClick = () => {
     if (user) {
@@ -99,6 +114,22 @@ function Header() {
     setShowUserDropdown(false);
     await logout();
     navigate("/");
+  };
+
+  // Slug oluşturma fonksiyonu
+  const createSlug = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ü/g, "u")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim();
   };
 
   // Dropdown dışına tıklama ile kapatma
@@ -569,90 +600,22 @@ function Header() {
             >
               KATEGORİLER
             </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/meyve-ve-sebze")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/meyve-ve-sebze")}
-            >
-              MEYVE &amp; SEBZE
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/et-ve-et-urunleri")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/et-ve-et-urunleri")}
-            >
-              ET &amp; TAVUK &amp; BALIK
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/sut-ve-sut-urunleri")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/sut-ve-sut-urunleri")}
-            >
-              SÜT ÜRÜNLERİ
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/temel-gida")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/temel-gida")}
-            >
-              TEMEL GIDA
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/icecekler")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/icecekler")}
-            >
-              İÇECEKLER
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/atistirmalik")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/atistirmalik")}
-            >
-              ATIŞTIRMALIK
-            </button>
-            <button
-              className={
-                "category-btn" +
-                (location.pathname.startsWith("/category/temizlik")
-                  ? " active"
-                  : "")
-              }
-              type="button"
-              onClick={() => navigate("/category/temizlik")}
-            >
-              TEMİZLİK
-            </button>
+            {categories.map((cat) => {
+              const slug = cat.slug || createSlug(cat.name);
+              const isActive = location.pathname.startsWith(
+                `/category/${slug}`
+              );
+              return (
+                <button
+                  key={cat.id}
+                  className={"category-btn" + (isActive ? " active" : "")}
+                  type="button"
+                  onClick={() => navigate(`/category/${slug}`)}
+                >
+                  {cat.name.toUpperCase()}
+                </button>
+              );
+            })}
             <button
               className="category-btn"
               type="button"
@@ -830,11 +793,11 @@ function App() {
           }
         />
         <Route
-          path="/admin/coupons"
+          path="/admin/posters"
           element={
             <AdminGuard>
               <AdminLayout>
-                <CouponManagement />
+                <PosterManagement />
               </AdminLayout>
             </AdminGuard>
           }
@@ -977,42 +940,97 @@ function ScrollToTop() {
 function HomePage() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
+  const [slides, setSlides] = React.useState([]);
+  const [promoImages, setPromoImages] = React.useState([]);
 
-  const slides = [
-    {
-      id: 1,
-      title: "TAZE VE DOĞAL İNDİRİM REYONU",
-      subtitle: "",
-      description: "",
-      badge: "",
-      image: "/images/taze-dogal-indirim-banner.png",
-    },
-    {
-      id: 2,
-      title: "İLK ALIŞVERİŞİNİZE %25 İNDİRİM",
-      subtitle: "",
-      description: "",
-      badge: "",
-      image: "/images/ilk-alisveris-indirim-banner.png",
-    },
-    {
-      id: 3,
-      title: "MEYVE REYONUMUZ",
-      subtitle: "EN TAZELERİ",
-      description: "",
-      badge: "",
-      image: "/images/meyve-reyonu-banner.png",
-    },
-  ];
-
-  // Auto-slide effect with pause functionality
+  // Posterleri API'den çek
   React.useEffect(() => {
-    if (isPaused) return;
+    const fetchPosters = async () => {
+      try {
+        const res = await fetch("/api/banners");
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const activePosters = data
+            .filter((p) => p.isActive)
+            .sort((a, b) => a.displayOrder - b.displayOrder);
+          setSlides(
+            activePosters
+              .filter((p) => p.type === "slider" || !p.type)
+              .map((p) => ({
+                id: p.id,
+                title: p.title,
+                image: p.imageUrl,
+                link: p.linkUrl,
+              }))
+          );
+          setPromoImages(
+            activePosters
+              .filter((p) => p.type === "promo")
+              .map((p) => ({
+                id: p.id,
+                title: p.title,
+                image: p.imageUrl,
+                link: p.linkUrl,
+              }))
+          );
+        }
+      } catch {
+        // Fallback statik veriler
+        setSlides([
+          {
+            id: 1,
+            title: "TAZE VE DOĞAL İNDİRİM REYONU",
+            image: "/images/taze-dogal-indirim-banner.png",
+          },
+          {
+            id: 2,
+            title: "İLK ALIŞVERİŞİNİZE %25 İNDİRİM",
+            image: "/images/ilk-alisveris-indirim-banner.png",
+          },
+          {
+            id: 3,
+            title: "MEYVE REYONUMUZ",
+            image: "/images/meyve-reyonu-banner.png",
+          },
+        ]);
+        setPromoImages([
+          {
+            id: 1,
+            title: "Temizlik Malzemeleri",
+            image: "/images/temizlik-malzemeleri.png",
+          },
+          {
+            id: 2,
+            title: "Taze ve Doğal",
+            image: "/images/taze-dogal-urunler.png",
+          },
+          {
+            id: 3,
+            title: "Taze Günlük Lezzetli",
+            image: "/images/taze-gunluk-lezzetli.png",
+          },
+          {
+            id: 4,
+            title: "Özel Fiyat Köy Sütü",
+            image: "/images/ozel-fiyat-koy-sutu.png",
+          },
+          {
+            id: 5,
+            title: "CIF Jel Serisi",
+            image: "/images/cif-jel-serisi.png",
+          },
+        ]);
+      }
+    };
+    fetchPosters();
+  }, []);
 
+  // Auto-slide effect
+  React.useEffect(() => {
+    if (isPaused || slides.length === 0) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 4000);
-
     return () => clearInterval(interval);
   }, [slides.length, isPaused]);
 
@@ -1187,183 +1205,50 @@ function HomePage() {
         ></div>
 
         <div className="container-fluid px-4 position-relative">
-          {/* 5 Özel Resim Section - Özel Seçimler'den ÖNCE */}
+          {/* Dinamik Promosyon Resimleri */}
           <div className="special-images-container mb-5 pt-3">
             <div className="d-flex flex-wrap justify-content-center special-images-row">
-              {/* Resim 1 - Temizlik Malzemeleri */}
-              <div className="special-image-col">
-                <div
-                  className="special-image-card h-100"
-                  style={{
-                    borderRadius: "15px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-10px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 25px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 15px rgba(0,0,0,0.1)";
-                  }}
-                >
-                  <img
-                    src="/images/temizlik-malzemeleri.png"
-                    alt="Temizlik Malzemelerimizi İnceleyin"
-                    className="img-fluid w-100"
+              {promoImages.map((promo) => (
+                <div key={promo.id} className="special-image-col">
+                  <div
+                    className="special-image-card h-100"
                     style={{
-                      display: "block",
-                      objectFit: "cover",
-                      height: "100%",
+                      borderRadius: "15px",
+                      overflow: "hidden",
+                      boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                      transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                      cursor: "pointer",
                     }}
-                  />
-                </div>
-              </div>
-
-              {/* Resim 2 - Taze ve Doğal */}
-              <div className="special-image-col">
-                <div
-                  className="special-image-card h-100"
-                  style={{
-                    borderRadius: "15px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-10px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 25px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 15px rgba(0,0,0,0.1)";
-                  }}
-                >
-                  <img
-                    src="/images/taze-dogal-urunler.png"
-                    alt="Taze ve Doğal"
-                    className="img-fluid w-100"
-                    style={{
-                      display: "block",
-                      objectFit: "cover",
-                      height: "100%",
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-10px)";
+                      e.currentTarget.style.boxShadow =
+                        "0 8px 25px rgba(0,0,0,0.15)";
                     }}
-                  />
-                </div>
-              </div>
-
-              {/* Resim 3 - Taze Günlük Lezzetli */}
-              <div className="special-image-col">
-                <div
-                  className="special-image-card h-100"
-                  style={{
-                    borderRadius: "15px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-10px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 25px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 15px rgba(0,0,0,0.1)";
-                  }}
-                >
-                  <img
-                    src="/images/taze-gunluk-lezzetli.png"
-                    alt="Taze Günlük Lezzetli"
-                    className="img-fluid w-100"
-                    style={{
-                      display: "block",
-                      objectFit: "cover",
-                      height: "100%",
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow =
+                        "0 4px 15px rgba(0,0,0,0.1)";
                     }}
-                  />
+                    onClick={() =>
+                      promo.link && (window.location.href = promo.link)
+                    }
+                  >
+                    <img
+                      src={promo.image}
+                      alt={promo.title}
+                      className="img-fluid w-100"
+                      style={{
+                        display: "block",
+                        objectFit: "cover",
+                        height: "100%",
+                      }}
+                      onError={(e) => {
+                        e.target.src = "/images/placeholder.png";
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              {/* Resim 4 - Özel Fiyat Köy Sütü */}
-              <div className="special-image-col">
-                <div
-                  className="special-image-card h-100"
-                  style={{
-                    borderRadius: "15px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-10px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 25px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 15px rgba(0,0,0,0.1)";
-                  }}
-                >
-                  <img
-                    src="/images/ozel-fiyat-koy-sutu.png"
-                    alt="Özel Fiyat Köy Sütü %50 İndirim"
-                    className="img-fluid w-100"
-                    style={{
-                      display: "block",
-                      objectFit: "cover",
-                      height: "100%",
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Resim 5 - CIF Jel Serisi */}
-              <div className="special-image-col">
-                <div
-                  className="special-image-card h-100"
-                  style={{
-                    borderRadius: "15px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-10px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 25px rgba(0,0,0,0.15)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 15px rgba(0,0,0,0.1)";
-                  }}
-                >
-                  <img
-                    src="/images/cif-jel-serisi.png"
-                    alt="CIF Jel Serisi - Tüm Yüzeyler"
-                    className="img-fluid w-100"
-                    style={{
-                      display: "block",
-                      objectFit: "cover",
-                      height: "100%",
-                    }}
-                  />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 

@@ -5,6 +5,23 @@ import api from "../services/api";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
 import { shouldUseMockData, debugLog } from "../config/apiConfig";
+import mockDataStore from "../services/mockDataStore";
+
+// Slug oluşturma fonksiyonu
+const createSlug = (name) => {
+  return name
+    .toLowerCase()
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ş/g, "s")
+    .replace(/ü/g, "u")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+};
 
 export default function Category() {
   const { slug } = useParams();
@@ -17,6 +34,22 @@ export default function Category() {
     setLoading(true);
     setError("");
 
+    // Mock modda mockDataStore'dan kategori bul
+    if (shouldUseMockData()) {
+      const allCategories = mockDataStore.getCategories();
+      const foundCat = allCategories.find((c) => {
+        const catSlug = c.slug || createSlug(c.name);
+        return catSlug === slug;
+      });
+      
+      if (foundCat) {
+        setCategory(foundCat);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // API'den dene
     api
       .get(`/api/categories/${encodeURIComponent(slug)}`)
       .then((cat) => {
@@ -25,57 +58,7 @@ export default function Category() {
       })
       .catch((e) => {
         if (!mounted) return;
-        // Mock moda düş: bilinen slug -> kategori id eşlemesi
-        if (shouldUseMockData()) {
-          debugLog("Kategori API başarısız, mock eşleşmeye düşülüyor", {
-            slug,
-            error: e?.message,
-          });
-          const map = {
-            "meyve-ve-sebze": {
-              id: 3,
-              name: "Meyve ve Sebze",
-              description: "Taze meyve ve sebzeler",
-            },
-            "et-ve-et-urunleri": {
-              id: 1,
-              name: "Et ve Et Ürünleri",
-              description: "Taze et ve şarküteri ürünleri",
-            },
-            "sut-ve-sut-urunleri": {
-              id: 2,
-              name: "Süt ve Süt Ürünleri",
-              description: "Süt, peynir, yoğurt ve türevleri",
-            },
-            icecekler: {
-              id: 4,
-              name: "İçecekler",
-              description: "Soğuk ve sıcak içecekler",
-            },
-            atistirmalik: {
-              id: 5,
-              name: "Atıştırmalık",
-              description: "Cipsi, kraker ve atıştırmalıklar",
-            },
-            temizlik: {
-              id: 6,
-              name: "Temizlik",
-              description: "Ev temizlik ürünleri",
-            },
-            "temel-gida": {
-              id: 7,
-              name: "Temel Gıda",
-              description: "Temel gıda ürünleri",
-            },
-          };
-          const mockCat = map[slug];
-          if (mockCat) {
-            setCategory(mockCat);
-            setError("");
-            return;
-          }
-        }
-
+        debugLog("Kategori API başarısız", { slug, error: e?.message });
         setError(e?.message || "Kategori bilgisi yüklenemedi.");
       })
       .finally(() => {
@@ -86,6 +69,23 @@ export default function Category() {
     return () => {
       mounted = false;
     };
+  }, [slug]);
+
+  // Subscribe to category changes
+  useEffect(() => {
+    if (shouldUseMockData()) {
+      const unsub = mockDataStore.subscribe("categories", () => {
+        const allCategories = mockDataStore.getCategories();
+        const foundCat = allCategories.find((c) => {
+          const catSlug = c.slug || createSlug(c.name);
+          return catSlug === slug;
+        });
+        if (foundCat) {
+          setCategory(foundCat);
+        }
+      });
+      return () => unsub && unsub();
+    }
   }, [slug]);
 
   return (

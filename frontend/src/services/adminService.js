@@ -4,204 +4,10 @@ import {
   shouldUseMockData,
 } from "../config/apiConfig";
 import api from "./api";
+import mockDataStore from "./mockDataStore";
 
-// Mock data storage
-let mockCategories = [
-  {
-    id: 1,
-    name: "Et ve Et Ürünleri",
-    description: "Taze et ve şarküteri ürünleri",
-    icon: "fa-drumstick-bite",
-    productCount: 3,
-    isActive: true,
-  },
-  {
-    id: 2,
-    name: "Süt ve Süt Ürünleri",
-    description: "Süt, peynir, yoğurt ve türevleri",
-    icon: "fa-cheese",
-    productCount: 2,
-    isActive: true,
-  },
-  {
-    id: 3,
-    name: "Meyve ve Sebze",
-    description: "Taze meyve ve sebzeler",
-    icon: "fa-apple-alt",
-    productCount: 3,
-    isActive: true,
-  },
-  {
-    id: 4,
-    name: "İçecekler",
-    description: "Soğuk ve sıcak içecekler",
-    icon: "fa-coffee",
-    productCount: 3,
-    isActive: true,
-  },
-  {
-    id: 5,
-    name: "Atıştırmalık",
-    description: "Cipsi, kraker ve atıştırmalıklar",
-    icon: "fa-cookie-bite",
-    productCount: 1,
-    isActive: true,
-  },
-  {
-    id: 6,
-    name: "Temizlik",
-    description: "Ev temizlik ürünleri",
-    icon: "fa-broom",
-    productCount: 1,
-    isActive: true,
-  },
-];
-
-let mockProducts = [
-  {
-    id: 1,
-    name: "Dana Kuşbaşı",
-    categoryId: 1,
-    categoryName: "Et ve Et Ürünleri",
-    price: 89.9,
-    stock: 25,
-    description: "Taze dana eti kuşbaşı",
-    imageUrl: "/images/dana-kusbasi.jpg",
-    isActive: true,
-  },
-  {
-    id: 2,
-    name: "Kuzu İncik",
-    categoryId: 1,
-    categoryName: "Et ve Et Ürünleri",
-    price: 95.5,
-    stock: 15,
-    description: "Taze kuzu incik eti",
-    imageUrl: "/images/kuzu-incik.webp",
-    isActive: true,
-  },
-  {
-    id: 3,
-    name: "Sucuk 250gr",
-    categoryId: 1,
-    categoryName: "Et ve Et Ürünleri",
-    price: 24.9,
-    stock: 30,
-    description: "Geleneksel sucuk",
-    imageUrl: "/images/sucuk.jpg",
-    isActive: true,
-  },
-  {
-    id: 4,
-    name: "Pınar Süt 1L",
-    categoryId: 2,
-    categoryName: "Süt ve Süt Ürünleri",
-    price: 12.5,
-    stock: 50,
-    description: "Taze tam yağlı süt",
-    imageUrl: "/images/pınar-süt.jpg",
-    isActive: true,
-  },
-  {
-    id: 5,
-    name: "Şek Kaşar Peyniri 200gr",
-    categoryId: 2,
-    categoryName: "Süt ve Süt Ürünleri",
-    price: 35.9,
-    stock: 20,
-    description: "Eski kaşar peynir",
-    imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-    isActive: true,
-  },
-  {
-    id: 6,
-    name: "Domates Kg",
-    categoryId: 3,
-    categoryName: "Meyve ve Sebze",
-    price: 8.75,
-    stock: 100,
-    description: "Taze domates",
-    imageUrl: "/images/domates.webp",
-    isActive: true,
-  },
-  {
-    id: 7,
-    name: "Salatalık Kg",
-    categoryId: 3,
-    categoryName: "Meyve ve Sebze",
-    price: 6.5,
-    stock: 80,
-    description: "Taze salatalık",
-    imageUrl: "/images/salatalik.jpg",
-    isActive: true,
-  },
-  {
-    id: 8,
-    name: "Bulgur 1 Kg",
-    categoryId: 7,
-    categoryName: "Temel Gıda",
-    price: 15.9,
-    stock: 40,
-    description: "Pilavlık bulgur",
-    imageUrl: "/images/bulgur.png",
-    isActive: true,
-  },
-  {
-    id: 9,
-    name: "Coca Cola 330ml",
-    categoryId: 4,
-    categoryName: "İçecekler",
-    price: 5.5,
-    stock: 75,
-    description: "Coca Cola teneke kutu",
-    imageUrl: "/images/coca-cola.jpg",
-    isActive: true,
-  },
-  {
-    id: 10,
-    name: "Lipton Ice Tea 330ml",
-    categoryId: 4,
-    categoryName: "İçecekler",
-    price: 4.75,
-    stock: 60,
-    description: "Şeftali aromalı ice tea",
-    imageUrl: "/images/lipton-ice-tea.jpg",
-    isActive: true,
-  },
-  {
-    id: 11,
-    name: "Nescafe 200gr",
-    categoryId: 4,
-    categoryName: "İçecekler",
-    price: 45.9,
-    stock: 25,
-    description: "Klasik nescafe",
-    imageUrl: "/images/nescafe.jpg",
-    isActive: true,
-  },
-  {
-    id: 12,
-    name: "Tahıl Cipsi 150gr",
-    categoryId: 5,
-    categoryName: "Atıştırmalık",
-    price: 12.9,
-    stock: 35,
-    description: "Çıtır tahıl cipsi",
-    imageUrl: "/images/tahil-cipsi.jpg",
-    isActive: true,
-  },
-  {
-    id: 13,
-    name: "Cif Krem Temizleyici",
-    categoryId: 6,
-    categoryName: "Temizlik",
-    price: 15.9,
-    stock: 5,
-    description: "Mutfak temizleyici",
-    imageUrl: "/images/yeşil-cif-krem.jpg",
-    isActive: false,
-  },
-];
+// Mock data artık mockDataStore'da merkezi olarak yönetiliyor
+// Duplicate veri tanımları kaldırıldı - tüm işlemler mockDataStore üzerinden yapılıyor
 
 let mockCoupons = [
   {
@@ -535,41 +341,28 @@ export const AdminService = {
   getCategories: async () => {
     if (shouldUseMockData()) {
       debugLog("Admin Categories - Mock data kullanılıyor");
-      return [...mockCategories];
+      return mockDataStore.getAllCategories();
     }
     ensureBackend();
     return api.get("/api/admin/categories");
   },
   createCategory: async (formData) => {
     if (shouldUseMockData()) {
-      const newId = Math.max(...mockCategories.map((c) => c.id)) + 1;
-      const newCategory = { ...formData, id: newId, productCount: 0 };
-      mockCategories.push(newCategory);
-      return newCategory;
+      return mockDataStore.createCategory(formData);
     }
     ensureBackend();
     return api.post("/api/admin/categories", formData);
   },
   updateCategory: async (id, formData) => {
     if (shouldUseMockData()) {
-      const index = mockCategories.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        mockCategories[index] = { ...mockCategories[index], ...formData };
-        return mockCategories[index];
-      }
-      throw new Error("Kategori bulunamadı");
+      return mockDataStore.updateCategory(id, formData);
     }
     ensureBackend();
     return api.put(`/api/admin/categories/${id}`, formData);
   },
   deleteCategory: async (id) => {
     if (shouldUseMockData()) {
-      const index = mockCategories.findIndex((c) => c.id === id);
-      if (index !== -1) {
-        mockCategories.splice(index, 1);
-        return { success: true };
-      }
-      throw new Error("Kategori bulunamadı");
+      return mockDataStore.deleteCategory(id);
     }
     ensureBackend();
     return api.delete(`/api/admin/categories/${id}`);
@@ -579,55 +372,28 @@ export const AdminService = {
   getProducts: async (page = 1, size = 10) => {
     if (shouldUseMockData()) {
       debugLog("Admin Products - Mock data kullanılıyor");
-      return [...mockProducts];
+      return mockDataStore.getAllProducts();
     }
     ensureBackend();
     return api.get(`/api/admin/products?page=${page}&size=${size}`);
   },
   createProduct: async (payload) => {
     if (shouldUseMockData()) {
-      const newId = Math.max(...mockProducts.map((p) => p.id)) + 1;
-      const category = mockCategories.find(
-        (c) => c.id === Number(payload.categoryId)
-      );
-      const newProduct = {
-        ...payload,
-        id: newId,
-        categoryName: category ? category.name : "Kategori Yok",
-      };
-      mockProducts.push(newProduct);
-      return newProduct;
+      return mockDataStore.createProduct(payload);
     }
     ensureBackend();
     return api.post("/api/admin/products", payload);
   },
   updateProduct: async (id, payload) => {
     if (shouldUseMockData()) {
-      const index = mockProducts.findIndex((p) => p.id === id);
-      if (index !== -1) {
-        const category = mockCategories.find(
-          (c) => c.id === Number(payload.categoryId)
-        );
-        mockProducts[index] = {
-          ...mockProducts[index],
-          ...payload,
-          categoryName: category ? category.name : "Kategori Yok",
-        };
-        return mockProducts[index];
-      }
-      throw new Error("Ürün bulunamadı");
+      return mockDataStore.updateProduct(id, payload);
     }
     ensureBackend();
     return api.put(`/api/admin/products/${id}`, payload);
   },
   deleteProduct: async (id) => {
     if (shouldUseMockData()) {
-      const index = mockProducts.findIndex((p) => p.id === id);
-      if (index !== -1) {
-        mockProducts.splice(index, 1);
-        return { success: true };
-      }
-      throw new Error("Ürün bulunamadı");
+      return mockDataStore.deleteProduct(id);
     }
     ensureBackend();
     return api.delete(`/api/admin/products/${id}`);

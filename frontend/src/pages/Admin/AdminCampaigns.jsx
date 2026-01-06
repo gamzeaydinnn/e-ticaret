@@ -208,115 +208,140 @@ export default function AdminCampaigns() {
   const activeCount = campaigns.filter((c) => c.isActive).length;
 
   return (
-    <div className="container-fluid p-4">
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
+      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 px-1">
         <div>
-          <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
+          <h5
+            className="fw-bold mb-0"
+            style={{ color: "#2d3748", fontSize: "1rem" }}
+          >
             <i className="fas fa-gift me-2" style={{ color: "#f57c00" }}></i>
             Kampanya Yönetimi
-          </h1>
-          <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-            Kampanyalarınızı oluşturun, düzenleyin ve yönetin.
-          </div>
+          </h5>
+          <p
+            className="text-muted mb-0 d-none d-sm-block"
+            style={{ fontSize: "0.7rem" }}
+          >
+            Kampanyalarınızı yönetin
+          </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-1 flex-wrap">
           <input
             type="text"
             className="form-control form-control-sm"
-            placeholder="Ara: kampanya adı, aktif/pasif"
-            style={{ width: 240 }}
+            placeholder="Ara..."
+            style={{ width: "100px", fontSize: "0.7rem" }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <button
-            className="btn btn-sm btn-outline-secondary"
+            className="btn btn-sm btn-outline-secondary px-2 py-1"
+            style={{ fontSize: "0.65rem" }}
             onClick={loadCampaigns}
             disabled={loading}
           >
-            Yenile
+            <i className="fas fa-sync-alt"></i>
           </button>
           <button
-            className="btn btn-sm text-white fw-semibold"
+            className="btn btn-sm text-white fw-semibold px-2 py-1"
             style={{
               background: "linear-gradient(135deg, #f57c00, #ff9800)",
+              fontSize: "0.65rem",
             }}
             onClick={openCreateModal}
           >
-            <i className="fas fa-plus me-2"></i>
-            Yeni Kampanya
+            <i className="fas fa-plus me-1"></i>Yeni
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="alert alert-danger" role="alert">
+        <div
+          className="alert alert-danger py-2 mx-1"
+          style={{ fontSize: "0.7rem" }}
+        >
           {error}
         </div>
       )}
       {message && (
-        <div className={`alert alert-${messageType}`} role="alert">
+        <div
+          className={`alert alert-${messageType} py-2 mx-1`}
+          style={{ fontSize: "0.7rem" }}
+        >
           {message}
         </div>
       )}
 
-      <div className="card border-0 shadow-sm">
-        <div className="card-header bg-white d-flex justify-content-between align-items-center">
-          <div>
-            <i className="fas fa-layer-group me-2 text-primary"></i>
-            Kampanyalar
-            <small className="ms-2 text-muted">
-              Toplam: {totalCount} · Aktif: {activeCount}
-            </small>
-          </div>
+      <div
+        className="card border-0 shadow-sm mx-1"
+        style={{ borderRadius: "8px" }}
+      >
+        <div className="card-header bg-white py-2 px-2 d-flex justify-content-between align-items-center">
+          <span style={{ fontSize: "0.8rem" }}>
+            <i className="fas fa-layer-group me-1 text-primary"></i>Kampanyalar
+          </span>
+          <small className="text-muted" style={{ fontSize: "0.65rem" }}>
+            Toplam: {totalCount} · Aktif: {activeCount}
+          </small>
         </div>
-        <div className="card-body">
+        <div className="card-body p-0">
           {loading ? (
-            <div className="text-muted">Yükleniyor...</div>
+            <div className="text-muted small p-3">Yükleniyor...</div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-sm align-middle">
-                <thead>
+              <table
+                className="table table-sm mb-0"
+                style={{ fontSize: "0.65rem" }}
+              >
+                <thead className="bg-light">
                   <tr>
-                    <th style={{ width: 70 }}>ID</th>
-                    <th>Kampanya Adı</th>
-                    <th>Başlangıç</th>
-                    <th>Bitiş</th>
-                    <th>Açıklama</th>
-                    <th>Aktif mi?</th>
-                    <th style={{ width: 140 }}>İşlemler</th>
+                    <th className="px-1">ID</th>
+                    <th className="px-1">Ad</th>
+                    <th className="px-1 d-none d-sm-table-cell">Tarih</th>
+                    <th className="px-1">Durum</th>
+                    <th className="px-1">İşlem</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredCampaigns.length ? (
-                    filteredCampaigns.map((campaign) => (
-                      <tr key={campaign.id}>
-                        <td>#{campaign.id}</td>
-                        <td className="fw-semibold">{campaign.name}</td>
-                        <td>{formatDate(campaign.startDate)}</td>
-                        <td>{formatDate(campaign.endDate)}</td>
-                        <td className="text-muted">
-                          {campaign.description || "-"}
+                    filteredCampaigns.map((c) => (
+                      <tr key={c.id}>
+                        <td className="px-1">#{c.id}</td>
+                        <td
+                          className="px-1 fw-semibold text-truncate"
+                          style={{ maxWidth: "100px" }}
+                        >
+                          {c.name}
                         </td>
-                        <td>
+                        <td
+                          className="px-1 d-none d-sm-table-cell"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {formatDate(c.startDate)} - {formatDate(c.endDate)}
+                        </td>
+                        <td className="px-1">
                           <span
                             className={`badge ${
-                              campaign.isActive ? "bg-success" : "bg-secondary"
+                              c.isActive ? "bg-success" : "bg-secondary"
                             }`}
+                            style={{ fontSize: "0.55rem" }}
                           >
-                            {campaign.isActive ? "Aktif" : "Pasif"}
+                            {c.isActive ? "Aktif" : "Pasif"}
                           </span>
                         </td>
-                        <td>
-                          <div className="d-flex gap-2">
+                        <td className="px-1">
+                          <div className="d-flex gap-1">
                             <button
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => openEditModal(campaign)}
+                              className="btn btn-outline-primary p-1"
+                              style={{ fontSize: "0.55rem", lineHeight: 1 }}
+                              onClick={() => openEditModal(c)}
                             >
                               <i className="fas fa-edit"></i>
                             </button>
                             <button
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => handleDelete(campaign.id)}
+                              className="btn btn-outline-danger p-1"
+                              style={{ fontSize: "0.55rem", lineHeight: 1 }}
+                              onClick={() => handleDelete(c.id)}
                             >
                               <i className="fas fa-trash"></i>
                             </button>
@@ -326,8 +351,8 @@ export default function AdminCampaigns() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="7" className="text-muted">
-                        Kayıt bulunamadı.
+                      <td colSpan="5" className="text-muted text-center py-3">
+                        Kayıt bulunamadı
                       </td>
                     </tr>
                   )}
@@ -343,42 +368,48 @@ export default function AdminCampaigns() {
           className="modal d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered">
+          <div className="modal-dialog modal-dialog-centered mx-2">
             <div
               className="modal-content border-0"
-              style={{ borderRadius: 16 }}
+              style={{ borderRadius: "12px" }}
             >
-              <div className="modal-header border-0 p-4">
-                <h5
+              <div className="modal-header border-0 py-2 px-3">
+                <h6
                   className="modal-title fw-bold"
-                  style={{ color: "#2d3748" }}
+                  style={{ color: "#2d3748", fontSize: "0.9rem" }}
                 >
                   <i
                     className="fas fa-gift me-2"
                     style={{ color: "#f57c00" }}
                   ></i>
-                  {editingId ? "Kampanyayı Düzenle" : "Yeni Kampanya"}
-                </h5>
-                <button className="btn-close" onClick={closeModal}></button>
+                  {editingId ? "Düzenle" : "Yeni Kampanya"}
+                </h6>
+                <button
+                  className="btn-close btn-close-sm"
+                  onClick={closeModal}
+                ></button>
               </div>
               <form onSubmit={handleSubmit}>
-                <div className="modal-body p-4">
+                <div
+                  className="modal-body p-3"
+                  style={{ maxHeight: "60vh", overflowY: "auto" }}
+                >
                   {modalLoading ? (
-                    <div className="text-center text-muted py-4">
-                      Bilgiler yükleniyor...
+                    <div className="text-center text-muted py-3">
+                      Yükleniyor...
                     </div>
                   ) : (
-                    <div className="row g-3">
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold mb-1">
+                    <div className="row g-2">
+                      <div className="col-12">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
                           Kampanya Adı
                         </label>
                         <input
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: "0.75rem" }}
                           name="name"
                           value={form.name}
                           onChange={onFormChange}
@@ -386,152 +417,146 @@ export default function AdminCampaigns() {
                           placeholder="Örn: Sepette %10 İndirim"
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold mb-1">
+                      <div className="col-12">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
                           Açıklama
                         </label>
                         <input
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: "0.75rem" }}
                           name="description"
                           value={form.description}
                           onChange={onFormChange}
                           placeholder="Opsiyonel"
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold mb-1">
-                          Başlangıç Tarihi
+                      <div className="col-6">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          Başlangıç
                         </label>
                         <input
                           type="date"
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: "0.7rem" }}
                           name="startDate"
                           value={form.startDate}
                           onChange={onFormChange}
                           required
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold mb-1">
-                          Bitiş Tarihi
+                      <div className="col-6">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          Bitiş
                         </label>
                         <input
                           type="date"
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: "0.7rem" }}
                           name="endDate"
                           value={form.endDate}
                           onChange={onFormChange}
                           required
                         />
                       </div>
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold mb-1">
-                          Kural (JSON)
-                        </label>
-                        <textarea
-                          className="form-control border-0"
-                          rows="3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
-                          name="conditionJson"
-                          value={form.conditionJson}
-                          onChange={onFormChange}
-                          placeholder='Örn: {"minSubtotal": 250}'
-                        />
-                        <small className="text-muted">
-                          Opsiyonel. Tek bir koşul JSON'u girilebilir.
-                        </small>
-                      </div>
-                      <div className="col-md-3">
-                        <label className="form-label fw-semibold mb-1">
+                      <div className="col-6">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
                           Ödül Türü
                         </label>
                         <select
-                          className="form-select border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-select form-select-sm"
+                          style={{ fontSize: "0.7rem" }}
                           name="rewardType"
                           value={form.rewardType}
                           onChange={onFormChange}
                         >
                           <option value="Percent">% İndirim</option>
-                          <option value="Amount">Tutar İndirimi</option>
+                          <option value="Amount">₺ İndirim</option>
                           <option value="FreeShipping">Ücretsiz Kargo</option>
                         </select>
                       </div>
-                      <div className="col-md-3">
-                        <label className="form-label fw-semibold mb-1">
+                      <div className="col-6">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
                           Ödül Değeri
                         </label>
                         <input
                           type="number"
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245,124,0,0.05)",
-                            borderRadius: 12,
-                          }}
+                          className="form-control form-control-sm"
+                          style={{ fontSize: "0.7rem" }}
                           name="rewardValue"
                           value={form.rewardValue}
                           onChange={onFormChange}
                           min={0}
                           step="0.01"
                           disabled={form.rewardType === "FreeShipping"}
-                          placeholder={
-                            rewardLabels[form.rewardType] || "Ödül değeri"
-                          }
                         />
                       </div>
-                      <div className="col-md-12 d-flex align-items-center pt-2">
+                      <div className="col-12">
+                        <label
+                          className="form-label fw-semibold mb-1"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          Kural (JSON)
+                        </label>
+                        <textarea
+                          className="form-control form-control-sm"
+                          rows="2"
+                          style={{ fontSize: "0.7rem" }}
+                          name="conditionJson"
+                          value={form.conditionJson}
+                          onChange={onFormChange}
+                          placeholder='{"minSubtotal": 250}'
+                        />
+                      </div>
+                      <div className="col-12">
                         <div className="form-check">
                           <input
                             type="checkbox"
                             className="form-check-input"
-                            id="campaignIsActive"
                             name="isActive"
                             checked={form.isActive}
                             onChange={onFormChange}
                           />
                           <label
-                            className="form-check-label fw-semibold"
-                            htmlFor="campaignIsActive"
+                            className="form-check-label"
+                            style={{ fontSize: "0.75rem" }}
                           >
-                            Aktif mi?
+                            Aktif
                           </label>
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
-                <div className="modal-footer border-0 p-4">
+                <div className="modal-footer border-0 py-2 px-3">
                   <button
                     type="button"
-                    className="btn btn-light"
+                    className="btn btn-light btn-sm"
+                    style={{ fontSize: "0.7rem" }}
                     onClick={closeModal}
                   >
                     İptal
                   </button>
                   <button
                     type="submit"
-                    className="btn text-white fw-semibold px-4"
+                    className="btn btn-sm text-white fw-semibold px-3"
                     style={{
                       background: "linear-gradient(135deg, #f57c00, #ff9800)",
-                      borderRadius: 8,
+                      fontSize: "0.7rem",
                     }}
                     disabled={modalLoading}
                   >

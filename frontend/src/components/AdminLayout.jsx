@@ -13,52 +13,59 @@ export default function AdminLayout({ children }) {
   const isAdminLike =
     user?.role === "Admin" || user?.role === "SuperAdmin" || user?.isAdmin;
 
-  const menuItems = useMemo(() => [
-    {
-      path: "/admin/dashboard",
-      icon: "fas fa-tachometer-alt",
-      label: "Dashboard",
-    },
-    { path: "/admin/products", icon: "fas fa-box", label: "Ürünler" },
-    { path: "/admin/categories", icon: "fas fa-tags", label: "Kategoriler" },
-    {
-      path: "/admin/orders",
-      icon: "fas fa-shopping-cart",
-      label: "Siparişler",
-    },
-    {
-      path: "/admin/users",
-      icon: "fas fa-users",
-      label: "Kullanıcılar",
-      adminOnly: true,
-    },
-    { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
-    { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
-    { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
-    { path: "/admin/coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
-    {
-      path: "/admin/weight-reports",
-      icon: "fas fa-weight",
-      label: "Ağırlık Raporları",
-    },
-    {
-      path: "/admin/campaigns",
-      icon: "fas fa-gift",
-      label: "Kampanya Yönetimi",
-      adminOnly: true,
-    },
-    {
-      label: "Loglar",
-      icon: "fas fa-clipboard-list",
-      adminOnly: true,
-      children: [
-        { path: "/admin/logs/audit", label: "Audit Logs" },
-        { path: "/admin/logs/errors", label: "Error Logs" },
-        { path: "/admin/logs/system", label: "System Logs" },
-        { path: "/admin/logs/inventory", label: "Inventory Logs" },
-      ],
-    },
-  ], []);
+  const menuItems = useMemo(
+    () => [
+      {
+        path: "/admin/dashboard",
+        icon: "fas fa-tachometer-alt",
+        label: "Dashboard",
+      },
+      { path: "/admin/products", icon: "fas fa-box", label: "Ürünler" },
+      { path: "/admin/categories", icon: "fas fa-tags", label: "Kategoriler" },
+      {
+        path: "/admin/orders",
+        icon: "fas fa-shopping-cart",
+        label: "Siparişler",
+      },
+      {
+        path: "/admin/users",
+        icon: "fas fa-users",
+        label: "Kullanıcılar",
+        adminOnly: true,
+      },
+      { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
+      { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
+      { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
+      {
+        path: "/admin/posters",
+        icon: "fas fa-image",
+        label: "Poster Yönetimi",
+      },
+      {
+        path: "/admin/weight-reports",
+        icon: "fas fa-weight",
+        label: "Ağırlık Raporları",
+      },
+      {
+        path: "/admin/campaigns",
+        icon: "fas fa-gift",
+        label: "Kampanya Yönetimi",
+        adminOnly: true,
+      },
+      {
+        label: "Loglar",
+        icon: "fas fa-clipboard-list",
+        adminOnly: true,
+        children: [
+          { path: "/admin/logs/audit", label: "Audit Logs" },
+          { path: "/admin/logs/errors", label: "Error Logs" },
+          { path: "/admin/logs/system", label: "System Logs" },
+          { path: "/admin/logs/inventory", label: "Inventory Logs" },
+        ],
+      },
+    ],
+    []
+  );
 
   useEffect(() => {
     const parentWithChild = menuItems.find(
@@ -88,7 +95,7 @@ export default function AdminLayout({ children }) {
   };
 
   return (
-    <div className="d-flex">
+    <div className="d-flex admin-layout-root">
       {/* Sidebar */}
       <div
         className={`text-white ${sidebarOpen ? "" : "d-none d-lg-block"}`}
@@ -173,7 +180,9 @@ export default function AdminLayout({ children }) {
                     <span style={{ fontSize: "0.9rem" }}>{item.label}</span>
                     <i
                       className={`fas ms-auto ${
-                        openMenus[item.label] ? "fa-chevron-up" : "fa-chevron-down"
+                        openMenus[item.label]
+                          ? "fa-chevron-up"
+                          : "fa-chevron-down"
                       }`}
                       style={{ fontSize: "0.75rem" }}
                     ></i>
@@ -206,90 +215,90 @@ export default function AdminLayout({ children }) {
               );
             }
             return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="d-block text-decoration-none px-3 py-3 text-white position-relative"
-              style={{
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                background:
-                  location.pathname === item.path
-                    ? "linear-gradient(135deg, #f57c00, #ff9800)"
-                    : "transparent",
-                borderLeft:
-                  location.pathname === item.path
-                    ? "4px solid #fff"
-                    : "4px solid transparent",
-                boxShadow:
-                  location.pathname === item.path
-                    ? "0 4px 15px rgba(245, 124, 0, 0.3)"
-                    : "none",
-                transform:
-                  location.pathname === item.path
-                    ? "translateX(3px)"
-                    : "translateX(0)",
-                animation: `slideIn 0.4s ease-out ${index * 0.05}s both`,
-              }}
-              onMouseEnter={(e) => {
-                if (location.pathname !== item.path) {
-                  e.target.style.backgroundColor = "rgba(245, 124, 0, 0.1)";
-                  e.target.style.borderLeft =
-                    "4px solid rgba(245, 124, 0, 0.3)";
-                  e.target.style.transform = "translateX(5px)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (location.pathname !== item.path) {
-                  e.target.style.backgroundColor = "transparent";
-                  e.target.style.borderLeft = "4px solid transparent";
-                  e.target.style.transform = "translateX(0)";
-                }
-              }}
-            >
-              <i
-                className={`${item.icon} me-3`}
+              <Link
+                key={item.path}
+                to={item.path}
+                className="d-block text-decoration-none px-3 py-3 text-white position-relative"
                 style={{
-                  width: "20px",
-                  fontSize: "0.9rem",
-                  filter:
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                  background:
                     location.pathname === item.path
-                      ? "drop-shadow(0 0 8px rgba(255,255,255,0.5))"
+                      ? "linear-gradient(135deg, #f57c00, #ff9800)"
+                      : "transparent",
+                  borderLeft:
+                    location.pathname === item.path
+                      ? "4px solid #fff"
+                      : "4px solid transparent",
+                  boxShadow:
+                    location.pathname === item.path
+                      ? "0 4px 15px rgba(245, 124, 0, 0.3)"
                       : "none",
-                  transition: "filter 0.3s ease",
+                  transform:
+                    location.pathname === item.path
+                      ? "translateX(3px)"
+                      : "translateX(0)",
+                  animation: `slideIn 0.4s ease-out ${index * 0.05}s both`,
                 }}
-              ></i>
-              <span
-                style={{
-                  fontSize: "0.9rem",
-                  fontWeight: location.pathname === item.path ? "600" : "400",
+                onMouseEnter={(e) => {
+                  if (location.pathname !== item.path) {
+                    e.target.style.backgroundColor = "rgba(245, 124, 0, 0.1)";
+                    e.target.style.borderLeft =
+                      "4px solid rgba(245, 124, 0, 0.3)";
+                    e.target.style.transform = "translateX(5px)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (location.pathname !== item.path) {
+                    e.target.style.backgroundColor = "transparent";
+                    e.target.style.borderLeft = "4px solid transparent";
+                    e.target.style.transform = "translateX(0)";
+                  }
                 }}
               >
-                {item.label}
-              </span>
-              {item.path === "/admin/weight-reports" && (
-                <span
-                  className="position-absolute"
+                <i
+                  className={`${item.icon} me-3`}
                   style={{
-                    right: "12px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background:
-                      "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
-                    color: "white",
-                    fontSize: "0.7rem",
-                    fontWeight: "700",
-                    padding: "3px 7px",
-                    borderRadius: "12px",
-                    boxShadow: "0 2px 8px rgba(255, 107, 107, 0.4)",
-                    animation: "pulse 2s infinite",
-                    minWidth: "22px",
-                    textAlign: "center",
+                    width: "20px",
+                    fontSize: "0.9rem",
+                    filter:
+                      location.pathname === item.path
+                        ? "drop-shadow(0 0 8px rgba(255,255,255,0.5))"
+                        : "none",
+                    transition: "filter 0.3s ease",
+                  }}
+                ></i>
+                <span
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: location.pathname === item.path ? "600" : "400",
                   }}
                 >
-                  3
+                  {item.label}
                 </span>
-              )}
-            </Link>
+                {item.path === "/admin/weight-reports" && (
+                  <span
+                    className="position-absolute"
+                    style={{
+                      right: "12px",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background:
+                        "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
+                      color: "white",
+                      fontSize: "0.7rem",
+                      fontWeight: "700",
+                      padding: "3px 7px",
+                      borderRadius: "12px",
+                      boxShadow: "0 2px 8px rgba(255, 107, 107, 0.4)",
+                      animation: "pulse 2s infinite",
+                      minWidth: "22px",
+                      textAlign: "center",
+                    }}
+                  >
+                    3
+                  </span>
+                )}
+              </Link>
             );
           })}
         </nav>
@@ -370,7 +379,7 @@ export default function AdminLayout({ children }) {
         </nav>
 
         {/* Page Content */}
-        <main className="p-4">{children}</main>
+        <main className="p-4 admin-layout-main">{children}</main>
       </div>
     </div>
   );

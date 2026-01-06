@@ -6,6 +6,7 @@ import { useCart } from "../contexts/CartContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { ProductService } from "../services/productService";
+import mockDataStore from "../services/mockDataStore";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 
@@ -425,8 +426,19 @@ export default function ProductGrid({
 
     loadProducts();
 
+    // Mock modda ürün değişikliklerini dinle
+    let unsubscribe;
+    if (shouldUseMockData()) {
+      unsubscribe = mockDataStore.subscribe("products", () => {
+        if (isMounted) {
+          loadProducts();
+        }
+      });
+    }
+
     return () => {
       isMounted = false;
+      if (unsubscribe) unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, initialProducts]);
