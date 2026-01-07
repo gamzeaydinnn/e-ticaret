@@ -5,11 +5,13 @@
 Bu proje **hybrid API mimarisi** kullanmaktadır:
 
 ### ✅ Gerçek Backend API (Kalıcı)
+
 - **Posterler/Bannerlar** → `/api/admin/banners`
 - **Kategoriler** → `/api/admin/categories`
 - **Kullanıcılar, Siparişler, vb.** → Mevcut backend
 
 ### 🔄 Geçici Mock API (Mikro API gelene kadar)
+
 - **Ürünler** → JSON Server (`http://localhost:3005/products`)
 
 ---
@@ -19,13 +21,15 @@ Bu proje **hybrid API mimarisi** kullanmaktadır:
 ### 1. API Client'lar
 
 #### `apiBackend.js`
+
 ```javascript
 // Gerçek backend API için
-baseURL: https://localhost:7221 (veya REACT_APP_API_URL)
-Kullanım: Posterler, Kategoriler
+baseURL: //localhost:7221 (veya REACT_APP_API_URL)
+https: Kullanım: Posterler, Kategoriler;
 ```
 
 #### `apiProducts.js`
+
 ```javascript
 // JSON Server için (GEÇİCİ)
 baseURL: http://localhost:3005
@@ -34,10 +38,10 @@ Kullanım: Sadece Ürünler
 
 ### 2. Servisler
 
-| Servis | Bağlandığı API | Durum |
-|--------|----------------|-------|
-| `posterService.js` | apiBackend → Backend API | ✅ Kalıcı |
-| `categoryService.js` | apiBackend → Backend API | ✅ Kalıcı |
+| Servis                  | Bağlandığı API            | Durum     |
+| ----------------------- | ------------------------- | --------- |
+| `posterService.js`      | apiBackend → Backend API  | ✅ Kalıcı |
+| `categoryService.js`    | apiBackend → Backend API  | ✅ Kalıcı |
 | `productServiceTemp.js` | apiProducts → JSON Server | 🔄 Geçici |
 
 ---
@@ -72,6 +76,7 @@ npm start
 ### Backend API Endpoints
 
 #### Posterler/Bannerlar
+
 ```
 GET    /api/banners/slider          # Public: Aktif slider'lar
 GET    /api/banners/promo           # Public: Aktif promo'lar
@@ -83,6 +88,7 @@ PATCH  /api/admin/banners/{id}/toggle # Admin: Aktif/Pasif
 ```
 
 #### Kategoriler
+
 ```
 GET    /api/categories              # Public: Tüm kategoriler
 GET    /api/categories/{slug}       # Public: Slug'a göre
@@ -119,13 +125,14 @@ Mikro API hazır olduğunda **sadece 1 dosya değişecek**:
 
 ```javascript
 // ŞİMDİ (Geçici)
-import apiProducts from "./apiProducts";  // JSON Server
+import apiProducts from "./apiProducts"; // JSON Server
 
 // MİKRO API GELDİĞİNDE
-import apiMikro from "./apiMikro";         // Mikro API
+import apiMikro from "./apiMikro"; // Mikro API
 ```
 
 Endpoint path'lerini güncelle:
+
 ```javascript
 // Şimdi
 "/products" → await apiProducts.get("/products")
@@ -169,12 +176,14 @@ frontend/
 ## 🛠 Yardımcı Komutlar
 
 ### Mock DB'yi Sıfırla
+
 ```bash
 cd frontend
 node scripts/reset-mock-db.js
 ```
 
 ### JSON Server'ı Restart Et
+
 ```bash
 # Ctrl+C ile durdur, sonra:
 node node_modules/json-server/lib/bin.js mock-db.json --port 3005
@@ -198,7 +207,7 @@ node node_modules/json-server/lib/bin.js mock-db.json --port 3005
 ✅ **Minimum Değişiklik** - Mikro API geldiğinde tek dosya güncellenecek  
 ✅ **Profesyonel Yapı** - Domain-based service separation  
 ✅ **Kalıcı Veri** - Posterler ve kategoriler gerçek DB'de  
-✅ **Kolay Geçiş** - Migration süreci çok basit  
+✅ **Kolay Geçiş** - Migration süreci çok basit
 
 ---
 
@@ -207,6 +216,7 @@ node node_modules/json-server/lib/bin.js mock-db.json --port 3005
 Backend'inizde şu endpoint'lerin olması gerekiyor:
 
 ### Posterler
+
 - `GET /api/banners/slider`
 - `GET /api/banners/promo`
 - `GET /api/admin/banners`
@@ -216,6 +226,7 @@ Backend'inizde şu endpoint'lerin olması gerekiyor:
 - `PATCH /api/admin/banners/{id}/toggle`
 
 ### Kategoriler
+
 - `GET /api/categories`
 - `GET /api/categories/{slug}`
 - `GET /api/admin/categories`

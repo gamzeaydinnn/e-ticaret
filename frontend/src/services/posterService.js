@@ -20,7 +20,7 @@ const notify = () => {
 
 const posterService = {
   // ============ PUBLIC ENDPOINTS ============
-  
+
   // Aktif slider posterlerini getir
   async getSliderPosters() {
     try {
@@ -82,7 +82,7 @@ const posterService = {
       displayOrder: parseInt(poster.displayOrder) || 0,
       isActive: poster.isActive !== false,
     };
-    
+
     const result = await apiBackend.post("/api/admin/banners", payload);
     notify();
     return result;
@@ -99,7 +99,7 @@ const posterService = {
       displayOrder: parseInt(poster.displayOrder) || 0,
       isActive: poster.isActive !== false,
     };
-    
+
     const result = await apiBackend.put(`/api/admin/banners/${id}`, payload);
     notify();
     return result;

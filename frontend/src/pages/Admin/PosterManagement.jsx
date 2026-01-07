@@ -35,7 +35,10 @@ export default function PosterManagement() {
     } catch (err) {
       console.error("Posterler yüklenirken hata:", err);
       setPosters([]);
-      showFeedback("Posterler yüklenemedi - Backend API'ye bağlanılamadı", "danger");
+      showFeedback(
+        "Posterler yüklenemedi - Backend API'ye bağlanılamadı",
+        "danger"
+      );
     } finally {
       setLoading(false);
     }
@@ -79,24 +82,26 @@ export default function PosterManagement() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target.result;
-      
+
       // Resim boyutlarını kontrol et
       const img = new Image();
       img.onload = () => {
         const guidelines = DIMENSION_GUIDELINES[form.type];
         const widthTolerance = 100; // ±100px tolerans
-        const heightTolerance = 50;  // ±50px tolerans
-        
-        const widthInRange = Math.abs(img.width - guidelines.width) <= widthTolerance;
-        const heightInRange = Math.abs(img.height - guidelines.height) <= heightTolerance;
-        
+        const heightTolerance = 50; // ±50px tolerans
+
+        const widthInRange =
+          Math.abs(img.width - guidelines.width) <= widthTolerance;
+        const heightInRange =
+          Math.abs(img.height - guidelines.height) <= heightTolerance;
+
         if (!widthInRange || !heightInRange) {
           showFeedback(
             `Görsel boyutu önerilen ölçülere uymuyor. Önerilen: ${guidelines.text} (±tolerans), Yüklenen: ${img.width}x${img.height}px. Yine de kullanılacak.`,
             "warning"
           );
         }
-        
+
         setImagePreview(base64);
         setForm((p) => ({ ...p, imageUrl: base64 }));
         setUploading(false);
@@ -225,9 +230,16 @@ export default function PosterManagement() {
           <button
             className="btn btn-outline-secondary btn-sm"
             onClick={() => {
-              if (window.confirm("Tüm posterler varsayılana sıfırlanacak. Emin misiniz?")) {
+              if (
+                window.confirm(
+                  "Tüm posterler varsayılana sıfırlanacak. Emin misiniz?"
+                )
+              ) {
                 // JSON Server için: npm run mock-reset komutu ile sıfırlanır
-                showFeedback("Sıfırlamak için terminalde 'npm run mock-reset' çalıştırın", "warning");
+                showFeedback(
+                  "Sıfırlamak için terminalde 'npm run mock-reset' çalıştırın",
+                  "warning"
+                );
               }
             }}
             title="Varsayılana Sıfırla (Terminal: npm run mock-reset)"
@@ -286,7 +298,9 @@ export default function PosterManagement() {
                 .map((p) => (
                   <div
                     key={p.id}
-                    className={`position-relative ${!p.isActive ? "opacity-50" : ""}`}
+                    className={`position-relative ${
+                      !p.isActive ? "opacity-50" : ""
+                    }`}
                     style={{
                       width: "320px",
                       borderRadius: "12px",
@@ -294,8 +308,12 @@ export default function PosterManagement() {
                       boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                       transition: "transform 0.2s",
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.transform = "scale(1.02)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.transform = "scale(1)")
+                    }
                   >
                     <img
                       src={p.imageUrl}
@@ -315,14 +333,19 @@ export default function PosterManagement() {
                       <span className="badge bg-dark">#{p.displayOrder}</span>
                     </div>
                     <div className="position-absolute top-0 end-0 m-2">
-                      <span className={`badge ${p.isActive ? "bg-success" : "bg-secondary"}`}>
+                      <span
+                        className={`badge ${
+                          p.isActive ? "bg-success" : "bg-secondary"
+                        }`}
+                      >
                         {p.isActive ? "Aktif" : "Pasif"}
                       </span>
                     </div>
                     {/* Bottom Bar */}
                     <div
                       style={{
-                        background: "linear-gradient(transparent, rgba(0,0,0,0.8))",
+                        background:
+                          "linear-gradient(transparent, rgba(0,0,0,0.8))",
                         padding: "30px 12px 12px",
                         position: "absolute",
                         bottom: 0,
@@ -331,7 +354,10 @@ export default function PosterManagement() {
                       }}
                     >
                       <div className="d-flex justify-content-between align-items-center">
-                        <span className="text-white fw-bold text-truncate" style={{ maxWidth: "150px" }}>
+                        <span
+                          className="text-white fw-bold text-truncate"
+                          style={{ maxWidth: "150px" }}
+                        >
                           {p.title}
                         </span>
                         <div className="d-flex gap-1">
@@ -343,11 +369,17 @@ export default function PosterManagement() {
                             <i className="fas fa-edit"></i>
                           </button>
                           <button
-                            className={`btn btn-sm ${p.isActive ? "btn-warning" : "btn-success"}`}
+                            className={`btn btn-sm ${
+                              p.isActive ? "btn-warning" : "btn-success"
+                            }`}
                             onClick={() => toggleActive(p)}
                             title={p.isActive ? "Pasif Yap" : "Aktif Yap"}
                           >
-                            <i className={`fas ${p.isActive ? "fa-eye-slash" : "fa-eye"}`}></i>
+                            <i
+                              className={`fas ${
+                                p.isActive ? "fa-eye-slash" : "fa-eye"
+                              }`}
+                            ></i>
                           </button>
                           <button
                             className="btn btn-danger btn-sm"
@@ -403,7 +435,9 @@ export default function PosterManagement() {
                 .map((p) => (
                   <div
                     key={p.id}
-                    className={`position-relative ${!p.isActive ? "opacity-50" : ""}`}
+                    className={`position-relative ${
+                      !p.isActive ? "opacity-50" : ""
+                    }`}
                     style={{
                       width: "200px",
                       borderRadius: "10px",
@@ -411,8 +445,12 @@ export default function PosterManagement() {
                       boxShadow: "0 3px 10px rgba(0,0,0,0.12)",
                       transition: "transform 0.2s",
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.transform = "scale(1.03)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.transform = "scale(1)")
+                    }
                   >
                     <img
                       src={p.imageUrl}
@@ -430,7 +468,9 @@ export default function PosterManagement() {
                     {/* Badges */}
                     <div className="position-absolute top-0 end-0 m-1">
                       <span
-                        className={`badge ${p.isActive ? "bg-success" : "bg-secondary"}`}
+                        className={`badge ${
+                          p.isActive ? "bg-success" : "bg-secondary"
+                        }`}
                         style={{ fontSize: "0.65rem" }}
                       >
                         {p.isActive ? "Aktif" : "Pasif"}
@@ -461,11 +501,19 @@ export default function PosterManagement() {
                             <i className="fas fa-edit"></i>
                           </button>
                           <button
-                            className={`btn p-1 ${p.isActive ? "btn-outline-warning" : "btn-outline-success"}`}
+                            className={`btn p-1 ${
+                              p.isActive
+                                ? "btn-outline-warning"
+                                : "btn-outline-success"
+                            }`}
                             style={{ fontSize: "0.7rem" }}
                             onClick={() => toggleActive(p)}
                           >
-                            <i className={`fas ${p.isActive ? "fa-eye-slash" : "fa-eye"}`}></i>
+                            <i
+                              className={`fas ${
+                                p.isActive ? "fa-eye-slash" : "fa-eye"
+                              }`}
+                            ></i>
                           </button>
                           <button
                             className="btn btn-outline-danger p-1"
@@ -626,9 +674,9 @@ export default function PosterManagement() {
                           <div className="py-4">
                             <i className="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
                             <p className="mb-1">Resim yüklemek için tıklayın</p>
-                        <small className="text-muted">
-                          veya URL girin (max 10MB)
-                        </small>
+                            <small className="text-muted">
+                              veya URL girin (max 10MB)
+                            </small>
                           </div>
                         )}
                       </div>

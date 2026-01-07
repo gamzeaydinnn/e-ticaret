@@ -36,7 +36,7 @@ const createSlug = (name) => {
 
 const categoryService = {
   // ============ PUBLIC ENDPOINTS ============
-  
+
   // Tüm kategorileri getir (public - navigasyon için)
   async getAll() {
     try {
@@ -86,10 +86,11 @@ const categoryService = {
       imageUrl: category.imageUrl || "",
       icon: category.icon || "",
       parentId: category.parentId || null,
-      sortOrder: parseInt(category.sortOrder) || parseInt(category.displayOrder) || 0,
+      sortOrder:
+        parseInt(category.sortOrder) || parseInt(category.displayOrder) || 0,
       isActive: category.isActive !== false,
     };
-    
+
     const result = await apiBackend.post("/api/admin/categories", payload);
     notify();
     return result;
@@ -105,10 +106,11 @@ const categoryService = {
       imageUrl: category.imageUrl || "",
       icon: category.icon || "",
       parentId: category.parentId || null,
-      sortOrder: parseInt(category.sortOrder) || parseInt(category.displayOrder) || 0,
+      sortOrder:
+        parseInt(category.sortOrder) || parseInt(category.displayOrder) || 0,
       isActive: category.isActive !== false,
     };
-    
+
     const result = await apiBackend.put(`/api/admin/categories/${id}`, payload);
     notify();
     return result;

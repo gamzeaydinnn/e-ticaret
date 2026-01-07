@@ -20,6 +20,9 @@ COPY --from=build /app/build .
 RUN echo 'upstream api { \
     server ecommerce-api-prod:5000; \
 } \
+upstream mock_api { \
+    server ecommerce-mock-api-prod:3005; \
+} \
 server { \
     listen 80; \
     root /usr/share/nginx/html; \
@@ -34,6 +37,30 @@ server { \
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
         proxy_set_header X-Forwarded-Proto $scheme; \
         proxy_cache_bypass $http_upgrade; \
+    } \
+    location /products { \
+        proxy_pass http://mock_api/products; \
+        proxy_http_version 1.1; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+    location /posters { \
+        proxy_pass http://mock_api/posters; \
+        proxy_http_version 1.1; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+    location /coupons { \
+        proxy_pass http://mock_api/coupons; \
+        proxy_http_version 1.1; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+    location /reviews { \
+        proxy_pass http://mock_api/reviews; \
+        proxy_http_version 1.1; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
     } \
     location / { \
         try_files $uri /index.html; \

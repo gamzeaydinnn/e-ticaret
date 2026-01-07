@@ -1,9 +1,19 @@
 // src/services/apiProducts.js
-// JSON Server Client - Şimdilik SADECE ÜRÜNLER için (Mikro API gelene kadar)
+// SADECE ÜRÜNLER IÇIN Mock API - Production'da nginx proxy (/products)
+// DİĞER API CALLS gerçek .NET API'ye gider (/api/...)
 import axios from "axios";
 
+const getBaseURL = () => {
+  // Production'da nginx proxy üzerinden /products'a git
+  if (process.env.NODE_ENV === 'production') {
+    return "";  // baseURL boş = localhost:3005 yerine nginx proxy (/products)
+  }
+  // Development'ta direkt localhost:3005'e git
+  return "http://localhost:3005";
+};
+
 const apiProducts = axios.create({
-  baseURL: "http://localhost:3005",
+  baseURL: getBaseURL(),
   headers: {
     "Content-Type": "application/json",
   },
@@ -13,7 +23,9 @@ const apiProducts = axios.create({
 // Request interceptor
 apiProducts.interceptors.request.use(
   (config) => {
-    console.log(`[Products Mock API] ${config.method?.toUpperCase()} ${config.url}`);
+    console.log(
+      `[Products Mock API] ${config.method?.toUpperCase()} ${config.url}`
+    );
     return config;
   },
   (error) => {

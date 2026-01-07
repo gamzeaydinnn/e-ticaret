@@ -37,7 +37,7 @@ const productServiceMock = {
       isActive: product.isActive !== false,
     };
     delete payload.id; // JSON Server otomatik verecek
-    
+
     const res = await apiProducts.post("/products", payload);
     notify();
     return res.data;
@@ -68,7 +68,9 @@ const productServiceMock = {
 
   // Kategoriye göre ürünler
   async getByCategory(categoryId) {
-    const res = await apiProducts.get(`/products?categoryId=${categoryId}&isActive=true`);
+    const res = await apiProducts.get(
+      `/products?categoryId=${categoryId}&isActive=true`
+    );
     return res.data;
   },
 
@@ -81,7 +83,9 @@ const productServiceMock = {
   // Arama
   async search(query) {
     // JSON Server'da full-text search için q parametresi kullanılır
-    const res = await apiProducts.get(`/products?q=${encodeURIComponent(query)}&isActive=true`);
+    const res = await apiProducts.get(
+      `/products?q=${encodeURIComponent(query)}&isActive=true`
+    );
     return res.data;
   },
 
