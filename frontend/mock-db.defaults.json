@@ -1,0 +1,291 @@
+{
+  "posters": [
+    {
+      "id": 1,
+      "title": "İlk Alışveriş İndirimi",
+      "imageUrl": "/images/ilk-alisveris-indirim-banner.png",
+      "linkUrl": "/kampanyalar/ilk-alisveris",
+      "type": "slider",
+      "displayOrder": 1,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "title": "Taze ve Doğal İndirim Reyonu",
+      "imageUrl": "/images/taze-dogal-indirim-banner.png",
+      "linkUrl": "/kategori/meyve-ve-sebze",
+      "type": "slider",
+      "displayOrder": 2,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 3,
+      "title": "Meyve Reyonumuz",
+      "imageUrl": "/images/meyve-reyonu-banner.png",
+      "linkUrl": "/kategori/meyve-ve-sebze",
+      "type": "slider",
+      "displayOrder": 3,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 4,
+      "title": "Özel Fiyat Köy Sütü",
+      "imageUrl": "/images/ozel-fiyat-koy-sutu.png",
+      "linkUrl": "/urun/koy-sutu",
+      "type": "promo",
+      "displayOrder": 1,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "title": "Temizlik Malzemeleri",
+      "imageUrl": "/images/temizlik-malzemeleri.png",
+      "linkUrl": "/kategori/temizlik",
+      "type": "promo",
+      "displayOrder": 2,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "title": "Taze Günlük Lezzetli",
+      "imageUrl": "/images/taze-gunluk-lezzetli.png",
+      "linkUrl": "/kategori/sut-ve-sut-urunleri",
+      "type": "promo",
+      "displayOrder": 3,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    },
+    {
+      "id": 7,
+      "title": "Gölköy Gurme Et",
+      "imageUrl": "/images/golkoy-banner-2.png",
+      "linkUrl": "/kategori/et-ve-et-urunleri",
+      "type": "promo",
+      "displayOrder": 4,
+      "isActive": true,
+      "createdAt": "2026-01-07T00:00:00.000Z",
+      "updatedAt": "2026-01-07T00:00:00.000Z"
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "Dana Kuşbaşı",
+      "categoryId": 1,
+      "categoryName": "Et ve Et Ürünleri",
+      "price": 89.9,
+      "stock": 25,
+      "description": "Taze dana eti kuşbaşı",
+      "imageUrl": "/images/dana-kusbasi.jpg",
+      "isActive": true
+    },
+    {
+      "id": 2,
+      "name": "Kuzu İncik",
+      "categoryId": 1,
+      "categoryName": "Et ve Et Ürünleri",
+      "price": 95.5,
+      "stock": 15,
+      "description": "Taze kuzu incik eti",
+      "imageUrl": "/images/kuzu-incik.webp",
+      "isActive": true
+    },
+    {
+      "id": 3,
+      "name": "Sucuk 250gr",
+      "categoryId": 1,
+      "categoryName": "Et ve Et Ürünleri",
+      "price": 24.9,
+      "stock": 30,
+      "description": "Geleneksel sucuk",
+      "imageUrl": "/images/sucuk.jpg",
+      "isActive": true
+    },
+    {
+      "id": 4,
+      "name": "Pınar Süt 1L",
+      "categoryId": 2,
+      "categoryName": "Süt ve Süt Ürünleri",
+      "price": 12.5,
+      "stock": 50,
+      "description": "Taze tam yağlı süt",
+      "imageUrl": "/images/pinar-nestle-sut.jpg",
+      "isActive": true
+    },
+    {
+      "id": 5,
+      "name": "Şek Kaşar Peyniri 200gr",
+      "categoryId": 2,
+      "categoryName": "Süt ve Süt Ürünleri",
+      "price": 35.9,
+      "stock": 20,
+      "description": "Taze kaşar peyniri",
+      "imageUrl": "/images/kasar.jpg",
+      "isActive": true
+    },
+    {
+      "id": 6,
+      "name": "Elma (1kg)",
+      "categoryId": 3,
+      "categoryName": "Meyve ve Sebze",
+      "price": 15.9,
+      "stock": 100,
+      "description": "Taze kırmızı elma",
+      "imageUrl": "/images/elma.jpg",
+      "isActive": true
+    },
+    {
+      "id": 7,
+      "name": "Domates (1kg)",
+      "categoryId": 3,
+      "categoryName": "Meyve ve Sebze",
+      "price": 12.5,
+      "stock": 80,
+      "description": "Taze domates",
+      "imageUrl": "/images/domates.png",
+      "isActive": true
+    },
+    {
+      "id": 8,
+      "name": "Muz (1kg)",
+      "categoryId": 3,
+      "categoryName": "Meyve ve Sebze",
+      "price": 29.9,
+      "stock": 60,
+      "description": "İthal muz",
+      "imageUrl": "/images/muz.jpg",
+      "isActive": true
+    },
+    {
+      "id": 9,
+      "name": "Coca Cola 1L",
+      "categoryId": 4,
+      "categoryName": "İçecekler",
+      "price": 8.9,
+      "stock": 100,
+      "description": "Coca Cola gazlı içecek",
+      "imageUrl": "/images/cocacola.jpg",
+      "isActive": true
+    },
+    {
+      "id": 10,
+      "name": "Lipton Ice Tea 330ml",
+      "categoryId": 4,
+      "categoryName": "İçecekler",
+      "price": 4.75,
+      "stock": 60,
+      "description": "Şeftali aromalı ice tea",
+      "imageUrl": "/images/lipton-ice-tea.jpg",
+      "isActive": true
+    },
+    {
+      "id": 11,
+      "name": "Nescafe 200gr",
+      "categoryId": 4,
+      "categoryName": "İçecekler",
+      "price": 45.9,
+      "stock": 25,
+      "description": "Klasik nescafe",
+      "imageUrl": "/images/nescafe.jpg",
+      "isActive": true
+    },
+    {
+      "id": 12,
+      "name": "Tahıl Cipsi 150gr",
+      "categoryId": 5,
+      "categoryName": "Atıştırmalık",
+      "price": 12.9,
+      "stock": 35,
+      "description": "Çıtır tahıl cipsi",
+      "imageUrl": "/images/tahil-cipsi.jpg",
+      "isActive": true
+    },
+    {
+      "id": 13,
+      "name": "Cif Krem Temizleyici",
+      "categoryId": 6,
+      "categoryName": "Temizlik",
+      "price": 15.9,
+      "stock": 45,
+      "description": "Mutfak temizleyici",
+      "imageUrl": "/images/yeşil-cif-krem.jpg",
+      "isActive": true
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "Et ve Et Ürünleri",
+      "slug": "et-ve-et-urunleri",
+      "description": "Taze et ve şarküteri ürünleri",
+      "icon": "fa-drumstick-bite",
+      "productCount": 3,
+      "isActive": true
+    },
+    {
+      "id": 2,
+      "name": "Süt ve Süt Ürünleri",
+      "slug": "sut-ve-sut-urunleri",
+      "description": "Süt, peynir, yoğurt ve türevleri",
+      "icon": "fa-cheese",
+      "productCount": 2,
+      "isActive": true
+    },
+    {
+      "id": 3,
+      "name": "Meyve ve Sebze",
+      "slug": "meyve-ve-sebze",
+      "description": "Taze meyve ve sebzeler",
+      "icon": "fa-apple-alt",
+      "productCount": 3,
+      "isActive": true
+    },
+    {
+      "id": 4,
+      "name": "İçecekler",
+      "slug": "icecekler",
+      "description": "Soğuk ve sıcak içecekler",
+      "icon": "fa-coffee",
+      "productCount": 3,
+      "isActive": true
+    },
+    {
+      "id": 5,
+      "name": "Atıştırmalık",
+      "slug": "atistirmalik",
+      "description": "Cipsi, kraker ve atıştırmalıklar",
+      "icon": "fa-cookie-bite",
+      "productCount": 1,
+      "isActive": true
+    },
+    {
+      "id": 6,
+      "name": "Temizlik",
+      "slug": "temizlik",
+      "description": "Ev temizlik ürünleri",
+      "icon": "fa-broom",
+      "productCount": 1,
+      "isActive": true
+    },
+    {
+      "id": 7,
+      "name": "Temel Gıda",
+      "slug": "temel-gida",
+      "description": "Bakliyat, makarna, pirinç",
+      "icon": "fa-seedling",
+      "productCount": 1,
+      "isActive": true
+    }
+  ]
+}

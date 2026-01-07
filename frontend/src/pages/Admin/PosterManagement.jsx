@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import mockDataStore from "../../services/mockDataStore";
+import posterService from "../../services/posterService";
 
 const initialForm = {
   id: 0,
@@ -12,8 +12,8 @@ const initialForm = {
 };
 
 const DIMENSION_GUIDELINES = {
-  slider: { width: 1200, height: 400, text: "1200x400px" },
-  promo: { width: 300, height: 200, text: "300x200px" },
+  slider: { width: 1200, height: 400, text: "1200x400px (Ana Slider)" },
+  promo: { width: 300, height: 200, text: "300x200px (Kampanya)" },
 };
 
 export default function PosterManagement() {
@@ -27,13 +27,15 @@ export default function PosterManagement() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
 
-  const fetchPosters = () => {
+  const fetchPosters = async () => {
     try {
       setLoading(true);
-      const data = mockDataStore.getAllPosters();
+      const data = await posterService.getAll();
       setPosters(Array.isArray(data) ? data : []);
-    } catch {
+    } catch (err) {
+      console.error("Posterler yüklenirken hata:", err);
       setPosters([]);
+      showFeedback("Posterler yüklenemedi - Backend API'ye bağlanılamadı", "danger");
     } finally {
       setLoading(false);
     }
@@ -41,7 +43,8 @@ export default function PosterManagement() {
 
   useEffect(() => {
     fetchPosters();
-    const unsubscribe = mockDataStore.subscribe("posters", fetchPosters);
+    // Gerçek backend API - subscription sistemi
+    const unsubscribe = posterService.subscribe(fetchPosters);
     return () => unsubscribe && unsubscribe();
   }, []);
 
@@ -55,14 +58,14 @@ export default function PosterManagement() {
     setForm((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
   };
 
-  // Resim yükleme - Base64 olarak localStorage'a kaydet
+  // Resim yükleme - Base64 olarak kaydet ve boyut kontrolü yap
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Dosya boyutu kontrolü (max 50MB)
-    if (file.size > 50 * 1024 * 1024) {
-      showFeedback("Dosya boyutu 50MB'dan küçük olmalı", "danger");
+    // Dosya boyutu kontrolü (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showFeedback("Dosya boyutu 10MB'dan küçük olmalı", "danger");
       return;
     }
 
@@ -76,9 +79,33 @@ export default function PosterManagement() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const base64 = event.target.result;
-      setImagePreview(base64);
-      setForm((p) => ({ ...p, imageUrl: base64 }));
-      setUploading(false);
+      
+      // Resim boyutlarını kontrol et
+      const img = new Image();
+      img.onload = () => {
+        const guidelines = DIMENSION_GUIDELINES[form.type];
+        const widthTolerance = 100; // ±100px tolerans
+        const heightTolerance = 50;  // ±50px tolerans
+        
+        const widthInRange = Math.abs(img.width - guidelines.width) <= widthTolerance;
+        const heightInRange = Math.abs(img.height - guidelines.height) <= heightTolerance;
+        
+        if (!widthInRange || !heightInRange) {
+          showFeedback(
+            `Görsel boyutu önerilen ölçülere uymuyor. Önerilen: ${guidelines.text} (±tolerans), Yüklenen: ${img.width}x${img.height}px. Yine de kullanılacak.`,
+            "warning"
+          );
+        }
+        
+        setImagePreview(base64);
+        setForm((p) => ({ ...p, imageUrl: base64 }));
+        setUploading(false);
+      };
+      img.onerror = () => {
+        showFeedback("Resim yüklenirken hata oluştu", "danger");
+        setUploading(false);
+      };
+      img.src = base64;
     };
     reader.onerror = () => {
       showFeedback("Resim yüklenirken hata oluştu", "danger");
@@ -105,7 +132,7 @@ export default function PosterManagement() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.title.trim()) {
@@ -119,38 +146,41 @@ export default function PosterManagement() {
 
     try {
       if (form.id > 0) {
-        mockDataStore.updatePoster(form.id, form);
+        await posterService.update(form.id, form);
         showFeedback("Poster güncellendi");
       } else {
-        mockDataStore.createPoster(form);
+        await posterService.create(form);
         showFeedback("Poster eklendi");
       }
+      await fetchPosters(); // Listeyi yenile
       closeModal();
     } catch (err) {
+      console.error("Poster kaydetme hatası:", err);
       showFeedback(err.message || "Hata oluştu", "danger");
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Bu posteri silmek istediğinize emin misiniz?")) return;
     try {
-      mockDataStore.deletePoster(id);
+      await posterService.delete(id);
       showFeedback("Poster silindi");
-    } catch {
+      await fetchPosters(); // Listeyi yenile
+    } catch (err) {
+      console.error("Poster silme hatası:", err);
       showFeedback("Silinemedi", "danger");
     }
   };
 
-  const toggleActive = (poster) => {
+  const toggleActive = async (poster) => {
     try {
-      mockDataStore.updatePoster(poster.id, {
-        ...poster,
-        isActive: !poster.isActive,
-      });
+      await posterService.toggleActive(poster);
       showFeedback(
         poster.isActive ? "Poster pasif yapıldı" : "Poster aktif yapıldı"
       );
-    } catch {
+      await fetchPosters(); // Listeyi yenile
+    } catch (err) {
+      console.error("Durum güncelleme hatası:", err);
       showFeedback("Durum güncellenemedi", "danger");
     }
   };
@@ -196,11 +226,11 @@ export default function PosterManagement() {
             className="btn btn-outline-secondary btn-sm"
             onClick={() => {
               if (window.confirm("Tüm posterler varsayılana sıfırlanacak. Emin misiniz?")) {
-                mockDataStore.resetToDefaults();
-                showFeedback("Posterler varsayılana sıfırlandı");
+                // JSON Server için: npm run mock-reset komutu ile sıfırlanır
+                showFeedback("Sıfırlamak için terminalde 'npm run mock-reset' çalıştırın", "warning");
               }
             }}
-            title="Varsayılana Sıfırla"
+            title="Varsayılana Sıfırla (Terminal: npm run mock-reset)"
           >
             <i className="fas fa-undo"></i>
           </button>
@@ -247,7 +277,12 @@ export default function PosterManagement() {
           ) : (
             <div className="d-flex flex-wrap gap-3 justify-content-center">
               {sliderPosters
-                .sort((a, b) => a.displayOrder - b.displayOrder)
+                .sort((a, b) => {
+                  if (a.displayOrder !== b.displayOrder) {
+                    return a.displayOrder - b.displayOrder;
+                  }
+                  return a.id - b.id;
+                })
                 .map((p) => (
                   <div
                     key={p.id}
@@ -359,7 +394,12 @@ export default function PosterManagement() {
           ) : (
             <div className="d-flex flex-wrap gap-3 justify-content-center">
               {promoPosters
-                .sort((a, b) => a.displayOrder - b.displayOrder)
+                .sort((a, b) => {
+                  if (a.displayOrder !== b.displayOrder) {
+                    return a.displayOrder - b.displayOrder;
+                  }
+                  return a.id - b.id;
+                })
                 .map((p) => (
                   <div
                     key={p.id}
@@ -586,9 +626,9 @@ export default function PosterManagement() {
                           <div className="py-4">
                             <i className="fas fa-cloud-upload-alt fa-3x text-muted mb-2"></i>
                             <p className="mb-1">Resim yüklemek için tıklayın</p>
-                            <small className="text-muted">
-                              veya URL girin (max 50MB)
-                            </small>
+                        <small className="text-muted">
+                          veya URL girin (max 10MB)
+                        </small>
                           </div>
                         )}
                       </div>
