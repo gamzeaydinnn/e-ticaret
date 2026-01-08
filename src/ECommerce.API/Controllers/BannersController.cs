@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs;
@@ -7,18 +8,25 @@ namespace ECommerce.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [IgnoreAntiforgeryToken]
+    [AllowAnonymous]
     public class BannersController : ControllerBase
     {
         private readonly IBannerService _bannerService;
-        public BannersController(IBannerService bannerService)
+        private readonly ILogger<BannersController> _logger;
+        
+        public BannersController(IBannerService bannerService, ILogger<BannersController> logger)
         {
             _bannerService = bannerService;
+            _logger = logger;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
+            _logger.LogInformation("🔍 BannersController.GetAll çağrıldı");
             var banners = await _bannerService.GetAllAsync();
+            _logger.LogInformation($"✅ {(banners as System.Collections.Generic.IEnumerable<BannerDto>)?.Count() ?? 0} banner döndürüldü");
             return Ok(banners);
         }
 
@@ -31,15 +39,18 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpPost]
+        [RequestSizeLimit(10_000_000)]
         public async Task<IActionResult> Add([FromBody] BannerDto dto)
         {
             await _bannerService.AddAsync(dto);
             return Ok();
         }
 
-        [HttpPut]
-        public async Task<IActionResult> Update([FromBody] BannerDto dto)
+        [HttpPut("{id}")]
+        [RequestSizeLimit(10_000_000)]
+        public async Task<IActionResult> Update(int id, [FromBody] BannerDto dto)
         {
+            dto.Id = id;
             await _bannerService.UpdateAsync(dto);
             return Ok();
         }

@@ -41,6 +41,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<InventoryLog> InventoryLogs { get; set; }
         public virtual DbSet<Notification> Notifications { get; set; }
         public virtual DbSet<WeightReport> WeightReports { get; set; }
+        public virtual DbSet<Banner> Banners { get; set; }
       public virtual DbSet<OrderStatusHistory> OrderStatusHistories { get; set; }
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
         public virtual DbSet<Campaign> Campaigns { get; set; }
