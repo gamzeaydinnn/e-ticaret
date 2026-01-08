@@ -397,17 +397,9 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = services.GetRequiredService<ECommerceDbContext>();
-        // Dev/SQLite: şemayı oluştur; SQL Server: migrate
-        var useSqliteAtRuntime = builder.Configuration.GetValue<bool>("Database:UseSqlite");
-        if (useSqliteAtRuntime)
-        {
-            db.Database.EnsureCreated();
-        }
-        else
-        {
-            // SQL Server: her zaman migrate çalıştır
-            db.Database.Migrate();
-        }
+        // Create database schema safely - works for both SQLite and SQL Server
+        // EnsureCreated() is idempotent and won't fail if tables already exist
+        db.Database.EnsureCreated();
 
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
         ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
