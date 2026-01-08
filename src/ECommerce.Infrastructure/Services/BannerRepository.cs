@@ -1,5 +1,8 @@
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
+using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,47 +11,66 @@ namespace ECommerce.Infrastructure.Services
 {
     public class BannerRepository : IBannerRepository
     {
-        private readonly List<Banner> _banners = new();
+        private readonly ECommerceDbContext _context;
 
-        public Task<IEnumerable<Banner>> GetAllAsync()
+        public BannerRepository(ECommerceDbContext context)
         {
-            return Task.FromResult(_banners.AsEnumerable());
+            _context = context;
         }
 
-        public Task<Banner?> GetByIdAsync(int id)
+        public async Task<IEnumerable<Banner>> GetAllAsync()
         {
-            return Task.FromResult(_banners.FirstOrDefault(b => b.Id == id));
+            Console.WriteLine("🔍 BannerRepository.GetAllAsync çağrıldı");
+            try
+            {
+                var banners = await _context.Banners.OrderBy(b => b.DisplayOrder).ToListAsync();
+                Console.WriteLine($"✅ BannerRepository: {banners.Count} banner bulundu");
+                return banners;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ BannerRepository Error: {ex.Message}");
+                Console.WriteLine($"❌ StackTrace: {ex.StackTrace}");
+                throw;
+            }
         }
 
-        public Task AddAsync(Banner banner)
+        public async Task<Banner?> GetByIdAsync(int id)
         {
-            banner.Id = _banners.Count > 0 ? _banners.Max(b => b.Id) + 1 : 1;
-            _banners.Add(banner);
-            return Task.CompletedTask;
+            return await _context.Banners.FindAsync(id);
         }
 
-        public Task UpdateAsync(Banner banner)
+        public async Task AddAsync(Banner banner)
         {
-            var existing = _banners.FirstOrDefault(b => b.Id == banner.Id);
+            banner.CreatedAt = DateTime.UtcNow;
+            await _context.Banners.AddAsync(banner);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(Banner banner)
+        {
+            var existing = await _context.Banners.FindAsync(banner.Id);
             if (existing != null)
             {
                 existing.Title = banner.Title;
                 existing.ImageUrl = banner.ImageUrl;
                 existing.LinkUrl = banner.LinkUrl;
+                existing.Type = banner.Type;
                 existing.IsActive = banner.IsActive;
                 existing.DisplayOrder = banner.DisplayOrder;
+                existing.UpdatedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
             }
-            return Task.CompletedTask;
         }
 
-        public Task DeleteAsync(int id)
+        public async Task DeleteAsync(int id)
         {
-            var banner = _banners.FirstOrDefault(b => b.Id == id);
+            var banner = await _context.Banners.FindAsync(id);
             if (banner != null)
             {
-                _banners.Remove(banner);
+                _context.Banners.Remove(banner);
+                await _context.SaveChangesAsync();
             }
-            return Task.CompletedTask;
         }
     }
 }

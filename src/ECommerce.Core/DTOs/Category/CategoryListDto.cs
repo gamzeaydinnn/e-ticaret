@@ -12,5 +12,6 @@ namespace ECommerce.Core.DTOs.Category
         public string Slug { get; set; } = string.Empty;
         public string? ImageUrl { get; set; }
         public int? ParentId { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 }

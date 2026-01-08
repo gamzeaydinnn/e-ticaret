@@ -36,7 +36,8 @@ namespace ECommerce.API.Controllers
                 Name = c.Name,
                 Slug = c.Slug,
                 ImageUrl = c.ImageUrl,
-                ParentId = c.ParentId
+                ParentId = c.ParentId,
+                IsActive = c.IsActive
             });
 
             return Ok(categoryDtos);

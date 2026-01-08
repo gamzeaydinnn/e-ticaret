@@ -17,16 +17,21 @@ export default function CategoryTile({ category }) {
   const slug = category?.slug || slugify(category?.name);
 
   return (
-    <Link to={slug ? `/category/${slug}` : "#"} className="text-decoration-none">
+    <Link
+      to={slug ? `/category/${slug}` : "#"}
+      className="text-decoration-none"
+    >
       <div className="border p-6 rounded-lg shadow hover:shadow-lg transition cursor-pointer text-center bg-white">
-        {category?.ImageUrl && (
+        {(category?.imageUrl || category?.ImageUrl) && (
           <img
-            src={category.ImageUrl}
-            alt={category.name}
+            src={category?.imageUrl || category?.ImageUrl}
+            alt={category?.name}
             className="mb-4 w-full h-40 object-cover rounded-lg mx-auto"
           />
         )}
-        <h3 className="font-semibold text-lg text-gray-800">{category?.name || "Kategori"}</h3>
+        <h3 className="font-semibold text-lg text-gray-800">
+          {category?.name || "Kategori"}
+        </h3>
       </div>
     </Link>
   );
