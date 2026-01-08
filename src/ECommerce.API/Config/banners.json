@@ -1,0 +1,79 @@
+[
+  {
+    "id": 1,
+    "title": "İlk Alışveriş İndirimi",
+    "imageUrl": "/images/ilk-alisveris-indirim-banner.png",
+    "linkUrl": "/kampanyalar/ilk-alisveris",
+    "type": "slider",
+    "displayOrder": 1,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "title": "Taze ve Doğal İndirim Reyonu",
+    "imageUrl": "/images/taze-dogal-indirim-banner.png",
+    "linkUrl": "/kategori/meyve-ve-sebze",
+    "type": "slider",
+    "displayOrder": 2,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 3,
+    "title": "Meyve Reyonumuz",
+    "imageUrl": "/images/meyve-reyonu-banner.png",
+    "linkUrl": "/kategori/meyve-ve-sebze",
+    "type": "slider",
+    "displayOrder": 3,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 4,
+    "title": "Özel Fiyat Köy Sütü",
+    "imageUrl": "/images/ozel-fiyat-koy-sutu.png",
+    "linkUrl": "/urun/koy-sutu",
+    "type": "promo",
+    "displayOrder": 1,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 5,
+    "title": "Temizlik Malzemeleri",
+    "imageUrl": "/images/temizlik-malzemeleri.png",
+    "linkUrl": "/kategori/temizlik",
+    "type": "promo",
+    "displayOrder": 2,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 6,
+    "title": "Taze Günlük Lezzetli",
+    "imageUrl": "/images/taze-gunluk-lezzetli.png",
+    "linkUrl": "/kategori/sut-ve-sut-urunleri",
+    "type": "promo",
+    "displayOrder": 3,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  },
+  {
+    "id": 7,
+    "title": "Gölköy Gurme Et",
+    "imageUrl": "/images/golkoy-banner-2.png",
+    "linkUrl": "/kategori/et-ve-et-urunleri",
+    "type": "promo",
+    "displayOrder": 4,
+    "isActive": true,
+    "createdAt": "2026-01-07T00:00:00.000Z",
+    "updatedAt": "2026-01-07T00:00:00.000Z"
+  }
+]
