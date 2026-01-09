@@ -6,28 +6,26 @@ ARG REACT_APP_API_URL=https://golkoygurme.com.tr/api
 ARG REACT_APP_BACKEND_ENABLED=true
 ARG REACT_APP_USE_MOCK_DATA=false
 
-# Create .env file FIRST - BEFORE copying source or npm install
-RUN echo "REACT_APP_API_URL=${REACT_APP_API_URL}" > .env && \
-    echo "REACT_APP_BACKEND_ENABLED=${REACT_APP_BACKEND_ENABLED}" >> .env && \
-    echo "REACT_APP_USE_MOCK_DATA=${REACT_APP_USE_MOCK_DATA}" >> .env && \
-    echo "=== .env file created ===" && \
-    cat .env
-
-# Copy package files
+# Copy package files first
 COPY package.json package-lock.json* ./
 
-# Install dependencies (will use .env created above)
+# Install dependencies
 RUN npm ci --production=false --legacy-peer-deps --no-fund --no-audit
 
 # Copy source code
 COPY . .
 
-# Verify .env is still correct (in case source had .env file)
-RUN echo "=== Verifying .env before build ===" && \
-    cat .env
-
-# Build with NODE_ENV=production to ensure production optimizations
-RUN NODE_ENV=production npm run build
+# Create .env file and build in ONE RUN block so ENV vars are available
+RUN printf "REACT_APP_API_URL=%s\nREACT_APP_BACKEND_ENABLED=%s\nREACT_APP_USE_MOCK_DATA=%s\n" \
+    "${REACT_APP_API_URL}" "${REACT_APP_BACKEND_ENABLED}" "${REACT_APP_USE_MOCK_DATA}" > .env && \
+    echo "=== .env file created ===" && \
+    cat .env && \
+    export REACT_APP_API_URL="${REACT_APP_API_URL}" && \
+    export REACT_APP_BACKEND_ENABLED="${REACT_APP_BACKEND_ENABLED}" && \
+    export REACT_APP_USE_MOCK_DATA="${REACT_APP_USE_MOCK_DATA}" && \
+    NODE_ENV=production npm run build && \
+    echo "=== Build complete ===" && \
+    ls -la build/ | head -20
 
 # Production stage
 FROM nginx:stable-alpine
