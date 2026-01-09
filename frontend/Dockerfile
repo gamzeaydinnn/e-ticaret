@@ -1,6 +1,16 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
+# Build arguments from docker-compose
+ARG REACT_APP_API_URL=https://golkoygurme.com.tr/api
+ARG REACT_APP_BACKEND_ENABLED=true
+ARG REACT_APP_USE_MOCK_DATA=false
+
+# Set environment variables for build
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+ENV REACT_APP_BACKEND_ENABLED=$REACT_APP_BACKEND_ENABLED
+ENV REACT_APP_USE_MOCK_DATA=$REACT_APP_USE_MOCK_DATA
+
 # Copy package files first for better caching
 COPY package.json package-lock.json* ./
 
