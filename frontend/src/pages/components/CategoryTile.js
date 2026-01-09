@@ -21,15 +21,22 @@ export default function CategoryTile({ category }) {
       to={slug ? `/category/${slug}` : "#"}
       className="text-decoration-none"
     >
-      <div className="border p-6 rounded-lg shadow hover:shadow-lg transition cursor-pointer text-center bg-white">
+      <div className="border p-3 rounded shadow-sm hover:shadow transition cursor-pointer text-center bg-white h-100">
         {(category?.imageUrl || category?.ImageUrl) && (
           <img
             src={category?.imageUrl || category?.ImageUrl}
             alt={category?.name}
-            className="mb-4 w-full h-40 object-cover rounded-lg mx-auto"
+            className="mb-2"
+            style={{
+              width: "100%",
+              height: "100px",
+              objectFit: "cover",
+              borderRadius: "6px",
+              display: "block"
+            }}
           />
         )}
-        <h3 className="font-semibold text-lg text-gray-800">
+        <h3 className="font-weight-600 text-gray-800" style={{ fontSize: "0.95rem" }}>
           {category?.name || "Kategori"}
         </h3>
       </div>
