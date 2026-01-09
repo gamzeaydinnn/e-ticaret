@@ -6,23 +6,28 @@ ARG REACT_APP_API_URL=https://golkoygurme.com.tr/api
 ARG REACT_APP_BACKEND_ENABLED=true
 ARG REACT_APP_USE_MOCK_DATA=false
 
-# Copy package files first for better caching
-COPY package.json package-lock.json* ./
-
-# Install dependencies
-RUN npm ci --production=false --legacy-peer-deps --no-fund --no-audit
-
-# Copy source
-COPY . .
-
-# Create .env file from build args AFTER copying source (to not be overwritten)
+# Create .env file FIRST - BEFORE copying source or npm install
 RUN echo "REACT_APP_API_URL=${REACT_APP_API_URL}" > .env && \
     echo "REACT_APP_BACKEND_ENABLED=${REACT_APP_BACKEND_ENABLED}" >> .env && \
     echo "REACT_APP_USE_MOCK_DATA=${REACT_APP_USE_MOCK_DATA}" >> .env && \
+    echo "=== .env file created ===" && \
     cat .env
 
-# Build
-RUN npm run build
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies (will use .env created above)
+RUN npm ci --production=false --legacy-peer-deps --no-fund --no-audit
+
+# Copy source code
+COPY . .
+
+# Verify .env is still correct (in case source had .env file)
+RUN echo "=== Verifying .env before build ===" && \
+    cat .env
+
+# Build with NODE_ENV=production to ensure production optimizations
+RUN NODE_ENV=production npm run build
 
 # Production stage
 FROM nginx:stable-alpine
