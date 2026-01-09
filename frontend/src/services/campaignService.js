@@ -74,7 +74,7 @@ export const CampaignService = {
     }
 
     try {
-      const data = await api.get(`/api/campaigns/${encodeURIComponent(slug)}`);
+      const data = await api.get(`/campaigns/${encodeURIComponent(slug)}`);
       if (data) return data.data || data;
     } catch (e) {
       debugLog("Campaign detail API başarısız, mock'a düşülüyor", {

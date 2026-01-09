@@ -31,7 +31,7 @@ export const FavoriteService = {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
         debugLog("Backend'den favoriler çekiliyor", { userId: user.id });
-        const result = await api.get(`/api/favorites?userId=${user.id}`);
+        const result = await api.get(`/favorites?userId=${user.id}`);
         return result?.success ? result.data : [];
       } catch (error) {
         debugLog("Backend API hatası, localStorage fallback", error);

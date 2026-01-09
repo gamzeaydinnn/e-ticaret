@@ -4,14 +4,14 @@ import api from "./api";
 
 /**
  * SMS Doğrulama Servisi
- *
+ * 
  * Backend Endpoint'leri:
  * - POST /api/sms/send-otp     : OTP gönder
  * - POST /api/sms/verify-otp   : OTP doğrula
  * - POST /api/sms/resend-otp   : Tekrar gönder
  * - GET  /api/sms/status/{phone} : Durum sorgula
  * - GET  /api/sms/can-send     : Gönderebilir mi kontrol
- *
+ * 
  * Purpose Enum - Backend (C#) enum değerleriyle eşleşmelidir:
  * - 1: Registration (Kayıt)
  * - 2: PasswordReset (Şifre Sıfırlama)
@@ -23,12 +23,12 @@ import api from "./api";
 
 // Purpose enum değerleri - Backend ECommerce.Entities.Enums.SmsVerificationPurpose ile eşleşir
 export const SmsVerificationPurpose = {
-  Registration: 1, // Backend'de 1
-  PasswordReset: 2, // Backend'de 2
-  TwoFactorAuth: 3, // Backend'de 3
-  PhoneChange: 4, // Backend'de 4
-  OrderConfirmation: 5, // Backend'de 5
-  AccountDeletion: 6, // Backend'de 6
+  Registration: 1,        // Backend'de 1
+  PasswordReset: 2,       // Backend'de 2
+  TwoFactorAuth: 3,       // Backend'de 3
+  PhoneChange: 4,         // Backend'de 4
+  OrderConfirmation: 5,   // Backend'de 5
+  AccountDeletion: 6,     // Backend'de 6
 };
 
 const smsService = {
@@ -40,9 +40,9 @@ const smsService = {
    */
   async sendOtp(phoneNumber, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.post("/api/sms/send-otp", {
-        phoneNumber,
-        purpose,
+      const response = await api.post("/api/sms/send-otp", { 
+        phoneNumber, 
+        purpose 
       });
       console.log("[SmsService] OTP gönderildi:", response.data);
       return {
@@ -69,11 +69,7 @@ const smsService = {
    * @param {number} purpose - Doğrulama amacı
    * @returns {Promise<Object>} { success, message, remainingAttempts }
    */
-  async verifyOtp(
-    phoneNumber,
-    code,
-    purpose = SmsVerificationPurpose.Registration
-  ) {
+  async verifyOtp(phoneNumber, code, purpose = SmsVerificationPurpose.Registration) {
     try {
       const response = await api.post("/api/sms/verify-otp", {
         phoneNumber,
@@ -105,9 +101,9 @@ const smsService = {
    */
   async resendOtp(phoneNumber, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.post("/api/sms/resend-otp", {
-        phoneNumber,
-        purpose,
+      const response = await api.post("/api/sms/resend-otp", { 
+        phoneNumber, 
+        purpose 
       });
       console.log("[SmsService] OTP tekrar gönderildi:", response.data);
       return {
@@ -134,12 +130,9 @@ const smsService = {
    */
   async getStatus(phoneNumber, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.get(
-        `/api/sms/status/${encodeURIComponent(phoneNumber)}`,
-        {
-          params: { purpose },
-        }
-      );
+      const response = await api.get(`/sms/status/${encodeURIComponent(phoneNumber)}`, {
+        params: { purpose },
+      });
       return {
         success: true,
         ...response.data,
@@ -189,10 +182,7 @@ const smsService = {
    */
   async registerWithPhone(userData) {
     try {
-      const response = await api.post(
-        "/api/auth/register-with-phone",
-        userData
-      );
+      const response = await api.post("/api/auth/register-with-phone", userData);
       console.log("[SmsService] Kayıt başlatıldı:", response.data);
       return {
         success: true,
@@ -296,16 +286,9 @@ const smsService = {
 
 // Eski API uyumluluğu için (backward compatibility)
 const otpService = {
-  sendOtp: (phoneNumber) =>
-    smsService.sendOtp(phoneNumber, SmsVerificationPurpose.Registration),
-  verifyOtp: (phoneNumber, code) =>
-    smsService.verifyOtp(
-      phoneNumber,
-      code,
-      SmsVerificationPurpose.Registration
-    ),
-  canSendOtp: (phoneNumber) =>
-    smsService.canSendOtp(phoneNumber).then((r) => r.canSend),
+  sendOtp: (phoneNumber) => smsService.sendOtp(phoneNumber, SmsVerificationPurpose.Registration),
+  verifyOtp: (phoneNumber, code) => smsService.verifyOtp(phoneNumber, code, SmsVerificationPurpose.Registration),
+  canSendOtp: (phoneNumber) => smsService.canSendOtp(phoneNumber).then(r => r.canSend),
 };
 
 export { smsService };

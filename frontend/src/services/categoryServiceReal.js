@@ -39,15 +39,15 @@ const categoryServiceReal = {
 
   // Tüm kategorileri getir (public - navigasyon için)
   async getAll() {
-    console.log("[CategoryService] Calling /api/categories...");
-    const data = await api.get("/api/categories");
+    console.log("[CategoryService] Calling /categories...");
+    const data = await api.get("/categories");
     console.log("[CategoryService] Received data:", data);
     return Array.isArray(data) ? data : [];
   },
 
   // Slug'a göre kategori getir
   async getBySlug(slug) {
-    return await api.get(`/api/categories/${encodeURIComponent(slug)}`);
+    return await api.get(`/categories/${encodeURIComponent(slug)}`);
   },
 
   // Aktif kategoriler (public görünüm için)
@@ -71,7 +71,7 @@ const categoryServiceReal = {
 
   // Admin: ID'ye göre kategori getir
   async getById(id) {
-    return await api.get(`/api/admin/categories/${id}`);
+    return await api.get(`/admin/categories/${id}`);
   },
 
   // Admin: Yeni kategori oluştur
@@ -104,14 +104,14 @@ const categoryServiceReal = {
       isActive: category.isActive !== false,
     };
 
-    const result = await api.put(`/api/admin/categories/${id}`, payload);
+    const result = await api.put(`/admin/categories/${id}`, payload);
     notify();
     return result;
   },
 
   // Admin: Kategori sil (soft delete)
   async delete(id) {
-    await api.delete(`/api/admin/categories/${id}`);
+    await api.delete(`/admin/categories/${id}`);
     notify();
     return { success: true };
   },

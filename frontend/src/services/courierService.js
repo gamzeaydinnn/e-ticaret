@@ -168,5 +168,5 @@ export const CourierService = {
   remove: (id) => api.delete(`${base}/${id}`),
   myOrders: () => api.get("/api/courier/orders"),
   updateStatus: (orderId, status) =>
-    api.post(`/api/courier/orders/${orderId}/status`, { status }),
+    api.post(`/courier/orders/${orderId}/status`, { status }),
 };
