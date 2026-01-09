@@ -947,7 +947,7 @@ function HomePage() {
   React.useEffect(() => {
     const fetchPosters = async () => {
       try {
-        const res = await fetch("/api/banners");
+        const res = await fetch("/banners");
         const data = await res.json();
         if (Array.isArray(data)) {
           const activePosters = data

@@ -51,7 +51,7 @@ export const CampaignService = {
     }
 
     try {
-      const data = await api.get("/api/campaigns");
+      const data = await api.get("/campaigns");
       // Backend hazır değilse ya da farklı shape dönerse güvenli tarafta kal
       if (Array.isArray(data)) return data;
       if (Array.isArray(data?.data)) return data.data;

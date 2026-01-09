@@ -1,6 +1,6 @@
 import api from "./api";
 
-const base = "/api/cartitems";
+const base = "/cartitems";
 
 export const CartService = {
   // Sepet öğelerini getir
@@ -99,5 +99,5 @@ export const CartService = {
   },
 
   previewPrice: (payload) =>
-    api.post("/api/cartitems/price-preview", payload).then((res) => res.data),
+    api.post("/cartitems/price-preview", payload).then((res) => res.data),
 };

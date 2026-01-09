@@ -24,7 +24,7 @@ const posterService = {
   // Aktif slider posterlerini getir
   async getSliderPosters() {
     try {
-      const data = await apiBackend.get("/api/banners");
+      const data = await apiBackend.get("/banners");
       console.log("[PosterService] All banners from API:", data);
       // Backend'den gelen posterler tıplarına göre filtrele (case-insensitive)
       const sliders = Array.isArray(data) ? data.filter(p => {
@@ -42,7 +42,7 @@ const posterService = {
   // Aktif promo posterlerini getir
   async getPromoPosters() {
     try {
-      const data = await apiBackend.get("/api/banners");
+      const data = await apiBackend.get("/banners");
       // Backend'den gelen posterler tıplarına göre filtrele (case-insensitive)
       const promos = Array.isArray(data) ? data.filter(p => {
         const type = (p.type || '').toLowerCase();
@@ -61,7 +61,7 @@ const posterService = {
   // Admin: Tüm posterleri getir
   async getAll() {
     try {
-      const data = await apiBackend.get("/api/admin/banners");
+      const data = await apiBackend.get("/admin/banners");
       return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error("All posters fetch error:", error);
@@ -71,13 +71,13 @@ const posterService = {
 
   // Admin: ID'ye göre poster getir
   async getById(id) {
-    return await apiBackend.get(`/api/admin/banners/${id}`);
+    return await apiBackend.get(`/admin/banners/${id}`);
   },
 
   // Admin: Tip'e göre posterler
   async getByType(type) {
     try {
-      const data = await apiBackend.get(`/api/admin/banners?type=${type}`);
+      const data = await apiBackend.get(`/admin/banners?type=${type}`);
       return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error(`Posters by type (${type}) fetch error:`, error);
@@ -96,7 +96,7 @@ const posterService = {
       isActive: poster.isActive !== false,
     };
 
-    const result = await apiBackend.post("/api/admin/banners", payload);
+    const result = await apiBackend.post("/admin/banners", payload);
     notify();
     return result;
   },
@@ -113,14 +113,14 @@ const posterService = {
       isActive: poster.isActive !== false,
     };
 
-    const result = await apiBackend.put(`/api/admin/banners/${id}`, payload);
+    const result = await apiBackend.put(`/admin/banners/${id}`, payload);
     notify();
     return result;
   },
 
   // Admin: Poster sil
   async delete(id) {
-    await apiBackend.delete(`/api/admin/banners/${id}`);
+    await apiBackend.delete(`/admin/banners/${id}`);
     notify();
     return { success: true };
   },
@@ -132,7 +132,7 @@ const posterService = {
       isActive: !poster.isActive,
     };
     const result = await apiBackend.patch(
-      `/api/admin/banners/${poster.id}/toggle`,
+      `/admin/banners/${poster.id}/toggle`,
       payload
     );
     notify();

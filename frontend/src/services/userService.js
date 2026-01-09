@@ -1,10 +1,10 @@
 import api from "./api";
 
-const base = "/api/Users";
+const base = "/Users";
 
 export const UserService = {
   register: (payload) => api.post(base, payload),
-  login: (payload) => api.post("/api/Auth/login", payload), // login endpoint var
+  login: (payload) => api.post("/Auth/login", payload), // login endpoint var
   me: async () => {
     const id = localStorage.getItem("userId");
     if (!id) return null;

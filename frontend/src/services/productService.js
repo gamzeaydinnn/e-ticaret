@@ -51,7 +51,7 @@ export const ProductService = {
       const items = mockDataStore.getProducts();
       return items.map(mapProduct);
     }
-    const url = `/api/products${query}`;
+    const url = `/products${query}`;
     const data = await api.get(url);
     const items = Array.isArray(data) ? data : data?.data || [];
     return items.map(mapProduct);
@@ -61,7 +61,7 @@ export const ProductService = {
       const product = mockDataStore.getProductById(id);
       return product ? mapProduct(product) : null;
     }
-    const data = await api.get(`/api/products/${id}`);
+    const data = await api.get(`/products/${id}`);
     return mapProduct(data);
   },
   
@@ -69,9 +69,9 @@ export const ProductService = {
   subscribe: (callback) => mockDataStore.subscribe("products", callback),
 
   // Admin endpoints (kept for compatibility)
-  createAdmin: (formData) => api.post(`/api/Admin/products`, formData),
-  updateAdmin: (id, formData) => api.put(`/api/Admin/products/${id}`, formData),
-  deleteAdmin: (id) => api.delete(`/api/Admin/products/${id}`),
+  createAdmin: (formData) => api.post(`/Admin/products`, formData),
+  updateAdmin: (id, formData) => api.put(`/Admin/products/${id}`, formData),
+  deleteAdmin: (id) => api.delete(`/Admin/products/${id}`),
   updateStockAdmin: (id, stock) =>
-    api.patch(`/api/Admin/products/${id}/stock`, { stock }),
+    api.patch(`/Admin/products/${id}/stock`, { stock }),
 };

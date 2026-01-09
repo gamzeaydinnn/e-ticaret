@@ -1,6 +1,6 @@
 import api from "./api";
 
-const base = "/api/courier"; // courier (tekil) olmalı - backend'deki route ile eşleşmeli
+const base = "/courier"; // courier (tekil) olmalı - backend'deki route ile eşleşmeli
 const USE_MOCK_DATA = true; // DEMO: Her zaman mock veri kullan
 
 // Mock kurye verileri
@@ -166,7 +166,7 @@ export const CourierService = {
   add: (courier) => api.post(base, courier),
   update: (id, courier) => api.put(`${base}/${id}`, courier),
   remove: (id) => api.delete(`${base}/${id}`),
-  myOrders: () => api.get("/api/courier/orders"),
+  myOrders: () => api.get("/courier/orders"),
   updateStatus: (orderId, status) =>
     api.post(`/courier/orders/${orderId}/status`, { status }),
 };

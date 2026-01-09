@@ -1,6 +1,6 @@
 import api from "./api";
 
-const base = "/api/Payments";
+const base = "/Payments";
 
 export const PaymentService = {
   // Ödeme başlat

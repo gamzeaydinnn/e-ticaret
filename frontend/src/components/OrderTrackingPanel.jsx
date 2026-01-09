@@ -17,7 +17,7 @@ export default function OrderTrackingPanel({ initialOrderId = "" }) {
     setError(null);
     setOrder(null);
     try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(id)}`, {
+      const res = await fetch(`/orders/${encodeURIComponent(id)}`, {
         credentials: "include",
       });
       if (!res.ok) {

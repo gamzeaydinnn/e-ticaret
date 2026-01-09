@@ -4,10 +4,10 @@ export default function AdminCategories() {
   const [categories, setCategories] = useState([]);
   const [newCategory, setNewCategory] = useState({ name: "", description: "" });
 useEffect(() => {
-    axios.get("/api/AdminCategories").then((res) => setCategories(res.data));
+    axios.get("/AdminCategories").then((res) => setCategories(res.data));
   }, []);
 const addCategory = () => {
-    axios.post("/api/AdminCategories", newCategory).then((res) => {
+    axios.post("/AdminCategories", newCategory).then((res) => {
       setCategories([...categories, res.data]);
       setNewCategory({ name: "", description: "" });
     });

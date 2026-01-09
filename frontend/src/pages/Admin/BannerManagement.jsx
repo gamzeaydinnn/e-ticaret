@@ -16,7 +16,7 @@ const BannerManagement = () => {
   const tableRef = useRef(null);
 
   const fetchBanners = async () => {
-    const res = await axios.get("/api/banners");
+    const res = await axios.get("/banners");
     setBanners(res.data);
   };
 
@@ -36,10 +36,10 @@ const BannerManagement = () => {
     e.preventDefault();
     try {
       if (editing) {
-        await axios.put("/api/banners", form);
+        await axios.put("/banners", form);
         setFeedback("Banner başarıyla güncellendi.");
       } else {
-        await axios.post("/api/banners", form);
+        await axios.post("/banners", form);
         setFeedback("Banner başarıyla eklendi.");
       }
       setForm({
@@ -69,7 +69,7 @@ const BannerManagement = () => {
   };
 
   const handleDelete = async (id) => {
-    await axios.delete(`/api/banners/${id}`);
+    await axios.delete(`/banners/${id}`);
     fetchBanners();
   };
 

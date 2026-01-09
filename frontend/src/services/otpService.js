@@ -40,7 +40,7 @@ const smsService = {
    */
   async sendOtp(phoneNumber, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.post("/api/sms/send-otp", { 
+      const response = await api.post("/sms/send-otp", { 
         phoneNumber, 
         purpose 
       });
@@ -71,7 +71,7 @@ const smsService = {
    */
   async verifyOtp(phoneNumber, code, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.post("/api/sms/verify-otp", {
+      const response = await api.post("/sms/verify-otp", {
         phoneNumber,
         code,
         purpose,
@@ -101,7 +101,7 @@ const smsService = {
    */
   async resendOtp(phoneNumber, purpose = SmsVerificationPurpose.Registration) {
     try {
-      const response = await api.post("/api/sms/resend-otp", { 
+      const response = await api.post("/sms/resend-otp", { 
         phoneNumber, 
         purpose 
       });
@@ -153,7 +153,7 @@ const smsService = {
    */
   async canSendOtp(phoneNumber) {
     try {
-      const response = await api.get("/api/sms/can-send", {
+      const response = await api.get("/sms/can-send", {
         params: { phone: phoneNumber },
       });
       return {
@@ -182,7 +182,7 @@ const smsService = {
    */
   async registerWithPhone(userData) {
     try {
-      const response = await api.post("/api/auth/register-with-phone", userData);
+      const response = await api.post("/auth/register-with-phone", userData);
       console.log("[SmsService] Kayıt başlatıldı:", response.data);
       return {
         success: true,
@@ -207,7 +207,7 @@ const smsService = {
    */
   async verifyPhoneRegistration(phoneNumber, code, email) {
     try {
-      const response = await api.post("/api/auth/verify-phone-registration", {
+      const response = await api.post("/auth/verify-phone-registration", {
         phoneNumber,
         code,
         email,
@@ -234,7 +234,7 @@ const smsService = {
    */
   async forgotPasswordByPhone(phoneNumber) {
     try {
-      const response = await api.post("/api/auth/forgot-password-by-phone", {
+      const response = await api.post("/auth/forgot-password-by-phone", {
         phoneNumber,
       });
       console.log("[SmsService] Şifre sıfırlama kodu gönderildi");
@@ -262,7 +262,7 @@ const smsService = {
    */
   async resetPasswordByPhone(phoneNumber, code, newPassword, confirmPassword) {
     try {
-      const response = await api.post("/api/auth/reset-password-by-phone", {
+      const response = await api.post("/auth/reset-password-by-phone", {
         phoneNumber,
         code,
         newPassword,

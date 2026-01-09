@@ -51,7 +51,7 @@ export const FavoriteService = {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
         const result = await api.post(
-          `/api/favorites/${productId}?userId=${user.id}`
+          `/favorites/${productId}?userId=${user.id}`
         );
         return result;
       } catch (error) {
@@ -98,7 +98,7 @@ export const FavoriteService = {
       // Backend API mevcut ve kullanıcı giriş yapmış
       try {
         const result = await api.delete(
-          `/api/favorites/${productId}?userId=${user.id}`
+          `/favorites/${productId}?userId=${user.id}`
         );
         return result;
       } catch (error) {

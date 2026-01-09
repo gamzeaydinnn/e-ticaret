@@ -1,7 +1,7 @@
 import { debugLog, shouldUseMockData } from "../config/apiConfig";
 import api from "./api";
 
-const baseAdmin = "/api/admin/micro"; // admin-only actions
+const baseAdmin = "/admin/micro"; // admin-only actions
 
 let mockMicroProducts = [
   { id: 1, name: "Dana Kuşbaşı", price: 89.9, category: "Et ve Et Ürünleri" },

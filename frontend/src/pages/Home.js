@@ -32,7 +32,7 @@ export default function Home() {
       setCategories(mockDataStore.getCategories());
     } else {
       api
-        .get("/api/Categories")
+        .get("/Categories")
         .then((r) => setCategories(r.data || r))
         .catch(() => {});
     }

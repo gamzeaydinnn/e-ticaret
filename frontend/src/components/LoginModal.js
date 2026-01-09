@@ -235,7 +235,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       const response = await fetch(
         `${
           process.env.REACT_APP_API_URL || "http://localhost:5153"
-        }/api/auth/forgot-password`,
+        }/auth/forgot-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

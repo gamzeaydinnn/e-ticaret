@@ -51,7 +51,7 @@ export default function Category() {
 
     // API'den dene
     api
-      .get(`/api/categories/${encodeURIComponent(slug)}`)
+      .get(`/categories/${encodeURIComponent(slug)}`)
       .then((cat) => {
         if (!mounted) return;
         setCategory(cat);

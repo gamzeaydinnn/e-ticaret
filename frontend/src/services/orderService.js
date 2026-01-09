@@ -1,6 +1,6 @@
 import api from "./api";
 
-const base = "/api/Orders";
+const base = "/Orders";
 
 const generateClientOrderId = () => {
   try {

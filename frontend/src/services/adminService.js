@@ -255,7 +255,7 @@ export const AdminService = {
       };
     }
     ensureBackend();
-    return api.get("/api/Admin/dashboard/stats");
+    return api.get("/Admin/dashboard/stats");
   },
   // Users
   getUsers: async () => {
@@ -304,7 +304,7 @@ export const AdminService = {
 
     try {
       ensureBackend();
-      return await api.get("/api/admin/users");
+      return await api.get("/admin/users");
     } catch (error) {
       console.error("Users fetch error:", error);
       throw error;
@@ -312,29 +312,29 @@ export const AdminService = {
   },
   createUser: async (payload) => {
     ensureBackend();
-    return api.post("/api/admin/users", payload);
+    return api.post("/admin/users", payload);
   },
   updateUserRole: async (id, role) => {
     ensureBackend();
-    return api.put(`/api/admin/users/${id}/role`, { role });
+    return api.put(`/admin/users/${id}/role`, { role });
   },
 
   // Logs
   getAuditLogs: async (params = {}) => {
     ensureBackend();
-    return api.get("/api/admin/logs/audit", { params });
+    return api.get("/admin/logs/audit", { params });
   },
   getErrorLogs: async (params = {}) => {
     ensureBackend();
-    return api.get("/api/admin/logs/errors", { params });
+    return api.get("/admin/logs/errors", { params });
   },
   getSystemLogs: async (params = {}) => {
     ensureBackend();
-    return api.get("/api/admin/logs/system", { params });
+    return api.get("/admin/logs/system", { params });
   },
   getInventoryLogs: async (params = {}) => {
     ensureBackend();
-    return api.get("/api/admin/logs/inventory", { params });
+    return api.get("/admin/logs/inventory", { params });
   },
 
   // Categories
@@ -344,28 +344,28 @@ export const AdminService = {
       return mockDataStore.getAllCategories();
     }
     ensureBackend();
-    return api.get("/api/admin/categories");
+    return api.get("/admin/categories");
   },
   createCategory: async (formData) => {
     if (shouldUseMockData()) {
       return mockDataStore.createCategory(formData);
     }
     ensureBackend();
-    return api.post("/api/admin/categories", formData);
+    return api.post("/admin/categories", formData);
   },
   updateCategory: async (id, formData) => {
     if (shouldUseMockData()) {
       return mockDataStore.updateCategory(id, formData);
     }
     ensureBackend();
-    return api.put(`/api/admin/categories/${id}`, formData);
+    return api.put(`/admin/categories/${id}`, formData);
   },
   deleteCategory: async (id) => {
     if (shouldUseMockData()) {
       return mockDataStore.deleteCategory(id);
     }
     ensureBackend();
-    return api.delete(`/api/admin/categories/${id}`);
+    return api.delete(`/admin/categories/${id}`);
   },
 
   // Products
@@ -375,31 +375,31 @@ export const AdminService = {
       return mockDataStore.getAllProducts();
     }
     ensureBackend();
-    return api.get(`/api/admin/products?page=${page}&size=${size}`);
+    return api.get(`/admin/products?page=${page}&size=${size}`);
   },
   createProduct: async (payload) => {
     if (shouldUseMockData()) {
       return mockDataStore.createProduct(payload);
     }
     ensureBackend();
-    return api.post("/api/admin/products", payload);
+    return api.post("/admin/products", payload);
   },
   updateProduct: async (id, payload) => {
     if (shouldUseMockData()) {
       return mockDataStore.updateProduct(id, payload);
     }
     ensureBackend();
-    return api.put(`/api/admin/products/${id}`, payload);
+    return api.put(`/admin/products/${id}`, payload);
   },
   deleteProduct: async (id) => {
     if (shouldUseMockData()) {
       return mockDataStore.deleteProduct(id);
     }
     ensureBackend();
-    return api.delete(`/api/admin/products/${id}`);
+    return api.delete(`/admin/products/${id}`);
   },
   updateStock: (id, stock) =>
-    api.patch(`/api/admin/products/${id}/stock`, stock),
+    api.patch(`/admin/products/${id}/stock`, stock),
 
   // Orders
   getOrders: async (page = 1, size = 20) => {
@@ -436,12 +436,12 @@ export const AdminService = {
       ];
     }
     ensureBackend();
-    return api.get(`/api/admin/orders?page=${page}&size=${size}`);
+    return api.get(`/admin/orders?page=${page}&size=${size}`);
   },
-  getOrder: (id) => api.get(`/api/admin/orders/${id}`),
+  getOrder: (id) => api.get(`/admin/orders/${id}`),
   updateOrderStatus: (id, status) =>
-    api.put(`/api/admin/orders/${id}/status`, { status }),
-  getRecentOrders: () => api.get("/api/admin/orders/recent"),
+    api.put(`/admin/orders/${id}/status`, { status }),
+  getRecentOrders: () => api.get("/admin/orders/recent"),
 
   // Reports
   getLowStockProducts: async () => {
@@ -449,7 +449,7 @@ export const AdminService = {
       return clone(mockLowStockReport);
     }
     ensureBackend();
-    const res = await api.get("/api/admin/reports/stock/low");
+    const res = await api.get("/admin/reports/stock/low");
     return res;
   },
   getInventoryMovements: async ({ from, to } = {}) => {
@@ -473,7 +473,7 @@ export const AdminService = {
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     const qs = params.length ? `?${params.join("&")}` : "";
-    const res = await api.get(`/api/admin/reports/inventory/movements${qs}`);
+    const res = await api.get(`/admin/reports/inventory/movements${qs}`);
     return res;
   },
   getSalesReport: async (period = "daily") => {
@@ -484,7 +484,7 @@ export const AdminService = {
     }
     ensureBackend();
     const res = await api.get(
-      `/api/admin/reports/sales?period=${encodeURIComponent(period)}`
+      `/admin/reports/sales?period=${encodeURIComponent(period)}`
     );
     return res;
   },
@@ -501,7 +501,7 @@ export const AdminService = {
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     const qs = params.length ? `?${params.join("&")}` : "";
-    return api.get(`/api/admin/reports/erp/sync-status${qs}`);
+    return api.get(`/admin/reports/erp/sync-status${qs}`);
   },
 
   // Coupons
@@ -511,7 +511,7 @@ export const AdminService = {
       return clone(mockCoupons);
     }
     ensureBackend();
-    return api.get("/api/admin/coupons");
+    return api.get("/admin/coupons");
   },
   getCoupon: async (id) => {
     if (shouldUseMockData()) {
@@ -520,7 +520,7 @@ export const AdminService = {
       return { ...coupon };
     }
     ensureBackend();
-    return api.get(`/api/admin/coupons/${id}`);
+    return api.get(`/admin/coupons/${id}`);
   },
   createCoupon: async (coupon) => {
     if (shouldUseMockData()) {
@@ -540,7 +540,7 @@ export const AdminService = {
       return { ...prepared };
     }
     ensureBackend();
-    return api.post("/api/admin/coupons", coupon);
+    return api.post("/admin/coupons", coupon);
   },
   updateCoupon: async (id, coupon) => {
     if (shouldUseMockData()) {
@@ -554,7 +554,7 @@ export const AdminService = {
       return { ...mockCoupons[idx] };
     }
     ensureBackend();
-    return api.put(`/api/admin/coupons/${id}`, coupon);
+    return api.put(`/admin/coupons/${id}`, coupon);
   },
   deleteCoupon: async (id) => {
     if (shouldUseMockData()) {
@@ -564,7 +564,7 @@ export const AdminService = {
       return { success: true };
     }
     ensureBackend();
-    return api.delete(`/api/admin/coupons/${id}`);
+    return api.delete(`/admin/coupons/${id}`);
   },
 
   // Campaigns
@@ -573,7 +573,7 @@ export const AdminService = {
       return clone(mockCampaigns);
     }
     ensureBackend();
-    return api.get("/api/admin/campaigns");
+    return api.get("/admin/campaigns");
   },
   getCampaignById: async (id) => {
     if (shouldUseMockData()) {
@@ -582,7 +582,7 @@ export const AdminService = {
       return { ...found };
     }
     ensureBackend();
-    return api.get(`/api/admin/campaigns/${id}`);
+    return api.get(`/admin/campaigns/${id}`);
   },
   createCampaign: async (payload) => {
     if (shouldUseMockData()) {
@@ -606,7 +606,7 @@ export const AdminService = {
       return { ...prepared };
     }
     ensureBackend();
-    return api.post("/api/admin/campaigns", payload);
+    return api.post("/admin/campaigns", payload);
   },
   updateCampaign: async (id, payload) => {
     if (shouldUseMockData()) {
@@ -628,7 +628,7 @@ export const AdminService = {
       return { ...mockCampaigns[idx] };
     }
     ensureBackend();
-    return api.put(`/api/admin/campaigns/${id}`, payload);
+    return api.put(`/admin/campaigns/${id}`, payload);
   },
   deleteCampaign: async (id) => {
     if (shouldUseMockData()) {
@@ -638,7 +638,7 @@ export const AdminService = {
       return { success: true };
     }
     ensureBackend();
-    return api.delete(`/api/admin/campaigns/${id}`);
+    return api.delete(`/admin/campaigns/${id}`);
   },
 };
 

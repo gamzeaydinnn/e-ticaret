@@ -115,7 +115,7 @@ const OrderTracking = () => {
                 // Fetch VAPID public key from server to avoid embedding placeholders in client build
                 let vapidPublicKey = "PLACEHOLDER_VAPID_PUBLIC_KEY";
                 try {
-                  const vk = await fetch("/api/push/vapidPublicKey");
+                  const vk = await fetch("/push/vapidPublicKey");
                   if (vk.ok) {
                     const json = await vk.json();
                     vapidPublicKey = json.publicKey || vapidPublicKey;
@@ -146,7 +146,7 @@ const OrderTracking = () => {
                 const userId =
                   localStorage.getItem("userId") || prompt("Test userId girin");
                 await fetch(
-                  `/api/push/subscribe?userId=${encodeURIComponent(userId)}`,
+                  `/push/subscribe?userId=${encodeURIComponent(userId)}`,
                   {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },

@@ -65,7 +65,7 @@ const categoryServiceReal = {
 
   // Admin: Tüm kategorileri getir (aktif/pasif dahil)
   async getAllAdmin() {
-    const data = await api.get("/api/admin/categories");
+    const data = await api.get("/admin/categories");
     return Array.isArray(data) ? data : [];
   },
 
@@ -86,7 +86,7 @@ const categoryServiceReal = {
       isActive: category.isActive !== false,
     };
 
-    const result = await api.post("/api/admin/categories", payload);
+    const result = await api.post("/admin/categories", payload);
     notify();
     return result;
   },
@@ -124,7 +124,7 @@ const categoryServiceReal = {
       isActive: !category.isActive,
     };
     const result = await api.put(
-      `/api/admin/categories/${category.id}`,
+      `/admin/categories/${category.id}`,
       payload
     );
     notify();
