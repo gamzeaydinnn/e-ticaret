@@ -6,6 +6,12 @@ ARG REACT_APP_API_URL=https://golkoygurme.com.tr/api
 ARG REACT_APP_BACKEND_ENABLED=true
 ARG REACT_APP_USE_MOCK_DATA=false
 
+# Set as ENV so they persist in this RUN block
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
+ENV REACT_APP_BACKEND_ENABLED=${REACT_APP_BACKEND_ENABLED}
+ENV REACT_APP_USE_MOCK_DATA=${REACT_APP_USE_MOCK_DATA}
+ENV NODE_ENV=production
+
 # Copy package files first
 COPY package.json package-lock.json* ./
 
@@ -15,19 +21,12 @@ RUN npm ci --production=false --legacy-peer-deps --no-fund --no-audit
 # Copy source code
 COPY . .
 
-# Build with environment variables exported to process.env
-# Create .env file for reference only (CRA reads from process.env)
-RUN printf "REACT_APP_API_URL=%s\nREACT_APP_BACKEND_ENABLED=%s\nREACT_APP_USE_MOCK_DATA=%s\n" \
-    "${REACT_APP_API_URL}" "${REACT_APP_BACKEND_ENABLED}" "${REACT_APP_USE_MOCK_DATA}" > .env && \
-    echo "=== Build environment ===" && \
+# Build with ENV variables that are now set
+RUN echo "=== Build environment ===" && \
     echo "REACT_APP_API_URL=${REACT_APP_API_URL}" && \
     echo "REACT_APP_BACKEND_ENABLED=${REACT_APP_BACKEND_ENABLED}" && \
     echo "REACT_APP_USE_MOCK_DATA=${REACT_APP_USE_MOCK_DATA}" && \
     echo "=== Starting npm build ===" && \
-    REACT_APP_API_URL="${REACT_APP_API_URL}" \
-    REACT_APP_BACKEND_ENABLED="${REACT_APP_BACKEND_ENABLED}" \
-    REACT_APP_USE_MOCK_DATA="${REACT_APP_USE_MOCK_DATA}" \
-    NODE_ENV=production \
     npm run build && \
     echo "=== Build complete, checking for API URL in output ===" && \
     grep -r "golkoygurme" build/static/js/*.js | head -1 || echo "WARNING: API URL not found in build output"
