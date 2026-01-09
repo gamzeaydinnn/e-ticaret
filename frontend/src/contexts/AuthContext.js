@@ -1,6 +1,7 @@
 // src/contexts/AuthContext.js
 import { createContext, useContext, useEffect, useState } from "react";
 import { AuthService } from "../services/authService";
+import { smsService } from "../services/otpService";
 
 const AuthContext = createContext();
 
@@ -27,9 +28,27 @@ export const AuthProvider = ({ children }) => {
       console.error("Demo users parsing error:", error);
     }
     return [
-      { id: 1, email: "demo@example.com", password: "123456", firstName: "Demo", lastName: "User" },
-      { id: 2, email: "test@example.com", password: "123456", firstName: "Test", lastName: "User" },
-      { id: 3, email: "user@example.com", password: "123456", firstName: "Example", lastName: "User" },
+      {
+        id: 1,
+        email: "demo@example.com",
+        password: "123456",
+        firstName: "Demo",
+        lastName: "User",
+      },
+      {
+        id: 2,
+        email: "test@example.com",
+        password: "123456",
+        firstName: "Test",
+        lastName: "User",
+      },
+      {
+        id: 3,
+        email: "user@example.com",
+        password: "123456",
+        firstName: "Example",
+        lastName: "User",
+      },
     ];
   };
 
@@ -63,15 +82,18 @@ export const AuthProvider = ({ children }) => {
       const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
 
       if (data && (data.success || data.token || data.Token)) {
-        const userData = data.user || data.User || {
-          id: data.id,
-          email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          name: data.name || `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
-          role: data.role,
-          isAdmin: data.isAdmin,
-        };
+        const userData = data.user ||
+          data.User || {
+            id: data.id,
+            email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            name:
+              data.name ||
+              `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
+            role: data.role,
+            isAdmin: data.isAdmin,
+          };
         const token = data.token || data.Token;
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -157,11 +179,11 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, firstName, lastName) => {
     try {
       // Backend API çağrısı
-      const resp = await AuthService.register({ 
-        email, 
-        password, 
-        firstName, 
-        lastName 
+      const resp = await AuthService.register({
+        email,
+        password,
+        firstName,
+        lastName,
       });
 
       const data = resp && resp.data === undefined ? resp : resp.data;
@@ -171,7 +193,7 @@ export const AuthProvider = ({ children }) => {
           email,
           firstName,
           lastName,
-          name: `${firstName} ${lastName}`
+          name: `${firstName} ${lastName}`,
         };
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -210,7 +232,7 @@ export const AuthProvider = ({ children }) => {
         firstName,
         lastName,
         name: `${firstName} ${lastName}`,
-        password // Demo için şifreyi de saklayalım
+        password, // Demo için şifreyi de saklayalım
       };
 
       // Demo kullanıcılar listesine ekle
@@ -222,13 +244,152 @@ export const AuthProvider = ({ children }) => {
       AuthService.saveToken(token);
       localStorage.setItem("user", JSON.stringify(newUser));
       localStorage.setItem("userId", newUser.id.toString());
-      
+
       // Demo kullanıcıları localStorage'a kaydet
       localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
 
       setUser(newUser);
 
       return { success: true, user: newUser };
+    }
+  };
+
+  // ======= SMS DOĞRULAMA İLE KAYIT =======
+
+  /**
+   * Telefon numarası ile kayıt başlatır.
+   * SMS kodu gönderilir, verifyPhoneRegistration ile tamamlanır.
+   */
+  const registerWithPhone = async (
+    email,
+    password,
+    firstName,
+    lastName,
+    phoneNumber
+  ) => {
+    try {
+      const result = await smsService.registerWithPhone({
+        email,
+        password,
+        firstName,
+        lastName,
+        phoneNumber,
+      });
+
+      if (result.success) {
+        return {
+          success: true,
+          message: result.message,
+          userId: result.userId,
+          phoneVerificationRequired: true,
+        };
+      } else {
+        return {
+          success: false,
+          error: result.message || "Kayıt başarısız!",
+        };
+      }
+    } catch (error) {
+      console.error("RegisterWithPhone error:", error);
+      return {
+        success: false,
+        error: "Kayıt sırasında bir hata oluştu.",
+      };
+    }
+  };
+
+  /**
+   * Telefon doğrulama kodunu kontrol eder ve hesabı aktif eder.
+   * Başarılı olursa JWT token döner.
+   */
+  const verifyPhoneRegistration = async (phoneNumber, code, email) => {
+    try {
+      const result = await smsService.verifyPhoneRegistration(
+        phoneNumber,
+        code,
+        email
+      );
+
+      if (result.success && result.token) {
+        // Token ve kullanıcı bilgilerini kaydet
+        AuthService.saveToken(result.token);
+
+        // Kullanıcı bilgilerini decode et veya API'den al
+        const userData = {
+          email,
+          phoneNumber,
+        };
+
+        localStorage.setItem("user", JSON.stringify(userData));
+        setUser(userData);
+
+        return {
+          success: true,
+          message: result.message,
+          token: result.token,
+        };
+      } else {
+        return {
+          success: false,
+          error: result.message || "Doğrulama başarısız!",
+        };
+      }
+    } catch (error) {
+      console.error("VerifyPhoneRegistration error:", error);
+      return {
+        success: false,
+        error: "Doğrulama sırasında bir hata oluştu.",
+      };
+    }
+  };
+
+  // ======= TELEFON İLE ŞİFRE SIFIRLAMA =======
+
+  /**
+   * Telefon numarasına şifre sıfırlama kodu gönderir.
+   */
+  const forgotPasswordByPhone = async (phoneNumber) => {
+    try {
+      const result = await smsService.forgotPasswordByPhone(phoneNumber);
+      return {
+        success: result.success,
+        message: result.message,
+      };
+    } catch (error) {
+      console.error("ForgotPasswordByPhone error:", error);
+      return {
+        success: false,
+        error: "İşlem sırasında bir hata oluştu.",
+      };
+    }
+  };
+
+  /**
+   * SMS kodu ile şifre sıfırlar.
+   */
+  const resetPasswordByPhone = async (
+    phoneNumber,
+    code,
+    newPassword,
+    confirmPassword
+  ) => {
+    try {
+      const result = await smsService.resetPasswordByPhone(
+        phoneNumber,
+        code,
+        newPassword,
+        confirmPassword
+      );
+      return {
+        success: result.success,
+        message: result.message,
+      };
+    } catch (error) {
+      console.error("ResetPasswordByPhone error:", error);
+      return {
+        success: false,
+        error: "Şifre sıfırlama sırasında bir hata oluştu.",
+      };
     }
   };
 
@@ -242,21 +403,26 @@ export const AuthProvider = ({ children }) => {
         const data = resp && resp.data === undefined ? resp : resp.data;
         if (data && (data.token || data.Token)) {
           const token = data.token || data.Token;
-          const userData = data.user || data.User || {
-            id: data.id,
-            email: data.email,
-            name: data.name,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            role: data.role || "User",
-          };
+          const userData = data.user ||
+            data.User || {
+              id: data.id,
+              email: data.email,
+              name: data.name,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              role: data.role || "User",
+            };
           AuthService.saveToken(token);
           localStorage.setItem("user", JSON.stringify(userData));
-          if (userData?.id != null) localStorage.setItem("userId", String(userData.id));
+          if (userData?.id != null)
+            localStorage.setItem("userId", String(userData.id));
           setUser(userData);
           return { success: true, user: userData };
         }
-        return { success: false, error: data?.message || "Sosyal giriş başarısız" };
+        return {
+          success: false,
+          error: data?.message || "Sosyal giriş başarısız",
+        };
       } catch (e) {
         // Backend yoksa demo sosyal login
         const fallbackUser = {
@@ -277,6 +443,10 @@ export const AuthProvider = ({ children }) => {
     },
     logout,
     register,
+    registerWithPhone,
+    verifyPhoneRegistration,
+    forgotPasswordByPhone,
+    resetPasswordByPhone,
     loading,
     isAuthenticated: !!user,
   };

@@ -9,7 +9,7 @@ namespace ECommerce.Entities.Concrete
         public string? Description { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
-        public bool IsActive { get; set; } = true;
+        public new bool IsActive { get; set; } = true; // BaseEntity'deki IsActive'i gizler
 
         public virtual ICollection<CampaignRule> Rules { get; set; } = new HashSet<CampaignRule>();
         public virtual ICollection<CampaignReward> Rewards { get; set; } = new HashSet<CampaignReward>();

@@ -12,7 +12,7 @@ namespace ECommerce.Entities.Concrete
         public int? ParentId { get; set; }
         public int SortOrder { get; set; } = 0;
         public string Slug { get; set; } = string.Empty;
-        public bool IsActive { get; set; } = true;
+        public new bool IsActive { get; set; } = true; // BaseEntity'deki IsActive'i gizler (override değil, yeni property)
         //ParentCategoryId ile hiyerarşi desteği.
         public ICollection<Product> Products { get; set; } = new HashSet<Product>();
 

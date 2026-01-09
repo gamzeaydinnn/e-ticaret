@@ -7,7 +7,6 @@ export { AdminService } from "./adminService";
 export { FavoriteService } from "./favoriteService";
 export { CartService } from "./cartService";
 export { CategoryService } from "./categoryService";
-export { AddressService } from "./addressService";
 export { MicroService } from "./microService"; 
 
 

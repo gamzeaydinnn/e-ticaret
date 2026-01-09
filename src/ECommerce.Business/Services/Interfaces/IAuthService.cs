@@ -26,5 +26,29 @@ namespace ECommerce.Business.Services.Interfaces
         // Email doğrulama
         Task<bool> ConfirmEmailAsync(int userId, string token);
         Task<bool> ResendConfirmationEmailAsync(string email);
+
+        // SMS Doğrulama ile Kayıt
+        /// <summary>
+        /// Telefon numarası ile kayıt işlemi başlatır.
+        /// Kullanıcı oluşturulur (inactive), SMS kodu gönderilir.
+        /// </summary>
+        Task<(bool success, string message, int? userId)> RegisterWithPhoneAsync(RegisterDto dto);
+
+        /// <summary>
+        /// Telefon doğrulama kodunu kontrol eder ve hesabı aktif eder.
+        /// Başarılı olursa JWT token döner.
+        /// </summary>
+        Task<(bool success, string message, string? accessToken, string? refreshToken)> VerifyPhoneRegistrationAsync(VerifyPhoneRegistrationDto dto);
+
+        // Telefon ile Şifre Sıfırlama
+        /// <summary>
+        /// Telefon numarası ile şifre sıfırlama kodu gönderir.
+        /// </summary>
+        Task<(bool success, string message)> ForgotPasswordByPhoneAsync(ForgotPasswordByPhoneDto dto);
+
+        /// <summary>
+        /// SMS doğrulama kodu ile şifre sıfırlar.
+        /// </summary>
+        Task<(bool success, string message)> ResetPasswordByPhoneAsync(ResetPasswordByPhoneDto dto);
     }
 }

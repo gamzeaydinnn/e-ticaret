@@ -41,6 +41,22 @@ services:
       - Jwt__Key=${JWT_SECRET:-YourVeryStrongSecretKeyMinimum32CharactersLong!!!}
       - Jwt__Issuer=ECommerceAPI
       - Jwt__Audience=ECommerceClient
+      # NetGSM SMS Configuration
+      - NetGsm__UserCode=${NETGSM_USERCODE}
+      - NetGsm__Password=${NETGSM_PASSWORD}
+      - NetGsm__MsgHeader=${NETGSM_MSGHEADER:-ETICARET}
+      - NetGsm__AppName=${NETGSM_APPNAME:-E-Ticaret}
+      - NetGsm__ApiUrl=https://api.netgsm.com.tr/sms/rest/v2
+      - NetGsm__Enabled=${NETGSM_ENABLED:-true}
+      - NetGsm__UseMockService=${NETGSM_USEMOCKSERVICE:-false}
+      # SMS Verification Settings
+      - SmsVerification__ExpirationSeconds=${SMS_EXPIRATION_SECONDS:-180}
+      - SmsVerification__ResendCooldownSeconds=${SMS_RESEND_COOLDOWN:-60}
+      - SmsVerification__DailyMaxOtpCount=${SMS_DAILY_MAX:-5}
+      - SmsVerification__HourlyMaxOtpCount=${SMS_HOURLY_MAX:-3}
+      - SmsVerification__MaxWrongAttempts=${SMS_MAX_WRONG_ATTEMPTS:-3}
+      - SmsVerification__CodeLength=6
+      - SmsVerification__AppName=${SMS_APP_NAME:-E-Ticaret}
     depends_on:
       - sqlserver
     volumes:
@@ -54,7 +70,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=http://${SERVER_DOMAIN:-31.186.24.78}:5000
+        - REACT_APP_API_URL=https://golkoygurme.com.tr/api
     image: ecommerce-frontend:latest
     container_name: ecommerce-frontend-prod
     restart: always

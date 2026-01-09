@@ -20,6 +20,18 @@ namespace ECommerce.Entities.Concrete
         public string? PasswordResetToken { get; set; }
         public DateTime? ResetTokenExpires { get; set; }
 
+        // SMS Doğrulama İlgili Alanlar
+        /// <summary>
+        /// Telefon numarası doğrulandı mı?
+        /// Not: IdentityUser'daki PhoneNumberConfirmed özelliği kullanılır.
+        /// </summary>
+        // public bool PhoneNumberConfirmed { get; set; } = false; // IdentityUser'da var
+
+        /// <summary>
+        /// Telefon numarası doğrulama tarihi
+        /// </summary>
+        public DateTime? PhoneNumberConfirmedAt { get; set; }
+
         // Navigation Properties
         public virtual ICollection<Order> Orders { get; set; } = new HashSet<Order>();
         public virtual ICollection<CartItem> CartItems { get; set; } = new HashSet<CartItem>();

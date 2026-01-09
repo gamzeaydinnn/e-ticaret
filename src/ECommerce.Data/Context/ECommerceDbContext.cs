@@ -47,6 +47,10 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Campaign> Campaigns { get; set; }
         public virtual DbSet<CampaignRule> CampaignRules { get; set; }
         public virtual DbSet<CampaignReward> CampaignRewards { get; set; }
+        
+        // SMS Doğrulama Tabloları
+        public virtual DbSet<SmsVerification> SmsVerifications { get; set; }
+        public virtual DbSet<SmsRateLimit> SmsRateLimits { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -392,6 +396,85 @@ namespace ECommerce.Data.Context
                       .WithMany()
                       .HasForeignKey(e => e.ApprovedByUserId)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // -------------------
+            // SmsVerification Configuration
+            // -------------------
+            modelBuilder.Entity<SmsVerification>(entity =>
+            {
+                entity.ToTable("SmsVerifications");
+                
+                entity.Property(e => e.PhoneNumber)
+                      .HasMaxLength(20)
+                      .IsRequired();
+                
+                entity.Property(e => e.Code)
+                      .HasMaxLength(10)
+                      .IsRequired();
+                
+                entity.Property(e => e.CodeHash)
+                      .HasMaxLength(256);
+                
+                entity.Property(e => e.IpAddress)
+                      .HasMaxLength(50);
+                
+                entity.Property(e => e.UserAgent)
+                      .HasMaxLength(500);
+                
+                entity.Property(e => e.JobId)
+                      .HasMaxLength(100);
+                
+                entity.Property(e => e.SmsErrorMessage)
+                      .HasMaxLength(500);
+
+                // Index'ler - Performans için kritik
+                entity.HasIndex(e => e.PhoneNumber)
+                      .HasDatabaseName("IX_SmsVerifications_PhoneNumber");
+                
+                entity.HasIndex(e => new { e.PhoneNumber, e.Purpose, e.Status })
+                      .HasDatabaseName("IX_SmsVerifications_Phone_Purpose_Status");
+                
+                entity.HasIndex(e => e.ExpiresAt)
+                      .HasDatabaseName("IX_SmsVerifications_ExpiresAt");
+                
+                entity.HasIndex(e => e.UserId)
+                      .HasDatabaseName("IX_SmsVerifications_UserId");
+
+                // User ilişkisi (opsiyonel)
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // -------------------
+            // SmsRateLimit Configuration
+            // -------------------
+            modelBuilder.Entity<SmsRateLimit>(entity =>
+            {
+                entity.ToTable("SmsRateLimits");
+                
+                entity.Property(e => e.PhoneNumber)
+                      .HasMaxLength(20)
+                      .IsRequired();
+                
+                entity.Property(e => e.IpAddress)
+                      .HasMaxLength(50);
+                
+                entity.Property(e => e.BlockReason)
+                      .HasMaxLength(200);
+
+                // Index'ler
+                entity.HasIndex(e => e.PhoneNumber)
+                      .IsUnique()
+                      .HasDatabaseName("IX_SmsRateLimits_PhoneNumber");
+                
+                entity.HasIndex(e => e.IpAddress)
+                      .HasDatabaseName("IX_SmsRateLimits_IpAddress");
+                
+                entity.HasIndex(e => e.DailyResetAt)
+                      .HasDatabaseName("IX_SmsRateLimits_DailyResetAt");
             });
 
             // -------------------

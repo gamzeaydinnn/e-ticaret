@@ -359,6 +359,188 @@ namespace ECommerce.API.Controllers
             return Ok(new { confirmUrl });
         }
 
+        #region SMS Doğrulama ile Kayıt
+
+        /// <summary>
+        /// Telefon numarası ile kayıt işlemi başlatır.
+        /// 
+        /// Kullanıcı oluşturulur (inactive) ve telefon numarasına SMS kodu gönderilir.
+        /// </summary>
+        /// <param name="dto">Kayıt bilgileri (Email, Password, FirstName, LastName, PhoneNumber)</param>
+        /// <returns>Başarılı olursa userId döner</returns>
+        /// <response code="200">Kayıt başarılı, SMS gönderildi</response>
+        /// <response code="400">Geçersiz istek veya kullanıcı zaten var</response>
+        [HttpPost("register-with-phone")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> RegisterWithPhone([FromBody] RegisterDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Message = "Geçersiz istek parametreleri." });
+                }
+
+                var (success, message, userId) = await _authService.RegisterWithPhoneAsync(dto);
+
+                if (!success)
+                {
+                    return BadRequest(new { Message = message });
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = message,
+                    UserId = userId,
+                    PhoneVerificationRequired = true
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Telefon doğrulama kodunu kontrol eder ve hesabı aktif eder.
+        /// 
+        /// Başarılı olursa JWT token döner ve kullanıcı giriş yapmış olur.
+        /// </summary>
+        /// <param name="dto">Doğrulama bilgileri (PhoneNumber, Code, Email)</param>
+        /// <returns>JWT access token ve refresh token</returns>
+        /// <response code="200">Doğrulama başarılı, token döndü</response>
+        /// <response code="400">Yanlış kod veya geçersiz istek</response>
+        [HttpPost("verify-phone-registration")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> VerifyPhoneRegistration([FromBody] VerifyPhoneRegistrationDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Message = "Geçersiz istek parametreleri." });
+                }
+
+                var (success, message, accessToken, refreshToken) = 
+                    await _authService.VerifyPhoneRegistrationAsync(dto);
+
+                if (!success)
+                {
+                    return BadRequest(new { Message = message });
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = message,
+                    Token = accessToken,
+                    RefreshToken = refreshToken
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        #endregion
+
+        #region Telefon ile Şifre Sıfırlama
+
+        /// <summary>
+        /// Telefon numarası ile şifre sıfırlama kodu gönderir.
+        /// 
+        /// Telefon numarasına SMS doğrulama kodu gönderilir.
+        /// </summary>
+        /// <param name="dto">Telefon numarası</param>
+        /// <returns>Başarı durumu</returns>
+        /// <response code="200">SMS gönderildi</response>
+        /// <response code="429">Rate limit aşıldı</response>
+        [HttpPost("forgot-password-by-phone")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(object), StatusCodes.Status429TooManyRequests)]
+        public async Task<IActionResult> ForgotPasswordByPhone([FromBody] ForgotPasswordByPhoneDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Message = "Geçersiz telefon numarası." });
+                }
+
+                var (success, message) = await _authService.ForgotPasswordByPhoneAsync(dto);
+
+                if (!success)
+                {
+                    // Rate limit hatası 429 dönsün
+                    if (message.Contains("fazla istek") || message.Contains("bekleyin"))
+                    {
+                        return StatusCode(StatusCodes.Status429TooManyRequests, new { Message = message });
+                    }
+                    return BadRequest(new { Message = message });
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = message
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// SMS doğrulama kodu ile şifre sıfırlar.
+        /// 
+        /// Doğrulama kodu kontrol edilir ve başarılıysa şifre güncellenir.
+        /// </summary>
+        /// <param name="dto">Telefon numarası, kod ve yeni şifre</param>
+        /// <returns>Başarı durumu</returns>
+        /// <response code="200">Şifre başarıyla değiştirildi</response>
+        /// <response code="400">Yanlış kod veya geçersiz istek</response>
+        [HttpPost("reset-password-by-phone")]
+        [AllowAnonymous]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> ResetPasswordByPhone([FromBody] ResetPasswordByPhoneDto dto)
+        {
+            try
+            {
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new { Message = "Geçersiz istek parametreleri." });
+                }
+
+                var (success, message) = await _authService.ResetPasswordByPhoneAsync(dto);
+
+                if (!success)
+                {
+                    return BadRequest(new { Message = message });
+                }
+
+                return Ok(new
+                {
+                    Success = true,
+                    Message = message
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { Message = ex.Message });
+            }
+        }
+
+        #endregion
+
         // Development helper: generate and immediately confirm server-side
         [HttpPost("dev/confirm-direct")]
         [AllowAnonymous]

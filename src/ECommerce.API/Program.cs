@@ -28,6 +28,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
+using ECommerce.API.Services.Sms;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using ECommerce.API.Validators;
@@ -219,6 +220,16 @@ builder.Services.AddScoped<ICampaignRepository, CampaignRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IWeightReportRepository, WeightReportRepository>();
 
+// SMS Verification Repositories - SMS doðrulama için gerekli repository'ler
+builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsVerificationRepository, ECommerce.Data.Repositories.SmsVerificationRepository>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsRateLimitRepository, ECommerce.Data.Repositories.SmsRateLimitRepository>();
+
+// NetGSM SMS Provider ve Settings
+builder.Services.Configure<NetGsmSettings>(builder.Configuration.GetSection("NetGsm"));
+builder.Services.Configure<SmsVerificationSettings>(builder.Configuration.GetSection("SmsVerification"));
+builder.Services.AddHttpClient<ECommerce.API.Services.Sms.NetGsmService>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsProvider, ECommerce.API.Services.Sms.NetGsmService>();
+
 // Services  
 builder.Services.AddScoped<IUserService, UserManager>();
 builder.Services.AddScoped<IProductService, ProductManager>();
@@ -280,7 +291,29 @@ builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
 }).SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<MicroSyncManager>();
-builder.Services.AddScoped<IAuthService, AuthManager>();
+
+// SMS Verification Service - Factory pattern ile tüm baðýmlýlýklarý manuel çözümle
+builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.ISmsVerificationService>(serviceProvider =>
+{
+    var verificationRepo = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsVerificationRepository>();
+    var rateLimitRepo = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsRateLimitRepository>();
+    var smsProvider = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsProvider>();
+    var settings = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SmsVerificationSettings>>();
+    var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SmsVerificationManager>>();
+    return new SmsVerificationManager(verificationRepo, rateLimitRepo, smsProvider, settings, logger);
+});
+
+// AuthManager - Factory pattern ile SMS servisi dahil tüm baðýmlýlýklarý çözümle
+builder.Services.AddScoped<IAuthService>(sp =>
+{
+    var userManager = sp.GetRequiredService<UserManager<ECommerce.Entities.Concrete.User>>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    var emailSender = sp.GetRequiredService<EmailSender>();
+    var refreshTokenRepo = sp.GetRequiredService<IRefreshTokenRepository>();
+    var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
+    var smsService = sp.GetRequiredService<ECommerce.Business.Services.Interfaces.ISmsVerificationService>();
+    return new AuthManager(userManager, config, emailSender, refreshTokenRepo, httpContextAccessor, smsService);
+});
 
 // // builder.Services.AddScoped<StockSyncJob>();
 
