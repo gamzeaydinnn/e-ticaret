@@ -3,6 +3,7 @@
 ## 📋 YAPILAN ÇALIŞMALAR ÖZETI
 
 ### 🔧 KOD DÜZELTMELERI (Yerel)
+
 - ✅ `categoryService.js` dosyası oluşturuldu (eksik dosya)
 - ✅ `.env.production` API URL ayarlandı (https://golkoygurme.com.tr/api)
 - ✅ `appsettings.json` CORS domain'leri eklendi
@@ -11,13 +12,13 @@
 
 ### 📚 DEPLOYMENT DOKÜMANTASYONU (5 Dosya)
 
-| Dosya | Amaç | Hedef Kullanıcı |
-|-------|------|-----------------|
-| **SUNUCU_DEPLOY_KOMUTLARI_HIZLI.md** | 10 adımlık hızlı başlangaç | Acele edenler |
-| **SUNUCU_DEPLOY_CHECKLIST.md** | Madde madde kontrol listesi | Yeni başlayanlar |
-| **TEMIZ_DEPLOY_KOMUTLARI.md** | Tüm detaylar, 11 bölüm | Deneyimli DevOps |
-| **SUNUCU_DEPLOY_OZET.md** | Hızlı referans, copy-paste | Gerekli olunca bakacak |
-| **SUNUCU_DEPLOY.ps1** | İnteraktif Windows menüsü | Windows kullanıcıları |
+| Dosya                                | Amaç                        | Hedef Kullanıcı        |
+| ------------------------------------ | --------------------------- | ---------------------- |
+| **SUNUCU_DEPLOY_KOMUTLARI_HIZLI.md** | 10 adımlık hızlı başlangaç  | Acele edenler          |
+| **SUNUCU_DEPLOY_CHECKLIST.md**       | Madde madde kontrol listesi | Yeni başlayanlar       |
+| **TEMIZ_DEPLOY_KOMUTLARI.md**        | Tüm detaylar, 11 bölüm      | Deneyimli DevOps       |
+| **SUNUCU_DEPLOY_OZET.md**            | Hızlı referans, copy-paste  | Gerekli olunca bakacak |
+| **SUNUCU_DEPLOY.ps1**                | İnteraktif Windows menüsü   | Windows kullanıcıları  |
 
 ### 🎯 DEPLOYMENT SÜRECI (10 FAZA)
 
@@ -49,6 +50,7 @@ Proje: /home/huseyinadm/eticaret
 ## 🚀 BAŞLAMAK İÇİN
 
 ### SEÇENEK 1: Hızlı Başlangaç (5-10 dakika)
+
 ```bash
 # Dosya aç: SUNUCU_DEPLOY_KOMUTLARI_HIZLI.md
 # 10 adımı sırayla yapıştır
@@ -56,6 +58,7 @@ Proje: /home/huseyinadm/eticaret
 ```
 
 ### SEÇENEK 2: Adım Adım (15-20 dakika)
+
 ```bash
 # Dosya aç: SUNUCU_DEPLOY_CHECKLIST.md
 # Her maddeyi takip et
@@ -63,11 +66,13 @@ Proje: /home/huseyinadm/eticaret
 ```
 
 ### SEÇENEK 3: Script ile (10 dakika)
+
 ```bash
 # Sunucuda çalıştır: bash TEMIZ_DEPLOY_KOMUTLARI.sh
 ```
 
 ### SEÇENEK 4: Windows PowerShell (İnteraktif)
+
 ```powershell
 # Windows'ta çalıştır: .\SUNUCU_DEPLOY.ps1
 ```
@@ -76,14 +81,14 @@ Proje: /home/huseyinadm/eticaret
 
 ## 📊 KONTROL TABLOSU
 
-| Adım | Komut | Beklenen Sonuç |
-|------|-------|----------------|
-| Bağlantı | `ssh huseyinadm@31.186.24.78` | Bağlandı |
-| Container | `docker-compose ps` | Tüm container'lar Up |
-| API | `curl localhost:5000/api/health` | 200 OK |
-| DB | SQL Query | 50+ ürün |
-| Frontend | `curl -I localhost:3000` | 200 OK |
-| HTTPS | `curl https://golkoygurme.com.tr` | 200 OK |
+| Adım      | Komut                             | Beklenen Sonuç       |
+| --------- | --------------------------------- | -------------------- |
+| Bağlantı  | `ssh huseyinadm@31.186.24.78`     | Bağlandı             |
+| Container | `docker-compose ps`               | Tüm container'lar Up |
+| API       | `curl localhost:5000/api/health`  | 200 OK               |
+| DB        | SQL Query                         | 50+ ürün             |
+| Frontend  | `curl -I localhost:3000`          | 200 OK               |
+| HTTPS     | `curl https://golkoygurme.com.tr` | 200 OK               |
 
 ---
 
@@ -99,6 +104,7 @@ Proje: /home/huseyinadm/eticaret
 ## 🎓 DEPLOYMENT SONRASINDA
 
 ### Başarılı İseler:
+
 - ✅ Site https://golkoygurme.com.tr adresinde canlı
 - ✅ Admin paneli erişilebilir (admin/admin123)
 - ✅ Ürünler gösteriliyor
@@ -106,6 +112,7 @@ Proje: /home/huseyinadm/eticaret
 - ✅ SMS OTP sistemi çalışıyor
 
 ### Sorun Varsa:
+
 1. Docker loglarını kontrol et
 2. Port kullanımını kontrol et
 3. Network bağlantısını test et
@@ -169,18 +176,18 @@ docker exec -it ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd -S localhost -U
 
 ## ✅ DEPLOYMENT BAŞARISI ÖZETİ
 
-| Kontrol | Durum | Notlar |
-|---------|-------|--------|
-| SSH Bağlantısı | ✅ | 31.186.24.78:22 |
-| Docker/Compose | ✅ | Kurulu ve çalışıyor |
-| Git Repository | ✅ | Klonlu, güncel |
-| .env Dosyası | ✅ | Production ayarları |
-| Docker Images | ✅ | Build'lenmiş |
-| Container'lar | ✅ | Tüm servisleri çalışıyor |
-| Veritabanı | ✅ | Seed data yüklü |
-| CORS Ayarları | ✅ | Production domain'leri |
-| SSL Sertifikası | ✅ | HTTPS etkin |
-| Admin Paneli | ✅ | admin/admin123 |
+| Kontrol         | Durum | Notlar                   |
+| --------------- | ----- | ------------------------ |
+| SSH Bağlantısı  | ✅    | 31.186.24.78:22          |
+| Docker/Compose  | ✅    | Kurulu ve çalışıyor      |
+| Git Repository  | ✅    | Klonlu, güncel           |
+| .env Dosyası    | ✅    | Production ayarları      |
+| Docker Images   | ✅    | Build'lenmiş             |
+| Container'lar   | ✅    | Tüm servisleri çalışıyor |
+| Veritabanı      | ✅    | Seed data yüklü          |
+| CORS Ayarları   | ✅    | Production domain'leri   |
+| SSL Sertifikası | ✅    | HTTPS etkin              |
+| Admin Paneli    | ✅    | admin/admin123           |
 
 ---
 
@@ -215,7 +222,7 @@ Proje Klasörü:
 **Status:** 🟢 DEPLOYMENT HAZIR  
 **Sunucu:** 31.186.24.78  
 **Tarih:** 9 Ocak 2026  
-**Proje:** GolkoyGurme E-Ticaret  
+**Proje:** GolkoyGurme E-Ticaret
 
 ## 🚀 HAZIRSANIZ, BAŞLAMAYA BAŞLAYABILIRSINIZ!
 

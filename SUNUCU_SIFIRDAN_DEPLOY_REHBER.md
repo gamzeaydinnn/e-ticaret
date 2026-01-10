@@ -1,10 +1,12 @@
 # 🚀 SUNUCU SIFIRDAN DEPLOY - HIZLI REHBER
 
 ## 📋 ÖNCEKİ SORUN
+
 `ecommerce/` klasörü gereksiz bir şekilde iç içe geçmiş (nested submodule) olarak vardı.
 Bu durum sunucuda yanlış frontend kodunun çalışmasına neden oluyordu.
 
 ## ✅ ÇÖZÜM UYGULANDII
+
 - `ecommerce/` klasörü yerel projeden tamamen silindi
 - `.gitignore`'a eklendi (tekrar oluşmasını engeller)
 - GitHub'a push edildi
@@ -14,12 +16,14 @@ Bu durum sunucuda yanlış frontend kodunun çalışmasına neden oluyordu.
 ## 🖥️ SUNUCU KOMUTLARI (SIFIRDAN)
 
 ### 1. SSH ile Bağlan
+
 ```bash
 ssh huseyinadm@31.186.24.78
 # Şifre: Passwd1122FFGG
 ```
 
 ### 2. Eski Her Şeyi Temizle
+
 ```bash
 cd ~
 # Varsa eski konteynerleri durdur
@@ -35,6 +39,7 @@ docker volume rm $(docker volume ls -q) 2>/dev/null || true
 ```
 
 ### 3. Projeyi Yeniden Çek
+
 ```bash
 cd ~
 git clone https://github.com/gamzeaydinnn/e-ticaret.git eticaret
@@ -42,6 +47,7 @@ cd ~/eticaret
 ```
 
 ### 4. .env Dosyasını Oluştur
+
 ```bash
 cat > .env << 'EOF'
 DB_PASSWORD=ECom1234
@@ -52,6 +58,7 @@ EOF
 ```
 
 ### 5. Docker Build ve Başlat
+
 ```bash
 # Build (5-10 dakika sürer)
 docker-compose -f docker-compose.prod.yml build --no-cache
@@ -61,6 +68,7 @@ docker-compose -f docker-compose.prod.yml up -d
 ```
 
 ### 6. Bekle ve Kontrol Et
+
 ```bash
 # 30 saniye bekle
 sleep 30
@@ -79,21 +87,23 @@ docker-compose -f docker-compose.prod.yml logs -f
 
 ## 📍 ERİŞİM ADRESLERİ
 
-| Servis | Adres |
-|--------|-------|
-| Frontend | http://31.186.24.78:3000 |
-| API | http://31.186.24.78:5000/api |
+| Servis   | Adres                        |
+| -------- | ---------------------------- |
+| Frontend | http://31.186.24.78:3000     |
+| API      | http://31.186.24.78:5000/api |
 
 ---
 
 ## 🔧 SORUN GİDERME
 
 ### API 502/503 hatası veriyorsa:
+
 ```bash
 docker-compose -f docker-compose.prod.yml logs api
 ```
 
 ### SQL Server bağlantı sorunu:
+
 ```bash
 docker exec ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd \
   -S localhost -U sa -P "ECom1234" -C \
@@ -101,6 +111,7 @@ docker exec ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd \
 ```
 
 ### Kategoriler görünmüyorsa:
+
 ```bash
 # Seed data yükle
 cat seed-products.sql | docker exec -i ecommerce-sql-prod \

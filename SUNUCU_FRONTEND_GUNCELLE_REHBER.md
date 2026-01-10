@@ -1,6 +1,7 @@
 # 🚀 SUNUCU FRONTEND GÜNCELLEME - HIZLI KOMUTLAR
 
 ## 📌 DURUM
+
 - ✅ Yerel PC (localhost:3000) = **ÇALIŞIYOR**
 - ❌ Sunucu (31.186.24.78:3000) = **GÜNCELLENMELI**
 
@@ -9,12 +10,14 @@
 ### SEÇENEK 1: Otomatik Script (Önerilen)
 
 **Sunucuya bağlan:**
+
 ```bash
 ssh huseyinadm@31.186.24.78
 # Şifre: Passwd1122FFGG
 ```
 
 **Script'i indir ve çalıştır:**
+
 ```bash
 cd ~
 # GitHub'dan doğrudan indirip çalıştır
@@ -22,6 +25,7 @@ curl -s https://raw.githubusercontent.com/gamzeaydinnn/e-ticaret/main/SUNUCU_FRO
 ```
 
 Veya sunucuya transfer edip çalıştır:
+
 ```bash
 # PC'den upload et (PowerShell)
 scp C:\Users\GAMZE\Desktop\eticaret\SUNUCU_FRONTEND_GUNCELLE.sh huseyinadm@31.186.24.78:~/
@@ -125,26 +129,28 @@ docker-compose -f docker-compose.prod.yml logs frontend | tail -20
 
 ## 📊 DEPLOYMENT TIMELINE
 
-| Adım | Bekleme | Açıklama |
-|------|---------|----------|
-| 1. Frontend stop | Anında | Container durdurulur |
-| 2. Git pull | 5-10s | Kod indirilir |
-| 3. Docker build | 3-5 min | Image rebuild edilir |
-| 4. Container start | 5-10s | Yeni image başlatılır |
-| 5. Health check | 5-10s | Port açılır, hazır olur |
-| **TOPLAM** | **~4-5 min** | |
+| Adım               | Bekleme      | Açıklama                |
+| ------------------ | ------------ | ----------------------- |
+| 1. Frontend stop   | Anında       | Container durdurulur    |
+| 2. Git pull        | 5-10s        | Kod indirilir           |
+| 3. Docker build    | 3-5 min      | Image rebuild edilir    |
+| 4. Container start | 5-10s        | Yeni image başlatılır   |
+| 5. Health check    | 5-10s        | Port açılır, hazır olur |
+| **TOPLAM**         | **~4-5 min** |                         |
 
 ---
 
 ## 🎯 BEKLENEN SONUÇ
 
 ✅ **BAŞARILI:**
+
 - http://31.186.24.78:3000 açılıyor
 - Kategoriler görünüyor
 - Log'larda hata yok
 - API'yle iletişim kurabiliyor
 
 ❌ **BAŞARISIZ YAKLAŞMALAR:**
+
 - `docker-compose.prod.yml restart frontend` ← Eski image'ı başlatır!
 - `docker restart ecommerce-frontend-prod` ← Rebuild yapmaz!
 - Código değiştirip `docker-compose up -d` ← Image rebuild etmez!
