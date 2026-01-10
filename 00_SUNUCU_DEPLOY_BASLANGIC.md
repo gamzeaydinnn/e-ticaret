@@ -6,7 +6,7 @@
 - ✅ `categoryService.js` dosyası oluşturuldu (eksik dosya)
 - ✅ `.env.production` API URL ayarlandı (https://golkoygurme.com.tr/api)
 - ✅ `appsettings.json` CORS domain'leri eklendi
-- ✅ `ecommerce/` klasöründeki dosyalar güncellendi
+- ✅ `ecommerce/` gereksiz klasörü tamamen kaldırıldı
 - ✅ AddressService export'u kaldırıldı (kullanılmıyor)
 
 ### 📚 DEPLOYMENT DOKÜMANTASYONU (5 Dosya)

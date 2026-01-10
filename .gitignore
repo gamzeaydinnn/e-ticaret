@@ -12,6 +12,10 @@ bld/
 [Bb]in/
 [Oo]bj/
 [Ll]ogs/
+
+# Eski gereksiz klasör - tekrar oluşturulmasını engelle
+ecommerce/
+
 !frontend/src/pages/admin/logs/
 !frontend/src/pages/admin/logs/**
 !src/ECommerce.Core/DTOs/Logs/
