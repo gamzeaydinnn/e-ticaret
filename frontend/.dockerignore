@@ -1,5 +1,5 @@
 node_modules
-build
+# build  # COMMENTED - we need this for Docker
 dist
 .env
 .DS_Store

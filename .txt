@@ -1,0 +1,3895 @@
+bak e ticaret sitesi için asms doğrulama apisi entegre etmeye çalışıyorumm databsei her şeyi düşüneek madde madde aşırı detaylı bir mimari oluştur bu da doc API Dokümanı
+
+API ile kullanılabilir hizmetlere doküman üzerinden ulaşabilirsiniz.
+
+API servisine gönderilebilir istekleri ve servisten tarafınıza dönen örnek yanıtları inceleyebilirsiniz.
+
+Örnek kodlamalara ulaşabilirsiniz.
+
+İletişim : teknikdestek@netgsm.com.tr 0312 911 0 911 - 0850 303 0 303
+
+Duyurular
+
+** 11.03.2025 - Görev ID Güncellemesi Bu güncelleme, request ve response yapısında herhangi bir değişikliğe neden olmayacaktır.
+
+Yapılan değişiklikle birlikte, daha önce başarılı gönderimlerde servisten 10 haneli bir görev ID’si (örn: 173772167) dönerken, güncelleme sonrasında daha uzun bir string ifade dönecektir (örn: 17377215342605050417149344).
+
+06.08.2024 - SMS Rapor Servisi API isteklerinde Content-Type Başlığı Eklemenin Zorunlu Hale Gelmesi
+
+06.08.2024 tarihi itibariyle SMS Rapor API servislerinde Content-Type başlığı ile veri formatı belirtmek zorunlu hale gelmiştir.
+
+22.01.2024 - Alt Kullanıcı Hesabı Olmayan API Kullanıcılarının API Erişimlerinin Kısıtlanması
+
+15.02.2024 tarihi itibariyle API servislerinde, API yetkileri verilmiş bir alt kullanıcı ile erişim sağlanması zorunlu hale gelecektir.
+
+usercode/username/kullanıcı adı alanında abone numaranızı (312XXXXXXX, 850XXXXXXX vs.)
+
+password/şifre alanında oluşturduğunuz alt kullanıcı şifresi kullanılmalıdır.
+
+01.11.2023 - Zorunlu Alt Kullanıcı Oluşturma
+
+01.11.2023 tarihi itibari ile API servisi ile sağlanacak işlemler için gerekli API yetkileri verilmiş bir alt kullanıcı kullanılmalıdır.
+
+usercode/username/kullanıcı adı alanında abone numarası (312XXXXXXX, 850XXXXXXX vs.) ve password/şifre alanında oluşturulan alt kullanıcı şifresi kullanılmalıdır.
+
+Alt kullanıcınızı buradan hesabınıza giriş yaparak Abonelik işlemleri>Alt kullanıcı hesapları sayfasından oluşturabilirsiniz. Müşteri temsilcilerimiz alt kullanıcı onayı için iletişime geçecektir, onaylandıktan sonra alt kullanıcınız ile işlem sağlayabilirsiniz.
+
+Sürüm Notları
+
+2.0 - 13.03.2023
+
+API servisine api.netgsm.com.tr eriştiğiniz endpointlerde SSL zorunluğuluğu getirilmiştir.
+
+https://api.netgsm.com.tr servis adresimiz SSL'li olarak hizmet vermektedir.
+
+1.9 - 01.08.2022
+
+Gönderici adı sorgulamalarında JSON POST inputu desteklenmeye başlanmıştır.
+
+1.8 - 19.04.2022
+
+SMS gönderimlerinde HTTP GET metodu desteklenmemektedir, https://api.netgsm.com.tr/sms/send/get ve https://api.netgsm.com.tr/bulkhttppost.asp adresine gönderdiğiniz isteklerde POST yöntemini tercih edebilirsiniz.
+
+Geliştiriciler
+
+Netgsm hizmetlerini yazılımlarına entegre eden geliştiricileri, Netgsm Entegrasyon Ağına dahil ediyoruz, buradan "Entegrasyon Ağına Katıl" butonuna tıklayarak başvuruda bulunabilirsiniz.
+
+Kaydınızı tamamladıktan sonra en kısa süre içerisinde entegrasyon ekibimiz sizinle iletişime geçecektir.
+
+Entegrasyon Ağı Nedir?
+
+Netgsm Entegrasyon Ağının temel amacı; Netgsm ile Geliştiricileri arasında bir bağ kurmaktır.
+
+Bu sayede Geliştiriciler;
+
+Netgsm Hizmetlerini daha etkin kullanabilir,
+
+Uygulama yeteneklerini, Netgsm hizmetleri ile genişletebilir,
+
+Kapsamlı API Entegrasyon desteği alabilir,
+
+API güncellemeleri, genel duyurular ve bakım bildirimlerinden haberdar olabilir,
+
+Entegrasyon ekibi ile toplantı talep edebilir,
+
+Netgsm tarafından düzenlenen webinar ve seminerlere katılabilir.
+
+Alt Kullanıcı
+
+API/Entegrasyon hizmetimiz ana hesabınıza bağlı olarak oluşturulan alt kullanıcı üzerinden yapılmalıdır.
+
+Alt kullanıcılar, aboneliğinize bağlı tanımlanacak ve sınırladığınız yetkilere göre hizmetleri (SMS, rehber, santral, sesli mesaj vs.) kullanabileceklerdir.
+
+Web portaldan ana kullanıcı adı ve şifreniz ile buradan giriş yaparak Abonelik İşlemleri / Alt Kullanıcı Hesapları menüsünden ilerleyerek alt kullanıcı oluşturabilirsiniz. Oluşturacağınız alt kullanıcıda yetki sütununda alt kullanıcıya API izinlerini işaretlemenizi öneririz. (Yeni bir alt kullanıcı tanımlaması yalnızca ana hesap girişi ile yapılabilir.)
+
+API Servisine gelen requestleriniz(isteklerde) usercode/username parametresinde abone numaranızı, password parametresinde ise yeni oluşturduğunuz API sütunu yetkisi verilmiş alt kullanıcı şifreniz ile kullanmanız gerekmektedir.
+
+Ayarlar
+
+API Erişim Talebi
+
+API servisi ile işlem sağlayabilmek için, API erişim izniniz olması gerekmektedir. Bu işlemi, www.netgsm.com.tr adresinden giriş yaptıktan sonra Abonelik İşlemleri / API işlemleri menüsünden sağlayabilirsiniz. Bu işlem alt kullanıcı oluşturduktan sonra yapılmalıdır.
+
+
+
+
+
+IP Sınırlama
+
+API servisi kullanımına IP adres sınırlaması getirmek için Abonelik İşlemleri / API işlemleri menüsundeki API için IP Erişimini Sınırla butonunu kullanabilirsiniz.
+
+Gönderici Adı Oluşturma
+
+Web arayüzde SMS Hizmeti / SMS Ayarları / Başlıklarım menüsunden yeni gönderici adı talep edebilir veya tanımlı gönderici adlarınızı görebilirsiniz.
+
+SMS Gönderimi
+
+API ile SMS göndermek için www.netgsm.com.tr adresinden giriş yaptıktan sonra Kullanıcı İşlemleri / API Talep İşlemleri menüsünden API talebinde bulununuz.
+
+API servisine erişimde hesabınızda alt kullanıcı tanımlamanız gerekmektedir, Abonelik İşlemleri / Alt Kullanıcı Hesapları menüsü ile oluşturacağınız alt kullanıcıya API servisi yetkilerini verebilirsiniz.
+
+API ile ilgili teknik değişiklik ve gelişmelerden haberdar olmak için Abonelik İşlemleri / API işlemleri menüsündeki API yetkilisi bölümüne API entegrasyonunu sağlayan kişinin bilgilerini girmeniz gerekmektedir.
+
+API servisi kullanımına IP adres sınırlaması getirmek için Abonelik İşlemleri / API işlemleri menüsündeki API için IP Erişimini Sınırla butonunu kullanabilirsiniz.
+
+Mesaj başlığı kısmına kullanıcı hesabınızda tanımlı gönderici adlarından(mesaj başlığı) birini giriniz. Hesabınızda tanımlı olan gönderici adlarınızı API ile Gönderici Adı Sorgula menüsündeki sorgulama ile listeyebilirsiniz. Ayrıca web ara yüzde SMS Hizmeti / SMS Ayarları / Başlıklarım menüsünden de kontrol edebilirsiniz.
+
+Yurt dışına SMS gönderiminde numara başına '00' eklenmelidir. Örneğin, +421xxxxxxx numarasına 00421xxxxxxx şeklinde gönderim sağlanmalıdır.
+
+Enter karakterli SMS gönderimlerinde, gönderilen metin içinde string olarak " \n " karakterleri kullanılmalıdır.
+
+Ticari Elektronik İleti; Firmaların, mal ve hizmetlerini pazarlamak, işletmesini tanıtmak ya da kutlama ve temenni gibi içeriklerle tanınırlığını artırmak amacıyla tüketicilere kampanya, özel gün kutlaması,indirim, hediye içerikli vb. gönderdiği mesajlardır.
+
+SMS'lerinizi ticari içerikli iletmek için 3 gönderim yönteminde de göndermeniz gereken zorunlu parametreyi iletmelisiniz.Gönderim yöntemlerinde bu parametre belirtilmiştir. Parametreyi ticari içerikli olarak göndermeniz halinde, gönderdiğiniz mesajlar İleti Yönetim Sistemi (İYS)'den kontrol edilecek ve İYS'de kayıtlı olmayan numaralara mesajlar iletilmeyecektir. Gönderdiğiniz mesajın içeriğinin ticari elektronik ileti olmadığını düşünüyorsanız bu bir bilgilendirme içerir ve parametrenin bilgilendirmeyi içerdiği değeri göndermelisiniz. Bu durumda İYS'den sorgulama yapılmadan doğrudan alıcıya mesajlar gönderilecektir. Sorumluluk mesajı gönderen abonededir. İleti Yönetim Sistemi hakkında detaylı bilgiye, buradan ulaşabilirsiniz.
+
+Mükerrer olarak raporlanan SMS'in anlamı; abonelerimiz, bir saat içerisinde aynı mesaj içeriğini aynı numaraya göndermek istediklerinde koruma amaçlı filtreye takılırlar. Bu durumu önlemek için çağrı merkezi ile görüşerek mükerrer filtresini sesli onayınız ile kaldırtabilirsiniz ya da farklı mesaj metin içerikli SMS gönderim testlerinde bulunabilirsiniz.
+
+SMS lerinizin Türkçe karakter içermesini istiyorsanız encoding=TR parametresini kullanabilirsiniz.
+
+Başarılı gönderimlerinizde size mesajınızı sorguyabileceğiniz jobid döner.
+
+Başarısız gönderimlerinizde, duruma göre hata kodları döner.
+
+SMS gönderimlerinizde Ticari içerik fitresi uygulayarak mesaj göndermek için iysfilter parametresini de eklemelisiniz.
+
+Software Development Kit
+
+Python için https://pypi.org/project/netgsm-sms/
+
+JavaScript için https://www.npmjs.com/package/@netgsm/sms bağlantılarını ziyaret edebilirsiniz.
+
+Authentication
+
+API, HTTP Basic Authentication yöntemini kullanır. Bu, username ve passwordun Base64 formatında kodlanarak Authorization başlığına eklenmesini gerektirir.
+
+Tanımlar
+
+ParametreAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.noSMSin gönderileceği gsm numarasıdır. Eğer yurtdışı telefon numarasına mesaj göndermek istiyorsanız numaranın başına 00 ekleyerek gönderim işlemini yapabilirsiniz.msgMesaj metnidir. Tarifenizdeki maksimum karakterden uzun olmamalıdır. Standart maksimum karakter 917 dur.msgheaderSistemde tanımlı olan mesaj başlığınızdır (gönderici adınız). En az 3, en fazla 11 karakterden oluşur. Eğer mesaj başlığınızın abone numaranızın olmasını istiyorsanız, bu parametreye başında sıfır olmadan abone numaranızı yazınız.8xxxxxxxxxxstartdateGönderime başlayacağınız tarih. (ddMMyyyyHHmm) * Boş bırakılırsa mesajınız hemen gider.stopdateİki tarih arası gönderimlerinizde bitiş tarihi.(ddMMyyyyHHmm) * Boş bırakılırsa sistem başlangıç tarihine 21 saat ekleyerek otomatik gönderir.encodingTürkçe karakterli mesaj gönderimlerinizde "TR" gönderilir. Eğer gönderim sağlanmazsa mesajınız Türkçe karakter içermeden gönderilecektir.iysfilterTicari içerikli SMS gönderimlerinde bu parametreyi kullanabilirsiniz. Ticari içerikli bireysele gönderilecek numaralar için İYS kontrollü gönderimlerde ise "11" değerini, tacire gönderilecek İYS kontrollü gönderimlerde ise "12" değerini almalıdır. Bilgilendirme amaçlı gönderilen içeriklerde (İYS kontrolü sağlanmadan gönderilen) "0" değerini almalıdır.partnercodeBayi üyesi iseniz bayinize ait kod gönderilebilir.appnameUygulamanızın ismi.referansIDHer isteğe özel olarak istemci (client) tarafından oluşturulabilir ve API isteğine eklenebilir (Zorunlu değil). Bu, mesaj gönderiminin daha sonra takip edilebilmesini sağlar.
+
+Servisten Alınan Cevap
+
+KodAnlamı00Görevinizin tarih formatinda bir hata olmadığını gösterir.01Mesaj gönderim başlangıç tarihinde hata var. Sistem tarihi ile değiştirilip işleme alındı.02Mesaj gönderim sonlandırılma tarihinde hata var.Sistem tarihi ile değiştirilip işleme alındı.Bitiş tarihi başlangıç tarihinden küçük girilmiş ise, sistem bitiş tarihine içinde bulunduğu tarihe 24 saat ekler.17377215342605050417149344Gönderdiğiniz SMS'inizin başarıyla sistemimize ulaştığını gösterir. Bu jobid ile mesajınızın durumunu sorguyabilirsiniz.
+
+HTTP Status Kodları
+
+KodAnlamı200İstek başarıyla alındı, işlendi ve sunucu tarafından cevaplandı.406istemcinin isteğinin kabul edilemez olduğunu ve sunucunun isteği işleyemediğini belirtir.
+
+Hata Durumları
+
+Hata KoduAnlamı20Mesaj metninde ki problemden dolayı gönderilemediğini veya standart maksimum mesaj karakter sayısını geçtiğini ifade eder.30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Mesaj başlığınızın (gönderici adınızın) sistemde tanımlı olmadığını ifade eder. Gönderici adlarınızı API ile sorgulayarak kontrol edebilirsiniz. Önemli: Eğer abone numaranızı başlık olarak kullanırken bu hatayı alıyorsanız, çağrı merkezimizden (0850 303 0 303) "abone numaralı gönderim" kısıtlamasını kaldırmanız gerekir.50Abone hesabınız ile İYS kontrollü gönderimler yapılamamaktadır.51Aboneliğinize tanımlı İYS Marka bilgisi bulunamadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.80Gönderim sınır aşımı.85Mükerrer Gönderim sınır aşımı. Aynı numaraya 1 dakika içerisinde 20'den fazla görev oluşturulamaz.
+
+POST
+
+https://api.netgsm.com.tr/sms/rest/v2/send
+
+Örnek Kod
+
+$data = [
+
+    "msgheader" => "xxxxxxx",
+
+    "messages" => [
+
+        [
+
+            "msg" => "test1",
+
+            "no" => "510xxxxxxx"
+
+        ],
+
+        [
+
+            "msg" => "test2",
+
+            "no" => "510xxxxxxx"
+
+        ]
+
+    ],
+
+    "encoding" => "TR",
+
+    "iysfilter" => "",
+
+    "partnercode" => ""
+
+];// API URL'si
+
+$url = "https://api.netgsm.com.tr/sms/rest/v2/send"; // Buraya hedef API URL'sini yazın// Basic Auth kullanıcı adı ve şifresi
+
+$username = "your-username"; // Buraya kullanıcı adınızı yazın
+
+$password = "your-password"; // Buraya şifrenizi yazın// cURL başlat
+
+$ch = curl_init();// cURL ayarları
+
+curl_setopt($ch, CURLOPT_URL, $url);
+
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+curl_setopt($ch, CURLOPT_POST, true);
+
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+
+    'Content-Type: application/json',
+
+    'Authorization: Basic ' . base64_encode($username . ':' . $password)
+
+]);// API isteğini gönder
+
+$response = curl_exec($ch);if (curl_errno($ch)) {
+
+    echo 'Hata: ' . curl_error($ch);
+
+} else {
+
+    // API yanıtını yazdır
+
+    echo "Yanıt: " . $response;
+
+}// cURL kapat
+
+curl_close($ch);/*
+
+{
+
+    "code": "00",  //Görevinizin tarih formatinda bir hata olmadığını gösterir.
+
+    "jobid": "17377215342605050417149344", //SMS isteğinize ait benzersiz id bilgisidir. Bu jobid ile SMS raporu sorgulanabilir
+
+    "description": "queued" // SMS isteğinizin başarıyla kuyruğa alındığını belirtir.
+
+}
+
+*/
+
+Karakter Hesaplama
+
+Göndereceğiniz Türkçe karakterli mesajlarda türkçe karakter hesaplamanızın detaylandırılmasıdır.
+
+Türkçe dil seçeneği ile SMS gönderiliyorsa, 1 boy SMS 155 karakter üzerinden değil 150 karakter üzerinden hesaplanır. Düşen 5 karakter mesajın Türkçe Karakterleri de desteklemesi için harcanır, 150 tane Türkçe karakter kullanılabilir anlamına gelmez.
+
+150 tane karakter sınırla, içinde Türkçe karakterlerde kullanılabilir anlamına gelir.
+
+Sistemdeki Türkçe karakterler " ç , ğ , ı , ş , Ğ , İ , Ş "
+
+12.04.2016 tarihli DK-YED/211 sayılı BTK kararı ile 11.12.2016 tarihinden itibaren başlıklı SMS gönderimlerinde mesaj metninin sonuna operatör kodunun (B021) eklenmesi zorunlu hale getirilmiştir.
+
+Sistem otomatik olarak B021 kodunu mesaj metninizin sonuna ekleyecektir. 1 SMS karakter boyu başlıklı SMS için 155 olarak güncellenmiştir. Abone no ile gönderimlerde bu durum geçerli değildir.
+
+Örneğin, "ÖzTürkçe" kelimesi abone numaralı bir SMS içeriğinde gönderilmek istendiğinde, 160-5=155 karakter üzerinden hesaplanır.
+
+Mesaj İçeriğiHarfTürkçe KarakterKalan KarakterÖÖTürkçe değil(155-1) 154ÖzzTürkçe değil(154-1) 153ÖzTTTürkçe değil(153-1) 152ÖzTüüTürkçe değil(152-1) 151ÖzTürrTürkçe değil(151-1) 150ÖzTürkkTürkçe değil(150-1) 149ÖzTürkççTürkçe(149-2) 147ÖzTürkçeeTürkçe değil(147-1) 146
+
+Tablodaki gibi, Türkçe karakter içeren bir harf yer alıyorsa hesaplamada 2 karakter harcar.
+
+"ççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççççç" Burada 77 tane ç harfi var her biri 2 karakter harcar 2x77=154 [ boy=1 ] yani bundan sonra yazılan herhangi bir Türkçe karakter 154+2=156 [ boy=2 ] şeklinde hesaplanır.
+
+SMS API Desteklenen Karakterler
+
+KarakterASCII/UTF-8KarakterASCII/UTF-8KarakterASCII/UTF-8KarakterASCII/UTF-8KarakterASCII/UTF-8KarakterASCII/UTF-8A41Q51g67w77_5F;3BB42R52h68x78ßC3 9F<3CC43S53i69y79!21=3DD44T54j6Az7A#23>3EE45U55k6B030%25?3FF46V56l6C131&26ÖC3 96G47W57m6D232'27ÜC3 9CH48X58n6E333(28§C2 A7I49Y59o6F434)29äC3 A4J4AZ5Ap70535*2AöC3 B6K4Ba61q71636+2BüC3 BCL4Cb62r72737,2Cboşluk20M4Dc63s73838-2DN4Ed64t74939.2EO4Fe65u75@40/2FP50f66v76$24:3A
+
+İleri Tarihli SMS İptal
+
+Authentication
+
+API, HTTP Basic Authentication yöntemini kullanır. Bu, username ve passwordun Base64 formatında kodlanarak Authorization başlığına eklenmesini gerektirir.
+
+İleri tarihe zamanlanmış SMS'lerinizi iptal edebilirsiniz.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)jobidGönderilen SMS'e ait Görev ID İstek yapılırken gönderilmesi zorunludur.appnameİsteğe bağlı bir parametredir, zorunlu değildir.
+
+Örnek Başarılı Yanıt
+
+KodAnlamı00İleri zamanlı görevinizin başarılı bir şekilde iptal edilğini ifade eder.
+
+Hata Durumları
+
+KodAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.60Gönderdiğiniz görevid'ye ait kayıt olmadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/sms/rest/v2/cancel
+
+Basic Auth Base64: username password
+
+Örnek Request
+
+{
+
+    "jobid": "17411822587291945377189121",
+
+    "appname":"app name"
+
+}
+
+Örnek Response
+
+{
+
+    "code": "00",
+
+    "jobid": "1741182258XXXXXXX377189121",
+
+    "description": "job canceled"
+
+}
+
+SMS Sorgulama
+
+Sorgulamalarınız tarih aralığı ya da görev numarası (bulkid, jobid olarak da adlandırılan) SMS ID ile de sorgulanabilir.
+
+Mükerrer olarak raporlanan SMS'in anlamı; abonelerimiz, bir saat içerisinde aynı mesaj içeriğini aynı numaraya göndermek istediklerinde koruma amaçlı filtreye takılırlar. Bu durumu önlemek için çağrı merkezi ile görüşerek mükerrer filtresini sesli onayınız ile kaldırtabilirsiniz ya da farklı mesaj metin içerikli SMS gönderim testlerinde bulunabilirsiniz.
+
+Ayrıca SMS raporlarınızı arayüzdende görüntüleyebilirsiniz.www.netgsm.com.tr adresinden kullanıcı adı ve şifreniz ile giriş yaptıktan sonra SMS Hizmeti / Raporlar-İstatistik alanından da ulaşabilirsiniz.
+
+Software Development Kit
+
+Python için https://pypi.org/project/netgsm-sms/
+
+JavaScript için https://www.npmjs.com/package/@netgsm/sms bağlantılarını ziyaret edebilirsiniz.
+
+JSON POST Rapor
+
+Gönderilen mesajların son 3 aya kadar raporlarını sorguyarak; iletim durumlarını öğrenebilirsiniz.
+
+API isteklerinde Content-Type başlığını eklemek zorunludur. JSON verisi gönderirken Content-Type: application/json başlığını eklemek verinin doğru bir şekilde işlenebilmesi için kritik öneme sahiptir.
+
+API, HTTP Basic Authentication yöntemini kullanır. Bu, username ve passwordun Base64 formatında kodlanarak Authorization başlığına eklenmesini gerektirir.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur. (Basic Auth)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.(Basic Auth)jobidsApi veya soap web servisi ile başarılı mesaj gönderimlerinizde dönen görevid (bulkid) nizdir.startdateİki tarih arası sorgulamalarınızda başlangıç tarihidir("01.03.2025 14:43:09")stopdateİki tarih arası sorgulamalarınızda bitiş tarihidir("02.03.2025 14:43:09") Bütün numaralar birbirlerinden <BR> kodu ile ayrılmiştir.appnameUygulama adınızı belirten parametredir. Zorunlu değildir.pagenumberGetirilecek sayfa numarasını belirten parametre. Varsayılan olarak 1 gelir. Zorunlu değildir.pagesizeHer sayfada döndürülecek kayıt sayısını belirten parametre. Zorunlu değildir
+
+Servisten Dönen Yanıt
+
+Parametre = status
+
+KodAnlamı0İletilmeyi bekleyenler1İletilmiş olanlar2Zaman aşımına uğramış olanlar3Hatalı veya kısıtlı numara4Operatöre gönderilemedi11Operatör tarafından kabul edilmemiş olanlar12Gönderim hatası olanlar13Mükerrer olanlar14Yetersiz Kredi / Paket15Gönderilen numara kara listede16İYS Ret17İYS Hatası
+
+Parametre = operator
+
+KodAnlamı10Vodafone20Türk Telekom30Turkcell40Netgsm STH41Netgsm Mobil60Türktelekom Sabit70Tanımsız Operator160KKTC Vodafone212Yurtdışı213Yurtdışı214Yurtdışı215Yurtdışı880KKTC Turkcell
+
+Hata Kodu Açıklamaları
+
+KodAnlamı0Hata Yok101Mesaj Kutusu Dolu102Kapalı yada Kapsama Dışında103Meşgul104Hat Aktif Değil105Hatalı Numara106SMS red, Karaliste111Zaman Aşımı112Mobil Cihaz Sms Gönderimine Kapalı113Mobil Cihaz Desteklemiyor114Yönlendirme Başarısız115Hedef Operatörden Zaman Aşımı Oluştu116Tanımlanamayan Abone117Yasadışı Abone119Sistemsel Hata
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.80sınır aşımı, dakikada 10 kez sorgulanabilir.100-110Sistem hatası
+
+POST
+
+https://api.netgsm.com.tr/sms/rest/v2/report
+
+<?php<?php
+
+
+
+$curl = curl_init();
+
+
+
+$usercode = "KULLANICI_ADINIZ";  // Netgsm API kullanıcı adınızı buraya yazın(Abone numarası 850xxxxxxx,312xxxxxxx vs)
+
+$password = "ŞİFRENİZ";           // Netgsm API şifrenizi (API Kullanıcı olarak oluşturulmuş alt kullanıcı şifresi) buraya yazın// Kullanıcı adı ve şifreyi Base64 ile şifrele
+
+$credentials = base64_encode("$username:$password");
+
+
+
+curl_setopt_array($curl, array(
+
+  CURLOPT_URL => 'https://api.netgsm.com.tr/sms/rest/v2/report',
+
+  CURLOPT_RETURNTRANSFER => true,
+
+  CURLOPT_ENCODING => '',
+
+  CURLOPT_MAXREDIRS => 10,
+
+  CURLOPT_TIMEOUT => 0,
+
+  CURLOPT_FOLLOWLOCATION => true,
+
+  CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+  CURLOPT_CUSTOMREQUEST => 'POST',
+
+  CURLOPT_POSTFIELDS => json_encode(array(
+
+    "appname" => "uygulama_adi",
+
+    "startdate" => "10.03.2025 00:00:09",
+
+    "stopdate" => "10.03.2025 23:44:00",
+
+    "jobids" => ["1741611906XXXX945377171144", "17416119577XXXX45377160152"],
+
+    "pagenumber" => 0,
+
+    "pagesize" => 3
+
+  )),
+
+  CURLOPT_HTTPHEADER => array(
+
+    'Content-Type: application/json',
+
+    'Authorization: Basic ' . $credentials  // Base64 şifreli kimlik doğrulama
+
+  ),
+
+));
+
+
+
+$response = curl_exec($curl);if (curl_errno($curl)) {
+
+    echo 'Curl error: ' . curl_error($curl);
+
+}
+
+
+
+curl_close($curl);echo $response;/*{
+
+    "response": {
+
+        "job": [
+
+            {
+
+                "jobid": "1895512113",
+
+                "telno": "90xxxxxxxxx",
+
+                "status": 1,
+
+                "operator": 41,
+
+                "msglen": 1, //mesaj boyu
+
+                "deliveredDate": "23.07.2024 14:29:07", //iletim tarihi
+
+                "errorCode": 0 //hata olmadığını belirtir.
+
+            },
+
+            {
+
+                "jobid": "1814793052",
+
+                "telno": "90xxxxxxxxx",
+
+                "status": 1,
+
+                "operator": 41,
+
+                "msglen": 1,
+
+                "deliveredDate": "23.07.2024 14:39:07",
+
+                "errorCode": 0
+
+            }
+
+        ]
+
+    }
+
+}
+
+*/
+
+JSON POST Rapor İstatistik
+
+Bir grup SMS gönderimine ait istatistikleri öğrenebilirsiniz. SMS durumlarına göre gruplanmış olarak; toplam mesaj sayısı, toplam mesaj boyu, ücretlendirme bilgisi, yurtiçi veya yurtdışı bilgisi öğrenilebilir.
+
+Sorgulama için jobid zorunludur.
+
+Her bir istekte, 1 jobid sorgulanabilir.
+
+Her bir jobid, 10 dakikada 1 defa sorgulanabilir.
+
+Request Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (Basic Auth) ZorunlupasswordAPI alt kullanıcı şifresi. (Basic Auth) ZorunlujobidGönderilen grup SMS'e ait jobid değeri, gönderim sırasında, başarılı istek sonrası cevap olarak döner. ZorunlusenddateSMS gönderim tarihi (YYYY-MM-DD HH:DD:SS) Zorunlu Değil (SMS gönderimi ile istatistik sorgusu aynı ay içerisinde gerçekleşiyorsa null gönderilebilir. Fakat gönderimi önceki aylara ait bir jobid 'ye ait istatistik isteniyorsa, gönderime ait tarih bilgisi girilmelidir.)
+
+Response Tanımlar
+
+ParametreAnlamıstatusSMS durumutotalMessageLengthToplam mesaj boyutotalSmsToplam mesaj sayısıchargeStatementÜcretlendirilen toplam boystatementÜcretlendirme durumudomesticSMS yönü (yurtiçi=true, yurtdışı=false)
+
+Durum Açıklamaları
+
+StatusAnlamısuccessfulİletildinotEnoughCreditYetersiz Kredi / PaketiysNotValidİYS RetblacklistKaralistenumberErrorHatalı NumarasendingErrorGönderim HatasıoperatorErrorOperatör HatasıoperatorRefusedOperatör Mesajı Kabul EtmedicannotSendToOperatorOperatöre GönderilemedimessageTextErrorMesaj Boyu Limit HatasınotAccceptedByNtsNTS HatasıwaitingBekleyenrepeatedMükerrer gönderimrefundedÜcretlendirme iade edildiexpiredZaman aşımına uğramış
+
+POST
+
+https://api.netgsm.com.tr/sms/rest/v2/stats
+
+Örnek Request
+
+{
+
+    "jobid": "17581962771521945377799112",
+
+    "senddate": ""
+
+}
+
+Örnek Response
+
+{
+
+    "stats": [
+
+        {
+
+            "status": "repeated",
+
+            "totalMessageLength": 0,
+
+            "totalSms": 1,
+
+            "chargeStatement": "",
+
+            "statement": "uncharged",
+
+            "domestic": true
+
+        },
+
+        {
+
+            "status": "successful",
+
+            "totalMessageLength": 3,
+
+            "totalSms": 3,
+
+            "chargeStatement": "3.0 unit(s) from: ",
+
+            "statement": "charged",
+
+            "domestic": true
+
+        }
+
+    ],
+
+    "description": "success"
+
+}
+
+OTP SMS
+
+Anlık SMS gönderimlerinde (şifre, onay kodu vs.) OTP Servisini kullanabilirsiniz.
+
+SMS'lerde zaman ayarı yapılamaz, 3 dakika içerisinde iletilir.
+
+Türkçe karakterli gönderim yapılmamaktadır.
+
+Yurtdışı ve sabit numaralara gönderim yapılamaz.
+
+Bu servisi kullanım için hesabınızda OTP paketi tanımlı olmalıdır.
+
+Detaylı bilgi için tıklayınız.
+
+PHP Laravel & Symfony örnekleri için composer paketi ve detaylı bilgiye buradan ulaşabilirsiniz.
+
+
+
+OTP SMSDiğer SMSSMS’ler 3 dakika içerisinde iletilir.Belirlenen tarih aralığı içerisinde mesaj gönderimi sağlanır. İletilemeyen SMS’ler stopdate gözetilerek tekrar deneme sistemine girerYüksek güvenlikli ve önceliklidir, doğrudan şebekeye teslim.Hesap bazında gönderim sıralamasına göre kuyruklanır.İleri tarihli gönderim gerçekleştirilemez.İleri tarihli gönderim gerçekleştirilebilir.Toplu gönderim yapılamaz.Toplu gönderim yapılabilir.3 operatöre OTP SMS teslim imkanı, yurt dışına OTP gönderilemez.Yurt içi ve yurt dışına SMS gönderimi sağlanabilir.Yalnızca API servisleri ile gönderim sağlanır.API servisi, web, mobil ve masaüstü arayüzlerinden gönderim sağlanabilir.Filtresiz gönderim (İYS kontrolü, Kara liste, Mükerrer filtresi)Filtrelenerek gönderilir.Türkçe karakterli gönderim yapılamaz.)Türkçe karakterli gönderim yapılabilir.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (Basic Auth) ZorunlupasswordAPI alt kullanıcı şifresi. (Basic Auth) ZorunlumsgheaderSistemde tanımlı olan mesaj başlığınızdır (gönderici adınız). En az 3, en fazla 11 karakterden oluşur. Eğer mesaj başlığınızın abone numaranızın olmasını istiyorsanız, bu parametreye abone numaranızı yazınız. Zorunlumsg1 boy ve Türkçe karakter içermeyen mesaj metni bu parametrede gönderilir. XML Parse işlemlerinde özel işaretlerin sorun yaratmamasi için, mesaj metni <![CDATA[Mesaj metni bu alanda olacak]] > taglari içinde yer almalıdır. (İstek yapılırken gönderilmesi zorunludur.)noMesajın gönderileceği gsm numarasıdır.(5xxXXXxxxx formatında olmalıdır.) Yurt dışına gönderim yapılmamaktadır. ZorunluappnameEntegrasyon sağladığınız uygulama adınız. Zorunlu değil
+
+Hata Durumları
+
+Hata KoduAnlamı20Mesaj metni ya da mesaj boyunu kontrol ediniz. (Alfanumerik başlık ile maksimum 155 karakter, abone numarası ile maksimum 160 karakter)30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız IP dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40-41Gönderici adınızı kontrol ediniz.50-52Gönderilen numarayı kontrol ediniz.60Hesabınızda OTP SMS Paketi tanımlı değildir, kontrol ediniz.70Input parametrelerini kontrol ediniz.100Sistem hatası.
+
+POST
+
+https://api.netgsm.com.tr/sms/rest/v2/otp
+
+Örnek Request
+
+{
+
+    "msgheader": "850XXXXXXX",
+
+    "appname": "uygulama_adiniz",
+
+    "msg": "code: 1234",
+
+    "no": "510XXXXXXX"
+
+}
+
+Başarılı Örnek Response
+
+{
+
+    "jobid": "176243759XXXXX9453710538549",
+
+    "code": "00",
+
+    "description": "success"
+
+}
+
+Başarısız Örnek Response
+
+{
+
+    "code": "XX",
+
+    "description": "error message desc."
+
+}
+
+Gelen SMS
+
+Software Development Kit
+
+Python için https://pypi.org/project/netgsm-sms/
+
+JavaScript için https://www.npmjs.com/package/@netgsm/sms bağlantılarını ziyaret edebilirsiniz.
+
+URL'e Yönlendirme
+
+Abone numaranıza gelen SMS'leri tarafınızda belirleyeceğiniz bir URL adresine anlık olarak post ediyoruz.
+
+Bu işlemi webportaldan SMS Hizmeti / İnteraktif SMS menüsündeki URL Adresine Yönlendir Modülüe tıklayarak gerçekleştirebilirsiniz.
+
+Belirttiğiniz URL adresine yönlendirilecek veri post ile gönderilir.
+
+Gönderilen post değerleri ceptel, mesaj, aboneno, tarih, ve gorevid dir.
+
+function log_yaz($veri,$dosya_adi){
+
+	$klasor_tarih=str_replace(".","",date("d.m.Y"));
+
+
+
+	if (!is_dir("D:/Log/ULRyonlendir/$klasor_tarih"))
+
+	{
+
+			mkdir("D:/Log/ULRyonlendir/$klasor_tarih",0700);		
+
+	}
+
+	$dosya = "D:/Log/ULRyonlendir/".$klasor_tarih."/$dosya_adi"."$tarih.txt";
+
+	$dt=fopen($dosya, 'w');
+
+	if (is_writable($dosya))
+
+	{
+
+		if (!$dt = fopen($dosya, 'a'))
+
+			{
+
+				 exit;
+
+			}
+
+		if (fwrite($dt, $veri) === FALSE)
+
+			{
+
+				 exit;
+
+			}
+
+	fclose($dt);
+
+	}
+
+
+
+}
+
+log_yaz($_POST["mesaj"]." -Ceptel:".$_POST["ceptel"]." - ".$_POST["aboneno"]." - ".$_POST["gorevid"]." - ".$_POST["tarih"],"gelenveridosyasi");
+
+JSON GET Gelen SMS
+
+Abone numaranıza gelen SMS'leri servis URLe JSON Get yöntemi ile sorgulayabilirsiniz.
+
+Authentication
+
+API, HTTP Basic Authentication yöntemini kullanır. Bu, username ve passwordun Base64 formatında kodlanarak Authorization başlığına eklenmesini gerektirir.
+
+Gelen SMS sorgulamalarında "görüldü" durumu geçerlidir. Gelen SMS'e ait bilgiler, servisten sadece bir kere döner.
+
+Tanımlar
+
+ParametreAnlamıstartdateİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm) Params olarak gönderilmelidir.stopdateİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm) Params olarak gönderilmelidir.appnameUygulama adınızı belirten parametredir. Zorunlu değildir.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Gösterilecek mesajınızın olmadığını ifade eder. Api ile mesajlarınızı eğer startdate ve stopdate parametlerini kullanmıyorsanız sadece bir kere listeyebilirsiniz. Listelenen mesajlar diğer sorgulamalarınızda gelmez.50Tarih formatı hatalıdır. (Tarih formatı: ddmmyyyyhhmm şeklinde olmalıdır.)60Arama kiterlerindeki startdate ve stopdate zaman farkının 30 günden fazla olduğunu ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+GET
+
+https://api.netgsm.com.tr/sms/rest/v2/inbox
+
+Gönderici Adı Sorgulama
+
+Web üzerinden erişebileceğiniz, SMS Hizmeti / SMS Ayarları / Başlıklarım menüsünde tanımlayabileceğiniz, gönderici adlarınız (bir diğer adıyla mesaj başlığınızı) API servisi ile listeleyebilirsiniz.
+
+Tanımladığınız gönderici adlarının onay süreci hakkında bilgi almak için çağrı merkezimizle iletişim kurabilirsiniz.
+
+Software Development Kit
+
+Python için https://pypi.org/project/netgsm-sms/
+
+JavaScript için https://www.npmjs.com/package/@netgsm/sms bağlantılarını ziyaret edebilirsiniz.
+
+JSON
+
+Hesabınızda tanımlı gönderici adlarını(mesaj başlığı) JSON payload kullanarak sorgulama yapılan modüldür.
+
+API, HTTP Basic Authentication yöntemini kullanır. Bu, username ve passwordun Base64 formatında kodlanarak Authorization başlığına eklenmesini gerektirir.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.
+
+Hata Durumları
+
+KodAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.100-101Sistem hatası.
+
+GET
+
+https://api.netgsm.com.tr/sms/rest/v2/msgheader
+
+Örnek Request
+
+{
+
+    "usercode": "850xxxxxxx",
+
+    "password": "XXXXXXX"
+
+}
+
+Örnek Response
+
+{
+
+    "msgheader": [
+
+        "850xxxxxxx",
+
+        "XXXX XXXX"
+
+    ]
+
+}
+
+function curlitjson($url,$content) {
+
+    $curl = curl_init($url);
+
+    curl_setopt($curl, CURLOPT_HEADER, false);
+
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+    curl_setopt($curl, CURLOPT_HTTPHEADER,
+
+        array("Content-type: application/json"));
+
+    curl_setopt($curl, CURLOPT_POST, true);
+
+    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
+
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $content);
+
+    $json_response = curl_exec($curl);
+
+    $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+    curl_close($curl);
+
+    return($json_response);
+
+}try {
+
+    $arr_acc = array(
+
+        "usercode" => "850XXXXXXX",
+
+        "password" => "XXXX"
+
+    );
+
+    $url_acc = "https://api.netgsm.com.tr/sms/rest/v2/msgheader";
+
+    $content_acc = json_encode($arr_acc);
+
+
+
+    $send_acc = curlitjson($url_acc,$content_acc);
+
+    $send_acc = json_decode($send_acc);
+
+    print_r($send_acc);
+
+} catch (Exception $exc)
+
+{
+
+    echo $exc->getMessage();
+
+}
+
+
+
+
+
+  /*
+
+  Servise POST edilen JSON formatı
+
+  {
+
+    "usercode":"850XXXXXXX",
+
+    "password":"XXXXXX"
+
+ }
+
+
+
+  Servisten Dönen Cevap:
+
+  {
+
+      "msgheader": [
+
+          "850XXXXXXX",
+
+          "göndericiadi1"
+
+      ]
+
+  }
+
+  }
+
+  */
+
+Kara Liste
+
+Blacklist olarak da bilinen SMS gönderimi istenmeyen yasaklı numaralar listeniz için, belirlediğiniz numaraları Kara Listeye Ekleme / Kara Listeden Çıkarma modülünü kullanabilirsiniz. Kara Listede bulunan numaralara hesabınızdan SMS gönderilmez.Bu kontrol Netgsm tarafında sağlanır.
+
+Web portal SMS Hizmeti / SMS Ayarları / Kara Liste bölümünden bu listeye erişim sağlayabilir, excele döküm sağlayabilirsiniz.
+
+API servisi ile bu listere numara ekleyebilir, listelerden numara çıkarabilirsiniz.Listeleme işlemi API servisi ile kullanılmamaktadır.
+
+Tip parametresine 1 değeri verilmesi ile Kara Listeye alma , 2 değeri verilmesi ile Kara Listeden çıkarma işlemi gerçekleştirilir.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.tip1 değeri ile Kara listeye ekleme, 2 değeri ile Kara listeden çıkarma işlemi gerçekleşir. İstek yapılırken gönderilmesi zorunludur.numberKara Listeye eklenecek ya da listede var olan numaralardan kaldırmak istenilen numaralardır. İstek yapılırken gönderilmesi zorunludur.
+
+Ornek Başarılı Yanıt
+
+KodAnlamıOKKara Listeye Ekleme / Çıkarma işleminde bir hata olmadığını gösterir.
+
+Hata Durumları
+
+KodAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.401 dakika içerisinde 120 numaradan fazla istek yapıldığını ifade eder.60Geçersiz tip gönderimi70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/sms/blacklist
+
+Örnek Kod
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version="1.0"?>
+
+<mainbody>
+
+  <header>  
+
+    <usercode>KullaniciAdi</usercode>
+
+    <password>Sifre</password>
+
+    <tip>1</tip>
+
+  </header>
+
+  <body>
+
+    <number>05121231232</number>
+
+    <number>05121231233</number>
+
+  </body>
+
+</mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/sms/blacklist',$xml);echo $gelen;
+
+Eski Versiyonlar
+
+XML POST SMS Gönderme
+
+XML POST yöntemini tercih ettiğinizde SMS gönderimleriniz 1:n ya da n:n tipinde olabilir.
+
+1:n ve n:n toplu gönderimlerde bir paket içerisinde aynı numaraya bir tane tane SMS gönderilebilir.
+
+Yüklü miktardaki SMS'lerinizi tek tek (her pakette bir numara) göndermeniz durumunda SMS'leriniz biriken sisteme girer ve sistem tarafından biriktirilerek 1 dakika içerisinde iletilir. SMS'lerinizi bize tek pakette çoklu halde göndermeniz bu durumun önüne geçecektir.Biriken sistemde aldığınız output değişecektir.
+
+PHP Laravel & Symfony örnekleri için composer paketi ve detaylı bilgiye buradan ulaşabilirsiniz.
+
+1:n SMS Gönderimn:n SMS GönderimAynı SMS içeriğini birden fazla numaraya aynı anda tek seferde iletebilirsiniz.Birden fazla farklı SMS içeriğini farklı numaralara aynı anda tek pakette gönderebilirsiniz.Yoğun ve ardışık gönderimleriniz biriken sisteme girebilir.Yoğun ve ardışık gönderimleriniz biriken sisteme girmez, SMS'leriniz başarısız olur.XML içerisinde yalnızca no parametresini çoklayabilirsiniz.XML içerisinde <mp></mp> tagında msg ve no parametrelerini çoklayabilirsiniz.<?xml version='1.0' encoding='UTF-8'?><mainbody><header><company dil='TR'>Netgsm</company><usercode>KullaniciAdi</usercode><password>Sifre</password><type>1:n</type><msgheader>Baslik</msgheader></header><body><msg><![CDATA[Mesaj Metnim]]></msg><no>051212312312</no><no>051212312312</no></body></mainbody><?xml version='1.0' encoding='UTF-8'?><mainbody><header><company dil='TR'>Netgsm</company><usercode>KullaniciAdi</usercode><password>Sifre</password><type>n:n</type><msgheader>Baslik</msgheader></header><body><mp><msg><![CDATA[Mesaj1]]></msg><no>905551234567</no></mp><mp><msg><![CDATA[Mesaj2]]></msg><no>905551234568</no></mp></body></mainbody>
+
+Tanımlar
+
+ParametreAnlamıcompanyNetgsm yazılır. Eğer mesajınızn Türkçe karakter içermesini istiyorsanız; dil='TR' yazmanız gerekmektedir <company dil='TR'>Netgsm</company> ve sayfanızın dil kodlamasının utf-8 olmasına dikkat ediniz. Bayi üyesi iseniz bayinize ait kodunuzu <company bayikodu='xxxxx'>Netgsm</company> olarak iletebilirsiniz.usercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.).İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.startdateGönderime başlayacağınız tarih. (ddMMyyyyHHmm)* Boş bırakılırsa mesajınız hemen gider.<startdate></startdate>stopdateİki tarih arası gönderimlerinizde bitiş tarihi.(ddMMyyyyHHmm) * Boş bırakılırsa sistem başlangıç tarihine 21 saat ekleyerek otomatik gönderir. Başlangıç ve bitiş tarihleri arasında en az 1 saat en fazla 21 saat olmalıdır.<stopdate></stopdate>type1:N gönderimlerde <type>1:n</type> olarak n:N gönderimlerde <type>n:n</type> olarak teslim edebilirsiniz.msgheaderSistemde tanımlı olan mesaj başlığınızdır (gönderici adınız). En az 3, en fazla 11 karakterden oluşur.. Eğer mesaj başlığınızın abone numaranızın olmasını istiyorsanız, bu parametreye abone numaranızı yazınız.filterTicari içerikli SMS gönderimlerinde bu parametreyi kullanabilirsiniz. Ticari içerikli bireysele gönderilecek numaralar için İYS kontrollü gönderimlerde ise "11" değerini, tacire gönderilecek İYS kontrollü gönderimlerde ise "12" değerini almalıdır. Bilgilendirme amaçlı gönderilen içeriklerde (İYS kontrolü sağlanmadan gönderilen) "0" değerini almalıdır.msgMesaj metnidir. Tarifenizdeki maksimum karakterden uzun olmamalıdır. Standart maksimum karakter 917 dur. XML Parse işlemlerinde Türkçe karakterler ve özel işaretlerin sorun yaratmamasi için, mesaj metni <![CDATA[Mesaj metni bu alanda olacak]] > taglari içinde yer almalıdır.noMesajın gönderileceği gsm numarasıdır. Eğer yurtdışı telefon numarasına mesaj göndermek istiyorsanız numaranın başına 00 ekleyerek gönderim işlemini yapabilirsiniz.
+
+Başarılı Gönderim Durumları
+
+KodAnlamı00 347022009Gönderdiğiniz SMS'inizin başarıyla sistemimize ulaştığını gösterir. 00 : Mesajınızın tarih formatına ilişkin bir hata olmadığı anlamına gelir. 123xxxxxx : Gönderilen SMSe ait ID bilgisi, Bu görevid (bulkid) niz ile mesajınızın iletim raporunu sorguyabilirsiniz.01 347022009Gönderdiğiniz SMS'inizin başarıyla sistemimize ulaştığını gösterir. 01 : Mesajınızın başlangıç tarihine ilişkin bir hata olduğunu gösterir, sistem tarihi ile değiştirilip işleme alınmıştır. 123xxxxxx : Gönderilen SMSe ait ID bilgisi, Bu görevid (bulkid) niz ile mesajınızın iletim raporunu sorguyabilirsiniz.02 347022009Gönderdiğiniz SMS'inizin başarıyla sistemimize ulaştığını gösterir. 02 : Mesajınızın sonlandırma tarihine ilişkin bir hata olduğunu gösterir, sistem tarihi ile değiştirilip işleme alınmıştır. 123xxxxxx : Gönderilen SMSe ait ID bilgisi, Bu görevid (bulkid) niz ile mesajınızın iletim raporunu sorguyabilirsiniz.00 5Fxxxxxx-2xxx-4xxE-8xxx-8A5xxxxxxxxxxxxGönderdiğiniz SMS'inizin başarıyla sistemimize ulaştığını gösterir. Bu görev(bulkid) sorgulanabilir, Raporlama servisinde bulkID bilgisi olarak 5Fxxxxxx-2xxx-4xxE-8xxx-8A5xxxxxxxxxxxx verilebilir. Bu outputu almanızın sebebi, 5 dakika boyunca ard arda gönderdiğiniz SMS'lerin sistemimiz tarafında çoklanarak (biriktirilerek) 1 dakika içerisinde gönderileceği anlamına gelir.
+
+Hata Durumları
+
+Hata KoduAnlamı20Mesaj metninde ki problemden dolayı gönderilemediğini veya standart maksimum mesaj karakter sayısını geçtiğini ifade eder.30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Mesaj başlığınızın (gönderici adınızın) sistemde tanımlı olmadığını ifade eder. Gönderici adlarınızı API ile sorgulayarak kontrol edebilirsiniz.50Abone hesabınız ile İYS kontrollü gönderimler yapılamamaktadır.51Aboneliğinize tanımlı İYS Marka bilgisi bulunamadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.80Gönderim sınır aşımı.85Mükerrer Gönderim sınır aşımı. Aynı numaraya 1 dakika içerisinde 20'den fazla görev oluşturulamaz.
+
+POST
+
+https://api.netgsm.com.tr/sms/send/xml
+
+Örnek Kod 1:n Gönderim
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+ $xml='<?xml version="1.0" encoding="UTF-8"?>
+
+ <mainbody>
+
+ <header>
+
+ <company dil="TR">Netgsm</company>        
+
+ <usercode>KullaniciAdi</usercode>
+
+ <password>Sifre</password>
+
+ <type>1:n</type>
+
+ <msgheader>Baslik</msgheader>
+
+ </header>
+
+ <body>
+
+ <msg>
+
+ <![CDATA[Mesaj Metnim]]>
+
+ </msg>
+
+ <no>051212312312</no>
+
+ <no>051212312312</no>
+
+ </body>
+
+ </mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/sms/send/xml',$xml);echo $gelen;
+
+Örnek Kod n:n SMS Gönderme
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+   $xml='<?xml version="1.0" encoding="UTF-8"?>
+
+   <mainbody>
+
+   <header>
+
+   <company dil="TR">Netgsm</company>
+
+   <usercode>KullaniciAdi</usercode>
+
+   <password>Sifre</password>
+
+   <type>n:n</type>
+
+   <msgheader>Baslik</msgheader>
+
+   </header>
+
+   <body>
+
+   <mp><msg><![CDATA[Mesaj1]]></msg><no>905551234567</no></mp>
+
+   <mp><msg><![CDATA[Mesaj2]]></msg><no>905551234568</no></mp>
+
+   </body>
+
+   </mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/sms/send/xml',$xml);echo $gelen;
+
+Servisten Alınan Cevap
+
+00 347022009
+
+XML POST OTP SMS
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)msgheaderSistemde tanımlı olan mesaj başlığınızdır (gönderici adınız). En az 3, en fazla 11 karakterden oluşur. Eğer mesaj başlığınızın abone numaranızın olmasını istiyorsanız, bu parametreye abone numaranızı yazınız. (İstek yapılırken gönderilmesi zorunludur.)msg1 boy ve Türkçe karakter içermeyen mesaj metni bu parametrede gönderilir. XML Parse işlemlerinde özel işaretlerin sorun yaratmamasi için, mesaj metni <![CDATA[Mesaj metni bu alanda olacak]] > taglari içinde yer almalıdır. (İstek yapılırken gönderilmesi zorunludur.)noMesajın gönderileceği gsm numarasıdır.(5xxXXXxxxx formatında olmalıdır.) Yur dışına gönderim yapılmamaktadır. (İstek yapılırken gönderilmesi zorunludur.)
+
+Hata Durumları
+
+Hata KoduAnlamı20Mesaj metni ya da mesaj boyunu kontrol ediniz.30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40-41Gönderici adınızı kontrol ediniz.50-52Gönderilen numarayı kontrol ediniz.60Hesabınızda OTP SMS Paketi tanımlı değildir, kontrol ediniz.70Input parametrelerini kontrol ediniz.100Sistem hatası.
+
+POST
+
+https://api.netgsm.com.tr/sms/send/otp
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version="1.0"?>
+
+<mainbody>
+
+   <header>
+
+       <usercode>KullaniciAdi</usercode>
+
+       <password>Sifre</password>
+
+       <msgheader>Baslik</msgheader>
+
+   </header>
+
+   <body>
+
+       <msg>
+
+           <![CDATA[OTP SMS Metni]]>
+
+       </msg>
+
+       <no>5012345678</no>
+
+   </body>
+
+</mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/sms/send/otp',$xml);echo $gelen;/*
+
+Servisten dönen yanıt (SMS başarıyla teslim alındığında)
+
+
+
+<?xml version="1.0"?>
+
+<xml><main>
+
+   <code>0</code>
+
+   <jobid>172551745916519453710565585</jobid>
+
+ <main><xml>
+
+
+
+Servisten dönen yanıt (Hata alındığında)
+
+
+
+<?xml version="1.0"?>
+
+<xml><main>
+
+   <code>30</code>
+
+   <error>Kullanici bilgisi bulunamadi</error>
+
+ <main><xml>
+
+
+
+*/
+
+XML POST Rapor
+
+Gönderilen mesajların son 3 aya kadar raporlarını sorguyarak; iletim durumlarını öğrenebilirsiniz.
+
+API isteklerinde Content-Type başlığını eklemek zorunludur. XML verisi gönderirken Content-Type: application/xml başlığını eklemek verinin doğru bir şekilde işlenebilmesi için kritik öneme sahiptir.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.bulkidApi veya soap web servisi ile başarılı mesaj gönderimlerinizde dönen görevid (bulkid) nizdir. type=0 ve type=1 durumunda istek yapılırken gönderilmesi zorunludur.typeSorgulama tipini belirlemek için kullanılır.0: Tek görevid (bulkid)'ye göre sorgulama yapar.(Sorgulama sonucunda görevid (bulkid) değeri döndürülmez. )1: Birden çok görevid (bulkid)'ye göre sorgulama yapar.(Not: Bu durumda görevid (bulkid) parametresi 43234, 53453, 54332, ....gibi yazılır. )2: Tarih aralığında sorgu yapabilmek için kullanılır. (Not: Parametrenin bu değerinde görevid (bulkid) parametresine girilen değer dikkate alınmaz.)statusVerilen görevid (bulkid) deki istenilen durumdaki raporları sorgular. Aşağıda ayrıntılı bir şekilde durum açıklamalarına ulaşabilirsiniz. (Yeşil renkli açıklama tabloları)version0: Olursa veya hiç gönderilmezse status değerlerindeki 11,12,13 durumları (zaman aşımına uğramış ) olarak kabul edilir.1: Gönderilirse status değerleri aynen geçerlidir. 2: Gönderilirse status değerleri aynen geçerlidir.Rapor detaylı bir şekilde gösterilir.telnoMesajın gönderildiği telefon numarasıdır. Örn 1 : 5051234567 veya 05051234567 Örn 2 : 5051234567,5051234567 veya 05051234567,05051234567mbaslikMesajın gönderen kısmında görünen başlıktır.bastarİki tarih arası sorgulamalarınızda başlangıç tarihidir(ddmmyyyy)bittarİki tarih arası sorgulamalarınızda bitiş tarihidir(ddmmyyyy) Bütün numaralar birbirlerinden <BR> kodu ile ayrılmiştir.
+
+Servisten Dönen Yanıt
+
+Parametre = status
+
+KodAnlamı0İletilmeyi bekleyenler1İletilmiş olanlar2Zaman aşımına uğramış olanlar3Hatalı veya kısıtlı numara4Operatöre gönderilemedi11Operatör tarafından kabul edilmemiş olanlar12Gönderim hatası olanlar13Mükerrer olanlar14Yetersiz Kredi / Paket15Gönderilen numara kara listede16İYS Ret17İYS Hatası
+
+Parametre = operator
+
+KodAnlamı10Vodafone20Türk Telekom30Turkcell40Netgsm STH41Netgsm Mobil60Türktelekom Sabit70Tanımsız Operator160KKTC Vodafone212Yurtdışı213Yurtdışı214Yurtdışı215Yurtdışı880KKTC Turkcell
+
+Hata Kodu Açıklamaları
+
+KodAnlamı0Hata Yok101Mesaj Kutusu Dolu102Kapalı yada Kapsama Dışında103Meşgul104Hat Aktif Değil105Hatalı Numara106SMS red, Karaliste111Zaman Aşımı112Mobil Cihaz Sms Gönderimine Kapalı113Mobil Cihaz Desteklemiyor114Yönlendirme Başarısız115Hedef Operatörden Zaman Aşımı Oluştu116Tanımlanamayan Abone117Yasadışı Abone119Sistemsel Hata
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.80sınır aşımı, dakikada 10 kez sorgulanabilir.100-110Sistem hatası
+
+POST
+
+https://api.netgsm.com.tr/sms/report
+
+<?php
+
+
+
+
+
+$curl = curl_init();
+
+
+
+curl_setopt_array($curl, array(
+
+  CURLOPT_URL => 'https://api.netgsm.com.tr/sms/report',
+
+  CURLOPT_RETURNTRANSFER => true,
+
+  CURLOPT_ENCODING => '',
+
+  CURLOPT_MAXREDIRS => 10,
+
+  CURLOPT_TIMEOUT => 0,
+
+  CURLOPT_FOLLOWLOCATION => true,
+
+  CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+  CURLOPT_CUSTOMREQUEST => 'POST',
+
+  CURLOPT_POSTFIELDS =>'  <report>
+
+    <usercode>x</usercode>
+
+    <password>x</password>
+
+    <bulkid>1907618612</bulkid>
+
+    <type>1</type>
+
+    <status>100</status>
+
+    <version>2</version>
+
+    <bastar>220720240000</bastar>
+
+     <bittar>200720240000</bittar>
+
+</report>
+
+',
+
+  CURLOPT_HTTPHEADER => array(
+
+    'Content-Type: application/xml'
+
+  ),
+
+));
+
+
+
+$response = curl_exec($curl);
+
+
+
+curl_close($curl);echo $response;/*
+
+
+
+<?xml version="1.0"?>
+
+<response>
+
+    <job>
+
+        <jobid>1907618612</jobid>
+
+        <telno>90xxxxxxxxx</telno>
+
+        <status>1</status>
+
+        <operator>20</operator>
+
+        <msglen>1</msglen>
+
+        <deliveredDate>22.07.2024 14:25:06</deliveredDate>
+
+        <errorCode>0</errorCode>
+
+    </job>
+
+    <job>
+
+        <jobid>1907618612</jobid>
+
+        <telno>90xxxxxxxxx</telno>
+
+        <status>4</status>
+
+        <operator>0</operator> //operator kodu
+
+        <msglen>1</msglen> //mesaj boyu
+
+        <deliveredDate>22.07.2024 14:26:00</deliveredDate>// iletim tarihi
+
+        <errorCode>0</errorCode> //hata olmadığını belirtir.
+
+    </job>
+
+</response>
+
+*/
+
+HTTP POST Rapor
+
+Gönderilen mesajların son 3 aya kadar raporlarını sorguyarak; iletim durumlarını öğrenebilirsiniz.
+
+PHP Laravel & Symfony örnekleri için composer paketi ve detaylı bilgiye buradan ulaşabilirsiniz.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.bulkidApi veya soap web servisi ile başarılı mesaj gönderimlerinizde dönen görevid (bulkid) nizdir. type=0 ve type=1 durumunda istek yapılırken gönderilmesi zorunludur.typeSorgulama tipini belirlemek için kullanılır.0: Tek görevid (bulkid)'ye göre sorgulama yapar.(Sorgulama sonucunda görevid (bulkid) değeri döndürülmez. )1: Birden çok görevid (bulkid)'ye göre sorgulama yapar.(Not: Bu durumda görevid (bulkid) parametresi 43234, 53453, 54332, ....gibi yazılır. )2: Tarih aralığında sorgu yapabilmek için kullanılır. (Not: Parametrenin bu değerinde görevid (bulkid) parametresine girilen değer dikkate alınmaz.)statusVerilen görevid (bulkid) deki istenilen durumdaki raporları sorgular. Aşağıda ayrıntılı bir şekilde durum açıklamalarına ulaşabilirsiniz. (Yeşil renkli açıklama tabloları)version0: Olursa veya hiç gönderilmezse status değerlerindeki 11,12,13 durumları (zaman aşımına uğramış ) olarak kabul edilir.1: Gönderilirse status değerleri aynen geçerlidir. 2: Gönderilirse status değerleri aynen geçerlidir.Rapor detaylı bir şekilde gösterilir.telnoMesajın gönderildiği telefon numarasıdır. Örn 1 : 5051234567 veya 05051234567 Örn 2 : 5051234567,5051234567 veya 05051234567,05051234567mbaslikMesajın gönderen kısmında görünen başlıktır.bastarİki tarih arası sorgulamalarınızda başlangıç tarihidir(ddmmyyyy)bittarİki tarih arası sorgulamalarınızda bitiş tarihidir(ddmmyyyy) Bütün numaralar birbirlerinden <BR> kodu ile ayrılmiştir.
+
+Servisten Dönen Yanıt
+
+Parametre = durum
+
+KodAnlamı0İletilmeyi bekleyenler1İletilmiş olanlar2Zaman aşımına uğramış olanlar3Hatalı veya kısıtlı numara4Operatöre gönderilemedi11Operatör tarafından kabul edilmemiş olanlar12Gönderim hatası olanlar13Mükerrer olanlar14Yetersiz Kredi / Paket15Gönderilen numara kara listede16İYS Ret17İYS Hatası
+
+Parametre = operator
+
+KodAnlamı10Vodafone20Türk Telekom30Turkcell40Netgsm STH41Netgsm Mobil60Türktelekom Sabit70Tanımsız Operator160KKTC Vodafone212Yurtdışı213Yurtdışı214Yurtdışı215Yurtdışı880KKTC Turkcell
+
+Hata Kodu Açıklamaları
+
+KodAnlamı0Hata Yok101Mesaj Kutusu Dolu102Kapalı yada Kapsama Dışında103Meşgul104Hat Aktif Değil105Hatalı Numara106SMS red, Karaliste111Zaman Aşımı112Mobil Cihaz Sms Gönderimine Kapalı113Mobil Cihaz Desteklemiyor114Yönlendirme Başarısız115Hedef Operatörden Zaman Aşımı Oluştu116Tanımlanamayan Abone117Yasadışı Abone119Sistemsel Hata
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.80sınır aşımı, dakikada 10 kez sorgulanabilir.100-110Sistem hatası
+
+POST
+
+https://api.netgsm.com.tr/sms/report
+
+Örnek Kod
+
+function SMSHttpPOST(){
+
+
+
+  $username = "850303xxxx"; //
+
+  $password = urlencode("xxxx"); //
+
+
+
+  $url= "https://api.netgsm.com.tr/sms/report/?usercode=850303xxxx&password=xxxx&bulkid=123456&type=0&status=100&version=2";
+
+
+
+  $ch = curl_init($url);
+
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+  $http_response = curl_exec($ch);
+
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+
+
+  if($http_code != 200){
+
+    echo "$http_code $http_response\n";
+
+    return false;
+
+  }
+
+  $balanceInfo = $http_response;
+
+  echo "MesajID : $balanceInfo";
+
+  return $balanceInfo;
+
+}
+
+
+
+SMSHttpPOST();/*
+
+Servisten dönen yanıt (version=2 ve type değeri "0" ise)
+
+    90xxxxxxxxx 0 10 1 01.05.2014 22:24:00 102
+
+
+
+Servisten dönen yanıt (version=2 ise ve type değeri "0" değilse)
+
+    53545 90xxxxxxxxx 0 10 1 01.05.2014 22:24:00 102
+
+
+
+Servisten dönen yanıt (version=0 veya version=1 veya version=3 ise ) ve type değeri "0" ise
+
+    90xxxxxxxxx 0
+
+
+
+Servisten dönen yanıt (version=0 veya version=1 veya version=3) ve type değeri "0" değilse
+
+    53545 90xxxxxxxxx 0
+
+
+
+Not: type değeri "0" ise JobID response içeriğine eklenmeyecek.
+
+
+
+Not: type değeri "null" gönderildiğinde veya hiç gönderilmediği durumlarda type değeri "0" kabul edilir.
+
+
+
+Açıklamalar :  
+
+
+
+53545 -> JobID  
+
+90xxxxxxxxx -> Cep Telefon   
+
+0 -> Mesaj Durumu   
+
+10 -> Operatör Kodu   
+
+1 -> Mesaj Boyu  
+
+01.05.2014 22:24:00 -> İletim Tarihi   
+
+102 -> Dönen Hata Kodu
+
+*/
+
+XML POST Gelen SMS
+
+Abone numaranıza gelen SMS'leri servis URLe XML Post yöntemi ile sorgulayabilirsiniz.
+
+PHP Laravel & Symfony örnekleri için composer paketi ve detaylı bilgiye buradan ulaşabilirsiniz.
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.startdateİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm)stopdateİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm)type1 değeri ile görevid değeri de döner.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Gösterilecek mesajınızın olmadığını ifade eder. Api ile mesajlarınızı eğer startdate ve stopdate parametlerini kullanmıyorsanız sadece bir kere listeyebilirsiniz. Listelenen mesajlar diğer sorgulamalarınızda gelmez.50Tarih formatı hatalıdır. (Tarih formatı: ddmmyyyyhhmm şeklinde olmalıdır.)60Arama kiterlerindeki startdate ve stopdate zaman farkının 30 günden fazla olduğunu ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/sms/receive
+
+Örnek Kod
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version='1.0' encoding='UTF-8'?>
+
+<mainbody>
+
+   <header>
+
+       <usercode>KullaniciAdi</usercode>
+
+       <password>Sifre</password>
+
+       <startdate>010720191000</startdate>
+
+       <stopdate>010720191200</stopdate>
+
+       <type>0</type>
+
+   </header>
+
+</mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/sms/receive',$xml);echo $gelen;/*
+
+Servisten dönen yanıt :
+
+5xxxxxxxxx | Mesaj Metni |	10.11.2014 14:00:43
+
+Gelen Telefon Numarası |  Gelen Mesaj Metni | Mesajın Geldiği Tarih
+
+*/
+
+İYS Adres Yükleme
+
+Ticari Elektronik İleti; Firmaların, mal ve hizmetlerini pazarlamak, işletmesini tanıtmak ya da kutlama ve temenni gibi içeriklerle tanınırlığını artırmak amacıyla tüketicilere kampanya, özel gün kutlaması,indirim, hediye içerikli vb. gönderdiği mesajlardır.
+
+Ticari elektronik iletinizin içeriği alıcıdan alınan onaya uygun olmalıdır.
+
+İYS API Servisi ile Hizmet sağlayıcıların Netgsm İYS İş ortağı aracılığıyla iletişim adreslerini yükleyebilirler.
+
+Yükleme işlemleriniz sonrasında, SMS'lerinizi ticari içerikli iletmek için 3 gönderim yönteminde de göndermeniz gereken zorunlu parametreyi iletmelisiniz.Gönderim yöntemlerinde bu parametre belirtilmiştir. Parametreyi ticari içerikli olarak göndermeniz halinde, gönderdiğiniz mesajlar İleti Yönetim Sistemi (İYS)'den kontrol edilecek ve İYS'de kayıtlı olmayan numaralara mesajlar iletilmeyecektir. Gönderdiğiniz mesajın içeriğinin ticari elektronik ileti olmadığını düşünüyorsanız bu bir bilgilendirme içerir ve parametrenin bilgilendirmeyi içerdiği değeri göndermelisiniz. Bu durumda İYS'den sorgulama yapılmadan doğrudan alıcıya mesajlar gönderilecektir. Sorumluluk mesajı gönderen abonededir. İleti Yönetim Sistemi hakkında detaylı bilgiye, buradan ulaşabilirsiniz.
+
+API servisine erişimde hesabınızda alt kullanıcı tanımlamanız gerekmektedir, Abonelik İşlemleri / Alt Kullanıcı Hesapları menüsü ile oluşturacağınız alt kullanıcıya API servisi yetkilerini verebilirsiniz.
+
+Tanımladığınız alt kullanıcılarınız için Ticari içerikli gönderim durumu için zorunlu seçim alanı bulunmaktadır. Bu alana Bilgilendirme SMS'i gönderebilir seçimi yapılmışsa, API servisi ile yapılacak ticari içerikli ileti gönderimlerinde filter parametresinde 11 ticari bireysel ya da 12 ticari tacir kullanılmalıdır. filter parametresinde 0 değeri almışsa iletiler İYS kontrolü yapılmadan iletilecektir. Ticari içerikli gönderim durumuna sadece ticari içerik gönderir seçimlerinden biri yapılmışsa tüm iletileriniz filter parametresine bakılmaksızın ticari içerik olduğu varsayılarak İYS kontrollü şekilde iletilecektir.
+
+Lütfen İYS arayüzünde İş ortağı ve Aracı Hizmet Sağlayıcı olarak Netgsm'i seçiniz. Aksi takdirde İYS sistemleri sorgulanamayacaktır.
+
+Netiys modülünü API servisi üzerinden kullanabilmeniz için, API Servisi erişim izniniz bulunmalıdır. API Erişim izniniz bullunmuyorsa aşağıdaki adımları izleyebilirsiniz, www.netgsm.com.tr adresinden giriş yaptıktan sonra Abonelik İşlemleri / API işlemleri menüsünden API talebinde bulununuz.
+
+API ile ilgili teknik değişiklik ve gelişmelerden haberdar olmak için Abonelik İşlemleri / API işlemleri menüsündeki API yetkilisi bölümüne API entegrasyonunu sağlayan kişinin bilgilerini girmeniz gerekmektedir.
+
+API servisi kullanımına IP adres sınırlaması getirmek için Abonelik İşlemleri / API işlemleri menüsündeki API için IP Erişimini Sınırla butonunu kullanabilirsiniz.
+
+İleti Yönetim Sistemi, başvuru süreci ve Netiys hakkında detaylı bilgiye buradan ulaşabilirsiniz.
+
+JSON POST ile Adres Ekle
+
+Tanımlar (Input)
+
+ParametreAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). Zorunlu parametrepasswordAPI yetkisi tanımlı alt kullanıcı şifresi. Zorunlu parametrebrandCodeİletişim adresi izinlerinizi yüklemeyi tercih ettiğiniz marka kodunuz Zorunlu parametrerefidTarafınızda belirleyeceğiniz bir ID bilgisi göndererek daha sonrasında bu requestin durumunu refid ile sorgulayabilirsiniz. header içerisinde gönderilir. Zorunlu olmayan parametretypeİletişim adres türü ARAMA, MESAJ ya da EPOSTA dan biri olmalıdırl. Zorunlu parametresourceizin alınan kaynağı ifade eder, HS_FIZIKSEL_ORTAM, HS_ISLAK_IMZA, HS_WEB, HS_CAGRI_MERKEZI, HS_SOSYAL_MEDYA, HS_EPOSTA, HS_MESAJ, HS_MOBIL, HS_EORTAM, HS_ETKINLIK, HS_2015, HS_ATM ve HS_KARAR değerlerini alabilir. Zorunlu parametrerecipientİzin alınan kullanıcının telefon numarası ya da e-posta bilgisidir. +905XXXXXXXXX ya da info@netgsm.com.tr formatlarında olmalıdır. Zorunlu parametrestatusONAY ya da RET değerini gönderebilirsiniz. Zorunlu parametreconsentDateİzin alınan tarih bilgisi YYYY-mm-dd HH:mm:ss formatında gönderilmelidir. Zorunlu parametrerecipientTypeBIREYSEL ya da TACIR parametre olarak gönderilmelidir. Zorunlu parametreretailerCodeİzin alınmasına aracılık eden bayiye İYS tarafından atanan İYS numara bilgisidir. Nümerik olmalı, zorunlu olmayan parametredir.retailerAccessİzne erişimi olan bayilere İYS tarafından tekil olarak atanan İYS numaralarını gösterir. Nümerik olmalı, zorunlu olmayan parametredir.
+
+Servisten Alınan Cevap (Output)
+
+ParametreAnlamıcodeİsteğinize ait dönen code bilgisierrorİsteğiniz başarılı olması durumunda false, başarısız olması durumunda hata mesajı döner.uidEn az bir başarılı iletişim adresi yüklendiğinbde tarafınıza dönen ID bilgisi, 7717b087-7a6a-4a49-b98d-6694fe8b4861 formatında oalcaktır.erroritemHatalı recipientları listeler.recipienterroritem ile birlikte dönen bu parametre formatı hatalı olan telefon numarası ya da mail adres bilgisini döner.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız IP dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40IYS modülünüz aktifleştirilmeli, çağrı merkezimizle görüşebilirsiniz.60Marka kodunuz geçersiz, kontrol ediniz.70Parametre Hatası. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.8010Adres yükleme sınır aşımı, her bir istekte maksimum 500 iletişim adresi yüklenebilir.100-101Sistem hatası, sınır aşımı. (Dakikada en fazla 10 istek)
+
+POST
+
+https://api.netgsm.com.tr/iys/add
+
+Örnek Kod
+
+function curlitjson($url,$content) {
+
+$curl = curl_init($url);
+
+curl_setopt($curl, CURLOPT_HEADER, false);
+
+curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+curl_setopt($curl, CURLOPT_HTTPHEADER,array("Content-type: application/json"));
+
+curl_setopt($curl, CURLOPT_POST, true);
+
+curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
+
+curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+curl_setopt($curl, CURLOPT_POSTFIELDS, $content);				
+
+$json_response = curl_exec($curl);
+
+$status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+curl_close($curl);				return($json_response);
+
+}try {
+
+	$arr_acc = array(
+
+	 "header" => array( "username" => "85030xxxxxxxx","password" => "xxxx","brandCode" => "xxxx" ),
+
+	 "body" => array(  
+
+	 	 "data" => [
+
+			 array(
+
+			 "type"       	=> "MESAJ",
+
+			 "source"    		=> "HS_WEB",
+
+			 "recipient"    => "+905XXXXXXXXX",
+
+			 "status"  			=> "ONAY",
+
+			 "consentDate"  => "2020-11-06 09:40:00",
+
+			 "recipientType"=> "BIREYSEL"			 
+
+			)
+
+			]       
+
+				));			
+
+    $url_acc = "https://api.netgsm.com.tr/iys/add";  
+
+    $content_acc = json_encode($arr_acc);				
+
+
+
+    $send_acc = curlitjson($url_acc,$content_acc);
+
+    $send_acc = json_decode($send_acc);
+
+    print($send_acc);
+
+} catch (Exception $exc)
+
+  {  
+
+  echo $exc->getMessage();
+
+}/*
+
+Servise Gönderilmesi Gereken Input :
+
+
+
+// İys'ye iletişim adresi yüklenmek isteniyorsa
+
+{
+
+    "header": {
+
+        "username": 312xxxxxxx,
+
+        "password": "****",       
+
+        "brandCode": "68xxxx"
+
+				//"refid": "3e16xxxx-40xx-45xx-81xx-c5dec8axxxxx"
+
+    },
+
+    "body": {
+
+        "data": [
+
+            {
+
+                "type": "EPOSTA",
+
+                "source": "HS_WEB",
+
+                "recipient": "info@netgsm.com.tr",
+
+                "status": "ONAY",
+
+                "consentDate": "2020-11-06 09:40:00",
+
+                "recipientType": "BIREYSEL"               
+
+            },
+
+            {
+
+                "type": "MESAJ",
+
+                "source": "HS_MESAJ",
+
+                "recipient": "+905XXXXXXXXX",
+
+                "status": "ONAY",
+
+                "consentDate": "2020-11-05 09:40:00",
+
+                "recipientType": "BIREYSEL"               
+
+            }                     
+
+        ]
+
+    }
+
+}
+
+
+
+Servisten Alınan Başarılı Örnek Cevap
+
+
+
+// Kayıtlarınız başarılı olarak işleme alındığında
+
+{
+
+    "code": "0",
+
+    "error": "false",
+
+    "uid": "73113cb9-dff0-415b-9491-xxxxxxxxxx"
+
+}
+
+
+
+// En az bir başarılı kayıt olduğunda kayıt ID ile birlikte hata alan kayıtlar dönmektedir.
+
+{
+
+    "code": "0",
+
+    "error": "false",
+
+    "uid": "16116f5e-ae2a-4745-927a-xxxxxxxxxxx",
+
+    "erroritem": {
+
+        "1": {
+
+            "recipient": "Telefon numarası 13 karakter ve numerik olmalıdır.+9xxxx"
+
+        }
+
+    }
+
+}
+
+
+
+Servisten Alınan Başarısız Örnek Cevap
+
+
+
+// Geçersiz kullanıcı bilgileri hatası
+
+{ "code": "30",
+
+"error": "Kullanici bilgisi bulunamadi"
+
+}
+
+// Geçersiz Marka kodu hatası
+
+{
+
+    "code": "60",
+
+    "error": "Brandcode parametresinde gönderdiğiniz değeri kontrol ediniz. "
+
+}
+
+*/
+
+İYS Adres Sorgulama
+
+Hizmet sağlayıcıların İYS veritabanında kayıtlı iletişim adreslerini sorgulayabileceği servistir.
+
+İleti yönetim sistemi hakkında detaylı bilgiye, buradan ulaşabilirsiniz.
+
+Netiys modülünü API servisi üzerinden kullanabilmeniz için, API Servisi erişim izniniz bulunmalıdır. API Erişim izniniz bullunmuyorsa aşağıdaki adımları izleyebilirsiniz, www.netgsm.com.tr adresinden giriş yaptıktan sonra Abonelik İşlemleri / API işlemleri menüsünden API talebinde bulununuz.
+
+API servisine erişimde hesabınızda alt kullanıcı tanımlamanız gerekmektedir, Abonelik İşlemleri / Alt Kullanıcı Hesapları menüsü ile oluşturacağınız alt kullanıcıya API servisi yetkilerini verebilirsiniz.
+
+API ile ilgili teknik değişiklik ve gelişmelerden haberdar olmak için Abonelik İşlemleri / API işlemleri menüsündeki API yetkilisi bölümüne API entegrasyonunu sağlayan kişinin bilgilerini girmeniz gerekmektedir.
+
+API servisi kullanımına IP adres sınırlaması getirmek için Abonelik İşlemleri / API işlemleri menüsündeki API için IP Erişimini Sınırla butonunu kullanabilirsiniz.
+
+JSON POST Adres Sorgula
+
+Tanımlar (Input)
+
+ParametreAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). Zorunlu parametrepasswordAPI yetkisi tanımlı alt kullanıcı şifresi. Zorunlu parametrebrandCodeİletişim adresi izinlerinizi yüklediğiniz marka kodunuz Zorunlu parametretypeİletişim adres türü ARAMA, MESAJ ya da EPOSTA dan biri olmalıdır. Zorunlu parametrerecipientİYS'de kaydını sorgulayacağınız iletişim adresinin telefon numarası ya da e-posta bilgisidir. +905XXXXXXXXX ya da info@netgsm.com.tr formatlarında olmalıdır. Zorunlu parametrerecipientTypeBIREYSEL ya da TACIR parametre olarak gönderilmelidir. Zorunlu parametrerefidrefid ile eklenen adresi sorgulayabilirsiniz, bu parametreyi kullandığınızda recipient, recipientType ve type zorunlu parametre olmaktan çıkar. Yalnızca refid gönderilebilir. data parametresinde gönderilir.
+
+Servisten Alınan Cevap (Output)
+
+ParametreAnlamıcodeİsteğinize ait dönen code bilgisierrorİsteğiniz başarılı olması durumunda false, başarısız olması durumunda hata mesajı döner.typeİletişim adres türü ARAMA, MESAJ ya da EPOSTA dan biri döner.sourceizin alınan kaynağı ifade eder, HS_FIZIKSEL_ORTAM, HS_ISLAK_IMZA, HS_WEB, HS_CAGRI_MERKEZI, HS_SOSYAL_MEDYA, HS_EPOSTA, HS_MESAJ, HS_MOBIL, HS_EORTAM, HS_ETKINLIK, HS_2015, HS_ATM ve HS_KARAR değerlerinden biri döner.recipientİzin alınan kullanıcının telefon numarası ya da e-posta bilgisidir. +905XXXXXXXXX ya da info@netgsm.com.tr formatlarında döner.statusONAY ya da RET değeri döner.consentDateİzin alınan tarih bilgisi YYYY-mm-dd HH:mm:ss formatında döner.recipientTypeBIREYSEL ya da TACIR olarak döner.creationDateİYS'de oluşturulma tarihi döner.retailerAccessCountİzne erişimi olan bayi sayısı döner.transactionIdNetiysdeki islem ID bilgisi, refid ile sorgulamada dönmez.querystatusİYS'ye Yüklenme durum bilgisini döner, refid ile sorgulama işleminde dönen parametredir. success, null, error değerlerini alır.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız IP dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40IYS modülünüz aktifleştirilmeli, çağrı merkezimizle görüşebilirsiniz.50Sorguladığınız kayıt bulunamadı.60Marka kodunuz geçersiz, kontrol ediniz.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.100-101Sistem hatası, sınır aşımı. (Dakikada en fazla 10 istek)
+
+POST
+
+https://api.netgsm.com.tr/iys/search
+
+Örnek Kod
+
+function curlitjson($url,$content) {
+
+$curl = curl_init($url);
+
+curl_setopt($curl, CURLOPT_HEADER, false);
+
+curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+
+curl_setopt($curl, CURLOPT_HTTPHEADER,array("Content-type: application/json"));
+
+curl_setopt($curl, CURLOPT_POST, true);
+
+curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
+
+curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
+
+curl_setopt($curl, CURLOPT_POSTFIELDS, $content);				
+
+$json_response = curl_exec($curl);
+
+$status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+curl_close($curl);				return($json_response);
+
+}try {
+
+	$arr_acc = array(
+
+	 "header" => array( "username" => "85030xxxxxxxx","password" => "xxxx","brandCode" => "xxxx"),
+
+	 "body" => array(  
+
+	 	 "data" => [array(
+
+			 "type"       	=> "MESAJ",		
+
+			 "recipient"    => "+905XXXXXXXXX",			 			 
+
+			 "recipientType"=> "BIREYSEL"			 
+
+		 ) ]      
+
+				));			
+
+    $url_acc = "https://api.netgsm.com.tr/iys/search";  
+
+    $content_acc = json_encode($arr_acc);				
+
+
+
+    $send_acc = curlitjson($url_acc,$content_acc);
+
+    $send_acc = json_decode($send_acc);
+
+    print($send_acc);
+
+} catch (Exception $exc)
+
+  {  
+
+  echo $exc->getMessage();
+
+}/*
+
+Servise Gönderilmesi Gereken Input :
+
+
+
+// İys'ye yüklenmiş iletişim adresi sorgulanmak isteniyorsa
+
+{
+
+    "header": {
+
+        "username": 312xxxxxxx,
+
+        "password": "****",       
+
+        "brandCode": "68xxxx"
+
+    },
+
+    "body": {
+
+        "data": [            
+
+            {
+
+                "type": "MESAJ",                
+
+                "recipient": "+905XXXXXXXXX",                                
+
+                "recipientType": "BIREYSEL"  
+
+							//"refid": "3e16xxxx-40xx-45xx-81xx-c5dec8axxxxx"             
+
+            }                     
+
+        ]
+
+    }
+
+}
+
+
+
+Servisten Alınan Başarılı Örnek Cevap
+
+
+
+// Aradığınız adresin İYS'de kaydı olduğunda alınan output
+
+{
+
+    "code": "0",
+
+    "error": "false",
+
+    "query": {
+
+        "consentDate": "2020-11-06 11:22:34",
+
+        "source": "HS_FIZIKSEL_ORTAM",
+
+        "recipient": "+905XXXXXXXXX",
+
+        "recipientType": "BIREYSEL",
+
+        "type": "MESAJ",
+
+        "status": "ONAY",
+
+        "creationDate": "2020-11-06 11:23:49",
+
+        "retailerAccessCount": 0
+
+				// "querystatus": null
+
+    }
+
+}
+
+
+
+Servisten Alınan Başarısız Örnek Cevap
+
+
+
+// Geçersiz kullanıcı bilgileri hatası
+
+{
+
+		"code": "30",
+
+		"error": "Kullanici bilgisi bulunamadi"
+
+}
+
+
+
+// Geçersiz Marka kodu hatası
+
+{
+
+    "code": "60",
+
+    "error": "Brandcode parametresini değeri kontrol ediniz. "
+
+}
+
+
+
+// Aradığınız adresin İYS'de kaydı olmadığında alınan hata
+
+{
+
+    "code": "50",
+
+    "error": "Kayıt bulunamadi."
+
+}
+
+
+
+*/
+
+İYS Webhook
+
+İYS'ye yüklenen izin ve ret bilgilerinin sonuç durumları, Webhook (Web kancası) uygulaması kullanılarak alınabilir. Bildirim işlemi webhook olarak tanımlanan URL adresine yapılır.
+
+Bu servisi kullanabilmek için URL'inizi tanımlamanız gerekmektedir. Bu işlem www.netgsm.com.tr adresine giriş sağladıktan sonra Dijital Servisler altındaki Netiys modülünden ayarlanabilir, NetİYS Modülü Uygulamalar bölümüne erişmek için, Netgsm web portala login olduktan sonra tıklayabilirsiniz
+
+İYS izninin veya izin değişikliğinin hangi yolla yapıldığı fark etmeksizin webhook ile URL'e bildirilir.
+
+URL'e Bildirilen Alanlar
+
+ParametreAnlamıiyscodeİYS'de kayıtlı numaranızbrandcodeİYS'de kayıtlı marka kodunuztypeİletişim adres türü ARAMA, MESAJ ya da EPOSTA dan biri döner.sourceizin alınan kaynağı ifade eder, HS_FIZIKSEL_ORTAM, HS_ISLAK_IMZA, HS_WEB, HS_CAGRI_MERKEZI, HS_SOSYAL_MEDYA, HS_EPOSTA, HS_MESAJ, HS_MOBIL, HS_EORTAM, HS_ETKINLIK, HS_2015, HS_ATM ve HS_KARAR ya da IYS_3338, IYS_CM, IYS_WEB, IYS_MOBIL, IYS_KISA_LINK değerlerinden biri döner.statusONAY ya da RET değeri döner.consentDateİzin alınan tarih bilgisi YYYY-mm-dd HH:mm:ss formatında döner.recipientTypeBIREYSEL ya da TACIR olarak döner.retailercodeİzin alınmasında aracılık eden bayinin iyscode bilgisidir.Nümerik bayi iyscode değeri döner.retailerAccessİzne erişimi olan bayilerin iyscode bilgisidir. {123456,789456} formatında bayi iyscode bilgisi döner.submitidİzin yüklenirken oluşturulan, izin paketine ait id bilgisidir. "40e6215d-b5c6-4896-987c-f30f3678f608" formatında id verisi döner.recipientİzin alınan kişinin telefon numarası ya da e-posta adresi bilgisdir. Telefon numaraları E164 uluslararası([+][country code][area code][local phone number]) formatında döner.resultstatusİznin işlenme durum bilgisidir. success iznin eklendiğini, failure iznin eklendiğini gösterir.errcodeİzin işlenirken karşılaşılan hata kodu bilgisdir. "H155" formatında İYS hata kodu formatındadır.errmsgİzin işlenirken karşılaşılan hata mesajı bilgisdir. Metin formatında hata mesajı döner.creationdateİznin İYS tarafında işleme alındığı tarih bilgisidir. YYYY-MM-DD HH:mm:ss formatında tarih verisi döner.
+
+function log($veri,$dosya_adi){
+
+ if (!is_dir("D:/Log/"))
+
+	{
+
+			mkdir("D:/Log/",0700);		
+
+	}
+
+	$dosya = "D:/Log/$dosya_adi.txt";
+
+	$dt=fopen($dosya, 'a');
+
+	if (is_writable($dosya))
+
+	{
+
+		if (!$dt = fopen($dosya, 'a'))
+
+			{
+
+				 exit;
+
+			}
+
+		if (fwrite($dt, $veri) === FALSE)
+
+			{
+
+				 exit;
+
+			}
+
+	fclose($dt);
+
+	}
+
+
+
+}  
+
+
+
+	$gelendegerler = file_get_contents("php://input");
+
+	$data 			= json_decode($gelendegerler, true);
+
+	log($data, "iyswebhook");// İYS iletişim adres güncellenmesinde URL'e POST Edilecek Bilgi :/*
+
+{
+
+ "iyscode":123456,
+
+ "brandcode":123456,
+
+ "type":"MESAJ",
+
+ "source":"HS_ETKINLIK",
+
+ "status":"ONAY",
+
+ "consentdate":"2010-02-10 13:55:00",
+
+ "recipienttype":"TACIR",
+
+ "retailercode":"987654",
+
+ "retaileraccess":"",
+
+ "submitid":"40e6215d-b5c6-4896-987c-f30f3678f608",
+
+ "recipient":"+903129110911",
+
+ "resultstatus":"failure",
+
+ "errcode":"H155",
+
+ "errmsg":"İzin tarihi (consentDate) kabul edilemedi.",
+
+ "creationdate":""
+
+}
+
+
+
+} */    
+
+İYS Webhook Ekle/Güncelle
+
+Bu servis ile İYS Webhook URL adresi tanımlayabilir veya güncelleyebilirsiniz.
+
+Tanımlar (Input)
+
+ParametreAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). Zorunlu parametrepasswordAPI yetkisi tanımlı alt kullanıcı şifresi. Zorunlu parametrebrandCodeİletişim adresi izinlerinizi yüklemeyi tercih ettiğiniz marka kodunuz Zorunlu parametrewebhookUrlRapor bilgisinin gönderileceği webhook URL Zorunlu olmayan parametre
+
+Servisten Alınan Cevap (Output)
+
+ParametreAnlamıcodeİsteğinizin başarılı olması durumunda 0, başarısız olması durumunda hata kodu döner.errorİsteğiniz başarılı olması durumunda false, başarısız olması durumunda hata mesajı döner.uidBaşarılı istek ile tarafınıza dönen ID bilgisi, 7717b087-7a6a-4a49-b98d-6694fe8b4861 formatında olacaktır.messageİsteğe ait bilgilendirme mesajı.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40iys modülünüz aktifleştirilmeli, çağrı merkezimizle görüşebilirsiniz.60Marka kodunuz geçersiz, kontrol ediniz.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/iys/webhook
+
+{
+
+    "header": {
+
+        "username": "850xxxxxxx",
+
+        "password": "xxxxxxx",      
+
+        "brandCode": "xxxxxx"
+
+    },
+
+    "body": {
+
+        "webhookUrl":"https://ornek.endpoint.com.tr/iys/rapor"
+
+    }
+
+}
+
+Görüşme Detayı
+
+Gelen ve giden aramalarınızı bu servisi kullanarak sorgulayabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)dateAramanın yapıldığı tarih formatı ddMMyyyyHHmm şeklinde olmalıdır. (Boş bırakılırsa sorgulama yapılan günün kayıtları listelenir.)directionArama yönünü belirlemek için kullanılır. Gönderebileceğiniz değerleri aşağıdaki Direction (Arama Yönü) Açıklamaları listeden bulabilirsiniz.viewZorunlu parametre değildir. 1 gönderilirse sonuç xml formatında 2 gönderilirse sonuç json formatında dönecektir.
+
+Direction (Arama Yönü) Açıklamaları
+
+KodAnlamı1Gelen Aramalar2Giden Aramalar3Cevapsız Aramalar4Bütün Aramalar
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.50date parametresindeki tarih formatının hatalı olduğunu ifade eder. ddMMyyyyHHmm formatını kullanınız.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.100-101Sistem hatası, sınır aşımı. (dakikada en fazla 2 kez sorgulanabilir.)
+
+POST
+
+https://api.netgsm.com.tr/voice/report
+
+Örnek Kod
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,1);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version='1.0' encoding='UTF-8'?>
+
+<mainbody>
+
+   <header>
+
+       <usercode>KullaniciAdi</usercode>
+
+       <password>Sifre</password>
+
+       <date>010720191000</date>
+
+       <direction>1</direction>      
+
+   </header>
+
+</mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/voice/report',$xml);echo $gelen;/*
+
+Servisten Dönen Cevap
+
+3129110911 01.05.2014 13:53:00 00:05:00 1
+
+
+
+Açıklamalar :
+
+3129110911              -> Numara
+
+01.05.2014 13:53:00     -> Tarih
+
+00:05:00	               -> Süre
+
+1                       -> Arama Yönü
+
+*/
+
+Telesekreter Mesajları
+
+Abone numaranıza gelen sesli mesajları sorguyabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)startdateİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm)stopdateİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm)viewZorunlu parametre değildir. 1 gönderilirse sonuç xml formatında 2 gönderilirse sonuç json formatında dönecektir.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.50Arama kriterlerindeki tarih formatının hatalı olduğunu ifade eder. (ddMMyyyyHHmm)60Arama kiterlerindeki startdate ve stopdate zaman farkının 24 saatten fazla olduğunu ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/receive
+
+Örnek İstek
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version='1.0'?>
+
+     <mainbody>
+
+       <header>  
+
+         <usercode>KullaniciAdi</usercode>
+
+         <password>Sifre</password>
+
+         <startdate>250720180000</startdate>
+
+         <stopdate>270720180000</stopdate>
+
+       </header>
+
+     </mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/voicesms/receive',$xml);echo $gelen;/*
+
+Serviten Dönen Yanıt :
+
+
+
+0216xxxxxxx	21.09.2012 18:24:43	26	https://.....
+
+
+
+Açıklamalar:
+
+
+
+0216xxxxxxx           --> Gönderen TelefonNo
+
+21.09.2012 18:24:43   --> Tarih
+
+26                    --> Mesaj Süresi
+
+https://.....         --> Gelen Ses Dosyası
+
+*/
+
+Sesli Mesaj Başlatma
+
+Sesli Mesaj API ile, sesli mesajlarınızı senaryonuza göre basit ya da dinamik şekilde başlatabilirsiniz. Sistemimize yüklü ses dosyanız ya da göndereceğiniz textin tarafımızda ses dosyasına dönüşümü ile Sesli Mesaj başlatabilirsiniz,
+
+Ses dosyası yükleyebilir,
+
+Gelen sesli Mesajları listeleyebilir,
+
+Başlattığınız Sesli Mesajların durumlarını sorgulayarak Raporlama yapabilirsiniz.
+
+Sesli mesaj senaryoları bir adet tuşlama yapacak şekilde gerçekleştirebilir.
+
+Sesli mesaj gönderimlerinizde JSON POST ve XML POST yöntemlerini kullanabilirsiniz.
+
+Basit Sesli Mesaj
+
+Sesli Mesajlarınızı API ile gönderebilirsiniz.
+
+Konu ile alakalı destek almak için bize mail adresimizden ulaşabilirsiniz, tıklayın.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.startdateGönderime başlayacağınız tarih. (ddMMyyyy)starttimeMesajın gönderilmeye başlanacağı saat(ssdd)stopdateİki tarih arası gönderimlerinizde bitiş tarihi.(ddMMyyyy) *Başlangıç ve bitiş tarihleri arasında en az 1 saat en fazla 21 saat olmalıdır.stoptimeMesaj gönderimi bitiş saati(ssdd)key=1Ses kaydının sonunda tuşa basılmasını istiyorum.key=0Ses kaydının sonunda tuşa basılmasını istemiyorum.relationidTarafınızda belirleyeceğiniz bir random sayı ile sesli mesaj başlattığınızda, Raporlama servisini sorguladığınızda relationID bilgisi de dönecektir.urlSesli mesajın durumunun (raporunun) post edilmesini istediğiniz URL bilgisi.audioidGönderilmek istenen sesid, sisteme daha önce yüklemiş olmanız gerekir.textGönderilmek istenen metinnoMesajın gönderildiği telefon numarasıkeysSesli mesaj baslattıktan sonra, karsı taraftan istenen tuslama bilgisi ile arama başlattığınız numaraya, tekrar bir metin ya da ses dosyası dinletmek icin kullanılır.keydetailTuslama bilgisi ile islem yapılacaksa gönderilir. Gönderilecek tuş bilgisi kadar bu tagi de göndermek gereklidir.keyinfoTus bilgisi bu parametre ile gönderilir. Bu parametre sonrasında audioID ya da text bilgisi içeren parametre göndermeniz zorunludur.filterTicari içerikli sesli mesaj gönderimlerinde bu parametreyi kullanabilirsiniz. Ticari içerikli bireysele gönderilecek numaralar için İYS kontrollü gönderimlerde ise "11" değerini, tacire gönderilecek İYS kontrollü gönderimlerde ise "12" değerini almalıdır. Bilgilendirme amaçlı gönderilen içeriklerde (İYS kontrolü sağlanmadan gönderilen) "0" değerini almalıdır.ringtimeSesli mesaj için yapılan aramada telefoonun çalma süresi. (min 10 - max 30 sn)
+
+Örnek Yanıt
+
+KoduAnlamı00Görevinizin tarih formatinda bir hata olmadığını gösterir.01Mesaj gönderim baslangıç tarihinde hata var. Sistem tarihi ile değiştirilip işleme alındı.02Mesaj gönderim sonlandırılma tarihinde hata var.Sistem tarihi ile değiştirilip işleme alındı.Bitiş tarihi başlangıç tarihinden küçük girilmiş ise, sistem bitiş tarihine içinde bulunduğu tarihe 24 saat ekler.123456Gönderdiğiniz Sesli mesajın başarıyla sistemimize ulaştığını gösterir. Bu görevid niz ile mesajınızın durumunu sorguyabilirsiniz.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Ses dosyasının olmadığını ifade eder45Gönderilecek telefon numarasının bulunmadığını ifade eder70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/send
+
+Örnek İstek
+
+<?php
+
+
+
+$curl = curl_init();
+
+
+
+curl_setopt_array($curl, array(
+
+ CURLOPT_URL => 'https://api.netgsm.com.tr/voicesms/send',
+
+ CURLOPT_RETURNTRANSFER => true,
+
+ CURLOPT_ENCODING => '',
+
+ CURLOPT_MAXREDIRS => 10,
+
+ CURLOPT_TIMEOUT => 0,
+
+ CURLOPT_FOLLOWLOCATION => true,
+
+ CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+ CURLOPT_CUSTOMREQUEST => 'POST',
+
+ CURLOPT_POSTFIELDS =>'<?xml version="1.0" encoding="UTF-8"?>
+
+<mainbody>
+
+   <header>
+
+       <usercode>x</usercode>
+
+       <password>x</password>
+
+       <key>1</key>
+
+   </header>
+
+   <body>
+
+       <text>merhaba bu bir test</text>
+
+      <no>90xxxxxxxxx</no>
+
+       <keys>
+
+             <keydetail>
+
+                 <keyinfo>1</keyinfo>
+
+                 <text>okunacak metin </text>
+
+             </keydetail>
+
+         </keys>      
+
+   </body>
+
+</mainbody>',
+
+ CURLOPT_HTTPHEADER => array(
+
+   'Content-Type: application/xml'
+
+ ),
+
+));
+
+
+
+$response = curl_exec($curl);
+
+
+
+curl_close($curl);echo $response;
+
+Servisten Alınan Örnek Cevap
+
+00 3576544
+
+Dinamik Sesli Mesaj
+
+Senaryonuza göre sırası belirlenmiş şekilde gönderdiğiniz yüklü ses dosyaları ya da textlerinizle sesli mesajınız başlatılır. 1:n mantığı ile bir sesli mesajı birden fazla numaraya başlatabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.startdateGönderime başlayacağınız tarih. (ddMMyyyy)starttimeMesajın gönderilmeye başlanacağı saat(ssdd)stopdateİki tarih arası gönderimlerinizde bitiş tarihi.(ddMMyyyy) *Başlangıç ve bitiş tarihleri arasında en az 1 saat en fazla 21 saat olmalıdır.stoptimeMesaj gönderimi bitiş saati(ssdd).relationidTarafınızda belirleyeceğiniz bir random sayı ile sesli mesaj başlattığınızda, Raporlama servisini sorguladığınızda relationID bilgisi de dönecektir.urlSesli mesajın durumunun (raporunun) post edilmesini istediğiniz URL bilgisi.key=1Ses kaydının sonunda tuşa basılmasını istiyorum.key=0Ses kaydının sonunda tuşa basılmasını istemiyorum.audioidGönderilmek istenen sesid, sisteme daha önce yüklemiş olmanız gerekir.textGönderilmek istenen metinnoMesajın gönderildiği telefon numarasıkeysSesli mesaj baslattıktan sonra, karsı taraftan istenen tuslama bilgisi ile arama başlattığınız numaraya, tekrar bir metin ya da ses dosyası dinletmek icin kullanılır.keydetailTuslama bilgisi ile islem yapılacaksa gönderilir. Gönderilecek tuş bilgisi kadar bu tagi de göndermek gereklidir.keyinfoTus bilgisi bu parametre ile gönderilir. Bu parametre sonrasında audioID ya da text bilgisi içeren parametre göndermeniz zorunludur.filterTicari içerikli sesli mesaj gönderimlerinde bu parametreyi kullanabilirsiniz. Ticari içerikli bireysele gönderilecek numaralar için İYS kontrollü gönderimlerde ise "11" değerini, tacire gönderilecek İYS kontrollü gönderimlerde ise "12" değerini almalıdır. Bilgilendirme amaçlı gönderilen içeriklerde (İYS kontrolü sağlanmadan gönderilen) "0" değerini almalıdır.ringtimeSesli mesaj için yapılan aramada telefonun çalma süresi. (min 10 - max 30 sn)
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı00Görevinizin tarih formatinda bir hata olmadığını gösterir.01Mesaj gönderim baslangıç tarihinde hata var. Sistem tarihi ile değiştirilip işleme alındı.02Mesaj gönderim sonlandırılma tarihinde hata var.Sistem tarihi ile değiştirilip işleme alındı.Bitiş tarihi başlangıç tarihinden küçük girilmiş ise, sistem bitiş tarihine içinde bulunduğu tarihe 24 saat ekler.123456Gönderdiğiniz Sesli mesajın başarıyla sistemimize ulaştığını gösterir. Bu görevid niz ile mesajınızın durumunu sorguyabilirsiniz.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Ses dosyasının olmadığını ifade eder45Gönderilecek telefon numarasının bulunmadığını ifade eder70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/send
+
+Örnek İstek
+
+<?php
+
+
+
+$curl = curl_init();
+
+
+
+curl_setopt_array($curl, array(
+
+ CURLOPT_URL => 'https://api.netgsm.com.tr/voicesms/send',
+
+ CURLOPT_RETURNTRANSFER => true,
+
+ CURLOPT_ENCODING => '',
+
+ CURLOPT_MAXREDIRS => 10,
+
+ CURLOPT_TIMEOUT => 0,
+
+ CURLOPT_FOLLOWLOCATION => true,
+
+ CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+ CURLOPT_CUSTOMREQUEST => 'POST',
+
+ CURLOPT_POSTFIELDS =>'<?xml version="1.0" encoding="UTF-8"?>
+
+<mainbody>
+
+<header>         
+
+    <usercode>x</usercode>
+
+    <password>x</password>
+
+    <startdate>16112023</startdate>
+
+       <starttime>1509</starttime>
+
+       <stopdate>16112023</stopdate>
+
+       <stoptime>1609</stoptime>
+
+    <key>1</key>
+
+</header>         
+
+<body>            
+
+<voicemail>
+
+      <scenario>
+
+         <series s=\'1\'>
+
+          <text>sese çevrilmesi istenen metin 1</text>
+
+         </series>
+
+          <series s=\'2\'>
+
+            <audioid>12768046</audioid>
+
+        </series>
+
+          <series s=\'3\'>
+
+              <text>sese çevrilmesi istenen metin 2</text>
+
+          </series>
+
+          <number>
+
+              <no>90xxxxxxxx</no>
+
+          </number>
+
+          <keys>
+
+             <keydetail>
+
+                 <keyinfo>1</keyinfo>
+
+                 <text>1i tuslayanlara okutulacak metin</text>
+
+             </keydetail>
+
+             <keydetail>
+
+                 <keyinfo>2</keyinfo>
+
+                 <audioid>12768046</audioid>
+
+             </keydetail>
+
+         </keys>
+
+     </scenario>
+
+ </voicemail>    
+
+</body>            
+
+</mainbody>',
+
+ CURLOPT_HTTPHEADER => array(
+
+   'Content-Type: application/xml'
+
+ ),
+
+));
+
+
+
+$response = curl_exec($curl);
+
+
+
+curl_close($curl);echo $response;
+
+<?php<?php
+
+
+
+$curl = curl_init();
+
+
+
+curl_setopt_array($curl, array(
+
+ CURLOPT_URL => 'https://api.netgsm.com.tr/voicesms/send',
+
+ CURLOPT_RETURNTRANSFER => true,
+
+ CURLOPT_ENCODING => '',
+
+ CURLOPT_MAXREDIRS => 10,
+
+ CURLOPT_TIMEOUT => 0,
+
+ CURLOPT_FOLLOWLOCATION => true,
+
+ CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+ CURLOPT_CUSTOMREQUEST => 'POST',
+
+ CURLOPT_POSTFIELDS =>'{
+
+   "header": {
+
+       "username": "x",
+
+       "password": "x",
+
+       "key": "x"
+
+   },
+
+   "body": {
+
+       "scenario": {
+
+           "series": [
+
+               {
+
+                   "seri": "1",
+
+                   "text": "metin"
+
+               }
+
+           ],
+
+           "numbers": [
+
+               {
+
+                   "no": "x"
+
+               }
+
+           ]
+
+       }
+
+   }
+
+}',
+
+ CURLOPT_HTTPHEADER => array(
+
+   'Content-Type: application/json'
+
+ ),
+
+));
+
+
+
+$response = curl_exec($curl);
+
+
+
+curl_close($curl);echo $response;
+
+Servisten Alınan Örnek Cevap
+
+00 3576544
+
+Sesli Mesaj İptali
+
+İleri tarihe zamanlanmış sesli mesajlarınızı iptal edebilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.bulkidİptal edilmek istenen, sesli mesaj gönderimi yapılırken dönen görevid(bulkid) nizdir. İstek yapılırken gönderilmesi zorunludur.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Verilen bulkid için ileri tarihli sesli mesaj bulunamadi70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/edit
+
+Örnek İstek
+
+function sesliMesajiptal(){
+
+
+
+    $username = "850303xxxx"; //
+
+    $password = urlencode("xxxx"); //
+
+
+
+    $url= "https://api.netgsm.com.tr/voicesms/edit?usercode=312XXXXXXX&password=XXXX&bulkid=XXXXXX";
+
+
+
+    $ch = curl_init($url);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+    $http_response = curl_exec($ch);
+
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+
+
+    if($http_code != 200){
+
+        echo "$http_code $http_response\n";
+
+        return false;
+
+    }
+
+    $balanceInfo = $http_response;
+
+    echo "MesajID : $balanceInfo";
+
+    return $balanceInfo;
+
+}
+
+sesliMesajiptal();
+
+Servisten Alınan Örnek Cevap
+
+Servisten alınan başarılı yanıt
+
+
+
+{
+
+"code": 200,
+
+"message": "bulkid iptal islemine alindi.",
+
+"bulkid": "XXXXXX"
+
+
+
+}
+
+Ses Dosyaları
+
+Yükleme
+
+Sesli mesaj yapacağınız ses dosyasını api ile yükleyebilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.dosyaYüklemek istediğiniz dosya (İzinli Uzantılar : ".wav")
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı12345SesliMesaj Upload GörevId
+
+Hata Durumları
+
+Hata KoduAnlamı10Dosyanızın sistemimize başarılı bir şekilde alınamadığını ifade eder.20Geçersiz dosya uzantısını ifade eder. (İzinli Uzantılar : ".wav")30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Göndermeye çalıştığınız dosya boyutunun maksimum gönderebileceğiniz dosya boyutunu aştığını ifade eder. (Maksimum dosya boyutu: 4 MB)
+
+POST
+
+https://api.netgsm.com.tr/voicesms/upload
+
+Örnek İstek
+
+ 	  $target_url ="https://api.netgsm.com.tr/voicesms/upload";          
+
+    $fname = "";	// dosya yolunu belirtin.
+
+    $cfile = new CURLFile(realpath($fname));
+
+
+
+        $post = array (
+
+                  'dosya' => $cfile,
+
+                  'username' => $username,
+
+                  'password' => $password
+
+                  );    
+
+
+
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, $target_url);
+
+    curl_setopt($ch, CURLOPT_POST, 1);
+
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+	  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/4.0 (compatible;)");   
+
+    curl_setopt($ch, CURLOPT_HTTPHEADER,array('Content-Type: multipart/form-data'));
+
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, 1);   
+
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, 1);  
+
+    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
+
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+
+    $result = curl_exec ($ch);
+
+    if ($result === FALSE) {
+
+        echo "Error sending" . $fname .  " " . curl_error($ch);
+
+        curl_close ($ch);
+
+    }else{
+
+        curl_close ($ch);
+
+        echo  "Result: " . $result;
+
+    }   
+
+Servisten Alınan Örnek Cevap
+
+12345
+
+Listeleme
+
+Yüklediğiniz ses dosyalarını sorguyarak bilgisine ulaşabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.startdateİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm)stopdateİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm)
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.50Arama kriterlerindeki tarih formatının hatalı olduğunu ifade eder. (ddMMyyyyHHmm)60Arama kiterlerindeki startdate ve stopdate zaman farkının 30 günden fazla olduğunu ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/uploadlist
+
+Örnek İstek
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version='1.0'?>
+
+     <mainbody>
+
+       <header>  
+
+         <usercode>KullaniciAdi</usercode>
+
+         <password>Sifre</password>
+
+         <startdate>011220130101</startdate>
+
+         <stopdate>021220130101</stopdate>
+
+       </header>
+
+     </mainbody>';
+
+
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/voicesms/uploadlist',$xml);echo $gelen;/*
+
+Serviten Dönen Yanıt :
+
+
+
+12345	0216xxxxxxx	21.09.2012 18:24:43	26	indir
+
+
+
+Açıklamalar:
+
+
+
+12345                 --> AudioID
+
+0216xxxxxxx           --> Gönderen TelefonNo
+
+21.09.2012 18:24:43   --> Tarih
+
+26                    --> Mesaj Süresi
+
+https://.....         --> Yüklenmiş Dosya
+
+*/
+
+Raporlama Servisi
+
+Göndermiş olduğunuz sesli mesajların iletim durumlarını sorgulayabilirsiniz. Burada iki yöntemden birini tercih edebilirsiniz; HTTP POST ya da URL'e yönlendirme metodu.
+
+POST
+
+https://api.netgsm.com.tr/voicesms/report
+
+Sesli Mesaj Raporlar
+
+HTTP POST yöntemini kullanarak; Sesli mesajlarınızı başlattıktan sonra tarafınıza dönen ID bilgisi bulkid ile göndereceğiniz ya da bastar- bittar parametreleri gibi sesli mesajlarınızı yaptığınız zaman aralığına göre sorgulayabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.bulkidApi ile başarılı sesli mesaj gönderimlerinizde dönen görevid(bulkid) nizdir.typeSorgulama tipini belirlemek için kullanılır.0: Tek bulkid'ye göre sorgulama yapar. 1: Birden çok bulkid'ye göre sorgulama yapar. (Not: Bu durumda bulkid parametresi 43234, 53453, 54332, ....gibi yazılır.) 2: Tarih aralığında sorgu yapabilmek için kullanılır. (Not: Parametrenin bu değerinde bulkid parametresine girilen değer dikkate alınmaz.)bastarİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm)bittarİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm)statusMesajınızın durumunu sorgulamak için kullanılır. Status parametesi için açıklamaları aşağıdaki tabloda bulabilirsiniz.tusArama yapıldığında komut edilen tuş numarası. Tuşlanan rakam eğer 10 şeklinde gönderilirse hiç bir tuşa basmayanlar listelenir.version1: Birden çok bulkid'ye göre sorgulama yapıldığında kullanılır.Status ParametresiAçıklamalar0Cevaplanmayı bekleyenler1Cevaplananlar / Açan2Cevaplanmayanlar3Ulaşılamayan4Ücretlendirelemeyen / Varlık Yetersiz5Iptal Edilen6Başarısız : başlatılamayan çağrılar, durdurulan, hata alanlar7Meşgule Alınan8Numara Geçersiz9Süresi DolduTuş ParametresiAçıklamalar-1ses dosyası dinletilen numaranın çağrı esnasında kapatması ya da tuşlama yapmaması halinde terkedilmiş olarak raporlanır.
+
+Servisten Alınan Cevap
+
+İlk rakam sesli mesaj mesajid, ikinci rakam telefon numarası, üçüncü rakam status, dördüncü tuş numarasıdır.
+
+Bütün numaralar birbirlerinden <br> kodu ile ayrılmıştır.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder. (bastar ve bittar zaman farkı 24 saatten fazla olmamalıdır.)80Sorgulama sınır aşımını ifade eder, dakikada 2 kez sorgulanabilir.100Sistem hatası
+
+Örnek Kod
+
+function SesliSMSSorgulama(){
+
+
+
+  $username = "850303xxxx"; //
+
+  $password = urlencode("xxxx"); //
+
+  $url= "https://api.netgsm.com.tr/voicesms/report/?usercode=850303xxxx&password=xxxx&bulkid=32443&type=0&status=0&tus=1";
+
+
+
+  $ch = curl_init($url);
+
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);   
+
+  $http_response = curl_exec($ch);
+
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+
+
+  if($http_code != 200){
+
+    echo "$http_code $http_response\n";
+
+    return false;
+
+  }
+
+  $balanceInfo = $http_response;
+
+  echo $balanceInfo;
+
+  return $balanceInfo;
+
+}
+
+
+
+
+
+SesliSMSSorgulama();
+
+
+
+
+
+    /*
+
+    Servisten Dönen Cevap:
+
+    53545	05xxxxxxxxx	0	1
+
+
+
+    Servisten Dönen Cevap (version = 1 ve type = 1) :
+
+    53545	05xxxxxxxxx	1	1<br>53546	05xxxxxxxxx	2	-<br>53547	60<br>
+
+
+
+    Açıklamalar :
+
+    53545,53546,53547	 --> Seli MesajID(bulkID)
+
+    05xxxxxxxxx,60     --> Numarası Bilgisi (Kaydı olmayan bulkID sorgulamalarında 60 döner)
+
+    1,2	               --> Çağrı (Cevap) Durumu (status) Kaydı olmayan bulkID sorgulamalarında bilgi dönmez.
+
+    1,-	               --> Tuşlanan Rakam (tus) Tuşlanmayan Sesli mesajlarda "-" döner Kaydı olmayan bulkID sorgulamalarında bilgi dönmez.        
+
+    */
+
+SesliMesaj Webhook
+
+Başlattığınız Sesli mesajın durumunun (rapor olarak düşünebilirsiniz) belirleyeceğiniz bir URL'e post edilmesini isterseniz, bu yöntemi tercih edebilirsiniz.
+
+Bu durumda Basit ya da Dinamik Sesli mesaj Oluşturma işleminde url paramretresini de POST etmeniz zorunludur.
+
+Servisten Dönen Yanıt (Output)
+
+DeğişkenAnlamıbulkidBaşlatılan sesli mesaj görevIDcallerArayanın numarasıcalleeArananın numarasıstateÇağrının gerçekleşme durumudur. ( 1: Cevaplananlar, 2: Cevaplanmayan, 3: Ulaşılamayan, 7: Meşgule Alınan )typeSesli Mesajın tipi (1: Sadece belirlenmiş ses kaydı dinlet, 2: Belirlenmiş ses kaydını dinlet ve sonrasından ses kaydı al, 3: Belirlenmiş ses kaydını dinlet ve tuş bilgisi al, 4: Belirlenmiş ses kaydını dinlet ve tuş bilgisi al)nameArananın Adı Soyadı bilgisicreation_timeİşin oluşturulma zamanı ( yyyy-MM-dd HH:mm:ss.SSS )start_timeÇağrının başlatılma zamanı ( yyyy-MM-dd HH:mm:ss.SSS )answer_timeÇağrının cevaplanma zamanı ( yyyy-MM-dd HH:mm:ss.SSS ) "Açan" durumu içinhangup_timeCevaplanan çağrının kapanma zamanı ( yyyy-MM-dd HH:mm:ss.SSS ) "Açan" durumu içinbilsecGörüşme süresi, "Açan" durumu içinrelationidİşleri gruplandırmak için kullanılan değer.detailÇağrılar hakkında tiplerine göre daha detaylı bilgi içeren objedir.push_buttonTuşlamalı sesli mesajlarda tuşlama bilgisidir ( NULL: sesi dinleyip tuşlamaya kalmadan ayrılanlar, -1: Sesi dinleyip tuşlamaya kalıp belirlenen sürede tuşlama yapmayanlar type: 4 olanlar için type: 3 veya type: 4 olan işlerdesurvey_push_button_descAnketlerde basılan tuşun açıklamasıdır.type = 3 olan işlerdesurvey_taskidAnketlerde basılan tuş için belirlenmiş görev(0: Görev atanmamış, 1: Çağrı kapansın, 2: İlk dinletilen ses kaydını tekrar dinlet, 3: Yeni bir ses kaydı dinlet, 4: Yeni ses kaydını dinlet sonrasında ses kaydını al). type =3 olan işlerderecord_linkAranandan ses kaydı alındığı durumlarda ses kaydını indiren link type = 3 ve taskid = 4 olanlar veya type = 2 olanlar
+
+function log_yaz($veri,$dosya_adi){
+
+ if (!is_dir("D:/Log/"))
+
+	{
+
+			mkdir("D:/Log/",0700);		
+
+	}
+
+	$dosya = "D:/Log/$dosya_adi.txt";
+
+	$dt=fopen($dosya, 'a');
+
+	if (is_writable($dosya))
+
+	{
+
+		if (!$dt = fopen($dosya, 'a'))
+
+			{
+
+				 exit;
+
+			}
+
+		if (fwrite($dt, $veri) === FALSE)
+
+			{
+
+				 exit;
+
+			}
+
+	fclose($dt);
+
+	}
+
+
+
+}  
+
+
+
+	$gelendegerler = file_get_contents("php://input");
+
+	$gelendegerler = html_entity_decode($gelendegerler,ENT_COMPAT,'UTF-8');
+
+
+
+	log_yaz($gelendegerler, "seslismsRapor");// Sesli Mesaj Durum bilgisi için URL'e POST Edilecek Bilgi :/* {
+
+  "bulkid": ,
+
+  "caller": "",
+
+  "callee": "",
+
+  "state": ,
+
+  "type": ,
+
+  "name": "",
+
+  "creation_time": "",
+
+  "start_time": "",
+
+  "answer_time": "",
+
+  "hangup_time": "",
+
+  "bilsec": ,
+
+  "relationid": ,
+
+  "detail": {
+
+      "push_button": ,
+
+      "survey_push_button_desc": "",
+
+      "survey_taskid": ,
+
+      "record_link": ""
+
+  }
+
+} */    
+
+Dosya Yükleme
+
+Faks API ile, faks dosyanızı ve göndermek istediğiniz numara / numaraları belirleyerek iki aşamalı olarak faks gönderebilirsiniz. 1. aşamada faks dosyanızı random bir değerle yükleyerek, aynı random değerle gönderim işlemini 2. aşamada tekrar POST işlemi ile sağlayabilirsiniz.
+
+Gelen fakslarınızı listeleyebilir,
+
+Başlattığınız faksların durumlarını sorgulayarak Raporlama yapabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıdosyaYüklemek istediğiniz dosya İzinli Uzantılar : .jpeg, .jpg,.png,.gif,.pdf,.doc,.docx,.xls,.xlsxusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.).. (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)refidTarafınızda belirleyeceğiniz referans(random) numarasıdır.parametreDosya Upload işlemi için; 1 değerini almalıdır.
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı0Başarılı Upload Cevabı
+
+Hata Durumları
+
+Hata KoduAnlamı10Dosyanın kopyalanamadığını ifade eder.20Geçersiz dosya uzantısını ifade eder. (İzinli Uzantılar : ".txt", ".jpeg", ".jpg", ".png",".gif",".pdf",".doc",".docx",".xls",".xlsx")30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Göndermeye çalıştığınız dosya boyutunun maksimum gönderebileceğiniz dosya boyutunu aştığını ifade eder. (Maksimum dosya boyutu: 8 MB)50Referans Id'nin hatalı olduğunu ifade eder.90Dosyanın fax formatına çevrilemediğini ifade eder.100Parametrelerinizden birinde hata olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/fax/send
+
+Örnek Kod
+
+ 	  $target_url ="https://api.netgsm.com.tr/fax/send";          
+
+    $fname = "";	// dosya yolunu belirtin.
+
+    $cfile = new CURLFile(realpath($fname));
+
+
+
+        $post = array (
+
+                  'dosya' => $cfile,
+
+                  'username' => $username,
+
+                  'password' => $password,
+
+                  'refid' => $random,
+
+                  'parametre' => 1,
+
+                  );    
+
+
+
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, $target_url);
+
+    curl_setopt($ch, CURLOPT_POST, 1);
+
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/4.0 (compatible;)");   
+
+    curl_setopt($ch, CURLOPT_HTTPHEADER,array('Content-Type: multipart/form-data'));
+
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, 1);   
+
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, 1);  
+
+    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
+
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+
+    $result = curl_exec ($ch);
+
+    if ($result === FALSE) {
+
+        echo "Error sending" . $fname .  " " . curl_error($ch);
+
+        curl_close ($ch);
+
+    }else{
+
+        curl_close ($ch);
+
+        echo  "Result: " . $result;
+
+    }   
+
+Faks Gönderme
+
+İstediğiniz faks numarasına belirleyeceğiniz zaman aralıklarıyla faks gönderilmesi işlemidir.
+
+Tanımlar
+
+DeğişkenAnlamıusernameNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.dosyaYüklemek istediğiniz dosya (İzinli Uzantılar: ".jpeg", ".jpg", ".png",".gif",".pdf",".doc",".docx",".xls",".xlsx")refidFaks dosyası yüklerken belirlediğiniz referans numarasıdır.parametreDosya gönderme işlemi için; 2 değerini almalıdır.telefonFaks göndereceğiniz telefon numarası. (Örnek: 3129110911) Eğer birden fazla telefon numarasına gönderim yapmak istiyorsanız; (3129110911,3129110912,3129110913) telefon numalarının arasına virgül ekleyerek gönderiniz.startdateFaks göndermeye başlayacağınız tarih. (dd-mm-yyyy hh:mm) * Boş bırakılırsa mesajınız hemen gider.stopdateİki tarih arası gönderimlerinizde bitiş tarihi (dd-mm-yyyy hh:mm) * Boş bırakılırsa mesajın bitiş zamanı sistem tarafından belirlenir.
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı12345Fax GörevId
+
+Hata Durumları
+
+Hata KoduAnlamı10Dosyanın kopyalanamadığını ifade eder.20Geçersiz dosya uzantısını ifade eder. (İzinli Uzantılar : ".txt", ".jpeg", ".jpg", ".png",".gif",".pdf",".doc",".docx",".xls",".xlsx")30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Göndermeye çalıştığınız dosya boyutunun maksimum gönderebileceğiniz dosya boyutunu aştığını ifade eder. (Maksimum dosya boyutu: 8 MB)50Referans Id'nin hatalı olduğunu ifade eder.60Başlangıç veya bitiş tarihinin hatalı olduğunu ifade eder. . (ddmmyyyyhhmm)70Gönderdiğiniz telefon numarasının hatalı olduğunu ifade eder.80Yetersiz kredi olduğunu ifade eder.90Dosyanın fax formatına çevrilemediğini ifade eder.100Parametrelerinizden birinde hata olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/fax/send
+
+Örnek Kod
+
+ 	  $target_url ="https://api.netgsm.com.tr/fax/send";              
+
+    $cfile = new CURLFile(realpath($fname));
+
+
+
+        $post = array (                  
+
+                  'username' => $username,
+
+                  'password' => $password,
+
+                  'refid' => $random,
+
+                  'telefon' => '312xxxxxxx',
+
+                  'parametre' => 2
+
+                  );    
+
+
+
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_URL, $target_url);
+
+    curl_setopt($ch, CURLOPT_POST, 1);
+
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+
+    curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/4.0 (compatible;)");   
+
+    curl_setopt($ch, CURLOPT_HTTPHEADER,array('Content-Type: multipart/form-data'));
+
+    curl_setopt($ch, CURLOPT_FRESH_CONNECT, 1);   
+
+    curl_setopt($ch, CURLOPT_FORBID_REUSE, 1);  
+
+    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
+
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+
+    $result = curl_exec ($ch);
+
+    if ($result === FALSE) {
+
+        echo "Error sending" . $fname .  " " . curl_error($ch);
+
+        curl_close ($ch);
+
+    }else{
+
+        curl_close ($ch);
+
+        echo  "Result: " . $result;
+
+    }   
+
+Gelen Faks
+
+Abone numaranıza gelen fakslarınızı API ile sorguyabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)startdateİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyyHHmm)stopdateİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyyHHmm)type"1" değerini almalıdır.
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı8xxxxxxxxxGönderen TelefonNo21.08.2019TarihSUCCESSİleti Durumuhttps://xxx/....Dosya Yolu
+
+İleti Durumları
+
+DurumSUCCESSFAILED
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir. Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.40Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.50Başlangıç veya bitiş tarihinin hatalı olduğunu ifade eder. (ddmmyyyyhhmm)60Arama kiterlerindeki startdate ve stopdate zaman farkının 30 günden fazla olduğunu ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/fax/receive
+
+Örnek Kod
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version="1.0"?>
+
+<mainbody>
+
+	<header>
+
+		<company>Netgsm</company>
+
+		<usercode>KullaniciAdi</usercode>
+
+		<password>Sifre</password>
+
+		<startdate>011220180101</startdate>
+
+		<stopdate>021220180101</stopdate>
+
+		<type>1</type>
+
+	</header>
+
+</mainbody>';
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/fax/receive',$xml);echo $gelen;/*
+
+Servisten Dönen Cevap :
+
+8xxxxxxxxx	21.09.2012	SUCCESS	https://xxx/....
+
+
+
+8xxxxxxxxx          --> Gönderen TelefonNo
+
+21.09.2012          --> Tarih
+
+SUCCESS             --> İleti Durumu
+
+https://xxx/....    --> Dosya Yolu
+
+*/
+
+Raporlama
+
+Abone numaranız ile gönderdiğiniz fakslarınızın iletim durumlarını sorgulayabilirsiniz.
+
+Tanımlar
+
+DeğişkenAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). İstek yapılırken gönderilmesi zorunludur.passwordAPI yetkisi tanımlı alt kullanıcı şifresi. İstek yapılırken gönderilmesi zorunludur.bulkidApi ile başarılı faks mesaj gönderimlerinizde dönen bulkid nizdir.type=0Tek bulkidye göre sorgulama yapar.type=1Birden çok bulkidye göre sorgulama yapar. (bulkid=123456,123457)type=2Tarih araligiığında sorgu yapabilmek için kullanılır.Parametrenin bu değerinde bulkid parametresine girilen değer dikkate alınmaz.bastarİki tarih arası sorgulamanızda başlangıç tarihi (ddMMyyyy)bittarİki tarih arası sorgulamanızda bitiş tarihi(ddMMyyyy)statusFaksınızın durumunu sorgulamak için kullanılır.
+
+Servisten Alınan Örnek Cevap
+
+KoduAnlamı53545Mesaj ID05xxxxxxxxxCep Telefon0Faks Durumu1Gönderim Süresi
+
+Faks Durumları
+
+KoduAnlamı1Gönderimi Başarılı2Cevaplanmayan3Gönderiliyor4Gönderilmeyi Bekleyen7Başlatılamadı9Hedef numara faks çağrısını açmış ancak faks gönderilememiş100Tüm ileti durumları
+
+Servisten Alınan Örnek Cevap İlk rakam faksID, ikinci rakam telefon numarası, üçüncü rakam status, dördüncü rakam gönderim süresi(sn). Bütün numaralar birbirlerinden < BR> kodu ile ayrılmıştır.
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Arama kriterlerinize göre listelenecek kayıt olmadığını ifade eder.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/fax/report
+
+Örnek Kod
+
+function RaporAl(){
+
+
+
+  $username = "850303xxxx"; //
+
+  $password = urlencode("xxxx"); //
+
+
+
+  $url= "https://api.netgsm.com.tr/fax/report/?usercode=850302xxxx&password=xxxxx&bulkid=32443&type=0&status=0";
+
+
+
+  $ch = curl_init($url);
+
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);  
+
+  $http_response = curl_exec($ch);
+
+  $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+
+
+  if($http_code != 200){
+
+    echo "$http_code $http_response\n";
+
+    return false;
+
+  }
+
+  $balanceInfo = $http_response;
+
+  echo "Krediniz : $balanceInfo";
+
+  return $balanceInfo;
+
+}
+
+
+
+RaporAl();/*
+
+Servisten dönen Örnek Kod
+
+53545	05xxxxxxxxx	0	1
+
+
+
+53545	       --> Mesaj ID
+
+05xxxxxxxxx	 --> Cep Telefon
+
+0	           --> Faks Durumu
+
+1            -->	Gönderim Süresi
+
+*/
+
+Netsantral Entegrasyonu
+
+Netsantral API servisleri ile kullanabileceğiniz özelliklere, buradan ulaşabilirsiniz.
+
+Kredi/Paket Sorgulama
+
+Netgsm aboneliğinizde bulunan hesap bakiyesini ve paket/kampanya bilgilerini API ile sorgulayabilirsiniz.
+
+Software Development Kit
+
+Python için https://pypi.org/project/netgsm-sms/
+
+JavaScript için https://www.npmjs.com/package/@netgsm/sms bağlantılarını ziyaret edebilirsiniz.
+
+XML Post Paket/Kredi
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)view1 gönderilirse xml sonuç dönerstip1 : paket/kampanya bilgisi 2: kredi bilgisi 3: paket/kampanya/kredi tüm varlık bilgisi almak için gönderilir. Zorunlu Parametre
+
+stip=3 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıamountMiktar*balance_nameVarlık Türü
+
+stip=2 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıcodeİleti veya Hata Durumu 00 başarılı sorgulama sonucu dönerbalanceKredi Miktarı
+
+stip=1 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıamountMiktar*balance_namePaket Adı
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Hesabınızda tanımlı paket veya kampanyanız bulunmamaktadır.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/balance
+
+Örnek İstek
+
+function XMLPOST($PostAddress,$xmlData){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$PostAddress);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST,2);
+
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER,0);
+
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER,1);
+
+		curl_setopt($ch, CURLOPT_HTTPHEADER, Array("Content-Type: text/xml"));
+
+		curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlData);
+
+		$result = curl_exec($ch);
+
+		return $result;
+
+}
+
+$xml='<?xml version="1.0"?>
+
+<mainbody>
+
+	<header>		
+
+        <usercode>KullaniciAdi</usercode>
+
+        <password>Sifre</password>
+
+	      <stip>2</stip>
+
+          <view>1</view>
+
+        </header>		
+
+</mainbody>';
+
+$gelen=XMLPOST('https://api.netgsm.com.tr/balance',$xml);echo $gelen;/*
+
+stip=3 alınan örnek cevap
+
+
+
+<results>
+
+    <result>
+
+        <amount>10</amount>
+
+        <balance_name>Netiys Numara</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>4</amount>
+
+        <balance_name>Sesli Mesaj</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>8</amount>
+
+        <balance_name>Adet OTP Sms</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>277</amount>
+
+        <balance_name>Adet SMS</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>92,150</amount>
+
+        <balance_name>Kredi Bakiye</balance_name>
+
+    </result>
+
+</results>
+
+
+
+stip=2 alınan örnek cevap
+
+
+
+<?xml version="1.0"?>
+
+<result>
+
+    <code>00</code>
+
+    <balance>50,000</balance>
+
+</result>
+
+
+
+stip=1 alınan örnek cevap
+
+
+
+<results>
+
+    <result>
+
+        <amount>242</amount>
+
+        <balance_name>Dakika</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>100</amount>
+
+        <balance_name>Adet Flash Sms</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>767</amount>
+
+        <balance_name>Adet OTP Sms</balance_name>
+
+    </result>
+
+    <result>
+
+        <amount>117</amount>
+
+        <balance_name>Adet SMS</balance_name>
+
+    </result>
+
+</results>
+
+*/
+
+JSON POST Paket/Kredi
+
+Tanımlar
+
+ParametreAnlamıusercodeNetgsm'den hizmet alınan abone numarası (850xxxxxxx, 312XXXXXXX vs.). (İstek yapılırken gönderilmesi zorunludur.)passwordAPI yetkisi tanımlı alt kullanıcı şifresi. (İstek yapılırken gönderilmesi zorunludur.)stip1 : paket/kampanya bilgisi 2: kredi bilgisi 3: paket/kampanya/kredi tüm varlık bilgisi almak için gönderilir. Zorunlu Parametre
+
+stip=3 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıamountMiktar*balance_nameVarlık Türü
+
+stip=2 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıcodeİleti veya Hata Durumu 00 başarılı sorgulama sonucu dönerbalanceKredi Miktarı
+
+stip=1 Servisten Alınan Cevap Parametreleri
+
+ParametreAnlamıamountMiktar*balance_namePaket Adı
+
+Hata Durumları
+
+Hata KoduAnlamı30Geçersiz kullanıcı adı , şifre veya kullanıcınızın API erişim izninin olmadığını gösterir.Ayrıca eğer API erişiminizde IP sınırlaması yaptıysanız ve sınırladığınız ip dışında gönderim sağlıyorsanız 30 hata kodunu alırsınız. API erişim izninizi veya IP sınırlamanızı , web arayüzümüzden; sağ üst köşede bulunan Abonelik İşlemleri / API işlemleri menüsunden kontrol edebilirsiniz.60Hesabınızda tanımlı paket veya kampanyanız bulunmamaktadır.70Hatalı sorgulama. Gönderdiğiniz parametrelerden birisi hatalı veya zorunlu alanlardan birinin eksik olduğunu ifade eder.
+
+POST
+
+https://api.netgsm.com.tr/balance
+
+Örnek Kod
+
+$curl = curl_init();
+
+
+
+curl_setopt_array($curl, array(
+
+  CURLOPT_URL => 'https://api.netgsm.com.tr/balance',
+
+  CURLOPT_RETURNTRANSFER => true,
+
+  CURLOPT_ENCODING => '',
+
+  CURLOPT_MAXREDIRS => 10,
+
+  CURLOPT_TIMEOUT => 0,
+
+  CURLOPT_FOLLOWLOCATION => true,
+
+  CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+
+  CURLOPT_CUSTOMREQUEST => 'POST',
+
+  CURLOPT_POSTFIELDS =>'{
+
+    "usercode":850XXXXXXX,
+
+    "password":"XXXX",
+
+    "stip":1
+
+    }',
+
+  CURLOPT_HTTPHEADER => array(
+
+    'Content-Type: application/json'
+
+  ),
+
+));
+
+
+
+$response = curl_exec($curl);
+
+
+
+curl_close($curl);echo $response;
+
+
+
+
+
+
+
+  /*
+
+  stip=1
+
+ {
+
+    "balance": [
+
+        {
+
+            "amount": 399,
+
+            "balance_name": "Adet SMS"
+
+        },
+
+        {
+
+            "amount": 11,
+
+            "balance_name": "Sesli Mesaj"
+
+        }
+
+    ]
+
+  }
+
+
+
+  stip=2 
+
+    {
+
+        "code": "00",
+
+        "balance": "57,860"
+
+    }
+
+
+
+  stip=3
+
+    {
+
+    "balance": [
+
+        {
+
+            "amount": 10,
+
+            "balance_name": "Netiys Numara"
+
+        },
+
+        {
+
+            "amount": 4,
+
+            "balance_name": "Sesli Mesaj"
+
+        },
+
+        {
+
+            "amount": 8,
+
+            "balance_name": "Adet OTP Sms"
+
+        },
+
+        {
+
+            "amount": 277,
+
+            "balance_name": "Adet SMS"
+
+        },
+
+        {
+
+            "amount": "92,150",
+
+            "balance_name": "Kredi Bakiye"
+
+        }
+
+    ]
+
+}
+
+
+
+  */
+
+Entegrasyon
+
+Netgsm tarafından çeşitli uygulamalar için geliştirilen eklentilere buradan, ulaşabilirsiniz. Geliştirici olarak kaydolabilirsiniz.Kullanici Adiniz: 5333175161 Sifreniz:FAA895A  buna göre mimari kurr 

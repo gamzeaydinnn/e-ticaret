@@ -31,7 +31,7 @@ package-lock.json
 yarn.lock
 
 # React build (will be built on server)
-frontend/build/
+# frontend/build/  # COMMENTED OUT - we need this for local Docker build
 
 # .NET packages
 packages/

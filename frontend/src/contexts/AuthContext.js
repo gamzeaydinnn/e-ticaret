@@ -28,27 +28,9 @@ export const AuthProvider = ({ children }) => {
       console.error("Demo users parsing error:", error);
     }
     return [
-      {
-        id: 1,
-        email: "demo@example.com",
-        password: "123456",
-        firstName: "Demo",
-        lastName: "User",
-      },
-      {
-        id: 2,
-        email: "test@example.com",
-        password: "123456",
-        firstName: "Test",
-        lastName: "User",
-      },
-      {
-        id: 3,
-        email: "user@example.com",
-        password: "123456",
-        firstName: "Example",
-        lastName: "User",
-      },
+      { id: 1, email: "demo@example.com", password: "123456", firstName: "Demo", lastName: "User" },
+      { id: 2, email: "test@example.com", password: "123456", firstName: "Test", lastName: "User" },
+      { id: 3, email: "user@example.com", password: "123456", firstName: "Example", lastName: "User" },
     ];
   };
 
@@ -82,18 +64,15 @@ export const AuthProvider = ({ children }) => {
       const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
 
       if (data && (data.success || data.token || data.Token)) {
-        const userData = data.user ||
-          data.User || {
-            id: data.id,
-            email,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            name:
-              data.name ||
-              `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
-            role: data.role,
-            isAdmin: data.isAdmin,
-          };
+        const userData = data.user || data.User || {
+          id: data.id,
+          email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          name: data.name || `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
+          role: data.role,
+          isAdmin: data.isAdmin,
+        };
         const token = data.token || data.Token;
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -179,11 +158,11 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, firstName, lastName) => {
     try {
       // Backend API çağrısı
-      const resp = await AuthService.register({
-        email,
-        password,
-        firstName,
-        lastName,
+      const resp = await AuthService.register({ 
+        email, 
+        password, 
+        firstName, 
+        lastName 
       });
 
       const data = resp && resp.data === undefined ? resp : resp.data;
@@ -193,7 +172,7 @@ export const AuthProvider = ({ children }) => {
           email,
           firstName,
           lastName,
-          name: `${firstName} ${lastName}`,
+          name: `${firstName} ${lastName}`
         };
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -232,7 +211,7 @@ export const AuthProvider = ({ children }) => {
         firstName,
         lastName,
         name: `${firstName} ${lastName}`,
-        password, // Demo için şifreyi de saklayalım
+        password // Demo için şifreyi de saklayalım
       };
 
       // Demo kullanıcılar listesine ekle
@@ -244,7 +223,7 @@ export const AuthProvider = ({ children }) => {
       AuthService.saveToken(token);
       localStorage.setItem("user", JSON.stringify(newUser));
       localStorage.setItem("userId", newUser.id.toString());
-
+      
       // Demo kullanıcıları localStorage'a kaydet
       localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
 
@@ -260,13 +239,7 @@ export const AuthProvider = ({ children }) => {
    * Telefon numarası ile kayıt başlatır.
    * SMS kodu gönderilir, verifyPhoneRegistration ile tamamlanır.
    */
-  const registerWithPhone = async (
-    email,
-    password,
-    firstName,
-    lastName,
-    phoneNumber
-  ) => {
+  const registerWithPhone = async (email, password, firstName, lastName, phoneNumber) => {
     try {
       const result = await smsService.registerWithPhone({
         email,
@@ -304,22 +277,18 @@ export const AuthProvider = ({ children }) => {
    */
   const verifyPhoneRegistration = async (phoneNumber, code, email) => {
     try {
-      const result = await smsService.verifyPhoneRegistration(
-        phoneNumber,
-        code,
-        email
-      );
+      const result = await smsService.verifyPhoneRegistration(phoneNumber, code, email);
 
       if (result.success && result.token) {
         // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(result.token);
-
+        
         // Kullanıcı bilgilerini decode et veya API'den al
         const userData = {
           email,
           phoneNumber,
         };
-
+        
         localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
 
@@ -367,12 +336,7 @@ export const AuthProvider = ({ children }) => {
   /**
    * SMS kodu ile şifre sıfırlar.
    */
-  const resetPasswordByPhone = async (
-    phoneNumber,
-    code,
-    newPassword,
-    confirmPassword
-  ) => {
+  const resetPasswordByPhone = async (phoneNumber, code, newPassword, confirmPassword) => {
     try {
       const result = await smsService.resetPasswordByPhone(
         phoneNumber,
@@ -403,26 +367,21 @@ export const AuthProvider = ({ children }) => {
         const data = resp && resp.data === undefined ? resp : resp.data;
         if (data && (data.token || data.Token)) {
           const token = data.token || data.Token;
-          const userData = data.user ||
-            data.User || {
-              id: data.id,
-              email: data.email,
-              name: data.name,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              role: data.role || "User",
-            };
+          const userData = data.user || data.User || {
+            id: data.id,
+            email: data.email,
+            name: data.name,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            role: data.role || "User",
+          };
           AuthService.saveToken(token);
           localStorage.setItem("user", JSON.stringify(userData));
-          if (userData?.id != null)
-            localStorage.setItem("userId", String(userData.id));
+          if (userData?.id != null) localStorage.setItem("userId", String(userData.id));
           setUser(userData);
           return { success: true, user: userData };
         }
-        return {
-          success: false,
-          error: data?.message || "Sosyal giriş başarısız",
-        };
+        return { success: false, error: data?.message || "Sosyal giriş başarısız" };
       } catch (e) {
         // Backend yoksa demo sosyal login
         const fallbackUser = {

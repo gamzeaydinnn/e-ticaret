@@ -63,7 +63,6 @@ dotnet user-secrets remove "NetGsm:Password"
 ⚠️ **ASLA** `secrets.json` veya gerçek credential'ları Git'e eklemeyin!
 
 ✅ `.gitignore` dosyasında şunlar olmalı:
-
 ```
 **/secrets.json
 **/.user-secrets/
@@ -71,7 +70,6 @@ appsettings.Production.json
 ```
 
 ✅ User Secrets'ın avantajları:
-
 - Kod deposunda saklanmaz
 - Geliştirici bazında farklı credential'lar
 - Windows: `%APPDATA%\Microsoft\UserSecrets\<user_secrets_id>\secrets.json`
@@ -80,7 +78,6 @@ appsettings.Production.json
 ## Production Ortamı
 
 Production'da User Secrets kullanmayın. Bunun yerine:
-
 - **Azure**: Key Vault
 - **AWS**: Secrets Manager
 - **Docker**: Environment Variables

@@ -1,25 +1,29 @@
-// src/services/categoryServiceReal.js
-// Kategori servisi - GERÇEK BACKEND API'ye bağlı
-// Public: /api/categories
-// Admin: /api/admin/categories
+/**
+ * categoryServiceReal.js
+ * 
+ * Kategori Servisi - Backend API ile iletişim
+ * 
+ * Bu servis, veritabanındaki kategorileri frontend'e taşır.
+ * Public endpoint'ler navigasyon için, Admin endpoint'ler yönetim içindir.
+ * 
+ * @author E-Ticaret Projesi
+ * @version 2.0.0 - Sıfırdan yeniden yazıldı
+ */
 
 import api from "./api";
 
-// Event listener sistemi - bileşenler arası senkronizasyon için
-const listeners = [];
+// ============================================================
+// YARDIMCI FONKSİYONLAR
+// ============================================================
 
-const notify = () => {
-  listeners.forEach((callback) => {
-    try {
-      callback();
-    } catch (e) {
-      console.error("[CategoryService] Listener error:", e);
-    }
-  });
-};
-
-// Slug oluşturma yardımcı fonksiyonu
+/**
+ * Türkçe karakterleri ASCII'ye çevirip URL-uyumlu slug oluşturur
+ * @param {string} name - Kategori adı
+ * @returns {string} URL-uyumlu slug
+ */
 const createSlug = (name) => {
+  if (!name) return "";
+  
   return name
     .toLowerCase()
     .replace(/ç/g, "c")
@@ -34,47 +38,107 @@ const createSlug = (name) => {
     .trim();
 };
 
+// ============================================================
+// EVENT LISTENER SİSTEMİ
+// Admin panelden kategori güncellendiğinde diğer bileşenleri bilgilendirir
+// ============================================================
+
+const listeners = [];
+
+/**
+ * Tüm listener'ları tetikler (kategori güncellendiğinde)
+ */
+const notify = () => {
+  listeners.forEach((callback) => {
+    try {
+      callback();
+    } catch (e) {
+      // Listener hatası sessizce loglanır, uygulama çökmez
+      console.error("[CategoryService] Listener hatası:", e);
+    }
+  });
+};
+
+// ============================================================
+// KATEGORİ SERVİSİ
+// ============================================================
+
 const categoryServiceReal = {
-  // ============ PUBLIC ENDPOINTS ============
-
-  // Tüm kategorileri getir (public - navigasyon için)
+  
+  // ==================== PUBLIC ENDPOINT'LER ====================
+  
+  /**
+   * Tüm kategorileri getirir (navigasyon menüsü için)
+   * Backend: GET /api/categories
+   * 
+   * @returns {Promise<Array>} Kategori listesi
+   */
   async getAll() {
-    console.log("[CategoryService] Calling /categories...");
-    const data = await api.get("/categories");
-    console.log("[CategoryService] Received data:", data);
-    return Array.isArray(data) ? data : [];
+    try {
+      const response = await api.get("/categories");
+      // API response'u array olmalı, değilse boş array döndür
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error("[CategoryService] Kategoriler alınamadı:", error.message);
+      return []; // Hata durumunda boş array döndür, UI çökmez
+    }
   },
 
-  // Slug'a göre kategori getir
-  async getBySlug(slug) {
-    return await api.get(`/categories/${encodeURIComponent(slug)}`);
-  },
-
-  // Aktif kategoriler (public görünüm için)
+  /**
+   * Aktif kategorileri getirir (header butonları için)
+   * isActive: true veya undefined olan kategorileri filtreler
+   * 
+   * @returns {Promise<Array>} Aktif kategori listesi
+   */
   async getActive() {
-    console.log("[CategoryService] getActive() called");
-    const all = await this.getAll();
-    console.log("[CategoryService] getActive() all categories:", all);
-    // isActive field'ı olmayan kategorileri de dahil et (varsayılan aktif)
-    const filtered = all.filter((c) => c.isActive !== false);
-    console.log("[CategoryService] getActive() filtered:", filtered);
-    return filtered;
+    const allCategories = await this.getAll();
+    // isActive false olmayanları getir (true veya undefined kabul edilir)
+    return allCategories.filter((cat) => cat.isActive !== false);
   },
 
-  // ============ ADMIN ENDPOINTS ============
+  /**
+   * Slug'a göre tek kategori getirir
+   * Backend: GET /api/categories/{slug}
+   * 
+   * @param {string} slug - Kategori slug'ı
+   * @returns {Promise<Object|null>} Kategori objesi veya null
+   */
+  async getBySlug(slug) {
+    try {
+      if (!slug) return null;
+      return await api.get(`/categories/${encodeURIComponent(slug)}`);
+    } catch (error) {
+      console.error(`[CategoryService] Kategori bulunamadı: ${slug}`, error.message);
+      return null;
+    }
+  },
 
-  // Admin: Tüm kategorileri getir (aktif/pasif dahil)
+  // ==================== ADMIN ENDPOINT'LER ====================
+
+  /**
+   * Admin: Tüm kategorileri getirir (aktif/pasif dahil)
+   * Backend: GET /api/admin/categories
+   */
   async getAllAdmin() {
-    const data = await api.get("/admin/categories");
-    return Array.isArray(data) ? data : [];
+    try {
+      const response = await api.get("/admin/categories");
+      return Array.isArray(response) ? response : [];
+    } catch (error) {
+      console.error("[CategoryService] Admin kategoriler alınamadı:", error.message);
+      return [];
+    }
   },
 
-  // Admin: ID'ye göre kategori getir
+  /**
+   * Admin: ID'ye göre kategori getirir
+   */
   async getById(id) {
     return await api.get(`/admin/categories/${id}`);
   },
 
-  // Admin: Yeni kategori oluştur
+  /**
+   * Admin: Yeni kategori oluşturur
+   */
   async create(category) {
     const payload = {
       name: category.name,
@@ -87,11 +151,13 @@ const categoryServiceReal = {
     };
 
     const result = await api.post("/admin/categories", payload);
-    notify();
+    notify(); // Diğer bileşenleri bilgilendir
     return result;
   },
 
-  // Admin: Kategori güncelle
+  /**
+   * Admin: Kategori günceller
+   */
   async update(id, category) {
     const payload = {
       id: parseInt(id),
@@ -109,38 +175,44 @@ const categoryServiceReal = {
     return result;
   },
 
-  // Admin: Kategori sil (soft delete)
+  /**
+   * Admin: Kategori siler
+   */
   async delete(id) {
     await api.delete(`/admin/categories/${id}`);
     notify();
     return { success: true };
   },
 
-  // Admin: Aktif/Pasif durumunu değiştir
+  /**
+   * Admin: Aktif/Pasif durumunu değiştirir
+   */
   async toggleActive(category) {
     const payload = {
       ...category,
       id: parseInt(category.id),
       isActive: !category.isActive,
     };
-    const result = await api.put(
-      `/admin/categories/${category.id}`,
-      payload
-    );
+    const result = await api.put(`/admin/categories/${category.id}`, payload);
     notify();
     return result;
   },
 
-  // Bileşen subscription sistemi
+  // ==================== SUBSCRIPTION SİSTEMİ ====================
+
+  /**
+   * Kategori değişikliklerini dinlemek için subscribe olur
+   * @param {Function} callback - Değişiklik olduğunda çağrılacak fonksiyon
+   * @returns {Function} Unsubscribe fonksiyonu
+   */
   subscribe(callback) {
     listeners.push(callback);
     return () => {
       const index = listeners.indexOf(callback);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
+      if (index > -1) listeners.splice(index, 1);
     };
   },
 };
 
 export default categoryServiceReal;
+

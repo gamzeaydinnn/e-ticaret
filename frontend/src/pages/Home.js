@@ -1,15 +1,15 @@
 // Hero banner, kategori grid, kampanyalar, öne çıkan ürünler
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ProductService } from "../services/productService";
-import { shouldUseMockData } from "../config/apiConfig";
-import mockDataStore from "../services/mockDataStore";
-import api from "../services/api";
+import bannerService from "../services/bannerService";
+import categoryServiceReal from "../services/categoryServiceReal";
 import { Helmet } from "react-helmet-async";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
 
 export default function Home() {
   const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [featured, setFeatured] = useState([]);
   const [productLoading, setProductLoading] = useState(true);
   const [productError, setProductError] = useState(null);
@@ -26,28 +26,48 @@ export default function Home() {
     }
   });
 
-  const loadData = () => {
-    // Categories
-    if (shouldUseMockData()) {
-      setCategories(mockDataStore.getCategories());
-    } else {
-      api
-        .get("/Categories")
-        .then((r) => setCategories(r.data || r))
-        .catch(() => {});
+  const loadData = useCallback(async () => {
+    // Categories - API'den çek
+    setCategoriesLoading(true);
+    try {
+      const cats = await categoryServiceReal.getActive();
+      console.log("[Home] Categories from API:", cats);
+      setCategories(cats || []);
+    } catch (err) {
+      console.error("[Home] Categories error:", err);
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
     }
 
-    // Products
+    // Products - JSON Server'dan (şimdilik)
     setProductLoading(true);
-    ProductService.list()
-      .then((items) => setFeatured(items))
-      .catch((e) => setProductError(e?.message || "Ürünler yüklenemedi"))
-      .finally(() => setProductLoading(false));
+    try {
+      const items = await ProductService.list();
+      setFeatured(items);
+    } catch (e) {
+      setProductError(e?.message || "Ürünler yüklenemedi");
+    } finally {
+      setProductLoading(false);
+    }
 
-    // Posters
-    setSliderPosters(mockDataStore.getSliderPosters());
-    setPromoPosters(mockDataStore.getPromoPosters());
-  };
+    // Banners/Posters - Gerçek Backend API'den
+    try {
+      const [sliders, promos] = await Promise.all([
+        bannerService.getSliderBanners(),
+        bannerService.getPromoBanners(),
+      ]);
+      console.log("[Home] Sliders:", sliders);
+      console.log("[Home] Promos:", promos);
+      setSliderPosters(sliders || []);
+      setPromoPosters(promos || []);
+    } catch (err) {
+      console.error("Posterler yüklenemedi:", err);
+      // Fallback: Boş array
+      setSliderPosters([]);
+      setPromoPosters([]);
+    }
+  }, []);
 
   // Favori ürün ekle/çıkar
   const handleToggleFavorite = (productId) => {
@@ -72,33 +92,17 @@ export default function Home() {
   useEffect(() => {
     loadData();
 
-    // Subscribe to changes for real-time updates
-    const unsubProducts = mockDataStore.subscribe("products", loadData);
-    const unsubCategories = mockDataStore.subscribe("categories", () => {
-      if (shouldUseMockData()) {
-        setCategories(mockDataStore.getCategories());
-      }
-    });
-    const unsubPosters = mockDataStore.subscribe("posters", () => {
-      setSliderPosters(mockDataStore.getSliderPosters());
-      setPromoPosters(mockDataStore.getPromoPosters());
-    });
-
-    // Farklı sekmeler arası senkronizasyon
-    const handleStorageChange = (e) => {
-      if (e.key?.startsWith("mockStore_")) {
-        loadData();
-      }
+    // Sayfa odağına geldiğinde verileri yenile (sekmeler arası senkronizasyon)
+    const handleFocus = () => {
+      console.log("[Home] Sayfa odaklandı, veriler yenileniyor...");
+      loadData();
     };
-    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("focus", handleFocus);
 
     return () => {
-      unsubProducts && unsubProducts();
-      unsubCategories && unsubCategories();
-      unsubPosters && unsubPosters();
-      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [loadData]);
 
   // Auto-rotation for slider (5 seconds)
   useEffect(() => {
@@ -381,17 +385,43 @@ export default function Home() {
           <i className="fas fa-th-large me-2" style={{ color: "#10b981" }}></i>
           Kategoriler
         </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-            gap: "12px",
-          }}
-        >
-          {categories.map((c) => (
-            <CategoryTile key={c.id} category={c} />
-          ))}
-        </div>
+        {categoriesLoading ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "30px 20px",
+              color: "#6b7280",
+            }}
+          >
+            <i
+              className="fas fa-spinner fa-spin me-2"
+              style={{ fontSize: "20px" }}
+            ></i>
+            Kategoriler yükleniyor…
+          </div>
+        ) : categories.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "30px 20px",
+              color: "#9ca3af",
+            }}
+          >
+            Kategori bulunamadı
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: "12px",
+            }}
+          >
+            {categories.map((c) => (
+              <CategoryTile key={c.id} category={c} />
+            ))}
+          </div>
+        )}
       </section>
 
       <section>

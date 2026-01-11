@@ -27,10 +27,10 @@ Belirtilen telefon numarasına 6 haneli doğrulama kodu gönderir.
 }
 ```
 
-| Alan        | Tip    | Zorunlu | Açıklama                                                             |
-| ----------- | ------ | ------- | -------------------------------------------------------------------- |
-| phoneNumber | string | Evet    | Türkiye formatında telefon (05XXXXXXXXX)                             |
-| purpose     | string | Evet    | `registration`, `password_reset`, `two_factor`, `phone_verification` |
+| Alan | Tip | Zorunlu | Açıklama |
+|------|-----|---------|----------|
+| phoneNumber | string | Evet | Türkiye formatında telefon (05XXXXXXXXX) |
+| purpose | string | Evet | `registration`, `password_reset`, `two_factor`, `phone_verification` |
 
 #### Response (200 OK)
 
@@ -58,14 +58,14 @@ Belirtilen telefon numarasına 6 haneli doğrulama kodu gönderir.
 
 #### Hata Kodları
 
-| Kod                     | Açıklama                                                   |
-| ----------------------- | ---------------------------------------------------------- |
-| `DAILY_LIMIT_EXCEEDED`  | Günlük 5 SMS limiti aşıldı                                 |
-| `HOURLY_LIMIT_EXCEEDED` | Saatlik 3 SMS limiti aşıldı                                |
-| `RESEND_COOLDOWN`       | 60 saniye beklemeden yeniden gönderim yapılamaz            |
-| `PHONE_BLOCKED`         | Telefon numarası bloke edildi (çok fazla başarısız deneme) |
-| `INVALID_PHONE`         | Geçersiz telefon numarası formatı                          |
-| `SMS_PROVIDER_ERROR`    | NetGSM API hatası                                          |
+| Kod | Açıklama |
+|-----|----------|
+| `DAILY_LIMIT_EXCEEDED` | Günlük 5 SMS limiti aşıldı |
+| `HOURLY_LIMIT_EXCEEDED` | Saatlik 3 SMS limiti aşıldı |
+| `RESEND_COOLDOWN` | 60 saniye beklemeden yeniden gönderim yapılamaz |
+| `PHONE_BLOCKED` | Telefon numarası bloke edildi (çok fazla başarısız deneme) |
+| `INVALID_PHONE` | Geçersiz telefon numarası formatı |
+| `SMS_PROVIDER_ERROR` | NetGSM API hatası |
 
 ---
 
@@ -122,12 +122,12 @@ Gönderilen OTP kodunu doğrular.
 
 #### Hata Kodları
 
-| Kod                     | Açıklama                                  |
-| ----------------------- | ----------------------------------------- |
-| `INVALID_CODE`          | Yanlış doğrulama kodu (3 deneme hakkı)    |
-| `CODE_EXPIRED`          | Kod süresi dolmuş (3 dakika)              |
-| `MAX_ATTEMPTS_EXCEEDED` | 3 yanlış deneme yapıldı                   |
-| `NOT_FOUND`             | Bu telefon için aktif doğrulama kaydı yok |
+| Kod | Açıklama |
+|-----|----------|
+| `INVALID_CODE` | Yanlış doğrulama kodu (3 deneme hakkı) |
+| `CODE_EXPIRED` | Kod süresi dolmuş (3 dakika) |
+| `MAX_ATTEMPTS_EXCEEDED` | 3 yanlış deneme yapıldı |
+| `NOT_FOUND` | Bu telefon için aktif doğrulama kaydı yok |
 
 ---
 
@@ -200,13 +200,13 @@ Telefona OTP gönderilip gönderilemeyeceğini kontrol eder.
 
 ### Limitler
 
-| Kriter              | Limit     | Süre               |
-| ------------------- | --------- | ------------------ |
-| **Telefon başına**  | 5 SMS     | 24 saat            |
-| **Telefon başına**  | 3 SMS     | 1 saat             |
+| Kriter | Limit | Süre |
+|--------|-------|------|
+| **Telefon başına** | 5 SMS | 24 saat |
+| **Telefon başına** | 3 SMS | 1 saat |
 | **Resend Cooldown** | 60 saniye | Her gönderim arası |
-| **Yanlış Deneme**   | 3 kez     | Her OTP için       |
-| **Kod Geçerliliği** | 3 dakika  | Her OTP            |
+| **Yanlış Deneme** | 3 kez | Her OTP için |
+| **Kod Geçerliliği** | 3 dakika | Her OTP |
 
 ### Blokla
 
@@ -225,17 +225,17 @@ ma Koşulları
 ```javascript
 // 1. OTP Gönder
 const sendOtp = async (phoneNumber) => {
-  const response = await fetch("http://localhost:5153/api/sms/send-otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const response = await fetch('http://localhost:5153/api/sms/send-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       phoneNumber,
-      purpose: "registration",
-    }),
+      purpose: 'registration'
+    })
   });
-
+  
   const result = await response.json();
-
+  
   if (result.success) {
     console.log(`Kod gönderildi! ${result.expiresInSeconds}s geçerli`);
     return result;
@@ -247,20 +247,20 @@ const sendOtp = async (phoneNumber) => {
 
 // 2. OTP Doğrula
 const verifyOtp = async (phoneNumber, code) => {
-  const response = await fetch("http://localhost:5153/api/sms/verify-otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  const response = await fetch('http://localhost:5153/api/sms/verify-otp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       phoneNumber,
       code,
-      purpose: "registration",
-    }),
+      purpose: 'registration'
+    })
   });
-
+  
   const result = await response.json();
-
+  
   if (result.success) {
-    console.log("✅ Doğrulama başarılı!");
+    console.log('✅ Doğrulama başarılı!');
     return true;
   } else {
     console.error(`❌ Hata: ${result.message}`);
@@ -273,14 +273,14 @@ const verifyOtp = async (phoneNumber, code) => {
 
 // 3. Kullanım
 try {
-  await sendOtp("05551234567");
+  await sendOtp('05551234567');
   // Kullanıcı kodu girer...
-  const verified = await verifyOtp("05551234567", "123456");
+  const verified = await verifyOtp('05551234567', '123456');
   if (verified) {
     // Kayıt işlemine devam et
   }
 } catch (error) {
-  console.error("OTP akışı hatası:", error);
+  console.error('OTP akışı hatası:', error);
 }
 ```
 
@@ -330,7 +330,6 @@ Development ortamında gerçek SMS göndermeden test yapmak için:
 ```
 
 Mock servis aktif olduğunda:
-
 - Gerçek SMS gönderilmez
 - Tüm gönderimler başarılı sayılır
 - Kodlar console'a yazılır
@@ -410,7 +409,6 @@ Burada tüm endpoint'leri test edebilirsiniz.
 ## Destek
 
 Sorularınız için:
-
 - **Email:** support@eticaret.com
 - **Dokümantasyon:** https://docs.eticaret.com/sms-api
 - **GitHub Issues:** https://github.com/yourusername/eticaret/issues

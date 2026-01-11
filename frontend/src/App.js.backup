@@ -1,4 +1,4 @@
-import "bootstrap/dist/css/bootstrap.min.css";
+﻿import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import React, { useState } from "react";
 import {
@@ -80,6 +80,7 @@ import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 
+
 function Header() {
   const { count: cartCount } = useCartCount();
   const navigate = useNavigate();
@@ -89,31 +90,20 @@ function Header() {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [categories, setCategories] = useState([]);
 
-  // ============================================================
-  // KATEGORİLERİ YÜKLE - Backend API'den
-  // Bu effect component mount olduğunda çalışır ve kategorileri çeker
-  // ============================================================
+  // Kategorileri API'den yukle
   React.useEffect(() => {
-    // Kategorileri API'den çekip state'e kaydet
     const loadCategories = async () => {
       try {
         const cats = await categoryServiceReal.getActive();
         setCategories(cats || []);
       } catch (err) {
-        // Hata durumunda konsola yaz, UI boş kategori ile devam eder
-        console.error("[Header] Kategoriler yüklenemedi:", err.message);
+        console.error("[Header] Kategoriler yuklenemedi:", err.message);
         setCategories([]);
       }
     };
-
-    // İlk yükleme
     loadCategories();
-
-    // Admin panelden kategori güncellenirse yeniden yükle
-    const unsubscribe = categoryServiceReal.subscribe(loadCategories);
-
-    // Cleanup: component unmount olduğunda subscription'ı kaldır
-    return () => unsubscribe && unsubscribe();
+    const unsub = categoryServiceReal.subscribe(loadCategories);
+    return () => unsub && unsub();
   }, []);
 
   const handleAccountClick = () => {
@@ -612,7 +602,7 @@ function Header() {
               type="button"
               onClick={() => navigate("/")}
             >
-              KATEGORİLER
+              YENI-KOD-2026
             </button>
             {categories.map((cat) => {
               const slug = cat.slug || createSlug(cat.name);
@@ -1717,3 +1707,6 @@ function HomePage() {
 }
 
 export default AppWithProviders;
+
+// TERMINAL-TEST-2026
+// GAMZE-TEST-021306

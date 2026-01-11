@@ -4,10 +4,11 @@ import {
   shouldUseMockData,
 } from "../config/apiConfig";
 import api from "./api";
-import mockDataStore from "./mockDataStore";
+import categoryServiceReal from "./categoryServiceReal";
+import productServiceMock from "./productServiceMock";
 
-// Mock data artık mockDataStore'da merkezi olarak yönetiliyor
-// Duplicate veri tanımları kaldırıldı - tüm işlemler mockDataStore üzerinden yapılıyor
+// Kategoriler: Gerçek Backend API
+// Ürünler: JSON Server (geçici - Mikro API gelene kadar)
 
 let mockCoupons = [
   {
@@ -337,69 +338,36 @@ export const AdminService = {
     return api.get("/admin/logs/inventory", { params });
   },
 
-  // Categories
+  // Categories - GERÇEK BACKEND API
   getCategories: async () => {
-    if (shouldUseMockData()) {
-      debugLog("Admin Categories - Mock data kullanılıyor");
-      return mockDataStore.getAllCategories();
-    }
-    ensureBackend();
-    return api.get("/admin/categories");
+    debugLog("Admin Categories - Gerçek Backend API kullanılıyor");
+    return categoryServiceReal.getAllAdmin();
   },
   createCategory: async (formData) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.createCategory(formData);
-    }
-    ensureBackend();
-    return api.post("/admin/categories", formData);
+    return categoryServiceReal.create(formData);
   },
   updateCategory: async (id, formData) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.updateCategory(id, formData);
-    }
-    ensureBackend();
-    return api.put(`/admin/categories/${id}`, formData);
+    return categoryServiceReal.update(id, formData);
   },
   deleteCategory: async (id) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.deleteCategory(id);
-    }
-    ensureBackend();
-    return api.delete(`/admin/categories/${id}`);
+    return categoryServiceReal.delete(id);
   },
 
-  // Products
+  // Products - JSON SERVER (Geçici - Mikro API gelene kadar)
   getProducts: async (page = 1, size = 10) => {
-    if (shouldUseMockData()) {
-      debugLog("Admin Products - Mock data kullanılıyor");
-      return mockDataStore.getAllProducts();
-    }
-    ensureBackend();
-    return api.get(`/admin/products?page=${page}&size=${size}`);
+    debugLog("Admin Products - JSON Server kullanılıyor (geçici)");
+    return productServiceMock.getAll();
   },
   createProduct: async (payload) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.createProduct(payload);
-    }
-    ensureBackend();
-    return api.post("/admin/products", payload);
+    return productServiceMock.create(payload);
   },
   updateProduct: async (id, payload) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.updateProduct(id, payload);
-    }
-    ensureBackend();
-    return api.put(`/admin/products/${id}`, payload);
+    return productServiceMock.update(id, payload);
   },
   deleteProduct: async (id) => {
-    if (shouldUseMockData()) {
-      return mockDataStore.deleteProduct(id);
-    }
-    ensureBackend();
-    return api.delete(`/admin/products/${id}`);
+    return productServiceMock.delete(id);
   },
-  updateStock: (id, stock) =>
-    api.patch(`/admin/products/${id}/stock`, stock),
+  updateStock: (id, stock) => api.patch(`/admin/products/${id}/stock`, stock),
 
   // Orders
   getOrders: async (page = 1, size = 20) => {

@@ -7,7 +7,7 @@ import { smsService, SmsVerificationPurpose } from "../services/otpService";
 
 /**
  * OTP Doğrulama Modal Komponenti
- *
+ * 
  * @param {boolean} show - Modal görünür mü?
  * @param {function} onHide - Modal kapatıldığında çağrılır
  * @param {function} onVerified - Doğrulama başarılı olduğunda çağrılır
@@ -106,13 +106,13 @@ const OtpVerificationModal = ({
         setOtpSent(true);
         setSuccess("Doğrulama kodu telefonunuza gönderildi.");
         setRemainingAttempts(3);
-
+        
         // Resend countdown (60 saniye)
         startResendCountdown(60);
-
+        
         // Expiry countdown (varsayılan 180 saniye = 3 dakika)
         startExpiryCountdown(result.expiresInSeconds || 180);
-
+        
         // İlk input'a focus
         setTimeout(() => {
           inputRefs.current[0]?.focus();
@@ -135,7 +135,7 @@ const OtpVerificationModal = ({
     if (show && autoSendOnShow && phoneNumber && !otpSent) {
       handleSendOtp();
     }
-
+    
     // Modal kapandığında temizle
     if (!show) {
       clearTimers();
@@ -154,7 +154,7 @@ const OtpVerificationModal = ({
   // OTP Doğrula
   const handleVerifyOtp = async () => {
     const code = otpDigits.join("");
-
+    
     if (code.length !== 6) {
       setError("6 haneli kodu eksiksiz girin");
       return;
@@ -169,11 +169,7 @@ const OtpVerificationModal = ({
       // Purpose'a göre farklı endpoint kullan
       if (purpose === SmsVerificationPurpose.Registration && email) {
         // Kayıt doğrulama
-        result = await smsService.verifyPhoneRegistration(
-          phoneNumber,
-          code,
-          email
-        );
+        result = await smsService.verifyPhoneRegistration(phoneNumber, code, email);
       } else {
         // Genel OTP doğrulama
         result = await smsService.verifyOtp(phoneNumber, code, purpose);
@@ -182,23 +178,22 @@ const OtpVerificationModal = ({
       if (result.success) {
         setSuccess(result.message || "Doğrulama başarılı!");
         clearTimers();
-
+        
         // Parent'a bildir
         setTimeout(() => {
-          onVerified &&
-            onVerified({
-              phoneNumber,
-              token: result.token,
-              refreshToken: result.refreshToken,
-            });
+          onVerified && onVerified({
+            phoneNumber,
+            token: result.token,
+            refreshToken: result.refreshToken,
+          });
         }, 500);
       } else {
         setError(result.message);
-
+        
         if (result.remainingAttempts !== undefined) {
           setRemainingAttempts(result.remainingAttempts);
         }
-
+        
         // Input'ları temizle
         setOtpDigits(["", "", "", "", "", ""]);
         inputRefs.current[0]?.focus();
@@ -216,7 +211,7 @@ const OtpVerificationModal = ({
     if (!/^\d*$/.test(value)) return;
 
     const newDigits = [...otpDigits];
-
+    
     // Paste durumu (6 haneli kod yapıştırıldı)
     if (value.length > 1) {
       const pastedDigits = value.slice(0, 6).split("");
@@ -224,7 +219,7 @@ const OtpVerificationModal = ({
         newDigits[i] = pastedDigits[i] || "";
       }
       setOtpDigits(newDigits);
-
+      
       // Son dolu input'a focus
       const lastIndex = Math.min(value.length - 1, 5);
       inputRefs.current[lastIndex]?.focus();
@@ -246,7 +241,7 @@ const OtpVerificationModal = ({
     if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
-
+    
     // Enter ile doğrula
     if (e.key === "Enter" && otpDigits.join("").length === 6) {
       handleVerifyOtp();
@@ -269,9 +264,7 @@ const OtpVerificationModal = ({
         {/* Başlık */}
         <div style={styles.header}>
           <h2 style={styles.title}>{title}</h2>
-          <button onClick={onHide} style={styles.closeBtn}>
-            ×
-          </button>
+          <button onClick={onHide} style={styles.closeBtn}>×</button>
         </div>
 
         {/* İçerik */}
@@ -285,8 +278,7 @@ const OtpVerificationModal = ({
           {/* Süre bilgisi */}
           {expiryCountdown > 0 && (
             <p style={styles.expiryInfo}>
-              Kod geçerlilik süresi:{" "}
-              <strong>{formatTime(expiryCountdown)}</strong>
+              Kod geçerlilik süresi: <strong>{formatTime(expiryCountdown)}</strong>
             </p>
           )}
 
@@ -304,11 +296,7 @@ const OtpVerificationModal = ({
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 style={{
                   ...styles.otpInput,
-                  borderColor: error
-                    ? "#dc3545"
-                    : digit
-                    ? "#28a745"
-                    : "#ced4da",
+                  borderColor: error ? "#dc3545" : digit ? "#28a745" : "#ced4da",
                 }}
                 disabled={loading}
                 autoFocus={index === 0}
@@ -353,8 +341,7 @@ const OtpVerificationModal = ({
           <div style={styles.resendContainer}>
             {countdown > 0 ? (
               <p style={styles.resendWait}>
-                Tekrar göndermek için <strong>{countdown}</strong> saniye
-                bekleyin
+                Tekrar göndermek için <strong>{countdown}</strong> saniye bekleyin
               </p>
             ) : (
               <button

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { debugLog, shouldUseMockData } from "../config/apiConfig";
+import { debugLog } from "../config/apiConfig";
 import getProductCategoryRules from "../config/productCategoryRules";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { ProductService } from "../services/productService";
-import mockDataStore from "../services/mockDataStore";
+import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 
@@ -404,19 +404,12 @@ export default function ProductGrid({
           return;
         }
 
-        debugLog("Ürün listesi yüklenemedi, fallback değerlendiriliyor", err);
+        debugLog("Ürün listesi yüklenemedi, demo verilere düşülüyor", err);
 
-        if (shouldUseMockData()) {
-          setData(DEMO_PRODUCTS);
-          setError("");
-          setUsingMockData(true);
-        } else {
-          setError(
-            err?.message ||
-              "Ürünler yüklenemedi. Lütfen daha sonra tekrar deneyin."
-          );
-          setData([]);
-        }
+        // JSON Server bağlantısı başarısızsa demo verileri kullan
+        setData(DEMO_PRODUCTS);
+        setError("");
+        setUsingMockData(true);
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -426,19 +419,16 @@ export default function ProductGrid({
 
     loadProducts();
 
-    // Mock modda ürün değişikliklerini dinle
-    let unsubscribe;
-    if (shouldUseMockData()) {
-      unsubscribe = mockDataStore.subscribe("products", () => {
-        if (isMounted) {
-          loadProducts();
-        }
-      });
-    }
+    // JSON Server'dan ürün değişikliklerini dinle
+    const unsubscribe = productServiceMock.subscribe(() => {
+      if (isMounted) {
+        loadProducts();
+      }
+    });
 
     return () => {
       isMounted = false;
-      if (unsubscribe) unsubscribe();
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryId, initialProducts]);

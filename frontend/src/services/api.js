@@ -1,3 +1,9 @@
+/**
+ * api.js - Axios HTTP Client
+ * 
+ * baseURL: REACT_APP_API_URL environment variable'ından gelir
+ * Docker'da nginx proxy ile /api → ecommerce-api:5000 yönlendirilir
+ */
 import axios from "axios";
 
 const api = axios.create({
@@ -5,7 +11,19 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Global response interceptor: başarıda data'yı unwrap et, hatalarda tutarlı bir Error nesnesi fırlat
+// Request interceptor: Token varsa ekle
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor: Başarıda data unwrap, hatada normalize
 api.interceptors.response.use(
   (res) => res.data,
   (error) => {
@@ -16,18 +34,16 @@ api.interceptors.response.use(
       data?.message ||
       data?.error ||
       error?.message ||
-      "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.";
+      "Beklenmeyen bir hata oluştu.";
 
     const normalizedError = new Error(message);
     normalizedError.status = status;
     normalizedError.raw = error;
 
-    console.error("API error:", {
-      status,
-      message,
-      url: error?.config?.url,
-      method: error?.config?.method,
-    });
+    // Sadece development'ta detaylı log (production'da temiz)
+    if (process.env.NODE_ENV === "development") {
+      console.error("[API] Hata:", status, message);
+    }
 
     throw normalizedError;
   }

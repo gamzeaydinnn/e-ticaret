@@ -99,7 +99,6 @@ Frontend: `http://localhost:3000`
 ```
 
 **Avantajlar:**
-
 - ✅ Gerçek SMS gönderilmez (maliyet yok)
 - ✅ Kodlar console'a yazılır
 - ✅ Rate limiting test edilebilir
@@ -173,12 +172,12 @@ GET /api/sms/can-send?phoneNumber=05551234567
 
 ```javascript
 // React - otpService kullanımı
-import otpService from "./services/otpService";
+import otpService from './services/otpService';
 
 // 1. OTP Gönder
 const handleSendOtp = async (phoneNumber) => {
-  const result = await otpService.sendOtp(phoneNumber, "registration");
-
+  const result = await otpService.sendOtp(phoneNumber, 'registration');
+  
   if (result.success) {
     alert(`Kod gönderildi! ${result.expiresInSeconds}s geçerli`);
   } else {
@@ -188,11 +187,11 @@ const handleSendOtp = async (phoneNumber) => {
 
 // 2. OTP Doğrula
 const handleVerifyOtp = async (phoneNumber, code) => {
-  const result = await otpService.verifyOtp(phoneNumber, code, "registration");
-
+  const result = await otpService.verifyOtp(phoneNumber, code, 'registration');
+  
   if (result.success) {
     // Kayıt işlemine devam
-    console.log("✅ Doğrulama başarılı!");
+    console.log('✅ Doğrulama başarılı!');
   } else {
     alert(`❌ ${result.message}`);
     if (result.remainingAttempts !== undefined) {
@@ -206,33 +205,33 @@ const handleVerifyOtp = async (phoneNumber, code) => {
 
 ```javascript
 // React - AuthContext ile SMS kayıt
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from './contexts/AuthContext';
 
 function RegisterForm() {
   const { registerWithPhone, verifyPhoneRegistration } = useAuth();
-
+  
   // 1. Telefon ile kayıt başlat
   const handleRegister = async () => {
     const result = await registerWithPhone({
-      phoneNumber: "05551234567",
-      firstName: "Ahmet",
-      lastName: "Yılmaz",
-      password: "Secure123!",
+      phoneNumber: '05551234567',
+      firstName: 'Ahmet',
+      lastName: 'Yılmaz',
+      password: 'Secure123!'
     });
-
+    
     if (result.success) {
       // SMS gönderildi, OTP modal'ı aç
       setShowOtpModal(true);
     }
   };
-
+  
   // 2. OTP ile doğrula ve kaydı tamamla
   const handleVerify = async (code) => {
-    const result = await verifyPhoneRegistration("05551234567", code);
-
+    const result = await verifyPhoneRegistration('05551234567', code);
+    
     if (result.success) {
       // Kullanıcı giriş yaptı, token alındı
-      navigate("/dashboard");
+      navigate('/dashboard');
     }
   };
 }
@@ -244,13 +243,13 @@ function RegisterForm() {
 
 ### Rate Limiting
 
-| Kriter          | Limit     | Süre         |
-| --------------- | --------- | ------------ |
-| Telefon başına  | 5 SMS     | 24 saat      |
-| Telefon başına  | 3 SMS     | 1 saat       |
+| Kriter | Limit | Süre |
+|--------|-------|------|
+| Telefon başına | 5 SMS | 24 saat |
+| Telefon başına | 3 SMS | 1 saat |
 | Resend cooldown | 60 saniye | Her gönderim |
-| Yanlış deneme   | 3 kez     | Her OTP      |
-| Kod geçerliliği | 3 dakika  | -            |
+| Yanlış deneme | 3 kez | Her OTP |
+| Kod geçerliliği | 3 dakika | - |
 
 ### Bloke Koşulları
 
@@ -334,9 +333,9 @@ CREATE TABLE SmsVerifications (
     IsDeleted BIT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IX_SmsVerifications_Phone_Purpose
+CREATE INDEX IX_SmsVerifications_Phone_Purpose 
     ON SmsVerifications(PhoneNumber, Purpose);
-CREATE INDEX IX_SmsVerifications_ExpiresAt
+CREATE INDEX IX_SmsVerifications_ExpiresAt 
     ON SmsVerifications(ExpiresAt);
 ```
 
@@ -360,9 +359,9 @@ CREATE TABLE SmsRateLimits (
     UpdatedAt DATETIME2 NULL
 );
 
-CREATE INDEX IX_SmsRateLimits_PhoneNumber
+CREATE INDEX IX_SmsRateLimits_PhoneNumber 
     ON SmsRateLimits(PhoneNumber);
-CREATE INDEX IX_SmsRateLimits_IpAddress
+CREATE INDEX IX_SmsRateLimits_IpAddress 
     ON SmsRateLimits(IpAddress);
 ```
 
@@ -393,7 +392,7 @@ curl https://api.netgsm.com.tr/sms/rest/v2/health
 DELETE FROM SmsRateLimits WHERE PhoneNumber = '05551234567';
 
 -- Veya reset yap
-UPDATE SmsRateLimits
+UPDATE SmsRateLimits 
 SET DailyCount = 0, HourlyCount = 0, IsBlocked = 0
 WHERE PhoneNumber = '05551234567';
 ```
@@ -402,8 +401,8 @@ WHERE PhoneNumber = '05551234567';
 
 ```csharp
 // Kod geçerliliğini kontrol et
-SELECT * FROM SmsVerifications
-WHERE PhoneNumber = '05551234567'
+SELECT * FROM SmsVerifications 
+WHERE PhoneNumber = '05551234567' 
   AND ExpiresAt > GETUTCDATE()
   AND VerifiedAt IS NULL
 ORDER BY CreatedAt DESC;
@@ -415,8 +414,8 @@ ORDER BY CreatedAt DESC;
 // appsettings.Development.json kontrol
 {
   "NetGsm": {
-    "Enabled": false, // ← false olmalı
-    "UseMockService": true // ← true olmalı
+    "Enabled": false,        // ← false olmalı
+    "UseMockService": true   // ← true olmalı
   }
 }
 ```
@@ -433,15 +432,15 @@ private string FormatOtpMessage(string code, SmsVerificationPurpose purpose)
 {
     return purpose switch
     {
-        SmsVerificationPurpose.Registration =>
+        SmsVerificationPurpose.Registration => 
             $"Hoş geldiniz! Doğrulama kodunuz: {code}. 3 dakika geçerlidir.",
-
-        SmsVerificationPurpose.PasswordReset =>
+        
+        SmsVerificationPurpose.PasswordReset => 
             $"Şifre sıfırlama kodunuz: {code}. Kimseyle paylaşmayın.",
-
-        SmsVerificationPurpose.TwoFactor =>
+        
+        SmsVerificationPurpose.TwoFactor => 
             $"Giriş doğrulama kodunuz: {code}.",
-
+        
         _ => $"Doğrulama kodunuz: {code}"
     };
 }
@@ -461,7 +460,7 @@ public class SmsCleanupJob : BackgroundService
             await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
         }
     }
-
+    
     private async Task CleanupExpiredRecords()
     {
         // 7 günden eski kayıtları sil
@@ -475,7 +474,7 @@ public class SmsCleanupJob : BackgroundService
 
 ```sql
 -- SMS istatistikleri
-SELECT
+SELECT 
     Purpose,
     COUNT(*) as TotalSent,
     SUM(CASE WHEN VerifiedAt IS NOT NULL THEN 1 ELSE 0 END) as Verified,
