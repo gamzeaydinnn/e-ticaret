@@ -31,10 +31,10 @@ WORKDIR /app
 # Compiled app files
 COPY --from=build /app/publish .
 
-# uploads klasörünü de kopyala (banner/product görselleri için)
-# Kaynak: build stage'deki /src/ECommerce.API/uploads
-# Hedef: runtime'daki /app/uploads
-COPY --from=build /src/ECommerce.API/uploads ./uploads
+# ⚠️ NOT: uploads klasörü VOLUME ile mount edilecek (docker-compose.prod.yml)
+# COPY uploads yapmıyoruz çünkü volume mount bunu override eder
+# Görseller admin panel üzerinden yüklenecek ve host'taki ./uploads/ klasöründe saklanacak
+# Bu sayede container yeniden başlatıldığında görseller kaybolmaz
 
 EXPOSE 5000
 ENTRYPOINT ["dotnet", "ECommerce.API.dll"]
