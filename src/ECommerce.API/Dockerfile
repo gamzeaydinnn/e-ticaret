@@ -27,6 +27,14 @@ RUN dotnet publish -c Release -o /app/publish
 # =========================
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
+
+# Compiled app files
 COPY --from=build /app/publish .
+
+# uploads klasörünü de kopyala (banner/product görselleri için)
+# Kaynak: build stage'deki /src/ECommerce.API/uploads
+# Hedef: runtime'daki /app/uploads
+COPY --from=build /src/ECommerce.API/uploads ./uploads
+
 EXPOSE 5000
 ENTRYPOINT ["dotnet", "ECommerce.API.dll"]
