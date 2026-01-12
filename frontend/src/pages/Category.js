@@ -1,11 +1,9 @@
 // Kategoriye göre ürün listeleme (mevcut mimariye uygun)
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import api from "../services/api";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
-import { shouldUseMockData, debugLog } from "../config/apiConfig";
-import mockDataStore from "../services/mockDataStore";
+import categoryServiceReal from "../services/categoryServiceReal";
 
 // Slug oluşturma fonksiyonu
 const createSlug = (name) => {
@@ -29,64 +27,51 @@ export default function Category() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let mounted = true;
+  const loadCategory = useCallback(async () => {
     setLoading(true);
     setError("");
 
-    // Mock modda mockDataStore'dan kategori bul
-    if (shouldUseMockData()) {
-      const allCategories = mockDataStore.getCategories();
+    // Gerçek Backend API'den kategori al
+    try {
+      // Önce slug ile dene
+      const cat = await categoryServiceReal.getBySlug(slug);
+      if (cat) {
+        setCategory(cat);
+        setLoading(false);
+        return;
+      }
+
+      // Slug bulunamazsa tüm kategorilerden ara
+      const allCategories = await categoryServiceReal.getActive();
       const foundCat = allCategories.find((c) => {
         const catSlug = c.slug || createSlug(c.name);
         return catSlug === slug;
       });
-      
+
       if (foundCat) {
         setCategory(foundCat);
-        setLoading(false);
-        return;
+      } else {
+        setError("Kategori bulunamadı.");
       }
+    } catch (err) {
+      console.error("Kategoriler yüklenemedi:", err);
+      setError(err?.message || "Kategori bilgisi yüklenemedi.");
+    } finally {
+      setLoading(false);
     }
-
-    // API'den dene
-    api
-      .get(`/categories/${encodeURIComponent(slug)}`)
-      .then((cat) => {
-        if (!mounted) return;
-        setCategory(cat);
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        debugLog("Kategori API başarısız", { slug, error: e?.message });
-        setError(e?.message || "Kategori bilgisi yüklenemedi.");
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-
-    return () => {
-      mounted = false;
-    };
   }, [slug]);
+
+  useEffect(() => {
+    loadCategory();
+  }, [loadCategory]);
 
   // Subscribe to category changes
   useEffect(() => {
-    if (shouldUseMockData()) {
-      const unsub = mockDataStore.subscribe("categories", () => {
-        const allCategories = mockDataStore.getCategories();
-        const foundCat = allCategories.find((c) => {
-          const catSlug = c.slug || createSlug(c.name);
-          return catSlug === slug;
-        });
-        if (foundCat) {
-          setCategory(foundCat);
-        }
-      });
-      return () => unsub && unsub();
-    }
-  }, [slug]);
+    const unsub = categoryServiceReal.subscribe(() => {
+      loadCategory();
+    });
+    return () => unsub && unsub();
+  }, [loadCategory]);
 
   return (
     <div className="container-fluid px-4 py-4">

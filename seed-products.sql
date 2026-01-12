@@ -7,7 +7,7 @@ SET IDENTITY_INSERT Categories ON;
 INSERT INTO Categories (Id, Name, Description, ImageUrl, Slug, SortOrder, IsActive, CreatedAt, UpdatedAt)
 VALUES 
 (1, N'Et ve Et Ürünleri', N'Taze et ve şarküteri ürünleri', '/images/dana-kusbasi.jpg', 'et-ve-et-urunleri', 1, 1, GETDATE(), GETDATE()),
-(2, N'Süt ve Süt Ürünleri', N'Süt, peynir, yoğurt ve türevleri', '/images/ozel-fiyat-koy-sutu.png', 'sut-ve-sut-urunleri', 2, 1, GETDATE(), GETDATE()),
+(2, N'Süt Ürünleri', N'Süt, peynir, yoğurt ve türevleri', '/images/ozel-fiyat-koy-sutu.png', 'sut-urunleri', 2, 1, GETDATE(), GETDATE()),
 (3, N'Meyve ve Sebze', N'Taze meyve ve sebzeler', '/images/domates.webp', 'meyve-ve-sebze', 3, 1, GETDATE(), GETDATE()),
 (4, N'İçecekler', N'Soğuk ve sıcak içecekler', '/images/coca-cola.jpg', 'icecekler', 4, 1, GETDATE(), GETDATE()),
 (5, N'Atıştırmalık', N'Cipsi, kraker ve atıştırmalıklar', '/images/tahil-cipsi.jpg', 'atistirmalik', 5, 1, GETDATE(), GETDATE()),

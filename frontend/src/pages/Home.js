@@ -1,4 +1,18 @@
-// Hero banner, kategori grid, kampanyalar, öne çıkan ürünler
+/**
+ * Home.js - Ana Sayfa Bileşeni
+ *
+ * Bu bileşen, e-ticaret sitesinin ana sayfasını render eder.
+ *
+ * Bölümler:
+ * - Hero Slider (banner'lar)
+ * - Promosyon Kartları
+ * - Kategori Grid
+ * - Öne Çıkan Ürünler
+ *
+ * @author Senior Developer
+ * @version 2.0.0
+ */
+
 import { useEffect, useState, useCallback } from "react";
 import { ProductService } from "../services/productService";
 import bannerService from "../services/bannerService";
@@ -6,16 +20,33 @@ import categoryServiceReal from "../services/categoryServiceReal";
 import { Helmet } from "react-helmet-async";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
+import HeroSlider from "../components/HeroSlider";
+import PromoCards from "../components/PromoCards";
+
+// ============================================
+// ANA BİLEŞEN
+// ============================================
 
 export default function Home() {
+  // ============================================
+  // STATE YÖNETİMİ
+  // ============================================
+
+  // Kategori state'leri
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Ürün state'leri
   const [featured, setFeatured] = useState([]);
   const [productLoading, setProductLoading] = useState(true);
   const [productError, setProductError] = useState(null);
-  const [sliderPosters, setSliderPosters] = useState([]);
-  const [promoPosters, setPromoPosters] = useState([]);
-  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Banner state'leri
+  const [sliderBanners, setSliderBanners] = useState([]);
+  const [promoBanners, setPromoBanners] = useState([]);
+  const [bannersLoading, setBannersLoading] = useState(true);
+
+  // Favori state'i
   const [favorites, setFavorites] = useState(() => {
     // localStorage'dan favori ürünleri yükle
     try {
@@ -26,68 +57,64 @@ export default function Home() {
     }
   });
 
+  // ============================================
+  // VERİ YÜKLEME FONKSİYONU
+  // ============================================
+
   const loadData = useCallback(async () => {
-    // Categories - API'den çek
+    // Kategorileri yükle
     setCategoriesLoading(true);
     try {
       const cats = await categoryServiceReal.getActive();
-      console.log("[Home] Categories from API:", cats);
+      console.log("[Home] Categories from API:", cats?.length || 0);
       setCategories(cats || []);
     } catch (err) {
-      console.error("[Home] Categories error:", err);
+      console.error("[Home] Categories error:", err.message);
       setCategories([]);
     } finally {
       setCategoriesLoading(false);
     }
 
-    // Products - JSON Server'dan (şimdilik)
+    // Ürünleri yükle
     setProductLoading(true);
     try {
       const items = await ProductService.list();
-      setFeatured(items);
-    } catch (e) {
-      setProductError(e?.message || "Ürünler yüklenemedi");
+      setFeatured(items || []);
+      setProductError(null);
+    } catch (err) {
+      console.error("[Home] Products error:", err.message);
+      setProductError(err?.message || "Ürünler yüklenemedi");
+      setFeatured([]);
     } finally {
       setProductLoading(false);
     }
 
-    // Banners/Posters - Gerçek Backend API'den
+    // Banner'ları yükle (paralel olarak)
+    setBannersLoading(true);
     try {
       const [sliders, promos] = await Promise.all([
         bannerService.getSliderBanners(),
         bannerService.getPromoBanners(),
       ]);
-      console.log("[Home] Sliders:", sliders);
-      console.log("[Home] Promos:", promos);
-      setSliderPosters(sliders || []);
-      setPromoPosters(promos || []);
+
+      console.log("[Home] Sliders loaded:", sliders?.length || 0);
+      console.log("[Home] Promos loaded:", promos?.length || 0);
+
+      setSliderBanners(sliders || []);
+      setPromoBanners(promos || []);
     } catch (err) {
-      console.error("Posterler yüklenemedi:", err);
-      // Fallback: Boş array
-      setSliderPosters([]);
-      setPromoPosters([]);
+      console.error("[Home] Banners error:", err.message);
+      // Hata durumunda boş array kullan (fallback)
+      setSliderBanners([]);
+      setPromoBanners([]);
+    } finally {
+      setBannersLoading(false);
     }
   }, []);
 
-  // Favori ürün ekle/çıkar
-  const handleToggleFavorite = (productId) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId];
-      localStorage.setItem("favorites", JSON.stringify(updated));
-      return updated;
-    });
-  };
-
-  // Sepete ekle
-  const handleAddToCart = (productId) => {
-    const product = featured.find((p) => p.id === productId);
-    if (product) {
-      // Sepet işlemleri burada yapılacak (Context/Redux kullanılıyorsa)
-      alert(`${product.name} sepete eklendi!`);
-    }
-  };
+  // ============================================
+  // LIFECYCLE EFFECTS
+  // ============================================
 
   useEffect(() => {
     loadData();
@@ -104,288 +131,117 @@ export default function Home() {
     };
   }, [loadData]);
 
-  // Auto-rotation for slider (5 seconds)
-  useEffect(() => {
-    if (sliderPosters.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % sliderPosters.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [sliderPosters.length]);
+  // ============================================
+  // FAVORİ İŞLEMLERİ
+  // ============================================
+
+  /** Favori ürün ekle/çıkar */
+  const handleToggleFavorite = useCallback((productId) => {
+    setFavorites((prev) => {
+      const updated = prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId];
+      localStorage.setItem("favorites", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  // ============================================
+  // SEPET İŞLEMLERİ
+  // ============================================
+
+  /** Sepete ürün ekle */
+  const handleAddToCart = useCallback(
+    (productId) => {
+      const product = featured.find((p) => p.id === productId);
+      if (product) {
+        // TODO: Context veya Redux ile sepet yönetimi
+        alert(`${product.name} sepete eklendi!`);
+      }
+    },
+    [featured]
+  );
+
+  // ============================================
+  // SEO METADATA
+  // ============================================
+
+  const siteUrl =
+    process.env.REACT_APP_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "16px" }}>
+      {/* SEO Helmet */}
       <Helmet>
-        {(() => {
-          const siteUrl =
-            process.env.REACT_APP_SITE_URL ||
-            (typeof window !== "undefined" ? window.location.origin : "");
-          return (
-            <>
-              <title>Doğadan Sofranza — Taze ve doğal market ürünleri</title>
-              <meta
-                name="description"
-                content="Doğadan Sofranza: Taze meyve, sebze, süt ürünleri ve günlük ihtiyaçlarınızı güvenle sipariş edin."
-              />
-              <meta
-                property="og:title"
-                content="Doğadan Sofranza — Taze ve doğal market ürünleri"
-              />
-              <meta
-                property="og:description"
-                content="Taze ve doğal ürünleri kapınıza getiren yerel market"
-              />
-              <meta
-                property="og:image"
-                content={`${siteUrl}/images/og-default.jpg`}
-              />
-              <link
-                rel="canonical"
-                href={`${siteUrl}${
-                  typeof window !== "undefined" ? window.location.pathname : ""
-                }`}
-              />
-            </>
-          );
-        })()}
+        <title>Doğadan Sofranza — Taze ve doğal market ürünleri</title>
+        <meta
+          name="description"
+          content="Doğadan Sofranza: Taze meyve, sebze, süt ürünleri ve günlük ihtiyaçlarınızı güvenle sipariş edin."
+        />
+        <meta
+          property="og:title"
+          content="Doğadan Sofranza — Taze ve doğal market ürünleri"
+        />
+        <meta
+          property="og:description"
+          content="Taze ve doğal ürünleri kapınıza getiren yerel market"
+        />
+        <meta
+          property="og:image"
+          content={`${siteUrl}/images/og-default.jpg`}
+        />
+        <link
+          rel="canonical"
+          href={`${siteUrl}${
+            typeof window !== "undefined" ? window.location.pathname : ""
+          }`}
+        />
       </Helmet>
-      {/* Hero Slider Section */}
+
+      {/* ========== HERO SLIDER SECTION ========== */}
       <section className="mb-4">
-        {sliderPosters.length > 0 ? (
-          <div
-            style={{
-              position: "relative",
-              borderRadius: "12px",
-              overflow: "hidden",
-              boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-            }}
-          >
-            {/* Slider Container */}
-            <div
-              style={{ position: "relative", height: "300px", width: "100%" }}
-            >
-              {sliderPosters.map((poster, index) => (
-                <a
-                  key={poster.id}
-                  href={poster.linkUrl || "#"}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    opacity: index === currentSlide ? 1 : 0,
-                    visibility: index === currentSlide ? "visible" : "hidden",
-                    transition: "opacity 0.5s ease-in-out, visibility 0.5s",
-                    zIndex: index === currentSlide ? 1 : 0,
-                  }}
-                >
-                  <img
-                    src={poster.imageUrl}
-                    alt={poster.title}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                    onError={(e) => {
-                      e.target.src = "/images/placeholder.png";
-                    }}
-                  />
-                </a>
-              ))}
-            </div>
-
-            {/* Navigation Arrows */}
-            {sliderPosters.length > 1 && (
-              <>
-                <button
-                  onClick={() =>
-                    setCurrentSlide(
-                      (prev) =>
-                        (prev - 1 + sliderPosters.length) % sliderPosters.length
-                    )
-                  }
-                  style={{
-                    position: "absolute",
-                    left: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "rgba(0,0,0,0.5)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "50%",
-                    width: "40px",
-                    height: "40px",
-                    cursor: "pointer",
-                    zIndex: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  aria-label="Önceki"
-                >
-                  <i className="fas fa-chevron-left"></i>
-                </button>
-                <button
-                  onClick={() =>
-                    setCurrentSlide((prev) => (prev + 1) % sliderPosters.length)
-                  }
-                  style={{
-                    position: "absolute",
-                    right: "10px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "rgba(0,0,0,0.5)",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "50%",
-                    width: "40px",
-                    height: "40px",
-                    cursor: "pointer",
-                    zIndex: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  aria-label="Sonraki"
-                >
-                  <i className="fas fa-chevron-right"></i>
-                </button>
-              </>
-            )}
-
-            {/* Navigation Dots */}
-            {sliderPosters.length > 1 && (
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "12px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  display: "flex",
-                  gap: "8px",
-                  zIndex: 10,
-                }}
-              >
-                {sliderPosters.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentSlide(index)}
-                    style={{
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      border: "2px solid white",
-                      cursor: "pointer",
-                      backgroundColor:
-                        index === currentSlide ? "white" : "transparent",
-                      transition: "background-color 0.3s",
-                    }}
-                    aria-label={`Slide ${index + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              background: "linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)",
-              borderRadius: "12px",
-              padding: "40px 32px",
-              color: "white",
-            }}
-          >
-            <h1
-              style={{
-                fontSize: "1.75rem",
-                fontWeight: "bold",
-                marginBottom: "8px",
-              }}
-            >
-              Bugün ne sipariş ediyorsun?
-            </h1>
-            <p style={{ opacity: 0.9 }}>
-              Hızlı teslimat — Taze ürünler — Güvenli ödeme
-            </p>
-          </div>
-        )}
+        <HeroSlider
+          banners={sliderBanners}
+          loading={bannersLoading}
+          showNavigation={true}
+          showDots={true}
+          showContent={false}
+          autoSlideInterval={5000}
+        />
       </section>
 
-      {/* Promo Grid Section */}
-      {promoPosters.length > 0 && (
-        <section className="mb-4">
-          <h2
-            style={{
-              fontSize: "1.25rem",
-              fontWeight: "600",
-              marginBottom: "12px",
-            }}
-          >
-            <i className="fas fa-tags me-2" style={{ color: "#f97316" }}></i>
-            Kampanyalar
-          </h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-              gap: "12px",
-            }}
-          >
-            {promoPosters.map((promo) => (
-              <a
-                key={promo.id}
-                href={promo.linkUrl || "#"}
-                style={{
-                  display: "block",
-                  borderRadius: "8px",
-                  overflow: "hidden",
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                  transition: "transform 0.2s, box-shadow 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-4px)";
-                  e.currentTarget.style.boxShadow =
-                    "0 8px 16px rgba(0,0,0,0.15)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
-                }}
-              >
-                <img
-                  src={promo.imageUrl}
-                  alt={promo.title}
-                  style={{
-                    width: "100%",
-                    height: "120px",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
-                  onError={(e) => {
-                    e.target.src = "/images/placeholder.png";
-                  }}
-                />
-              </a>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* ========== PROMO CARDS SECTION ========== */}
+      <PromoCards
+        promos={promoBanners}
+        loading={bannersLoading}
+        title="Kampanyalar"
+        icon="fa-tags"
+        showTitle={true}
+      />
 
+      {/* ========== KATEGORİLER SECTION ========== */}
       <section className="mb-4">
         <h2
           style={{
             fontSize: "1.25rem",
             fontWeight: "600",
             marginBottom: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
           }}
         >
-          <i className="fas fa-th-large me-2" style={{ color: "#10b981" }}></i>
+          <i className="fas fa-th-large" style={{ color: "#10b981" }}></i>
           Kategoriler
         </h2>
+
         {categoriesLoading ? (
+          // Loading State
           <div
             style={{
               textAlign: "center",
@@ -400,16 +256,21 @@ export default function Home() {
             Kategoriler yükleniyor…
           </div>
         ) : categories.length === 0 ? (
+          // Empty State
           <div
             style={{
               textAlign: "center",
               padding: "30px 20px",
               color: "#9ca3af",
+              backgroundColor: "#f9fafb",
+              borderRadius: "12px",
             }}
           >
+            <i className="fas fa-folder-open fa-2x mb-2 d-block opacity-50"></i>
             Kategori bulunamadı
           </div>
         ) : (
+          // Kategori Grid
           <div
             style={{
               display: "grid",
@@ -424,38 +285,79 @@ export default function Home() {
         )}
       </section>
 
+      {/* ========== ÖNE ÇIKANLAR SECTION ========== */}
       <section>
         <h2
           style={{
             fontSize: "1.25rem",
             fontWeight: "600",
             marginBottom: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
           }}
         >
-          <i className="fas fa-star me-2" style={{ color: "#eab308" }}></i>
+          <i className="fas fa-star" style={{ color: "#eab308" }}></i>
           Öne Çıkanlar
         </h2>
-        {productLoading && (
+
+        {productLoading ? (
+          // Loading State
           <div
             style={{ textAlign: "center", padding: "20px", color: "#6b7280" }}
           >
-            <i className="fas fa-spinner fa-spin me-2"></i>Ürünler yükleniyor…
+            <i className="fas fa-spinner fa-spin me-2"></i>
+            Ürünler yükleniyor…
           </div>
-        )}
-        {productError && !productLoading && (
+        ) : productError ? (
+          // Error State
           <div
             style={{
               color: "#dc2626",
-              padding: "12px",
+              padding: "16px",
               background: "#fef2f2",
-              borderRadius: "8px",
+              borderRadius: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
             }}
           >
-            <i className="fas fa-exclamation-circle me-2"></i>Hata:{" "}
-            {productError}
+            <i className="fas fa-exclamation-circle fa-lg"></i>
+            <div>
+              <strong>Hata:</strong> {productError}
+              <button
+                onClick={loadData}
+                style={{
+                  marginLeft: "12px",
+                  padding: "4px 12px",
+                  backgroundColor: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                Tekrar Dene
+              </button>
+            </div>
           </div>
-        )}
-        {!productLoading && !productError && (
+        ) : featured.length === 0 ? (
+          // Empty State
+          <div
+            style={{
+              textAlign: "center",
+              padding: "30px 20px",
+              color: "#9ca3af",
+              backgroundColor: "#f9fafb",
+              borderRadius: "12px",
+            }}
+          >
+            <i className="fas fa-box-open fa-2x mb-2 d-block opacity-50"></i>
+            Henüz ürün eklenmemiş
+          </div>
+        ) : (
+          // Ürün Grid
           <div
             style={{
               display: "grid",

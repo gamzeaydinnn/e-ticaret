@@ -31,9 +31,9 @@ namespace ECommerce.API.Infrastructure
                 return;
             }
 
-            // Skip CSRF for API routes - SPA uses JWT Authorization header
+            // Skip CSRF for ALL API routes - SPA uses JWT Authorization header
             var path = context.Request.Path.Value ?? "";
-            if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+            if (path.StartsWith("/api", StringComparison.OrdinalIgnoreCase))
             {
                 await _next(context);
                 return;

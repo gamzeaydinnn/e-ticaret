@@ -1,7 +1,6 @@
 // src/services/productService.js
+// Ürün servisi - Backend API kullanıyor
 import api from "./api";
-import { shouldUseMockData } from "../config/apiConfig";
-import mockDataStore from "./mockDataStore";
 
 const mapProduct = (p = {}) => {
   const basePrice = p.price ?? p.unitPrice ?? 0;
@@ -43,35 +42,67 @@ const mapProduct = (p = {}) => {
   };
 };
 
-export const ProductService = {
-  // Public endpoints (mapped shape)
-  list: async (query = "") => {
-    // Mock data kullanılıyorsa mockDataStore'dan al
-    if (shouldUseMockData()) {
-      const items = mockDataStore.getProducts();
-      return items.map(mapProduct);
-    }
-    const url = `/products${query}`;
-    const data = await api.get(url);
-    const items = Array.isArray(data) ? data : data?.data || [];
-    return items.map(mapProduct);
-  },
-  get: async (id) => {
-    if (shouldUseMockData()) {
-      const product = mockDataStore.getProductById(id);
-      return product ? mapProduct(product) : null;
-    }
-    const data = await api.get(`/products/${id}`);
-    return mapProduct(data);
-  },
-  
-  // Subscribe to product changes (for real-time updates)
-  subscribe: (callback) => mockDataStore.subscribe("products", callback),
+// Subscription callbacks
+let subscribers = [];
 
-  // Admin endpoints (kept for compatibility)
-  createAdmin: (formData) => api.post(`/Admin/products`, formData),
-  updateAdmin: (id, formData) => api.put(`/Admin/products/${id}`, formData),
-  deleteAdmin: (id) => api.delete(`/Admin/products/${id}`),
-  updateStockAdmin: (id, stock) =>
-    api.patch(`/Admin/products/${id}/stock`, { stock }),
+export const ProductService = {
+  // Backend API'den ürünleri çek
+  list: async (query = "") => {
+    try {
+      const response = await api.get("/api/products");
+      const items = Array.isArray(response) ? response : response?.data || [];
+      return items.filter((p) => p.isActive !== false).map(mapProduct);
+    } catch (err) {
+      console.error("Ürünler yüklenemedi:", err);
+      return [];
+    }
+  },
+
+  get: async (id) => {
+    try {
+      const response = await api.get(`/api/products/${id}`);
+      const product = response?.data || response;
+      return product ? mapProduct(product) : null;
+    } catch (err) {
+      console.error("Ürün bulunamadı:", err);
+      return null;
+    }
+  },
+
+  // Kategoriye göre ürünleri çek
+  getByCategory: async (categoryId) => {
+    try {
+      const response = await api.get(`/api/products/category/${categoryId}`);
+      const items = Array.isArray(response) ? response : response?.data || [];
+      return items.filter((p) => p.isActive !== false).map(mapProduct);
+    } catch (err) {
+      console.error("Kategori ürünleri yüklenemedi:", err);
+      return [];
+    }
+  },
+
+  // Subscribe to product changes
+  subscribe: (callback) => {
+    subscribers.push(callback);
+    return () => {
+      subscribers = subscribers.filter((cb) => cb !== callback);
+    };
+  },
+
+  // Admin endpoints
+  createAdmin: async (formData) => {
+    const response = await api.post("/api/products", formData);
+    return response?.data || response;
+  },
+  updateAdmin: async (id, formData) => {
+    const response = await api.put(`/api/products/${id}`, formData);
+    return response?.data || response;
+  },
+  deleteAdmin: async (id) => {
+    await api.delete(`/api/products/${id}`);
+  },
+  updateStockAdmin: async (id, stock) => {
+    const response = await api.patch(`/api/products/${id}/stock`, { stock });
+    return response?.data || response;
+  },
 };

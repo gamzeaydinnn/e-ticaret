@@ -79,6 +79,7 @@ import Sustainability from "./pages/Sustainability.jsx";
 import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
+import bannerService from "./services/bannerService";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -957,38 +958,87 @@ function HomePage() {
   const [slides, setSlides] = React.useState([]);
   const [promoImages, setPromoImages] = React.useState([]);
 
-  // Posterleri API'den çek
+  // Posterleri API'den çek - bannerService kullanarak
   React.useEffect(() => {
     const fetchPosters = async () => {
       try {
-        const res = await fetch("/banners");
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const activePosters = data
-            .filter((p) => p.isActive)
-            .sort((a, b) => a.displayOrder - b.displayOrder);
+        // Slider ve promo bannerları paralel olarak çek
+        const [sliderData, promoData] = await Promise.all([
+          bannerService.getSliderBanners(),
+          bannerService.getPromoBanners(),
+        ]);
+
+        console.log("[HomePage] Slider banners:", sliderData?.length || 0);
+        console.log("[HomePage] Promo banners:", promoData?.length || 0);
+
+        // Slider banner'ları ayarla
+        if (Array.isArray(sliderData) && sliderData.length > 0) {
           setSlides(
-            activePosters
-              .filter((p) => p.type === "slider" || !p.type)
-              .map((p) => ({
-                id: p.id,
-                title: p.title,
-                image: p.imageUrl,
-                link: p.linkUrl,
-              }))
+            sliderData.map((p) => ({
+              id: p.id,
+              title: p.title,
+              image: p.imageUrl,
+              link: p.linkUrl,
+            }))
           );
-          setPromoImages(
-            activePosters
-              .filter((p) => p.type === "promo")
-              .map((p) => ({
-                id: p.id,
-                title: p.title,
-                image: p.imageUrl,
-                link: p.linkUrl,
-              }))
-          );
+        } else {
+          // Slider için fallback
+          setSlides([
+            {
+              id: 1,
+              title: "TAZE VE DOĞAL İNDİRİM REYONU",
+              image: "/images/taze-dogal-indirim-banner.png",
+            },
+            {
+              id: 2,
+              title: "İLK ALIŞVERİŞİNİZE %25 İNDİRİM",
+              image: "/images/ilk-alisveris-indirim-banner.png",
+            },
+            {
+              id: 3,
+              title: "MEYVE REYONUMUZ",
+              image: "/images/meyve-reyonu-banner.png",
+            },
+          ]);
         }
-      } catch {
+
+        // Promo banner'ları ayarla
+        if (Array.isArray(promoData) && promoData.length > 0) {
+          setPromoImages(
+            promoData.map((p) => ({
+              id: p.id,
+              title: p.title,
+              image: p.imageUrl,
+              link: p.linkUrl,
+            }))
+          );
+        } else {
+          // Promo için fallback
+          setPromoImages([
+            {
+              id: 1,
+              title: "Temizlik Malzemeleri",
+              image: "/images/temizlik-malzemeleri.png",
+            },
+            {
+              id: 2,
+              title: "Taze ve Doğal",
+              image: "/images/taze-dogal-urunler.png",
+            },
+            {
+              id: 3,
+              title: "Taze Günlük Lezzetli",
+              image: "/images/taze-gunluk-lezzetli.png",
+            },
+            {
+              id: 4,
+              title: "Özel Fiyat Köy Sütü",
+              image: "/images/ozel-fiyat-koy-sutu.png",
+            },
+          ]);
+        }
+      } catch (error) {
+        console.error("[HomePage] Poster yükleme hatası:", error);
         // Fallback statik veriler
         setSlides([
           {
@@ -1027,11 +1077,6 @@ function HomePage() {
             id: 4,
             title: "Özel Fiyat Köy Sütü",
             image: "/images/ozel-fiyat-koy-sutu.png",
-          },
-          {
-            id: 5,
-            title: "CIF Jel Serisi",
-            image: "/images/cif-jel-serisi.png",
           },
         ]);
       }

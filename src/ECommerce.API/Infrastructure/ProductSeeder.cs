@@ -46,7 +46,7 @@ namespace ECommerce.API.Infrastructure
                 },
                 new Category
                 {
-                    Name = "Süt ve Süt Ürünleri",
+                    Name = "Süt Ürünleri",
                     Description = "Süt, peynir, yoğurt ve türevleri",
                     ImageUrl = "/images/ozel-fiyat-koy-sutu.png",
                     Slug = "sut-ve-sut-urunleri",

@@ -4,42 +4,45 @@ import api from "./api";
 
 export const AuthService = {
   // ==================== E-POSTA TABANLI KİMLİK DOĞRULAMA ====================
-  login: (credentials) => api.post("/auth/login", credentials),
-  register: (data) => api.post("/auth/register", data),
-  logout: () => api.post("/auth/logout"),
-  me: () => api.get("/auth/me"),
-  refresh: (data) => api.post("/auth/refresh", data),
-  socialLogin: (data) => api.post("/auth/social-login", data),
+  login: (credentials) => api.post("/api/auth/login", credentials),
+  register: (data) => api.post("/api/auth/register", data),
+  logout: () => api.post("/api/auth/logout"),
+  me: () => api.get("/api/auth/me"),
+  refresh: (data) => api.post("/api/auth/refresh", data),
+  socialLogin: (data) => api.post("/api/auth/social-login", data),
 
   // ==================== SMS TABANLI KİMLİK DOĞRULAMA ====================
-  
+
   /**
    * Telefon numarası ile kayıt başlat
    * @param {Object} data - { phoneNumber, firstName, lastName, password }
    * @returns {Promise} - SMS gönderim sonucu
    */
-  registerWithPhone: (data) => api.post("/auth/register-with-phone", data),
+  registerWithPhone: (data) => api.post("/api/auth/register-with-phone", data),
 
   /**
    * Telefon kayıt doğrulama
    * @param {Object} data - { phoneNumber, code }
    * @returns {Promise} - JWT token ve kullanıcı bilgileri
    */
-  verifyPhoneRegistration: (data) => api.post("/auth/verify-phone-registration", data),
+  verifyPhoneRegistration: (data) =>
+    api.post("/api/auth/verify-phone-registration", data),
 
   /**
    * Telefon ile şifre sıfırlama isteği
    * @param {Object} data - { phoneNumber }
    * @returns {Promise} - SMS gönderim sonucu
    */
-  forgotPasswordByPhone: (data) => api.post("/auth/forgot-password-by-phone", data),
+  forgotPasswordByPhone: (data) =>
+    api.post("/api/auth/forgot-password-by-phone", data),
 
   /**
    * Telefon ile şifre sıfırlama işlemi
    * @param {Object} data - { phoneNumber, code, newPassword }
    * @returns {Promise} - Başarı durumu
    */
-  resetPasswordByPhone: (data) => api.post("/auth/reset-password-by-phone", data),
+  resetPasswordByPhone: (data) =>
+    api.post("/api/auth/reset-password-by-phone", data),
 
   // helper client-side
   saveToken: (token) => {

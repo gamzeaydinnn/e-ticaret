@@ -1,6 +1,6 @@
 /**
  * api.js - Axios HTTP Client
- * 
+ *
  * baseURL: REACT_APP_API_URL environment variable'ından gelir
  * Docker'da nginx proxy ile /api → ecommerce-api:5000 yönlendirilir
  */
@@ -17,6 +17,22 @@ api.interceptors.request.use(
     const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      // Debug: Token gönderildiğini log'la
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[API] 📤 ${config.method?.toUpperCase()} ${config.url}`, {
+          hasToken: !!token,
+          tokenPrefix: token.substring(0, 20) + "...",
+        });
+      }
+    } else {
+      // Debug: Token bulunamadı uyarısı
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `[API] ⚠️  ${config.method?.toUpperCase()} ${
+            config.url
+          } - Token bulunamadı!`
+        );
+      }
     }
     return config;
   },
@@ -40,9 +56,18 @@ api.interceptors.response.use(
     normalizedError.status = status;
     normalizedError.raw = error;
 
-    // Sadece development'ta detaylı log (production'da temiz)
+    // Development'ta detaylı log (401 unauthorized özellikle önemli)
     if (process.env.NODE_ENV === "development") {
-      console.error("[API] Hata:", status, message);
+      if (status === 401) {
+        console.error(`[API] 🔒 401 Unauthorized:`, {
+          url: error.config?.url,
+          method: error.config?.method,
+          hasAuthHeader: !!error.config?.headers?.Authorization,
+          message: message,
+        });
+      } else {
+        console.error(`[API] ❌ ${status}:`, message);
+      }
     }
 
     throw normalizedError;

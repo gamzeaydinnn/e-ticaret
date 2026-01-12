@@ -407,11 +407,31 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>
         /// OTP mesaj metnini formatlar.
+        /// DİKKAT: NetGSM OTP servisi Türkçe karakter desteklemez!
         /// </summary>
         private string FormatOtpMessage(string code)
         {
             var expiryMinutes = _settings.ExpirationSeconds / 60;
-            return $"Dogrulama kodunuz: {code}\nBu kod {expiryMinutes} dakika gecerlidir.\n- {_settings.AppName}";
+            // OTP mesajlarında Türkçe karakter kullanılamaz - ASCII'ye çevir
+            var appName = RemoveTurkishChars(_settings.AppName ?? "E-Ticaret");
+            return $"Dogrulama kodunuz: {code}. Bu kod {expiryMinutes} dakika gecerlidir. - {appName}";
+        }
+
+        /// <summary>
+        /// Türkçe karakterleri ASCII karşılıklarına çevirir.
+        /// OTP SMS'leri Türkçe karakter desteklemediği için gerekli.
+        /// </summary>
+        private static string RemoveTurkishChars(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            
+            return text
+                .Replace('ç', 'c').Replace('Ç', 'C')
+                .Replace('ğ', 'g').Replace('Ğ', 'G')
+                .Replace('ı', 'i').Replace('İ', 'I')
+                .Replace('ö', 'o').Replace('Ö', 'O')
+                .Replace('ş', 's').Replace('Ş', 'S')
+                .Replace('ü', 'u').Replace('Ü', 'U');
         }
 
         #endregion

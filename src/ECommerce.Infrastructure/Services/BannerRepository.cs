@@ -52,13 +52,29 @@ namespace ECommerce.Infrastructure.Services
             var existing = await _context.Banners.FindAsync(banner.Id);
             if (existing != null)
             {
+                // Temel alanlar
                 existing.Title = banner.Title;
+                existing.SubTitle = banner.SubTitle;
+                existing.Description = banner.Description;
                 existing.ImageUrl = banner.ImageUrl;
                 existing.LinkUrl = banner.LinkUrl;
+                existing.ButtonText = banner.ButtonText;
                 existing.Type = banner.Type;
+                existing.Position = banner.Position;
                 existing.IsActive = banner.IsActive;
                 existing.DisplayOrder = banner.DisplayOrder;
+                
+                // Tarih alanları
+                existing.StartDate = banner.StartDate;
+                existing.EndDate = banner.EndDate;
+                
+                // Analytics alanları (sadece açıkça güncelleniyorsa)
+                existing.ClickCount = banner.ClickCount;
+                existing.ViewCount = banner.ViewCount;
+                
+                // Güncelleme tarihi
                 existing.UpdatedAt = DateTime.UtcNow;
+                
                 await _context.SaveChangesAsync();
             }
         }

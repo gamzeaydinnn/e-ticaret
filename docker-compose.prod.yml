@@ -68,7 +68,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=${REACT_APP_API_URL:-http://localhost:5000/api}
+        # Sunucuda nginx proxy /api → backend yönlendirir
+        # Frontend'de zaten /api prefix var, tekrar eklenmemeli (double /api/api önlenir)
+        - REACT_APP_API_URL=
+        - REACT_APP_BACKEND_ENABLED=true
+        - REACT_APP_USE_MOCK_DATA=false
+        - API_HOST=ecommerce-api-prod
     image: ecommerce-frontend:latest
     container_name: ecommerce-frontend-prod
     restart: always

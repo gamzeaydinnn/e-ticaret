@@ -5,7 +5,7 @@ const baseAdmin = "/admin/micro"; // admin-only actions
 
 let mockMicroProducts = [
   { id: 1, name: "Dana Kuşbaşı", price: 89.9, category: "Et ve Et Ürünleri" },
-  { id: 2, name: "Pınar Süt 1L", price: 12.5, category: "Süt ve Süt Ürünleri" },
+  { id: 2, name: "Pınar Süt 1L", price: 12.5, category: "Süt Ürünleri" },
   { id: 3, name: "Domates Kg", price: 8.75, category: "Meyve ve Sebze" },
   { id: 4, name: "Coca Cola 330ml", price: 5.5, category: "İçecekler" },
 ];

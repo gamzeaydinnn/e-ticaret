@@ -1,11 +1,11 @@
 /**
  * categoryServiceReal.js
- * 
+ *
  * Kategori Servisi - Backend API ile iletişim
- * 
+ *
  * Bu servis, veritabanındaki kategorileri frontend'e taşır.
  * Public endpoint'ler navigasyon için, Admin endpoint'ler yönetim içindir.
- * 
+ *
  * @author E-Ticaret Projesi
  * @version 2.0.0 - Sıfırdan yeniden yazıldı
  */
@@ -23,7 +23,7 @@ import api from "./api";
  */
 const createSlug = (name) => {
   if (!name) return "";
-  
+
   return name
     .toLowerCase()
     .replace(/ç/g, "c")
@@ -64,18 +64,17 @@ const notify = () => {
 // ============================================================
 
 const categoryServiceReal = {
-  
   // ==================== PUBLIC ENDPOINT'LER ====================
-  
+
   /**
    * Tüm kategorileri getirir (navigasyon menüsü için)
    * Backend: GET /api/categories
-   * 
+   *
    * @returns {Promise<Array>} Kategori listesi
    */
   async getAll() {
     try {
-      const response = await api.get("/categories");
+      const response = await api.get("/api/categories");
       // API response'u array olmalı, değilse boş array döndür
       return Array.isArray(response) ? response : [];
     } catch (error) {
@@ -87,7 +86,7 @@ const categoryServiceReal = {
   /**
    * Aktif kategorileri getirir (header butonları için)
    * isActive: true veya undefined olan kategorileri filtreler
-   * 
+   *
    * @returns {Promise<Array>} Aktif kategori listesi
    */
   async getActive() {
@@ -99,16 +98,19 @@ const categoryServiceReal = {
   /**
    * Slug'a göre tek kategori getirir
    * Backend: GET /api/categories/{slug}
-   * 
+   *
    * @param {string} slug - Kategori slug'ı
    * @returns {Promise<Object|null>} Kategori objesi veya null
    */
   async getBySlug(slug) {
     try {
       if (!slug) return null;
-      return await api.get(`/categories/${encodeURIComponent(slug)}`);
+      return await api.get(`/api/categories/${encodeURIComponent(slug)}`);
     } catch (error) {
-      console.error(`[CategoryService] Kategori bulunamadı: ${slug}`, error.message);
+      console.error(
+        `[CategoryService] Kategori bulunamadı: ${slug}`,
+        error.message
+      );
       return null;
     }
   },
@@ -121,10 +123,13 @@ const categoryServiceReal = {
    */
   async getAllAdmin() {
     try {
-      const response = await api.get("/admin/categories");
+      const response = await api.get("/api/admin/categories");
       return Array.isArray(response) ? response : [];
     } catch (error) {
-      console.error("[CategoryService] Admin kategoriler alınamadı:", error.message);
+      console.error(
+        "[CategoryService] Admin kategoriler alınamadı:",
+        error.message
+      );
       return [];
     }
   },
@@ -133,7 +138,7 @@ const categoryServiceReal = {
    * Admin: ID'ye göre kategori getirir
    */
   async getById(id) {
-    return await api.get(`/admin/categories/${id}`);
+    return await api.get(`/api/admin/categories/${id}`);
   },
 
   /**
@@ -150,7 +155,7 @@ const categoryServiceReal = {
       isActive: category.isActive !== false,
     };
 
-    const result = await api.post("/admin/categories", payload);
+    const result = await api.post("/api/admin/categories", payload);
     notify(); // Diğer bileşenleri bilgilendir
     return result;
   },
@@ -170,7 +175,7 @@ const categoryServiceReal = {
       isActive: category.isActive !== false,
     };
 
-    const result = await api.put(`/admin/categories/${id}`, payload);
+    const result = await api.put(`/api/admin/categories/${id}`, payload);
     notify();
     return result;
   },
@@ -179,7 +184,7 @@ const categoryServiceReal = {
    * Admin: Kategori siler
    */
   async delete(id) {
-    await api.delete(`/admin/categories/${id}`);
+    await api.delete(`/api/admin/categories/${id}`);
     notify();
     return { success: true };
   },
@@ -193,7 +198,10 @@ const categoryServiceReal = {
       id: parseInt(category.id),
       isActive: !category.isActive,
     };
-    const result = await api.put(`/admin/categories/${category.id}`, payload);
+    const result = await api.put(
+      `/api/admin/categories/${category.id}`,
+      payload
+    );
     notify();
     return result;
   },
@@ -215,4 +223,3 @@ const categoryServiceReal = {
 };
 
 export default categoryServiceReal;
-

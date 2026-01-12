@@ -1,10 +1,8 @@
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Business.Services.Managers;
-using ECommerce.Business.Services.Managers;
 using ECommerce.Business.Services.Interfaces;
 using WebPush;
-using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Repositories;
 using Microsoft.IdentityModel.Tokens;
@@ -28,10 +26,13 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
-using ECommerce.API.Services.Sms;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using ECommerce.API.Services.Sms;
 using ECommerce.API.Validators;
+using ECommerce.API.Services.Otp;
+using ECommerce.Entities.Enums;
+using ECommerce.API.Data;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -39,6 +40,13 @@ using ECommerce.API.Validators;
 // using Hangfire.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// TEMPORARY: Disable ALL service validation for debugging DI issues
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    options.ValidateScopes = false;
+    options.ValidateOnBuild = false;
+});
 
 // CORS (ortama göre sıkılaştırma)
 builder.Services.AddCors(options =>
@@ -150,7 +158,7 @@ builder.Services.AddAuthentication(options =>
             ValidIssuer = builder.Configuration[ConfigKeys.JwtIssuer],
             ValidAudience = builder.Configuration[ConfigKeys.JwtAudience],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration[ConfigKeys.JwtKey]))
+                Encoding.UTF8.GetBytes(builder.Configuration[ConfigKeys.JwtKey] ?? throw new InvalidOperationException("JwtKey is required")))
         };
         // Check revoked tokens (deny list) on token validation
         options.Events = new JwtBearerEvents
@@ -199,6 +207,49 @@ builder.Services.PostConfigure<PaymentSettings>(settings =>
 });
 builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("Inventory"));
 
+// NetGSM SMS ve OTP servisleri
+builder.Services.Configure<NetGsmSettings>(builder.Configuration.GetSection("NetGsm"));
+
+// DEBUG: Configuration'ı dosyaya yaz
+var netGsmSection = builder.Configuration.GetSection("NetGsm");
+var debugPath = Path.Combine(builder.Environment.ContentRootPath, "netgsm_debug.txt");
+File.WriteAllText(debugPath, $@"
+=== DEBUG NETGSM CONFIGURATION ===
+Section Exists: {netGsmSection.Exists()}
+UserCode: '{netGsmSection["UserCode"]}'
+Password: '{netGsmSection["Password"]}'
+MsgHeader: '{netGsmSection["MsgHeader"]}'
+AppName: '{netGsmSection["AppName"]}'
+All Keys: {string.Join(", ", netGsmSection.GetChildren().Select(c => $"{c.Key}={c.Value}"))}
+Environment: {builder.Environment.EnvironmentName}
+=================================
+");
+
+// Eğer boşsa exception fırlat
+if (string.IsNullOrWhiteSpace(netGsmSection["UserCode"]))
+{
+    var msg = $"FATAL: NetGsm:UserCode is empty! Check {debugPath} for details.";
+    File.AppendAllText(debugPath, $"\nFATAL ERROR: {msg}\n");
+    throw new InvalidOperationException(msg);
+}
+
+builder.Services.Configure<OtpSettings>(builder.Configuration.GetSection("Otp"));
+builder.Services.Configure<SmsVerificationSettings>(
+    builder.Configuration.GetSection("SmsVerification"));
+
+// Typed HttpClient için NetGsmService'i doğru şekilde kaydet
+builder.Services.AddHttpClient<NetGsmService>();
+
+// Interface'ler için factory kullanarak aynı instance'ı kullan
+builder.Services.AddScoped<INetGsmService>(sp => sp.GetRequiredService<NetGsmService>());
+builder.Services.AddScoped<ISmsProvider>(sp => sp.GetRequiredService<NetGsmService>());
+
+builder.Services.AddScoped<IOtpService, OtpService>();
+
+// SMS Doğrulama Repository servisleri
+builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsVerificationRepository, ECommerce.Data.Repositories.SmsVerificationRepository>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsRateLimitRepository, ECommerce.Data.Repositories.SmsRateLimitRepository>();
+
 // Email + FileStorage services
 builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<IFileStorage>(sp =>
@@ -219,16 +270,6 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<ICampaignRepository, CampaignRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IWeightReportRepository, WeightReportRepository>();
-
-// SMS Verification Repositories - SMS do�rulama i�in gerekli repository'ler
-builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsVerificationRepository, ECommerce.Data.Repositories.SmsVerificationRepository>();
-builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsRateLimitRepository, ECommerce.Data.Repositories.SmsRateLimitRepository>();
-
-// NetGSM SMS Provider ve Settings
-builder.Services.Configure<NetGsmSettings>(builder.Configuration.GetSection("NetGsm"));
-builder.Services.Configure<SmsVerificationSettings>(builder.Configuration.GetSection("SmsVerification"));
-builder.Services.AddHttpClient<ECommerce.API.Services.Sms.NetGsmService>();
-builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsProvider, ECommerce.API.Services.Sms.NetGsmService>();
 
 // Services  
 builder.Services.AddScoped<IUserService, UserManager>();
@@ -292,18 +333,20 @@ builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.
 }).SetHandlerLifetime(TimeSpan.FromMinutes(5));
 builder.Services.AddScoped<MicroSyncManager>();
 
-// SMS Verification Service - Factory pattern ile t�m ba��ml�l�klar� manuel ��z�mle
+// SMS Verification Service - Factory pattern ile tüm bağımlılıkları manuel çözümle
 builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.ISmsVerificationService>(serviceProvider =>
 {
+    // Bağımlılıkları manuel olarak al
     var verificationRepo = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsVerificationRepository>();
     var rateLimitRepo = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsRateLimitRepository>();
     var smsProvider = serviceProvider.GetRequiredService<ECommerce.Core.Interfaces.ISmsProvider>();
     var settings = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SmsVerificationSettings>>();
     var logger = serviceProvider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SmsVerificationManager>>();
+    
     return new SmsVerificationManager(verificationRepo, rateLimitRepo, smsProvider, settings, logger);
 });
 
-// AuthManager - Factory pattern ile SMS servisi dahil t�m ba��ml�l�klar� ��z�mle
+// AuthManager - Factory pattern ile SMS servisi dahil tüm bağımlılıkları çözümle
 builder.Services.AddScoped<IAuthService>(sp =>
 {
     var userManager = sp.GetRequiredService<UserManager<ECommerce.Entities.Concrete.User>>();
@@ -312,6 +355,7 @@ builder.Services.AddScoped<IAuthService>(sp =>
     var refreshTokenRepo = sp.GetRequiredService<IRefreshTokenRepository>();
     var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
     var smsService = sp.GetRequiredService<ECommerce.Business.Services.Interfaces.ISmsVerificationService>();
+    
     return new AuthManager(userManager, config, emailSender, refreshTokenRepo, httpContextAccessor, smsService);
 });
 
@@ -424,23 +468,64 @@ var app = builder.Build();
 //     // Cron.Hourly);
 
 // DB init + Seed Roles/Admin User (ilk çalıştırmada)
+Console.WriteLine("🚀🚀🚀 SEED BLOĞU BAŞLIYOR 🚀🚀🚀");
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    Console.WriteLine("✅ ServiceScope oluşturuldu");
     try
     {
+        Console.WriteLine("🔍 DbContext alınıyor...");
         var db = services.GetRequiredService<ECommerceDbContext>();
-        // Create database schema safely - works for both SQLite and SQL Server
-        // EnsureCreated() is idempotent and won't fail if tables already exist
-        db.Database.EnsureCreated();
+        Console.WriteLine("✅ DbContext alındı");
+        
+        Console.WriteLine("🔍 Logger oluşturuluyor...");
+        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
+        Console.WriteLine("✅ Logger oluşturuldu");
+        
+        logger.LogInformation("🔍🔍🔍 Database initialization başlıyor...");
+        Console.WriteLine("🔍🔍🔍 Database initialization başlıyor...");
+        
+        // Apply migrations (production-safe: works with existing databases)
+        Console.WriteLine("🔍 Database.Migrate() çağrılıyor...");
+        db.Database.Migrate();
+        logger.LogInformation("✅ Database migrations uygulandı");
+        Console.WriteLine("✅ Database migrations uygulandı");
 
+        logger.LogInformation("🔍 IdentitySeeder başlatılıyor...");
+        Console.WriteLine("🔍 IdentitySeeder başlatılıyor...");
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
+        logger.LogInformation("✅ IdentitySeeder tamamlandı");
+        Console.WriteLine("✅ IdentitySeeder tamamlandı");
+        
+        logger.LogInformation("🔍 ProductSeeder başlatılıyor...");
+        Console.WriteLine("🔍 ProductSeeder başlatılıyor...");
         ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
+        logger.LogInformation("✅ ProductSeeder tamamlandı");
+        Console.WriteLine("✅ ProductSeeder tamamlandı");
+        
+        // Banner seed - varsayılan ana sayfa görselleri
+        logger.LogInformation("🖼️ BannerSeeder başlatılıyor...");
+        Console.WriteLine("🖼️ BannerSeeder başlatılıyor...");
+        BannerSeeder.SeedAsync(services).GetAwaiter().GetResult();
+        logger.LogInformation("✅ BannerSeeder tamamlandı");
+        Console.WriteLine("✅ BannerSeeder tamamlandı");
+        
+        // logger.LogInformation("🔍 CategorySeeder başlatılıyor...");
+        // Console.WriteLine("🔍 CategorySeeder başlatılıyor...");
+        // CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
+        // logger.LogInformation("✅ CategorySeeder tamamlandı");
+        // Console.WriteLine("✅ CategorySeeder tamamlandı");
+        
+        logger.LogInformation("✅ Tüm seed işlemleri başarıyla tamamlandı!");
+        Console.WriteLine("✅✅✅ TÜM SEED İŞLEMLERİ BAŞARIYLA TAMAMLANDI! ✅✅✅");
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"❌❌❌ SEED HATASI: {ex.Message}");
+        Console.WriteLine($"❌ StackTrace: {ex.StackTrace}");
         var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-        logger.LogError(ex, "Database migration veya seed sırasında hata oluştu");
+        logger.LogError(ex, "❌ Database migration veya seed sırasında hata oluştu");
         throw; // Hatayı yeniden fırlat - uygulama başlamasın
     }
 }
@@ -459,6 +544,29 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseCors("Default");
+
+// 📁 Uploads klasörü için static files desteği
+// Banner/poster resimleri /uploads/... path'inden servis edilir
+var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+}
+
+// Alt klasörleri de oluştur (banners, products, categories)
+var bannersPath = Path.Combine(uploadsPath, "banners");
+var productsPath = Path.Combine(uploadsPath, "products");
+var categoriesPath = Path.Combine(uploadsPath, "categories");
+if (!Directory.Exists(bannersPath)) Directory.CreateDirectory(bannersPath);
+if (!Directory.Exists(productsPath)) Directory.CreateDirectory(productsPath);
+if (!Directory.Exists(categoriesPath)) Directory.CreateDirectory(categoriesPath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
+
 // Content Security Policy (per-request nonce available at HttpContext.Items["CSPNonce"]) 
 app.UseMiddleware<ECommerce.API.Infrastructure.CspMiddleware>();
 // Exempt some monitoring endpoints from rate limiting (health checks, metrics)

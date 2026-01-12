@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { AdminService } from "../../services/adminService";
+import { ProductService } from "../../services/productService";
+import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
 
 const AdminProducts = () => {
@@ -29,7 +30,7 @@ const AdminProducts = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const productsData = await AdminService.getProducts();
+      const productsData = await ProductService.getAll();
       setProducts(productsData);
     } catch (err) {
       setError("Ürünler yüklenirken hata oluştu");
@@ -41,7 +42,7 @@ const AdminProducts = () => {
 
   const fetchCategories = async () => {
     try {
-      const categoriesData = await AdminService.getCategories();
+      const categoriesData = await categoryService.getAll();
       setCategories(categoriesData);
     } catch (err) {
       console.error("Kategoriler yükleme hatası:", err);
@@ -58,10 +59,10 @@ const AdminProducts = () => {
       };
 
       if (editingProduct) {
-        await AdminService.updateProduct(editingProduct.id, productData);
+        await ProductService.update(editingProduct.id, productData);
       } else {
         // create and then migrate any temporary variants
-        const created = await AdminService.createProduct(productData);
+        const created = await ProductService.create(productData);
         // created may be the created product object or an id depending on API
         const newId = created && created.id ? created.id : created;
         // if we had a temp editing id, move local variants into new product id
@@ -120,9 +121,9 @@ const AdminProducts = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Bu ürünü silmek istediğinizden emin misiniz?")) {
+    if (window.confirm("Ürünü silmek istediğinizden emin misiniz?")) {
       try {
-        await AdminService.deleteProduct(id);
+        await ProductService.delete(id);
         fetchProducts();
       } catch (err) {
         console.error("Ürün silme hatası:", err);

@@ -156,7 +156,7 @@ const FavoritesPage = () => {
             description: "Tam yağlı UHT süt 1 litre",
             price: 28.5,
             categoryId: 2,
-            categoryName: "Süt ve Süt Ürünleri",
+            categoryName: "Süt Ürünleri",
             imageUrl: "/images/pinar-nestle-sut.jpg",
             isNew: false,
             discountPercentage: 0,

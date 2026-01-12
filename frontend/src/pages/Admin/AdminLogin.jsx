@@ -1,7 +1,9 @@
 // src/pages/Admin/AdminLogin.jsx
+// Admin paneli giriş sayfası - Backend API entegrasyonu ile
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { AuthService } from "../../services/authService";
 
 export default function AdminLogin() {
   const [credentials, setCredentials] = useState({
@@ -20,37 +22,98 @@ export default function AdminLogin() {
     setError("");
 
     try {
-      // Admin veya Demo Admin girişi
-      const isRealAdmin =
-        credentials.email === "admin@admin.com" &&
-        credentials.password === "admin123";
+      // ÖNCELİK 1: Backend API ile giriş dene
+      const resp = await AuthService.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      // Backend başarılı yanıt verdi
+      const data = resp && resp.data === undefined ? resp : resp.data;
+
+      if (data && (data.success || data.token || data.Token)) {
+        const token = data.token || data.Token;
+        const userData = data.user ||
+          data.User || {
+            id: data.id,
+            email: credentials.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            name:
+              data.name ||
+              `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim() ||
+              "Admin User",
+            role: data.role || "Admin",
+            isAdmin:
+              data.isAdmin ??
+              (data.role === "Admin" || data.role === "SuperAdmin"),
+          };
+
+        // Kullanıcının admin yetkisi var mı kontrol et
+        const isAdmin =
+          userData.isAdmin ||
+          userData.role === "Admin" ||
+          userData.role === "SuperAdmin";
+        if (!isAdmin) {
+          setError("Bu hesap admin yetkisine sahip değil!");
+          setLoading(false);
+          return;
+        }
+
+        // Token ve kullanıcı bilgilerini kaydet (tüm key'lere yaz - uyumluluk için)
+        AuthService.saveToken(token); // 'token' key'ine yazar ve axios header'a ekler
+        localStorage.setItem("authToken", token); // AdminGuard uyumluluğu için
+        localStorage.setItem("user", JSON.stringify(userData));
+        if (userData?.id != null) {
+          localStorage.setItem("userId", String(userData.id));
+        }
+
+        // Auth context'i güncelle
+        setUser?.(userData);
+
+        // Token'ın axios'a set edildiğinden emin ol
+        console.log("✅ Token kaydedildi:", token.substring(0, 20) + "...");
+        console.log("✅ User data:", userData);
+
+        // Token'ın localStorage'a yazılması için kısa bir bekle
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        navigate("/admin/dashboard");
+        return;
+      }
+
+      // Backend başarısız yanıt
+      setError(data?.message || data?.error || "Giriş başarısız!");
+    } catch (err) {
+      console.error("Admin login error:", err);
+
+      // ÖNCELİK 2: Backend bağlantısı yoksa fallback demo login
       const isDemoAdmin =
         credentials.email === "demo@example.com" &&
         credentials.password === "123456";
 
-      if (isRealAdmin || isDemoAdmin) {
+      if (isDemoAdmin) {
+        const demoToken = "demo_admin_token_" + Date.now();
         const adminUser = {
-          id: isRealAdmin ? "admin-1" : "demo-admin-1",
-          name: isRealAdmin ? "Admin User" : "Demo User",
+          id: "demo-admin-1",
+          name: "Demo Admin",
           email: credentials.email,
           role: "Admin",
           isAdmin: true,
         };
 
-        // localStorage'a admin bilgilerini kaydet
+        // Token ve kullanıcı bilgilerini kaydet
+        AuthService.saveToken(demoToken);
+        localStorage.setItem("authToken", demoToken);
         localStorage.setItem("user", JSON.stringify(adminUser));
         localStorage.setItem("userId", adminUser.id);
-        localStorage.setItem("authToken", "admin_token_" + Date.now());
 
-        // Auth context'i güncelle
         setUser?.(adminUser);
-
         navigate("/admin/dashboard");
       } else {
-        setError("Geçersiz email veya şifre");
+        // Hata mesajını kullanıcıya göster
+        setError(err.message || "Geçersiz email veya şifre");
       }
-    } catch (err) {
-      setError("Giriş yapılırken bir hata oluştu");
     } finally {
       setLoading(false);
     }

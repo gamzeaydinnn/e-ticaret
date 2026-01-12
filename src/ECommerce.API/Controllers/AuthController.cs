@@ -178,9 +178,25 @@ namespace ECommerce.API.Controllers
                     // ignore cache errors
                 }
 
+                // Kullanıcı bilgilerini de döndür (frontend için gerekli)
+                var user = await _userManager.FindByEmailAsync(dto.Email);
+                var isAdmin = user?.Role == "Admin" || user?.Role == "SuperAdmin";
+                var userResponse = user != null ? new
+                {
+                    id = user.Id,
+                    email = user.Email,
+                    firstName = user.FirstName,
+                    lastName = user.LastName,
+                    name = !string.IsNullOrEmpty(user.FullName) ? user.FullName : $"{user.FirstName} {user.LastName}".Trim(),
+                    role = user.Role,
+                    isAdmin = isAdmin
+                } : null;
+
                 return Ok(new { 
                     Token = token,
                     RefreshToken = refreshToken,
+                    User = userResponse,
+                    Success = true,
                     Message = "Giriş başarılı!"
                 });
             }
@@ -557,6 +573,49 @@ namespace ECommerce.API.Controllers
             return Ok(new { success = result.Succeeded });
         }
 
+        // 🔧 GEÇICI DEVELOPMENT ENDPOINT - Production'da kaldırılmalı
+        // Admin şifresini admin123 olarak ayarlamak için
+        [HttpPost("dev-reset-admin-password")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DevResetAdminPassword()
+        {
+            #if DEBUG
+            try
+            {
+                var adminUser = await _userManager.FindByEmailAsync("admin@admin.com");
+                if (adminUser == null)
+                {
+                    return NotFound(new { message = "Admin kullanıcısı bulunamadı" });
+                }
+
+                // Mevcut şifreyi kaldır
+                await _userManager.RemovePasswordAsync(adminUser);
+                
+                // Yeni şifre: admin123
+                var result = await _userManager.AddPasswordAsync(adminUser, "admin123");
+                
+                if (result.Succeeded)
+                {
+                    return Ok(new { 
+                        message = "Admin şifresi başarıyla 'admin123' olarak ayarlandı",
+                        email = "admin@admin.com",
+                        password = "admin123"
+                    });
+                }
+                
+                return BadRequest(new { 
+                    message = "Şifre güncellenemedi", 
+                    errors = result.Errors.Select(e => e.Description) 
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            #else
+            return NotFound();
+            #endif
+        }
     }
 }
 

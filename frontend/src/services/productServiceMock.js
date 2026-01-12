@@ -22,6 +22,10 @@ export const getAllProducts = async () => {
   return Promise.resolve(mockProducts);
 };
 
+export const getActive = async () => {
+  return Promise.resolve(mockProducts);
+};
+
 export const getProductById = async (id) => {
   return Promise.resolve(mockProducts.find((p) => p.id === id));
 };
@@ -36,9 +40,14 @@ export const subscribe = (callback) => {
   return () => {}; // Return unsubscribe function
 };
 
-export default {
+const productServiceMock = {
   getAllProducts,
+  getActive,
   getProductById,
   getProductsByCategory,
   subscribe,
+  // Alias: adminService.js uyumluluğu için (getAll çağrısı yapıyor)
+  getAll: getAllProducts,
 };
+
+export default productServiceMock;

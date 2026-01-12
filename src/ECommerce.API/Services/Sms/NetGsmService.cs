@@ -18,9 +18,8 @@ public class NetGsmService : INetGsmService, ISmsProvider
 
     // NetGSM API Endpoints (SSL zorunlu - https)
     private const string SMS_API_URL = "https://api.netgsm.com.tr/sms/rest/v2/send";
+    private const string OTP_API_URL = "https://api.netgsm.com.tr/sms/rest/v2/otp";  // OTP için özel endpoint
     private const string BALANCE_API_URL = "https://api.netgsm.com.tr/balance";
-    
-    // Not: OTP için ayrı endpoint yok, SMS_API_URL kullanılır (NetGSM API dok.)
 
     public NetGsmService(
         HttpClient httpClient,
@@ -306,6 +305,7 @@ public class NetGsmService : INetGsmService, ISmsProvider
             "40" => "Mesaj başlığı (gönderici adı) sistemde tanımlı değil",
             "50" => "İYS kontrollü gönderim yapılamıyor (abone hesabı uygun değil)",
             "51" => "Aboneliğe tanımlı İYS Marka bilgisi bulunamadı",
+            "60" => "OTP SMS paketi tanımlı değil - normal SMS endpoint'i kullanılacak",
             "70" => "Hatalı sorgulama - Parametrelerden biri hatalı veya eksik",
             "80" => "Gönderim sınır aşımı",
             "85" => "Mükerrer gönderim sınır aşımı (aynı numaraya 1 dakikada 20'den fazla)",
@@ -333,8 +333,8 @@ public class NetGsmService : INetGsmService, ISmsProvider
 
     /// <summary>
     /// OTP SMS gönderir.
-    /// NetGSM API'sine göre OTP da normal SMS endpoint'i ile gönderilir.
-    /// Bilgilendirme amaçlı olduğu için İYS kontrolü yapılmaz.
+    /// Önce OTP endpoint'ini dener, başarısız olursa normal SMS endpoint'i kullanır.
+    /// OTP mesajları Türkçe karakter içeremez ve 155 karakter ile sınırlıdır.
     /// </summary>
     public async Task<SmsSendResult> SendOtpAsync(string phoneNumber, string message)
     {
@@ -343,59 +343,102 @@ public class NetGsmService : INetGsmService, ISmsProvider
             var formattedPhone = FormatPhoneNumber(phoneNumber);
             
             _logger.LogInformation("[NetGSM-OTP] OTP SMS gönderiliyor: {Phone}", formattedPhone);
-            _logger.LogInformation("[NetGSM-OTP] Settings - MsgHeader: '{Header}', AppName: '{AppName}'", 
-                _settings.MsgHeader, _settings.AppName);
 
-            // NetGSM API dokümantasyonuna göre OTP da normal SMS endpoint'i kullanır
-            // msgheader: Sistemde tanımlı gönderici adı (ZORUNLU - boş olamaz)
-            // messages: SMS detayları array formatında
-            // encoding: "TR" Türkçe karakter desteği
-            // iysfilter: "0" OTP bilgilendirme SMS'i olduğu için İYS kontrolü yapılmaz
-            var requestData = new
+            // Önce OTP endpoint'ini dene (hızlı, yüksek öncelikli)
+            var otpResult = await TrySendOtpViaDedicatedEndpoint(formattedPhone, message);
+            
+            // OTP endpoint başarısız olduysa (60 = OTP paketi yok), normal SMS endpoint'i kullan
+            if (!otpResult.Success && otpResult.Code == "60")
             {
-                msgheader = _settings.MsgHeader,  // ZORUNLU: Boş olmamalı!
-                messages = new[]
-                {
-                    new
-                    {
-                        msg = message,
-                        no = formattedPhone
-                    }
-                },
-                encoding = "TR",  // Türkçe karakter desteği
-                iysfilter = "0",  // Bilgilendirme amaçlı (İYS kontrolsüz)
-                appname = _settings.AppName
-            };
-
-            var json = JsonSerializer.Serialize(requestData);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            // OTP için de standart SMS endpoint'i kullanılıyor (API dok.)
-            var response = await _httpClient.PostAsync(SMS_API_URL, content);
-            var responseText = await response.Content.ReadAsStringAsync();
-
-            _logger.LogInformation("[NetGSM-OTP] Response: {Response}", responseText);
-
-            // Response'u parse et
-            var smsResult = ParseSmsResponse(responseText);
-
-            if (smsResult.Success)
-            {
-                _logger.LogInformation("[NetGSM-OTP] OTP başarıyla gönderildi. JobId: {JobId}", smsResult.JobId);
-                return SmsSendResult.SuccessResult(smsResult.JobId ?? string.Empty, smsResult.Code);
+                _logger.LogWarning("[NetGSM-OTP] OTP paketi yok, normal SMS endpoint'i deneniyor...");
+                return await SendViaNormalSmsEndpoint(formattedPhone, message);
             }
-            else
-            {
-                _logger.LogWarning("[NetGSM-OTP] OTP gönderilemedi. Code: {Code}, Error: {Error}", 
-                    smsResult.Code, smsResult.ErrorMessage);
-                return SmsSendResult.FailResult(smsResult.ErrorMessage ?? "Bilinmeyen hata", smsResult.Code);
-            }
+            
+            return otpResult;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[NetGSM-OTP] OTP gönderim hatası: {Phone}", phoneNumber);
             return SmsSendResult.FailResult(ex.Message);
         }
+    }
+
+    /// <summary>
+    /// OTP özel endpoint'i ile SMS gönderir (hızlı, yüksek öncelikli).
+    /// </summary>
+    private async Task<SmsSendResult> TrySendOtpViaDedicatedEndpoint(string formattedPhone, string message)
+    {
+        var requestData = new
+        {
+            msgheader = _settings.MsgHeader,
+            msg = message,
+            no = formattedPhone,
+            appname = _settings.AppName
+        };
+
+        var json = JsonSerializer.Serialize(requestData);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        _logger.LogInformation("[NetGSM-OTP] Deneme 1 - OTP Endpoint: {Url}", OTP_API_URL);
+
+        var response = await _httpClient.PostAsync(OTP_API_URL, content);
+        var responseText = await response.Content.ReadAsStringAsync();
+
+        _logger.LogInformation("[NetGSM-OTP] OTP Response: {Response}", responseText);
+
+        var smsResult = ParseSmsResponse(responseText);
+
+        if (smsResult.Success)
+        {
+            _logger.LogInformation("[NetGSM-OTP] OTP başarıyla gönderildi. JobId: {JobId}", smsResult.JobId);
+            return SmsSendResult.SuccessResult(smsResult.JobId ?? string.Empty, smsResult.Code);
+        }
+        
+        return SmsSendResult.FailResult(smsResult.ErrorMessage ?? "OTP gönderilemedi", smsResult.Code);
+    }
+
+    /// <summary>
+    /// Normal SMS endpoint'i ile OTP gönderir (fallback - daha yavaş ama çalışır).
+    /// </summary>
+    private async Task<SmsSendResult> SendViaNormalSmsEndpoint(string formattedPhone, string message)
+    {
+        var requestData = new
+        {
+            msgheader = _settings.MsgHeader,
+            messages = new[]
+            {
+                new
+                {
+                    msg = message,
+                    no = formattedPhone
+                }
+            },
+            encoding = "TR",
+            iysfilter = "0",  // Bilgilendirme amaçlı (İYS kontrolsüz)
+            appname = _settings.AppName
+        };
+
+        var json = JsonSerializer.Serialize(requestData);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        _logger.LogInformation("[NetGSM-OTP] Deneme 2 - Normal SMS Endpoint: {Url}", SMS_API_URL);
+
+        var response = await _httpClient.PostAsync(SMS_API_URL, content);
+        var responseText = await response.Content.ReadAsStringAsync();
+
+        _logger.LogInformation("[NetGSM-OTP] Normal SMS Response: {Response}", responseText);
+
+        var smsResult = ParseSmsResponse(responseText);
+
+        if (smsResult.Success)
+        {
+            _logger.LogInformation("[NetGSM-OTP] OTP normal SMS ile gönderildi. JobId: {JobId}", smsResult.JobId);
+            return SmsSendResult.SuccessResult(smsResult.JobId ?? string.Empty, smsResult.Code);
+        }
+        
+        _logger.LogWarning("[NetGSM-OTP] Normal SMS de başarısız. Code: {Code}, Error: {Error}", 
+            smsResult.Code, smsResult.ErrorMessage);
+        return SmsSendResult.FailResult(smsResult.ErrorMessage ?? "SMS gönderilemedi", smsResult.Code);
     }
 
     /// <summary>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { AdminService } from "../../services/adminService";
+import categoryService from "../../services/categoryService";
 
 const AdminCategories = () => {
   const [categories, setCategories] = useState([]);
@@ -21,7 +21,7 @@ const AdminCategories = () => {
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const categoriesData = await AdminService.getCategories();
+      const categoriesData = await categoryService.getAllAdmin();
       setCategories(categoriesData);
     } catch (err) {
       setError("Kategoriler yüklenirken hata oluştu");
@@ -35,9 +35,9 @@ const AdminCategories = () => {
     e.preventDefault();
     try {
       if (editingCategory) {
-        await AdminService.updateCategory(editingCategory.id, formData);
+        await categoryService.update(editingCategory.id, formData);
       } else {
-        await AdminService.createCategory(formData);
+        await categoryService.create(formData);
       }
       setShowModal(false);
       setFormData({
@@ -67,7 +67,7 @@ const AdminCategories = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Bu kategoriyi silmek istediğinizden emin misiniz?")) {
       try {
-        await AdminService.deleteCategory(id);
+        await categoryService.delete(id);
         fetchCategories();
       } catch (err) {
         console.error("Kategori silme hatası:", err);

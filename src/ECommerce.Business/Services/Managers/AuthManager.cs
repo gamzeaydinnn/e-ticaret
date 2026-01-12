@@ -452,8 +452,6 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // 4. SMS doğrulama kodu gönder
-                // TODO: Re-enable after fixing DI issue
-                /*
                 var ipAddress = GetClientIpAddress();
                 var userAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString();
 
@@ -470,10 +468,8 @@ namespace ECommerce.Business.Services.Managers
                     await _userManager.DeleteAsync(user);
                     return (false, smsResult.Message, null);
                 }
-                */
 
-                // TEMPORARY: SMS verification disabled
-                return (true, "Kayıt başarılı! (SMS doğrulama geçici olarak devre dışı)", user.Id);
+                return (true, "Doğrulama kodu telefonunuza gönderildi. Lütfen kodu girin.", user.Id);
             }
             catch (Exception ex)
             {
@@ -515,8 +511,6 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // 3. SMS kodunu doğrula
-                // TODO: Re-enable after fixing DI issue
-                /*
                 var verifyResult = await _smsVerificationService.VerifyCodeAsync(
                     normalizedPhone,
                     dto.Code,
@@ -527,9 +521,7 @@ namespace ECommerce.Business.Services.Managers
                 {
                     return (false, verifyResult.Message, null, null);
                 }
-                */
 
-                // TEMPORARY: Auto-approve phone verification
                 // 4. Hesabı aktif et
                 user.IsActive = true;
                 user.PhoneNumberConfirmed = true;

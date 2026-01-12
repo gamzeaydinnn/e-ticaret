@@ -45,14 +45,14 @@ const DEMO_PRODUCTS = [
     specialPrice: 699.95,
     stockQuantity: 15,
   },
-  // Süt ve Süt Ürünleri (categoryId: 2)
+  // Süt Ürünleri (categoryId: 2)
   {
     id: 3,
     name: "Pınar Süt 1L",
     description: "Tam yağlı UHT süt 1 litre",
     price: 28.5,
     categoryId: 2,
-    categoryName: "Süt ve Süt Ürünleri",
+    categoryName: "Süt Ürünleri",
     imageUrl: "/images/pinar-nestle-sut.jpg",
     isNew: false,
     discountPercentage: 0,
@@ -66,7 +66,7 @@ const DEMO_PRODUCTS = [
     description: "Dilimli kaşar peyniri 200g",
     price: 75.9,
     categoryId: 2,
-    categoryName: "Süt ve Süt Ürünleri",
+    categoryName: "Süt Ürünleri",
     imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
     isNew: false,
     discountPercentage: 15,

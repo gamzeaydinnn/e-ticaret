@@ -11,7 +11,11 @@ services:
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ECom1234 -C -Q 'SELECT 1' || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ECom1234 -C -Q 'SELECT 1' || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -38,8 +42,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # Docker container içinden /api relative URL kullan (nginx proxy ile backend'e yönlendirilir)
-        - REACT_APP_API_URL=/api
+        # Docker container içinden boş URL kullan (nginx proxy ile /api → backend'e yönlendirilir)
+        # Frontend'de zaten /api prefix'i var, tekrar eklenmemeli
+        - REACT_APP_API_URL=
         - REACT_APP_BACKEND_ENABLED=true
         - REACT_APP_USE_MOCK_DATA=false
         - API_HOST=ecommerce-api

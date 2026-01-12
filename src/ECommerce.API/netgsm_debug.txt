@@ -1,0 +1,10 @@
+
+=== DEBUG NETGSM CONFIGURATION ===
+Section Exists: True
+UserCode: '8503078774'
+Password: '123456Z-M'
+MsgHeader: 'GOLKYGURMEM'
+AppName: 'GolkoyGurme'
+All Keys: AppName=GolkoyGurme, MsgHeader=GOLKYGURMEM, Password=123456Z-M, UserCode=8503078774
+Environment: Development
+=================================
