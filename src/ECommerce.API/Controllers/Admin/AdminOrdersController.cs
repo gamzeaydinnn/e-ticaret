@@ -7,6 +7,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using ECommerce.API.Authorization;
 /*OrdersController
 •	POST /api/orders (guest veya userId ile) -> sipariş oluşturma. Eğer guest ise, zorunlu alanlar: name, phone, email, address, paymentMethod
 •	GET /api/orders/{id} -> sipariş detay (admin, ilgili kullanıcı veya kurye görmeli)
@@ -15,7 +16,7 @@ using System.Security.Claims;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = Roles.AdminLike)] // sadece admin erişebilir
+    [Authorize(Roles = Roles.AdminLike)]
     [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {
@@ -29,6 +30,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPatch("{id:int}/tracking-number")]
+        [HasPermission(Permissions.Orders.UpdateStatus)]
         public async Task<IActionResult> UpdateTrackingNumber(int id, [FromBody] Dictionary<string, string>? body)
         {
             // Sadece TrackingNumber alanını güncelle
@@ -48,6 +50,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpGet]
+        [HasPermission(Permissions.Orders.View)]
         public async Task<IActionResult> GetOrders()
         {
             var orders = await _orderService.GetOrdersAsync();
@@ -55,6 +58,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpDelete("{id}")]
+        [HasPermission(Permissions.Orders.Cancel)]
         public async Task<IActionResult> DeleteOrder(int id)
         {
             var existing = await _orderService.GetByIdAsync(id);
@@ -77,6 +81,7 @@ namespace ECommerce.API.Controllers.Admin
 
 
         [HttpGet("{id}")]
+        [HasPermission(Permissions.Orders.ViewDetails)]
         public async Task<IActionResult> GetOrder(int id)
         {
             var order = await _orderService.GetByIdAsync(id);
@@ -85,6 +90,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPost]
+        [HasPermission(Permissions.Orders.View)]
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateDto dto)
         {
             var order = await _orderService.CreateAsync(dto);
@@ -92,6 +98,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPut("{id}/status")]
+        [HasPermission(Permissions.Orders.UpdateStatus)]
         public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] OrderStatusUpdateDto dto)
         {
             if (dto == null || string.IsNullOrWhiteSpace(dto.Status))

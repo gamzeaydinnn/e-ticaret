@@ -4,6 +4,7 @@ using ECommerce.Core.DTOs.Product;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
+using ECommerce.API.Authorization;
 using System.Security.Claims;
 /*ProductsController
 •	GET /api/products -> ürün listesi (kategori, pagination destekleyin)
@@ -14,8 +15,7 @@ namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]
 [Route("api/admin/products")]
-    [Authorize(Roles = Roles.AdminLike)]
-
+[Authorize(Roles = Roles.AdminLike)]
 public class AdminProductsController : ControllerBase
 {
     private readonly IProductService _productService;
@@ -30,6 +30,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpGet]
+    [HasPermission(Permissions.Products.View)]
     public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int size = 10)
     {
         var products = await _productService.GetAllProductsAsync(page, size);
@@ -37,6 +38,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpPost]
+    [HasPermission(Permissions.Products.Create)]
     public async Task<IActionResult> CreateProduct([FromBody] ProductCreateDto productDto)
     {
         var result = await _productService.CreateProductAsync(productDto);
@@ -44,6 +46,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [HasPermission(Permissions.Products.Update)]
     public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductUpdateDto productDto)
     {
         var oldProduct = await _productService.GetByIdAsync(id);
@@ -80,6 +83,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [HasPermission(Permissions.Products.Delete)]
     public async Task<IActionResult> DeleteProduct(int id)
     {
         var existingProduct = await _productService.GetByIdAsync(id);
@@ -106,6 +110,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [HasPermission(Permissions.Products.View)]
     public async Task<IActionResult> GetProduct(int id)
     {
         // Tercihen tekil get-by-id için belirli servis metodunu kullan
@@ -116,6 +121,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpPatch("{id}/stock")]
+    [HasPermission(Permissions.Products.ManageStock)]
     public async Task<IActionResult> UpdateStock(int id, [FromBody] int stock)
     {
         await _productService.UpdateStockAsync(id, stock);
@@ -123,6 +129,7 @@ public class AdminProductsController : ControllerBase
     }
 
     [HttpPost("sync-stocks")]
+    [HasPermission(Permissions.Products.ManageStock)]
     public async Task<IActionResult> SyncStocks()
     {
         await _stockSyncJob.RunOnce();

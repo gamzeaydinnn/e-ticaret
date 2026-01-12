@@ -24,8 +24,9 @@ namespace ECommerce.Core.Helpers
             var jwtId = string.IsNullOrWhiteSpace(jti) ? Guid.NewGuid().ToString() : jti;
             var claims = new List<Claim>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, email),
+                // Sub claim removed to avoid conflict with NameIdentifier
                 new Claim(JwtRegisteredClaimNames.Email, email),
+                new Claim(ClaimTypes.Email, email),
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Role, role),
                 new Claim(JwtRegisteredClaimNames.Jti, jwtId)

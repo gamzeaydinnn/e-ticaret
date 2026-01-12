@@ -2270,14 +2270,14 @@ html {
     display: flex !important;
     flex-wrap: nowrap;
   }
-  
+
   .special-image-col {
     flex: 0 0 auto;
     width: calc(20% - 12px);
     min-width: 180px;
     max-width: 250px;
   }
-  
+
   .special-image-card {
     aspect-ratio: auto;
   }
@@ -3881,5 +3881,395 @@ html {
     padding: 0.35rem 0.6rem;
     font-size: 0.8rem;
     border-radius: 8px;
+  }
+}
+
+/* =============================================================================
+   ADMIN PANEL - RBAC SAYFALARI MOBİL RESPONSIVE
+   =============================================================================
+   Rol yönetimi ve izin yönetimi sayfaları için mobil uyumluluk stilleri.
+   Touch-friendly checkbox'lar ve modal düzenlemeleri.
+============================================================================= */
+
+/* Admin Layout - Sidebar Mobil Düzenleme */
+@media (max-width: 992px) {
+  .admin-layout-root {
+    flex-direction: column;
+  }
+
+  .admin-layout-root > div:first-child {
+    width: 100% !important;
+    min-height: auto !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1050;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+
+  .admin-layout-root > div:first-child.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .admin-layout-main {
+    padding-top: 60px !important;
+    min-height: calc(100vh - 60px);
+  }
+}
+
+/* Admin Sidebar Overlay (Mobil) */
+.admin-sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+}
+
+@media (max-width: 992px) {
+  .admin-sidebar-overlay.show {
+    display: block;
+  }
+}
+
+/* Rol Yönetimi Kartları - Mobil Responsive */
+@media (max-width: 576px) {
+  .admin-roles-page .card {
+    margin-bottom: 1rem;
+  }
+
+  .admin-roles-page .card-body {
+    padding: 1rem;
+  }
+
+  .admin-roles-page .card-title {
+    font-size: 1rem;
+  }
+
+  .admin-roles-page .btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+    min-width: 80px;
+  }
+
+  /* Rol kartları içindeki butonları stack yap */
+  .admin-roles-page .d-flex.gap-2 {
+    flex-wrap: wrap;
+  }
+
+  .admin-roles-page .d-flex.gap-2 .btn {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 100px;
+  }
+}
+
+/* İzin Yönetimi Tablosu - Mobil Responsive */
+@media (max-width: 768px) {
+  /* Matrix tablosu için yatay scroll */
+  .permission-matrix-table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  .permission-matrix-table table {
+    min-width: 600px;
+  }
+
+  /* Tablo başlıkları sticky */
+  .permission-matrix-table thead th {
+    position: sticky;
+    top: 0;
+    background: #fff;
+    z-index: 10;
+  }
+
+  .permission-matrix-table thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    background: #f8f9fa;
+  }
+
+  .permission-matrix-table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background: #fff;
+    z-index: 5;
+    border-right: 2px solid #dee2e6;
+  }
+}
+
+/* Touch-Friendly Checkbox'lar */
+.permission-checkbox {
+  width: 24px !important;
+  height: 24px !important;
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: 2px solid #6c757d;
+  border-radius: 4px;
+  background: #fff;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.permission-checkbox:checked {
+  background: #28a745;
+  border-color: #28a745;
+}
+
+.permission-checkbox:checked::after {
+  content: "✓";
+  position: absolute;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.permission-checkbox:hover {
+  border-color: #28a745;
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+}
+
+.permission-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+}
+
+/* Touch cihazlarda daha büyük touch target */
+@media (hover: none) and (pointer: coarse) {
+  .permission-checkbox {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+    margin: 4px;
+  }
+
+  .permission-checkbox::after {
+    font-size: 18px;
+  }
+}
+
+/* Modal - Mobil Responsive */
+@media (max-width: 768px) {
+  .modal-xl {
+    max-width: 95vw !important;
+    margin: 1rem auto;
+  }
+
+  .modal-dialog-scrollable .modal-body {
+    max-height: 60vh;
+  }
+
+  .modal-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .modal-title {
+    font-size: 1rem;
+  }
+
+  .modal-footer {
+    padding: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 100%;
+    min-width: 100px;
+  }
+}
+
+/* İzin Accordion - Mobil Responsive */
+@media (max-width: 576px) {
+  .accordion-button {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .accordion-body {
+    padding: 0.75rem;
+  }
+
+  .accordion-body .form-check {
+    padding: 0.5rem 0;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .accordion-body .form-check-label {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .accordion-body .form-check-label small {
+    font-size: 0.7rem;
+  }
+}
+
+/* Filter ve Arama - Mobil Responsive */
+@media (max-width: 576px) {
+  .permission-filters .form-label {
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .permission-filters .form-control,
+  .permission-filters .form-select {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .permission-filters .input-group-text {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Stats Kartları - Mobil Responsive */
+@media (max-width: 576px) {
+  .permission-stats .card-body {
+    padding: 0.75rem;
+  }
+
+  .permission-stats .h3 {
+    font-size: 1.5rem;
+  }
+
+  .permission-stats small {
+    font-size: 0.7rem;
+  }
+}
+
+/* Rol Badge'leri - Mobil Uyumluluk */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.role-badge-superadmin {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+}
+
+.role-badge-admin {
+  background: linear-gradient(135deg, #6f42c1, #5a32a3);
+  color: white;
+}
+
+.role-badge-storemanager {
+  background: linear-gradient(135deg, #fd7e14, #e8590c);
+  color: white;
+}
+
+.role-badge-customersupport {
+  background: linear-gradient(135deg, #20c997, #1aa179);
+  color: white;
+}
+
+.role-badge-logistics {
+  background: linear-gradient(135deg, #0dcaf0, #0aa2c0);
+  color: white;
+}
+
+.role-badge-user {
+  background: linear-gradient(135deg, #6c757d, #5a6268);
+  color: white;
+}
+
+/* Admin Panel Sayfa Başlıkları - Mobil */
+@media (max-width: 576px) {
+  .admin-page-header h1 {
+    font-size: 1.25rem;
+  }
+
+  .admin-page-header p {
+    font-size: 0.8rem;
+  }
+
+  .admin-page-header .btn {
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+}
+
+/* Access Denied Sayfası - Mobil */
+@media (max-width: 576px) {
+  .access-denied-page .display-4 {
+    font-size: 3rem;
+  }
+
+  .access-denied-page h2 {
+    font-size: 1.25rem;
+  }
+
+  .access-denied-page p {
+    font-size: 0.9rem;
+  }
+
+  .access-denied-page .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* Dark Mode Desteği (Opsiyonel) */
+@media (prefers-color-scheme: dark) {
+  .permission-matrix-table tbody td:first-child {
+    background: #2d3748;
+  }
+
+  .permission-matrix-table thead th {
+    background: #1a202c;
+    color: #e2e8f0;
+  }
+
+  .permission-checkbox {
+    background: #2d3748;
+    border-color: #4a5568;
+  }
+
+  .permission-checkbox:checked {
+    background: #38a169;
+    border-color: #38a169;
+  }
+}
+
+/* Print Styles - İzin Raporu */
+@media print {
+  .admin-layout-root > div:first-child {
+    display: none !important;
+  }
+
+  .admin-layout-main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+  }
+
+  .permission-matrix-table {
+    overflow: visible;
+  }
+
+  .btn,
+  .modal,
+  .dropdown {
+    display: none !important;
   }
 }

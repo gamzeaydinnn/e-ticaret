@@ -2,13 +2,82 @@ import React, { useState, useEffect, useCallback } from "react";
 import { AdminService } from "../../services/adminService";
 import { useAuth } from "../../contexts/AuthContext";
 
+// ============================================================================
+// 5 TEMEL ROL VE AÇIKLAMALARI
+// RBAC (Role-Based Access Control) sistemi için tanımlanmış roller
+// ============================================================================
 const ROLE_DESCRIPTIONS = {
-  SuperAdmin:
-    "Tüm sistemi yönetir. Diğer adminleri ve rolleri yönetebilir, kritik ayarları değiştirebilir.",
-  Admin:
-    "Ürün, kategori, kampanya, kupon, sipariş ve kullanıcı yönetimi yapabilir. Sistem ayarlarını değiştiremez.",
-  User: "Normal müşteri hesabıdır. Sadece alışveriş ve kendi hesap işlemlerini yapabilir, admin paneline erişemez.",
+  SuperAdmin: {
+    name: "Süper Yönetici",
+    description:
+      "Sistemin tam yetkili sahibidir. Tüm site ayarlarını değiştirme, diğer yöneticileri atama/silme, ödeme yöntemlerini yapılandırma ve tam veri dışa aktarma yetkisine sahiptir.",
+    color: "danger",
+    icon: "👑",
+  },
+  StoreManager: {
+    name: "Mağaza Yöneticisi",
+    description:
+      "Günlük iş akışını yöneten kişidir. Ürün ekleme/güncelleme, stok yönetimi, kampanya ve kupon oluşturma, satış raporlarını görüntüleme yetkilerine sahiptir. Sistem ayarlarına erişemez.",
+    color: "warning",
+    icon: "🏪",
+  },
+  CustomerSupport: {
+    name: "Müşteri Hizmetleri",
+    description:
+      "Müşteri memnuniyetini sağlamak ve sipariş sorunlarını çözmekle görevlidir. Sipariş durumlarını güncelleme, iade süreçlerini yönetme, müşteri yorumlarını onaylama yetkilerine sahiptir.",
+    color: "info",
+    icon: "🎧",
+  },
+  Logistics: {
+    name: "Lojistik Görevlisi",
+    description:
+      "Depo ve kargo operasyonlarından sorumludur. Sadece gönderilmeyi bekleyen sipariş listesini görme ve kargo takip numarası girme yetkisine sahiptir. Müşteri bilgilerine erişemez.",
+    color: "secondary",
+    icon: "🚚",
+  },
+  Admin: {
+    name: "Admin (Eski)",
+    description:
+      "[Deprecated] Eski uyumluluk için korunmuş rol. Yeni kullanıcılar için StoreManager tercih edilmeli.",
+    color: "dark",
+    icon: "⚙️",
+  },
+  User: {
+    name: "Müşteri",
+    description:
+      "Sitenin son kullanıcısıdır. Ürün satın alma, kendi profilini düzenleme, sipariş geçmişini görüntüleme ve favori listesi oluşturma yetkilerine sahiptir.",
+    color: "light",
+    icon: "👤",
+  },
+  Customer: {
+    name: "Müşteri",
+    description:
+      "Sitenin son kullanıcısıdır. Ürün satın alma, kendi profilini düzenleme, sipariş geçmişini görüntüleme yetkilerine sahiptir.",
+    color: "light",
+    icon: "👤",
+  },
 };
+
+// Rol seçenekleri - Admin panelinden atanabilecek roller
+const ASSIGNABLE_ROLES = [
+  { value: "SuperAdmin", label: "Süper Yönetici", requiresSuperAdmin: true },
+  {
+    value: "StoreManager",
+    label: "Mağaza Yöneticisi",
+    requiresSuperAdmin: false,
+  },
+  {
+    value: "CustomerSupport",
+    label: "Müşteri Hizmetleri",
+    requiresSuperAdmin: false,
+  },
+  {
+    value: "Logistics",
+    label: "Lojistik Görevlisi",
+    requiresSuperAdmin: false,
+  },
+  { value: "User", label: "Müşteri", requiresSuperAdmin: false },
+];
 
 const AdminUsers = () => {
   const { user: currentUser } = useAuth();
@@ -241,39 +310,43 @@ const AdminUsers = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id}>
-                    <td data-label="ID">{u.id}</td>
-                    <td data-label="Ad Soyad">
-                      {u.fullName ||
-                        `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()}
-                    </td>
-                    <td data-label="Email">{u.email}</td>
-                    <td data-label="Rol">
-                      <span
-                        className={`badge ${
-                          u.role === "SuperAdmin"
-                            ? "bg-danger"
-                            : u.role === "Admin"
-                            ? "bg-warning text-dark"
-                            : "bg-secondary"
-                        }`}
-                      >
-                        {u.role === "User" ? "Kullanıcı" : u.role}
-                      </span>
-                    </td>
-                    <td data-label="İşlemler">
-                      {canEditUserRole(u) && (
-                        <button
-                          className="btn btn-sm btn-outline-primary admin-users-action-btn"
-                          onClick={() => openRoleModal(u)}
+                {users.map((u) => {
+                  const roleInfo =
+                    ROLE_DESCRIPTIONS[u.role] || ROLE_DESCRIPTIONS.User;
+                  return (
+                    <tr key={u.id}>
+                      <td data-label="ID">{u.id}</td>
+                      <td data-label="Ad Soyad">
+                        {u.fullName ||
+                          `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim()}
+                      </td>
+                      <td data-label="Email">{u.email}</td>
+                      <td data-label="Rol">
+                        <span
+                          className={`badge bg-${roleInfo.color} ${
+                            roleInfo.color === "warning" ||
+                            roleInfo.color === "light"
+                              ? "text-dark"
+                              : ""
+                          }`}
+                          title={roleInfo.description}
                         >
-                          Rolü Düzenle
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                          {roleInfo.icon} {roleInfo.name}
+                        </span>
+                      </td>
+                      <td data-label="İşlemler">
+                        {canEditUserRole(u) && (
+                          <button
+                            className="btn btn-sm btn-outline-primary admin-users-action-btn"
+                            onClick={() => openRoleModal(u)}
+                          >
+                            Rolü Düzenle
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -287,20 +360,401 @@ const AdminUsers = () => {
         </div>
       </div>
 
+      {/* Rol Açıklamaları - 5 Temel Rol */}
       <div className="card mb-4 mt-4">
+        <div className="card-header bg-dark text-white">
+          <h5 className="card-title mb-0">
+            <i className="fas fa-user-tag me-2"></i>
+            Rol Açıklamaları
+          </h5>
+        </div>
         <div className="card-body">
-          <h5 className="card-title">Rol Açıklamaları</h5>
-          <ul className="mb-0">
-            <li>
-              <strong>SuperAdmin:</strong> {ROLE_DESCRIPTIONS.SuperAdmin}
-            </li>
-            <li>
-              <strong>Admin:</strong> {ROLE_DESCRIPTIONS.Admin}
-            </li>
-            <li>
-              <strong>Kullanıcı:</strong> {ROLE_DESCRIPTIONS.User}
-            </li>
-          </ul>
+          <div className="row">
+            {/* Süper Yönetici */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-danger">
+                <div className="card-header bg-danger text-white">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.SuperAdmin.icon}{" "}
+                    {ROLE_DESCRIPTIONS.SuperAdmin.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.SuperAdmin.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Mağaza Yöneticisi */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-warning">
+                <div className="card-header bg-warning text-dark">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.StoreManager.icon}{" "}
+                    {ROLE_DESCRIPTIONS.StoreManager.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.StoreManager.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Müşteri Hizmetleri */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-info">
+                <div className="card-header bg-info text-white">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.CustomerSupport.icon}{" "}
+                    {ROLE_DESCRIPTIONS.CustomerSupport.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.CustomerSupport.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Lojistik Görevlisi */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-secondary">
+                <div className="card-header bg-secondary text-white">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.Logistics.icon}{" "}
+                    {ROLE_DESCRIPTIONS.Logistics.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.Logistics.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Müşteri */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-light">
+                <div className="card-header bg-light text-dark">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.User.icon} {ROLE_DESCRIPTIONS.User.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.User.description}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* İzin Matrisi Tablosu - 5 Rol */}
+      <div className="card mb-4">
+        <div className="card-header bg-primary text-white">
+          <h5 className="card-title mb-0">
+            <i className="fas fa-shield-alt me-2"></i>
+            Rol Bazlı Erişim Kontrol (RBAC) Matrisi
+          </h5>
+        </div>
+        <div className="card-body">
+          <p className="text-muted mb-3">
+            Her rol için hangi modüllere erişim izni olduğunu gösteren tablo
+            ("En Az Yetki" prensibi uygulanmıştır):
+          </p>
+          <div className="table-responsive">
+            <table className="table table-bordered table-hover permission-matrix">
+              <thead className="table-dark">
+                <tr>
+                  <th>Modül / İşlem</th>
+                  <th className="text-center">
+                    <span className="badge bg-danger">👑 Süper Yönetici</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-warning text-dark">
+                      🏪 Mağaza Yön.
+                    </span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-info">🎧 Müşt. Hizm.</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-secondary">🚚 Lojistik</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-light text-dark">👤 Müşteri</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Kullanıcı Yönetimi */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>👥 Kullanıcı Yönetimi</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kullanıcıları görüntüleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kullanıcı rolü değiştirme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Ödeme Ayarları */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>💳 Ödeme Ayarları</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Ödeme yöntemlerini yapılandırma</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Ürün/Fiyat Yönetimi */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>📦 Ürün/Fiyat Düzenleme</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Ürünleri görüntüleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Ürün ekleme/düzenleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Fiyat değiştirme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Stok yönetimi</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Sipariş Yönetimi */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>🛒 Sipariş Durumu Güncelleme</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Siparişleri görüntüleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Sipariş durumu güncelleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kargo takip no girme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* İade/İptal Yönetimi */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>↩️ İade/İptal Onayı</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">İade talebi görüntüleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">İade/İptal onaylama</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Satış Raporları */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>📈 Satış Raporları</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Satış istatistikleri</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Finansal raporlar</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Kampanya/Kupon */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>🏷️ Kampanya ve Kupon</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kampanya oluşturma</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kupon yönetimi</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Müşteri İletişimi */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>💬 Müşteri İletişimi</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Müşteri yorumlarını görme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Yorumları onaylama/silme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Sistem Ayarları */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>⚙️ Sistem Ayarları</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Site ayarlarını değiştirme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">ERP/Mikro entegrasyonu</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Veri dışa aktarma</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* Müşteri Yetkileri */}
+                <tr className="table-light">
+                  <td colSpan="6">
+                    <strong>🛍️ Müşteri İşlemleri</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Alışveriş yapma</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Kendi siparişlerini görme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                </tr>
+                <tr>
+                  <td className="ps-4">Profil düzenleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3">
+            <small className="text-muted">
+              <strong>Açıklama:</strong>✅ Tam erişim | ⚠️ Kısıtlı erişim
+              (sadece belirli koşullarda) | ❌ Erişim yok
+            </small>
+          </div>
         </div>
       </div>
 
@@ -331,24 +785,31 @@ const AdminUsers = () => {
                   <strong>Email:</strong> {selectedUser.email}
                 </p>
                 <div className="mb-3">
-                  <label className="form-label">Rol</label>
+                  <label className="form-label">Rol Seçin</label>
                   <select
                     className="form-select"
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
                   >
-                    <option
-                      value="SuperAdmin"
-                      disabled={currentUser?.role !== "SuperAdmin"}
-                    >
-                      SuperAdmin
-                    </option>
-                    <option value="Admin">Admin</option>
-                    <option value="User">Kullanıcı</option>
+                    {ASSIGNABLE_ROLES.map((role) => (
+                      <option
+                        key={role.value}
+                        value={role.value}
+                        disabled={
+                          role.requiresSuperAdmin &&
+                          currentUser?.role !== "SuperAdmin"
+                        }
+                      >
+                        {ROLE_DESCRIPTIONS[role.value]?.icon} {role.label}
+                      </option>
+                    ))}
                   </select>
-                  <small className="form-text text-muted">
-                    {ROLE_DESCRIPTIONS[selectedRole] || ""}
-                  </small>
+                  {ROLE_DESCRIPTIONS[selectedRole] && (
+                    <small className="form-text text-muted d-block mt-2">
+                      <strong>{ROLE_DESCRIPTIONS[selectedRole].name}:</strong>{" "}
+                      {ROLE_DESCRIPTIONS[selectedRole].description}
+                    </small>
+                  )}
                 </div>
               </div>
               <div className="modal-footer">
@@ -461,25 +922,34 @@ const AdminUsers = () => {
                       />
                     </div>
                     <div className="col-12">
-                      <label className="form-label">Rol</label>
+                      <label className="form-label">Rol Seçin</label>
                       <select
                         className="form-select"
                         name="role"
                         value={createForm.role}
                         onChange={handleCreateInputChange}
                       >
-                        <option value="User">Kullanıcı</option>
-                        <option value="Admin">Admin</option>
-                        <option
-                          value="SuperAdmin"
-                          disabled={currentUser?.role !== "SuperAdmin"}
-                        >
-                          SuperAdmin
-                        </option>
+                        {ASSIGNABLE_ROLES.map((role) => (
+                          <option
+                            key={role.value}
+                            value={role.value}
+                            disabled={
+                              role.requiresSuperAdmin &&
+                              currentUser?.role !== "SuperAdmin"
+                            }
+                          >
+                            {ROLE_DESCRIPTIONS[role.value]?.icon} {role.label}
+                          </option>
+                        ))}
                       </select>
-                      <small className="form-text text-muted">
-                        {ROLE_DESCRIPTIONS[createForm.role] || ""}
-                      </small>
+                      {ROLE_DESCRIPTIONS[createForm.role] && (
+                        <small className="form-text text-muted d-block mt-2">
+                          <strong>
+                            {ROLE_DESCRIPTIONS[createForm.role].name}:
+                          </strong>{" "}
+                          {ROLE_DESCRIPTIONS[createForm.role].description}
+                        </small>
+                      )}
                     </div>
                   </div>
                 </div>

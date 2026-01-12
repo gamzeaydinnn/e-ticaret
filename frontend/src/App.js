@@ -41,6 +41,10 @@ import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
 import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
+// Rol ve İzin Yönetimi Sayfaları
+import AdminRoles from "./pages/Admin/AdminRoles";
+import AdminPermissions from "./pages/Admin/AdminPermissions";
+import AdminAccessDenied from "./pages/Admin/AdminAccessDenied";
 // Kurye sayfaları
 import CourierDashboard from "./pages/Courier/CourierDashboard";
 import CourierLogin from "./pages/Courier/CourierLogin";
@@ -873,6 +877,38 @@ function App() {
             <AdminGuard>
               <AdminLayout>
                 <InventoryLogsPage />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+
+        {/* Rol ve İzin Yönetimi */}
+        <Route
+          path="/admin/roles"
+          element={
+            <AdminGuard requiredPermission="roles.view">
+              <AdminLayout>
+                <AdminRoles />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/permissions"
+          element={
+            <AdminGuard requiredPermission="roles.permissions">
+              <AdminLayout>
+                <AdminPermissions />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/access-denied"
+          element={
+            <AdminGuard>
+              <AdminLayout>
+                <AdminAccessDenied />
               </AdminLayout>
             </AdminGuard>
           }

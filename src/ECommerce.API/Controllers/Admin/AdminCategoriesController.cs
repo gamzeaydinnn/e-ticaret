@@ -3,6 +3,7 @@ using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
+using ECommerce.API.Authorization;
 using System.Threading.Tasks;
 
 namespace ECommerce.API.Controllers.Admin
@@ -21,6 +22,7 @@ namespace ECommerce.API.Controllers.Admin
 
         // GET /api/admin/categories
         [HttpGet]
+        [HasPermission(Permissions.Categories.View)]
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllAdminAsync();
@@ -29,6 +31,7 @@ namespace ECommerce.API.Controllers.Admin
 
         // GET /api/admin/categories/{id}
         [HttpGet("{id}")]
+        [HasPermission(Permissions.Categories.View)]
         public async Task<IActionResult> GetCategory(int id)
         {
             var category = await _categoryService.GetByIdAsync(id);
@@ -38,6 +41,7 @@ namespace ECommerce.API.Controllers.Admin
 
         // POST /api/admin/categories
         [HttpPost]
+        [HasPermission(Permissions.Categories.Create)]
         public async Task<IActionResult> CreateCategory([FromBody] Category category)
         {
             try
@@ -53,6 +57,7 @@ namespace ECommerce.API.Controllers.Admin
 
         // PUT /api/admin/categories/{id}
         [HttpPut("{id}")]
+        [HasPermission(Permissions.Categories.Update)]
         public async Task<IActionResult> UpdateCategory(int id, [FromBody] Category category)
         {
             var existing = await _categoryService.GetByIdAsync(id);
@@ -79,6 +84,7 @@ namespace ECommerce.API.Controllers.Admin
 
         // DELETE /api/admin/categories/{id}
         [HttpDelete("{id}")]
+        [HasPermission(Permissions.Categories.Delete)]
         public async Task<IActionResult> DeleteCategory(int id)
         {
             var category = await _categoryService.GetByIdAsync(id);

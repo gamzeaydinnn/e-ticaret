@@ -1,7 +1,21 @@
 // src/contexts/AuthContext.js
-import { createContext, useContext, useEffect, useState } from "react";
+// =============================================================================
+// AuthContext - Kimlik Doğrulama ve Yetki Yönetimi
+// =============================================================================
+// Bu context, kullanıcı kimlik doğrulama işlemlerini ve izin yönetimini sağlar.
+// Permission sistemi entegrasyonu ile birlikte çalışır.
+// =============================================================================
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import { AuthService } from "../services/authService";
 import { smsService } from "../services/otpService";
+import permissionService from "../services/permissionService";
 
 const AuthContext = createContext();
 
@@ -17,6 +31,13 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // =========================================================================
+  // Permission State - Kullanıcı izinleri
+  // =========================================================================
+  const [permissions, setPermissions] = useState([]);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissionsError, setPermissionsError] = useState(null);
+
   // Demo kullanıcıları - localStorage'dan yükle veya default'ları kullan
   const getStoredDemoUsers = () => {
     try {
@@ -28,13 +49,198 @@ export const AuthProvider = ({ children }) => {
       console.error("Demo users parsing error:", error);
     }
     return [
-      { id: 1, email: "demo@example.com", password: "123456", firstName: "Demo", lastName: "User" },
-      { id: 2, email: "test@example.com", password: "123456", firstName: "Test", lastName: "User" },
-      { id: 3, email: "user@example.com", password: "123456", firstName: "Example", lastName: "User" },
+      {
+        id: 1,
+        email: "demo@example.com",
+        password: "123456",
+        firstName: "Demo",
+        lastName: "User",
+      },
+      {
+        id: 2,
+        email: "test@example.com",
+        password: "123456",
+        firstName: "Test",
+        lastName: "User",
+      },
+      {
+        id: 3,
+        email: "user@example.com",
+        password: "123456",
+        firstName: "Example",
+        lastName: "User",
+      },
     ];
   };
 
   const [demoUsers, setDemoUsers] = useState(getStoredDemoUsers());
+
+  // =========================================================================
+  // Permission Loader - Kullanıcı izinlerini yükle
+  // =========================================================================
+  const loadUserPermissions = useCallback(async (userData) => {
+    // Sadece admin kullanıcılar için izinleri yükle
+    if (
+      !userData ||
+      (!userData.isAdmin &&
+        ![
+          "Admin",
+          "SuperAdmin",
+          "StoreManager",
+          "CustomerSupport",
+          "Logistics",
+        ].includes(userData.role))
+    ) {
+      setPermissions([]);
+      localStorage.removeItem("userPermissions");
+      return;
+    }
+
+    setPermissionsLoading(true);
+    setPermissionsError(null);
+
+    try {
+      // Önce localStorage'dan kontrol et (cache)
+      const cachedPermissions = localStorage.getItem("userPermissions");
+      const cacheTimestamp = localStorage.getItem("permissionsCacheTime");
+      const cacheMaxAge = 5 * 60 * 1000; // 5 dakika
+
+      if (cachedPermissions && cacheTimestamp) {
+        const cacheAge = Date.now() - parseInt(cacheTimestamp, 10);
+        if (cacheAge < cacheMaxAge) {
+          const cached = JSON.parse(cachedPermissions);
+          setPermissions(cached);
+          setPermissionsLoading(false);
+          return;
+        }
+      }
+
+      // API'den izinleri al
+      const response = await permissionService.getMyPermissions();
+
+      if (response && Array.isArray(response.permissions)) {
+        setPermissions(response.permissions);
+        // Cache'e kaydet
+        localStorage.setItem(
+          "userPermissions",
+          JSON.stringify(response.permissions)
+        );
+        localStorage.setItem("permissionsCacheTime", Date.now().toString());
+      } else if (Array.isArray(response)) {
+        setPermissions(response);
+        localStorage.setItem("userPermissions", JSON.stringify(response));
+        localStorage.setItem("permissionsCacheTime", Date.now().toString());
+      }
+    } catch (error) {
+      console.error("Permission loading error:", error);
+      setPermissionsError(error.message || "İzinler yüklenirken hata oluştu");
+
+      // Hata durumunda cache'den yükle (varsa)
+      const cachedPermissions = localStorage.getItem("userPermissions");
+      if (cachedPermissions) {
+        try {
+          setPermissions(JSON.parse(cachedPermissions));
+        } catch (parseError) {
+          console.error("Cache parse error:", parseError);
+        }
+      }
+    } finally {
+      setPermissionsLoading(false);
+    }
+  }, []);
+
+  // =========================================================================
+  // Permission Helper Functions
+  // =========================================================================
+
+  /**
+   * Belirli bir izne sahip mi kontrol et
+   */
+  const hasPermission = useCallback(
+    (permission) => {
+      if (!user) return false;
+
+      // SuperAdmin her şeye erişebilir
+      if (user.role === "SuperAdmin") return true;
+
+      // İzin listesinde var mı?
+      return permissions.includes(permission);
+    },
+    [user, permissions]
+  );
+
+  /**
+   * Verilen izinlerden herhangi birine sahip mi?
+   */
+  const hasAnyPermission = useCallback(
+    (...permissionList) => {
+      if (!user) return false;
+      if (user.role === "SuperAdmin") return true;
+
+      return permissionList.some((p) => permissions.includes(p));
+    },
+    [user, permissions]
+  );
+
+  /**
+   * Verilen tüm izinlere sahip mi?
+   */
+  const hasAllPermissions = useCallback(
+    (...permissionList) => {
+      if (!user) return false;
+      if (user.role === "SuperAdmin") return true;
+
+      return permissionList.every((p) => permissions.includes(p));
+    },
+    [user, permissions]
+  );
+
+  /**
+   * Admin paneline erişim yetkisi var mı?
+   */
+  const canAccessAdminPanel = useCallback(() => {
+    if (!user) return false;
+
+    // Admin rolleri
+    const adminRoles = [
+      "Admin",
+      "SuperAdmin",
+      "StoreManager",
+      "CustomerSupport",
+      "Logistics",
+    ];
+    if (adminRoles.includes(user.role)) return true;
+
+    // isAdmin flag
+    if (user.isAdmin) return true;
+
+    // En az bir admin izni varsa
+    return permissions.some(
+      (p) =>
+        p.startsWith("dashboard.") ||
+        p.startsWith("products.") ||
+        p.startsWith("orders.")
+    );
+  }, [user, permissions]);
+
+  /**
+   * İzin cache'ini temizle
+   */
+  const clearPermissionsCache = useCallback(() => {
+    setPermissions([]);
+    localStorage.removeItem("userPermissions");
+    localStorage.removeItem("permissionsCacheTime");
+  }, []);
+
+  /**
+   * İzinleri yeniden yükle
+   */
+  const refreshPermissions = useCallback(async () => {
+    clearPermissionsCache();
+    if (user) {
+      await loadUserPermissions(user);
+    }
+  }, [user, loadUserPermissions, clearPermissionsCache]);
 
   useEffect(() => {
     // Token interceptor'ını kur
@@ -46,7 +252,11 @@ export const AuthProvider = ({ children }) => {
 
     if (token && userData) {
       try {
-        setUser(JSON.parse(userData));
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+
+        // Kullanıcı izinlerini yükle
+        loadUserPermissions(parsedUser);
       } catch (error) {
         console.error("User data parsing error:", error);
         clearUserData();
@@ -64,15 +274,18 @@ export const AuthProvider = ({ children }) => {
       const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
 
       if (data && (data.success || data.token || data.Token)) {
-        const userData = data.user || data.User || {
-          id: data.id,
-          email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          name: data.name || `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
-          role: data.role,
-          isAdmin: data.isAdmin,
-        };
+        const userData = data.user ||
+          data.User || {
+            id: data.id,
+            email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            name:
+              data.name ||
+              `${data.firstName ?? ""} ${data.lastName ?? ""}`.trim(),
+            role: data.role,
+            isAdmin: data.isAdmin,
+          };
         const token = data.token || data.Token;
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -83,6 +296,9 @@ export const AuthProvider = ({ children }) => {
         }
 
         setUser(userData);
+
+        // Kullanıcı izinlerini yükle
+        await loadUserPermissions(userData);
 
         return { success: true, user: userData };
       } else {
@@ -142,6 +358,11 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
     localStorage.removeItem("userId");
 
+    // Permission verileri
+    localStorage.removeItem("userPermissions");
+    localStorage.removeItem("permissionsCacheTime");
+    setPermissions([]);
+
     // Sepet verileri
     localStorage.removeItem("guestCart");
 
@@ -158,11 +379,11 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, firstName, lastName) => {
     try {
       // Backend API çağrısı
-      const resp = await AuthService.register({ 
-        email, 
-        password, 
-        firstName, 
-        lastName 
+      const resp = await AuthService.register({
+        email,
+        password,
+        firstName,
+        lastName,
       });
 
       const data = resp && resp.data === undefined ? resp : resp.data;
@@ -172,7 +393,7 @@ export const AuthProvider = ({ children }) => {
           email,
           firstName,
           lastName,
-          name: `${firstName} ${lastName}`
+          name: `${firstName} ${lastName}`,
         };
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -211,7 +432,7 @@ export const AuthProvider = ({ children }) => {
         firstName,
         lastName,
         name: `${firstName} ${lastName}`,
-        password // Demo için şifreyi de saklayalım
+        password, // Demo için şifreyi de saklayalım
       };
 
       // Demo kullanıcılar listesine ekle
@@ -223,7 +444,7 @@ export const AuthProvider = ({ children }) => {
       AuthService.saveToken(token);
       localStorage.setItem("user", JSON.stringify(newUser));
       localStorage.setItem("userId", newUser.id.toString());
-      
+
       // Demo kullanıcıları localStorage'a kaydet
       localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
 
@@ -239,7 +460,13 @@ export const AuthProvider = ({ children }) => {
    * Telefon numarası ile kayıt başlatır.
    * SMS kodu gönderilir, verifyPhoneRegistration ile tamamlanır.
    */
-  const registerWithPhone = async (email, password, firstName, lastName, phoneNumber) => {
+  const registerWithPhone = async (
+    email,
+    password,
+    firstName,
+    lastName,
+    phoneNumber
+  ) => {
     try {
       const result = await smsService.registerWithPhone({
         email,
@@ -277,18 +504,22 @@ export const AuthProvider = ({ children }) => {
    */
   const verifyPhoneRegistration = async (phoneNumber, code, email) => {
     try {
-      const result = await smsService.verifyPhoneRegistration(phoneNumber, code, email);
+      const result = await smsService.verifyPhoneRegistration(
+        phoneNumber,
+        code,
+        email
+      );
 
       if (result.success && result.token) {
         // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(result.token);
-        
+
         // Kullanıcı bilgilerini decode et veya API'den al
         const userData = {
           email,
           phoneNumber,
         };
-        
+
         localStorage.setItem("user", JSON.stringify(userData));
         setUser(userData);
 
@@ -336,7 +567,12 @@ export const AuthProvider = ({ children }) => {
   /**
    * SMS kodu ile şifre sıfırlar.
    */
-  const resetPasswordByPhone = async (phoneNumber, code, newPassword, confirmPassword) => {
+  const resetPasswordByPhone = async (
+    phoneNumber,
+    code,
+    newPassword,
+    confirmPassword
+  ) => {
     try {
       const result = await smsService.resetPasswordByPhone(
         phoneNumber,
@@ -358,8 +594,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = {
+    // User state
     user,
     setUser,
+    loading,
+    isAuthenticated: !!user,
+
+    // Auth functions
     login,
     loginWithSocial: async (provider, profile = {}) => {
       try {
@@ -367,21 +608,30 @@ export const AuthProvider = ({ children }) => {
         const data = resp && resp.data === undefined ? resp : resp.data;
         if (data && (data.token || data.Token)) {
           const token = data.token || data.Token;
-          const userData = data.user || data.User || {
-            id: data.id,
-            email: data.email,
-            name: data.name,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            role: data.role || "User",
-          };
+          const userData = data.user ||
+            data.User || {
+              id: data.id,
+              email: data.email,
+              name: data.name,
+              firstName: data.firstName,
+              lastName: data.lastName,
+              role: data.role || "User",
+            };
           AuthService.saveToken(token);
           localStorage.setItem("user", JSON.stringify(userData));
-          if (userData?.id != null) localStorage.setItem("userId", String(userData.id));
+          if (userData?.id != null)
+            localStorage.setItem("userId", String(userData.id));
           setUser(userData);
+
+          // İzinleri yükle
+          await loadUserPermissions(userData);
+
           return { success: true, user: userData };
         }
-        return { success: false, error: data?.message || "Sosyal giriş başarısız" };
+        return {
+          success: false,
+          error: data?.message || "Sosyal giriş başarısız",
+        };
       } catch (e) {
         // Backend yoksa demo sosyal login
         const fallbackUser = {
@@ -406,8 +656,19 @@ export const AuthProvider = ({ children }) => {
     verifyPhoneRegistration,
     forgotPasswordByPhone,
     resetPasswordByPhone,
-    loading,
-    isAuthenticated: !!user,
+
+    // Permission state
+    permissions,
+    permissionsLoading,
+    permissionsError,
+
+    // Permission functions
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    canAccessAdminPanel,
+    refreshPermissions,
+    clearPermissionsCache,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

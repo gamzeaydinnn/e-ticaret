@@ -33,6 +33,7 @@ using ECommerce.API.Validators;
 using ECommerce.API.Services.Otp;
 using ECommerce.Entities.Enums;
 using ECommerce.API.Data;
+using ECommerce.API.Authorization;
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -163,8 +164,33 @@ builder.Services.AddAuthentication(options =>
         // Check revoked tokens (deny list) on token validation
         options.Events = new JwtBearerEvents
         {
+            OnMessageReceived = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                var authHeader = ctx.Request.Headers["Authorization"].ToString();
+                logger.LogInformation("🔵 JWT OnMessageReceived: Path={Path}, HasAuth={HasAuth}", 
+                    ctx.Request.Path, !string.IsNullOrEmpty(authHeader));
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = ctx =>
+            {
+                var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogError("❌ JWT Auth Failed: {Message}, Exception={Exception}", 
+                    ctx.Exception.Message, ctx.Exception.GetType().Name);
+                if (ctx.Exception.InnerException != null)
+                    logger.LogError("   Inner: {InnerMessage}", ctx.Exception.InnerException.Message);
+                
+                Console.WriteLine($"❌ JWT Auth Failed: {ctx.Exception.Message}");
+                if (ctx.Exception.InnerException != null)
+                    Console.WriteLine($"   Inner: {ctx.Exception.InnerException.Message}");
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async ctx =>
             {
+                var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogInformation("✅ JWT Token Validated for user: {User}", 
+                    ctx.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "unknown");
+                
                 try
                 {
                     var denyList = ctx.HttpContext.RequestServices.GetService(typeof(ECommerce.Core.Interfaces.ITokenDenyList)) as ECommerce.Core.Interfaces.ITokenDenyList;
@@ -175,11 +201,13 @@ builder.Services.AddAuthentication(options =>
 
                     if (await denyList.IsDeniedAsync(jti))
                     {
+                        logger.LogWarning("⚠️ Token revoked: jti={Jti}", jti);
                         ctx.Fail("Token revoked");
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    logger.LogError(ex, "Error checking token deny list");
                     // swallow exceptions here to avoid breaking auth pipeline unexpectedly
                 }
             }
@@ -361,7 +389,20 @@ builder.Services.AddScoped<IAuthService>(sp =>
 
 // // builder.Services.AddScoped<StockSyncJob>();
 
+// ================================================================================
+// RBAC (Role-Based Access Control) Servisleri
+// ================================================================================
+// Permission ve RolePermission yönetimi için servisler
+builder.Services.AddScoped<IPermissionService, PermissionManager>();
+builder.Services.AddScoped<IRolePermissionService, RolePermissionManager>();
+
+// Authorization altyapısı - dinamik permission policy'leri için
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, ECommerce.API.Authorization.PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, ECommerce.API.Authorization.PermissionAuthorizationHandler>();
+
+// Authorization servisi - default fallback policy provider'ı korur
 builder.Services.AddAuthorization();
+
 // Add in-memory caching for read-heavy endpoints (prerender, products)
 builder.Services.AddMemoryCache();
 // Login rate-limit service (IMemoryCache-based)

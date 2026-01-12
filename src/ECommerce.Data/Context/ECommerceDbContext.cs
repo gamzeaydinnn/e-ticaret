@@ -52,6 +52,19 @@ namespace ECommerce.Data.Context
         public virtual DbSet<SmsVerification> SmsVerifications { get; set; }
         public virtual DbSet<SmsRateLimit> SmsRateLimits { get; set; }
 
+        // RBAC (Rol Tabanlı Yetkilendirme) Tabloları
+        /// <summary>
+        /// Sistemdeki tüm izinleri (permissions) tutar.
+        /// Her izin bir modül ve aksiyon kombinasyonunu temsil eder.
+        /// </summary>
+        public virtual DbSet<Permission> Permissions { get; set; }
+        
+        /// <summary>
+        /// Rol-Permission many-to-many ilişkisini yönetir.
+        /// Hangi rolün hangi izinlere sahip olduğunu tanımlar.
+        /// </summary>
+        public virtual DbSet<RolePermission> RolePermissions { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -328,10 +341,12 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<RefreshToken>(entity =>
             {
                 entity.ToTable("RefreshTokens");
-                entity.Property(e => e.Token).HasMaxLength(512).IsRequired();
+                entity.Property(e => e.Token).HasMaxLength(512);
+                entity.Property(e => e.HashedToken).HasMaxLength(256).IsRequired();
                 entity.Property(e => e.JwtId).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.CreatedIp).HasMaxLength(64);
-                entity.HasIndex(e => e.Token).IsUnique();
+                // HashedToken üzerinde unique index (Token artık empty string olarak saklanıyor)
+                entity.HasIndex(e => e.HashedToken).IsUnique();
 
                 entity.HasOne(e => e.User)
                       .WithMany(u => u.RefreshTokens)
@@ -475,6 +490,86 @@ namespace ECommerce.Data.Context
                 
                 entity.HasIndex(e => e.DailyResetAt)
                       .HasDatabaseName("IX_SmsRateLimits_DailyResetAt");
+            });
+
+            // -------------------
+            // RBAC: Permission Configuration
+            // -------------------
+            modelBuilder.Entity<Permission>(entity =>
+            {
+                entity.ToTable("Permissions");
+                
+                // Name alanı benzersiz olmalı - izin adları tekrarlanamaz
+                entity.Property(e => e.Name)
+                      .HasMaxLength(100)
+                      .IsRequired();
+                
+                entity.Property(e => e.DisplayName)
+                      .HasMaxLength(200)
+                      .IsRequired();
+                
+                entity.Property(e => e.Description)
+                      .HasMaxLength(500);
+                
+                entity.Property(e => e.Module)
+                      .HasMaxLength(100)
+                      .IsRequired();
+
+                // Unique index: Aynı isimde iki izin olamaz
+                entity.HasIndex(e => e.Name)
+                      .IsUnique()
+                      .HasDatabaseName("IX_Permissions_Name");
+                
+                // Modül bazlı sorgular için index
+                entity.HasIndex(e => e.Module)
+                      .HasDatabaseName("IX_Permissions_Module");
+                
+                // Aktif izinleri hızlı sorgulamak için
+                entity.HasIndex(e => e.IsActive)
+                      .HasDatabaseName("IX_Permissions_IsActive");
+            });
+
+            // -------------------
+            // RBAC: RolePermission Configuration (Join Table)
+            // -------------------
+            modelBuilder.Entity<RolePermission>(entity =>
+            {
+                entity.ToTable("RolePermissions");
+
+                // Primary key
+                entity.HasKey(e => e.Id);
+                
+                // RoleId - AspNetRoles tablosuna referans
+                // NOT: IdentityRole<int> kullanıldığından foreign key tanımı manuel
+                entity.Property(e => e.RoleId)
+                      .IsRequired();
+                
+                entity.Property(e => e.PermissionId)
+                      .IsRequired();
+                
+                entity.Property(e => e.CreatedAt)
+                      .HasColumnType("datetime2");
+
+                // Permission navigation - Cascade delete: Permission silinirse ilişki de silinir
+                entity.HasOne(e => e.Permission)
+                      .WithMany(p => p.RolePermissions)
+                      .HasForeignKey(e => e.PermissionId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                
+                // CreatedByUser - Set null: Kullanıcı silinirse audit bilgisi korunur
+                entity.HasOne(e => e.CreatedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.CreatedByUserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Unique constraint: Aynı role aynı izin birden fazla atanamaz
+                entity.HasIndex(e => new { e.RoleId, e.PermissionId })
+                      .IsUnique()
+                      .HasDatabaseName("IX_RolePermissions_Role_Permission");
+                
+                // Role bazlı sorgular için index (kullanıcının izinlerini hızlı çekmek için)
+                entity.HasIndex(e => e.RoleId)
+                      .HasDatabaseName("IX_RolePermissions_RoleId");
             });
 
             // -------------------

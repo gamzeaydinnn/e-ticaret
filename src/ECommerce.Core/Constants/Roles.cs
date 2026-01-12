@@ -1,11 +1,167 @@
 namespace ECommerce.Core.Constants
 {
+    /// <summary>
+    /// Sistemdeki tüm kullanıcı rollerini tanımlar.
+    /// RBAC (Role-Based Access Control) sisteminin temel yapı taşlarıdır.
+    /// 
+    /// Rol Hiyerarşisi ve Sorumlulukları:
+    /// ──────────────────────────────────
+    /// 1. SuperAdmin: Sistemin tam yetkili sahibi. Tüm ayarları değiştirebilir,
+    ///    kullanıcı rollerini yönetebilir, kritik operasyonları gerçekleştirebilir.
+    ///    
+    /// 2. StoreManager (Mağaza Yöneticisi): Günlük iş operasyonlarını yönetir.
+    ///    Ürün/kategori yönetimi, kampanya oluşturma, satış raporları görüntüleme.
+    ///    
+    /// 3. CustomerSupport (Müşteri Hizmetleri): Müşteri memnuniyeti odaklı.
+    ///    Sipariş durumu güncelleme, iade işlemleri, müşteri yorumları yönetimi.
+    ///    
+    /// 4. Logistics (Lojistik): Depo ve kargo operasyonları.
+    ///    Gönderilecek siparişleri görme, kargo takip numarası girme.
+    ///    Hassas müşteri bilgilerine erişim YOK.
+    ///    
+    /// 5. Admin: Eski uyumluluk için korunmuş rol (deprecated, SuperAdmin kullanın).
+    /// 
+    /// 6. User/Customer: Sistemin son kullanıcısı, alışveriş yapan müşteri.
+    /// 
+    /// Güvenlik Prensibi: "En Az Yetki" (Least Privilege)
+    /// Her role sadece işini yapması için gereken minimum yetki verilir.
+    /// </summary>
     public static class Roles
     {
+        #region Ana Roller
+
+        /// <summary>
+        /// Sistem yöneticisi - Tam yetki.
+        /// Sadece şirket sahipleri veya teknik liderlerde bulunmalı.
+        /// </summary>
         public const string SuperAdmin = "SuperAdmin";
+
+        /// <summary>
+        /// [DEPRECATED] Eski admin rolü - Geriye dönük uyumluluk için korunuyor.
+        /// Yeni kullanıcılar için SuperAdmin veya StoreManager tercih edilmeli.
+        /// </summary>
         public const string Admin = "Admin";
+
+        /// <summary>
+        /// Mağaza/Operasyon Yöneticisi.
+        /// Ürün, kategori, kampanya ve stok yönetimi yetkilerine sahip.
+        /// Sistem ayarlarına ve kullanıcı yönetimine erişim YOK.
+        /// </summary>
+        public const string StoreManager = "StoreManager";
+
+        /// <summary>
+        /// Müşteri Hizmetleri/Destek personeli.
+        /// Sipariş durumu güncelleme, iade/iptal işlemleri, müşteri iletişimi.
+        /// Ürün fiyatlarını değiştirme veya finansal raporlara erişim YOK.
+        /// </summary>
+        public const string CustomerSupport = "CustomerSupport";
+
+        /// <summary>
+        /// Lojistik/Depo personeli.
+        /// Sadece kargoya verilecek siparişleri görür ve takip numarası girer.
+        /// Müşteri e-posta, ödeme bilgileri gibi hassas verilere erişim YOK.
+        /// </summary>
+        public const string Logistics = "Logistics";
+
+        /// <summary>
+        /// Normal kullanıcı/müşteri.
+        /// Alışveriş yapma, profil düzenleme, sipariş geçmişi görüntüleme.
+        /// </summary>
         public const string User = "User";
 
-        public const string AdminLike = SuperAdmin + "," + Admin;
+        /// <summary>
+        /// Customer rolü - User ile aynı, semantik netlik için.
+        /// </summary>
+        public const string Customer = "Customer";
+
+        #endregion
+
+        #region Rol Grupları - Yetkilendirme Kolaylığı İçin
+
+        /// <summary>
+        /// Yönetici seviyesi roller - Admin paneline erişim hakkı.
+        /// SuperAdmin, Admin ve StoreManager bu gruba dahil.
+        /// </summary>
+        public const string AdminLike = SuperAdmin + "," + Admin + "," + StoreManager;
+
+        /// <summary>
+        /// Tüm personel rolleri - Şirket çalışanları.
+        /// Müşteri dışındaki tüm roller.
+        /// </summary>
+        public const string AllStaff = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics;
+
+        /// <summary>
+        /// Sipariş yönetimi yapabilecek roller.
+        /// Sipariş durumunu güncelleyebilir veya görüntüleyebilir.
+        /// </summary>
+        public const string OrderManagement = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics;
+
+        /// <summary>
+        /// Ürün yönetimi yapabilecek roller.
+        /// Ürün ekleme, düzenleme, silme yetkisi.
+        /// </summary>
+        public const string ProductManagement = SuperAdmin + "," + Admin + "," + StoreManager;
+
+        /// <summary>
+        /// Kullanıcı yönetimi yapabilecek roller.
+        /// Sadece en üst düzey yetkililer.
+        /// </summary>
+        public const string UserManagement = SuperAdmin + "," + Admin;
+
+        #endregion
+
+        #region Yardımcı Metodlar
+
+        /// <summary>
+        /// Sistemdeki tüm rollerin listesini döndürür.
+        /// Seeder ve validation işlemlerinde kullanılır.
+        /// </summary>
+        public static string[] GetAllRoles() => new[]
+        {
+            SuperAdmin,
+            Admin,
+            StoreManager,
+            CustomerSupport,
+            Logistics,
+            User,
+            Customer
+        };
+
+        /// <summary>
+        /// Yönetici paneline erişebilecek rolleri döndürür.
+        /// </summary>
+        public static string[] GetAdminPanelRoles() => new[]
+        {
+            SuperAdmin,
+            Admin,
+            StoreManager,
+            CustomerSupport,
+            Logistics
+        };
+
+        /// <summary>
+        /// Verilen rolün admin paneline erişim hakkı olup olmadığını kontrol eder.
+        /// </summary>
+        /// <param name="roleName">Kontrol edilecek rol adı</param>
+        /// <returns>Admin paneline erişim hakkı varsa true</returns>
+        public static bool CanAccessAdminPanel(string? roleName)
+        {
+            if (string.IsNullOrWhiteSpace(roleName))
+                return false;
+
+            var adminRoles = GetAdminPanelRoles();
+            return adminRoles.Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Verilen rolün süper yönetici olup olmadığını kontrol eder.
+        /// </summary>
+        public static bool IsSuperAdmin(string? roleName)
+        {
+            return !string.IsNullOrWhiteSpace(roleName) &&
+                   roleName.Equals(SuperAdmin, StringComparison.OrdinalIgnoreCase);
+        }
+
+        #endregion
     }
 }

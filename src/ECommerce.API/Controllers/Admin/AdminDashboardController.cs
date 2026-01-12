@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
+using ECommerce.API.Authorization;
 using System.Threading.Tasks;
 
 namespace ECommerce.API.Controllers.Admin
@@ -43,6 +44,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpGet("stats")]
+        [HasPermission(Permissions.Dashboard.View)]
         public async Task<IActionResult> GetDashboardStats()
         {
             var stats = new

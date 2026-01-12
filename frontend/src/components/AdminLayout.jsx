@@ -1,77 +1,210 @@
 // src/components/AdminLayout.jsx
-import { useEffect, useMemo, useState } from "react";
+// =============================================================================
+// Admin Layout - İzin Bazlı Menü Sistemi
+// =============================================================================
+// Bu component admin paneli için sidebar ve layout sağlar.
+// Menü öğeleri kullanıcının izinlerine göre filtrelenir.
+// =============================================================================
+
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { PERMISSIONS } from "../services/permissionService";
 
 export default function AdminLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [openMenus, setOpenMenus] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission, hasAnyPermission } = useAuth();
 
-  const isAdminLike =
-    user?.role === "Admin" || user?.role === "SuperAdmin" || user?.isAdmin;
+  // Admin rolleri
+  const ADMIN_ROLES = [
+    "Admin",
+    "SuperAdmin",
+    "StoreManager",
+    "CustomerSupport",
+    "Logistics",
+  ];
 
+  const isAdminLike = user?.role === "SuperAdmin" || user?.isAdmin;
+  const isSuperAdmin = user?.role === "SuperAdmin";
+
+  // İzin kontrolü helper fonksiyonu
+  const checkPermission = useCallback(
+    (permission) => {
+      if (isSuperAdmin) return true;
+      if (!permission) return true;
+
+      if (Array.isArray(permission)) {
+        return hasAnyPermission?.(...permission) ?? false;
+      }
+      return hasPermission?.(permission) ?? false;
+    },
+    [isSuperAdmin, hasPermission, hasAnyPermission]
+  );
+
+  // Menü öğeleri - İzin bazlı filtreleme
   const menuItems = useMemo(
     () => [
       {
         path: "/admin/dashboard",
         icon: "fas fa-tachometer-alt",
         label: "Dashboard",
+        permission: PERMISSIONS.DASHBOARD_VIEW,
       },
-      { path: "/admin/products", icon: "fas fa-box", label: "Ürünler" },
-      { path: "/admin/categories", icon: "fas fa-tags", label: "Kategoriler" },
+      {
+        path: "/admin/products",
+        icon: "fas fa-box",
+        label: "Ürünler",
+        permission: PERMISSIONS.PRODUCTS_VIEW,
+      },
+      {
+        path: "/admin/categories",
+        icon: "fas fa-tags",
+        label: "Kategoriler",
+        permission: PERMISSIONS.CATEGORIES_VIEW,
+      },
       {
         path: "/admin/orders",
         icon: "fas fa-shopping-cart",
         label: "Siparişler",
+        permission: PERMISSIONS.ORDERS_VIEW,
       },
       {
         path: "/admin/users",
         icon: "fas fa-users",
         label: "Kullanıcılar",
+        permission: PERMISSIONS.USERS_VIEW,
         adminOnly: true,
       },
-      { path: "/admin/couriers", icon: "fas fa-motorcycle", label: "Kuryeler" },
-      { path: "/admin/reports", icon: "fas fa-chart-bar", label: "Raporlar" },
-      { path: "/admin/micro", icon: "fas fa-plug", label: "ERP / Mikro" },
+      {
+        path: "/admin/couriers",
+        icon: "fas fa-motorcycle",
+        label: "Kuryeler",
+        permission: PERMISSIONS.COURIERS_VIEW,
+      },
+      {
+        path: "/admin/reports",
+        icon: "fas fa-chart-bar",
+        label: "Raporlar",
+        permission: PERMISSIONS.REPORTS_VIEW,
+      },
+      {
+        path: "/admin/micro",
+        icon: "fas fa-plug",
+        label: "ERP / Mikro",
+        permission: PERMISSIONS.SETTINGS_SYSTEM,
+        adminOnly: true,
+      },
       {
         path: "/admin/posters",
         icon: "fas fa-image",
         label: "Poster Yönetimi",
+        permission: PERMISSIONS.BANNERS_VIEW,
       },
       {
         path: "/admin/weight-reports",
         icon: "fas fa-weight",
         label: "Ağırlık Raporları",
+        permission: PERMISSIONS.ORDERS_VIEW,
       },
       {
         path: "/admin/campaigns",
         icon: "fas fa-gift",
         label: "Kampanya Yönetimi",
+        permission: PERMISSIONS.CAMPAIGNS_VIEW,
         adminOnly: true,
+      },
+      // Rol ve İzin Yönetimi - Sadece SuperAdmin
+      {
+        label: "Yetki Yönetimi",
+        icon: "fas fa-user-shield",
+        superAdminOnly: true,
+        children: [
+          {
+            path: "/admin/roles",
+            label: "Rol Yönetimi",
+            permission: PERMISSIONS.ROLES_VIEW,
+          },
+          {
+            path: "/admin/permissions",
+            label: "İzin Yönetimi",
+            permission: PERMISSIONS.ROLES_PERMISSIONS,
+          },
+        ],
       },
       {
         label: "Loglar",
         icon: "fas fa-clipboard-list",
+        permission: PERMISSIONS.LOGS_VIEW,
         adminOnly: true,
         children: [
-          { path: "/admin/logs/audit", label: "Audit Logs" },
-          { path: "/admin/logs/errors", label: "Error Logs" },
-          { path: "/admin/logs/system", label: "System Logs" },
-          { path: "/admin/logs/inventory", label: "Inventory Logs" },
+          {
+            path: "/admin/logs/audit",
+            label: "Audit Logs",
+            permission: PERMISSIONS.LOGS_AUDIT,
+          },
+          {
+            path: "/admin/logs/errors",
+            label: "Error Logs",
+            permission: PERMISSIONS.LOGS_ERROR,
+          },
+          {
+            path: "/admin/logs/system",
+            label: "System Logs",
+            permission: PERMISSIONS.LOGS_VIEW,
+          },
+          {
+            path: "/admin/logs/inventory",
+            label: "Inventory Logs",
+            permission: PERMISSIONS.LOGS_VIEW,
+          },
         ],
       },
     ],
     []
   );
 
+  // Filtrelenmiş menü öğeleri
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      // SuperAdmin kontrolü
+      if (item.superAdminOnly && !isSuperAdmin) return false;
+
+      // Admin-only kontrolü
+      if (item.adminOnly && !isAdminLike && !ADMIN_ROLES.includes(user?.role))
+        return false;
+
+      // İzin kontrolü
+      if (item.permission && !checkPermission(item.permission)) return false;
+
+      // Alt menüleri filtrele
+      if (item.children) {
+        const filteredChildren = item.children.filter((child) => {
+          if (child.permission && !checkPermission(child.permission))
+            return false;
+          return true;
+        });
+
+        // Hiç görünür alt menü yoksa ana menüyü gösterme
+        if (filteredChildren.length === 0) return false;
+
+        // Filtrelenmiş children'ı güncelle
+        item.filteredChildren = filteredChildren;
+      }
+
+      return true;
+    });
+  }, [menuItems, isSuperAdmin, isAdminLike, user?.role, checkPermission]);
+
   useEffect(() => {
-    const parentWithChild = menuItems.find(
+    const parentWithChild = filteredMenuItems.find(
       (item) =>
-        item.children &&
-        item.children.some((child) => location.pathname.startsWith(child.path))
+        (item.children || item.filteredChildren) &&
+        (item.filteredChildren || item.children).some((child) =>
+          location.pathname.startsWith(child.path)
+        )
     );
     if (parentWithChild) {
       setOpenMenus((prev) => ({
@@ -79,7 +212,7 @@ export default function AdminLayout({ children }) {
         [parentWithChild.label]: true,
       }));
     }
-  }, [location.pathname, menuItems]);
+  }, [location.pathname, filteredMenuItems]);
 
   const toggleMenu = (label) => {
     setOpenMenus((prev) => ({
@@ -149,12 +282,11 @@ export default function AdminLayout({ children }) {
         </div>
 
         <nav className="mt-2">
-          {menuItems.map((item, index) => {
-            if (item.adminOnly && !isAdminLike) {
-              return null;
-            }
-            if (item.children && item.children.length > 0) {
-              const isActiveChild = item.children.some((child) =>
+          {filteredMenuItems.map((item, index) => {
+            // Children varsa (alt menü)
+            const children = item.filteredChildren || item.children;
+            if (children && children.length > 0) {
+              const isActiveChild = children.some((child) =>
                 location.pathname.startsWith(child.path)
               );
               return (
@@ -189,7 +321,7 @@ export default function AdminLayout({ children }) {
                   </button>
                   {openMenus[item.label] && (
                     <div className="ms-4">
-                      {item.children.map((child) => (
+                      {children.map((child) => (
                         <Link
                           key={child.path}
                           to={child.path}

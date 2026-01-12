@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Google.Apis.Auth;
 using ECommerce.Entities.Concrete;
 using System.Security.Claims;
+using ECommerce.Core.Constants;
 
 //		○ Auth: JWT + refresh token. UsersController ve AuthController.
 //		○ CORS, Rate limiting, HSTS, HTTPS redirection.
@@ -28,14 +29,22 @@ namespace ECommerce.API.Controllers
         private readonly UserManager<User> _userManager;
         private readonly ECommerce.Core.Interfaces.ITokenDenyList _denyList;
         private readonly ECommerce.Business.Services.Interfaces.ILoginRateLimitService _loginRateLimitService;
+        private readonly IPermissionService _permissionService;
 
-        public AuthController(IAuthService authService, IConfiguration config, UserManager<User> userManager, ECommerce.Core.Interfaces.ITokenDenyList denyList, ECommerce.Business.Services.Interfaces.ILoginRateLimitService loginRateLimitService)
+        public AuthController(
+            IAuthService authService, 
+            IConfiguration config, 
+            UserManager<User> userManager, 
+            ECommerce.Core.Interfaces.ITokenDenyList denyList, 
+            ECommerce.Business.Services.Interfaces.ILoginRateLimitService loginRateLimitService,
+            IPermissionService permissionService)
         {
             _authService = authService;
             _config = config;
             _userManager = userManager;
             _denyList = denyList;
             _loginRateLimitService = loginRateLimitService;
+            _permissionService = permissionService;
         }
 
         [HttpPost("register")]
@@ -53,6 +62,22 @@ namespace ECommerce.API.Controllers
             {
                 return BadRequest(new { Message = ex.Message });
             }
+        }
+
+        // DEBUG ENDPOINT
+        [HttpGet("test-auth")]
+        [Authorize]
+        public IActionResult TestAuth()
+        {
+            var claims = User.Claims.Select(c => new { c.Type, c.Value }).ToList();
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdSub = User.FindFirst("sub")?.Value;
+            return Ok(new {
+                IsAuthenticated = User.Identity?.IsAuthenticated,
+                UserId = userId,
+                UserIdSub = userIdSub,
+                Claims = claims
+            });
         }
 
         [HttpPost("social-login")]
@@ -615,6 +640,110 @@ namespace ECommerce.API.Controllers
             #else
             return NotFound();
             #endif
+        }
+
+        // =====================================================================
+        // GET: api/auth/permissions
+        // Kullanıcının sahip olduğu izinleri döndürür (Frontend RBAC için)
+        // =====================================================================
+        /// <summary>
+        /// Giriş yapmış kullanıcının tüm izinlerini döndürür.
+        /// Frontend bu bilgiyi kullanarak UI elementlerini göster/gizle yapabilir.
+        /// </summary>
+        /// <returns>Kullanıcının izin listesi</returns>
+        [HttpGet("permissions")]
+        [Authorize]
+        public async Task<IActionResult> GetMyPermissions()
+        {
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("sub")?.Value;
+                
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized(new { success = false, message = "Geçersiz kullanıcı." });
+                }
+
+                var user = await _userManager.FindByIdAsync(userId.ToString());
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "Kullanıcı bulunamadı." });
+                }
+
+                // SuperAdmin tüm izinlere sahiptir
+                var isSuperAdmin = user.Role == Roles.SuperAdmin;
+                
+                // Kullanıcının izinlerini al
+                var permissions = await _permissionService.GetUserPermissionsAsync(userId);
+                var permissionList = permissions.ToList();
+
+                // Kullanıcının admin paneline erişip erişemeyeceğini belirle
+                var canAccessAdminPanel = Roles.CanAccessAdminPanel(user.Role);
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new
+                    {
+                        userId = user.Id,
+                        email = user.Email,
+                        role = user.Role,
+                        isSuperAdmin = isSuperAdmin,
+                        canAccessAdminPanel = canAccessAdminPanel,
+                        permissions = permissionList,
+                        permissionCount = permissionList.Count
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        // =====================================================================
+        // GET: api/auth/check-permission
+        // Belirli bir iznin kullanıcıda olup olmadığını kontrol eder
+        // =====================================================================
+        /// <summary>
+        /// Kullanıcının belirli bir izne sahip olup olmadığını kontrol eder.
+        /// Frontend'de tek bir izin kontrolü yapmak için kullanılır.
+        /// </summary>
+        /// <param name="permission">Kontrol edilecek izin adı (örn: "products.create")</param>
+        /// <returns>İzin durumu</returns>
+        [HttpGet("check-permission")]
+        [Authorize]
+        public async Task<IActionResult> CheckPermission([FromQuery] string permission)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(permission))
+                {
+                    return BadRequest(new { success = false, message = "İzin adı gereklidir." });
+                }
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? User.FindFirst("sub")?.Value;
+                
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized(new { success = false, message = "Geçersiz kullanıcı." });
+                }
+
+                var hasPermission = await _permissionService.UserHasPermissionAsync(userId, permission);
+
+                return Ok(new
+                {
+                    success = true,
+                    permission = permission,
+                    hasPermission = hasPermission
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
     }
 }

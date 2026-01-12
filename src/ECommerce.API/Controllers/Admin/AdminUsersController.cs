@@ -5,6 +5,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.User;
 using ECommerce.Entities.Concrete;
 using Microsoft.AspNetCore.Identity;
+using ECommerce.API.Authorization;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Security.Claims;
@@ -26,6 +27,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpGet]
+        [HasPermission(Permissions.Users.View)]
         public async Task<IActionResult> GetUsers()
         {
             try
@@ -52,6 +54,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpGet("{id}")]
+        [HasPermission(Permissions.Users.View)]
         public async Task<IActionResult> GetUser(int id)
         {
             var user = await _userService.GetByIdAsync(id);
@@ -61,6 +64,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPost]
+        [HasPermission(Permissions.Users.Create)]
         public async Task<IActionResult> CreateUser([FromBody] UserCreateDto dto)
         {
             var targetRole = string.IsNullOrWhiteSpace(dto.Role) ? Roles.User : dto.Role;
@@ -91,6 +95,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPut("{id}")]
+        [HasPermission(Permissions.Users.Update)]
         public async Task<IActionResult> UpdateUser(int id, [FromBody] UserUpdateDto dto)
         {
             var user = await _userService.GetByIdAsync(id);
@@ -145,6 +150,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpDelete("{id}")]
+        [HasPermission(Permissions.Users.Delete)]
         public async Task<IActionResult> DeleteUser(int id)
         {
             var user = await _userService.GetByIdAsync(id);
@@ -210,10 +216,23 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(new { success = true, id = user.Id, role = user.Role });
         }
 
+        /// <summary>
+        /// Sistemde tanımlı geçerli roller listesi.
+        /// 5 temel rol + geriye dönük uyumluluk için Admin ve Customer
+        /// </summary>
+        private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
+        {
+            Roles.SuperAdmin,
+            Roles.Admin,           // Geriye dönük uyumluluk
+            Roles.StoreManager,
+            Roles.CustomerSupport,
+            Roles.Logistics,
+            Roles.User,
+            Roles.Customer          // User ile aynı, semantik
+        };
+
         private static bool IsAllowedRole(string? role) =>
-            role == Roles.SuperAdmin ||
-            role == Roles.Admin ||
-            role == Roles.User;
+            !string.IsNullOrWhiteSpace(role) && AllowedRoles.Contains(role);
 
         private int GetAdminUserId()
         {
