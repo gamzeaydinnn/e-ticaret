@@ -54,6 +54,36 @@ export const UPLOAD_CONFIG = {
 // ============================================
 
 /**
+ * Backend'den gelen relative URL'leri tam URL'ye dönüştürür
+ * Sunucuda /uploads/banners/xxx.jpg → http://domain/uploads/banners/xxx.jpg
+ * 
+ * @param {string} imageUrl - Backend'den gelen görsel URL'i
+ * @returns {string} Tam görsel URL'i
+ */
+export const normalizeImageUrl = (imageUrl) => {
+  if (!imageUrl) return "";
+  
+  // Zaten tam URL ise (http:// veya https:// ile başlıyorsa) olduğu gibi döndür
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+  
+  // Relative URL ise (örn: /uploads/banners/xxx.jpg)
+  // API base URL'i ile birleştir
+  const apiBaseUrl = process.env.REACT_APP_API_URL || "";
+  
+  // API base URL boşsa (production'da nginx proxy kullanıyoruz)
+  // Direkt browser'ın current origin'ini kullan
+  if (!apiBaseUrl) {
+    // Nginx proxy'de /api ve /uploads aynı domain'de
+    return imageUrl; // Örn: /uploads/banners/xxx.jpg → golkoygurme.com.tr/uploads/banners/xxx.jpg
+  }
+  
+  // Development'ta API base URL varsa onunla birleştir
+  return `${apiBaseUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+};
+
+/**
  * Dosya uzantısının geçerli olup olmadığını kontrol eder
  * @param {string} filename - Dosya adı
  * @returns {boolean} Geçerli ise true
@@ -145,7 +175,11 @@ export const getSliderBanners = async () => {
       return [];
     }
 
-    return data;
+    // ImageUrl'leri normalize et (relative → absolute)
+    return data.map(banner => ({
+      ...banner,
+      imageUrl: normalizeImageUrl(banner.imageUrl)
+    }));
   } catch (error) {
     console.error(
       "[BannerService] Slider banner'ları alınamadı:",
@@ -171,7 +205,11 @@ export const getPromoBanners = async () => {
       return [];
     }
 
-    return data;
+    // ImageUrl'leri normalize et (relative → absolute)
+    return data.map(banner => ({
+      ...banner,
+      imageUrl: normalizeImageUrl(banner.imageUrl)
+    }));
   } catch (error) {
     console.error(
       "[BannerService] Promo banner'ları alınamadı:",
@@ -199,7 +237,11 @@ export const getAllBanners = async () => {
       return [];
     }
 
-    return data;
+    // ImageUrl'leri normalize et (relative → absolute)
+    return data.map(banner => ({
+      ...banner,
+      imageUrl: normalizeImageUrl(banner.imageUrl)
+    }));
   } catch (error) {
     console.error("[BannerService] Banner'lar alınamadı:", error.message);
     throw error;
@@ -232,7 +274,11 @@ export const getAdminBanners = async () => {
       return [];
     }
 
-    return data;
+    // ImageUrl'leri normalize et (relative → absolute)
+    return data.map(banner => ({
+      ...banner,
+      imageUrl: normalizeImageUrl(banner.imageUrl)
+    }));
   } catch (error) {
     console.error(
       "[BannerService] Admin banner listesi alınamadı:",
@@ -256,7 +302,11 @@ export const getBannerById = async (id) => {
 
   try {
     const data = await api.get(`/api/admin/banners/${id}`);
-    return data;
+    // ImageUrl'i normalize et
+    return {
+      ...data,
+      imageUrl: normalizeImageUrl(data.imageUrl)
+    };
   } catch (error) {
     console.error(`[BannerService] Banner #${id} alınamadı:`, error.message);
     throw error;
