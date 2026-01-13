@@ -320,6 +320,42 @@ export const AdminService = {
     ensureBackend();
     return api.put(`/api/admin/users/${id}/role`, { role });
   },
+  // ============================================================================
+  // Kullanıcı Silme - Backend AdminUsersController.DeleteUser endpoint'i ile eşleşir
+  // Yetki: Users.Delete permission gerektirir (SuperAdmin/Admin)
+  // ============================================================================
+  deleteUser: async (id) => {
+    ensureBackend();
+    return api.delete(`/api/admin/users/${id}`);
+  },
+
+  // ============================================================================
+  // Madde 8: Kullanıcı Şifre Güncelleme
+  // Backend: AdminUsersController.UpdateUserPassword endpoint'i
+  // Yetki: Users.Update permission gerektirir
+  // ============================================================================
+  updateUserPassword: async (id, newPassword) => {
+    ensureBackend();
+    return api.put(`/api/admin/users/${id}/password`, { newPassword });
+  },
+
+  // ============================================================================
+  // Roller API - Backend AdminRolesController endpoint'leri
+  // Rol listesi ve atanabilir roller için
+  // ============================================================================
+  getRoles: async () => {
+    ensureBackend();
+    return api.get("/api/admin/roles");
+  },
+
+  // ============================================================================
+  // Kullanıcı Durum Güncelleme (Aktif/Pasif)
+  // Backend: AdminUsersController.UpdateUser endpoint'i ile
+  // ============================================================================
+  updateUserStatus: async (id, isActive) => {
+    ensureBackend();
+    return api.put(`/api/admin/users/${id}`, { isActive });
+  },
 
   // Logs
   getAuditLogs: async (params = {}) => {

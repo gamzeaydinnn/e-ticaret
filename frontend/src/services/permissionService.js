@@ -393,11 +393,11 @@ export const PERMISSIONS = {
   COURIERS_DELETE: "couriers.delete",
   COURIERS_ASSIGN: "couriers.assign",
 
-  // Teslimat
-  SHIPPING_VIEW: "shipping.view",
-  SHIPPING_UPDATE_STATUS: "shipping.update_status",
-  SHIPPING_TRACK: "shipping.track",
-  SHIPPING_WEIGHT_APPROVAL: "shipping.weight_approval",
+  // Teslimat - Backend Shipping sınıfı ile senkronize
+  SHIPPING_VIEW: "shipping.pending",
+  SHIPPING_UPDATE_STATUS: "shipping.tracking",
+  SHIPPING_TRACK: "shipping.ship",
+  SHIPPING_WEIGHT_APPROVAL: "shipping.deliver",
 
   // Raporlar
   REPORTS_VIEW: "reports.view",
@@ -405,6 +405,7 @@ export const PERMISSIONS = {
   REPORTS_INVENTORY: "reports.inventory",
   REPORTS_CUSTOMERS: "reports.customers",
   REPORTS_EXPORT: "reports.export",
+  REPORTS_WEIGHT: "reports.weight", // Ağırlık raporları için (YENİ)
 
   // Bannerlar
   BANNERS_VIEW: "banners.view",
@@ -484,11 +485,18 @@ export const PERMISSION_MODULES = {
     PERMISSIONS.COURIERS_UPDATE,
     PERMISSIONS.COURIERS_DELETE,
   ],
+  Shipping: [
+    PERMISSIONS.SHIPPING_VIEW,
+    PERMISSIONS.SHIPPING_UPDATE_STATUS,
+    PERMISSIONS.SHIPPING_TRACK,
+    PERMISSIONS.SHIPPING_WEIGHT_APPROVAL,
+  ],
   Reports: [
     PERMISSIONS.REPORTS_VIEW,
     PERMISSIONS.REPORTS_SALES,
     PERMISSIONS.REPORTS_INVENTORY,
     PERMISSIONS.REPORTS_EXPORT,
+    PERMISSIONS.REPORTS_WEIGHT, // Ağırlık raporları (YENİ)
   ],
   Banners: [
     PERMISSIONS.BANNERS_VIEW,

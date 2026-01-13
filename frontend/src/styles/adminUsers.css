@@ -1,0 +1,285 @@
+/* ============================================================================
+   AdminUsers.css - Kullanıcı Yönetimi Sayfası Stilleri
+   ============================================================================
+   Mobil uyumluluk, tablo responsive tasarımı ve UI iyileştirmeleri
+   ============================================================================ */
+
+/* ============================================================================
+   Tablo Genel Stilleri
+   ============================================================================ */
+.admin-users-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Email sütunu için özel genişlik */
+.admin-users-table td[data-label="Email"] {
+  max-width: 200px;
+}
+
+/* İşlemler sütunu için esnek genişlik */
+.admin-users-table td[data-label="İşlemler"] {
+  white-space: normal;
+}
+
+/* ============================================================================
+   Aksiyon Butonları
+   ============================================================================ */
+.admin-users-action-btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Seçili Satır Vurgusu
+   ============================================================================ */
+.admin-users-table tr.table-primary {
+  background-color: rgba(13, 110, 253, 0.1) !important;
+}
+
+.admin-users-table tr.table-primary:hover {
+  background-color: rgba(13, 110, 253, 0.15) !important;
+}
+
+/* ============================================================================
+   Toplu İşlem Araç Çubuğu
+   ============================================================================ */
+.bulk-actions-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: white;
+}
+
+/* ============================================================================
+   İzin Matrisi Tablosu
+   ============================================================================ */
+.permission-matrix {
+  font-size: 0.85rem;
+}
+
+.permission-matrix th,
+.permission-matrix td {
+  padding: 0.5rem;
+  vertical-align: middle;
+}
+
+.permission-matrix .badge {
+  font-size: 0.7rem;
+}
+
+/* ============================================================================
+   Mobil Responsive Stiller (768px altı)
+   ============================================================================ */
+@media (max-width: 768px) {
+  /* Tablo kart görünümüne geçiş */
+  .admin-users-table {
+    display: block;
+  }
+
+  .admin-users-table thead {
+    display: none;
+  }
+
+  .admin-users-table tbody {
+    display: block;
+  }
+
+  .admin-users-table tr {
+    display: block;
+    margin-bottom: 1rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+  }
+
+  .admin-users-table tr.table-primary {
+    border-color: #0d6efd;
+    border-width: 2px;
+  }
+
+  .admin-users-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .admin-users-table td:last-child {
+    border-bottom: none;
+  }
+
+  .admin-users-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.8rem;
+    text-align: left;
+    flex: 1;
+    margin-right: 1rem;
+  }
+
+  .admin-users-table td > * {
+    flex: 1;
+    text-align: right;
+  }
+
+  /* Checkbox hücresi için özel stil */
+  .admin-users-table td:first-child {
+    justify-content: flex-start;
+    padding: 0.5rem 1rem !important;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  .admin-users-table td:first-child::before {
+    content: "Seç";
+  }
+
+  /* İşlemler hücresi için özel stil */
+  .admin-users-table td[data-label="İşlemler"] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .admin-users-table td[data-label="İşlemler"]::before {
+    margin-bottom: 0.5rem;
+  }
+
+  .admin-users-table td[data-label="İşlemler"] .d-flex {
+    justify-content: center;
+  }
+
+  /* Aksiyon butonları mobilde tam genişlik */
+  .admin-users-action-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  /* İzin Matrisi mobil görünümü */
+  .permission-matrix {
+    font-size: 0.75rem;
+  }
+
+  .permission-matrix th,
+  .permission-matrix td {
+    padding: 0.25rem;
+  }
+
+  .permission-matrix .badge {
+    font-size: 0.6rem;
+    padding: 0.2rem 0.3rem;
+  }
+
+  /* Rol kartları mobilde tam genişlik */
+  .admin-users-page .col-md-6.col-lg-4 {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+
+  /* Toplu işlem araç çubuğu mobil */
+  .bulk-actions-toolbar .btn-group {
+    width: 100%;
+  }
+
+  .bulk-actions-toolbar .btn-group .btn {
+    flex: 1;
+  }
+}
+
+/* ============================================================================
+   Küçük Mobil Cihazlar (576px altı)
+   ============================================================================ */
+@media (max-width: 576px) {
+  .admin-users-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .admin-users-actions .btn {
+    width: 100%;
+  }
+
+  /* Filtre bileşeni mobil */
+  .admin-users-page .card-body .row > div {
+    margin-bottom: 0.5rem;
+  }
+
+  /* Sayfalama mobil */
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pagination .page-item {
+    margin: 0.125rem;
+  }
+}
+
+/* ============================================================================
+   Loading ve Empty State Stilleri
+   ============================================================================ */
+.admin-users-loading {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-users-empty {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.admin-users-empty i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+/* ============================================================================
+   Satır Hover Efekti
+   ============================================================================ */
+.admin-users-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+  transition: background-color 0.2s ease;
+}
+
+/* ============================================================================
+   Badge Stilleri
+   ============================================================================ */
+.admin-users-table .badge {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Modal Responsive
+   ============================================================================ */
+@media (max-width: 576px) {
+  .modal-dialog {
+    margin: 0.5rem;
+  }
+
+  .modal-body .row > div {
+    margin-bottom: 0.75rem;
+  }
+}

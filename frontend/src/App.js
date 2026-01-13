@@ -11,6 +11,7 @@ import {
 } from "react-router-dom";
 import AdminPanel from "./admin/AdminPanel";
 import "./App.css";
+import "./styles/adminMobile.css";
 import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
 import FavoritesPage from "./components/FavoritesPage";
@@ -730,10 +731,15 @@ function App() {
             </AdminLoginGuard>
           }
         />
+        {/* ================================================================
+            RBAC İzin Kontrollü Admin Route'ları
+            Her route için requiredPermission parametresi eklendi.
+            Bu sayede menüde görünmeyen sayfalara URL ile erişim engellenir.
+            ================================================================ */}
         <Route
           path="/admin/dashboard"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="dashboard.view">
               <AdminLayout>
                 <Dashboard />
               </AdminLayout>
@@ -743,7 +749,7 @@ function App() {
         <Route
           path="/admin/micro"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="settings.system">
               <AdminLayout>
                 <AdminMicro />
               </AdminLayout>
@@ -753,7 +759,7 @@ function App() {
         <Route
           path="/admin/users"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="users.view">
               <AdminLayout>
                 <AdminUsers />
               </AdminLayout>
@@ -763,7 +769,7 @@ function App() {
         <Route
           path="/admin/orders"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="orders.view">
               <AdminLayout>
                 <AdminOrders />
               </AdminLayout>
@@ -773,7 +779,7 @@ function App() {
         <Route
           path="/admin/products"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="products.view">
               <AdminLayout>
                 <AdminProducts />
               </AdminLayout>
@@ -783,7 +789,7 @@ function App() {
         <Route
           path="/admin/categories"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="categories.view">
               <AdminLayout>
                 <AdminCategories />
               </AdminLayout>
@@ -793,18 +799,18 @@ function App() {
         <Route
           path="/admin/couriers"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="couriers.view">
               <AdminLayout>
                 <AdminCouriers />
               </AdminLayout>
             </AdminGuard>
           }
         />
-
+        {/* Reports: reports.view VEYA reports.sales izni gerekli (OR logic) */}
         <Route
           path="/admin/reports"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission={["reports.view", "reports.sales"]}>
               <AdminLayout>
                 <AdminReports />
               </AdminLayout>
@@ -814,17 +820,18 @@ function App() {
         <Route
           path="/admin/posters"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="banners.view">
               <AdminLayout>
                 <PosterManagement />
               </AdminLayout>
             </AdminGuard>
           }
         />
+        {/* Weight Reports: reports.weight VEYA orders.view izni gerekli (OR logic) */}
         <Route
           path="/admin/weight-reports"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission={["reports.weight", "orders.view"]}>
               <AdminLayout>
                 <AdminWeightReports />
               </AdminLayout>
@@ -834,17 +841,18 @@ function App() {
         <Route
           path="/admin/campaigns"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="campaigns.view">
               <AdminLayout>
                 <AdminCampaigns />
               </AdminLayout>
             </AdminGuard>
           }
         />
+        {/* Log Sayfaları - Her biri için spesifik izin kontrolü */}
         <Route
           path="/admin/logs/audit"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="logs.audit">
               <AdminLayout>
                 <AuditLogsPage />
               </AdminLayout>
@@ -854,7 +862,7 @@ function App() {
         <Route
           path="/admin/logs/errors"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="logs.error">
               <AdminLayout>
                 <ErrorLogsPage />
               </AdminLayout>
@@ -864,7 +872,7 @@ function App() {
         <Route
           path="/admin/logs/system"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="logs.view">
               <AdminLayout>
                 <SystemLogsPage />
               </AdminLayout>
@@ -874,7 +882,7 @@ function App() {
         <Route
           path="/admin/logs/inventory"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="logs.view">
               <AdminLayout>
                 <InventoryLogsPage />
               </AdminLayout>

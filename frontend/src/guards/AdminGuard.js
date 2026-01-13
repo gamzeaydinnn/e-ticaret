@@ -42,11 +42,17 @@ export const AdminGuard = ({
     hasAnyPermission,
     hasAllPermissions,
     canAccessAdminPanel,
+    permissionsLoading, // İzinler yüklenirken
+    permissions: contextPermissions, // Context'teki izin listesi
+    loadUserPermissions, // İzin yükleme fonksiyonu
   } = useAuth();
   const location = useLocation();
 
-  // Yükleniyor durumu
-  if (loading) {
+  // ============================================================================
+  // YÜKLEME DURUMU - Hem user hem de permissions yüklenene kadar bekle
+  // Race condition düzeltmesi: İzinler yüklenmeden izin kontrolü yapılmamalı
+  // ============================================================================
+  if (loading || permissionsLoading) {
     return (
       <div
         className="d-flex justify-content-center align-items-center"
@@ -88,7 +94,7 @@ export const AdminGuard = ({
 
   // Spesifik izin kontrolü
   if (requiredPermission) {
-    const permissions = Array.isArray(requiredPermission)
+    const reqPerms = Array.isArray(requiredPermission)
       ? requiredPermission
       : [requiredPermission];
 
@@ -96,11 +102,63 @@ export const AdminGuard = ({
     if (user.role !== "SuperAdmin") {
       let hasAccess = false;
 
-      if (requireAll) {
-        hasAccess = hasAllPermissions?.(...permissions) ?? false;
-      } else {
-        hasAccess = hasAnyPermission?.(...permissions) ?? false;
+      // ============================================================================
+      // İZİN KONTROLÜ - Önce context, sonra localStorage fallback
+      // Context permissions güncelse onu kullan, yoksa cache'den kontrol et
+      // ============================================================================
+
+      // Context'teki izinler var mı kontrol et
+      const hasContextPermissions =
+        Array.isArray(contextPermissions) && contextPermissions.length > 0;
+
+      if (hasContextPermissions) {
+        // Context'teki helper fonksiyonları kullan
+        if (requireAll) {
+          hasAccess = hasAllPermissions?.(...reqPerms) ?? false;
+        } else {
+          hasAccess = hasAnyPermission?.(...reqPerms) ?? false;
+        }
       }
+
+      // Context'te izin yoksa veya bulunamadıysa, localStorage'dan kontrol et
+      if (!hasAccess) {
+        try {
+          const cachedPermissions = localStorage.getItem("userPermissions");
+          const cachedRole = localStorage.getItem("permissionsCacheRole");
+
+          // Sadece aynı rol için cache'i kullan
+          if (cachedPermissions && cachedRole === user.role) {
+            const cached = JSON.parse(cachedPermissions);
+            if (Array.isArray(cached) && cached.length > 0) {
+              if (requireAll) {
+                hasAccess = reqPerms.every((p) => cached.includes(p));
+              } else {
+                hasAccess = reqPerms.some((p) => cached.includes(p));
+              }
+
+              // Cache'de bulunduysa, context'e de yükle (sync için)
+              // NOT: Bu sadece fallback, normalde login'de yüklenmeli
+              console.log(
+                "[AdminGuard] Cache'den izin bulundu, context sync bekleniyor"
+              );
+            }
+          }
+        } catch (e) {
+          console.warn("[AdminGuard] Cache okuma hatası:", e);
+        }
+      }
+
+      // ============================================================================
+      // DEBUG LOG - İzin kontrolü sonucunu logla
+      // ============================================================================
+      console.log("[AdminGuard] İzin kontrolü:", {
+        user: user.email || user.name,
+        role: user.role,
+        requiredPermission: reqPerms,
+        requireAll,
+        hasAccess,
+        contextPermsCount: contextPermissions?.length || 0,
+      });
 
       if (!hasAccess) {
         // Yetkisiz - fallback path'e veya access denied sayfasına yönlendir
@@ -110,7 +168,7 @@ export const AdminGuard = ({
             to={redirectPath}
             state={{
               from: location,
-              requiredPermission: permissions,
+              requiredPermission: reqPerms,
               message: "Bu sayfaya erişim yetkiniz bulunmamaktadır.",
             }}
             replace

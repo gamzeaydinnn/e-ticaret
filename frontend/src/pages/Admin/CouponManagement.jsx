@@ -150,25 +150,26 @@ export default function CouponManagement() {
   const activeCount = coupons.filter((c) => c.isActive).length;
 
   return (
-    <div className="container-fluid p-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
+    <div className="container-fluid p-2 p-md-4">
+      {/* Header - Responsive */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4 gap-2">
+        <div className="mb-2 mb-md-0">
+          <h1 className="h4 h3-md fw-bold mb-1" style={{ color: "#2d3748" }}>
             <i
               className="fas fa-ticket-alt me-2"
               style={{ color: "#f57c00" }}
             />
             Kupon Yönetimi
           </h1>
-          <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+          <div className="text-muted" style={{ fontSize: "0.8rem" }}>
             İndirim kuponlarını oluşturun, düzenleyin ve yönetin
           </div>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
           <input
             type="text"
             className="form-control form-control-sm"
-            style={{ width: 220 }}
+            style={{ minWidth: 180, minHeight: "44px" }}
             placeholder="Ara: kod, aktif/pasif"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -177,6 +178,8 @@ export default function CouponManagement() {
             className="btn btn-sm text-white fw-semibold"
             style={{
               background: "linear-gradient(135deg, #f57c00, #ff9800)",
+              minHeight: "44px",
+              whiteSpace: "nowrap",
             }}
             onClick={openCreate}
           >
@@ -197,14 +200,14 @@ export default function CouponManagement() {
         </div>
       )}
 
-      <div className="row g-4">
+      <div className="row g-2 g-md-4">
         <div className="col-12">
           <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white d-flex align-items-center justify-content-between">
-              <div>
+            <div className="card-header bg-white d-flex align-items-center justify-content-between py-2 px-3">
+              <div style={{ fontSize: "0.85rem" }}>
                 <i className="fas fa-tags me-2 text-primary"></i>
                 Kuponlar
-                <small className="ms-2 text-muted">
+                <small className="ms-2 text-muted d-none d-sm-inline">
                   Toplam: {totalCount} · Aktif: {activeCount}
                 </small>
               </div>
@@ -212,36 +215,42 @@ export default function CouponManagement() {
                 className="btn btn-sm btn-outline-secondary"
                 onClick={loadCoupons}
                 disabled={loading}
+                style={{ minHeight: "36px" }}
               >
                 Yenile
               </button>
             </div>
-            <div className="card-body">
+            <div className="card-body p-2 p-md-3">
               {loading ? (
-                <div className="text-muted">Yükleniyor...</div>
+                <div className="text-muted text-center py-3">Yükleniyor...</div>
               ) : (
                 <div className="table-responsive">
-                  <table className="table table-sm align-middle">
+                  <table
+                    className="table table-sm align-middle admin-mobile-table"
+                    style={{ fontSize: "0.8rem" }}
+                  >
                     <thead>
                       <tr>
-                        <th style={{ width: 70 }}>ID</th>
+                        <th style={{ width: 50 }}>ID</th>
                         <th>Kod</th>
                         <th>İndirim</th>
-                        <th>Tür</th>
+                        <th className="d-none d-lg-table-cell">Tür</th>
                         <th>Bitiş</th>
-                        <th>Min Tutar</th>
-                        <th>Kullanım</th>
+                        <th className="d-none d-md-table-cell">Min Tutar</th>
+                        <th className="d-none d-lg-table-cell">Kullanım</th>
                         <th>Durum</th>
-                        <th style={{ width: 130 }}>İşlemler</th>
+                        <th style={{ width: 100 }}>İşlem</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.length ? (
                         filtered.map((c) => (
                           <tr key={c.id}>
-                            <td>#{c.id}</td>
-                            <td className="fw-semibold">{c.code}</td>
-                            <td>
+                            <td data-label="ID">#{c.id}</td>
+                            <td data-label="Kod" className="fw-semibold">
+                              {c.code}
+                            </td>
+                            <td data-label="İndirim">
                               {c.isPercentage
                                 ? `${Number(c.value || 0)}%`
                                 : `₺${Number(c.value || 0).toLocaleString(
@@ -249,43 +258,65 @@ export default function CouponManagement() {
                                     { minimumFractionDigits: 2 }
                                   )}`}
                             </td>
-                            <td>{c.isPercentage ? "Yüzde" : "Tutar"}</td>
-                            <td>
+                            <td
+                              data-label="Tür"
+                              className="d-none d-lg-table-cell"
+                            >
+                              {c.isPercentage ? "Yüzde" : "Tutar"}
+                            </td>
+                            <td data-label="Bitiş">
                               {c.expirationDate
                                 ? new Date(c.expirationDate).toLocaleDateString(
                                     "tr-TR"
                                   )
                                 : "-"}
                             </td>
-                            <td>
+                            <td
+                              data-label="Min Tutar"
+                              className="d-none d-md-table-cell"
+                            >
                               {c.minOrderAmount != null
                                 ? `₺${Number(c.minOrderAmount).toLocaleString(
                                     "tr-TR",
-                                    { minimumFractionDigits: 2 }
+                                    { minimumFractionDigits: 0 }
                                   )}`
                                 : "-"}
                             </td>
-                            <td>{c.usageLimit ?? 1}</td>
-                            <td>
+                            <td
+                              data-label="Kullanım"
+                              className="d-none d-lg-table-cell"
+                            >
+                              {c.usageLimit ?? 1}
+                            </td>
+                            <td data-label="Durum">
                               <span
                                 className={`badge ${
                                   c.isActive ? "bg-success" : "bg-secondary"
                                 }`}
+                                style={{ fontSize: "0.7rem" }}
                               >
                                 {c.isActive ? "Aktif" : "Pasif"}
                               </span>
                             </td>
-                            <td>
-                              <div className="d-flex gap-2">
+                            <td data-label="İşlem">
+                              <div className="d-flex gap-1 justify-content-end">
                                 <button
                                   className="btn btn-outline-primary btn-sm"
                                   onClick={() => openEdit(c)}
+                                  style={{
+                                    minWidth: "36px",
+                                    minHeight: "36px",
+                                  }}
                                 >
                                   <i className="fas fa-edit"></i>
                                 </button>
                                 <button
                                   className="btn btn-outline-danger btn-sm"
                                   onClick={() => onDelete(c.id)}
+                                  style={{
+                                    minWidth: "36px",
+                                    minHeight: "36px",
+                                  }}
                                 >
                                   <i className="fas fa-trash"></i>
                                 </button>
@@ -295,7 +326,10 @@ export default function CouponManagement() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="9" className="text-muted">
+                          <td
+                            colSpan="9"
+                            className="text-muted text-center py-3"
+                          >
                             Kayıt bulunamadı.
                           </td>
                         </tr>
@@ -309,21 +343,21 @@ export default function CouponManagement() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal - Mobilde full-width */}
       {showModal && (
         <div
           className="modal d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <div className="modal-dialog modal-dialog-centered">
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
             <div
               className="modal-content border-0"
-              style={{ borderRadius: 16 }}
+              style={{ borderRadius: "16px" }}
             >
-              <div className="modal-header border-0 p-4">
+              <div className="modal-header border-0 p-3 p-md-4">
                 <h5
                   className="modal-title fw-bold"
-                  style={{ color: "#2d3748" }}
+                  style={{ color: "#2d3748", fontSize: "1.1rem" }}
                 >
                   <i
                     className="fas fa-ticket-alt me-2"
@@ -334,28 +368,35 @@ export default function CouponManagement() {
                 <button className="btn-close" onClick={closeModal}></button>
               </div>
 
-              <form onSubmit={onSubmit}>
-                <div className="modal-body p-4">
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold mb-2">
+              <form onSubmit={onSubmit} className="admin-mobile-form">
+                <div className="modal-body p-3 p-md-4">
+                  <div className="row g-2 g-md-3">
+                    <div className="col-12 col-md-6">
+                      <label
+                        className="form-label fw-semibold mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
                         Kupon Kodu
                       </label>
                       <input
                         name="code"
                         value={form.code}
                         onChange={onFormChange}
-                        className="form-control border-0 py-3"
+                        className="form-control border-0 py-2"
                         style={{
                           background: "rgba(245,124,0,0.05)",
                           borderRadius: 12,
+                          minHeight: "44px",
                         }}
                         required
                         placeholder="Örn: WELCOME10"
                       />
                     </div>
-                    <div className="col-md-3">
-                      <label className="form-label fw-semibold mb-2">
+                    <div className="col-8 col-md-4">
+                      <label
+                        className="form-label fw-semibold mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
                         İndirim
                       </label>
                       <input
@@ -364,32 +405,44 @@ export default function CouponManagement() {
                         step="0.01"
                         value={form.value}
                         onChange={onFormChange}
-                        className="form-control border-0 py-3"
+                        className="form-control border-0 py-2"
                         style={{
                           background: "rgba(245,124,0,0.05)",
                           borderRadius: 12,
+                          minHeight: "44px",
                         }}
                         required
                         placeholder="0.00"
                       />
                     </div>
-                    <div className="col-md-3 d-flex align-items-end">
-                      <div className="form-check">
+                    <div className="col-4 col-md-2 d-flex align-items-end">
+                      <div
+                        className="form-check"
+                        style={{
+                          minHeight: "44px",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
                         <input
                           className="form-check-input"
                           type="checkbox"
                           name="isPercentage"
                           checked={form.isPercentage}
                           onChange={onFormChange}
+                          style={{ width: "1.25rem", height: "1.25rem" }}
                         />
-                        <label className="form-check-label fw-semibold">
+                        <label className="form-check-label fw-semibold ms-2">
                           Yüzde
                         </label>
                       </div>
                     </div>
 
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold mb-2">
+                    <div className="col-12 col-md-6">
+                      <label
+                        className="form-label fw-semibold mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
                         Bitiş Tarihi
                       </label>
                       <input
@@ -397,16 +450,20 @@ export default function CouponManagement() {
                         name="expirationDate"
                         value={form.expirationDate}
                         onChange={onFormChange}
-                        className="form-control border-0 py-3"
+                        className="form-control border-0 py-2"
                         style={{
                           background: "rgba(245,124,0,0.05)",
                           borderRadius: 12,
+                          minHeight: "44px",
                         }}
                         required
                       />
                     </div>
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold mb-2">
+                    <div className="col-12 col-md-6">
+                      <label
+                        className="form-label fw-semibold mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
                         Minimum Sipariş Tutarı
                       </label>
                       <input
@@ -415,17 +472,21 @@ export default function CouponManagement() {
                         step="0.01"
                         value={form.minOrderAmount}
                         onChange={onFormChange}
-                        className="form-control border-0 py-3"
+                        className="form-control border-0 py-2"
                         style={{
                           background: "rgba(245,124,0,0.05)",
                           borderRadius: 12,
+                          minHeight: "44px",
                         }}
                         placeholder="Opsiyonel"
                       />
                     </div>
 
-                    <div className="col-md-6">
-                      <label className="form-label fw-semibold mb-2">
+                    <div className="col-8 col-md-6">
+                      <label
+                        className="form-label fw-semibold mb-1"
+                        style={{ fontSize: "0.85rem" }}
+                      >
                         Kullanım Limiti
                       </label>
                       <input
@@ -433,24 +494,33 @@ export default function CouponManagement() {
                         name="usageLimit"
                         value={form.usageLimit}
                         onChange={onFormChange}
-                        className="form-control border-0 py-3"
+                        className="form-control border-0 py-2"
                         style={{
                           background: "rgba(245,124,0,0.05)",
                           borderRadius: 12,
+                          minHeight: "44px",
                         }}
                         min={1}
                       />
                     </div>
-                    <div className="col-md-6 d-flex align-items-end">
-                      <div className="form-check">
+                    <div className="col-4 col-md-6 d-flex align-items-end">
+                      <div
+                        className="form-check"
+                        style={{
+                          minHeight: "44px",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
                         <input
                           className="form-check-input"
                           type="checkbox"
                           name="isActive"
                           checked={form.isActive}
                           onChange={onFormChange}
+                          style={{ width: "1.25rem", height: "1.25rem" }}
                         />
-                        <label className="form-check-label fw-semibold">
+                        <label className="form-check-label fw-semibold ms-2">
                           Aktif
                         </label>
                       </div>
@@ -458,11 +528,12 @@ export default function CouponManagement() {
                   </div>
                 </div>
 
-                <div className="modal-footer border-0 p-4">
+                <div className="modal-footer border-0 p-3 p-md-4">
                   <button
                     type="button"
                     className="btn btn-light"
                     onClick={closeModal}
+                    style={{ minHeight: "44px" }}
                   >
                     İptal
                   </button>
@@ -472,6 +543,7 @@ export default function CouponManagement() {
                     style={{
                       background: "linear-gradient(135deg, #f57c00, #ff9800)",
                       borderRadius: 8,
+                      minHeight: "44px",
                     }}
                   >
                     {editing ? "Güncelle" : "Kaydet"}

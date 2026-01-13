@@ -34,8 +34,56 @@ export const AuthProvider = ({ children }) => {
   // =========================================================================
   // Permission State - Kullanıcı izinleri
   // =========================================================================
-  const [permissions, setPermissions] = useState([]);
-  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [permissions, setPermissions] = useState(() => {
+    // ============================================================================
+    // İLK YÜKLENİRKEN localStorage'dan permissions'ı oku
+    // Bu sayede sayfa refresh edildiğinde izinler hemen hazır olur
+    // Race condition önlenir: AdminGuard render olduğunda permissions hazırdır
+    // ============================================================================
+    try {
+      const cached = localStorage.getItem("userPermissions");
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (error) {
+      console.error("Permission cache okuma hatası:", error);
+    }
+    return [];
+  });
+
+  // ============================================================================
+  // KRİTİK: permissionsLoading başlangıç değeri
+  // Eğer user localStorage'da varsa ve admin rolündeyse, başlangıçta true olmalı
+  // Bu sayede ilk render'da izin kontrolü yapılmadan önce yükleme tamamlanır
+  // ============================================================================
+  const [permissionsLoading, setPermissionsLoading] = useState(() => {
+    try {
+      const storedUser = localStorage.getItem("user");
+      const token =
+        localStorage.getItem("authToken") || localStorage.getItem("token");
+      if (storedUser && token) {
+        const parsed = JSON.parse(storedUser);
+        const adminRoles = [
+          "Admin",
+          "SuperAdmin",
+          "StoreManager",
+          "CustomerSupport",
+          "Logistics",
+        ];
+        // Eğer admin kullanıcı ve cache'de permission yoksa, loading=true başla
+        const cachedPerms = localStorage.getItem("userPermissions");
+        if (
+          (parsed.isAdmin || adminRoles.includes(parsed.role)) &&
+          !cachedPerms
+        ) {
+          return true;
+        }
+      }
+    } catch (e) {
+      // Hata durumunda false devam et
+    }
+    return false;
+  });
   const [permissionsError, setPermissionsError] = useState(null);
 
   // Demo kullanıcıları - localStorage'dan yükle veya default'ları kullan
@@ -77,77 +125,109 @@ export const AuthProvider = ({ children }) => {
 
   // =========================================================================
   // Permission Loader - Kullanıcı izinlerini yükle
+  // Cache süresi: 5 dakika (rol değişikliklerinin makul sürede yansıması için)
+  // KRİTİK: Bu fonksiyon yüklenen izinleri döndürür - caller state güncelini bekleyebilir
   // =========================================================================
-  const loadUserPermissions = useCallback(async (userData) => {
-    // Sadece admin kullanıcılar için izinleri yükle
-    if (
-      !userData ||
-      (!userData.isAdmin &&
-        ![
-          "Admin",
-          "SuperAdmin",
-          "StoreManager",
-          "CustomerSupport",
-          "Logistics",
-        ].includes(userData.role))
-    ) {
-      setPermissions([]);
-      localStorage.removeItem("userPermissions");
-      return;
-    }
-
-    setPermissionsLoading(true);
-    setPermissionsError(null);
-
-    try {
-      // Önce localStorage'dan kontrol et (cache)
-      const cachedPermissions = localStorage.getItem("userPermissions");
-      const cacheTimestamp = localStorage.getItem("permissionsCacheTime");
-      const cacheMaxAge = 5 * 60 * 1000; // 5 dakika
-
-      if (cachedPermissions && cacheTimestamp) {
-        const cacheAge = Date.now() - parseInt(cacheTimestamp, 10);
-        if (cacheAge < cacheMaxAge) {
-          const cached = JSON.parse(cachedPermissions);
-          setPermissions(cached);
-          setPermissionsLoading(false);
-          return;
-        }
+  const loadUserPermissions = useCallback(
+    async (userData, forceRefresh = false) => {
+      // Sadece admin kullanıcılar için izinleri yükle
+      if (
+        !userData ||
+        (!userData.isAdmin &&
+          ![
+            "Admin",
+            "SuperAdmin",
+            "StoreManager",
+            "CustomerSupport",
+            "Logistics",
+          ].includes(userData.role))
+      ) {
+        setPermissions([]);
+        localStorage.removeItem("userPermissions");
+        localStorage.removeItem("permissionsCacheTime");
+        localStorage.removeItem("permissionsCacheRole");
+        return [];
       }
 
-      // API'den izinleri al
-      const response = await permissionService.getMyPermissions();
+      setPermissionsLoading(true);
+      setPermissionsError(null);
 
-      if (response && Array.isArray(response.permissions)) {
-        setPermissions(response.permissions);
-        // Cache'e kaydet
+      try {
+        // =========================================================================
+        // Cache Kontrolü - Rol değişikliği durumunda cache geçersiz sayılır
+        // =========================================================================
+        const cachedPermissions = localStorage.getItem("userPermissions");
+        const cacheTimestamp = localStorage.getItem("permissionsCacheTime");
+        const cachedRole = localStorage.getItem("permissionsCacheRole");
+        const cacheMaxAge = 5 * 60 * 1000; // 5 dakika
+
+        // Cache geçerlilik kontrolü:
+        // 1. forceRefresh true ise cache'i atla
+        // 2. Rol değiştiyse cache'i atla (Madde 5 düzeltmesi)
+        // 3. Cache süresi dolduysa cache'i atla
+        const roleChanged = cachedRole && cachedRole !== userData.role;
+
+        if (
+          !forceRefresh &&
+          !roleChanged &&
+          cachedPermissions &&
+          cacheTimestamp
+        ) {
+          const cacheAge = Date.now() - parseInt(cacheTimestamp, 10);
+          if (cacheAge < cacheMaxAge) {
+            const cached = JSON.parse(cachedPermissions);
+            setPermissions(cached);
+            setPermissionsLoading(false);
+            return cached; // Cache'den döndür
+          }
+        }
+
+        // API'den izinleri al
+        const response = await permissionService.getMyPermissions();
+        let loadedPermissions = [];
+
+        if (response && Array.isArray(response.permissions)) {
+          loadedPermissions = response.permissions;
+        } else if (Array.isArray(response)) {
+          loadedPermissions = response;
+        }
+
+        // State'i güncelle
+        setPermissions(loadedPermissions);
+
+        // Cache'e kaydet - rol bilgisi ile birlikte
         localStorage.setItem(
           "userPermissions",
-          JSON.stringify(response.permissions)
+          JSON.stringify(loadedPermissions)
         );
         localStorage.setItem("permissionsCacheTime", Date.now().toString());
-      } else if (Array.isArray(response)) {
-        setPermissions(response);
-        localStorage.setItem("userPermissions", JSON.stringify(response));
-        localStorage.setItem("permissionsCacheTime", Date.now().toString());
-      }
-    } catch (error) {
-      console.error("Permission loading error:", error);
-      setPermissionsError(error.message || "İzinler yüklenirken hata oluştu");
+        localStorage.setItem("permissionsCacheRole", userData.role);
 
-      // Hata durumunda cache'den yükle (varsa)
-      const cachedPermissions = localStorage.getItem("userPermissions");
-      if (cachedPermissions) {
-        try {
-          setPermissions(JSON.parse(cachedPermissions));
-        } catch (parseError) {
-          console.error("Cache parse error:", parseError);
+        return loadedPermissions; // Yüklenen izinleri döndür
+      } catch (error) {
+        console.error("Permission loading error:", error);
+        setPermissionsError(error.message || "İzinler yüklenirken hata oluştu");
+
+        // Hata durumunda cache'den yükle (varsa ve rol değişmediyse)
+        const cachedPermissions = localStorage.getItem("userPermissions");
+        const cachedRole = localStorage.getItem("permissionsCacheRole");
+
+        if (cachedPermissions && cachedRole === userData.role) {
+          try {
+            const cached = JSON.parse(cachedPermissions);
+            setPermissions(cached);
+            return cached;
+          } catch (parseError) {
+            console.error("Cache parse error:", parseError);
+          }
         }
+        return [];
+      } finally {
+        setPermissionsLoading(false);
       }
-    } finally {
-      setPermissionsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // =========================================================================
   // Permission Helper Functions
@@ -225,20 +305,23 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * İzin cache'ini temizle
+   * Rol değişikliği sonrası çağrılmalı (Madde 5 düzeltmesi)
    */
   const clearPermissionsCache = useCallback(() => {
     setPermissions([]);
     localStorage.removeItem("userPermissions");
     localStorage.removeItem("permissionsCacheTime");
+    localStorage.removeItem("permissionsCacheRole");
   }, []);
 
   /**
-   * İzinleri yeniden yükle
+   * İzinleri yeniden yükle (cache'i atlayarak)
+   * Rol değişikliği sonrası çağrılmalı (Madde 5 düzeltmesi)
    */
   const refreshPermissions = useCallback(async () => {
     clearPermissionsCache();
     if (user) {
-      await loadUserPermissions(user);
+      await loadUserPermissions(user, true); // forceRefresh = true
     }
   }, [user, loadUserPermissions, clearPermissionsCache]);
 
@@ -358,9 +441,10 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("user");
     localStorage.removeItem("userId");
 
-    // Permission verileri
+    // Permission verileri (Madde 5 düzeltmesi - rol bilgisi de temizleniyor)
     localStorage.removeItem("userPermissions");
     localStorage.removeItem("permissionsCacheTime");
+    localStorage.removeItem("permissionsCacheRole");
     setPermissions([]);
 
     // Sepet verileri

@@ -44,20 +44,45 @@ export const AuthService = {
   resetPasswordByPhone: (data) =>
     api.post("/api/auth/reset-password-by-phone", data),
 
-  // helper client-side
+  // ============================================================================
+  // TOKEN YÖNETİMİ
+  // Tüm olası key'lere yazar - geriye dönük uyumluluk için
+  // api.js interceptor'u bu key'lerden birini okur
+  // ============================================================================
   saveToken: (token) => {
+    // Tüm olası key'lere yaz (uyumluluk için)
     localStorage.setItem("token", token);
-    // Token'ı API header'ına da ekle
+    localStorage.setItem("authToken", token); // AdminGuard uyumlu
+    localStorage.setItem("adminToken", token); // Eski kod uyumlu
+
+    // Token'ı API header'ına da ekle (hemen geçerli olsun)
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+    console.log("[AuthService] ✅ Token tüm key'lere kaydedildi");
   },
 
   removeToken: () => {
+    // Tüm key'lerden kaldır
     localStorage.removeItem("token");
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("user");
+    localStorage.removeItem("userId");
+
     // API header'ından da kaldır
     delete api.defaults.headers.common["Authorization"];
+
+    console.log("[AuthService] ✅ Token tüm key'lerden kaldırıldı");
   },
 
-  getToken: () => localStorage.getItem("token"),
+  getToken: () => {
+    // Tüm olası key'leri kontrol et (api.js ile senkron)
+    return (
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("adminToken")
+    );
+  },
 
   // Token'ı API'ye otomatik eklemek için
   setupTokenInterceptor: () => {

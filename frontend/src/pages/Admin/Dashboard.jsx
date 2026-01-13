@@ -1,7 +1,20 @@
 import { useEffect, useState } from "react";
 import { AdminService } from "../../services/adminService";
+import { useAuth } from "../../contexts/AuthContext";
+import { PERMISSIONS } from "../../services/permissionService";
+
+// ============================================================================
+// Dashboard - İzin Bazlı Widget Görünürlüğü
+// ============================================================================
+// Her widget, ilgili izne göre gösterilir/gizlenir:
+// - dashboard.view: Temel dashboard erişimi (route seviyesinde kontrol edilir)
+// - dashboard.statistics: İstatistik kartları (Kullanıcılar, Ürünler, Siparişler)
+// - dashboard.revenue: Gelir bilgileri ve finansal veriler
+// ============================================================================
 
 export default function Dashboard() {
+  const { hasPermission, user } = useAuth();
+
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalOrders: 0,
@@ -12,6 +25,13 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // İzin kontrolleri - SuperAdmin her şeyi görebilir
+  const isSuperAdmin = user?.role === "SuperAdmin";
+  const canViewStatistics =
+    isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_STATISTICS);
+  const canViewRevenue =
+    isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_REVENUE);
 
   const loadDashboardStats = async () => {
     try {
@@ -69,105 +89,126 @@ export default function Dashboard() {
   return (
     <div style={{ overflow: "hidden", maxWidth: "100%" }}>
       <div className="container-fluid px-2 px-md-3">
-        {/* Modern Stats Cards */}
+        {/* Modern Stats Cards - İzin kontrolü ile */}
         <div className="row g-2 g-md-3 mb-3 mb-md-4">
-          {/* Kullanıcılar */}
-          <div className="col-6 col-xl-3">
-            <div
-              className="card border-0 h-100"
-              style={{
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                color: "white",
-                boxShadow: "0 4px 15px rgba(102, 126, 234, 0.25)",
-              }}
-            >
-              <div className="card-body p-2 p-md-3">
-                <p
-                  className="mb-0 opacity-75 text-uppercase"
-                  style={{ fontSize: "0.65rem" }}
-                >
-                  Kullanıcılar
-                </p>
-                <h5 className="mb-0 fw-bold">{stats.totalUsers}</h5>
+          {/* Kullanıcılar - dashboard.statistics izni gerekli */}
+          {canViewStatistics && (
+            <div className="col-6 col-xl-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3">
+                  <p
+                    className="mb-0 opacity-75 text-uppercase"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    Kullanıcılar
+                  </p>
+                  <h5 className="mb-0 fw-bold">{stats.totalUsers}</h5>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Ürünler */}
-          <div className="col-6 col-xl-3">
-            <div
-              className="card border-0 h-100"
-              style={{
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
-                color: "white",
-                boxShadow: "0 4px 15px rgba(17, 153, 142, 0.25)",
-              }}
-            >
-              <div className="card-body p-2 p-md-3">
-                <p
-                  className="mb-0 opacity-75 text-uppercase"
-                  style={{ fontSize: "0.65rem" }}
-                >
-                  Ürünler
-                </p>
-                <h5 className="mb-0 fw-bold">{stats.totalProducts}</h5>
+          {/* Ürünler - dashboard.statistics izni gerekli */}
+          {canViewStatistics && (
+            <div className="col-6 col-xl-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(17, 153, 142, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3">
+                  <p
+                    className="mb-0 opacity-75 text-uppercase"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    Ürünler
+                  </p>
+                  <h5 className="mb-0 fw-bold">{stats.totalProducts}</h5>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Siparişler */}
-          <div className="col-6 col-xl-3">
-            <div
-              className="card border-0 h-100"
-              style={{
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                color: "white",
-                boxShadow: "0 4px 15px rgba(240, 147, 251, 0.25)",
-              }}
-            >
-              <div className="card-body p-2 p-md-3">
-                <p
-                  className="mb-0 opacity-75 text-uppercase"
-                  style={{ fontSize: "0.65rem" }}
-                >
-                  Siparişler
-                </p>
-                <h5 className="mb-0 fw-bold">{stats.totalOrders}</h5>
+          {/* Siparişler - dashboard.statistics izni gerekli */}
+          {canViewStatistics && (
+            <div className="col-6 col-xl-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(240, 147, 251, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3">
+                  <p
+                    className="mb-0 opacity-75 text-uppercase"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    Siparişler
+                  </p>
+                  <h5 className="mb-0 fw-bold">{stats.totalOrders}</h5>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Toplam Gelir */}
-          <div className="col-6 col-xl-3">
-            <div
-              className="card border-0 h-100"
-              style={{
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
-                color: "white",
-                boxShadow: "0 4px 15px rgba(249, 115, 22, 0.25)",
-              }}
-            >
-              <div className="card-body p-2 p-md-3">
-                <p
-                  className="mb-0 opacity-75 text-uppercase"
-                  style={{ fontSize: "0.65rem" }}
-                >
-                  Toplam Gelir
-                </p>
-                <h5 className="mb-0 fw-bold" style={{ fontSize: "1rem" }}>
-                  ₺
-                  {stats.totalRevenue?.toLocaleString("tr-TR", {
-                    minimumFractionDigits: 0,
-                  })}
-                </h5>
+          {/* Toplam Gelir - dashboard.revenue izni gerekli */}
+          {canViewRevenue && (
+            <div className="col-6 col-xl-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(249, 115, 22, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3">
+                  <p
+                    className="mb-0 opacity-75 text-uppercase"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    Toplam Gelir
+                  </p>
+                  <h5 className="mb-0 fw-bold" style={{ fontSize: "1rem" }}>
+                    ₺
+                    {stats.totalRevenue?.toLocaleString("tr-TR", {
+                      minimumFractionDigits: 0,
+                    })}
+                  </h5>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* İzin yoksa bilgi mesajı göster */}
+        {!canViewStatistics && !canViewRevenue && (
+          <div className="alert alert-info border-0 rounded-3 mb-4">
+            <i className="fas fa-info-circle me-2"></i>
+            Dashboard istatistiklerini görüntülemek için gerekli izinlere sahip
+            değilsiniz.
+          </div>
+        )}
 
         {/* Son Siparişler ve En Çok Satan Ürünler */}
         <div className="row g-2 g-md-3">

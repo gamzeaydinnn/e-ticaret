@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     [Route("api/admin/dashboard")]
     public class AdminDashboardController : ControllerBase
     {

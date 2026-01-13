@@ -13,7 +13,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const { setUser } = useAuth();
+  const { setUser, loadUserPermissions } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -49,13 +49,28 @@ export default function AdminLogin() {
               (data.role === "Admin" || data.role === "SuperAdmin"),
           };
 
-        // Kullanıcının admin yetkisi var mı kontrol et
-        const isAdmin =
-          userData.isAdmin ||
-          userData.role === "Admin" ||
-          userData.role === "SuperAdmin";
-        if (!isAdmin) {
-          setError("Bu hesap admin yetkisine sahip değil!");
+        // ============================================================================
+        // Admin Paneline Erişim Kontrolü
+        // Backend'deki Roles.GetAdminPanelRoles() ile senkronize tutulmalı
+        // Tüm yönetici rolleri: SuperAdmin, Admin, StoreManager, CustomerSupport, Logistics
+        // ============================================================================
+        const ADMIN_PANEL_ROLES = [
+          "SuperAdmin",
+          "Admin",
+          "StoreManager",
+          "CustomerSupport",
+          "Logistics",
+        ];
+
+        const userRole = userData.role || "";
+        const hasAdminAccess =
+          userData.isAdmin === true ||
+          ADMIN_PANEL_ROLES.some(
+            (role) => role.toLowerCase() === userRole.toLowerCase()
+          );
+
+        if (!hasAdminAccess) {
+          setError("Bu hesap admin paneline erişim yetkisine sahip değil!");
           setLoading(false);
           return;
         }
@@ -71,12 +86,58 @@ export default function AdminLogin() {
         // Auth context'i güncelle
         setUser?.(userData);
 
+        // ============================================================================
+        // KRİTİK: İzinleri yükle - Navigate etmeden önce
+        // Bu işlem olmadan dashboard'a gidildiğinde 401/403 hataları alınır
+        // loadUserPermissions artık izinleri döndürüyor, state güncelini bekle
+        // ============================================================================
+        console.log("⏳ İzinler yükleniyor...");
+        let permissionsReady = false;
+        try {
+          if (loadUserPermissions) {
+            // İzinleri yükle ve dönen değeri al
+            const loadedPermissions = await loadUserPermissions(userData, true); // forceRefresh=true
+
+            // İzinler başarıyla yüklendi mi kontrol et
+            if (
+              Array.isArray(loadedPermissions) &&
+              loadedPermissions.length > 0
+            ) {
+              permissionsReady = true;
+              console.log(
+                "✅ İzinler yüklendi:",
+                loadedPermissions.length,
+                "adet"
+              );
+            } else {
+              // İzin bulunamadı - localStorage'a varsayılan dashboard.view ekle (fallback)
+              const fallbackPerms = ["dashboard.view"];
+              localStorage.setItem(
+                "userPermissions",
+                JSON.stringify(fallbackPerms)
+              );
+              localStorage.setItem(
+                "permissionsCacheTime",
+                Date.now().toString()
+              );
+              localStorage.setItem("permissionsCacheRole", userData.role);
+              console.warn("⚠️ İzin bulunamadı, fallback kullanılıyor");
+              permissionsReady = true;
+            }
+
+            // State güncelinin React tarafından işlenmesi için bekle
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
+        } catch (permError) {
+          console.warn("⚠️ İzin yükleme hatası:", permError);
+          // İzin hatası olsa bile devam et - PermissionManager'da fallback var
+          permissionsReady = true;
+        }
+
         // Token'ın axios'a set edildiğinden emin ol
         console.log("✅ Token kaydedildi:", token.substring(0, 20) + "...");
         console.log("✅ User data:", userData);
-
-        // Token'ın localStorage'a yazılması için kısa bir bekle
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        console.log("✅ Permissions ready:", permissionsReady);
 
         navigate("/admin/dashboard");
         return;

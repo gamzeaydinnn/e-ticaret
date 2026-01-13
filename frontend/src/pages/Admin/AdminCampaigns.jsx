@@ -208,139 +208,141 @@ export default function AdminCampaigns() {
   const activeCount = campaigns.filter((c) => c.isActive).length;
 
   return (
-    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 px-1">
-        <div>
-          <h5
-            className="fw-bold mb-0"
-            style={{ color: "#2d3748", fontSize: "1rem" }}
-          >
+    <div
+      className="container-fluid p-2 p-md-4"
+      style={{ overflow: "hidden", maxWidth: "100%" }}
+    >
+      {/* Header - Responsive */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 gap-2">
+        <div className="mb-2 mb-md-0">
+          <h1 className="h4 h3-md fw-bold mb-1" style={{ color: "#2d3748" }}>
             <i className="fas fa-gift me-2" style={{ color: "#f57c00" }}></i>
             Kampanya Yönetimi
-          </h5>
+          </h1>
           <p
             className="text-muted mb-0 d-none d-sm-block"
-            style={{ fontSize: "0.7rem" }}
+            style={{ fontSize: "0.8rem" }}
           >
             Kampanyalarınızı yönetin
           </p>
         </div>
-        <div className="d-flex gap-1 flex-wrap">
+        <div className="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
           <input
             type="text"
             className="form-control form-control-sm"
-            placeholder="Ara..."
-            style={{ width: "100px", fontSize: "0.7rem" }}
+            placeholder="Ara: ad, aktif/pasif"
+            style={{ minWidth: "150px", minHeight: "44px" }}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <button
-            className="btn btn-sm btn-outline-secondary px-2 py-1"
-            style={{ fontSize: "0.65rem" }}
-            onClick={loadCampaigns}
-            disabled={loading}
-          >
-            <i className="fas fa-sync-alt"></i>
-          </button>
-          <button
-            className="btn btn-sm text-white fw-semibold px-2 py-1"
-            style={{
-              background: "linear-gradient(135deg, #f57c00, #ff9800)",
-              fontSize: "0.65rem",
-            }}
-            onClick={openCreateModal}
-          >
-            <i className="fas fa-plus me-1"></i>Yeni
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              style={{ minHeight: "44px", minWidth: "44px" }}
+              onClick={loadCampaigns}
+              disabled={loading}
+            >
+              <i className="fas fa-sync-alt"></i>
+            </button>
+            <button
+              className="btn btn-sm text-white fw-semibold flex-grow-1"
+              style={{
+                background: "linear-gradient(135deg, #f57c00, #ff9800)",
+                minHeight: "44px",
+                whiteSpace: "nowrap",
+              }}
+              onClick={openCreateModal}
+            >
+              <i className="fas fa-plus me-1"></i>Yeni Kampanya
+            </button>
+          </div>
         </div>
       </div>
 
       {error && (
-        <div
-          className="alert alert-danger py-2 mx-1"
-          style={{ fontSize: "0.7rem" }}
-        >
+        <div className="alert alert-danger py-2" style={{ fontSize: "0.8rem" }}>
           {error}
         </div>
       )}
       {message && (
         <div
-          className={`alert alert-${messageType} py-2 mx-1`}
-          style={{ fontSize: "0.7rem" }}
+          className={`alert alert-${messageType} py-2`}
+          style={{ fontSize: "0.8rem" }}
         >
           {message}
         </div>
       )}
 
-      <div
-        className="card border-0 shadow-sm mx-1"
-        style={{ borderRadius: "8px" }}
-      >
-        <div className="card-header bg-white py-2 px-2 d-flex justify-content-between align-items-center">
-          <span style={{ fontSize: "0.8rem" }}>
-            <i className="fas fa-layer-group me-1 text-primary"></i>Kampanyalar
+      <div className="card border-0 shadow-sm" style={{ borderRadius: "10px" }}>
+        <div className="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
+          <span style={{ fontSize: "0.9rem" }}>
+            <i className="fas fa-layer-group me-2 text-primary"></i>Kampanyalar
           </span>
-          <small className="text-muted" style={{ fontSize: "0.65rem" }}>
+          <small className="text-muted" style={{ fontSize: "0.75rem" }}>
             Toplam: {totalCount} · Aktif: {activeCount}
           </small>
         </div>
-        <div className="card-body p-0">
+        <div className="card-body p-2 p-md-3">
           {loading ? (
-            <div className="text-muted small p-3">Yükleniyor...</div>
+            <div className="text-muted text-center py-3">Yükleniyor...</div>
           ) : (
             <div className="table-responsive">
               <table
-                className="table table-sm mb-0"
-                style={{ fontSize: "0.65rem" }}
+                className="table table-sm mb-0 admin-mobile-table"
+                style={{ fontSize: "0.8rem" }}
               >
                 <thead className="bg-light">
                   <tr>
-                    <th className="px-1">ID</th>
-                    <th className="px-1">Ad</th>
-                    <th className="px-1 d-none d-sm-table-cell">Tarih</th>
-                    <th className="px-1">Durum</th>
-                    <th className="px-1">İşlem</th>
+                    <th className="px-2">ID</th>
+                    <th className="px-2">Ad</th>
+                    <th className="px-2 d-none d-md-table-cell">Tarih</th>
+                    <th className="px-2">Durum</th>
+                    <th className="px-2">İşlem</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredCampaigns.length ? (
                     filteredCampaigns.map((c) => (
                       <tr key={c.id}>
-                        <td className="px-1">#{c.id}</td>
+                        <td data-label="ID" className="px-2">
+                          #{c.id}
+                        </td>
                         <td
-                          className="px-1 fw-semibold text-truncate"
-                          style={{ maxWidth: "100px" }}
+                          data-label="Ad"
+                          className="px-2 fw-semibold text-truncate"
+                          style={{ maxWidth: "150px" }}
                         >
                           {c.name}
                         </td>
                         <td
-                          className="px-1 d-none d-sm-table-cell"
-                          style={{ fontSize: "0.6rem" }}
+                          data-label="Tarih"
+                          className="px-2 d-none d-md-table-cell"
+                          style={{ fontSize: "0.75rem" }}
                         >
                           {formatDate(c.startDate)} - {formatDate(c.endDate)}
                         </td>
-                        <td className="px-1">
+                        <td data-label="Durum" className="px-2">
                           <span
                             className={`badge ${
                               c.isActive ? "bg-success" : "bg-secondary"
                             }`}
-                            style={{ fontSize: "0.55rem" }}
+                            style={{ fontSize: "0.7rem" }}
                           >
                             {c.isActive ? "Aktif" : "Pasif"}
                           </span>
                         </td>
-                        <td className="px-1">
-                          <div className="d-flex gap-1">
+                        <td data-label="İşlem" className="px-2">
+                          <div className="d-flex gap-1 justify-content-end">
                             <button
-                              className="btn btn-outline-primary p-1"
-                              style={{ fontSize: "0.55rem", lineHeight: 1 }}
+                              className="btn btn-outline-primary btn-sm"
+                              style={{ minWidth: "36px", minHeight: "36px" }}
                               onClick={() => openEditModal(c)}
                             >
                               <i className="fas fa-edit"></i>
                             </button>
                             <button
-                              className="btn btn-outline-danger p-1"
-                              style={{ fontSize: "0.55rem", lineHeight: 1 }}
+                              className="btn btn-outline-danger btn-sm"
+                              style={{ minWidth: "36px", minHeight: "36px" }}
                               onClick={() => handleDelete(c.id)}
                             >
                               <i className="fas fa-trash"></i>
@@ -363,53 +365,52 @@ export default function AdminCampaigns() {
         </div>
       </div>
 
+      {/* Modal - Mobilde full-width */}
       {showModal && (
         <div
           className="modal d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <div className="modal-dialog modal-dialog-centered mx-2">
+          <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
             <div
               className="modal-content border-0"
-              style={{ borderRadius: "12px" }}
+              style={{ borderRadius: "16px" }}
             >
-              <div className="modal-header border-0 py-2 px-3">
-                <h6
+              <div className="modal-header border-0 py-3 px-3">
+                <h5
                   className="modal-title fw-bold"
-                  style={{ color: "#2d3748", fontSize: "0.9rem" }}
+                  style={{ color: "#2d3748", fontSize: "1rem" }}
                 >
                   <i
                     className="fas fa-gift me-2"
                     style={{ color: "#f57c00" }}
                   ></i>
-                  {editingId ? "Düzenle" : "Yeni Kampanya"}
-                </h6>
-                <button
-                  className="btn-close btn-close-sm"
-                  onClick={closeModal}
-                ></button>
+                  {editingId ? "Kampanyayı Düzenle" : "Yeni Kampanya"}
+                </h5>
+                <button className="btn-close" onClick={closeModal}></button>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} className="admin-mobile-form">
                 <div
                   className="modal-body p-3"
-                  style={{ maxHeight: "60vh", overflowY: "auto" }}
+                  style={{ maxHeight: "70vh", overflowY: "auto" }}
                 >
                   {modalLoading ? (
-                    <div className="text-center text-muted py-3">
+                    <div className="text-center text-muted py-4">
+                      <div className="spinner-border spinner-border-sm me-2"></div>
                       Yükleniyor...
                     </div>
                   ) : (
-                    <div className="row g-2">
+                    <div className="row g-2 g-md-3">
                       <div className="col-12">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Kampanya Adı
                         </label>
                         <input
-                          className="form-control form-control-sm"
-                          style={{ fontSize: "0.75rem" }}
+                          className="form-control"
+                          style={{ minHeight: "44px" }}
                           name="name"
                           value={form.name}
                           onChange={onFormChange}
@@ -420,13 +421,13 @@ export default function AdminCampaigns() {
                       <div className="col-12">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Açıklama
                         </label>
                         <input
-                          className="form-control form-control-sm"
-                          style={{ fontSize: "0.75rem" }}
+                          className="form-control"
+                          style={{ minHeight: "44px" }}
                           name="description"
                           value={form.description}
                           onChange={onFormChange}
@@ -436,14 +437,14 @@ export default function AdminCampaigns() {
                       <div className="col-6">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Başlangıç
                         </label>
                         <input
                           type="date"
-                          className="form-control form-control-sm"
-                          style={{ fontSize: "0.7rem" }}
+                          className="form-control"
+                          style={{ minHeight: "44px" }}
                           name="startDate"
                           value={form.startDate}
                           onChange={onFormChange}
@@ -453,14 +454,14 @@ export default function AdminCampaigns() {
                       <div className="col-6">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Bitiş
                         </label>
                         <input
                           type="date"
-                          className="form-control form-control-sm"
-                          style={{ fontSize: "0.7rem" }}
+                          className="form-control"
+                          style={{ minHeight: "44px" }}
                           name="endDate"
                           value={form.endDate}
                           onChange={onFormChange}
@@ -470,13 +471,13 @@ export default function AdminCampaigns() {
                       <div className="col-6">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Ödül Türü
                         </label>
                         <select
-                          className="form-select form-select-sm"
-                          style={{ fontSize: "0.7rem" }}
+                          className="form-select"
+                          style={{ minHeight: "44px" }}
                           name="rewardType"
                           value={form.rewardType}
                           onChange={onFormChange}
@@ -489,14 +490,14 @@ export default function AdminCampaigns() {
                       <div className="col-6">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Ödül Değeri
                         </label>
                         <input
                           type="number"
-                          className="form-control form-control-sm"
-                          style={{ fontSize: "0.7rem" }}
+                          className="form-control"
+                          style={{ minHeight: "44px" }}
                           name="rewardValue"
                           value={form.rewardValue}
                           onChange={onFormChange}
@@ -508,14 +509,13 @@ export default function AdminCampaigns() {
                       <div className="col-12">
                         <label
                           className="form-label fw-semibold mb-1"
-                          style={{ fontSize: "0.7rem" }}
+                          style={{ fontSize: "0.85rem" }}
                         >
                           Kural (JSON)
                         </label>
                         <textarea
-                          className="form-control form-control-sm"
+                          className="form-control"
                           rows="2"
-                          style={{ fontSize: "0.7rem" }}
                           name="conditionJson"
                           value={form.conditionJson}
                           onChange={onFormChange}
@@ -523,18 +523,23 @@ export default function AdminCampaigns() {
                         />
                       </div>
                       <div className="col-12">
-                        <div className="form-check">
+                        <div
+                          className="form-check"
+                          style={{
+                            minHeight: "44px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
                           <input
                             type="checkbox"
                             className="form-check-input"
                             name="isActive"
                             checked={form.isActive}
                             onChange={onFormChange}
+                            style={{ width: "1.25rem", height: "1.25rem" }}
                           />
-                          <label
-                            className="form-check-label"
-                            style={{ fontSize: "0.75rem" }}
-                          >
+                          <label className="form-check-label fw-semibold ms-2">
                             Aktif
                           </label>
                         </div>
@@ -542,21 +547,21 @@ export default function AdminCampaigns() {
                     </div>
                   )}
                 </div>
-                <div className="modal-footer border-0 py-2 px-3">
+                <div className="modal-footer border-0 py-3 px-3">
                   <button
                     type="button"
-                    className="btn btn-light btn-sm"
-                    style={{ fontSize: "0.7rem" }}
+                    className="btn btn-light"
+                    style={{ minHeight: "44px" }}
                     onClick={closeModal}
                   >
                     İptal
                   </button>
                   <button
                     type="submit"
-                    className="btn btn-sm text-white fw-semibold px-3"
+                    className="btn text-white fw-semibold px-4"
                     style={{
                       background: "linear-gradient(135deg, #f57c00, #ff9800)",
-                      fontSize: "0.7rem",
+                      minHeight: "44px",
                     }}
                     disabled={modalLoading}
                   >

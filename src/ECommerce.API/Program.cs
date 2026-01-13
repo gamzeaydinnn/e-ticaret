@@ -383,8 +383,9 @@ builder.Services.AddScoped<IAuthService>(sp =>
     var refreshTokenRepo = sp.GetRequiredService<IRefreshTokenRepository>();
     var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
     var smsService = sp.GetRequiredService<ECommerce.Business.Services.Interfaces.ISmsVerificationService>();
+    var logger = sp.GetRequiredService<ILogger<AuthManager>>();
     
-    return new AuthManager(userManager, config, emailSender, refreshTokenRepo, httpContextAccessor, smsService);
+    return new AuthManager(userManager, config, emailSender, refreshTokenRepo, httpContextAccessor, smsService, logger);
 });
 
 // // builder.Services.AddScoped<StockSyncJob>();

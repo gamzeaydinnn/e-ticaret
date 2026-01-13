@@ -55,16 +55,22 @@ namespace ECommerce.Business.Services.Managers
             _userRepository.Delete(user);
         }
 
+        /// <summary>
+        /// Kullanıcı bilgilerini günceller.
+        /// Repository'deki async metodu çağırarak SaveChanges'i garanti eder.
+        /// </summary>
         public async Task UpdateAsync(User user)
         {
-            _userRepository.Update(user);
-            await Task.CompletedTask;
+            await _userRepository.UpdateAsync(user);
         }
 
+        /// <summary>
+        /// Kullanıcıyı siler.
+        /// Repository'deki async metodu çağırarak SaveChanges'i garanti eder.
+        /// </summary>
         public async Task DeleteAsync(User user)
         {
-            _userRepository.Delete(user);
-            await Task.CompletedTask;
+            await _userRepository.DeleteAsync(user);
         }
         public async Task<int> GetUserCountAsync()
         {

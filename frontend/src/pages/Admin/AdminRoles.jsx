@@ -5,7 +5,7 @@
 // Sadece SuperAdmin tarafından erişilebilir.
 // =============================================================================
 
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import permissionService, {
@@ -260,7 +260,7 @@ const AdminRoles = () => {
   }, [successMessage]);
 
   // İzinleri modüle göre grupla
-  const groupedPermissions = React.useMemo(() => {
+  const groupedPermissions = useMemo(() => {
     const groups = {};
 
     allPermissions.forEach((permission) => {
@@ -292,9 +292,9 @@ const AdminRoles = () => {
   // Yetki yoksa
   if (!canView) {
     return (
-      <div className="container-fluid">
+      <div className="container-fluid p-2 p-md-4">
         <div className="alert alert-danger">
-          <i className="bi bi-shield-lock me-2"></i>
+          <i className="fas fa-shield-alt me-2"></i>
           Bu sayfayı görüntüleme yetkiniz bulunmamaktadır.
         </div>
       </div>
@@ -304,10 +304,10 @@ const AdminRoles = () => {
   // Yükleniyor
   if (loading) {
     return (
-      <div className="container-fluid">
+      <div className="container-fluid p-2 p-md-4">
         <div
           className="d-flex justify-content-center align-items-center"
-          style={{ minHeight: "400px" }}
+          style={{ minHeight: "300px" }}
         >
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Yükleniyor...</span>
@@ -318,25 +318,32 @@ const AdminRoles = () => {
   }
 
   return (
-    <div className="container-fluid">
-      {/* Header */}
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
-        <div>
-          <h1 className="h3 mb-1">
-            <i className="bi bi-person-badge me-2 text-primary"></i>
+    <div className="container-fluid p-2 p-md-4">
+      {/* Header - Responsive */}
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-3 mb-md-4 gap-2">
+        <div className="mb-2 mb-md-0">
+          <h1 className="h4 h3-md fw-bold mb-1" style={{ color: "#2d3748" }}>
+            <i
+              className="fas fa-user-shield me-2"
+              style={{ color: "#f57c00" }}
+            ></i>
             Rol Yönetimi
           </h1>
-          <p className="text-muted mb-0">
+          <p className="text-muted mb-0" style={{ fontSize: "0.8rem" }}>
             Sistem rollerini ve izinlerini yönetin
           </p>
         </div>
 
         {canCreate && (
           <button
-            className="btn btn-primary mt-3 mt-md-0"
+            className="btn text-white fw-semibold"
+            style={{
+              background: "linear-gradient(135deg, #f57c00, #ff9800)",
+              minHeight: "44px",
+            }}
             onClick={handleOpenCreateModal}
           >
-            <i className="bi bi-plus-lg me-2"></i>
+            <i className="fas fa-plus me-2"></i>
             Yeni Rol
           </button>
         )}
@@ -345,10 +352,10 @@ const AdminRoles = () => {
       {/* Messages */}
       {error && (
         <div
-          className="alert alert-danger alert-dismissible fade show"
+          className="alert alert-danger alert-dismissible fade show py-2"
           role="alert"
         >
-          <i className="bi bi-exclamation-triangle me-2"></i>
+          <i className="fas fa-exclamation-triangle me-2"></i>
           {error}
           <button
             type="button"
@@ -360,10 +367,10 @@ const AdminRoles = () => {
 
       {successMessage && (
         <div
-          className="alert alert-success alert-dismissible fade show"
+          className="alert alert-success alert-dismissible fade show py-2"
           role="alert"
         >
-          <i className="bi bi-check-circle me-2"></i>
+          <i className="fas fa-check-circle me-2"></i>
           {successMessage}
           <button
             type="button"
@@ -373,25 +380,36 @@ const AdminRoles = () => {
         </div>
       )}
 
-      {/* Roles Grid */}
-      <div className="row g-4">
+      {/* Roles Grid - Responsive */}
+      <div className="row g-2 g-md-3">
         {roles.map((role) => (
           <div key={role.id || role.name} className="col-12 col-md-6 col-lg-4">
             <div className="card h-100 shadow-sm border-0">
-              <div className="card-body">
+              <div className="card-body p-3">
                 {/* Role Header */}
-                <div className="d-flex align-items-start justify-content-between mb-3">
-                  <div>
-                    <h5 className="card-title mb-1">
-                      <i className="bi bi-person-badge me-2 text-primary"></i>
+                <div className="d-flex align-items-start justify-content-between mb-2">
+                  <div className="flex-grow-1 overflow-hidden">
+                    <h6
+                      className="card-title mb-1 text-truncate"
+                      style={{ fontSize: "0.95rem" }}
+                    >
+                      <i className="fas fa-user-tag me-2 text-primary"></i>
                       {role.displayName || role.name}
-                    </h5>
-                    <span className="badge bg-secondary">{role.name}</span>
+                    </h6>
+                    <span
+                      className="badge bg-secondary"
+                      style={{ fontSize: "0.65rem" }}
+                    >
+                      {role.name}
+                    </span>
                   </div>
 
                   {role.isSystemRole && (
-                    <span className="badge bg-info">
-                      <i className="bi bi-lock me-1"></i>
+                    <span
+                      className="badge bg-info ms-2"
+                      style={{ fontSize: "0.65rem" }}
+                    >
+                      <i className="fas fa-lock me-1"></i>
                       Sistem
                     </span>
                   )}
@@ -399,7 +417,10 @@ const AdminRoles = () => {
 
                 {/* Description */}
                 {role.description && (
-                  <p className="card-text text-muted small mb-3">
+                  <p
+                    className="card-text text-muted small mb-2"
+                    style={{ fontSize: "0.75rem" }}
+                  >
                     {role.description}
                   </p>
                 )}
@@ -407,27 +428,38 @@ const AdminRoles = () => {
                 {/* Stats */}
                 <div className="d-flex gap-3 mb-3">
                   <div className="text-center">
-                    <div className="h5 mb-0 text-primary">
+                    <div className="h6 mb-0 text-primary">
                       {role.permissionCount || 0}
                     </div>
-                    <small className="text-muted">İzin</small>
+                    <small
+                      className="text-muted"
+                      style={{ fontSize: "0.7rem" }}
+                    >
+                      İzin
+                    </small>
                   </div>
                   <div className="text-center">
-                    <div className="h5 mb-0 text-success">
+                    <div className="h6 mb-0 text-success">
                       {role.userCount || 0}
                     </div>
-                    <small className="text-muted">Kullanıcı</small>
+                    <small
+                      className="text-muted"
+                      style={{ fontSize: "0.7rem" }}
+                    >
+                      Kullanıcı
+                    </small>
                   </div>
                 </div>
 
-                {/* Actions */}
+                {/* Actions - Touch-friendly */}
                 <div className="d-flex gap-2 flex-wrap">
                   {canManagePermissions && (
                     <button
                       className="btn btn-outline-primary btn-sm"
                       onClick={() => handleOpenPermissionsModal(role)}
+                      style={{ minHeight: "40px", minWidth: "80px" }}
                     >
-                      <i className="bi bi-key me-1"></i>
+                      <i className="fas fa-key me-1"></i>
                       İzinler
                     </button>
                   )}
@@ -436,8 +468,9 @@ const AdminRoles = () => {
                     <button
                       className="btn btn-outline-secondary btn-sm"
                       onClick={() => handleOpenEditModal(role)}
+                      style={{ minHeight: "40px", minWidth: "80px" }}
                     >
-                      <i className="bi bi-pencil me-1"></i>
+                      <i className="fas fa-edit me-1"></i>
                       Düzenle
                     </button>
                   )}
@@ -446,8 +479,9 @@ const AdminRoles = () => {
                     <button
                       className="btn btn-outline-danger btn-sm"
                       onClick={() => handleDeleteRole(role)}
+                      style={{ minHeight: "40px", minWidth: "60px" }}
                     >
-                      <i className="bi bi-trash me-1"></i>
+                      <i className="fas fa-trash me-1"></i>
                       Sil
                     </button>
                   )}
@@ -458,36 +492,42 @@ const AdminRoles = () => {
         ))}
       </div>
 
-      {/* Modal */}
+      {/* Modal - Mobilde full-width */}
       {showModal && (
         <div
           className="modal fade show d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
           <div
-            className={`modal-dialog modal-dialog-centered modal-dialog-scrollable ${
+            className={`modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down ${
               modalMode === "permissions" ? "modal-xl" : ""
             }`}
           >
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
+            <div
+              className="modal-content border-0"
+              style={{ borderRadius: "16px" }}
+            >
+              <div className="modal-header border-0 p-3">
+                <h5
+                  className="modal-title fw-bold"
+                  style={{ fontSize: "1rem" }}
+                >
                   {modalMode === "create" && (
                     <>
-                      <i className="bi bi-plus-circle me-2 text-primary"></i>
+                      <i className="fas fa-plus-circle me-2 text-primary"></i>
                       Yeni Rol Oluştur
                     </>
                   )}
                   {modalMode === "edit" && (
                     <>
-                      <i className="bi bi-pencil me-2 text-warning"></i>
+                      <i className="fas fa-edit me-2 text-warning"></i>
                       Rolü Düzenle:{" "}
                       {selectedRole?.displayName || selectedRole?.name}
                     </>
                   )}
                   {modalMode === "permissions" && (
                     <>
-                      <i className="bi bi-key me-2 text-success"></i>
+                      <i className="fas fa-key me-2 text-success"></i>
                       İzin Yönetimi:{" "}
                       {selectedRole?.displayName || selectedRole?.name}
                     </>
@@ -500,12 +540,17 @@ const AdminRoles = () => {
                 ></button>
               </div>
 
-              <div className="modal-body">
+              <div className="modal-body p-3">
                 {/* Create/Edit Form */}
                 {(modalMode === "create" || modalMode === "edit") && (
-                  <form onSubmit={handleSubmit}>
+                  <form onSubmit={handleSubmit} className="admin-mobile-form">
                     <div className="mb-3">
-                      <label className="form-label">Rol Adı (Sistem)</label>
+                      <label
+                        className="form-label fw-semibold"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Rol Adı (Sistem)
+                      </label>
                       <input
                         type="text"
                         className="form-control"
@@ -516,14 +561,23 @@ const AdminRoles = () => {
                         placeholder="örn: store_manager"
                         required
                         disabled={modalMode === "edit"}
+                        style={{ minHeight: "44px" }}
                       />
-                      <small className="text-muted">
+                      <small
+                        className="text-muted"
+                        style={{ fontSize: "0.75rem" }}
+                      >
                         Sistemde kullanılacak tekil isim (değiştirilemez)
                       </small>
                     </div>
 
                     <div className="mb-3">
-                      <label className="form-label">Görünen Ad</label>
+                      <label
+                        className="form-label fw-semibold"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Görünen Ad
+                      </label>
                       <input
                         type="text"
                         className="form-control"
@@ -536,11 +590,17 @@ const AdminRoles = () => {
                         }
                         placeholder="örn: Mağaza Yöneticisi"
                         required
+                        style={{ minHeight: "44px" }}
                       />
                     </div>
 
                     <div className="mb-3">
-                      <label className="form-label">Açıklama</label>
+                      <label
+                        className="form-label fw-semibold"
+                        style={{ fontSize: "0.85rem" }}
+                      >
+                        Açıklama
+                      </label>
                       <textarea
                         className="form-control"
                         rows="3"
@@ -555,7 +615,14 @@ const AdminRoles = () => {
                       />
                     </div>
 
-                    <div className="form-check mb-3">
+                    <div
+                      className="form-check mb-3"
+                      style={{
+                        minHeight: "44px",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
                       <input
                         type="checkbox"
                         className="form-check-input"
@@ -567,18 +634,25 @@ const AdminRoles = () => {
                             isActive: e.target.checked,
                           })
                         }
+                        style={{ width: "1.25rem", height: "1.25rem" }}
                       />
-                      <label className="form-check-label" htmlFor="isActive">
+                      <label
+                        className="form-check-label fw-semibold ms-2"
+                        htmlFor="isActive"
+                      >
                         Aktif
                       </label>
                     </div>
                   </form>
                 )}
 
-                {/* Permissions Matrix */}
+                {/* Permissions Matrix - Responsive */}
                 {modalMode === "permissions" && (
                   <div>
-                    <p className="text-muted mb-4">
+                    <p
+                      className="text-muted mb-3"
+                      style={{ fontSize: "0.8rem" }}
+                    >
                       Bu role atanacak izinleri seçin. Seçilen izinler bu role
                       sahip tüm kullanıcılara uygulanacaktır.
                     </p>
@@ -599,16 +673,17 @@ const AdminRoles = () => {
                           <div key={module.name} className="accordion-item">
                             <h2 className="accordion-header">
                               <button
-                                className={`accordion-button ${
+                                className={`accordion-button py-2 ${
                                   moduleIndex !== 0 ? "collapsed" : ""
                                 }`}
                                 type="button"
                                 data-bs-toggle="collapse"
                                 data-bs-target={`#module-${module.name}`}
+                                style={{ fontSize: "0.85rem" }}
                               >
                                 <div className="d-flex align-items-center w-100">
                                   <div
-                                    className="form-check me-3"
+                                    className="form-check me-2"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <input
@@ -622,13 +697,20 @@ const AdminRoles = () => {
                                       onChange={() =>
                                         handleModuleToggle(module.permissions)
                                       }
+                                      style={{
+                                        width: "1.25rem",
+                                        height: "1.25rem",
+                                      }}
                                     />
                                   </div>
                                   <div className="flex-grow-1">
                                     <strong>{module.displayName}</strong>
-                                    <small className="text-muted ms-2">
+                                    <small
+                                      className="text-muted ms-2"
+                                      style={{ fontSize: "0.7rem" }}
+                                    >
                                       ({selectedCount}/
-                                      {module.permissions.length} seçili)
+                                      {module.permissions.length})
                                     </small>
                                   </div>
                                 </div>
@@ -640,9 +722,12 @@ const AdminRoles = () => {
                                 moduleIndex === 0 ? "show" : ""
                               }`}
                             >
-                              <div className="accordion-body">
+                              <div className="accordion-body py-2 px-3">
                                 {module.description && (
-                                  <p className="text-muted small mb-3">
+                                  <p
+                                    className="text-muted small mb-2"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
                                     {module.description}
                                   </p>
                                 )}
@@ -652,7 +737,14 @@ const AdminRoles = () => {
                                       key={perm.code}
                                       className="col-12 col-md-6 col-lg-4"
                                     >
-                                      <div className="form-check">
+                                      <div
+                                        className="form-check"
+                                        style={{
+                                          minHeight: "40px",
+                                          display: "flex",
+                                          alignItems: "center",
+                                        }}
+                                      >
                                         <input
                                           type="checkbox"
                                           className="form-check-input"
@@ -663,15 +755,25 @@ const AdminRoles = () => {
                                           onChange={() =>
                                             handlePermissionToggle(perm.code)
                                           }
+                                          style={{
+                                            width: "1.25rem",
+                                            height: "1.25rem",
+                                          }}
                                         />
                                         <label
-                                          className="form-check-label"
+                                          className="form-check-label ms-2"
                                           htmlFor={`perm-${perm.code}`}
                                         >
-                                          <span className="d-block">
+                                          <span
+                                            className="d-block"
+                                            style={{ fontSize: "0.8rem" }}
+                                          >
                                             {perm.displayName}
                                           </span>
-                                          <small className="text-muted">
+                                          <small
+                                            className="text-muted"
+                                            style={{ fontSize: "0.65rem" }}
+                                          >
                                             {perm.code}
                                           </small>
                                         </label>
@@ -687,16 +789,17 @@ const AdminRoles = () => {
                     </div>
 
                     {/* Seçili İzin Sayısı */}
-                    <div className="mt-4 p-3 bg-light rounded">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <span>
-                          <i className="bi bi-check-circle text-success me-2"></i>
+                    <div className="mt-3 p-2 bg-light rounded">
+                      <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <span style={{ fontSize: "0.85rem" }}>
+                          <i className="fas fa-check-circle text-success me-2"></i>
                           <strong>{rolePermissions.length}</strong> izin seçildi
                         </span>
                         <button
                           type="button"
                           className="btn btn-outline-secondary btn-sm"
                           onClick={() => setRolePermissions([])}
+                          style={{ minHeight: "36px" }}
                         >
                           Tümünü Temizle
                         </button>
@@ -706,11 +809,12 @@ const AdminRoles = () => {
                 )}
               </div>
 
-              <div className="modal-footer">
+              <div className="modal-footer border-0 p-3">
                 <button
                   type="button"
                   className="btn btn-secondary"
                   onClick={handleCloseModal}
+                  style={{ minHeight: "44px" }}
                 >
                   İptal
                 </button>
@@ -721,6 +825,7 @@ const AdminRoles = () => {
                     className="btn btn-primary"
                     onClick={handleSubmit}
                     disabled={savingPermissions}
+                    style={{ minHeight: "44px" }}
                   >
                     {savingPermissions ? (
                       <>
@@ -729,7 +834,7 @@ const AdminRoles = () => {
                       </>
                     ) : (
                       <>
-                        <i className="bi bi-check-lg me-2"></i>
+                        <i className="fas fa-check me-2"></i>
                         {modalMode === "create" ? "Oluştur" : "Kaydet"}
                       </>
                     )}
@@ -742,6 +847,7 @@ const AdminRoles = () => {
                     className="btn btn-success"
                     onClick={handleSavePermissions}
                     disabled={savingPermissions}
+                    style={{ minHeight: "44px" }}
                   >
                     {savingPermissions ? (
                       <>
@@ -750,7 +856,7 @@ const AdminRoles = () => {
                       </>
                     ) : (
                       <>
-                        <i className="bi bi-key me-2"></i>
+                        <i className="fas fa-key me-2"></i>
                         İzinleri Kaydet
                       </>
                     )}

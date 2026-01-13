@@ -363,6 +363,8 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>
         /// Telefon numarasını normalize eder (5xxxxxxxxx formatına çevirir).
+        /// Giriş formatları: 05xxxxxxxxx, 5xxxxxxxxx, +905xxxxxxxxx, 905xxxxxxxxx
+        /// Çıkış formatı: 5xxxxxxxxx (10 haneli, başında 5)
         /// </summary>
         private static string NormalizePhoneNumber(string? phone)
         {
@@ -372,19 +374,20 @@ namespace ECommerce.Business.Services.Managers
             // Sadece rakamları al
             var digits = Regex.Replace(phone, @"[^\d]", "");
 
-            // Türkiye kodu varsa kaldır
-            if (digits.StartsWith("90") && digits.Length > 10)
+            // Türkiye kodu varsa kaldır (905xxxxxxxxx -> 5xxxxxxxxx)
+            if (digits.StartsWith("90") && digits.Length >= 12)
                 digits = digits[2..];
 
-            // Başındaki 0'ı kaldır
-            if (digits.StartsWith("0") && digits.Length > 10)
+            // Başındaki 0'ı kaldır (05xxxxxxxxx -> 5xxxxxxxxx)
+            if (digits.StartsWith("0"))
                 digits = digits[1..];
 
-            // 10 haneli olmalı (5xx xxx xx xx)
-            if (digits.Length != 10 || !digits.StartsWith("5"))
-                return string.Empty;
+            // Final validasyon: 10 haneli ve 5 ile başlamalı
+            if (digits.Length == 10 && digits.StartsWith("5"))
+                return digits;
 
-            return digits;
+            // Geçersiz format
+            return string.Empty;
         }
 
         /// <summary>

@@ -14,7 +14,12 @@ const api = axios.create({
 // Request interceptor: Token varsa ekle
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    // Tüm olası token key'lerini kontrol et (uyumluluk için)
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("adminToken");
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       // Debug: Token gönderildiğini log'la

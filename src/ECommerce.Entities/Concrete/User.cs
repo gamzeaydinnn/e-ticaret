@@ -16,6 +16,13 @@ namespace ECommerce.Entities.Concrete
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
+        
+        /// <summary>
+        /// Kullanıcının son giriş tarihi
+        /// AuthController.Login metodunda güncellenir
+        /// </summary>
+        public DateTime? LastLoginAt { get; set; }
+        
         public string? Password { get; set; }
         public string? PasswordResetToken { get; set; }
         public DateTime? ResetTokenExpires { get; set; }

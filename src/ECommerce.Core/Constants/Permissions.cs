@@ -223,6 +223,8 @@ namespace ECommerce.Core.Constants
         /// </summary>
         public static class Reports
         {
+            /// <summary>Genel rapor görüntüleme izni</summary>
+            public const string View = "reports.view";
             public const string ViewSales = "reports.sales";
             public const string ViewInventory = "reports.inventory";
             public const string ViewCustomers = "reports.customers";
@@ -231,7 +233,7 @@ namespace ECommerce.Core.Constants
             public const string Export = "reports.export";
             
             /// <summary>Rapor modülündeki tüm izinler</summary>
-            public static string[] All => new[] { ViewSales, ViewInventory, ViewCustomers, ViewFinancial, ViewWeight, Export };
+            public static string[] All => new[] { View, ViewSales, ViewInventory, ViewCustomers, ViewFinancial, ViewWeight, Export };
         }
 
         #endregion
@@ -283,12 +285,14 @@ namespace ECommerce.Core.Constants
         {
             public const string View = "settings.view";
             public const string Update = "settings.update";
+            /// <summary>Sistem seviyesi ayarlar izni</summary>
+            public const string System = "settings.system";
             public const string ManagePayment = "settings.payment";
             public const string ManageSms = "settings.sms";
             public const string ManageEmail = "settings.email";
             
             /// <summary>Ayar modülündeki tüm izinler</summary>
-            public static string[] All => new[] { View, Update, ManagePayment, ManageSms, ManageEmail };
+            public static string[] All => new[] { View, Update, System, ManagePayment, ManageSms, ManageEmail };
         }
 
         #endregion
@@ -301,13 +305,15 @@ namespace ECommerce.Core.Constants
         /// </summary>
         public static class Logs
         {
+            /// <summary>Genel log görüntüleme izni</summary>
+            public const string View = "logs.view";
             public const string ViewAudit = "logs.audit";
             public const string ViewError = "logs.error";
             public const string ViewSync = "logs.sync";
             public const string Export = "logs.export";
             
             /// <summary>Log modülündeki tüm izinler</summary>
-            public static string[] All => new[] { ViewAudit, ViewError, ViewSync, Export };
+            public static string[] All => new[] { View, ViewAudit, ViewError, ViewSync, Export };
         }
 
         #endregion
@@ -456,6 +462,7 @@ namespace ECommerce.Core.Constants
                 "email" => "E-posta",
                 "performance" => "Performans",
                 "details" => "Detay",
+                "system" => "Sistem",
                 _ => action
             };
 

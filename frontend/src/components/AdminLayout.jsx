@@ -12,11 +12,85 @@ import { useAuth } from "../contexts/AuthContext";
 import { PERMISSIONS } from "../services/permissionService";
 
 export default function AdminLayout({ children }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // ============================================================================
+  // MOBİL RESPONSIVE: Başlangıçta sidebar kapalı (mobilde)
+  // window.innerWidth kontrolü ile masaüstünde açık, mobilde kapalı başlar
+  // ============================================================================
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 992; // lg breakpoint
+    }
+    return true;
+  });
   const [openMenus, setOpenMenus] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
+
+  // ============================================================================
+  // TOUCH SWIPE DESTEĞİ - Mobilde kaydırarak sidebar açma/kapama
+  // ============================================================================
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const minSwipeDistance = 50; // Minimum kaydırma mesafesi (px)
+
+  const onTouchStart = useCallback((e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  }, []);
+
+  const onTouchMove = useCallback((e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    // Sadece mobilde çalışsın
+    if (typeof window !== "undefined" && window.innerWidth < 992) {
+      if (isRightSwipe && !sidebarOpen && touchStart < 50) {
+        // Ekranın sol kenarından sağa kaydırma - sidebar aç
+        setSidebarOpen(true);
+      } else if (isLeftSwipe && sidebarOpen) {
+        // Sola kaydırma - sidebar kapat
+        setSidebarOpen(false);
+      }
+    }
+  }, [touchStart, touchEnd, sidebarOpen]);
+
+  // Touch event listener'ları ekle
+  useEffect(() => {
+    const handleTouchStart = (e) => onTouchStart(e);
+    const handleTouchMove = (e) => onTouchMove(e);
+    const handleTouchEnd = () => onTouchEnd();
+
+    document.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
+    document.addEventListener("touchmove", handleTouchMove, { passive: true });
+    document.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [onTouchStart, onTouchMove, onTouchEnd]);
+
+  // Ekran boyutu değiştiğinde sidebar durumunu güncelle
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 992) {
+        setSidebarOpen(true);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Admin rolleri
   const ADMIN_ROLES = [
@@ -198,6 +272,13 @@ export default function AdminLayout({ children }) {
     });
   }, [menuItems, isSuperAdmin, isAdminLike, user?.role, checkPermission]);
 
+  // Mobilde menü öğesine tıklandığında sidebar'ı kapat
+  const handleMenuClick = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 992) {
+      setSidebarOpen(false);
+    }
+  }, []);
+
   useEffect(() => {
     const parentWithChild = filteredMenuItems.find(
       (item) =>
@@ -229,19 +310,42 @@ export default function AdminLayout({ children }) {
 
   return (
     <div className="d-flex admin-layout-root">
+      {/* ====================================================================
+          MOBİL OVERLAY - Sidebar açıkken arkaplanı karartan katman
+          Mobilde sidebar açıkken tıklanınca kapanmasını sağlar
+          ==================================================================== */}
+      {sidebarOpen && (
+        <div
+          className="d-lg-none position-fixed top-0 start-0 w-100 h-100"
+          style={{
+            backgroundColor: "rgba(0,0,0,0.5)",
+            zIndex: 1040,
+          }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <div
-        className={`text-white ${sidebarOpen ? "" : "d-none d-lg-block"}`}
+        className={`text-white sidebar-container ${
+          sidebarOpen ? "sidebar-open" : "sidebar-closed"
+        }`}
         style={{
           minHeight: "100vh",
           width: "240px",
           background: "linear-gradient(180deg, #2d3748 0%, #1a202c 100%)",
           boxShadow: "2px 0 10px rgba(0,0,0,0.1)",
-          position: "relative",
+          position: "fixed",
+          left: 0,
+          top: 0,
+          zIndex: 1050,
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
+          transition: "transform 0.3s ease-in-out",
+          overflowY: "auto",
         }}
       >
         <div
-          className="p-3 border-bottom"
+          className="p-3 border-bottom d-flex align-items-center justify-content-between"
           style={{ borderColor: "rgba(255,255,255,0.1) !important" }}
         >
           <h5 className="mb-0 fw-bold">
@@ -251,6 +355,14 @@ export default function AdminLayout({ children }) {
             ></i>
             Admin Panel
           </h5>
+          {/* Mobilde sidebar kapatma butonu */}
+          <button
+            className="btn btn-link text-white d-lg-none p-0"
+            onClick={() => setSidebarOpen(false)}
+            style={{ fontSize: "1.25rem" }}
+          >
+            <i className="fas fa-times"></i>
+          </button>
         </div>
 
         <div className="p-3">
@@ -325,6 +437,7 @@ export default function AdminLayout({ children }) {
                         <Link
                           key={child.path}
                           to={child.path}
+                          onClick={handleMenuClick}
                           className="d-block text-decoration-none px-3 py-2 text-white"
                           style={{
                             borderLeft:
@@ -350,6 +463,7 @@ export default function AdminLayout({ children }) {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={handleMenuClick}
                 className="d-block text-decoration-none px-3 py-3 text-white position-relative"
                 style={{
                   transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -437,10 +551,19 @@ export default function AdminLayout({ children }) {
       </div>
 
       {/* Main Content */}
-      <div className="flex-grow-1">
+      <div
+        className="flex-grow-1 main-content-wrapper"
+        style={{
+          // Mobilde margin ve width CSS @media query ile override edilir
+          marginLeft: sidebarOpen ? "240px" : "0",
+          width: sidebarOpen ? "calc(100% - 240px)" : "100%",
+          minHeight: "100vh",
+          transition: "margin-left 0.3s ease-in-out, width 0.3s ease-in-out",
+        }}
+      >
         {/* Top Navigation */}
         <nav
-          className="navbar navbar-expand-lg bg-white shadow-sm"
+          className="navbar navbar-expand-lg bg-white shadow-sm sticky-top"
           style={{ borderBottom: "1px solid #e5e7eb" }}
         >
           <div className="container-fluid">
@@ -519,6 +642,146 @@ export default function AdminLayout({ children }) {
 
 // CSS için inline styles
 const styles = `
+/* ====================================================================
+   MOBİL RESPONSİVE DÜZELTMELERİ
+   Admin paneli mobilde düzgün görünmesi için
+   ==================================================================== */
+
+/* Tüm cihazlar için temel stil */
+.admin-layout-root {
+  overflow-x: hidden;
+}
+
+/* Mobil swipe indicator - sol kenardan kaydırma ipucu */
+@media (max-width: 991.98px) {
+  .admin-layout-root::before {
+    content: '';
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 60px;
+    background: linear-gradient(180deg, transparent, rgba(245, 124, 0, 0.3), transparent);
+    border-radius: 0 4px 4px 0;
+    z-index: 1000;
+    opacity: 0.6;
+    animation: swipeHint 2s ease-in-out infinite;
+  }
+}
+
+@keyframes swipeHint {
+  0%, 100% { opacity: 0.3; transform: translateY(-50%) translateX(0); }
+  50% { opacity: 0.7; transform: translateY(-50%) translateX(3px); }
+}
+
+/* Mobil cihazlar için (992px altı) */
+@media (max-width: 991.98px) {
+  .main-content-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  
+  .sidebar-container {
+    position: fixed !important;
+    z-index: 1050 !important;
+    width: 260px !important;
+    box-shadow: 4px 0 25px rgba(0,0,0,0.3) !important;
+  }
+  
+  .sidebar-closed {
+    transform: translateX(-100%) !important;
+  }
+  
+  .sidebar-open {
+    transform: translateX(0) !important;
+  }
+  
+  .admin-layout-main {
+    padding: 0.75rem !important;
+  }
+  
+  /* Tablo responsive */
+  .table-responsive {
+    font-size: 0.8rem;
+  }
+  
+  .table-responsive th,
+  .table-responsive td {
+    padding: 0.5rem 0.4rem !important;
+    white-space: nowrap;
+  }
+  
+  /* Kart başlıkları */
+  .card-header h5,
+  .card-header h6 {
+    font-size: 0.9rem !important;
+  }
+  
+  /* Navbar padding */
+  .navbar .container-fluid {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+  }
+  
+  /* Form elemanları */
+  .form-control,
+  .form-select {
+    font-size: 0.85rem !important;
+    padding: 0.4rem 0.6rem !important;
+  }
+  
+  /* Butonlar */
+  .btn {
+    font-size: 0.8rem !important;
+    padding: 0.35rem 0.6rem !important;
+  }
+  
+  .btn-sm {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+}
+
+/* Çok küçük ekranlar için (576px altı) */
+@media (max-width: 575.98px) {
+  .sidebar-container {
+    width: 200px !important;
+  }
+  
+  .admin-layout-main {
+    padding: 0.5rem !important;
+  }
+  
+  .card {
+    margin-bottom: 0.75rem !important;
+  }
+  
+  .card-body {
+    padding: 0.75rem !important;
+  }
+  
+  h1, .h1 { font-size: 1.5rem !important; }
+  h2, .h2 { font-size: 1.25rem !important; }
+  h3, .h3 { font-size: 1.1rem !important; }
+  h4, .h4 { font-size: 1rem !important; }
+  h5, .h5 { font-size: 0.9rem !important; }
+}
+
+/* Desktop için (992px ve üstü) */
+@media (min-width: 992px) {
+  .sidebar-container {
+    transform: translateX(0) !important;
+  }
+  
+  .main-content-wrapper {
+    margin-left: 240px !important;
+    width: calc(100% - 240px) !important;
+  }
+}
+
 .dropdown-menu {
   border: none;
   border-radius: 12px;

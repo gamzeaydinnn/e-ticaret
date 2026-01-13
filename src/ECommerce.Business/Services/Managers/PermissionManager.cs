@@ -272,10 +272,59 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // 2. Kullanıcının rollerini al
+                // ============================================================================
+                // KRİTİK FIX: Hem Identity UserRoles hem de User.Role property kontrol edilir
+                // 
+                // Neden gerekli:
+                // - Bazı kullanıcılar sadece User.Role property'si ile oluşturulmuş olabilir
+                // - AspNetUserRoles tablosuna ekleme yapılmamış eski kullanıcılar var
+                // - Bu fallback mekanizması geriye dönük uyumluluk sağlar
+                // ============================================================================
                 var userRoles = await _userManager.GetRolesAsync(user);
+                
+                // Identity rolü yoksa, User.Role property'sinden fallback yap
+                if (!userRoles.Any() && !string.IsNullOrWhiteSpace(user.Role))
+                {
+                    _logger.LogWarning(
+                        "Kullanıcının Identity rolü yok, User.Role fallback kullanılıyor: UserId={UserId}, Role={Role}",
+                        userId, user.Role);
+                    
+                    // User.Role property'sini kullan
+                    userRoles = new List<string> { user.Role };
+                    
+                    // ============================================================================
+                    // OTOMATİK DÜZELTME: Identity rolünü de ata (veri tutarlılığı için)
+                    // Bu sayede sonraki isteklerde Identity rolü kullanılır
+                    // ============================================================================
+                    try
+                    {
+                        var addRoleResult = await _userManager.AddToRoleAsync(user, user.Role);
+                        if (addRoleResult.Succeeded)
+                        {
+                            _logger.LogInformation(
+                                "Identity rolü otomatik atandı: UserId={UserId}, Role={Role}",
+                                userId, user.Role);
+                        }
+                        else
+                        {
+                            var errors = string.Join(", ", addRoleResult.Errors.Select(e => e.Description));
+                            _logger.LogWarning(
+                                "Identity rol ataması başarısız: UserId={UserId}, Role={Role}, Errors={Errors}",
+                                userId, user.Role, errors);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Identity rol ataması sırasında hata: UserId={UserId}, Role={Role}",
+                            userId, user.Role);
+                    }
+                }
+                
+                // Hala rol yoksa boş dön
                 if (!userRoles.Any())
                 {
-                    // Kullanıcının rolü yoksa boş dön
+                    _logger.LogWarning("Kullanıcının hiç rolü yok: UserId={UserId}", userId);
                     return Enumerable.Empty<string>();
                 }
 

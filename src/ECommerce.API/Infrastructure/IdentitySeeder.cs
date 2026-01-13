@@ -380,9 +380,20 @@ namespace ECommerce.API.Infrastructure
                     Permissions.Banners.Delete,
                     
                     // Raporlar - Satış ve envanter
+                    Permissions.Reports.View,  // Genel rapor görüntüleme
                     Permissions.Reports.ViewSales,
                     Permissions.Reports.ViewInventory,
-                    Permissions.Reports.Export
+                    Permissions.Reports.Export,
+                    
+                    // ============================================================================
+                    // KULLANICI YÖNETİMİ - KALDIRILDI
+                    // StoreManager kullanıcı yönetimine erişmemeli
+                    // Sadece ürün, kategori, kampanya ve raporlarla ilgilenebilir
+                    // ============================================================================
+                    // Permissions.Users.View,  // ❌ KALDIRILDI
+                    
+                    // Kuryeler - Görüntüleme
+                    Permissions.Couriers.View
                 },
 
                 // CustomerSupport: Sipariş yönetimi, iade, müşteri iletişimi
@@ -406,7 +417,11 @@ namespace ECommerce.API.Infrastructure
                     Permissions.Orders.ViewCustomerInfo,
                     
                     // Kullanıcılar - Sadece görüntüleme (hassas veri hariç)
-                    Permissions.Users.View
+                    Permissions.Users.View,
+                    
+                    // Raporlar - Genel görüntüleme ve satış
+                    Permissions.Reports.View,
+                    Permissions.Reports.ViewSales
                 },
 
                 // Logistics: Kargo ve teslimat operasyonları
@@ -427,7 +442,11 @@ namespace ECommerce.API.Infrastructure
                     
                     // Kuryeler - Görüntüleme ve atama
                     Permissions.Couriers.View,
-                    Permissions.Couriers.AssignOrders
+                    Permissions.Couriers.AssignOrders,
+                    
+                    // Raporlar - Genel görüntüleme ve ağırlık raporları
+                    Permissions.Reports.View,
+                    Permissions.Reports.ViewWeight
                 },
 
                 // User/Customer: Müşteri izinleri (admin paneli erişimi yok)

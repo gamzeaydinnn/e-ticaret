@@ -1,0 +1,431 @@
+/* ============================================================================
+   adminMobile.css - Admin Panel Ortak Mobil Responsive Stiller
+   ============================================================================
+   Tüm admin sayfaları için ortak mobil uyumluluk stilleri
+   Breakpoints: 576px (xs), 768px (sm), 992px (md)
+   ============================================================================ */
+
+/* ============================================================================
+   Ortak Tablo → Kart Dönüşümü (768px altı)
+   ============================================================================ */
+@media (max-width: 768px) {
+  .admin-mobile-table {
+    display: block;
+  }
+
+  .admin-mobile-table thead {
+    display: none;
+  }
+
+  .admin-mobile-table tbody {
+    display: block;
+  }
+
+  .admin-mobile-table tr {
+    display: block;
+    margin-bottom: 1rem;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+  }
+
+  .admin-mobile-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem !important;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .admin-mobile-table td:last-child {
+    border-bottom: none;
+  }
+
+  .admin-mobile-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.75rem;
+    text-align: left;
+    flex: 1;
+    margin-right: 1rem;
+  }
+
+  .admin-mobile-table td > * {
+    flex: 1;
+    text-align: right;
+  }
+
+  /* İşlemler hücresi için özel stil */
+  .admin-mobile-table td[data-label="İşlemler"],
+  .admin-mobile-table td[data-label="İşlem"] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .admin-mobile-table td[data-label="İşlemler"]::before,
+  .admin-mobile-table td[data-label="İşlem"]::before {
+    margin-bottom: 0.5rem;
+  }
+
+  .admin-mobile-table td[data-label="İşlemler"] .d-flex,
+  .admin-mobile-table td[data-label="İşlem"] .d-flex {
+    justify-content: center;
+  }
+}
+
+/* ============================================================================
+   Touch-Friendly Butonlar (min 44px)
+   ============================================================================ */
+.admin-touch-btn {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .admin-mobile-table .btn,
+  .admin-action-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.5rem 1rem;
+  }
+
+  /* Form kontrolleri touch-friendly */
+  .admin-mobile-form .form-control,
+  .admin-mobile-form .form-select {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  .admin-mobile-form .form-check-input {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-top: 0;
+  }
+
+  .admin-mobile-form .form-check-label {
+    padding-left: 0.5rem;
+    line-height: 1.5rem;
+  }
+}
+
+/* ============================================================================
+   Responsive Header Layout
+   ============================================================================ */
+.admin-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 768px) {
+  .admin-page-header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+}
+
+.admin-page-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .admin-page-title {
+    font-size: 1.5rem;
+  }
+}
+
+/* ============================================================================
+   Responsive Buton Grupları
+   ============================================================================ */
+.admin-btn-group {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .admin-btn-group {
+    display: flex;
+    width: auto;
+  }
+}
+
+.admin-btn-group .btn {
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   Minimum Font Size (0.65rem = ~10.4px)
+   ============================================================================ */
+@media (max-width: 768px) {
+  .admin-mobile-table,
+  .admin-mobile-table td,
+  .admin-mobile-table th {
+    font-size: 0.75rem;
+  }
+
+  .admin-mobile-table .badge {
+    font-size: 0.65rem;
+  }
+
+  .admin-mobile-table td::before {
+    font-size: 0.7rem;
+  }
+
+  /* Sayfa başlıkları */
+  .admin-page-header h1,
+  .admin-page-header .h3 {
+    font-size: 1.1rem;
+  }
+
+  .admin-page-header .text-muted {
+    font-size: 0.75rem;
+  }
+}
+
+/* ============================================================================
+   Modal Full-Width (576px altı)
+   ============================================================================ */
+@media (max-width: 576px) {
+  .modal-fullscreen-sm-down {
+    width: 100vw;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+  }
+
+  .modal-fullscreen-sm-down .modal-content {
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .modal-fullscreen-sm-down .modal-body {
+    overflow-y: auto;
+  }
+}
+
+/* ============================================================================
+   Responsive Card Grid
+   ============================================================================ */
+.admin-card-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 576px) {
+  .admin-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .admin-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .admin-card-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ============================================================================
+   Collapsible Filter Panel
+   ============================================================================ */
+.admin-filter-panel {
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .admin-filter-panel .filter-content {
+    display: none;
+  }
+
+  .admin-filter-panel.show .filter-content {
+    display: block;
+  }
+
+  .admin-filter-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .admin-filter-toggle::after {
+    content: "\f078";
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    transition: transform 0.2s;
+  }
+
+  .admin-filter-panel.show .admin-filter-toggle::after {
+    transform: rotate(180deg);
+  }
+}
+
+@media (min-width: 769px) {
+  .admin-filter-toggle {
+    display: none;
+  }
+
+  .admin-filter-panel .filter-content {
+    display: block !important;
+  }
+}
+
+/* ============================================================================
+   Truncated Text with Expand
+   ============================================================================ */
+.admin-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+@media (max-width: 768px) {
+  .admin-truncate {
+    max-width: 150px;
+  }
+}
+
+.admin-truncate.expanded {
+  white-space: normal;
+  max-width: none;
+}
+
+/* ============================================================================
+   Responsive Spacing Utilities
+   ============================================================================ */
+.admin-p-responsive {
+  padding: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .admin-p-responsive {
+    padding: 1rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .admin-p-responsive {
+    padding: 1.5rem;
+  }
+}
+
+/* ============================================================================
+   Stat Cards 2x2 Grid (Mobil)
+   ============================================================================ */
+.admin-stat-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 768px) {
+  .admin-stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* ============================================================================
+   Image Preview Responsive
+   ============================================================================ */
+.admin-img-preview {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+@media (max-width: 768px) {
+  .admin-img-preview {
+    max-height: 120px;
+    object-fit: cover;
+  }
+}
+
+/* ============================================================================
+   Horizontal Scroll Container
+   ============================================================================ */
+.admin-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-scroll-x::-webkit-scrollbar {
+  height: 6px;
+}
+
+.admin-scroll-x::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.admin-scroll-x::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+/* ============================================================================
+   Loading ve Empty State
+   ============================================================================ */
+.admin-loading {
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-empty {
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  text-align: center;
+  padding: 2rem;
+}
+
+.admin-empty i {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .admin-empty {
+    min-height: 120px;
+    padding: 1rem;
+  }
+
+  .admin-empty i {
+    font-size: 2rem;
+  }
+}

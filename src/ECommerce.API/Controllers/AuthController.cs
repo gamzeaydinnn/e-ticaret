@@ -205,6 +205,17 @@ namespace ECommerce.API.Controllers
 
                 // Kullanıcı bilgilerini de döndür (frontend için gerekli)
                 var user = await _userManager.FindByEmailAsync(dto.Email);
+                
+                // ============================================================================
+                // Son giriş tarihini güncelle (Madde 7 - Kullanıcı listesinde eksik bilgiler)
+                // Bu bilgi admin panelinde kullanıcı listesinde gösterilecek
+                // ============================================================================
+                if (user != null)
+                {
+                    user.LastLoginAt = DateTime.UtcNow;
+                    await _userManager.UpdateAsync(user);
+                }
+                
                 var isAdmin = user?.Role == "Admin" || user?.Role == "SuperAdmin";
                 var userResponse = user != null ? new
                 {

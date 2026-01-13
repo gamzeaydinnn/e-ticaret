@@ -115,8 +115,10 @@ VALUES
 ('shipping.deliver', 'Kargo Teslim Et', 'Shipping modülü için Et yetkisi', 'Shipping', 53, 1, GETUTCDATE());
 
 -- Rapor İzinleri
+-- GÜNCELLEME: reports.view genel izni eklendi
 INSERT INTO Permissions (Name, DisplayName, Description, Module, SortOrder, IsActive, CreatedAt)
 VALUES
+('reports.view', 'Rapor Görüntüleme', 'Reports modülü için genel Görüntüleme yetkisi', 'Reports', 53, 1, GETUTCDATE()),
 ('reports.sales', 'Rapor Satış', 'Reports modülü için Satış yetkisi', 'Reports', 54, 1, GETUTCDATE()),
 ('reports.inventory', 'Rapor Envanter', 'Reports modülü için Envanter yetkisi', 'Reports', 55, 1, GETUTCDATE()),
 ('reports.customers', 'Rapor Müşteriler', 'Reports modülü için Müşteriler yetkisi', 'Reports', 56, 1, GETUTCDATE()),
@@ -141,21 +143,25 @@ VALUES
 ('brands.delete', 'Marka Silme', 'Brands modülü için Silme yetkisi', 'Brands', 67, 1, GETUTCDATE());
 
 -- Ayar İzinleri
+-- GÜNCELLEME: settings.system izni eklendi
 INSERT INTO Permissions (Name, DisplayName, Description, Module, SortOrder, IsActive, CreatedAt)
 VALUES
 ('settings.view', 'Ayar Görüntüleme', 'Settings modülü için Görüntüleme yetkisi', 'Settings', 68, 1, GETUTCDATE()),
 ('settings.update', 'Ayar Güncelleme', 'Settings modülü için Güncelleme yetkisi', 'Settings', 69, 1, GETUTCDATE()),
-('settings.payment', 'Ayar Ödeme', 'Settings modülü için Ödeme yetkisi', 'Settings', 70, 1, GETUTCDATE()),
-('settings.sms', 'Ayar SMS', 'Settings modülü için SMS yetkisi', 'Settings', 71, 1, GETUTCDATE()),
-('settings.email', 'Ayar E-posta', 'Settings modülü için E-posta yetkisi', 'Settings', 72, 1, GETUTCDATE());
+('settings.system', 'Sistem Ayarları', 'Settings modülü için Sistem yetkisi', 'Settings', 70, 1, GETUTCDATE()),
+('settings.payment', 'Ayar Ödeme', 'Settings modülü için Ödeme yetkisi', 'Settings', 71, 1, GETUTCDATE()),
+('settings.sms', 'Ayar SMS', 'Settings modülü için SMS yetkisi', 'Settings', 72, 1, GETUTCDATE()),
+('settings.email', 'Ayar E-posta', 'Settings modülü için E-posta yetkisi', 'Settings', 73, 1, GETUTCDATE());
 
 -- Log İzinleri
+-- GÜNCELLEME: logs.view genel izni eklendi
 INSERT INTO Permissions (Name, DisplayName, Description, Module, SortOrder, IsActive, CreatedAt)
 VALUES
-('logs.audit', 'Log Denetim', 'Logs modülü için Denetim yetkisi', 'Logs', 73, 1, GETUTCDATE()),
-('logs.error', 'Log Hata', 'Logs modülü için Hata yetkisi', 'Logs', 74, 1, GETUTCDATE()),
-('logs.sync', 'Log Senkronizasyon', 'Logs modülü için Senkronizasyon yetkisi', 'Logs', 75, 1, GETUTCDATE()),
-('logs.export', 'Log Dışa Aktarma', 'Logs modülü için Aktarma yetkisi', 'Logs', 76, 1, GETUTCDATE());
+('logs.view', 'Log Görüntüleme', 'Logs modülü için genel Görüntüleme yetkisi', 'Logs', 74, 1, GETUTCDATE()),
+('logs.audit', 'Log Denetim', 'Logs modülü için Denetim yetkisi', 'Logs', 75, 1, GETUTCDATE()),
+('logs.error', 'Log Hata', 'Logs modülü için Hata yetkisi', 'Logs', 76, 1, GETUTCDATE()),
+('logs.sync', 'Log Senkronizasyon', 'Logs modülü için Senkronizasyon yetkisi', 'Logs', 77, 1, GETUTCDATE()),
+('logs.export', 'Log Dışa Aktarma', 'Logs modülü için Aktarma yetkisi', 'Logs', 78, 1, GETUTCDATE());
 
 PRINT 'Permissions seeded successfully!';
 GO
@@ -199,6 +205,7 @@ END
 
 -- ============================================================
 -- StoreManager: Ürün, Kategori, Kampanya, Stok Yönetimi
+-- GÜNCELLEME: users.view, couriers.view ve reports.view izinleri eklendi
 -- ============================================================
 IF @StoreManagerRoleId IS NOT NULL
 BEGIN
@@ -224,8 +231,12 @@ BEGIN
         'brands.view', 'brands.create', 'brands.update', 'brands.delete',
         -- Banners
         'banners.view', 'banners.create', 'banners.update', 'banners.delete',
-        -- Reports
-        'reports.sales', 'reports.inventory', 'reports.export'
+        -- Reports - Genel görüntüleme dahil (YENİ)
+        'reports.view', 'reports.sales', 'reports.inventory', 'reports.export',
+        -- Users - Sadece görüntüleme (YENİ - Madde 4.1)
+        'users.view',
+        -- Couriers - Görüntüleme (YENİ - Madde 4.2)
+        'couriers.view'
     )
     AND NOT EXISTS (
         SELECT 1 FROM RolePermissions 
@@ -240,6 +251,7 @@ END
 
 -- ============================================================
 -- CustomerSupport: Sipariş Yönetimi, Müşteri İletişimi
+-- GÜNCELLEME: reports.view izni eklendi
 -- ============================================================
 IF @CustomerSupportRoleId IS NOT NULL
 BEGIN
@@ -258,7 +270,9 @@ BEGIN
         'orders.view', 'orders.details', 'orders.status', 'orders.cancel', 
         'orders.refund', 'orders.customer_info',
         -- Users - Sadece görüntüleme
-        'users.view'
+        'users.view',
+        -- Reports - Görüntüleme (YENİ - Madde 4.3)
+        'reports.view', 'reports.sales'
     )
     AND NOT EXISTS (
         SELECT 1 FROM RolePermissions 
@@ -273,6 +287,7 @@ END
 
 -- ============================================================
 -- Logistics: Kargo ve Teslimat Operasyonları
+-- GÜNCELLEME: reports.view ve reports.weight izinleri eklendi
 -- ============================================================
 IF @LogisticsRoleId IS NOT NULL
 BEGIN
@@ -288,7 +303,9 @@ BEGIN
         -- Shipping - Tam yetki
         'shipping.pending', 'shipping.tracking', 'shipping.ship', 'shipping.deliver',
         -- Couriers - Görüntüleme ve atama
-        'couriers.view', 'couriers.assign'
+        'couriers.view', 'couriers.assign',
+        -- Reports - Genel görüntüleme ve ağırlık raporları (YENİ)
+        'reports.view', 'reports.weight'
     )
     AND NOT EXISTS (
         SELECT 1 FROM RolePermissions 

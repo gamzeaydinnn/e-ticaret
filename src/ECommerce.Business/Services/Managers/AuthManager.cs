@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Http;
@@ -27,6 +28,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly EmailSender _emailSender;
         private readonly IRefreshTokenRepository _refreshTokenRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly ILogger<AuthManager> _logger;
         
         /// <summary>
         /// SMS doğrulama servisi - OTP gönderme ve doğrulama işlemleri için.
@@ -40,7 +42,8 @@ namespace ECommerce.Business.Services.Managers
             EmailSender emailSender,
             IRefreshTokenRepository refreshTokenRepository,
             IHttpContextAccessor httpContextAccessor,
-            ISmsVerificationService smsVerificationService)
+            ISmsVerificationService smsVerificationService,
+            ILogger<AuthManager> logger = null)
         {
             _userManager = userManager ?? throw new ArgumentNullException(nameof(userManager));
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -48,6 +51,7 @@ namespace ECommerce.Business.Services.Managers
             _refreshTokenRepository = refreshTokenRepository ?? throw new ArgumentNullException(nameof(refreshTokenRepository));
             _httpContextAccessor = httpContextAccessor; // Nullable, opsiyonel bağımlılık
             _smsVerificationService = smsVerificationService ?? throw new ArgumentNullException(nameof(smsVerificationService));
+            _logger = logger;
         }
 
         public async Task<string> RegisterAsync(RegisterDto dto)
@@ -561,20 +565,33 @@ namespace ECommerce.Business.Services.Managers
             try
             {
                 var normalizedPhone = NormalizePhoneNumber(dto.PhoneNumber);
+                
+                // Log - telefon numarası normalizasyonunu kontrol et
+                _logger?.LogInformation("[ForgotPassword] Input: {Input}, Normalized: {Normalized}", 
+                    dto.PhoneNumber, normalizedPhone);
 
                 // Kullanıcıyı telefon numarası ile bul
                 var user = await _userManager.Users
                     .FirstOrDefaultAsync(u => u.PhoneNumber == normalizedPhone);
 
+                // Log - kullanıcı bulundu mu?
+                _logger?.LogInformation("[ForgotPassword] User found: {Found}, UserId: {UserId}", 
+                    user != null, user?.Id);
+
                 // Güvenlik: Telefon numarası olmasa bile "başarılı" mesajı döndür (bilgi sızdırma önleme)
                 if (user == null)
                 {
+                    _logger?.LogWarning("[ForgotPassword] Kullanıcı bulunamadı: {Phone}", normalizedPhone);
+                    // NOT: Production'da bu mesajı değiştirmeyin - güvenlik için önemli
                     return (true, "Eğer bu telefon numarası sistemimizde kayıtlıysa, doğrulama kodu gönderildi.");
                 }
 
                 // SMS kodu gönder - NetGSM API üzerinden
                 var ipAddress = GetClientIpAddress();
                 var userAgent = _httpContextAccessor?.HttpContext?.Request.Headers["User-Agent"].ToString();
+
+                _logger?.LogInformation("[ForgotPassword] SMS gönderiliyor: {Phone}, UserId: {UserId}", 
+                    normalizedPhone, user.Id);
 
                 var smsResult = await _smsVerificationService.SendVerificationCodeAsync(
                     normalizedPhone,
@@ -583,9 +600,13 @@ namespace ECommerce.Business.Services.Managers
                     userAgent,
                     user.Id);
 
+                // Log - SMS sonucu
+                _logger?.LogInformation("[ForgotPassword] SMS Result: Success={Success}, Message={Message}, JobId={JobId}", 
+                    smsResult.Success, smsResult.Message, smsResult.JobId);
+
                 if (!smsResult.Success)
                 {
-                    // Rate limit veya SMS hatası - loglama yapılabilir
+                    _logger?.LogError("[ForgotPassword] SMS gönderilemedi: {Error}", smsResult.Message);
                     return (false, smsResult.Message);
                 }
 
@@ -593,6 +614,7 @@ namespace ECommerce.Business.Services.Managers
             }
             catch (Exception ex)
             {
+                _logger?.LogError(ex, "[ForgotPassword] Exception: {Message}", ex.Message);
                 return (false, $"Beklenmeyen bir hata oluştu: {ex.Message}");
             }
         }
@@ -665,6 +687,8 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>
         /// Telefon numarasını normalize eder (5xxxxxxxxx formatına çevirir).
+        /// Giriş formatları: 05xxxxxxxxx, 5xxxxxxxxx, +905xxxxxxxxx, 905xxxxxxxxx
+        /// Çıkış formatı: 5xxxxxxxxx (10 haneli, başında 5)
         /// </summary>
         private static string NormalizePhoneNumber(string? phone)
         {
@@ -674,14 +698,19 @@ namespace ECommerce.Business.Services.Managers
             // Sadece rakamları al
             var digits = new string(phone.Where(char.IsDigit).ToArray());
 
-            // Türkiye kodu varsa kaldır
-            if (digits.StartsWith("90") && digits.Length > 10)
+            // Türkiye kodu varsa kaldır (905xxxxxxxxx -> 5xxxxxxxxx)
+            if (digits.StartsWith("90") && digits.Length >= 12)
                 digits = digits[2..];
 
-            // Başındaki 0'ı kaldır
-            if (digits.StartsWith("0") && digits.Length > 10)
+            // Başındaki 0'ı kaldır (05xxxxxxxxx -> 5xxxxxxxxx)
+            if (digits.StartsWith("0"))
                 digits = digits[1..];
 
+            // Final validasyon: 10 haneli ve 5 ile başlamalı
+            if (digits.Length == 10 && digits.StartsWith("5"))
+                return digits;
+
+            // Geçersiz format - yine de döndür (hata mesajı için)
             return digits;
         }
 
