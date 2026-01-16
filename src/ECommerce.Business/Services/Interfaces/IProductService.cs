@@ -16,9 +16,9 @@ namespace ECommerce.Business.Services.Interfaces
 
         Task<ProductListDto?> GetByIdAsync(int id);
         Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto);
-        Task UpdateProductAsync(int id, ProductUpdateDto productDto);
-        Task DeleteProductAsync(int id);
-        Task UpdateStockAsync(int id, int stock);
+        Task<ProductListDto> UpdateProductAsync(int id, ProductUpdateDto productDto);
+        Task<bool> DeleteProductAsync(int id);
+        Task<bool> UpdateStockAsync(int id, int stock);
         Task<int> GetProductCountAsync();
         Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10);
 

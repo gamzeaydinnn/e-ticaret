@@ -21,7 +21,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  
+
   // Şifre sıfırlama için ek state'ler
   const [forgotPasswordStep, setForgotPasswordStep] = useState(1); // 1: telefon gir, 2: kod gir, 3: yeni şifre
   const [forgotPasswordPhone, setForgotPasswordPhone] = useState("");
@@ -29,10 +29,18 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const { login, register, registerWithPhone, verifyPhoneRegistration, forgotPasswordByPhone, resetPasswordByPhone, loginWithSocial } = useAuth();
+  const {
+    login,
+    register,
+    registerWithPhone,
+    verifyPhoneRegistration,
+    forgotPasswordByPhone,
+    resetPasswordByPhone,
+    loginWithSocial,
+  } = useAuth();
 
   // ==================== OTP İŞLEMLERİ ====================
-  
+
   /**
    * Kayıt için OTP kodu gönder
    * Backend'deki yeni /api/sms/send-otp endpoint'ini kullanır
@@ -47,14 +55,14 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setError("");
 
     // Yeni backend API'yi kullan - purpose: 'registration'
-    const result = await otpService.sendOtp(phoneNumber, 'registration');
+    const result = await otpService.sendOtp(phoneNumber, "registration");
 
     if (result.success) {
       setOtpSent(true);
       setShowOtpInput(true);
       setSuccess("Doğrulama kodu telefonunuza gönderildi.");
       setOtpCountdown(result.expiresInSeconds || 120); // Backend'den gelen süre
-      
+
       // Countdown timer
       const timer = setInterval(() => {
         setOtpCountdown((prev) => {
@@ -89,7 +97,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setError("");
 
     // Yeni backend API'yi kullan - purpose: 'registration'
-    const result = await otpService.verifyOtp(phoneNumber, otpCode, 'registration');
+    const result = await otpService.verifyOtp(
+      phoneNumber,
+      otpCode,
+      "registration"
+    );
 
     if (result.success) {
       setOtpVerified(true);
@@ -98,7 +110,9 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     } else {
       setError(result.message || "Kod doğrulanamadı");
       if (result.remainingAttempts !== undefined) {
-        setError(`${result.message} (${result.remainingAttempts} deneme kaldı)`);
+        setError(
+          `${result.message} (${result.remainingAttempts} deneme kaldı)`
+        );
       }
     }
 
@@ -106,7 +120,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   };
 
   // ==================== ŞİFRE SIFIRLAMA İŞLEMLERİ ====================
-  
+
   /**
    * Telefon ile şifre sıfırlama - Adım 1: OTP Gönder
    */
@@ -125,7 +139,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       setForgotPasswordStep(2);
       setSuccess("Doğrulama kodu telefonunuza gönderildi.");
       setOtpCountdown(result.expiresInSeconds || 120);
-      
+
       const timer = setInterval(() => {
         setOtpCountdown((prev) => {
           if (prev <= 1) {
@@ -144,6 +158,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
 
   /**
    * Telefon ile şifre sıfırlama - Adım 2: Kodu Doğrula
+   * Backend'e OTP doğrulama isteği gönderir, doğrulanırsa şifre adımına geçer.
+   * Güvenlik: Sadece client-side değil, backend tarafından da doğrulama yapılır.
    */
   const handleForgotPasswordVerifyCode = async () => {
     if (!forgotPasswordCode || forgotPasswordCode.length !== 6) {
@@ -151,10 +167,34 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       return;
     }
 
-    // Kodu doğrula ve şifre adımına geç
-    setForgotPasswordStep(3);
-    setSuccess("Kod doğrulandı! Yeni şifrenizi belirleyin.");
+    setLoading(true);
     setError("");
+
+    // Backend'e OTP doğrulama isteği gönder (purpose: PasswordReset = 2)
+    const result = await otpService.verifyOtp(
+      forgotPasswordPhone,
+      forgotPasswordCode,
+      2 // SmsVerificationPurpose.PasswordReset enum değeri (backend ile uyumlu)
+    );
+
+    if (result.success) {
+      // Kod backend tarafından doğrulandı, şifre adımına geç
+      setForgotPasswordStep(3);
+      setSuccess("Kod doğrulandı! Yeni şifrenizi belirleyin.");
+      setError("");
+    } else {
+      // Doğrulama başarısız - hata mesajını göster
+      let errorMessage = result.message || "Kod doğrulanamadı";
+      if (
+        result.remainingAttempts !== undefined &&
+        result.remainingAttempts > 0
+      ) {
+        errorMessage += ` (${result.remainingAttempts} deneme hakkı kaldı)`;
+      }
+      setError(errorMessage);
+    }
+
+    setLoading(false);
   };
 
   /**
@@ -162,7 +202,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
    */
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       setError("Şifreler eşleşmiyor");
       return;
@@ -176,7 +216,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setLoading(true);
     setError("");
 
-    const result = await resetPasswordByPhone(forgotPasswordPhone, forgotPasswordCode, newPassword);
+    const result = await resetPasswordByPhone(
+      forgotPasswordPhone,
+      forgotPasswordCode,
+      newPassword
+    );
 
     if (result.success) {
       setSuccess("Şifreniz başarıyla değiştirildi! Giriş yapabilirsiniz.");
@@ -261,7 +305,13 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
         result = await login(email, password);
       } else {
         // Telefon numarası ile kayıt
-        result = await register(email, password, firstName, lastName, phoneNumber);
+        result = await register(
+          email,
+          password,
+          firstName,
+          lastName,
+          phoneNumber
+        );
       }
 
       if (result.success) {
@@ -383,23 +433,57 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                 {/* Adım İndikatörü */}
                 <div className="d-flex justify-content-center mb-4">
                   <div className="d-flex align-items-center">
-                    <div 
-                      className={`rounded-circle d-flex align-items-center justify-content-center ${forgotPasswordStep >= 1 ? 'bg-primary text-white' : 'bg-light text-muted'}`}
-                      style={{ width: '32px', height: '32px', fontSize: '14px' }}
+                    <div
+                      className={`rounded-circle d-flex align-items-center justify-content-center ${
+                        forgotPasswordStep >= 1
+                          ? "bg-primary text-white"
+                          : "bg-light text-muted"
+                      }`}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        fontSize: "14px",
+                      }}
                     >
                       1
                     </div>
-                    <div className={`mx-2 ${forgotPasswordStep >= 2 ? 'bg-primary' : 'bg-light'}`} style={{ width: '40px', height: '3px' }}></div>
-                    <div 
-                      className={`rounded-circle d-flex align-items-center justify-content-center ${forgotPasswordStep >= 2 ? 'bg-primary text-white' : 'bg-light text-muted'}`}
-                      style={{ width: '32px', height: '32px', fontSize: '14px' }}
+                    <div
+                      className={`mx-2 ${
+                        forgotPasswordStep >= 2 ? "bg-primary" : "bg-light"
+                      }`}
+                      style={{ width: "40px", height: "3px" }}
+                    ></div>
+                    <div
+                      className={`rounded-circle d-flex align-items-center justify-content-center ${
+                        forgotPasswordStep >= 2
+                          ? "bg-primary text-white"
+                          : "bg-light text-muted"
+                      }`}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        fontSize: "14px",
+                      }}
                     >
                       2
                     </div>
-                    <div className={`mx-2 ${forgotPasswordStep >= 3 ? 'bg-primary' : 'bg-light'}`} style={{ width: '40px', height: '3px' }}></div>
-                    <div 
-                      className={`rounded-circle d-flex align-items-center justify-content-center ${forgotPasswordStep >= 3 ? 'bg-primary text-white' : 'bg-light text-muted'}`}
-                      style={{ width: '32px', height: '32px', fontSize: '14px' }}
+                    <div
+                      className={`mx-2 ${
+                        forgotPasswordStep >= 3 ? "bg-primary" : "bg-light"
+                      }`}
+                      style={{ width: "40px", height: "3px" }}
+                    ></div>
+                    <div
+                      className={`rounded-circle d-flex align-items-center justify-content-center ${
+                        forgotPasswordStep >= 3
+                          ? "bg-primary text-white"
+                          : "bg-light text-muted"
+                      }`}
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        fontSize: "14px",
+                      }}
                     >
                       3
                     </div>
@@ -410,7 +494,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                 {forgotPasswordStep === 1 && (
                   <div>
                     <p className="text-muted text-center mb-3">
-                      Şifrenizi sıfırlamak için kayıtlı telefon numaranızı girin.
+                      Şifrenizi sıfırlamak için kayıtlı telefon numaranızı
+                      girin.
                     </p>
                     <div className="mb-3">
                       <label htmlFor="forgotPhone" className="form-label">
@@ -421,7 +506,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         className="form-control form-control-lg"
                         id="forgotPhone"
                         value={forgotPasswordPhone}
-                        onChange={(e) => setForgotPasswordPhone(e.target.value.replace(/\D/g, ""))}
+                        onChange={(e) =>
+                          setForgotPasswordPhone(
+                            e.target.value.replace(/\D/g, "")
+                          )
+                        }
                         placeholder="05XXXXXXXXX"
                         maxLength="11"
                         style={{
@@ -429,7 +518,9 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                           border: "2px solid #e0e0e0",
                           padding: "12px 16px",
                         }}
-                        onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#ff6b35")
+                        }
                         onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                       />
                     </div>
@@ -446,9 +537,15 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       disabled={loading || forgotPasswordPhone.length < 10}
                     >
                       {loading ? (
-                        <><i className="fas fa-spinner fa-spin me-2"></i>Gönderiliyor...</>
+                        <>
+                          <i className="fas fa-spinner fa-spin me-2"></i>
+                          Gönderiliyor...
+                        </>
                       ) : (
-                        <><i className="fas fa-sms me-2"></i>Doğrulama Kodu Gönder</>
+                        <>
+                          <i className="fas fa-sms me-2"></i>Doğrulama Kodu
+                          Gönder
+                        </>
                       )}
                     </button>
                   </div>
@@ -458,13 +555,16 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                 {forgotPasswordStep === 2 && (
                   <div>
                     <p className="text-muted text-center mb-3">
-                      <strong>{forgotPasswordPhone}</strong> numarasına gönderilen 6 haneli kodu girin.
+                      <strong>{forgotPasswordPhone}</strong> numarasına
+                      gönderilen 6 haneli kodu girin.
                     </p>
                     <div className="mb-3">
                       <label htmlFor="forgotCode" className="form-label">
                         <i className="fas fa-key me-2"></i>Doğrulama Kodu
                         {otpCountdown > 0 && (
-                          <span className="badge bg-secondary ms-2">{otpCountdown}s</span>
+                          <span className="badge bg-secondary ms-2">
+                            {otpCountdown}s
+                          </span>
                         )}
                       </label>
                       <input
@@ -472,7 +572,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         className="form-control form-control-lg text-center"
                         id="forgotCode"
                         value={forgotPasswordCode}
-                        onChange={(e) => setForgotPasswordCode(e.target.value.replace(/\D/g, ""))}
+                        onChange={(e) =>
+                          setForgotPasswordCode(
+                            e.target.value.replace(/\D/g, "")
+                          )
+                        }
                         placeholder="123456"
                         maxLength="6"
                         style={{
@@ -497,9 +601,14 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       disabled={loading || forgotPasswordCode.length !== 6}
                     >
                       {loading ? (
-                        <><i className="fas fa-spinner fa-spin me-2"></i>Doğrulanıyor...</>
+                        <>
+                          <i className="fas fa-spinner fa-spin me-2"></i>
+                          Doğrulanıyor...
+                        </>
                       ) : (
-                        <><i className="fas fa-check me-2"></i>Kodu Doğrula</>
+                        <>
+                          <i className="fas fa-check me-2"></i>Kodu Doğrula
+                        </>
                       )}
                     </button>
                     {otpCountdown === 0 && (
@@ -540,7 +649,9 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                           border: "2px solid #e0e0e0",
                           padding: "12px 16px",
                         }}
-                        onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#ff6b35")
+                        }
                         onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                       />
                     </div>
@@ -562,7 +673,9 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                           border: "2px solid #e0e0e0",
                           padding: "12px 16px",
                         }}
-                        onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#ff6b35")
+                        }
                         onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                       />
                     </div>
@@ -578,9 +691,14 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       disabled={loading}
                     >
                       {loading ? (
-                        <><i className="fas fa-spinner fa-spin me-2"></i>Kaydediliyor...</>
+                        <>
+                          <i className="fas fa-spinner fa-spin me-2"></i>
+                          Kaydediliyor...
+                        </>
                       ) : (
-                        <><i className="fas fa-save me-2"></i>Şifremi Değiştir</>
+                        <>
+                          <i className="fas fa-save me-2"></i>Şifremi Değiştir
+                        </>
                       )}
                     </button>
                   </form>
@@ -651,7 +769,10 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         disabled={loading}
                         style={{ borderRadius: "12px", padding: "10px" }}
                       >
-                        <i className="fab fa-google me-2" style={{ color: "#DB4437" }}></i>
+                        <i
+                          className="fab fa-google me-2"
+                          style={{ color: "#DB4437" }}
+                        ></i>
                         Google ile devam et
                       </button>
                       <button
@@ -661,7 +782,10 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         disabled={loading}
                         style={{ borderRadius: "12px", padding: "10px" }}
                       >
-                        <i className="fab fa-facebook me-2" style={{ color: "#4267B2" }}></i>
+                        <i
+                          className="fab fa-facebook me-2"
+                          style={{ color: "#4267B2" }}
+                        ></i>
                         Facebook ile devam et
                       </button>
                     </div>
@@ -763,7 +887,12 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                             type="button"
                             className="btn btn-outline-primary"
                             onClick={handleSendOtp}
-                            disabled={loading || otpVerified || otpCountdown > 0 || phoneNumber.length < 10}
+                            disabled={
+                              loading ||
+                              otpVerified ||
+                              otpCountdown > 0 ||
+                              phoneNumber.length < 10
+                            }
                             style={{
                               borderRadius: "0 12px 12px 0",
                               border: "2px solid #e0e0e0",

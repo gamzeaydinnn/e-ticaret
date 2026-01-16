@@ -24,12 +24,12 @@
     - `deleteProduct()` → `mockDataStore.deleteProduct()`
     - _Requirements: 2.1, 3.1, 4.1_
 
-  - [ ]\* 1.4 Write property test for category update propagation
+  - [x] 1.4 Write property test for category update propagation
 
     - **Property 1: Category Update Propagation**
     - **Validates: Requirements 1.1**
 
-  - [ ]\* 1.5 Write property test for category-product name consistency
+  - [x] 1.5 Write property test for category-product name consistency
     - **Property 2: Category-Product Name Consistency**
     - **Validates: Requirements 1.4**
 
@@ -41,12 +41,12 @@
     - Cleanup fonksiyonunda unsubscribe yap
     - _Requirements: 2.2, 2.3, 3.2_
 
-  - [ ]\* 2.2 Write property test for product addition
+  - [x] 2.2 Write property test for product addition
 
     - **Property 3: Product Addition Increases List Size**
     - **Validates: Requirements 2.1**
 
-  - [ ]\* 2.3 Write property test for product deletion
+  - [x] 2.3 Write property test for product deletion
     - **Property 5: Product Deletion Decreases List Size**
     - **Validates: Requirements 3.1**
 
@@ -62,10 +62,15 @@
     - `get(id)` → `mockDataStore.getProductById(id)`
     - _Requirements: 2.2, 3.2, 4.3_
 
-  - [ ]\* 4.2 Write property test for inactive products filtering
+  - [x] 4.2 Write property test for inactive products filtering
     - **Property 7: Inactive Products Not In Public List**
     - **Validates: Requirements 3.3**
 
 - [x] 5. Final Checkpoint - Tüm testlerin geçtiğinden emin ol
 
   - Ensure all tests pass, ask the user if questions arise.
+
+## Notes
+
+- Tüm property testleri `mockDataStore.property.test.js` dosyasında
+- fast-check kütüphanesi kullanılıyor

@@ -643,22 +643,22 @@ namespace ECommerce.Business.Services.Managers
                     return (false, "Kullanıcı bulunamadı.");
                 }
 
-                // 5. OTP kodunu doğrula
-                // TODO: Re-enable after fixing DI issue
-                /*
+                // 2. OTP kodunu doğrula
+                // SMS ile gelen doğrulama kodunun geçerliliğini kontrol et
                 var verifyResult = await _smsVerificationService.VerifyCodeAsync(
                     normalizedPhone,
-                    code,
+                    dto.Code,
                     Entities.Enums.SmsVerificationPurpose.PasswordReset,
                     GetClientIpAddress());
 
                 if (!verifyResult.Success)
                 {
-                    return (false, verifyResult.Message, null);
+                    _logger?.LogWarning("[ResetPasswordByPhone] OTP doğrulaması başarısız - Telefon: {Phone}, Mesaj: {Message}", 
+                        normalizedPhone, verifyResult.Message);
+                    return (false, verifyResult.Message);
                 }
-                */
 
-                // TEMPORARY: Auto-approve phone verification
+                _logger?.LogInformation("[ResetPasswordByPhone] OTP doğrulaması başarılı - Telefon: {Phone}", normalizedPhone);
 
                 // 3. Şifreyi güncelle
                 var resetToken = await _userManager.GeneratePasswordResetTokenAsync(user);

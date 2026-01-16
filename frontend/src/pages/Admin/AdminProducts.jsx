@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
@@ -21,6 +21,19 @@ const AdminProducts = () => {
   });
   const [editingProductId, setEditingProductId] = useState(null);
   const [productVariants, setProductVariants] = useState([]);
+
+  // Excel Import State'leri
+  const [showExcelModal, setShowExcelModal] = useState(false);
+  const [excelFile, setExcelFile] = useState(null);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const [excelResult, setExcelResult] = useState(null);
+  const [excelError, setExcelError] = useState(null);
+
+  // Resim Upload State'leri
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const imageInputRef = useRef(null);
 
   useEffect(() => {
     fetchProducts();
@@ -52,17 +65,22 @@ const AdminProducts = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Ürün verilerini API formatına dönüştür
       const productData = {
-        ...formData,
+        name: formData.name,
+        description: formData.description || "",
         price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
+        stockQuantity: parseInt(formData.stock), // API stockQuantity bekliyor
+        categoryId: parseInt(formData.categoryId) || 1,
+        imageUrl: formData.imageUrl || null,
       };
 
       if (editingProduct) {
-        await ProductService.update(editingProduct.id, productData);
+        // Mevcut ürünü güncelle - ProductService.updateAdmin kullan
+        await ProductService.updateAdmin(editingProduct.id, productData);
       } else {
-        // create and then migrate any temporary variants
-        const created = await ProductService.create(productData);
+        // Yeni ürün oluştur - ProductService.createAdmin kullan
+        const created = await ProductService.createAdmin(productData);
         // created may be the created product object or an id depending on API
         const newId = created && created.id ? created.id : created;
         // if we had a temp editing id, move local variants into new product id
@@ -95,6 +113,9 @@ const AdminProducts = () => {
     setEditingProduct(product);
     setEditingProductId(product.id);
     setProductVariants(variantStore.getVariantsForProduct(product.id) || []);
+    // Mevcut ürünün resmini önizleme olarak göster
+    setImagePreview(product.imageUrl || null);
+    setImageFile(null);
     setFormData({
       name: product.name,
       categoryId: product.categoryId || "",
@@ -105,6 +126,84 @@ const AdminProducts = () => {
       isActive: product.isActive,
     });
     setShowModal(true);
+  };
+
+  /**
+   * Resim dosyası seçildiğinde çağrılır.
+   * Dosyayı validate eder ve önizleme oluşturur.
+   * @param {Event} e - File input change event
+   */
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Dosya türü kontrolü (frontend'de de güvenlik)
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir.");
+      e.target.value = "";
+      return;
+    }
+
+    // Dosya boyutu kontrolü (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert("Dosya boyutu maksimum 10MB olabilir.");
+      e.target.value = "";
+      return;
+    }
+
+    setImageFile(file);
+    // Önizleme için ObjectURL oluştur
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+  };
+
+  /**
+   * Seçilen resim dosyasını sunucuya yükler.
+   * Başarılı olursa imageUrl'i formData'ya set eder.
+   */
+  const handleImageUpload = async () => {
+    if (!imageFile) {
+      alert("Lütfen önce bir resim dosyası seçin.");
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const result = await ProductService.uploadImage(imageFile);
+      if (result?.success && result?.imageUrl) {
+        // Yükleme başarılı - form'a URL'i ekle
+        setFormData(prev => ({ ...prev, imageUrl: result.imageUrl }));
+        setImagePreview(result.imageUrl);
+        setImageFile(null);
+        // Input'u temizle
+        if (imageInputRef.current) {
+          imageInputRef.current.value = "";
+        }
+        alert("✅ Resim başarıyla yüklendi!");
+      } else {
+        throw new Error(result?.message || "Resim yüklenemedi");
+      }
+    } catch (err) {
+      console.error("Resim yükleme hatası:", err);
+      alert("Resim yüklenirken hata oluştu: " + (err.response?.data?.message || err.message));
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  /**
+   * Resim seçimini iptal eder ve önizlemeyi temizler.
+   */
+  const handleClearImage = () => {
+    setImageFile(null);
+    // Mevcut ürün düzenleniyorsa eski resmi göster
+    setImagePreview(editingProduct?.imageUrl || null);
+    setFormData(prev => ({ ...prev, imageUrl: editingProduct?.imageUrl || "" }));
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
   };
 
   const handleAddVariant = (variant) => {
@@ -123,11 +222,64 @@ const AdminProducts = () => {
   const handleDelete = async (id) => {
     if (window.confirm("Ürünü silmek istediğinizden emin misiniz?")) {
       try {
-        await ProductService.delete(id);
-        fetchProducts();
+        // ProductService.deleteAdmin kullan - veritabanından kalıcı siler
+        await ProductService.deleteAdmin(id);
+        fetchProducts(); // Listeyi yenile
       } catch (err) {
         console.error("Ürün silme hatası:", err);
+        alert(
+          "Ürün silinirken hata oluştu: " +
+            (err.response?.data?.message || err.message)
+        );
       }
+    }
+  };
+
+  // Excel dosyasından toplu ürün yükleme
+  const handleExcelUpload = async (e) => {
+    e.preventDefault();
+    if (!excelFile) {
+      setExcelError("Lütfen bir Excel veya CSV dosyası seçin.");
+      return;
+    }
+
+    setExcelLoading(true);
+    setExcelResult(null);
+    setExcelError(null);
+
+    try {
+      // ProductService.importExcel kullanarak dosyayı yükle
+      const result = await ProductService.importExcel(excelFile);
+      setExcelResult(result);
+      // Başarılı olursa ürün listesini yenile
+      fetchProducts();
+    } catch (err) {
+      console.error("Excel yükleme hatası:", err);
+      setExcelError(
+        err.response?.data?.message || "Dosya yüklenirken hata oluştu."
+      );
+    } finally {
+      setExcelLoading(false);
+    }
+  };
+
+  // Excel şablonu indir
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await ProductService.downloadTemplate();
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "urun_sablonu.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Şablon indirme hatası:", err);
+      alert(
+        "Şablon indirilemedi: " + (err.response?.data?.message || err.message)
+      );
     }
   };
 
@@ -173,7 +325,7 @@ const AdminProducts = () => {
       `}</style>
       <div className="container-fluid px-2">
         {/* Header - Mobil Uyumlu */}
-        <div className="d-flex justify-content-between align-items-center mb-3">
+        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <div>
             <h5
               className="mb-0 fw-bold"
@@ -183,34 +335,72 @@ const AdminProducts = () => {
               Ürünler
             </h5>
           </div>
-          <button
-            className="btn border-0 text-white fw-medium px-2 py-1"
-            style={{
-              background: "linear-gradient(135deg, #f97316, #fb923c)",
-              borderRadius: "6px",
-              fontSize: "0.75rem",
-            }}
-            onClick={() => {
-              setEditingProduct(null);
-              setFormData({
-                name: "",
-                categoryId: "",
-                price: "",
-                stock: "",
-                description: "",
-                imageUrl: "",
-                isActive: true,
-              });
-              const tempId = `temp-${Date.now()}`;
-              setEditingProductId(tempId);
-              setProductVariants(
-                variantStore.getVariantsForProduct(tempId) || []
-              );
-              setShowModal(true);
-            }}
-          >
-            <i className="fas fa-plus me-1"></i>Ekle
-          </button>
+          <div className="d-flex gap-2 flex-wrap">
+            {/* Excel'den Yükle Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #10b981, #34d399)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={() => {
+                setExcelFile(null);
+                setExcelResult(null);
+                setExcelError(null);
+                setShowExcelModal(true);
+              }}
+            >
+              <i className="fas fa-file-excel me-1"></i>Excel Yükle
+            </button>
+            {/* Şablon İndir Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #6366f1, #818cf8)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={handleDownloadTemplate}
+            >
+              <i className="fas fa-download me-1"></i>Şablon
+            </button>
+            {/* Yeni Ürün Ekle Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #f97316, #fb923c)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={() => {
+                setEditingProduct(null);
+                setFormData({
+                  name: "",
+                  categoryId: "",
+                  price: "",
+                  stock: "",
+                  description: "",
+                  imageUrl: "",
+                  isActive: true,
+                });
+                // Resim state'lerini sıfırla
+                setImageFile(null);
+                setImagePreview(null);
+                if (imageInputRef.current) {
+                  imageInputRef.current.value = "";
+                }
+                const tempId = `temp-${Date.now()}`;
+                setEditingProductId(tempId);
+                setProductVariants(
+                  variantStore.getVariantsForProduct(tempId) || []
+                );
+                setShowModal(true);
+              }}
+            >
+              <i className="fas fa-plus me-1"></i>Ekle
+            </button>
+          </div>
         </div>
 
         {/* Products Grid - Mobil 2'li */}
@@ -469,22 +659,108 @@ const AdminProducts = () => {
                         <label className="form-label fw-semibold mb-2">
                           Ürün Resmi
                         </label>
-                        <input
-                          type="text"
-                          className="form-control border-0 py-3"
-                          style={{
-                            background: "rgba(245, 124, 0, 0.05)",
-                            borderRadius: "12px",
-                          }}
-                          value={formData.imageUrl}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              imageUrl: e.target.value,
-                            })
-                          }
-                          placeholder="/images/urun.jpg veya https://..."
-                        />
+                        
+                        {/* Resim Önizleme Alanı */}
+                        {imagePreview && (
+                          <div className="mb-3 text-center">
+                            <img
+                              src={imagePreview}
+                              alt="Ürün önizleme"
+                              style={{
+                                maxWidth: "200px",
+                                maxHeight: "150px",
+                                objectFit: "contain",
+                                borderRadius: "12px",
+                                border: "2px solid #e2e8f0"
+                              }}
+                              onError={(e) => { e.target.src = "/images/placeholder.png"; }}
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Dosya Seçme Alanı */}
+                        <div className="d-flex gap-2 align-items-center flex-wrap">
+                          <input
+                            ref={imageInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            className="form-control border-0"
+                            style={{
+                              background: "rgba(245, 124, 0, 0.05)",
+                              borderRadius: "12px",
+                              flex: "1",
+                              minWidth: "200px"
+                            }}
+                            onChange={handleImageSelect}
+                          />
+                          
+                          {/* Yükle Butonu */}
+                          {imageFile && (
+                            <button
+                              type="button"
+                              className="btn text-white"
+                              style={{
+                                background: "linear-gradient(135deg, #10b981, #34d399)",
+                                borderRadius: "8px",
+                                minWidth: "100px"
+                              }}
+                              onClick={handleImageUpload}
+                              disabled={imageUploading}
+                            >
+                              {imageUploading ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-1"></span>
+                                  Yükleniyor...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fas fa-upload me-1"></i>
+                                  Yükle
+                                </>
+                              )}
+                            </button>
+                          )}
+                          
+                          {/* Temizle Butonu */}
+                          {(imageFile || imagePreview) && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary"
+                              style={{ borderRadius: "8px" }}
+                              onClick={handleClearImage}
+                            >
+                              <i className="fas fa-times"></i>
+                            </button>
+                          )}
+                        </div>
+                        
+                        {/* Mevcut URL gösterimi */}
+                        {formData.imageUrl && (
+                          <div className="mt-2">
+                            <small className="text-muted">
+                              <i className="fas fa-link me-1"></i>
+                              Kayıtlı: {formData.imageUrl}
+                            </small>
+                          </div>
+                        )}
+                        
+                        {/* Manuel URL girişi (opsiyonel) */}
+                        <div className="mt-2">
+                          <small 
+                            className="text-primary" 
+                            style={{ cursor: "pointer" }}
+                            onClick={() => {
+                              const url = prompt("Resim URL'si girin (opsiyonel):", formData.imageUrl);
+                              if (url !== null) {
+                                setFormData(prev => ({ ...prev, imageUrl: url }));
+                                setImagePreview(url || null);
+                              }
+                            }}
+                          >
+                            <i className="fas fa-edit me-1"></i>
+                            Manuel URL gir
+                          </small>
+                        </div>
                       </div>
 
                       {(editingProduct ||
@@ -603,6 +879,159 @@ const AdminProducts = () => {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Excel Import Modal */}
+        {showExcelModal && (
+          <div
+            className="modal fade show d-block"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          >
+            <div className="modal-dialog modal-dialog-centered">
+              <div
+                className="modal-content border-0"
+                style={{ borderRadius: "16px" }}
+              >
+                <div
+                  className="modal-header border-0 p-4"
+                  style={{
+                    background: "linear-gradient(135deg, #10b981, #34d399)",
+                    borderRadius: "16px 16px 0 0",
+                  }}
+                >
+                  <h5 className="modal-title text-white fw-bold">
+                    <i className="fas fa-file-excel me-2"></i>
+                    Excel'den Ürün Yükle
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={() => setShowExcelModal(false)}
+                  ></button>
+                </div>
+                <div className="modal-body p-4">
+                  {/* Bilgi kutusu */}
+                  <div className="alert alert-info border-0 mb-4">
+                    <h6 className="fw-bold mb-2">
+                      <i className="fas fa-info-circle me-2"></i>
+                      Dosya Formatı
+                    </h6>
+                    <p className="mb-2 small">
+                      Excel (.xlsx, .xls) veya CSV dosyası yükleyebilirsiniz.
+                    </p>
+                    <p className="mb-0 small">
+                      <strong>Sütunlar:</strong> Ürün Adı, Açıklama, Fiyat,
+                      Stok, Kategori ID, Görsel URL
+                    </p>
+                  </div>
+
+                  {/* Dosya seçimi */}
+                  <form onSubmit={handleExcelUpload}>
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold">
+                        Dosya Seçin
+                      </label>
+                      <input
+                        type="file"
+                        className="form-control"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={(e) => setExcelFile(e.target.files[0])}
+                      />
+                      {excelFile && (
+                        <small className="text-success mt-1 d-block">
+                          <i className="fas fa-check-circle me-1"></i>
+                          {excelFile.name} seçildi
+                        </small>
+                      )}
+                    </div>
+
+                    {/* Hata mesajı */}
+                    {excelError && (
+                      <div className="alert alert-danger border-0 py-2">
+                        <i className="fas fa-exclamation-circle me-2"></i>
+                        {excelError}
+                      </div>
+                    )}
+
+                    {/* Başarı mesajı */}
+                    {excelResult && (
+                      <div
+                        className={`alert border-0 py-2 ${
+                          excelResult.errorCount > 0
+                            ? "alert-warning"
+                            : "alert-success"
+                        }`}
+                      >
+                        <i
+                          className={`fas ${
+                            excelResult.errorCount > 0
+                              ? "fa-exclamation-triangle"
+                              : "fa-check-circle"
+                          } me-2`}
+                        ></i>
+                        <strong>{excelResult.message}</strong>
+                        <div className="mt-2 small">
+                          <div>İşlenen: {excelResult.totalProcessed}</div>
+                          <div className="text-success">
+                            Başarılı: {excelResult.successCount}
+                          </div>
+                          {excelResult.errorCount > 0 && (
+                            <div className="text-danger">
+                              Hatalı: {excelResult.errorCount}
+                            </div>
+                          )}
+                          {excelResult.errors &&
+                            excelResult.errors.length > 0 && (
+                              <ul className="mt-2 mb-0 ps-3">
+                                {excelResult.errors
+                                  .slice(0, 5)
+                                  .map((err, i) => (
+                                    <li key={i} className="text-danger">
+                                      {err}
+                                    </li>
+                                  ))}
+                              </ul>
+                            )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="d-flex gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary flex-fill"
+                        onClick={handleDownloadTemplate}
+                      >
+                        <i className="fas fa-download me-2"></i>
+                        Şablon İndir
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn text-white fw-semibold flex-fill"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #10b981, #34d399)",
+                        }}
+                        disabled={excelLoading || !excelFile}
+                      >
+                        {excelLoading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2"></span>
+                            Yükleniyor...
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-upload me-2"></i>
+                            Yükle
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </div>
           </div>

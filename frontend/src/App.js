@@ -85,6 +85,9 @@ import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
+// Mobil Bottom Navigation
+import MobileBottomNav from "./components/MobileBottomNav";
+import "./styles/mobileNav.css";
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -232,7 +235,8 @@ function Header() {
             {/* Modern Action Buttons */}
             <div className="col-md-3 col-auto ms-auto">
               <div className="header-actions d-flex justify-content-end align-items-center gap-1 gap-md-2">
-                <div className="position-relative">
+                {/* Hoş geldin butonu - sadece desktop'ta görünür */}
+                <div className="position-relative d-none d-md-block">
                   <button
                     onClick={handleAccountClick}
                     className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
@@ -528,9 +532,10 @@ function Header() {
                   )}
                 </div>
 
+                {/* Siparişlerim butonu - Mobilde gizli (bottom nav'da var) */}
                 <button
                   onClick={() => navigate("/orders")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
+                  className="modern-action-btn d-none d-md-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
                   title="Siparişlerim"
                 >
                   <div
@@ -554,9 +559,10 @@ function Header() {
                   </small>
                 </button>
 
+                {/* Sepetim butonu - sadece desktop'ta görünür, mobilde bottom nav'da var */}
                 <button
                   onClick={() => navigate("/cart")}
-                  className="modern-action-btn d-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent position-relative"
+                  className="modern-action-btn d-none d-md-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent position-relative"
                   title="Sepetim"
                 >
                   <div
@@ -607,8 +613,8 @@ function Header() {
         </div>
       </header>
 
-      {/* Professional Single Line Category Navigation */}
-      <nav className="single-line-categories">
+      {/* Professional Single Line Category Navigation - Mobilde gizli (bottom nav'da var) */}
+      <nav className="single-line-categories d-none d-md-block">
         <div className="container-fluid">
           <div className="category-scroll-container">
             <button
@@ -927,7 +933,12 @@ function App() {
         <Route path="/courier/dashboard" element={<CourierDashboard />} />
         <Route path="/courier/orders" element={<CourierOrders />} />
       </Routes>
+
+      {/* Footer - Mobilde gizli (desktop-only-footer class'ı ile) */}
       {showGlobalFooter && showHeader && <Footer />}
+
+      {/* Mobile Bottom Navigation - Sadece mobilde görünür, admin/kurye sayfalarında gizli */}
+      {showHeader && <MobileBottomNav />}
     </div>
   );
 }
@@ -1422,41 +1433,72 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Bu Yolculukta Bizimle Olun Section */}
-      <section className="join-journey-section">
+      {/* Features Section - 4 Özellik Kartları */}
+      <section className="features-section py-5">
         <div className="container-fluid px-4">
-          <div className="row justify-content-center">
-            <div className="col-lg-10">
-              <div className="join-journey-card text-center">
-                <div className="journey-icon mb-4">
-                  <div className="animated-icons">
-                    <i className="fas fa-heart pulse-icon"></i>
-                    <i className="fas fa-handshake bounce-icon"></i>
-                    <i className="fas fa-star twinkle-icon"></i>
-                  </div>
+          <div className="row g-4 justify-content-center">
+            <div className="col-6 col-lg-3">
+              <div className="feature-card text-center p-4 bg-white rounded-4 shadow-sm h-100">
+                <div className="feature-icon mb-3">
+                  <i
+                    className="fas fa-credit-card"
+                    style={{ fontSize: "2.5rem", color: "#ff9500" }}
+                  ></i>
                 </div>
-
-                <h2 className="journey-title mb-4 animated-title">
-                  Bu Yolculukta Bizimle Olun
-                </h2>
-
-                <p className="journey-subtitle mb-4 fade-in-text">
-                  Gölköy Gourmet Market ailesi olarak, sizlerle birlikte büyümek
-                  ve gelişmek istiyoruz.
-                  <br />
-                  Görüşleriniz bizim için çok değerli.
+                <h5 className="feature-title fw-bold mb-2">
+                  Esnek Ödeme İmkanları
+                </h5>
+                <p className="feature-desc text-muted small mb-0">
+                  Kapıda veya Kredi Kartı ile Online Ödeme Yapın
                 </p>
-
-                <div className="journey-buttons animated-buttons">
-                  <button className="btn btn-light btn-lg me-3 hover-lift">
-                    <i className="fas fa-envelope me-2"></i>
-                    İletişime Geçin
-                  </button>
-                  <button className="btn btn-outline-light btn-lg hover-lift">
-                    <i className="fas fa-users me-2"></i>
-                    Bültenimize Katılın
-                  </button>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="feature-card text-center p-4 bg-white rounded-4 shadow-sm h-100">
+                <div className="feature-icon mb-3">
+                  <i
+                    className="fas fa-truck"
+                    style={{ fontSize: "2.5rem", color: "#ff9500" }}
+                  ></i>
                 </div>
+                <h5 className="feature-title fw-bold mb-2">
+                  İstediğin Saatte Teslimat
+                </h5>
+                <p className="feature-desc text-muted small mb-0">
+                  Haftanın 7 günü İstediğin Saatte Teslim Edelim
+                </p>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="feature-card text-center p-4 bg-white rounded-4 shadow-sm h-100">
+                <div className="feature-icon mb-3">
+                  <i
+                    className="fas fa-box-open"
+                    style={{ fontSize: "2.5rem", color: "#ff9500" }}
+                  ></i>
+                </div>
+                <h5 className="feature-title fw-bold mb-2">
+                  Özenle Seçilmiş, Paketlenmiş Ürünler
+                </h5>
+                <p className="feature-desc text-muted small mb-0">
+                  Senin İçin Tüm Siparişlerini Özenle Hazırlıyoruz
+                </p>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="feature-card text-center p-4 bg-white rounded-4 shadow-sm h-100">
+                <div className="feature-icon mb-3">
+                  <i
+                    className="fas fa-leaf"
+                    style={{ fontSize: "2.5rem", color: "#27ae60" }}
+                  ></i>
+                </div>
+                <h5 className="feature-title fw-bold mb-2">
+                  Doğal Ürün Garantisi
+                </h5>
+                <p className="feature-desc text-muted small mb-0">
+                  Tüm Ürünlerimiz %100 Doğal ve Taze Garantilidir
+                </p>
               </div>
             </div>
           </div>
@@ -1511,9 +1553,9 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Modern Footer */}
+      {/* Modern Footer - Mobilde gizli */}
       <footer
-        className="modern-footer"
+        className="modern-footer d-none d-md-block"
         style={{
           background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
           color: "white",

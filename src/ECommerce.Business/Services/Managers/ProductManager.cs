@@ -162,10 +162,10 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
-        public async Task UpdateProductAsync(int id, ProductUpdateDto productDto)
+        public async Task<ProductListDto> UpdateProductAsync(int id, ProductUpdateDto productDto)
         {
             var product = await _productRepository.GetByIdAsync(id);
-            if (product == null) return;
+            if (product == null) return null;
 
             var oldStock = product.StockQuantity;
             product.Name = productDto.Name;
@@ -190,36 +190,52 @@ namespace ECommerce.Business.Services.Managers
                     $"Product:{product.Id}");
             }
             InvalidateProductCaches();
+            
+            return new ProductListDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
+                Price = product.Price,
+                SpecialPrice = product.SpecialPrice,
+                StockQuantity = product.StockQuantity,
+                ImageUrl = product.ImageUrl,
+                Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name ?? string.Empty
+            };
         }
 
-        public async Task DeleteProductAsync(int id)
+        public async Task<bool> DeleteProductAsync(int id)
         {
             var product = await _productRepository.GetByIdAsync(id);
-            if (product == null) return;
+            if (product == null) return false;
             await _productRepository.DeleteAsync(product);
             InvalidateProductCaches();
+            return true;
         }
 
-        public async Task UpdateStockAsync(int id, int stock)
+        public async Task<bool> UpdateStockAsync(int id, int stock)
         {
             var product = await _productRepository.GetByIdAsync(id);
-            if (product != null)
+            if (product == null) return false;
+            
+            var oldStock = product.StockQuantity;
+            product.StockQuantity = stock;
+            await _productRepository.UpdateAsync(product);
+            if (oldStock != product.StockQuantity)
             {
-                var oldStock = product.StockQuantity;
-                product.StockQuantity = stock;
-                await _productRepository.UpdateAsync(product);
-                if (oldStock != product.StockQuantity)
-                {
-                    await _inventoryLogService.WriteAsync(
-                        product.Id,
-                        "ProductUpdated",
-                        Math.Abs(stock - oldStock),
-                        oldStock,
-                        product.StockQuantity,
-                        $"Product:{product.Id}");
-                }
-                InvalidateProductCaches();
+                await _inventoryLogService.WriteAsync(
+                    product.Id,
+                    "ProductUpdated",
+                    Math.Abs(stock - oldStock),
+                    oldStock,
+                    product.StockQuantity,
+                    $"Product:{product.Id}");
             }
+            InvalidateProductCaches();
+            return true;
         }
 
         public async Task<int> GetProductCountAsync()

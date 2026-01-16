@@ -1,0 +1,392 @@
+/**
+ * Newsletter Form Styles
+ * 
+ * Turuncu gradient arka planlı, modern tasarımlı newsletter abonelik formu stilleri.
+ * 
+ * Özellikler:
+ * - Turuncu gradient background
+ * - Blur efektleri (::before, ::after pseudo elements)
+ * - Responsive tasarım (mobil ve web)
+ * - Input ve button stilleri
+ * 
+ * Requirements: 3.1, 3.4, 3.7
+ */
+
+/* ============================================
+   CSS Değişkenleri
+   ============================================ */
+:root {
+  --newsletter-primary: #ff6b35;
+  --newsletter-secondary: #ff8c00;
+  --newsletter-dark: #e55a2b;
+  --newsletter-light: #ffa366;
+  --newsletter-bg-start: #ff6b35;
+  --newsletter-bg-end: #ff8c00;
+  --newsletter-text: #ffffff;
+  --newsletter-input-bg: rgba(255, 255, 255, 0.95);
+  --newsletter-blur-color: rgba(255, 140, 0, 0.4);
+}
+
+/* ============================================
+   Ana Section
+   ============================================ */
+.newsletter-section {
+  position: relative;
+  padding: 60px 20px;
+  overflow: hidden;
+  background: linear-gradient(
+    135deg,
+    var(--newsletter-bg-start) 0%,
+    var(--newsletter-bg-end) 100%
+  );
+}
+
+/* ============================================
+   Container
+   ============================================ */
+.newsletter-container {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+  z-index: 1;
+}
+
+/* ============================================
+   Dekoratif Blur Efektleri
+   ============================================ */
+.newsletter-blur {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.newsletter-blur-1 {
+  width: 200px;
+  height: 200px;
+  background: var(--newsletter-blur-color);
+  top: -50px;
+  left: -50px;
+  animation: floatBlur1 8s ease-in-out infinite;
+}
+
+.newsletter-blur-2 {
+  width: 150px;
+  height: 150px;
+  background: rgba(255, 200, 100, 0.5);
+  bottom: -30px;
+  right: -30px;
+  animation: floatBlur2 10s ease-in-out infinite;
+}
+
+@keyframes floatBlur1 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(20px, 20px);
+  }
+}
+
+@keyframes floatBlur2 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-15px, -15px);
+  }
+}
+
+/* ============================================
+   Content Area
+   ============================================ */
+.newsletter-content {
+  position: relative;
+  text-align: center;
+  z-index: 2;
+}
+
+/* ============================================
+   İkon
+   ============================================ */
+.newsletter-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 70px;
+  margin-bottom: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  backdrop-filter: blur(10px);
+}
+
+.newsletter-icon i {
+  font-size: 32px;
+  color: var(--newsletter-text);
+}
+
+/* ============================================
+   Başlık ve Alt Başlık
+   ============================================ */
+.newsletter-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--newsletter-text);
+  margin-bottom: 10px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.newsletter-subtitle {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+/* ============================================
+   Form
+   ============================================ */
+.newsletter-form {
+  width: 100%;
+}
+
+.newsletter-input-group {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+/* ============================================
+   Input
+   ============================================ */
+.newsletter-input {
+  flex: 1;
+  padding: 16px 20px;
+  font-size: 16px;
+  border: 2px solid transparent;
+  border-radius: 50px;
+  background: var(--newsletter-input-bg);
+  color: #333;
+  outline: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.newsletter-input::placeholder {
+  color: #999;
+}
+
+.newsletter-input:focus {
+  border-color: var(--newsletter-dark);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.newsletter-input.error {
+  border-color: #e74c3c;
+  animation: shake 0.5s ease;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.newsletter-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   Button
+   ============================================ */
+.newsletter-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--newsletter-primary);
+  background: var(--newsletter-text);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+.newsletter-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+  background: #fff;
+}
+
+.newsletter-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.newsletter-button:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.newsletter-button .btn-icon {
+  transition: transform 0.3s ease;
+}
+
+.newsletter-button:hover:not(:disabled) .btn-icon {
+  transform: translateX(3px);
+}
+
+/* ============================================
+   Mesaj Alanı
+   ============================================ */
+.newsletter-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease;
+}
+
+.newsletter-message.success {
+  background: rgba(39, 174, 96, 0.2);
+  color: #fff;
+}
+
+.newsletter-message.error {
+  background: rgba(231, 76, 60, 0.2);
+  color: #fff;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================
+   Gizlilik Notu
+   ============================================ */
+.newsletter-privacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.newsletter-privacy i {
+  font-size: 12px;
+}
+
+/* ============================================
+   Responsive - Tablet
+   ============================================ */
+@media (max-width: 768px) {
+  .newsletter-section {
+    padding: 40px 15px;
+  }
+
+  .newsletter-title {
+    font-size: 24px;
+  }
+
+  .newsletter-subtitle {
+    font-size: 14px;
+    margin-bottom: 25px;
+  }
+
+  .newsletter-input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .newsletter-input {
+    padding: 14px 18px;
+    font-size: 15px;
+  }
+
+  .newsletter-button {
+    width: 100%;
+    padding: 14px 24px;
+    font-size: 15px;
+  }
+
+  .newsletter-icon {
+    width: 60px;
+    height: 60px;
+  }
+
+  .newsletter-icon i {
+    font-size: 26px;
+  }
+
+  .newsletter-blur-1 {
+    width: 150px;
+    height: 150px;
+  }
+
+  .newsletter-blur-2 {
+    width: 100px;
+    height: 100px;
+  }
+}
+
+/* ============================================
+   Responsive - Mobil Küçük
+   ============================================ */
+@media (max-width: 480px) {
+  .newsletter-section {
+    padding: 30px 12px;
+  }
+
+  .newsletter-title {
+    font-size: 20px;
+  }
+
+  .newsletter-subtitle {
+    font-size: 13px;
+  }
+
+  .newsletter-input {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .newsletter-button {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+
+  .newsletter-privacy {
+    font-size: 11px;
+  }
+}

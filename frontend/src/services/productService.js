@@ -90,19 +90,72 @@ export const ProductService = {
   },
 
   // Admin endpoints
+  getAll: async () => {
+    try {
+      const response = await api.get("/api/products/admin/all?size=500");
+      const items = Array.isArray(response) ? response : response?.data || [];
+      return items.map(mapProduct);
+    } catch (err) {
+      console.error("Admin ürünler yüklenemedi:", err);
+      // Fallback: normal endpoint dene
+      try {
+        const response = await api.get("/api/products?size=500");
+        const items = Array.isArray(response) ? response : response?.data || [];
+        return items.map(mapProduct);
+      } catch (err2) {
+        console.error("Ürünler yüklenemedi:", err2);
+        return [];
+      }
+    }
+  },
+
   createAdmin: async (formData) => {
     const response = await api.post("/api/products", formData);
     return response?.data || response;
   },
+
   updateAdmin: async (id, formData) => {
     const response = await api.put(`/api/products/${id}`, formData);
     return response?.data || response;
   },
+
   deleteAdmin: async (id) => {
     await api.delete(`/api/products/${id}`);
   },
+
   updateStockAdmin: async (id, stock) => {
     const response = await api.patch(`/api/products/${id}/stock`, { stock });
+    return response?.data || response;
+  },
+
+  importExcel: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post("/api/products/import/excel", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response?.data || response;
+  },
+
+  downloadTemplate: async () => {
+    const response = await api.get("/api/products/import/template", {
+      responseType: "blob",
+    });
+    return response;
+  },
+
+  /**
+   * Ürün resmi yükler (bilgisayardan dosya seçerek)
+   * @param {File} imageFile - Yüklenecek resim dosyası
+   * @returns {Promise<{success: boolean, imageUrl: string, message: string}>}
+   *          Yükleme sonucu ve dosya URL'i
+   */
+  uploadImage: async (imageFile) => {
+    const formData = new FormData();
+    formData.append("image", imageFile);
+    const response = await api.post("/api/products/upload/image", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return response?.data || response;
   },
 };

@@ -228,6 +228,85 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         /// <summary>
+        /// Sadece resim dosyası yükler (banner oluşturmadan)
+        /// Bilgisayardan resim seçilip yüklendikten sonra dönen URL, banner formunda kullanılır.
+        /// </summary>
+        /// <param name="image">Yüklenecek resim dosyası (jpg, jpeg, png, gif, webp)</param>
+        /// <returns>Yüklenen dosyanın URL'ini döner</returns>
+        [HttpPost("upload-image")]
+        [RequestSizeLimit(MaxFileSize)]
+        public async Task<IActionResult> UploadImageOnly(IFormFile image)
+        {
+            _logger.LogInformation("📤 Banner resmi yükleme başlatılıyor (sadece resim)");
+            
+            try
+            {
+                // Dosya var mı kontrolü
+                if (image == null || image.Length == 0)
+                {
+                    _logger.LogWarning("⚠️ Dosya seçilmedi");
+                    return BadRequest(new { message = "Lütfen bir resim dosyası seçin." });
+                }
+
+                // Dosya boyutu kontrolü
+                if (image.Length > MaxFileSize)
+                {
+                    _logger.LogWarning("⚠️ Dosya çok büyük: {Size}MB", image.Length / (1024 * 1024));
+                    return BadRequest(new { message = $"Dosya boyutu maksimum {MaxFileSize / (1024 * 1024)}MB olabilir." });
+                }
+
+                // Dosya uzantısı kontrolü (whitelist yaklaşımı)
+                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+                if (!AllowedExtensions.Contains(extension))
+                {
+                    _logger.LogWarning("⚠️ Geçersiz dosya uzantısı: {Extension}", extension);
+                    return BadRequest(new { message = $"Desteklenen dosya türleri: {string.Join(", ", AllowedExtensions)}" });
+                }
+
+                // MIME type kontrolü (güvenlik için ek katman)
+                var mimeType = image.ContentType.ToLowerInvariant();
+                if (!AllowedMimeTypes.Contains(mimeType))
+                {
+                    _logger.LogWarning("⚠️ Geçersiz MIME type: {MimeType}", mimeType);
+                    return BadRequest(new { message = "Geçersiz dosya türü. Sadece resim dosyaları kabul edilir." });
+                }
+
+                // Dosyayı LocalFileStorage üzerinden yükle
+                // Dosya adı: banner_{timestamp}_{guid}.{ext} formatında oluşturulur
+                string imageUrl;
+                using (var stream = image.OpenReadStream())
+                {
+                    var fileName = $"banner_{image.FileName}";
+                    imageUrl = await _fileStorage.UploadAsync(stream, fileName, image.ContentType);
+                }
+
+                _logger.LogInformation("✅ Banner resmi yüklendi: {ImageUrl}", imageUrl);
+
+                // Audit log
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    "BannerImageUploaded",
+                    "Banner",
+                    "0",
+                    null,
+                    new { imageUrl, originalFileName = image.FileName, fileSize = image.Length }
+                );
+
+                // Başarılı yanıt - yüklenen dosyanın URL'ini döndür
+                return Ok(new { 
+                    success = true,
+                    imageUrl = imageUrl,
+                    message = "Resim başarıyla yüklendi."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Banner resmi yüklenirken hata oluştu");
+                return StatusCode(500, new { message = "Resim yüklenirken bir hata oluştu. Lütfen tekrar deneyin." });
+            }
+        }
+
+        /// <summary>
         /// Mevcut banner'ı günceller (JSON body ile)
         /// </summary>
         [HttpPut("{id:int}")]
@@ -507,59 +586,7 @@ namespace ECommerce.API.Controllers.Admin
             }
         }
 
-        /// <summary>
-        /// Sadece resim yükler ve URL'ini döndürür
-        /// Mevcut banner'a atamadan önce resim yüklemek için kullanılabilir
-        /// </summary>
-        [HttpPost("upload-image")]
-        [RequestSizeLimit(MaxFileSize)]
-        public async Task<IActionResult> UploadImage(IFormFile image)
-        {
-            _logger.LogInformation("📤 Bağımsız resim yükleme başlatılıyor");
-            
-            try
-            {
-                if (image == null || image.Length == 0)
-                {
-                    return BadRequest(new { message = "Görsel dosyası zorunludur" });
-                }
 
-                if (image.Length > MaxFileSize)
-                {
-                    return BadRequest(new { message = $"Dosya boyutu maksimum {MaxFileSize / (1024 * 1024)}MB olabilir" });
-                }
-
-                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
-                if (!AllowedExtensions.Contains(extension))
-                {
-                    return BadRequest(new { message = $"Desteklenen dosya türleri: {string.Join(", ", AllowedExtensions)}" });
-                }
-
-                if (!AllowedMimeTypes.Contains(image.ContentType.ToLowerInvariant()))
-                {
-                    return BadRequest(new { message = "Geçersiz dosya türü" });
-                }
-
-                string imageUrl;
-                using (var stream = image.OpenReadStream())
-                {
-                    var fileName = $"banner_{image.FileName}";
-                    imageUrl = await _fileStorage.UploadAsync(stream, fileName, image.ContentType);
-                }
-
-                _logger.LogInformation("✅ Resim yüklendi: {ImageUrl}", imageUrl);
-                
-                return Ok(new { 
-                    message = "Resim başarıyla yüklendi", 
-                    imageUrl = imageUrl 
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "❌ Resim yüklenirken hata");
-                return StatusCode(500, new { message = "Resim yüklenirken bir hata oluştu" });
-            }
-        }
 
         /// <summary>
         /// Tipe göre banner'ları filtreler

@@ -1,9 +1,17 @@
 import { Link } from "react-router-dom";
 
+/**
+ * Footer - Site Alt Bilgi Bileşeni
+ *
+ * Mobilde gizlenir (bottom navigation ile çakışmayı önlemek için)
+ * Desktop'ta normal şekilde görünür.
+ *
+ * Requirements: 4.1, 4.2
+ */
 export default function Footer() {
   return (
     <footer
-      className="modern-footer"
+      className="modern-footer desktop-only-footer d-none d-md-block"
       style={{
         background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
         color: "white",
@@ -189,34 +197,34 @@ export default function Footer() {
 
           {/* Corporate */}
           <div className="col-lg-3 col-md-6 mb-4">
-              <h6 className="footer-title">Kurumsal</h6>
-              <ul className="footer-links">
-                <li>
-                  <Link to="/hakkimizda" className="footer-link">
-                    Hakkımızda
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/vizyon-misyon" className="footer-link">
-                    Vizyon & Misyon
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/kariyer" className="footer-link">
-                    Kariyer (Yakında)
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/basin-kiti" className="footer-link">
-                    Basın Kiti
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/surdurulebilirlik" className="footer-link">
-                    Sürdürülebilirlik
-                  </Link>
-                </li>
-              </ul>
+            <h6 className="footer-title">Kurumsal</h6>
+            <ul className="footer-links">
+              <li>
+                <Link to="/hakkimizda" className="footer-link">
+                  Hakkımızda
+                </Link>
+              </li>
+              <li>
+                <Link to="/vizyon-misyon" className="footer-link">
+                  Vizyon & Misyon
+                </Link>
+              </li>
+              <li>
+                <Link to="/kariyer" className="footer-link">
+                  Kariyer (Yakında)
+                </Link>
+              </li>
+              <li>
+                <Link to="/basin-kiti" className="footer-link">
+                  Basın Kiti
+                </Link>
+              </li>
+              <li>
+                <Link to="/surdurulebilirlik" className="footer-link">
+                  Sürdürülebilirlik
+                </Link>
+              </li>
+            </ul>
 
             {/* Social Media */}
             <div className="social-media mt-4">
@@ -250,9 +258,7 @@ export default function Footer() {
           <div className="row align-items-center">
             <div className="col-md-8">
               <div className="footer-bottom-links">
-                <span>
-                  Tüm haklar Gölköy Gurme Markete aittir.
-                </span>
+                <span>Tüm haklar Gölköy Gurme Markete aittir.</span>
                 <Link to="/gizlilik-politikasi" className="footer-bottom-link">
                   Gizlilik Politikası
                 </Link>

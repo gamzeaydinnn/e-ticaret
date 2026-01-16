@@ -224,6 +224,101 @@ export default function Home() {
         showTitle={true}
       />
 
+      {/* ========== ŞEF TAVSİYESİ SECTION ========== */}
+      <section className="mb-4" style={{ maxWidth: "900px", margin: "0 auto 24px" }}>
+        <h2
+          style={{
+            fontSize: "1.25rem",
+            fontWeight: "700",
+            marginBottom: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            color: "#ff6b35",
+          }}
+        >
+          <i className="fas fa-hat-chef" style={{ color: "#ff6b35" }}></i>
+          Şef Tavsiyesi
+        </h2>
+
+        <div
+          className="chef-recommendations"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: "16px",
+          }}
+        >
+          {/* Gurme Lezzetler */}
+          <div
+            className="chef-card"
+            style={{
+              position: "relative",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+              cursor: "pointer",
+              backgroundColor: "#fff",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,107,53,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+            }}
+          >
+            <img
+              src="https://images.migrosone.com/sanalmarket/banner/main_page_slider/144575/146609-banner-20260113145210-29b3cc.jpg"
+              alt="Gurme Lezzetler"
+              style={{
+                width: "100%",
+                height: "auto",
+                display: "block",
+                objectFit: "cover",
+              }}
+              loading="lazy"
+            />
+          </div>
+
+          {/* Şef Tavsiyesi Alayım */}
+          <div
+            className="chef-card"
+            style={{
+              position: "relative",
+              borderRadius: "16px",
+              overflow: "hidden",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+              cursor: "pointer",
+              backgroundColor: "#fff",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,107,53,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
+            }}
+          >
+            <img
+              src="https://images.migrosone.com/sanalmarket/banner/dogal-indirim-banner.png"
+              alt="Şef Tavsiyesi Alayım"
+              style={{
+                width: "100%",
+                height: "auto",
+                display: "block",
+                objectFit: "cover",
+              }}
+              loading="lazy"
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ========== KATEGORİLER SECTION ========== */}
       <section className="mb-4">
         <h2
@@ -283,6 +378,179 @@ export default function Home() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* ========== ÖZELLİKLER SECTION ========== */}
+      <section className="mb-5" style={{ marginTop: "40px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+            gap: "20px",
+            maxWidth: "1200px",
+            margin: "0 auto",
+          }}
+        >
+          {/* Esnek Ödeme */}
+          <div
+            className="feature-card"
+            style={{
+              textAlign: "center",
+              padding: "24px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+            }}
+          >
+            <div className="feature-icon" style={{ marginBottom: "16px" }}>
+              <i
+                className="fas fa-credit-card"
+                style={{ fontSize: "2.5rem", color: "#ff9500" }}
+              ></i>
+            </div>
+            <h5
+              className="feature-title"
+              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+            >
+              Esnek Ödeme İmkanları
+            </h5>
+            <p
+              className="feature-desc"
+              style={{ color: "#6b7280", fontSize: "0.875rem", margin: 0 }}
+            >
+              Kapıda veya Kredi Kartı ile Online Ödeme Yapın
+            </p>
+          </div>
+
+          {/* İstediğin Saatte Teslimat */}
+          <div
+            className="feature-card"
+            style={{
+              textAlign: "center",
+              padding: "24px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+            }}
+          >
+            <div className="feature-icon" style={{ marginBottom: "16px" }}>
+              <i
+                className="fas fa-truck"
+                style={{ fontSize: "2.5rem", color: "#ff9500" }}
+              ></i>
+            </div>
+            <h5
+              className="feature-title"
+              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+            >
+              İstediğin Saatte Teslimat
+            </h5>
+            <p
+              className="feature-desc"
+              style={{ color: "#6b7280", fontSize: "0.875rem", margin: 0 }}
+            >
+              Haftanın 7 günü İstediğin Saatte Teslim Edelim
+            </p>
+          </div>
+
+          {/* Özenle Seçilmiş Ürünler */}
+          <div
+            className="feature-card"
+            style={{
+              textAlign: "center",
+              padding: "24px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+            }}
+          >
+            <div className="feature-icon" style={{ marginBottom: "16px" }}>
+              <i
+                className="fas fa-box-open"
+                style={{ fontSize: "2.5rem", color: "#ff9500" }}
+              ></i>
+            </div>
+            <h5
+              className="feature-title"
+              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+            >
+              Özenle Seçilmiş, Paketlenmiş Ürünler
+            </h5>
+            <p
+              className="feature-desc"
+              style={{ color: "#6b7280", fontSize: "0.875rem", margin: 0 }}
+            >
+              Senin İçin Tüm Siparişlerini Özenle Hazırlıyoruz
+            </p>
+          </div>
+
+          {/* Doğal Ürün Garantisi */}
+          <div
+            className="feature-card"
+            style={{
+              textAlign: "center",
+              padding: "24px",
+              backgroundColor: "#fff",
+              borderRadius: "16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-4px)";
+              e.currentTarget.style.boxShadow = "0 8px 20px rgba(39,174,96,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+            }}
+          >
+            <div className="feature-icon" style={{ marginBottom: "16px" }}>
+              <i
+                className="fas fa-leaf"
+                style={{ fontSize: "2.5rem", color: "#27ae60" }}
+              ></i>
+            </div>
+            <h5
+              className="feature-title"
+              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+            >
+              Doğal Ürün Garantisi
+            </h5>
+            <p
+              className="feature-desc"
+              style={{ color: "#6b7280", fontSize: "0.875rem", margin: 0 }}
+            >
+              Tüm Ürünlerimiz %100 Doğal ve Taze Garantilidir
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* ========== ÖNE ÇIKANLAR SECTION ========== */}
@@ -361,8 +629,9 @@ export default function Home() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
-              gap: "12px",
+              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 280px))",
+              gap: "20px",
+              justifyContent: "center",
             }}
           >
             {featured.map((p) => (

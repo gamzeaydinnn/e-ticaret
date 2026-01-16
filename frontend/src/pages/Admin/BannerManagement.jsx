@@ -17,6 +17,12 @@ const BannerManagement = () => {
   const [loading, setLoading] = useState(true);
   const tableRef = useRef(null);
 
+  // Resim Upload State'leri
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const imageInputRef = useRef(null);
+
   const fetchBanners = async () => {
     try {
       setLoading(true);
@@ -42,6 +48,106 @@ const BannerManagement = () => {
     }));
   };
 
+  /**
+   * Resim dosyası seçildiğinde çağrılır.
+   * Dosyayı validate eder ve önizleme oluşturur.
+   */
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Dosya türü kontrolü
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      setFeedback("Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir.");
+      setFeedbackType("danger");
+      setTimeout(() => setFeedback(""), 3000);
+      e.target.value = "";
+      return;
+    }
+
+    // Dosya boyutu kontrolü (10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setFeedback("Dosya boyutu maksimum 10MB olabilir.");
+      setFeedbackType("danger");
+      setTimeout(() => setFeedback(""), 3000);
+      e.target.value = "";
+      return;
+    }
+
+    setImageFile(file);
+    // Önizleme için ObjectURL oluştur
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+  };
+
+  /**
+   * Seçilen resim dosyasını sunucuya yükler.
+   * Başarılı olursa imageUrl'i form'a set eder.
+   */
+  const handleImageUpload = async () => {
+    if (!imageFile) {
+      setFeedback("Lütfen önce bir resim dosyası seçin.");
+      setFeedbackType("warning");
+      setTimeout(() => setFeedback(""), 3000);
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+
+      // Banner için admin/banners/upload-image endpoint'i kullan
+      const response = await axios.post(
+        "/admin/banners/upload-image",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+
+      const result = response?.data || response;
+      if (result?.success && result?.imageUrl) {
+        // Yükleme başarılı - form'a URL'i ekle
+        setForm((prev) => ({ ...prev, imageUrl: result.imageUrl }));
+        setImagePreview(result.imageUrl);
+        setImageFile(null);
+        // Input'u temizle
+        if (imageInputRef.current) {
+          imageInputRef.current.value = "";
+        }
+        setFeedback("✅ Resim başarıyla yüklendi!");
+        setFeedbackType("success");
+      } else {
+        throw new Error(result?.message || "Resim yüklenemedi");
+      }
+    } catch (err) {
+      console.error("Resim yükleme hatası:", err);
+      setFeedback(
+        "Resim yüklenirken hata oluştu: " +
+          (err.response?.data?.message || err.message)
+      );
+      setFeedbackType("danger");
+    } finally {
+      setImageUploading(false);
+      setTimeout(() => setFeedback(""), 3000);
+    }
+  };
+
+  /**
+   * Resim seçimini iptal eder ve önizlemeyi temizler.
+   */
+  const handleClearImage = () => {
+    setImageFile(null);
+    // Mevcut banner düzenleniyorsa eski resmi göster
+    setImagePreview(editing && form.imageUrl ? form.imageUrl : null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -62,6 +168,12 @@ const BannerManagement = () => {
         isActive: true,
         displayOrder: 0,
       });
+      // Resim state'lerini temizle
+      setImageFile(null);
+      setImagePreview(null);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
       setEditing(false);
       await fetchBanners();
       if (tableRef.current) {
@@ -76,6 +188,12 @@ const BannerManagement = () => {
 
   const handleEdit = (banner) => {
     setForm(banner);
+    // Mevcut resmi önizleme olarak göster
+    setImagePreview(banner.imageUrl || null);
+    setImageFile(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
     setEditing(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -97,6 +215,12 @@ const BannerManagement = () => {
 
   const handleCancel = () => {
     setEditing(false);
+    // Resim state'lerini temizle
+    setImageFile(null);
+    setImagePreview(null);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
     setForm({
       id: 0,
       title: "",
@@ -173,17 +297,105 @@ const BannerManagement = () => {
                   className="form-label fw-semibold mb-1"
                   style={{ fontSize: "0.85rem" }}
                 >
-                  Görsel URL
+                  Görsel
                 </label>
-                <input
-                  name="imageUrl"
-                  value={form.imageUrl}
-                  onChange={handleChange}
-                  placeholder="https://example.com/image.jpg"
-                  className="form-control"
-                  style={{ minHeight: "44px" }}
-                  required
-                />
+
+                {/* Resim Önizleme Alanı */}
+                {imagePreview && (
+                  <div className="mb-2 text-center">
+                    <img
+                      src={imagePreview}
+                      alt="Banner önizleme"
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "120px",
+                        objectFit: "contain",
+                        borderRadius: "8px",
+                        border: "2px solid #e2e8f0",
+                      }}
+                      onError={(e) => {
+                        e.target.src = "/images/placeholder.png";
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Dosya Seçme Alanı */}
+                <div className="d-flex gap-2 align-items-center flex-wrap">
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    className="form-control"
+                    style={{ minHeight: "44px", flex: "1" }}
+                    onChange={handleImageSelect}
+                  />
+
+                  {/* Yükle Butonu */}
+                  {imageFile && (
+                    <button
+                      type="button"
+                      className="btn text-white"
+                      style={{
+                        background: "linear-gradient(135deg, #10b981, #34d399)",
+                        minHeight: "44px",
+                        minWidth: "80px",
+                      }}
+                      onClick={handleImageUpload}
+                      disabled={imageUploading}
+                    >
+                      {imageUploading ? (
+                        <span className="spinner-border spinner-border-sm"></span>
+                      ) : (
+                        <>
+                          <i className="fas fa-upload me-1"></i>
+                          Yükle
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Temizle Butonu */}
+                  {(imageFile || imagePreview) && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary"
+                      style={{ minHeight: "44px" }}
+                      onClick={handleClearImage}
+                    >
+                      <i className="fas fa-times"></i>
+                    </button>
+                  )}
+                </div>
+
+                {/* Mevcut URL gösterimi ve manuel giriş */}
+                {form.imageUrl && (
+                  <div className="mt-1">
+                    <small
+                      className="text-muted text-truncate d-block"
+                      style={{ maxWidth: "100%" }}
+                    >
+                      <i className="fas fa-link me-1"></i>
+                      {form.imageUrl}
+                    </small>
+                  </div>
+                )}
+                <div className="mt-1">
+                  <small
+                    className="text-primary"
+                    style={{ cursor: "pointer", fontSize: "0.75rem" }}
+                    onClick={() => {
+                      const url = prompt("Resim URL'si girin:", form.imageUrl);
+                      if (url !== null) {
+                        setForm((prev) => ({ ...prev, imageUrl: url }));
+                        setImagePreview(url || null);
+                      }
+                    }}
+                  >
+                    <i className="fas fa-edit me-1"></i>
+                    Manuel URL gir
+                  </small>
+                </div>
               </div>
               <div className="col-12 col-md-6">
                 <label

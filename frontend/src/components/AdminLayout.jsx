@@ -92,16 +92,6 @@ export default function AdminLayout({ children }) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Admin rolleri
-  const ADMIN_ROLES = [
-    "Admin",
-    "SuperAdmin",
-    "StoreManager",
-    "CustomerSupport",
-    "Logistics",
-  ];
-
-  const isAdminLike = user?.role === "SuperAdmin" || user?.isAdmin;
   const isSuperAdmin = user?.role === "SuperAdmin";
 
   // İzin kontrolü helper fonksiyonu
@@ -150,7 +140,6 @@ export default function AdminLayout({ children }) {
         icon: "fas fa-users",
         label: "Kullanıcılar",
         permission: PERMISSIONS.USERS_VIEW,
-        adminOnly: true,
       },
       {
         path: "/admin/couriers",
@@ -169,7 +158,6 @@ export default function AdminLayout({ children }) {
         icon: "fas fa-plug",
         label: "ERP / Mikro",
         permission: PERMISSIONS.SETTINGS_SYSTEM,
-        adminOnly: true,
       },
       {
         path: "/admin/posters",
@@ -188,7 +176,6 @@ export default function AdminLayout({ children }) {
         icon: "fas fa-gift",
         label: "Kampanya Yönetimi",
         permission: PERMISSIONS.CAMPAIGNS_VIEW,
-        adminOnly: true,
       },
       // Rol ve İzin Yönetimi - Sadece SuperAdmin
       {
@@ -212,7 +199,6 @@ export default function AdminLayout({ children }) {
         label: "Loglar",
         icon: "fas fa-clipboard-list",
         permission: PERMISSIONS.LOGS_VIEW,
-        adminOnly: true,
         children: [
           {
             path: "/admin/logs/audit",
@@ -246,10 +232,6 @@ export default function AdminLayout({ children }) {
       // SuperAdmin kontrolü
       if (item.superAdminOnly && !isSuperAdmin) return false;
 
-      // Admin-only kontrolü
-      if (item.adminOnly && !isAdminLike && !ADMIN_ROLES.includes(user?.role))
-        return false;
-
       // İzin kontrolü
       if (item.permission && !checkPermission(item.permission)) return false;
 
@@ -270,7 +252,7 @@ export default function AdminLayout({ children }) {
 
       return true;
     });
-  }, [menuItems, isSuperAdmin, isAdminLike, user?.role, checkPermission]);
+  }, [menuItems, isSuperAdmin, checkPermission]);
 
   // Mobilde menü öğesine tıklandığında sidebar'ı kapat
   const handleMenuClick = useCallback(() => {
