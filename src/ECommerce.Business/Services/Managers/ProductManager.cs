@@ -289,6 +289,11 @@ namespace ECommerce.Business.Services.Managers
             if (!_cache.TryGetValue(cacheKey, out object? cachedObj) || !(cachedObj is IEnumerable<ProductListDto> cached))
             {
                 var products = await _productRepository.GetAllAsync();
+                
+                // SADECE AKTİF ÜRÜNLERİ FİLTRELE
+                products = products.Where(p => p.IsActive);
+                
+                // KATEGORİYE GÖRE FİLTRELE
                 if (categoryId.HasValue)
                     products = products.Where(p => p.CategoryId == categoryId.Value);
 

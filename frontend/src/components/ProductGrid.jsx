@@ -382,10 +382,11 @@ export default function ProductGrid({
           return;
         }
 
-        const query = categoryId
-          ? `?categoryId=${encodeURIComponent(categoryId)}`
-          : "";
-        const response = await ProductService.list(query);
+        // CategoryId varsa getByCategory, yoksa list kullan
+        const response = categoryId
+          ? await ProductService.getByCategory(categoryId)
+          : await ProductService.list();
+
         if (!isMounted) {
           return;
         }
