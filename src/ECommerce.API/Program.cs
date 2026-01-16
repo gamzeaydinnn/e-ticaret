@@ -478,11 +478,11 @@ builder.Services.AddRateLimiter(options =>
 // restrict CI to use a stable IP when possible.
 var prerenderBypassToken = builder.Configuration["Prerender:BypassToken"];
 
-// Controller ekle (global input sanitization filter ekleniyor)
-builder.Services.AddControllers(options =>
-{
-    options.Filters.Add(typeof(ECommerce.API.Infrastructure.SanitizeInputFilter));
-});
+// Controller ekle
+// NOT: SanitizeInputFilter kaldırıldı - HTML encoding Türkçe karakterleri bozuyordu (ş→&#x15F;)
+// XSS koruması output'ta yapılmalı, React zaten bunu otomatik yapıyor (JSX output escaping)
+// Input validation için FluentValidation kullanılıyor
+builder.Services.AddControllers();
 
 // FluentValidation registration
 builder.Services.AddValidatorsFromAssemblyContaining<OrderCreateDtoValidator>();

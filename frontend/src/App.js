@@ -23,6 +23,7 @@ import ProductGrid from "./components/ProductGrid";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { CartProvider, useCart } from "./contexts/CartContext";
 import { FavoriteProvider, useFavorites } from "./contexts/FavoriteContext";
+import { ProductProvider } from "./contexts/ProductContext";
 import { useCartCount } from "./hooks/useCartCount";
 import AdminIndex from "./pages/Admin/AdminIndex.jsx";
 import AdminMicro from "./pages/Admin/AdminMicro";
@@ -946,17 +947,19 @@ function App() {
 function AppWithProviders() {
   return (
     <AuthProvider>
-      <CartProvider>
-        <FavoriteProvider>
-          <CompareProvider>
-            <Router>
-              <ScrollToTop />
-              <App />
-              <CompareFloatingButton />
-            </Router>
-          </CompareProvider>
-        </FavoriteProvider>
-      </CartProvider>
+      <ProductProvider>
+        <CartProvider>
+          <FavoriteProvider>
+            <CompareProvider>
+              <Router>
+                <ScrollToTop />
+                <App />
+                <CompareFloatingButton />
+              </Router>
+            </CompareProvider>
+          </FavoriteProvider>
+        </CartProvider>
+      </ProductProvider>
     </AuthProvider>
   );
 }

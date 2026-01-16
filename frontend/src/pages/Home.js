@@ -126,8 +126,21 @@ export default function Home() {
     };
     window.addEventListener("focus", handleFocus);
 
+    // ProductService subscription - Admin panelinde yapılan CRUD değişikliklerinde
+    // ana sayfa otomatik olarak güncellenir (real-time senkronizasyon)
+    const unsubscribe = ProductService.subscribe((event) => {
+      console.log("[Home] 📦 Ürün değişikliği algılandı:", event.action);
+      // Ürün eklendiğinde, güncellendiğinde, silindiğinde veya import edildiğinde
+      // ana sayfa ürünlerini yenile
+      if (["create", "update", "delete", "import"].includes(event.action)) {
+        loadData();
+      }
+    });
+
     return () => {
       window.removeEventListener("focus", handleFocus);
+      // Subscription'ı temizle (memory leak önleme)
+      unsubscribe();
     };
   }, [loadData]);
 
@@ -225,7 +238,10 @@ export default function Home() {
       />
 
       {/* ========== ŞEF TAVSİYESİ SECTION ========== */}
-      <section className="mb-4" style={{ maxWidth: "900px", margin: "0 auto 24px" }}>
+      <section
+        className="mb-4"
+        style={{ maxWidth: "900px", margin: "0 auto 24px" }}
+      >
         <h2
           style={{
             fontSize: "1.25rem",
@@ -263,7 +279,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,107,53,0.2)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 24px rgba(255,107,53,0.2)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -297,7 +314,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,107,53,0.2)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 24px rgba(255,107,53,0.2)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -404,7 +422,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 20px rgba(255,149,0,0.15)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -419,7 +438,11 @@ export default function Home() {
             </div>
             <h5
               className="feature-title"
-              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+              style={{
+                fontWeight: "700",
+                marginBottom: "8px",
+                fontSize: "1rem",
+              }}
             >
               Esnek Ödeme İmkanları
             </h5>
@@ -444,7 +467,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 20px rgba(255,149,0,0.15)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -459,7 +483,11 @@ export default function Home() {
             </div>
             <h5
               className="feature-title"
-              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+              style={{
+                fontWeight: "700",
+                marginBottom: "8px",
+                fontSize: "1rem",
+              }}
             >
               İstediğin Saatte Teslimat
             </h5>
@@ -484,7 +512,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 20px rgba(255,149,0,0.15)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 20px rgba(255,149,0,0.15)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -499,7 +528,11 @@ export default function Home() {
             </div>
             <h5
               className="feature-title"
-              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+              style={{
+                fontWeight: "700",
+                marginBottom: "8px",
+                fontSize: "1rem",
+              }}
             >
               Özenle Seçilmiş, Paketlenmiş Ürünler
             </h5>
@@ -524,7 +557,8 @@ export default function Home() {
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow = "0 8px 20px rgba(39,174,96,0.15)";
+              e.currentTarget.style.boxShadow =
+                "0 8px 20px rgba(39,174,96,0.15)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "translateY(0)";
@@ -539,7 +573,11 @@ export default function Home() {
             </div>
             <h5
               className="feature-title"
-              style={{ fontWeight: "700", marginBottom: "8px", fontSize: "1rem" }}
+              style={{
+                fontWeight: "700",
+                marginBottom: "8px",
+                fontSize: "1rem",
+              }}
             >
               Doğal Ürün Garantisi
             </h5>

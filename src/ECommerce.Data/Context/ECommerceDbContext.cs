@@ -70,6 +70,15 @@ namespace ECommerce.Data.Context
             base.OnModelCreating(modelBuilder);
 
             // -------------------
+            // GLOBAL COLLATION AYARI: Türkçe karakter desteği için Turkish_CI_AS
+            // Bu ayar tüm string alanlarının Türkçe karakterleri (ğ, ü, ş, ö, ç, ı, İ) 
+            // doğru şekilde saklamasını ve sıralamasını sağlar.
+            // CI = Case Insensitive (büyük/küçük harf duyarsız)
+            // AS = Accent Sensitive (aksan duyarlı: ı != i)
+            // -------------------
+            modelBuilder.UseCollation("Turkish_CI_AS");
+
+            // -------------------
             // User Configuration
             // -------------------
             modelBuilder.Entity<User>(entity =>
@@ -309,6 +318,29 @@ namespace ECommerce.Data.Context
                         .WithMany()
                         .HasForeignKey(r => r.UserId)
                         .OnDelete(DeleteBehavior.Restrict);
+
+            // -------------------
+            // Courier Configuration
+            // -------------------
+            modelBuilder.Entity<Courier>(entity =>
+            {
+                entity.ToTable("Couriers");
+                entity.Property(e => e.Phone).HasMaxLength(20);
+                entity.Property(e => e.Vehicle).HasMaxLength(50);
+                entity.Property(e => e.Status).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Location).HasMaxLength(500);
+                entity.Property(e => e.Rating).HasPrecision(3, 2); // 0.00 - 5.00 için yeterli
+                
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                      
+                entity.HasMany(e => e.AssignedOrders)
+                      .WithOne(o => o.Courier)
+                      .HasForeignKey(o => o.CourierId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
 
             modelBuilder.Entity<Campaign>(entity =>
             {

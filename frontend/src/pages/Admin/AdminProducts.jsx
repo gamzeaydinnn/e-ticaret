@@ -29,15 +29,37 @@ const AdminProducts = () => {
   const [excelResult, setExcelResult] = useState(null);
   const [excelError, setExcelError] = useState(null);
 
+  // Excel Export State'leri
+  const [exportLoading, setExportLoading] = useState(false);
+
   // Resim Upload State'leri
   const [imageFile, setImageFile] = useState(null);
   const [imageUploading, setImageUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const imageInputRef = useRef(null);
+  const dropZoneRef = useRef(null);
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+
+    // ProductService subscription - CRUD değişikliklerinde otomatik refetch
+    // Bu sayede başka bir yerde yapılan değişiklikler de yansır
+    const unsubscribe = ProductService.subscribe((event) => {
+      console.log("📦 Ürün değişikliği algılandı:", event.action);
+      // Kendi CRUD işlemlerimizden sonra zaten fetchProducts çağrılıyor
+      // Bu subscription daha çok multi-tab senkronizasyonu için
+      if (event.action === "import") {
+        // Excel import sonrası tam yenileme
+        fetchProducts();
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const fetchProducts = async () => {
@@ -64,20 +86,53 @@ const AdminProducts = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // ============================================================
+    // FORM VALİDASYONU - Kapsamlı kontroller
+    // ============================================================
+
+    // Ürün adı kontrolü
+    if (!formData.name || formData.name.trim().length < 2) {
+      alert("❌ Ürün adı en az 2 karakter olmalıdır.");
+      return;
+    }
+
+    // Fiyat kontrolü
+    const price = parseFloat(formData.price);
+    if (isNaN(price) || price <= 0) {
+      alert("❌ Geçerli bir fiyat girin (0'dan büyük olmalı).");
+      return;
+    }
+
+    // Stok kontrolü
+    const stock = parseInt(formData.stock);
+    if (isNaN(stock) || stock < 0) {
+      alert("❌ Geçerli bir stok adedi girin (0 veya daha büyük olmalı).");
+      return;
+    }
+
+    // Kategori kontrolü
+    if (!formData.categoryId) {
+      alert("❌ Lütfen bir kategori seçin.");
+      return;
+    }
+
     try {
       // Ürün verilerini API formatına dönüştür
       const productData = {
-        name: formData.name,
-        description: formData.description || "",
-        price: parseFloat(formData.price),
-        stockQuantity: parseInt(formData.stock), // API stockQuantity bekliyor
-        categoryId: parseInt(formData.categoryId) || 1,
-        imageUrl: formData.imageUrl || null,
+        name: formData.name.trim(),
+        description: formData.description?.trim() || "",
+        price: price,
+        stockQuantity: stock, // API stockQuantity bekliyor
+        categoryId: parseInt(formData.categoryId),
+        imageUrl: formData.imageUrl?.trim() || null,
+        isActive: formData.isActive !== false,
       };
 
       if (editingProduct) {
         // Mevcut ürünü güncelle - ProductService.updateAdmin kullan
         await ProductService.updateAdmin(editingProduct.id, productData);
+        alert("✅ Ürün başarıyla güncellendi!");
       } else {
         // Yeni ürün oluştur - ProductService.createAdmin kullan
         const created = await ProductService.createAdmin(productData);
@@ -91,7 +146,10 @@ const AdminProducts = () => {
             console.warn("Variant migration failed:", moveErr);
           }
         }
+        alert("✅ Yeni ürün başarıyla eklendi!");
       }
+
+      // Modal'ı kapat ve formu sıfırla
       setShowModal(false);
       setFormData({
         name: "",
@@ -103,9 +161,18 @@ const AdminProducts = () => {
         isActive: true,
       });
       setEditingProduct(null);
+      setEditingProductId(null);
+      setImageFile(null);
+      setImagePreview(null);
+
+      // Listeyi yenile
       fetchProducts();
     } catch (err) {
       console.error("Ürün kaydetme hatası:", err);
+      alert(
+        "❌ Ürün kaydedilirken hata oluştu: " +
+          (err.response?.data?.message || err.message)
+      );
     }
   };
 
@@ -129,34 +196,78 @@ const AdminProducts = () => {
   };
 
   /**
-   * Resim dosyası seçildiğinde çağrılır.
-   * Dosyayı validate eder ve önizleme oluşturur.
-   * @param {Event} e - File input change event
+   * Resim dosyasını validate eder ve önizleme oluşturur.
+   * File input veya drag & drop'tan gelen dosyalar için çalışır.
+   * @param {File} file - Seçilen dosya
+   * @returns {boolean} - Dosya geçerli mi
    */
-  const handleImageSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const validateAndSetImage = (file) => {
+    if (!file) return false;
 
     // Dosya türü kontrolü (frontend'de de güvenlik)
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       alert("Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir.");
-      e.target.value = "";
-      return;
+      return false;
     }
 
     // Dosya boyutu kontrolü (10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       alert("Dosya boyutu maksimum 10MB olabilir.");
-      e.target.value = "";
-      return;
+      return false;
     }
 
     setImageFile(file);
     // Önizleme için ObjectURL oluştur
     const previewUrl = URL.createObjectURL(file);
     setImagePreview(previewUrl);
+    return true;
+  };
+
+  /**
+   * Resim dosyası seçildiğinde çağrılır.
+   * Dosyayı validate eder ve önizleme oluşturur.
+   * @param {Event} e - File input change event
+   */
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!validateAndSetImage(file)) {
+      e.target.value = "";
+    }
+  };
+
+  /**
+   * Drag & Drop Event Handlers
+   */
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Sadece drop zone'dan çıkıldığında
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      validateAndSetImage(files[0]);
+    }
   };
 
   /**
@@ -174,7 +285,7 @@ const AdminProducts = () => {
       const result = await ProductService.uploadImage(imageFile);
       if (result?.success && result?.imageUrl) {
         // Yükleme başarılı - form'a URL'i ekle
-        setFormData(prev => ({ ...prev, imageUrl: result.imageUrl }));
+        setFormData((prev) => ({ ...prev, imageUrl: result.imageUrl }));
         setImagePreview(result.imageUrl);
         setImageFile(null);
         // Input'u temizle
@@ -187,7 +298,10 @@ const AdminProducts = () => {
       }
     } catch (err) {
       console.error("Resim yükleme hatası:", err);
-      alert("Resim yüklenirken hata oluştu: " + (err.response?.data?.message || err.message));
+      alert(
+        "Resim yüklenirken hata oluştu: " +
+          (err.response?.data?.message || err.message)
+      );
     } finally {
       setImageUploading(false);
     }
@@ -200,7 +314,10 @@ const AdminProducts = () => {
     setImageFile(null);
     // Mevcut ürün düzenleniyorsa eski resmi göster
     setImagePreview(editingProduct?.imageUrl || null);
-    setFormData(prev => ({ ...prev, imageUrl: editingProduct?.imageUrl || "" }));
+    setFormData((prev) => ({
+      ...prev,
+      imageUrl: editingProduct?.imageUrl || "",
+    }));
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
     }
@@ -283,6 +400,45 @@ const AdminProducts = () => {
     }
   };
 
+  /**
+   * Mevcut ürünleri Excel dosyası olarak dışa aktarır.
+   * Dosya adı: urunler_YYYYMMDD_HHMMSS.xlsx formatında oluşturulur.
+   * Türkçe karakterler UTF-8 encoding ile korunur.
+   */
+  const handleExportExcel = async () => {
+    setExportLoading(true);
+    try {
+      const blob = await ProductService.exportExcel();
+
+      // Dosya adı oluştur: urunler_20260116_143025.xlsx
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+      const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, "");
+      const fileName = `urunler_${dateStr}_${timeStr}.xlsx`;
+
+      // Blob'u dosya olarak indir
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      // Başarı mesajı göster (opsiyonel)
+      console.log(`✅ Excel export tamamlandı: ${fileName}`);
+    } catch (err) {
+      console.error("Excel export hatası:", err);
+      alert(
+        "Ürünler dışa aktarılamadı: " +
+          (err.response?.data?.message || err.message)
+      );
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -352,6 +508,28 @@ const AdminProducts = () => {
               }}
             >
               <i className="fas fa-file-excel me-1"></i>Excel Yükle
+            </button>
+            {/* Excel Export Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #3b82f6, #60a5fa)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={handleExportExcel}
+              disabled={exportLoading}
+            >
+              {exportLoading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1"></span>
+                  İndiriliyor...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-file-export me-1"></i>Excel İndir
+                </>
+              )}
             </button>
             {/* Şablon İndir Butonu */}
             <button
@@ -659,100 +837,152 @@ const AdminProducts = () => {
                         <label className="form-label fw-semibold mb-2">
                           Ürün Resmi
                         </label>
-                        
-                        {/* Resim Önizleme Alanı */}
-                        {imagePreview && (
-                          <div className="mb-3 text-center">
-                            <img
-                              src={imagePreview}
-                              alt="Ürün önizleme"
-                              style={{
-                                maxWidth: "200px",
-                                maxHeight: "150px",
-                                objectFit: "contain",
-                                borderRadius: "12px",
-                                border: "2px solid #e2e8f0"
-                              }}
-                              onError={(e) => { e.target.src = "/images/placeholder.png"; }}
-                            />
-                          </div>
-                        )}
-                        
-                        {/* Dosya Seçme Alanı */}
-                        <div className="d-flex gap-2 align-items-center flex-wrap">
+
+                        {/* Drag & Drop Alanı */}
+                        <div
+                          ref={dropZoneRef}
+                          onDragEnter={handleDragEnter}
+                          onDragLeave={handleDragLeave}
+                          onDragOver={handleDragOver}
+                          onDrop={handleDrop}
+                          onClick={() => imageInputRef.current?.click()}
+                          style={{
+                            border: isDragging
+                              ? "3px dashed #f57c00"
+                              : "2px dashed #e2e8f0",
+                            borderRadius: "16px",
+                            padding: "24px",
+                            textAlign: "center",
+                            cursor: "pointer",
+                            transition: "all 0.3s ease",
+                            background: isDragging
+                              ? "rgba(245, 124, 0, 0.1)"
+                              : "rgba(245, 124, 0, 0.02)",
+                            transform: isDragging ? "scale(1.02)" : "scale(1)",
+                          }}
+                        >
+                          {/* Resim Önizleme Alanı */}
+                          {imagePreview ? (
+                            <div className="mb-3">
+                              <img
+                                src={imagePreview}
+                                alt="Ürün önizleme"
+                                style={{
+                                  maxWidth: "200px",
+                                  maxHeight: "150px",
+                                  objectFit: "contain",
+                                  borderRadius: "12px",
+                                  border: "2px solid #e2e8f0",
+                                }}
+                                onError={(e) => {
+                                  e.target.src = "/images/placeholder.png";
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="py-3">
+                              <i
+                                className="fas fa-cloud-upload-alt"
+                                style={{
+                                  fontSize: "48px",
+                                  color: isDragging ? "#f57c00" : "#94a3b8",
+                                  transition: "color 0.3s ease",
+                                }}
+                              ></i>
+                              <p
+                                className="mt-3 mb-1 fw-medium"
+                                style={{ color: "#64748b" }}
+                              >
+                                {isDragging
+                                  ? "Bırakarak yükle"
+                                  : "Resim sürükleyip bırakın veya tıklayın"}
+                              </p>
+                              <small className="text-muted">
+                                JPG, PNG, GIF, WEBP (Maks. 10MB)
+                              </small>
+                            </div>
+                          )}
+
+                          {/* Gizli File Input */}
                           <input
                             ref={imageInputRef}
                             type="file"
                             accept="image/jpeg,image/png,image/gif,image/webp"
-                            className="form-control border-0"
-                            style={{
-                              background: "rgba(245, 124, 0, 0.05)",
-                              borderRadius: "12px",
-                              flex: "1",
-                              minWidth: "200px"
-                            }}
+                            style={{ display: "none" }}
                             onChange={handleImageSelect}
                           />
-                          
-                          {/* Yükle Butonu */}
-                          {imageFile && (
-                            <button
-                              type="button"
-                              className="btn text-white"
-                              style={{
-                                background: "linear-gradient(135deg, #10b981, #34d399)",
-                                borderRadius: "8px",
-                                minWidth: "100px"
-                              }}
-                              onClick={handleImageUpload}
-                              disabled={imageUploading}
-                            >
-                              {imageUploading ? (
-                                <>
-                                  <span className="spinner-border spinner-border-sm me-1"></span>
-                                  Yükleniyor...
-                                </>
-                              ) : (
-                                <>
-                                  <i className="fas fa-upload me-1"></i>
-                                  Yükle
-                                </>
-                              )}
-                            </button>
-                          )}
-                          
-                          {/* Temizle Butonu */}
-                          {(imageFile || imagePreview) && (
+                        </div>
+
+                        {/* Yükle & Temizle Butonları */}
+                        {(imageFile || imagePreview) && (
+                          <div className="d-flex gap-2 mt-3 justify-content-center">
+                            {/* Yükle Butonu */}
+                            {imageFile && (
+                              <button
+                                type="button"
+                                className="btn text-white"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #10b981, #34d399)",
+                                  borderRadius: "8px",
+                                  minWidth: "120px",
+                                }}
+                                onClick={handleImageUpload}
+                                disabled={imageUploading}
+                              >
+                                {imageUploading ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-1"></span>
+                                    Yükleniyor...
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="fas fa-upload me-1"></i>
+                                    Sunucuya Yükle
+                                  </>
+                                )}
+                              </button>
+                            )}
+
+                            {/* Temizle Butonu */}
                             <button
                               type="button"
                               className="btn btn-outline-secondary"
                               style={{ borderRadius: "8px" }}
                               onClick={handleClearImage}
                             >
-                              <i className="fas fa-times"></i>
+                              <i className="fas fa-times me-1"></i>
+                              Temizle
                             </button>
-                          )}
-                        </div>
-                        
+                          </div>
+                        )}
+
                         {/* Mevcut URL gösterimi */}
                         {formData.imageUrl && (
-                          <div className="mt-2">
+                          <div className="mt-2 text-center">
                             <small className="text-muted">
                               <i className="fas fa-link me-1"></i>
                               Kayıtlı: {formData.imageUrl}
                             </small>
                           </div>
                         )}
-                        
+
                         {/* Manuel URL girişi (opsiyonel) */}
-                        <div className="mt-2">
-                          <small 
-                            className="text-primary" 
+                        <div className="mt-2 text-center">
+                          <small
+                            className="text-primary"
                             style={{ cursor: "pointer" }}
-                            onClick={() => {
-                              const url = prompt("Resim URL'si girin (opsiyonel):", formData.imageUrl);
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const url = prompt(
+                                "Resim URL'si girin (opsiyonel):",
+                                formData.imageUrl
+                              );
                               if (url !== null) {
-                                setFormData(prev => ({ ...prev, imageUrl: url }));
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  imageUrl: url,
+                                }));
                                 setImagePreview(url || null);
                               }
                             }}

@@ -130,6 +130,9 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
         {
+            // SKU otomatik oluştur: CategoryId + timestamp + random
+            var sku = $"PRD{productDto.CategoryId:D2}{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+            
             var product = new Product
             {
                 Name = productDto.Name,
@@ -139,7 +142,8 @@ namespace ECommerce.Business.Services.Managers
                 StockQuantity = productDto.StockQuantity,
                 CategoryId = productDto.CategoryId,
                 ImageUrl = productDto.ImageUrl ?? string.Empty,
-                BrandId = productDto.BrandId
+                BrandId = productDto.BrandId,
+                SKU = string.IsNullOrWhiteSpace(productDto.SKU) ? sku : productDto.SKU
             };
 
             await _productRepository.AddAsync(product);

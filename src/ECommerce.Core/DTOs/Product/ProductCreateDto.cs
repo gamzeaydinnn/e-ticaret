@@ -7,6 +7,7 @@ namespace ECommerce.Core.DTOs.Product
     {
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
+        public string? SKU { get; set; } // Opsiyonel - boşsa otomatik oluşturulur
         public decimal Price { get; set; }
         public decimal? SpecialPrice { get; set; }  // Yeni alan
         public int StockQuantity { get; set; }
