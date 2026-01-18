@@ -30,6 +30,17 @@ namespace ECommerce.Business.Services.Interfaces
         Task UpdateOrderStatusAsync(int id, string status);
         Task<IEnumerable<OrderListDto>> GetRecentOrdersAsync(int count = 10);
         Task<OrderDetailDto?> GetDetailByIdAsync(int id);
+        
+        // ============================================================
+        // KURYE ATAMA
+        // ============================================================
+        /// <summary>
+        /// Siparişe kurye atar ve durumu "assigned" olarak günceller.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="courierId">Kurye ID</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        Task<OrderListDto?> AssignCourierAsync(int orderId, int courierId);
     }
 }
 /* Task<OrderSummaryDto> CreateOrderAsync(OrderCreateDto dto, Guid userId, CancellationToken ct = default);

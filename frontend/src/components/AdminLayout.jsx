@@ -1,15 +1,18 @@
 // src/components/AdminLayout.jsx
 // =============================================================================
-// Admin Layout - İzin Bazlı Menü Sistemi
+// Admin Layout - İzin Bazlı Menü Sistemi + Oturum Zaman Aşımı
 // =============================================================================
 // Bu component admin paneli için sidebar ve layout sağlar.
 // Menü öğeleri kullanıcının izinlerine göre filtrelenir.
+// GÜVENLİK: 30 dakika hareketsizlik sonrası otomatik çıkış yapılır.
 // =============================================================================
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { PERMISSIONS } from "../services/permissionService";
+import useSessionTimeout from "../hooks/useSessionTimeout";
+import SessionWarningModal from "./SessionWarningModal";
 
 export default function AdminLayout({ children }) {
   // ============================================================================
@@ -23,9 +26,43 @@ export default function AdminLayout({ children }) {
     return true;
   });
   const [openMenus, setOpenMenus] = useState({});
+  const [showSessionWarning, setShowSessionWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, hasPermission, hasAnyPermission } = useAuth();
+
+  // ============================================================================
+  // OTURUM ZAMAN AŞIMI (SESSION TIMEOUT) - 30 dakika
+  // Kullanıcı 30 dakika hareketsiz kalırsa otomatik çıkış yapılır.
+  // Son 5 dakikada uyarı modalı gösterilir.
+  // ============================================================================
+  const handleSessionTimeout = useCallback(() => {
+    // Oturum sona erdi - çıkış yap ve login sayfasına yönlendir
+    logout();
+    localStorage.removeItem("authUser");
+    // Mesaj göstermek için sessionStorage kullan
+    sessionStorage.setItem("sessionExpired", "true");
+    navigate("/admin/login");
+  }, [logout, navigate]);
+
+  const handleSessionWarning = useCallback(() => {
+    // Uyarı modalını göster
+    setShowSessionWarning(true);
+  }, []);
+
+  const { remainingTimeFormatted, isWarning, extendSession } =
+    useSessionTimeout({
+      timeoutMinutes: 30, // 30 dakika hareketsizlik sonrası çıkış
+      warningMinutes: 5, // Son 5 dakikada uyarı göster
+      onTimeout: handleSessionTimeout,
+      onWarning: handleSessionWarning,
+    });
+
+  // Oturumu uzat butonuna basıldığında
+  const handleExtendSession = useCallback(() => {
+    extendSession();
+    setShowSessionWarning(false);
+  }, [extendSession]);
 
   // ============================================================================
   // TOUCH SWIPE DESTEĞİ - Mobilde kaydırarak sidebar açma/kapama
@@ -105,7 +142,7 @@ export default function AdminLayout({ children }) {
       }
       return hasPermission?.(permission) ?? false;
     },
-    [isSuperAdmin, hasPermission, hasAnyPermission]
+    [isSuperAdmin, hasPermission, hasAnyPermission],
   );
 
   // Menü öğeleri - İzin bazlı filtreleme
@@ -177,23 +214,14 @@ export default function AdminLayout({ children }) {
         label: "Kampanya Yönetimi",
         permission: PERMISSIONS.CAMPAIGNS_VIEW,
       },
-      // Rol ve İzin Yönetimi - Sadece SuperAdmin
+      // =============================================================================
+      // Kupon Yönetimi - İndirim kuponları için admin sayfası
+      // =============================================================================
       {
-        label: "Yetki Yönetimi",
-        icon: "fas fa-user-shield",
-        superAdminOnly: true,
-        children: [
-          {
-            path: "/admin/roles",
-            label: "Rol Yönetimi",
-            permission: PERMISSIONS.ROLES_VIEW,
-          },
-          {
-            path: "/admin/permissions",
-            label: "İzin Yönetimi",
-            permission: PERMISSIONS.ROLES_PERMISSIONS,
-          },
-        ],
+        path: "/admin/coupons",
+        icon: "fas fa-ticket-alt",
+        label: "Kupon Yönetimi",
+        permission: PERMISSIONS.COUPONS_VIEW,
       },
       {
         label: "Loglar",
@@ -223,7 +251,7 @@ export default function AdminLayout({ children }) {
         ],
       },
     ],
-    []
+    [],
   );
 
   // Filtrelenmiş menü öğeleri
@@ -266,8 +294,8 @@ export default function AdminLayout({ children }) {
       (item) =>
         (item.children || item.filteredChildren) &&
         (item.filteredChildren || item.children).some((child) =>
-          location.pathname.startsWith(child.path)
-        )
+          location.pathname.startsWith(child.path),
+        ),
     );
     if (parentWithChild) {
       setOpenMenus((prev) => ({
@@ -307,13 +335,16 @@ export default function AdminLayout({ children }) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* ====================================================================
+          SIDEBAR - Scroll özellikli, mobil uyumlu
+          Header sabit, menüler scrollable, logout butonu altta sabit
+          ==================================================================== */}
       <div
         className={`text-white sidebar-container ${
           sidebarOpen ? "sidebar-open" : "sidebar-closed"
         }`}
         style={{
-          minHeight: "100vh",
+          height: "100vh", // vh kullanarak tam ekran yüksekliği
           width: "240px",
           background: "linear-gradient(180deg, #2d3748 0%, #1a202c 100%)",
           boxShadow: "2px 0 10px rgba(0,0,0,0.1)",
@@ -323,11 +354,16 @@ export default function AdminLayout({ children }) {
           zIndex: 1050,
           transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
           transition: "transform 0.3s ease-in-out",
-          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column", // Flex column yapısı ile header-content-footer ayrımı
+          overflow: "hidden", // Ana container scroll etmemeli
         }}
       >
+        {/* ================================================================
+            SIDEBAR HEADER - Sabit üstte
+            ================================================================ */}
         <div
-          className="p-3 border-bottom d-flex align-items-center justify-content-between"
+          className="p-3 border-bottom d-flex align-items-center justify-content-between flex-shrink-0"
           style={{ borderColor: "rgba(255,255,255,0.1) !important" }}
         >
           <h5 className="mb-0 fw-bold">
@@ -347,7 +383,10 @@ export default function AdminLayout({ children }) {
           </button>
         </div>
 
-        <div className="p-3">
+        {/* ================================================================
+            KULLANICI BİLGİSİ - Sabit
+            ================================================================ */}
+        <div className="p-3 flex-shrink-0">
           <div className="d-flex align-items-center mb-3">
             <div
               className="rounded-circle d-flex align-items-center justify-content-center me-3"
@@ -375,13 +414,24 @@ export default function AdminLayout({ children }) {
           </div>
         </div>
 
-        <nav className="mt-2">
+        {/* ================================================================
+            NAVİGASYON MENÜSÜ - SCROLLABLE ALAN
+            flex-grow-1 ile kalan alanı kaplar, overflow-y-auto ile scroll
+            ================================================================ */}
+        <nav
+          className="sidebar-nav-scroll flex-grow-1"
+          style={{
+            overflowY: "auto",
+            overflowX: "hidden",
+            paddingBottom: "80px", // Logout butonu için alan
+          }}
+        >
           {filteredMenuItems.map((item, index) => {
             // Children varsa (alt menü)
             const children = item.filteredChildren || item.children;
             if (children && children.length > 0) {
               const isActiveChild = children.some((child) =>
-                location.pathname.startsWith(child.path)
+                location.pathname.startsWith(child.path),
               );
               return (
                 <div key={item.label}>
@@ -530,6 +580,49 @@ export default function AdminLayout({ children }) {
             );
           })}
         </nav>
+
+        {/* ================================================================
+            SIDEBAR FOOTER - Çıkış Butonu (Sabit Altta)
+            position: absolute ile her zaman sidebar'ın altında görünür
+            ================================================================ */}
+        <div
+          className="sidebar-footer flex-shrink-0"
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            padding: "16px",
+            background: "linear-gradient(180deg, transparent 0%, #1a202c 30%)",
+            borderTop: "1px solid rgba(255,255,255,0.1)",
+          }}
+        >
+          <button
+            className="btn w-100 d-flex align-items-center justify-content-center gap-2"
+            onClick={handleLogout}
+            style={{
+              background: "rgba(220, 38, 38, 0.15)",
+              color: "#fca5a5",
+              border: "1px solid rgba(220, 38, 38, 0.3)",
+              borderRadius: "8px",
+              padding: "10px 16px",
+              fontSize: "0.9rem",
+              fontWeight: "500",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = "rgba(220, 38, 38, 0.25)";
+              e.target.style.borderColor = "rgba(220, 38, 38, 0.5)";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = "rgba(220, 38, 38, 0.15)";
+              e.target.style.borderColor = "rgba(220, 38, 38, 0.3)";
+            }}
+          >
+            <i className="fas fa-sign-out-alt"></i>
+            <span>Çıkış Yap</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
@@ -618,6 +711,17 @@ export default function AdminLayout({ children }) {
         {/* Page Content */}
         <main className="p-4 admin-layout-main">{children}</main>
       </div>
+
+      {/* ================================================================
+          SESSION WARNING MODAL
+          Oturum süresi dolmak üzereyken uyarı gösterir
+          ================================================================ */}
+      <SessionWarningModal
+        isOpen={showSessionWarning && isWarning}
+        remainingTime={remainingTimeFormatted}
+        onExtend={handleExtendSession}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }
@@ -632,6 +736,38 @@ const styles = `
 /* Tüm cihazlar için temel stil */
 .admin-layout-root {
   overflow-x: hidden;
+}
+
+/* ====================================================================
+   SIDEBAR SCROLL STİLLERİ
+   Menü scroll edilebilir, modern görünümlü scrollbar
+   ==================================================================== */
+.sidebar-nav-scroll {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(255,255,255,0.3) transparent; /* Firefox */
+}
+
+/* Webkit (Chrome, Safari, Edge) scrollbar stilleri */
+.sidebar-nav-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 3px;
+}
+
+.sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.35);
+}
+
+/* Scroll yapıldığında scrollbar görünsün */
+.sidebar-nav-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.3);
 }
 
 /* Mobil swipe indicator - sol kenardan kaydırma ipucu */

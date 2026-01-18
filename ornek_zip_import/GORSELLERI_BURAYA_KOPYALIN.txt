@@ -1,0 +1,52 @@
+╔═══════════════════════════════════════════════════════════════╗
+║  📁 GÖRSELLERİ BU KLASÖRE KOPYALAYIN                         ║
+╚═══════════════════════════════════════════════════════════════╝
+
+🎯 YAPMANIZ GEREKENLER:
+
+1️⃣ İndirilenlerdeki (veya herhangi bir yerdeki) görsellerinizi bulun:
+   - 10100128_1-3641e8-1650x1650.jpg
+   - fora-dilimli-siyah-zeytin-160-gr-655c29-1650x1650.jpg
+   - 09010025-3cf3da-Photoroom.png
+
+2️⃣ Bu 3 dosyayı KOPYALAYIN (Ctrl+C)
+
+3️⃣ Bu klasöre YAPIŞTIRIN (Ctrl+V):
+   c:\Users\GAMZE\Desktop\eticaret\ornek_zip_import\
+
+4️⃣ Artık klasörde şunlar olmalı:
+   ✅ data.csv
+   ✅ 10100128_1-3641e8-1650x1650.jpg
+   ✅ fora-dilimli-siyah-zeytin-160-gr-655c29-1650x1650.jpg
+   ✅ 09010025-3cf3da-Photoroom.png
+   ✅ README.txt
+
+5️⃣ Görselleri kopyaladıktan sonra bana "hazır" yazın, 
+   ben otomatik olarak ZIP dosyasını oluşturacağım!
+
+═══════════════════════════════════════════════════════════════
+
+💡 NOTLAR:
+
+❌ Görsellerinizi TAŞIMAYIN, sadece KOPYALAYIN
+   (Orijinal dosyalarınız yerinde kalsın)
+
+✅ Dosya adları TAM OLARAK aynı olmalı
+   (data.csv'deki ImageUrl sütunundaki adlarla)
+
+✅ Görseller İndirilenler, Belgeler, Masaüstü, 
+   herhangi bir yerde olabilir - önemli değil!
+
+═══════════════════════════════════════════════════════════════
+
+🔍 GÖRSELLERİNİZİ BULMAK İÇİN:
+
+Windows Arama (Win+S) tuşuna basın ve arayın:
+- 10100128_1-3641e8-1650x1650.jpg
+- fora-dilimli-siyah-zeytin
+- 09010025-3cf3da-Photoroom
+
+Veya İndirilenler klasörüne gidin:
+C:\Users\GAMZE\Downloads\
+
+═══════════════════════════════════════════════════════════════

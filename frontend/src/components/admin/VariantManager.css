@@ -1,0 +1,621 @@
+/* ============================================================
+   VARIANT MANAGER STYLES - Mobil Uyumlu Profesyonel Tasarım
+   ============================================================ */
+
+/* Overlay */
+.variant-manager-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: vmFadeIn 0.2s ease;
+}
+
+@keyframes vmFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Container */
+.variant-manager-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: vmSlideUp 0.3s ease;
+}
+
+@keyframes vmSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.variant-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.variant-manager-title h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.variant-manager-product {
+  display: block;
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-top: 4px;
+}
+
+.variant-manager-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.variant-manager-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+/* Toolbar */
+.variant-manager-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-wrap: wrap;
+}
+
+.variant-manager-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.variant-manager-selected-count {
+  font-size: 0.9rem;
+  color: #6b7280;
+  padding: 6px 12px;
+  background: #e5e7eb;
+  border-radius: 16px;
+}
+
+/* Buttons */
+.variant-manager-btn {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.variant-manager-btn.primary {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.variant-manager-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.variant-manager-btn.secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.variant-manager-btn.secondary:hover {
+  background: #f3f4f6;
+}
+
+.variant-manager-btn.danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.variant-manager-btn.danger:hover {
+  background: #fecaca;
+}
+
+.variant-manager-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Messages */
+.variant-manager-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  font-size: 0.9rem;
+}
+
+.variant-manager-message.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.variant-manager-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.variant-manager-message button {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  opacity: 0.7;
+  color: inherit;
+}
+
+/* Content */
+.variant-manager-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Form Section */
+.variant-manager-form-section {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.variant-manager-form-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  color: #166534;
+}
+
+.variant-manager-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.variant-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.variant-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.variant-form-group label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.variant-form-group input,
+.variant-form-group select {
+  padding: 10px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.variant-form-group input:focus,
+.variant-form-group select:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.variant-form-group input:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.variant-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.variant-input-group input {
+  flex: 1;
+}
+
+.variant-input-group select {
+  width: 60px;
+}
+
+.variant-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* List Styles */
+.variant-manager-list {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.variant-manager-loading,
+.variant-manager-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.variant-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: vmSpin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+@keyframes vmSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.variant-empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* List Header */
+.variant-list-header {
+  display: grid;
+  grid-template-columns: 40px 140px 1fr 100px 100px 100px;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+}
+
+/* List Items */
+.variant-list-item {
+  display: grid;
+  grid-template-columns: 40px 140px 1fr 100px 100px 100px;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.variant-list-item:hover {
+  background: #f9fafb;
+}
+
+.variant-list-item.selected {
+  background: #ecfdf5;
+}
+
+.variant-list-item:last-child {
+  border-bottom: none;
+}
+
+/* Checkbox */
+.variant-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.variant-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #10b981;
+}
+
+/* SKU Column */
+.variant-col-sku {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.variant-sku {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.variant-barcode {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* Title Column */
+.variant-col-title {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+/* Price Column */
+.variant-col-price {
+  text-align: right;
+}
+
+.variant-price {
+  font-weight: 600;
+  color: #10b981;
+  font-size: 0.95rem;
+}
+
+/* Stock Column */
+.variant-col-stock {
+  text-align: center;
+}
+
+.variant-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.variant-stock-badge.high {
+  background: #d1fae5;
+}
+
+.variant-stock-badge.medium {
+  background: #fef3c7;
+}
+
+.variant-stock-badge.low {
+  background: #fed7aa;
+}
+
+.variant-stock-badge.out {
+  background: #fee2e2;
+}
+
+.variant-stock-icon {
+  font-size: 0.8rem;
+}
+
+.variant-stock-input {
+  width: 50px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.variant-stock-input:hover,
+.variant-stock-input:focus {
+  border-color: #10b981;
+  background: white;
+  outline: none;
+}
+
+/* Actions Column */
+.variant-col-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.variant-action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.variant-action-btn.edit {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.variant-action-btn.edit:hover {
+  background: #bfdbfe;
+}
+
+.variant-action-btn.delete {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.variant-action-btn.delete:hover {
+  background: #fecaca;
+}
+
+/* Footer */
+.variant-manager-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.variant-manager-count {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+/* ============================================================
+   RESPONSIVE / MOBILE STYLES
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .variant-manager-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .variant-manager-modal {
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .variant-manager-toolbar {
+    padding: 12px 16px;
+  }
+
+  .variant-manager-content {
+    padding: 16px;
+  }
+
+  .variant-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  /* Mobile List - Card Layout */
+  .variant-list-header {
+    display: none;
+  }
+
+  .variant-list-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    position: relative;
+  }
+
+  .variant-checkbox {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+  }
+
+  .variant-col-sku {
+    padding-left: 32px;
+  }
+
+  .variant-col-title {
+    padding-left: 32px;
+    color: #6b7280;
+    font-size: 0.85rem;
+  }
+
+  .variant-col-price,
+  .variant-col-stock {
+    text-align: left;
+    padding-left: 32px;
+  }
+
+  .variant-col-actions {
+    justify-content: flex-end;
+    padding-top: 8px;
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .variant-manager-footer {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .variant-manager-header {
+    padding: 16px;
+  }
+
+  .variant-manager-title h2 {
+    font-size: 1.1rem;
+  }
+
+  .variant-manager-bulk-actions {
+    width: 100%;
+    justify-content: space-between;
+    margin-left: 0;
+    margin-top: 8px;
+  }
+
+  .variant-form-actions {
+    flex-direction: column;
+  }
+
+  .variant-form-actions .variant-manager-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

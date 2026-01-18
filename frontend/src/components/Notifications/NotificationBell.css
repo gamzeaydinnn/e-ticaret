@@ -1,0 +1,579 @@
+/* ==========================================================================
+   NotificationBell.css - Bildirim Zili Stil Dosyası
+   ==========================================================================
+   Mobil uyumlu, responsive tasarıma sahip bildirim zili stilleri.
+   Animasyonlar, hover efektleri ve accessibility özellikleri içerir.
+   ========================================================================== */
+
+/* Container */
+.notification-bell-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Zil Butonu */
+.notification-bell-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.notification-bell-button:hover {
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.notification-bell-button:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.notification-bell-button:active {
+  transform: scale(0.95);
+}
+
+/* Zil İkonu */
+.bell-icon {
+  font-size: 24px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+/* Zil Animasyonu */
+.notification-bell-button.animating .bell-icon {
+  animation: bellShake 0.5s ease-in-out infinite;
+}
+
+@keyframes bellShake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(15deg);
+  }
+  50% {
+    transform: rotate(-15deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+/* Badge */
+.notification-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: #fff;
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(220, 53, 69, 0.4);
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Dropdown Menu */
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  max-width: calc(100vw - 20px);
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  animation: dropdownSlide 0.2s ease-out;
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dropdown ok işareti */
+.notification-dropdown::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  right: 18px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  transform: rotate(45deg);
+  box-shadow: -3px -3px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Dropdown Header */
+.notification-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  background: linear-gradient(135deg, #f8f9fa, #fff);
+}
+
+.notification-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.unread-count {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #dc3545;
+}
+
+.notification-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.notification-action-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #007bff;
+  background: transparent;
+  border: 1px solid #007bff;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-action-btn:hover {
+  color: #fff;
+  background: #007bff;
+}
+
+/* Bildirim Listesi */
+.notification-list {
+  max-height: 400px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Custom scrollbar */
+.notification-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.notification-list::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Loading State */
+.notification-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 12px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Empty State */
+.notification-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.notification-empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Bildirim Item */
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background: #f8f9fa;
+}
+
+.notification-item.unread {
+  background: linear-gradient(to right, rgba(0, 123, 255, 0.05), transparent);
+}
+
+.notification-item:focus {
+  outline: none;
+  background: rgba(0, 123, 255, 0.1);
+}
+
+/* Bildirim İkon */
+.notification-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  background: #f8f9fa;
+  border-radius: 50%;
+}
+
+/* Bildirim İçerik */
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-message {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  line-height: 1.4;
+}
+
+.notification-item.unread .notification-message {
+  font-weight: 600;
+}
+
+.notification-body {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notification-time {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Okunmamış göstergesi */
+.unread-indicator {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border-radius: 50%;
+  animation: unreadPulse 2s ease-in-out infinite;
+}
+
+@keyframes unreadPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Dropdown Footer */
+.notification-dropdown-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #eee;
+  background: #f8f9fa;
+}
+
+.view-all-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: #007bff;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.view-all-link:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.clear-all-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #dc3545;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-all-btn:hover {
+  color: #fff;
+  background: #dc3545;
+  border-radius: 4px;
+}
+
+/* ==================== Responsive (Mobil Uyumlu) ==================== */
+
+/* Tablet */
+@media (max-width: 768px) {
+  .notification-dropdown {
+    width: 340px;
+    max-width: calc(100vw - 16px);
+    right: -10px;
+  }
+
+  .notification-dropdown::before {
+    right: 24px;
+  }
+
+  .notification-list {
+    max-height: 350px;
+  }
+}
+
+/* Mobil */
+@media (max-width: 576px) {
+  .notification-dropdown {
+    position: fixed;
+    top: 60px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    border-radius: 12px;
+  }
+
+  .notification-dropdown::before {
+    display: none;
+  }
+
+  .notification-dropdown-header {
+    padding: 14px 16px;
+  }
+
+  .notification-title {
+    font-size: 15px;
+  }
+
+  .notification-item {
+    padding: 14px 16px;
+  }
+
+  .notification-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  .notification-message {
+    font-size: 13px;
+  }
+
+  .notification-body {
+    font-size: 12px;
+  }
+
+  .notification-time {
+    font-size: 11px;
+  }
+
+  .notification-list {
+    max-height: 300px;
+  }
+
+  .notification-dropdown-footer {
+    padding: 10px 16px;
+  }
+}
+
+/* Küçük Mobil */
+@media (max-width: 375px) {
+  .notification-dropdown {
+    left: 4px;
+    right: 4px;
+  }
+
+  .notification-item {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .notification-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .notification-action-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
+
+/* Dark Mode Desteği */
+@media (prefers-color-scheme: dark) {
+  .notification-dropdown {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .notification-dropdown::before {
+    background: #1a1a1a;
+  }
+
+  .notification-dropdown-header {
+    background: linear-gradient(135deg, #2d2d2d, #1a1a1a);
+    border-bottom-color: #333;
+  }
+
+  .notification-title {
+    color: #f0f0f0;
+  }
+
+  .notification-item {
+    border-bottom-color: #333;
+  }
+
+  .notification-item:hover {
+    background: #2d2d2d;
+  }
+
+  .notification-item.unread {
+    background: linear-gradient(to right, rgba(0, 123, 255, 0.1), transparent);
+  }
+
+  .notification-message {
+    color: #f0f0f0;
+  }
+
+  .notification-body {
+    color: #aaa;
+  }
+
+  .notification-time {
+    color: #888;
+  }
+
+  .notification-icon {
+    background: #333;
+  }
+
+  .notification-dropdown-footer {
+    background: #2d2d2d;
+    border-top-color: #333;
+  }
+
+  .notification-empty {
+    color: #888;
+  }
+}
+
+/* Reduced Motion Desteği */
+@media (prefers-reduced-motion: reduce) {
+  .notification-bell-button.animating .bell-icon,
+  .notification-badge,
+  .unread-indicator {
+    animation: none;
+  }
+
+  .notification-dropdown {
+    animation: none;
+  }
+}
+
+/* Touch Cihazlar için */
+@media (hover: none) {
+  .notification-bell-button:hover {
+    background: transparent;
+  }
+
+  .notification-item:hover {
+    background: transparent;
+  }
+
+  .notification-item:active {
+    background: #f0f0f0;
+  }
+}

@@ -1,0 +1,782 @@
+{
+  "info": {
+    "_postman_id": "delivery-management-api-v1",
+    "name": "E-Commerce Delivery Management API",
+    "description": "Teslimat yönetimi sistemi için tüm API endpoint'leri.\n\n## Özellikler\n- Teslimat görevi CRUD işlemleri\n- Kurye atama ve yönetimi\n- Real-time durum güncellemeleri\n- POD (Proof of Delivery) yönetimi\n- Raporlama ve istatistikler\n\n## Kimlik Doğrulama\nTüm endpoint'ler JWT token gerektirir. Authorization header'ında Bearer token kullanın.\n\n## Ortamlar\n- Development: http://localhost:5000\n- Production: https://api.example.com",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "courierToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "description": "Kimlik doğrulama işlemleri",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"Admin123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Courier Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"courier@example.com\",\n  \"password\": \"Courier123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "auth", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📦 Admin - Delivery Tasks",
+      "description": "Admin panel teslimat görevi yönetimi",
+      "item": [
+        {
+          "name": "List All Delivery Tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks?page=1&pageSize=20&status=Created",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" },
+                { "key": "status", "value": "Created" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Delivery Task by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Delivery Task from Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": 1,\n  \"priority\": \"Normal\",\n  \"notesForCourier\": \"Kapı zilini çalmayın, bebek uyuyor.\",\n  \"timeWindowStart\": \"2026-01-19T10:00:00Z\",\n  \"timeWindowEnd\": \"2026-01-19T14:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Courier to Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"courierId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1", "assign"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Auto Assign Courier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1/auto-assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1", "auto-assign"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reassign Courier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newCourierId\": 2,\n  \"reason\": \"İlk kurye meşgul\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1/reassign",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1", "reassign"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Delivery Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Sipariş müşteri tarafından iptal edildi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1", "cancel"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Available Couriers for Task",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/1/available-couriers",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "1", "available-couriers"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Pending Tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/delivery-tasks/pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "delivery-tasks", "pending"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👤 Admin - Couriers",
+      "description": "Admin panel kurye yönetimi",
+      "item": [
+        {
+          "name": "List All Couriers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/couriers?isOnline=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "couriers"],
+              "query": [{ "key": "isOnline", "value": "true" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Courier by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/couriers/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "couriers", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Courier Workload",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/couriers/1/workload",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "couriers", "1", "workload"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Available Couriers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/couriers/available",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "couriers", "available"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🚚 Courier - Deliveries",
+      "description": "Kurye paneli teslimat işlemleri",
+      "item": [
+        {
+          "name": "Get My Deliveries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Delivery Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "accept"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Bölge dışında\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "reject"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as Picked Up",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/pickup",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "pickup"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as In Transit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/in-transit",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "in-transit"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Delivery",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"podMethod\": \"Photo\",\n  \"notes\": \"Kapıda teslim edildi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "complete"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as Failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"failureReasonCode\": \"CUSTOMER_NOT_HOME\",\n  \"failureNote\": \"Müşteri evde yoktu, 3 kez arandı\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/deliveries/1/fail",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "deliveries", "1", "fail"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📍 Courier - Location",
+      "description": "Kurye konum güncelleme",
+      "item": [
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"latitude\": 41.0082,\n  \"longitude\": 28.9784,\n  \"accuracy\": 10.5,\n  \"speed\": 25.0,\n  \"heading\": 180\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/location",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "location"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Location History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/courier/location/history?date=2026-01-18",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "location", "history"],
+              "query": [{ "key": "date", "value": "2026-01-18" }]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📸 Courier - POD",
+      "description": "Teslimat kanıtı (Proof of Delivery)",
+      "item": [
+        {
+          "name": "Upload POD Photo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                },
+                {
+                  "key": "deliveryTaskId",
+                  "value": "1",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/pod/photo",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "pod", "photo"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryTaskId\": 1,\n  \"otpCode\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/pod/verify-otp",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "pod", "verify-otp"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{courierToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryTaskId\": 1,\n  \"signatureData\": \"base64_encoded_signature_image\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/courier/pod/signature",
+              "host": ["{{baseUrl}}"],
+              "path": ["courier", "pod", "signature"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "📊 Reports",
+      "description": "Raporlama ve istatistikler",
+      "item": [
+        {
+          "name": "Get Delivery Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/reports/delivery-summary?startDate=2026-01-01&endDate=2026-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "reports", "delivery-summary"],
+              "query": [
+                { "key": "startDate", "value": "2026-01-01" },
+                { "key": "endDate", "value": "2026-01-31" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Courier Performance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/reports/courier-performance?courierId=1&startDate=2026-01-01&endDate=2026-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "reports", "courier-performance"],
+              "query": [
+                { "key": "courierId", "value": "1" },
+                { "key": "startDate", "value": "2026-01-01" },
+                { "key": "endDate", "value": "2026-01-31" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Failure Reasons Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/reports/failure-reasons?startDate=2026-01-01&endDate=2026-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "reports", "failure-reasons"],
+              "query": [
+                { "key": "startDate", "value": "2026-01-01" },
+                { "key": "endDate", "value": "2026-01-31" }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔍 Address Validation",
+      "description": "Adres doğrulama ve geocoding",
+      "item": [
+        {
+          "name": "Validate Address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addressLine\": \"Atatürk Mahallesi, Cumhuriyet Caddesi No:15 D:3\",\n  \"city\": \"İstanbul\",\n  \"district\": \"Kadıköy\",\n  \"includeGeocode\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/address/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "address", "validate"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

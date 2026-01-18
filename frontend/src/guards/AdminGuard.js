@@ -6,7 +6,7 @@
 // Hem rol hem de spesifik izin kontrolleri yapılabilir.
 // =============================================================================
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -47,6 +47,18 @@ export const AdminGuard = ({
     loadUserPermissions, // İzin yükleme fonksiyonu
   } = useAuth();
   const location = useLocation();
+
+  const normalizedPermissions = Array.isArray(contextPermissions)
+    ? contextPermissions
+    : contextPermissions?.permissions || [];
+
+  useEffect(() => {
+    if (!user) return;
+    const isAdminUser = user.isAdmin || ADMIN_ROLES.includes(user.role);
+    if (!isAdminUser || permissionsLoading) return;
+    if (normalizedPermissions.length > 0) return;
+    loadUserPermissions?.(user, true);
+  }, [user, permissionsLoading, normalizedPermissions, loadUserPermissions]);
 
   // ============================================================================
   // YÜKLEME DURUMU - Hem user hem de permissions yüklenene kadar bekle
@@ -108,8 +120,7 @@ export const AdminGuard = ({
       // ============================================================================
 
       // Context'teki izinler var mı kontrol et
-      const hasContextPermissions =
-        Array.isArray(contextPermissions) && contextPermissions.length > 0;
+      const hasContextPermissions = normalizedPermissions.length > 0;
 
       if (hasContextPermissions) {
         // Context'teki helper fonksiyonları kullan
@@ -129,11 +140,14 @@ export const AdminGuard = ({
           // Sadece aynı rol için cache'i kullan
           if (cachedPermissions && cachedRole === user.role) {
             const cached = JSON.parse(cachedPermissions);
-            if (Array.isArray(cached) && cached.length > 0) {
+            const cachedList = Array.isArray(cached)
+              ? cached
+              : cached?.permissions || [];
+            if (cachedList.length > 0) {
               if (requireAll) {
-                hasAccess = reqPerms.every((p) => cached.includes(p));
+                hasAccess = reqPerms.every((p) => cachedList.includes(p));
               } else {
-                hasAccess = reqPerms.some((p) => cached.includes(p));
+                hasAccess = reqPerms.some((p) => cachedList.includes(p));
               }
 
               // Cache'de bulunduysa, context'e de yükle (sync için)
@@ -157,7 +171,7 @@ export const AdminGuard = ({
         requiredPermission: reqPerms,
         requireAll,
         hasAccess,
-        contextPermsCount: contextPermissions?.length || 0,
+        contextPermsCount: normalizedPermissions.length || 0,
       });
 
       if (!hasAccess) {

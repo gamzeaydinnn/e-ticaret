@@ -48,6 +48,19 @@ namespace ECommerce.Data.Context
         public virtual DbSet<CampaignRule> CampaignRules { get; set; }
         public virtual DbSet<CampaignReward> CampaignRewards { get; set; }
         
+        // Kupon Sistemi Tabloları
+        /// <summary>
+        /// Kupon kullanım geçmişini tutar.
+        /// Her sipariş için hangi kuponun kullanıldığını ve indirim miktarını takip eder.
+        /// </summary>
+        public virtual DbSet<CouponUsage> CouponUsages { get; set; }
+        
+        /// <summary>
+        /// Kupon-Ürün many-to-many ilişkisini yönetir.
+        /// Belirli ürünlere özel kuponlar tanımlamak için kullanılır.
+        /// </summary>
+        public virtual DbSet<CouponProduct> CouponProducts { get; set; }
+        
         // SMS Doğrulama Tabloları
         public virtual DbSet<SmsVerification> SmsVerifications { get; set; }
         public virtual DbSet<SmsRateLimit> SmsRateLimits { get; set; }
@@ -64,6 +77,34 @@ namespace ECommerce.Data.Context
         /// Hangi rolün hangi izinlere sahip olduğunu tanımlar.
         /// </summary>
         public virtual DbSet<RolePermission> RolePermissions { get; set; }
+
+        // -------------------
+        // XML/Varyant Sistemi Tabloları
+        // -------------------
+        
+        /// <summary>
+        /// Ürün seçenek türlerini tutar.
+        /// Örn: "Hacim", "Renk", "Beden", "Paket"
+        /// </summary>
+        public virtual DbSet<ProductOption> ProductOptions { get; set; }
+        
+        /// <summary>
+        /// Seçenek türlerine ait değerleri tutar.
+        /// Örn: Hacim için "330ml", "1L", "2L"
+        /// </summary>
+        public virtual DbSet<ProductOptionValue> ProductOptionValues { get; set; }
+        
+        /// <summary>
+        /// Varyant-Seçenek değeri ilişkisi (Many-to-Many).
+        /// Hangi varyantın hangi özelliklere sahip olduğunu tanımlar.
+        /// </summary>
+        public virtual DbSet<VariantOptionValue> VariantOptionValues { get; set; }
+        
+        /// <summary>
+        /// XML feed kaynaklarını tutar.
+        /// Tedarikçi XML URL'leri ve mapping konfigürasyonları.
+        /// </summary>
+        public virtual DbSet<XmlFeedSource> XmlFeedSources { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -244,6 +285,10 @@ namespace ECommerce.Data.Context
             {
                 entity.ToTable("OrderItems");
                 entity.Property(oi => oi.UnitPrice).HasPrecision(18, 2);
+                
+                // Varyant snapshot alanları (sipariş anındaki değerler)
+                entity.Property(oi => oi.VariantTitle).HasMaxLength(200);
+                entity.Property(oi => oi.VariantSku).HasMaxLength(50);
 
                 entity.HasOne(oi => oi.Order)
                       .WithMany(o => o.OrderItems)
@@ -254,6 +299,12 @@ namespace ECommerce.Data.Context
                       .WithMany(p => p.OrderItems)
                       .HasForeignKey(oi => oi.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+                
+                // Varyant ilişkisi (nullable - eski siparişler için)
+                entity.HasOne(oi => oi.ProductVariant)
+                      .WithMany()
+                      .HasForeignKey(oi => oi.ProductVariantId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             // -------------------
@@ -273,8 +324,15 @@ namespace ECommerce.Data.Context
                       .WithMany()
                       .HasForeignKey(c => c.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
+                
+                // Varyant ilişkisi (nullable - varyantsız ürünler için)
+                entity.HasOne(c => c.ProductVariant)
+                      .WithMany()
+                      .HasForeignKey(c => c.ProductVariantId)
+                      .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasIndex(c => new { c.UserId, c.ProductId }).IsUnique();
+                // Aynı kullanıcı, aynı ürün ve aynı varyant tek satır olabilir
+                entity.HasIndex(c => new { c.UserId, c.ProductId, c.ProductVariantId }).IsUnique();
             });
 
             // ProductImage Configuration
@@ -285,15 +343,137 @@ namespace ECommerce.Data.Context
                         .OnDelete(DeleteBehavior.Cascade);
  
             // ProductVariant Configuration
-            modelBuilder.Entity<ProductVariant>()
-                        .HasOne(v => v.Product)
-                        .WithMany(p => p.ProductVariants)
-                        .HasForeignKey(v => v.ProductId)
-                        .OnDelete(DeleteBehavior.Cascade);
+            // SKU benzersiz olmalı - XML entegrasyonunun ana anahtarı
+            modelBuilder.Entity<ProductVariant>(entity =>
+            {
+                entity.ToTable("ProductVariants");
+                
+                // Temel alanlar
+                entity.Property(v => v.Title).HasMaxLength(200).IsRequired();
+                entity.Property(v => v.SKU).HasMaxLength(50).IsRequired();
+                entity.Property(v => v.Price).HasPrecision(18, 2);
+                entity.Property(v => v.Currency).HasMaxLength(10).HasDefaultValue("TRY");
+                
+                // XML entegrasyon alanları
+                entity.Property(v => v.Barcode).HasMaxLength(50);
+                entity.Property(v => v.SupplierCode).HasMaxLength(100);
+                entity.Property(v => v.ParentSku).HasMaxLength(50);
+                
+                // SKU benzersiz index - entegrasyonun kritik noktası
+                entity.HasIndex(v => v.SKU)
+                      .IsUnique()
+                      .HasDatabaseName("IX_ProductVariants_SKU");
+                
+                // Barcode index (opsiyonel aramalar için)
+                entity.HasIndex(v => v.Barcode)
+                      .HasDatabaseName("IX_ProductVariants_Barcode");
+                
+                // ParentSku index (gruplama için)
+                entity.HasIndex(v => v.ParentSku)
+                      .HasDatabaseName("IX_ProductVariants_ParentSku");
+                
+                // Tedarikçi kodu index
+                entity.HasIndex(v => v.SupplierCode)
+                      .HasDatabaseName("IX_ProductVariants_SupplierCode");
+                
+                // Son görülme tarihi index (pasifleştirme için)
+                entity.HasIndex(v => v.LastSeenAt)
+                      .HasDatabaseName("IX_ProductVariants_LastSeenAt");
+                
+                // Product ilişkisi
+                entity.HasOne(v => v.Product)
+                      .WithMany(p => p.ProductVariants)
+                      .HasForeignKey(v => v.ProductId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
 
-            modelBuilder.Entity<ProductVariant>()
-                        .Property(v => v.Price)
-                        .HasPrecision(18, 2);
+            // -------------------
+            // ProductOption Configuration
+            // Seçenek tipleri: Hacim, Renk, Beden vb.
+            // -------------------
+            modelBuilder.Entity<ProductOption>(entity =>
+            {
+                entity.ToTable("ProductOptions");
+                
+                entity.Property(o => o.Name).HasMaxLength(100).IsRequired();
+                entity.Property(o => o.Description).HasMaxLength(500);
+                
+                // Her seçenek adı benzersiz olmalı
+                entity.HasIndex(o => o.Name)
+                      .IsUnique()
+                      .HasDatabaseName("IX_ProductOptions_Name");
+            });
+
+            // -------------------
+            // ProductOptionValue Configuration
+            // Seçenek değerleri: 330ml, 1L, Kırmızı, XL vb.
+            // -------------------
+            modelBuilder.Entity<ProductOptionValue>(entity =>
+            {
+                entity.ToTable("ProductOptionValues");
+                
+                entity.Property(ov => ov.Value).HasMaxLength(100).IsRequired();
+                entity.Property(ov => ov.ColorCode).HasMaxLength(20);
+                
+                // Aynı seçenek altında aynı değer olamaz
+                entity.HasIndex(ov => new { ov.OptionId, ov.Value })
+                      .IsUnique()
+                      .HasDatabaseName("IX_ProductOptionValues_OptionId_Value");
+                
+                // ProductOption ilişkisi
+                entity.HasOne(ov => ov.Option)
+                      .WithMany(o => o.OptionValues)
+                      .HasForeignKey(ov => ov.OptionId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // -------------------
+            // VariantOptionValue Configuration
+            // Many-to-Many: Hangi varyant hangi seçenek değerlerine sahip
+            // -------------------
+            modelBuilder.Entity<VariantOptionValue>(entity =>
+            {
+                entity.ToTable("VariantOptionValues");
+                
+                // Composite Primary Key
+                entity.HasKey(vov => new { vov.VariantId, vov.OptionValueId });
+                
+                // ProductVariant ilişkisi
+                entity.HasOne(vov => vov.Variant)
+                      .WithMany(v => v.VariantOptionValues)
+                      .HasForeignKey(vov => vov.VariantId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                
+                // ProductOptionValue ilişkisi
+                entity.HasOne(vov => vov.OptionValue)
+                      .WithMany()
+                      .HasForeignKey(vov => vov.OptionValueId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // -------------------
+            // XmlFeedSource Configuration
+            // XML kaynak tanımları
+            // -------------------
+            modelBuilder.Entity<XmlFeedSource>(entity =>
+            {
+                entity.ToTable("XmlFeedSources");
+                
+                entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+                entity.Property(x => x.Url).HasMaxLength(1000).IsRequired();
+                entity.Property(x => x.MappingConfig).HasColumnType("nvarchar(max)");
+                entity.Property(x => x.SupplierName).HasMaxLength(200);
+                entity.Property(x => x.AuthType).HasMaxLength(50);
+                entity.Property(x => x.AuthUsername).HasMaxLength(200);
+                entity.Property(x => x.AuthPassword).HasMaxLength(200);
+                entity.Property(x => x.LastSyncError).HasMaxLength(2000);
+                entity.Property(x => x.Notes).HasMaxLength(1000);
+                
+                // Feed adı benzersiz olmalı
+                entity.HasIndex(x => x.Name)
+                      .IsUnique()
+                      .HasDatabaseName("IX_XmlFeedSources_Name");
+            });
 
             // -------------------
             // Stocks Configuration
@@ -405,6 +585,79 @@ namespace ECommerce.Data.Context
             {
                 entity.Property(c => c.Value).HasPrecision(18, 2);
                 entity.Property(c => c.MinOrderAmount).HasPrecision(18, 2);
+                entity.Property(c => c.MaxDiscountAmount).HasPrecision(18, 2);
+                
+                entity.Property(c => c.Code).HasMaxLength(50).IsRequired();
+                entity.Property(c => c.Description).HasMaxLength(500);
+                entity.Property(c => c.ConditionsJson).HasColumnType("nvarchar(max)");
+                
+                // Benzersiz kupon kodu
+                entity.HasIndex(c => c.Code).IsUnique();
+                
+                // Kategori ilişkisi (opsiyonel)
+                entity.HasOne(c => c.Category)
+                      .WithMany()
+                      .HasForeignKey(c => c.CategoryId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+            
+            // -------------------
+            // CouponProduct Configuration (Many-to-Many)
+            // -------------------
+            modelBuilder.Entity<CouponProduct>(entity =>
+            {
+                entity.ToTable("CouponProducts");
+                
+                entity.HasKey(cp => new { cp.CouponId, cp.ProductId });
+                
+                entity.Property(cp => cp.CustomDiscountValue).HasPrecision(18, 2);
+                
+                entity.HasOne(cp => cp.Coupon)
+                      .WithMany(c => c.CouponProducts)
+                      .HasForeignKey(cp => cp.CouponId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                
+                entity.HasOne(cp => cp.Product)
+                      .WithMany(p => p.CouponProducts)
+                      .HasForeignKey(cp => cp.ProductId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+            
+            // -------------------
+            // CouponUsage Configuration
+            // -------------------
+            modelBuilder.Entity<CouponUsage>(entity =>
+            {
+                entity.ToTable("CouponUsages");
+                
+                entity.Property(cu => cu.DiscountApplied).HasPrecision(18, 2);
+                entity.Property(cu => cu.CouponCode).HasMaxLength(50);
+                entity.Property(cu => cu.IpAddress).HasMaxLength(50);
+                entity.Property(cu => cu.UserAgent).HasMaxLength(500);
+                
+                // İndeksler
+                entity.HasIndex(cu => cu.CouponId);
+                entity.HasIndex(cu => cu.UserId);
+                entity.HasIndex(cu => cu.OrderId);
+                entity.HasIndex(cu => new { cu.CouponId, cu.UserId });
+                
+                // Kupon ilişkisi
+                entity.HasOne(cu => cu.Coupon)
+                      .WithMany(c => c.CouponUsages)
+                      .HasForeignKey(cu => cu.CouponId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                
+                // Kullanıcı ilişkisi
+                entity.HasOne(cu => cu.User)
+                      .WithMany()
+                      .HasForeignKey(cu => cu.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                
+                // Sipariş ilişkisi
+                entity.HasOne(cu => cu.Order)
+                      .WithMany(o => o.CouponUsages)
+                      .HasForeignKey(cu => cu.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
 
             modelBuilder.Entity<Discount>(entity =>

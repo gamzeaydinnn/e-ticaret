@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
+import XmlImportModal from "../../components/admin/XmlImportModal";
+import VariantManager from "../../components/admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -28,6 +30,14 @@ const AdminProducts = () => {
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelResult, setExcelResult] = useState(null);
   const [excelError, setExcelError] = useState(null);
+
+  // XML Import State'leri
+  const [showXmlImportModal, setShowXmlImportModal] = useState(false);
+
+  // Variant Manager State'leri
+  const [showVariantManager, setShowVariantManager] = useState(false);
+  const [selectedProductForVariants, setSelectedProductForVariants] =
+    useState(null);
 
   // Excel Export State'leri
   const [exportLoading, setExportLoading] = useState(false);
@@ -171,7 +181,7 @@ const AdminProducts = () => {
       console.error("Ürün kaydetme hatası:", err);
       alert(
         "❌ Ürün kaydedilirken hata oluştu: " +
-          (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message),
       );
     }
   };
@@ -300,7 +310,7 @@ const AdminProducts = () => {
       console.error("Resim yükleme hatası:", err);
       alert(
         "Resim yüklenirken hata oluştu: " +
-          (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message),
       );
     } finally {
       setImageUploading(false);
@@ -346,7 +356,7 @@ const AdminProducts = () => {
         console.error("Ürün silme hatası:", err);
         alert(
           "Ürün silinirken hata oluştu: " +
-            (err.response?.data?.message || err.message)
+            (err.response?.data?.message || err.message),
         );
       }
     }
@@ -373,7 +383,7 @@ const AdminProducts = () => {
     } catch (err) {
       console.error("Excel yükleme hatası:", err);
       setExcelError(
-        err.response?.data?.message || "Dosya yüklenirken hata oluştu."
+        err.response?.data?.message || "Dosya yüklenirken hata oluştu.",
       );
     } finally {
       setExcelLoading(false);
@@ -395,7 +405,7 @@ const AdminProducts = () => {
     } catch (err) {
       console.error("Şablon indirme hatası:", err);
       alert(
-        "Şablon indirilemedi: " + (err.response?.data?.message || err.message)
+        "Şablon indirilemedi: " + (err.response?.data?.message || err.message),
       );
     }
   };
@@ -432,7 +442,7 @@ const AdminProducts = () => {
       console.error("Excel export hatası:", err);
       alert(
         "Ürünler dışa aktarılamadı: " +
-          (err.response?.data?.message || err.message)
+          (err.response?.data?.message || err.message),
       );
     } finally {
       setExportLoading(false);
@@ -509,6 +519,18 @@ const AdminProducts = () => {
             >
               <i className="fas fa-file-excel me-1"></i>Excel Yükle
             </button>
+            {/* XML Import Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={() => setShowXmlImportModal(true)}
+            >
+              <i className="fas fa-code me-1"></i>XML Import
+            </button>
             {/* Excel Export Butonu */}
             <button
               className="btn border-0 text-white fw-medium px-2 py-1"
@@ -571,7 +593,7 @@ const AdminProducts = () => {
                 const tempId = `temp-${Date.now()}`;
                 setEditingProductId(tempId);
                 setProductVariants(
-                  variantStore.getVariantsForProduct(tempId) || []
+                  variantStore.getVariantsForProduct(tempId) || [],
                 );
                 setShowModal(true);
               }}
@@ -646,8 +668,8 @@ const AdminProducts = () => {
                         product.stock > 10
                           ? "bg-success"
                           : product.stock > 0
-                          ? "bg-warning"
-                          : "bg-danger"
+                            ? "bg-warning"
+                            : "bg-danger"
                       }`}
                       style={{ fontSize: "0.55rem", padding: "2px 4px" }}
                     >
@@ -659,13 +681,26 @@ const AdminProducts = () => {
                       className="btn btn-outline-primary btn-sm flex-fill"
                       style={{ fontSize: "0.65rem", padding: "3px 6px" }}
                       onClick={() => handleEdit(product)}
+                      title="Düzenle"
                     >
                       <i className="fas fa-edit"></i>
+                    </button>
+                    <button
+                      className="btn btn-outline-success btn-sm"
+                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
+                      onClick={() => {
+                        setSelectedProductForVariants(product);
+                        setShowVariantManager(true);
+                      }}
+                      title="Varyantlar"
+                    >
+                      <i className="fas fa-layer-group"></i>
                     </button>
                     <button
                       className="btn btn-outline-danger btn-sm"
                       style={{ fontSize: "0.65rem", padding: "3px 6px" }}
                       onClick={() => handleDelete(product.id)}
+                      title="Sil"
                     >
                       <i className="fas fa-trash"></i>
                     </button>
@@ -976,7 +1011,7 @@ const AdminProducts = () => {
                               e.stopPropagation();
                               const url = prompt(
                                 "Resim URL'si girin (opsiyonel):",
-                                formData.imageUrl
+                                formData.imageUrl,
                               );
                               if (url !== null) {
                                 setFormData((prev) => ({
@@ -1023,7 +1058,7 @@ const AdminProducts = () => {
                                   document.getElementById("v-package").value;
                                 const qty =
                                   parseFloat(
-                                    document.getElementById("v-qty").value
+                                    document.getElementById("v-qty").value,
                                   ) || 0;
                                 const unit =
                                   document.getElementById("v-unit").value ||
@@ -1265,6 +1300,30 @@ const AdminProducts = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* XML Import Modal */}
+        {showXmlImportModal && (
+          <XmlImportModal
+            isOpen={showXmlImportModal}
+            onClose={() => setShowXmlImportModal(false)}
+            onImportComplete={() => {
+              setShowXmlImportModal(false);
+              fetchProducts(); // Ürün listesini yenile
+            }}
+          />
+        )}
+
+        {/* Variant Manager Modal */}
+        {showVariantManager && selectedProductForVariants && (
+          <VariantManager
+            productId={selectedProductForVariants.id}
+            productName={selectedProductForVariants.name}
+            onClose={() => {
+              setShowVariantManager(false);
+              setSelectedProductForVariants(null);
+            }}
+          />
         )}
       </div>
     </div>

@@ -26,9 +26,10 @@ export const permissionService = {
   getMyPermissions: async () => {
     try {
       const response = await api.get("/api/auth/permissions");
+      const payload = response?.data ?? response;
       return (
-        response.data?.data ||
-        response.data || {
+        payload?.data ||
+        payload || {
           permissions: [],
           role: null,
           isSuperAdmin: false,

@@ -1,6 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { AdminService } from "../../services/adminService";
 import { CourierService } from "../../services/courierService";
+
+// ============================================================
+// ADMIN ORDERS - Sipariş Yönetimi
+// ============================================================
+// Bu sayfa admin panelinde siparişlerin yönetimini sağlar.
+// Anlık güncelleme için 15 saniyelik polling mekanizması kullanır.
+// ============================================================
+
+// Polling aralığı (milisaniye) - 15 saniyede bir kontrol
+const POLLING_INTERVAL = 15000;
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -9,23 +19,86 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [assigningCourier, setAssigningCourier] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // ============================================================
+  // ANLIK GÜNCELLEME (POLLING) STATELERİ
+  // ============================================================
+  const [autoRefresh, setAutoRefresh] = useState(true); // Otomatik yenileme aktif mi?
+  const [lastUpdate, setLastUpdate] = useState(null); // Son güncelleme zamanı
+  const [isRefreshing, setIsRefreshing] = useState(false); // Yenileme animasyonu
+  const pollingRef = useRef(null);
 
-  const loadData = async () => {
+  // ============================================================
+  // VERİ YÜKLEME FONKSİYONU
+  // ============================================================
+  const loadData = useCallback(async (showLoading = true) => {
     try {
+      if (showLoading) setIsRefreshing(true);
+
       const couriersData = await CourierService.getAll();
       // Gerçek siparişleri backend'den çek
       const ordersData = await AdminService.getOrders();
       setOrders(Array.isArray(ordersData) ? ordersData : []);
       setCouriers(couriersData);
+      setLastUpdate(new Date());
     } catch (error) {
       console.error("Veri yükleme hatası:", error);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, []);
+
+  // ============================================================
+  // İLK YÜKLEME VE POLLING KURULUMU
+  // ============================================================
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Polling mekanizması - otomatik yenileme
+  useEffect(() => {
+    if (autoRefresh) {
+      // Her POLLING_INTERVAL ms'de bir veri çek
+      pollingRef.current = setInterval(() => {
+        loadData(false); // Loading göstermeden sessiz güncelleme
+      }, POLLING_INTERVAL);
+
+      console.log("🔄 Sipariş otomatik yenileme aktif (15 saniye)");
+    }
+
+    // Cleanup - component unmount olduğunda veya autoRefresh değiştiğinde
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        console.log("⏹️ Sipariş otomatik yenileme durduruldu");
+      }
+    };
+  }, [autoRefresh, loadData]);
+
+  // ============================================================
+  // FİLTRE STATE'LERİ
+  // ============================================================
+  const [statusFilter, setStatusFilter] = useState("all"); // Durum filtresi
+  const [paymentFilter, setPaymentFilter] = useState("all"); // Ödeme filtresi
+
+  // Filtrelenmiş siparişler
+  const filteredOrders = orders.filter((order) => {
+    // Durum filtresi
+    if (statusFilter !== "all" && order.status !== statusFilter) {
+      return false;
+    }
+    // Ödeme durumu filtresi
+    if (paymentFilter !== "all") {
+      const isPaid = order.paymentStatus === "paid" || order.isPaid;
+      if (paymentFilter === "paid" && !isPaid) return false;
+      if (paymentFilter === "pending" && isPaid) return false;
+    }
+    return true;
+  });
+
+  // ============================================================
+  // SİPARİŞ İŞLEMLERİ
+  // ============================================================
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -38,24 +111,28 @@ export default function AdminOrders() {
     }
   };
 
+  // ============================================================
+  // KURYE ATAMA - Backend'e POST isteği gönderir
+  // ============================================================
   const assignCourier = async (orderId, courierId) => {
     setAssigningCourier(true);
     try {
-      const orderIndex = orders.findIndex((o) => o.id === orderId);
-      const courierName = couriers.find((c) => c.id === courierId)?.name;
+      // Backend'e kurye atama isteği gönder
+      const updatedOrder = await AdminService.assignCourier(orderId, courierId);
 
-      if (orderIndex !== -1) {
-        const updatedOrders = [...orders];
-        updatedOrders[orderIndex] = {
-          ...updatedOrders[orderIndex],
-          courierId,
-          courierName,
-          status: "assigned",
-        };
-        setOrders(updatedOrders);
+      // Başarılı olursa listeyi güncelle
+      if (updatedOrder) {
+        // Tüm listeyi yeniden çek (en güncel veri için)
+        const updated = await AdminService.getOrders();
+        setOrders(Array.isArray(updated) ? updated : []);
+
+        // Başarı bildirimi (opsiyonel)
+        console.log(`✅ Kurye başarıyla atandı: Sipariş #${orderId}`);
       }
     } catch (error) {
       console.error("Kurye atama hatası:", error);
+      // Kullanıcıya hata göster (ileride toast notification eklenebilir)
+      alert(`Kurye atama başarısız: ${error.message || "Bilinmeyen hata"}`);
     } finally {
       setAssigningCourier(false);
     }
@@ -116,16 +193,68 @@ export default function AdminOrders() {
             style={{ fontSize: "0.75rem" }}
           >
             Siparişleri takip edin
+            {lastUpdate && (
+              <span className="ms-2">
+                • Son güncelleme: {lastUpdate.toLocaleTimeString("tr-TR")}
+              </span>
+            )}
           </p>
         </div>
-        <button
-          onClick={loadData}
-          className="btn btn-outline-primary btn-sm px-2 py-1"
-          style={{ fontSize: "0.75rem" }}
-        >
-          <i className="fas fa-sync-alt me-1"></i>Yenile
-        </button>
+
+        {/* Kontrol Butonları */}
+        <div className="d-flex align-items-center gap-2">
+          {/* Otomatik Yenileme Toggle */}
+          <div className="form-check form-switch mb-0">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="autoRefreshToggle"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+            <label
+              className="form-check-label"
+              htmlFor="autoRefreshToggle"
+              style={{ fontSize: "0.7rem", cursor: "pointer" }}
+            >
+              Otomatik
+            </label>
+          </div>
+
+          {/* Manuel Yenile Butonu */}
+          <button
+            onClick={() => loadData(true)}
+            className="btn btn-outline-primary btn-sm px-2 py-1"
+            style={{ fontSize: "0.75rem" }}
+            disabled={isRefreshing}
+          >
+            <i
+              className={`fas fa-sync-alt me-1 ${isRefreshing ? "fa-spin" : ""}`}
+            ></i>
+            Yenile
+          </button>
+        </div>
       </div>
+
+      {/* Yeni Sipariş Bildirimi - Bekleyen sipariş varsa göster */}
+      {orders.filter((o) => o.status === "pending").length > 0 && (
+        <div
+          className="alert alert-warning d-flex align-items-center mb-3 py-2"
+          style={{ fontSize: "0.85rem" }}
+        >
+          <i
+            className="fas fa-bell me-2"
+            style={{ animation: "pulse 1s infinite" }}
+          ></i>
+          <span>
+            <strong>
+              {orders.filter((o) => o.status === "pending").length}
+            </strong>{" "}
+            adet bekleyen sipariş var!
+          </span>
+        </div>
+      )}
 
       {/* Özet Kartlar - daha kompakt */}
       <div className="row g-2 mb-3 px-1">
@@ -164,7 +293,7 @@ export default function AdminOrders() {
               <h6 className="fw-bold mb-0">
                 {
                   orders.filter((o) =>
-                    ["assigned", "picked_up", "in_transit"].includes(o.status)
+                    ["assigned", "picked_up", "in_transit"].includes(o.status),
                   ).length
                 }
               </h6>
@@ -187,6 +316,68 @@ export default function AdminOrders() {
         </div>
       </div>
 
+      {/* ================================================================
+          FİLTRE BUTONLARI - Durum ve Ödeme Durumu
+          ================================================================ */}
+      <div className="d-flex flex-wrap gap-2 mb-3 px-1">
+        {/* Durum Filtresi */}
+        <div className="btn-group btn-group-sm" role="group">
+          <button
+            className={`btn ${statusFilter === "all" ? "btn-primary" : "btn-outline-primary"}`}
+            onClick={() => setStatusFilter("all")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            Tümü
+          </button>
+          <button
+            className={`btn ${statusFilter === "pending" ? "btn-warning" : "btn-outline-warning"}`}
+            onClick={() => setStatusFilter("pending")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            Bekleyen
+          </button>
+          <button
+            className={`btn ${statusFilter === "preparing" ? "btn-info" : "btn-outline-info"}`}
+            onClick={() => setStatusFilter("preparing")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            Hazırlanan
+          </button>
+          <button
+            className={`btn ${statusFilter === "delivered" ? "btn-success" : "btn-outline-success"}`}
+            onClick={() => setStatusFilter("delivered")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            Teslim
+          </button>
+        </div>
+
+        {/* Ödeme Durumu Filtresi */}
+        <div className="btn-group btn-group-sm" role="group">
+          <button
+            className={`btn ${paymentFilter === "all" ? "btn-dark" : "btn-outline-dark"}`}
+            onClick={() => setPaymentFilter("all")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            <i className="fas fa-wallet me-1"></i>Tüm Ödemeler
+          </button>
+          <button
+            className={`btn ${paymentFilter === "pending" ? "btn-danger" : "btn-outline-danger"}`}
+            onClick={() => setPaymentFilter("pending")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            <i className="fas fa-clock me-1"></i>Ödeme Bekleyen
+          </button>
+          <button
+            className={`btn ${paymentFilter === "paid" ? "btn-success" : "btn-outline-success"}`}
+            onClick={() => setPaymentFilter("paid")}
+            style={{ fontSize: "0.7rem" }}
+          >
+            <i className="fas fa-check me-1"></i>Ödendi
+          </button>
+        </div>
+      </div>
+
       {/* Sipariş Listesi */}
       <div
         className="card border-0 shadow-sm mx-1"
@@ -195,7 +386,7 @@ export default function AdminOrders() {
         <div className="card-header bg-white border-0 py-2 px-2 px-md-3">
           <h6 className="fw-bold mb-0" style={{ fontSize: "0.85rem" }}>
             <i className="fas fa-list-alt me-2 text-primary"></i>
-            Siparişler ({orders.length})
+            Siparişler ({filteredOrders.length}/{orders.length})
           </h6>
         </div>
         <div className="card-body p-0">
@@ -210,99 +401,136 @@ export default function AdminOrders() {
                   <th className="px-1 py-2 d-none d-md-table-cell">Müşteri</th>
                   <th className="px-1 py-2">Tutar</th>
                   <th className="px-1 py-2">Durum</th>
+                  <th className="px-1 py-2 d-none d-sm-table-cell">Ödeme</th>
                   <th className="px-1 py-2 d-none d-sm-table-cell">Kurye</th>
                   <th className="px-1 py-2">İşlem</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id}>
-                    <td className="px-1 py-2">
-                      <span className="fw-bold">#{order.id}</span>
-                      <br />
-                      <small
-                        className="text-muted d-none d-sm-inline"
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {new Date(order.orderDate).toLocaleDateString("tr-TR")}
-                      </small>
-                    </td>
-                    <td className="px-1 py-2 d-none d-md-table-cell">
-                      <span
-                        className="fw-semibold text-truncate d-block"
-                        style={{ maxWidth: "80px" }}
-                      >
-                        {order.customerName}
-                      </span>
-                    </td>
-                    <td className="px-1 py-2">
-                      <span
-                        className="fw-bold text-success"
-                        style={{ fontSize: "0.7rem" }}
-                      >
-                        {(order.totalAmount ?? 0).toFixed(0)}₺
-                      </span>
-                    </td>
-                    <td className="px-1 py-2">
-                      <span
-                        className={`badge bg-${getStatusColor(order.status)}`}
-                        style={{ fontSize: "0.55rem", padding: "0.2em 0.4em" }}
-                      >
-                        {getStatusText(order.status).substring(0, 6)}
-                      </span>
-                    </td>
-                    <td className="px-1 py-2 d-none d-sm-table-cell">
-                      {order.courierName ? (
-                        <span
-                          className="text-success"
-                          style={{ fontSize: "0.65rem" }}
-                        >
-                          <i className="fas fa-motorcycle me-1"></i>
-                          {order.courierName.split(" ")[0]}
-                        </span>
-                      ) : (
-                        <span
-                          className="text-muted"
-                          style={{ fontSize: "0.6rem" }}
-                        >
-                          -
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-1 py-2">
-                      <div className="d-flex gap-1">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="btn btn-outline-primary p-1"
-                          style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                          title="Detay"
-                        >
-                          <i className="fas fa-eye"></i>
-                        </button>
-                        {order.status === "pending" && (
-                          <button
-                            onClick={() =>
-                              updateOrderStatus(order.id, "preparing")
-                            }
-                            className="btn btn-warning p-1"
-                            style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                          >
-                            <i className="fas fa-clock"></i>
-                          </button>
-                        )}
-                        {order.status === "preparing" && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, "ready")}
-                            className="btn btn-info p-1"
-                            style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                          >
-                            <i className="fas fa-check"></i>
-                          </button>
-                        )}
-                      </div>
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-4 text-muted">
+                      <i className="fas fa-inbox fa-2x mb-2 d-block"></i>
+                      {orders.length === 0
+                        ? "Henüz sipariş bulunmuyor"
+                        : "Filtreye uygun sipariş bulunamadı"}
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredOrders.map((order) => (
+                    <tr key={order.id}>
+                      <td className="px-1 py-2">
+                        <span className="fw-bold">#{order.id}</span>
+                        <br />
+                        <small
+                          className="text-muted d-none d-sm-inline"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {new Date(order.orderDate).toLocaleDateString(
+                            "tr-TR",
+                          )}
+                        </small>
+                      </td>
+                      <td className="px-1 py-2 d-none d-md-table-cell">
+                        <span
+                          className="fw-semibold text-truncate d-block"
+                          style={{ maxWidth: "80px" }}
+                        >
+                          {order.customerName}
+                        </span>
+                      </td>
+                      <td className="px-1 py-2">
+                        <span
+                          className="fw-bold text-success"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {(order.totalAmount ?? 0).toFixed(0)}₺
+                        </span>
+                      </td>
+                      <td className="px-1 py-2">
+                        <span
+                          className={`badge bg-${getStatusColor(order.status)}`}
+                          style={{
+                            fontSize: "0.55rem",
+                            padding: "0.2em 0.4em",
+                          }}
+                        >
+                          {getStatusText(order.status).substring(0, 6)}
+                        </span>
+                      </td>
+                      {/* Ödeme Durumu Sütunu */}
+                      <td className="px-1 py-2 d-none d-sm-table-cell">
+                        {order.paymentStatus === "paid" || order.isPaid ? (
+                          <span
+                            className="badge bg-success"
+                            style={{ fontSize: "0.55rem" }}
+                          >
+                            <i className="fas fa-check me-1"></i>Ödendi
+                          </span>
+                        ) : (
+                          <span
+                            className="badge bg-danger"
+                            style={{ fontSize: "0.55rem" }}
+                          >
+                            <i className="fas fa-clock me-1"></i>Bekliyor
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-1 py-2 d-none d-sm-table-cell">
+                        {order.courierName ? (
+                          <span
+                            className="text-success"
+                            style={{ fontSize: "0.65rem" }}
+                          >
+                            <i className="fas fa-motorcycle me-1"></i>
+                            {order.courierName.split(" ")[0]}
+                          </span>
+                        ) : (
+                          <span
+                            className="text-muted"
+                            style={{ fontSize: "0.6rem" }}
+                          >
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-1 py-2">
+                        <div className="d-flex gap-1">
+                          <button
+                            onClick={() => setSelectedOrder(order)}
+                            className="btn btn-outline-primary p-1"
+                            style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                            title="Detay"
+                          >
+                            <i className="fas fa-eye"></i>
+                          </button>
+                          {order.status === "pending" && (
+                            <button
+                              onClick={() =>
+                                updateOrderStatus(order.id, "preparing")
+                              }
+                              className="btn btn-warning p-1"
+                              style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                            >
+                              <i className="fas fa-clock"></i>
+                            </button>
+                          )}
+                          {order.status === "preparing" && (
+                            <button
+                              onClick={() =>
+                                updateOrderStatus(order.id, "ready")
+                              }
+                              className="btn btn-info p-1"
+                              style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                            >
+                              <i className="fas fa-check"></i>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -353,38 +581,87 @@ export default function AdminOrders() {
                   </div>
                   <div className="col-12 col-md-6">
                     <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      Sipariş
+                      <i className="fas fa-receipt me-1 text-primary"></i>
+                      Sipariş Bilgileri
                     </h6>
                     <p className="mb-1">
                       <strong>Tarih:</strong>{" "}
                       {selectedOrder.orderDate
                         ? new Date(selectedOrder.orderDate).toLocaleDateString(
-                            "tr-TR"
+                            "tr-TR",
                           )
                         : "-"}
                     </p>
                     <p className="mb-1">
                       <strong>Tutar:</strong>{" "}
-                      {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
+                      <span className="text-success fw-bold">
+                        {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
+                      </span>
+                    </p>
+                    {/* Ödeme Yöntemi */}
+                    <p className="mb-1">
+                      <strong>Ödeme:</strong>{" "}
+                      <span
+                        className={`badge ${
+                          selectedOrder.paymentMethod === "cash"
+                            ? "bg-warning text-dark"
+                            : selectedOrder.paymentMethod === "cash_card"
+                              ? "bg-info"
+                              : selectedOrder.paymentMethod === "bank_transfer"
+                                ? "bg-primary"
+                                : selectedOrder.paymentMethod === "card"
+                                  ? "bg-success"
+                                  : "bg-secondary"
+                        }`}
+                        style={{ fontSize: "0.6rem" }}
+                      >
+                        {selectedOrder.paymentMethod === "cash"
+                          ? "💵 Kapıda Nakit"
+                          : selectedOrder.paymentMethod === "cash_card"
+                            ? "💳 Kapıda Kart"
+                            : selectedOrder.paymentMethod === "bank_transfer"
+                              ? "🏦 Havale/EFT"
+                              : selectedOrder.paymentMethod === "card"
+                                ? "💳 Online Kart"
+                                : selectedOrder.paymentMethod ||
+                                  "Belirtilmemiş"}
+                      </span>
                     </p>
                     <p className="mb-1">
                       <strong>Durum:</strong>
                       <span
                         className={`badge bg-${getStatusColor(
-                          selectedOrder.status
+                          selectedOrder.status,
                         )} ms-1`}
                         style={{ fontSize: "0.6rem" }}
                       >
                         {getStatusText(selectedOrder.status)}
                       </span>
                     </p>
+                    {/* Sipariş Numarası varsa göster */}
+                    {selectedOrder.orderNumber && (
+                      <p className="mb-1">
+                        <strong>Sipariş No:</strong>{" "}
+                        <span
+                          className="badge bg-dark"
+                          style={{ fontSize: "0.6rem" }}
+                        >
+                          {selectedOrder.orderNumber}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
+                {/* ================================================================
+                    ÜRÜNLER TABLOSU - VARYANT BİLGİSİ DAHİL
+                    SKU, varyant başlığı varsa gösterilir
+                    ================================================================ */}
                 <h6
                   className="fw-bold mt-2 mb-1"
                   style={{ fontSize: "0.8rem" }}
                 >
+                  <i className="fas fa-box-open me-1 text-primary"></i>
                   Ürünler
                 </h6>
                 <div className="table-responsive">
@@ -392,11 +669,12 @@ export default function AdminOrders() {
                     className="table table-sm mb-0"
                     style={{ fontSize: "0.7rem" }}
                   >
-                    <thead>
+                    <thead className="bg-light">
                       <tr>
                         <th className="px-1">Ürün</th>
-                        <th className="px-1">Adet</th>
-                        <th className="px-1">Fiyat</th>
+                        <th className="px-1 d-none d-sm-table-cell">SKU</th>
+                        <th className="px-1 text-center">Adet</th>
+                        <th className="px-1 text-end">Fiyat</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -405,22 +683,78 @@ export default function AdminOrders() {
                         : []
                       ).map((item, index) => (
                         <tr key={index}>
-                          <td
-                            className="px-1 text-truncate"
-                            style={{ maxWidth: "100px" }}
-                          >
-                            {item.name}
-                          </td>
-                          <td className="px-1">{item.quantity}</td>
                           <td className="px-1">
-                            {((item.quantity ?? 0) * (item.price ?? 0)).toFixed(
-                              0
+                            <div className="d-flex flex-column">
+                              <span
+                                className="text-truncate fw-semibold"
+                                style={{ maxWidth: "120px" }}
+                              >
+                                {item.name || item.productName || "Ürün"}
+                              </span>
+                              {/* Varyant bilgisi varsa göster */}
+                              {item.variantTitle && (
+                                <span
+                                  className="badge mt-1"
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg, #10b981, #059669)",
+                                    color: "white",
+                                    fontSize: "0.55rem",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    width: "fit-content",
+                                  }}
+                                >
+                                  {item.variantTitle}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-1 d-none d-sm-table-cell">
+                            {item.sku ? (
+                              <span
+                                className="badge bg-secondary"
+                                style={{ fontSize: "0.55rem" }}
+                              >
+                                {item.sku}
+                              </span>
+                            ) : (
+                              <span className="text-muted">-</span>
                             )}
-                            ₺
+                          </td>
+                          <td className="px-1 text-center">
+                            <span className="badge bg-primary">
+                              {item.quantity}
+                            </span>
+                          </td>
+                          <td className="px-1 text-end">
+                            <span className="fw-bold text-success">
+                              {(
+                                (item.quantity ?? 0) *
+                                (item.price ?? item.unitPrice ?? 0)
+                              ).toFixed(0)}
+                              ₺
+                            </span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
+                    {/* Toplam satırı */}
+                    <tfoot className="bg-light">
+                      <tr>
+                        <td colSpan="3" className="px-1 text-end fw-bold">
+                          Toplam:
+                        </td>
+                        <td className="px-1 text-end">
+                          <span
+                            className="fw-bold text-success"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
 

@@ -1196,7 +1196,7 @@ const AdminUsers = () => {
             Her rol için hangi modüllere erişim izni olduğunu gösteren tablo
             ("En Az Yetki" prensibi uygulanmıştır):
           </p>
-          <div className="table-responsive">
+          <div className="table-responsive permission-matrix-wrapper">
             <table className="table table-bordered table-hover permission-matrix">
               <thead className="table-dark">
                 <tr>

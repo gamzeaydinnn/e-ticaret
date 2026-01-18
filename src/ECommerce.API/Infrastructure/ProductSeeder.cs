@@ -15,20 +15,18 @@ namespace ECommerce.API.Infrastructure
         {
             var dbContext = services.GetRequiredService<ECommerceDbContext>();
 
-            // Eğer doğru kategoriler ve ürünler varsa çıkış yap
-            var existingCategories = await dbContext.Categories.ToListAsync();
-            var hasCorrectCategories = existingCategories.Any(c => c.Slug == "et-ve-et-urunleri" || c.Slug == "meyve-ve-sebze");
+            // ⚠️ GÜVENLİK: Veritabanında HERHANGI BİR kategori veya ürün varsa ASLA seed yapma!
+            // Bu sayede sunucuya her deploy'da veriler KORUNUR
+            var hasAnyCategory = await dbContext.Categories.AnyAsync();
+            var hasAnyProduct = await dbContext.Products.AnyAsync();
             
-            if (hasCorrectCategories && dbContext.Products.Any())
-                return;
-
-            // Yanlış kategorileri ve ürünleri temizle
-            if (!hasCorrectCategories)
+            if (hasAnyCategory || hasAnyProduct)
             {
-                dbContext.Products.RemoveRange(dbContext.Products);
-                dbContext.Categories.RemoveRange(dbContext.Categories);
-                await dbContext.SaveChangesAsync();
+                Console.WriteLine("ℹ️ ProductSeeder: Veritabanında mevcut veriler var, seed ATLANILIYOR (veriler KORUNUYOR)");
+                return;
             }
+
+            Console.WriteLine("🆕 ProductSeeder: Veritabanı boş, varsayılan veriler ekleniyor...");
 
             // Kategorileri ekle
             var categories = new List<Category>

@@ -344,6 +344,25 @@ builder.Services.AddScoped<ICampaignService, CampaignManager>();
 builder.Services.AddScoped<IAdminLogService, LogManager>();
 builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 
+// =============================================
+// XML/Variant Sistemi - Repository ve Service Kayıtları
+// =============================================
+
+// ProductVariant & Option Repositories
+builder.Services.AddScoped<IProductVariantRepository, ProductVariantRepository>();
+builder.Services.AddScoped<IProductOptionRepository, ProductOptionRepository>();
+builder.Services.AddScoped<IXmlFeedSourceRepository, XmlFeedSourceRepository>();
+
+// ProductVariant & Option Services
+builder.Services.AddScoped<IProductVariantService, ProductVariantManager>();
+builder.Services.AddScoped<IProductOptionService, ProductOptionManager>();
+
+// XML Feed & Import Services  
+builder.Services.AddScoped<IXmlFeedSourceService, XmlFeedSourceManager>();
+builder.Services.AddScoped<IXmlImportService, XmlImportManager>();
+
+// =============================================
+
 // vs.
 
 // Stock sync job as hosted service and injectable singleton
@@ -534,21 +553,21 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("✅ Database migrations uygulandı");
         Console.WriteLine("✅ Database migrations uygulandı");
 
-        logger.LogInformation("🔍 IdentitySeeder başlatılıyor...");
-        Console.WriteLine("🔍 IdentitySeeder başlatılıyor...");
+        logger.LogInformation("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
+        Console.WriteLine("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
         logger.LogInformation("✅ IdentitySeeder tamamlandı");
         Console.WriteLine("✅ IdentitySeeder tamamlandı");
         
-        logger.LogInformation("🔍 ProductSeeder başlatılıyor...");
-        Console.WriteLine("🔍 ProductSeeder başlatılıyor...");
+        logger.LogInformation("🔍 ProductSeeder başlatılıyor (sadece DB boşsa çalışır)...");
+        Console.WriteLine("🔍 ProductSeeder başlatılıyor (sadece DB boşsa çalışır)...");
         ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
         logger.LogInformation("✅ ProductSeeder tamamlandı");
         Console.WriteLine("✅ ProductSeeder tamamlandı");
         
-        // Banner seed - varsayılan ana sayfa görselleri
-        logger.LogInformation("🖼️ BannerSeeder başlatılıyor...");
-        Console.WriteLine("🖼️ BannerSeeder başlatılıyor...");
+        // Banner seed - varsayılan ana sayfa görselleri (sadece DB boşsa)
+        logger.LogInformation("🖼️ BannerSeeder başlatılıyor (sadece DB boşsa çalışır)...");
+        Console.WriteLine("🖼️ BannerSeeder başlatılıyor (sadece DB boşsa çalışır)...");
         BannerSeeder.SeedAsync(services).GetAwaiter().GetResult();
         logger.LogInformation("✅ BannerSeeder tamamlandı");
         Console.WriteLine("✅ BannerSeeder tamamlandı");

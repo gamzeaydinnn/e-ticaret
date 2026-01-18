@@ -39,6 +39,12 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<Favorite> Favorites { get; set; } = new HashSet<Favorite>();
         public virtual ICollection<ProductImage> ProductImages { get; set; } = new HashSet<ProductImage>();
         public virtual ICollection<StockReservation> StockReservations { get; set; } = new HashSet<StockReservation>();
+        
+        /// <summary>
+        /// Ürüne özel kuponlar - Many-to-many ilişki
+        /// Bu ürünün geçerli olduğu kuponları listeler
+        /// </summary>
+        public virtual ICollection<CouponProduct> CouponProducts { get; set; } = new HashSet<CouponProduct>();
     }
 
 }

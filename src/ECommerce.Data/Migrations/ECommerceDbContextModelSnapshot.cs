@@ -377,6 +377,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("ProductId1")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ProductVariantId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -395,10 +398,13 @@ namespace ECommerce.Data.Migrations
 
                     b.HasIndex("ProductId1");
 
+                    b.HasIndex("ProductVariantId");
+
                     b.HasIndex("UserId1");
 
-                    b.HasIndex("UserId", "ProductId")
-                        .IsUnique();
+                    b.HasIndex("UserId", "ProductId", "ProductVariantId")
+                        .IsUnique()
+                        .HasFilter("[ProductVariantId] IS NOT NULL");
 
                     b.ToTable("CartItems", (string)null);
                 });
@@ -485,15 +491,32 @@ namespace ECommerce.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BuyXPayY")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Code")
                         .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ConditionsJson")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("ExpirationDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("IncludeSubCategories")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -501,12 +524,38 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsPercentage")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSingleUse")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaxDiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("MaxUsagePerUser")
+                        .HasColumnType("int");
+
                     b.Property<decimal?>("MinOrderAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("UsageCount")
+                        .HasColumnType("int");
 
                     b.Property<int>("UsageLimit")
                         .HasColumnType("int");
@@ -517,7 +566,108 @@ namespace ECommerce.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
                     b.ToTable("Coupons");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CouponProduct", b =>
+                {
+                    b.Property<int>("CouponId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("CustomDiscountValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("CouponId", "ProductId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("CouponProducts", (string)null);
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CouponUsage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CouponCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("CouponId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CouponType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DiscountApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("OrderTotalAfterDiscount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("OrderTotalBeforeDiscount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("UsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CouponId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("CouponId", "UserId");
+
+                    b.ToTable("CouponUsages", (string)null);
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Courier", b =>
@@ -1027,6 +1177,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ProductVariantId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -1037,11 +1190,21 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("VariantSku")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("VariantTitle")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OrderId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductVariantId");
 
                     b.ToTable("OrderItems", (string)null);
                 });
@@ -1303,6 +1466,85 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("ProductImages");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOption", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductOptions_Name");
+
+                    b.ToTable("ProductOptions", (string)null);
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOptionValue", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColorCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OptionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OptionId", "Value")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductOptionValues_OptionId_Value");
+
+                    b.ToTable("ProductOptionValues", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.ProductReview", b =>
                 {
                     b.Property<int>("Id")
@@ -1358,11 +1600,32 @@ namespace ECommerce.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("TRY");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastSyncedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ParentSku")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal>("Price")
                         .HasPrecision(18, 2)
@@ -1373,23 +1636,51 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<string>("SKU")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<int>("Stock")
                         .HasColumnType("int");
 
+                    b.Property<string>("SupplierCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("VolumeML")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("WeightGrams")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .HasDatabaseName("IX_ProductVariants_Barcode");
+
+                    b.HasIndex("LastSeenAt")
+                        .HasDatabaseName("IX_ProductVariants_LastSeenAt");
+
+                    b.HasIndex("ParentSku")
+                        .HasDatabaseName("IX_ProductVariants_ParentSku");
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("ProductVariants");
+                    b.HasIndex("SKU")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductVariants_SKU");
+
+                    b.HasIndex("SupplierCode")
+                        .HasDatabaseName("IX_ProductVariants_SupplierCode");
+
+                    b.ToTable("ProductVariants", (string)null);
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.ReconciliationLog", b =>
@@ -1871,6 +2162,29 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.VariantOptionValue", b =>
+                {
+                    b.Property<int>("VariantId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OptionValueId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ProductOptionValueId")
+                        .HasColumnType("int");
+
+                    b.HasKey("VariantId", "OptionValueId");
+
+                    b.HasIndex("OptionValueId");
+
+                    b.HasIndex("ProductOptionValueId");
+
+                    b.ToTable("VariantOptionValues", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.WeightReport", b =>
                 {
                     b.Property<int>("Id")
@@ -1962,6 +2276,96 @@ namespace ECommerce.Data.Migrations
                     b.HasIndex("Status");
 
                     b.ToTable("WeightReports", (string)null);
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.XmlFeedSource", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthPassword")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("AuthType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("AuthUsername")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("AutoSyncEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("LastSyncCreatedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LastSyncError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("LastSyncFailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool?>("LastSyncSuccess")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LastSyncUpdatedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MappingConfig")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("NextSyncAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("SupplierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("SyncIntervalMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TotalSyncCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("IX_XmlFeedSources_Name");
+
+                    b.ToTable("XmlFeedSources", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<int>", b =>
@@ -2157,6 +2561,11 @@ namespace ECommerce.Data.Migrations
                         .WithMany("CartItems")
                         .HasForeignKey("ProductId1");
 
+                    b.HasOne("ECommerce.Entities.Concrete.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("ECommerce.Entities.Concrete.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -2168,6 +2577,8 @@ namespace ECommerce.Data.Migrations
                         .HasForeignKey("UserId1");
 
                     b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
 
                     b.Navigation("User");
                 });
@@ -2184,6 +2595,61 @@ namespace ECommerce.Data.Migrations
                         .HasForeignKey("ProductId");
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.Coupon", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CouponProduct", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Coupon", "Coupon")
+                        .WithMany("CouponProducts")
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
+                        .WithMany("CouponProducts")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Coupon");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CouponUsage", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Coupon", "Coupon")
+                        .WithMany("CouponUsages")
+                        .HasForeignKey("CouponId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany("CouponUsages")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Coupon");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Courier", b =>
@@ -2278,9 +2744,16 @@ namespace ECommerce.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ECommerce.Entities.Concrete.ProductVariant", "ProductVariant")
+                        .WithMany()
+                        .HasForeignKey("ProductVariantId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+
+                    b.Navigation("ProductVariant");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.OrderStatusHistory", b =>
@@ -2321,6 +2794,17 @@ namespace ECommerce.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOptionValue", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.ProductOption", "Option")
+                        .WithMany("OptionValues")
+                        .HasForeignKey("OptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Option");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.ProductReview", b =>
@@ -2429,6 +2913,29 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("ProductVariant");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.VariantOptionValue", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.ProductOptionValue", "OptionValue")
+                        .WithMany()
+                        .HasForeignKey("OptionValueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.ProductOptionValue", null)
+                        .WithMany("VariantOptionValues")
+                        .HasForeignKey("ProductOptionValueId");
+
+                    b.HasOne("ECommerce.Entities.Concrete.ProductVariant", "Variant")
+                        .WithMany("VariantOptionValues")
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OptionValue");
+
+                    b.Navigation("Variant");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.WeightReport", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.User", "ApprovedBy")
@@ -2524,6 +3031,13 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("SubCategories");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.Coupon", b =>
+                {
+                    b.Navigation("CouponProducts");
+
+                    b.Navigation("CouponUsages");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.Courier", b =>
                 {
                     b.Navigation("AssignedOrders");
@@ -2536,6 +3050,8 @@ namespace ECommerce.Data.Migrations
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Order", b =>
                 {
+                    b.Navigation("CouponUsages");
+
                     b.Navigation("OrderItems");
 
                     b.Navigation("OrderStatusHistories");
@@ -2561,6 +3077,8 @@ namespace ECommerce.Data.Migrations
 
                     b.Navigation("Categories");
 
+                    b.Navigation("CouponProducts");
+
                     b.Navigation("Favorites");
 
                     b.Navigation("OrderItems");
@@ -2574,9 +3092,21 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("StockReservations");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOption", b =>
+                {
+                    b.Navigation("OptionValues");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOptionValue", b =>
+                {
+                    b.Navigation("VariantOptionValues");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.ProductVariant", b =>
                 {
                     b.Navigation("Stocks");
+
+                    b.Navigation("VariantOptionValues");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.User", b =>

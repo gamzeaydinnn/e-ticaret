@@ -1,6 +1,6 @@
 import api from "./api";
 
-const base = "/cartitems";
+const base = "/api/cartitems";
 
 export const CartService = {
   // Sepet öğelerini getir
@@ -98,6 +98,110 @@ export const CartService = {
     localStorage.setItem("shippingMethod", method);
   },
 
-  previewPrice: (payload) =>
-    api.post("/cartitems/price-preview", payload).then((res) => res.data),
+  previewPrice: (payload) => api.post(`${base}/price-preview`, payload),
+
+  // ========================================
+  // KUPON İŞLEMLERİ
+  // ========================================
+  
+  /**
+   * Kupon kodunu kontrol et (basit doğrulama)
+   * @param {string} code - Kupon kodu
+   * @returns {Promise<{isValid: boolean, message: string, coupon?: object}>}
+   */
+  checkCoupon: async (code) => {
+    try {
+      const response = await api.get(
+        `/api/coupon/check/${encodeURIComponent(code)}`
+      );
+      return response;
+    } catch (error) {
+      const errorData = error?.raw?.response?.data || error?.response?.data;
+      if (errorData) {
+        return errorData;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Kupon kodunu sepet detaylarıyla doğrula ve indirim hesapla
+   * @param {string} couponCode - Kupon kodu
+   * @param {Array} cartItems - Sepet ürünleri [{productId, quantity, unitPrice}]
+   * @param {number} subtotal - Ara toplam
+   * @returns {Promise<CouponValidationResult>}
+   */
+  validateCoupon: async (couponCode, cartItems, subtotal, shippingCost = 0) => {
+    try {
+      const normalizedItems = Array.isArray(cartItems) ? cartItems : [];
+      const productIds = [];
+      const categoryIds = [];
+      const productQuantities = {};
+
+      normalizedItems.forEach((item) => {
+        const productId = item.productId || item.id;
+        const categoryId =
+          item.categoryId || item?.product?.categoryId || item?.product?.category?.id;
+
+        if (productId != null) {
+          productIds.push(productId);
+          productQuantities[productId] =
+            (productQuantities[productId] || 0) + (item.quantity || 0);
+        }
+
+        if (categoryId != null) {
+          categoryIds.push(categoryId);
+        }
+      });
+
+      const payload = {
+        couponCode,
+        cartTotal: Number.isFinite(subtotal) ? subtotal : 0,
+        shippingCost: Number.isFinite(shippingCost) ? shippingCost : 0,
+        productIds: [...new Set(productIds)],
+        categoryIds: [...new Set(categoryIds)],
+        productQuantities,
+      };
+      const response = await api.post("/api/coupon/validate", payload);
+      return response;
+    } catch (error) {
+      const errorData = error?.raw?.response?.data || error?.response?.data;
+      if (errorData) {
+        return errorData;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Aktif kuponları getir
+   * @returns {Promise<Array>}
+   */
+  getActiveCoupons: async () => {
+    try {
+      const response = await api.get("/api/coupon/active");
+      return response;
+    } catch (error) {
+      console.error("Aktif kuponlar alınamadı:", error);
+      return [];
+    }
+  },
+
+  // Uygulanan kupon bilgisini localStorage'da sakla
+  getAppliedCoupon: () => {
+    const coupon = localStorage.getItem("appliedCoupon");
+    return coupon ? JSON.parse(coupon) : null;
+  },
+
+  setAppliedCoupon: (couponData) => {
+    if (couponData) {
+      localStorage.setItem("appliedCoupon", JSON.stringify(couponData));
+    } else {
+      localStorage.removeItem("appliedCoupon");
+    }
+  },
+
+  clearAppliedCoupon: () => {
+    localStorage.removeItem("appliedCoupon");
+  }
 };

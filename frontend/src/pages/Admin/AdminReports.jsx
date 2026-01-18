@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AdminService } from "../../services/adminService";
+import "../../styles/adminReports.css";
 
 export default function AdminReports() {
   const [lowStock, setLowStock] = useState({ threshold: 0, products: [] });
@@ -20,6 +21,20 @@ export default function AdminReports() {
   const [erp, setErp] = useState({ groups: [] });
   const [loadingErp, setLoadingErp] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+
+  const periodLabel = useMemo(
+    () => ({
+      daily: "Günlük",
+      weekly: "Haftalık",
+      monthly: "Aylık",
+    }),
+    []
+  );
+
+  const showError = (message) => {
+    setErrorMsg(message);
+    setTimeout(() => setErrorMsg(""), 3500);
+  };
 
   useEffect(() => {
     loadLowStock();
@@ -57,10 +72,10 @@ export default function AdminReports() {
     }
   }
 
-  async function loadSales() {
+  async function loadSales(period = salesPeriod) {
     try {
       setLoadingSales(true);
-      const data = await AdminService.getSalesReport(salesPeriod);
+      const data = await AdminService.getSalesReport(period);
       setSales(data);
     } catch (e) {
       console.error("Sales report error:", e);
@@ -85,85 +100,192 @@ export default function AdminReports() {
     }
   }
 
+  const handleExportSales = () => {
+    if (!sales) {
+      showError("Satış özeti için veri bulunamadı.");
+      return;
+    }
+    const topProducts = sales.topProducts?.length
+      ? sales.topProducts.map((p) => `#${p.productId} (${p.quantity})`).join(", ")
+      : "-";
+    const rows = [
+      [
+        periodLabel[salesPeriod] || salesPeriod,
+        sales.ordersCount ?? 0,
+        sales.revenue ?? 0,
+        sales.itemsSold ?? 0,
+        topProducts,
+      ],
+    ];
+    downloadCsv(
+      `satis-ozeti-${salesPeriod}-${isoDate(new Date())}.csv`,
+      ["Dönem", "Sipariş", "Gelir", "Adet", "En Çok Satanlar"],
+      rows
+    );
+  };
+
+  const handleExportErp = () => {
+    if (!erp.groups?.length) {
+      showError("ERP senkron verisi bulunamadı.");
+      return;
+    }
+    const rows = erp.groups.map((g) => [
+      g.entity || "-",
+      g.direction || "-",
+      g.lastStatus || "-",
+      formatDate(g.lastAttemptAt),
+      formatDate(g.lastSuccessAt),
+      g.lastMessage || "-",
+      g.lastError || "-",
+      g.updatedCount ?? "-",
+      g.totalAttempts ?? "-",
+      g.recentCount ?? "-",
+    ]);
+    downloadCsv(
+      `erp-senkron-${isoDate(new Date())}.csv`,
+      [
+        "Varlık",
+        "Yön",
+        "Durum",
+        "Son Deneme",
+        "Son Başarılı",
+        "Mesaj",
+        "Hata",
+        "Güncellenen",
+        "Toplam Deneme",
+        "Kayıt",
+      ],
+      rows
+    );
+  };
+
+  const handleExportLowStock = () => {
+    if (!lowStock.products?.length) {
+      showError("Düşük stok verisi bulunamadı.");
+      return;
+    }
+    const rows = lowStock.products.map((p) => [
+      p.id ?? "-",
+      p.name || "-",
+      p.stockQuantity ?? 0,
+    ]);
+    downloadCsv(
+      `dusuk-stok-${isoDate(new Date())}.csv`,
+      ["ID", "Ürün", "Stok"],
+      rows
+    );
+  };
+
+  const handleExportMovements = () => {
+    if (!movements.movements?.length) {
+      showError("Stok hareketi verisi bulunamadı.");
+      return;
+    }
+    const rows = movements.movements.map((m) => [
+      formatDate(m.createdAt),
+      m.productId ?? "-",
+      m.productName || "-",
+      m.changeQuantity ?? 0,
+      m.changeType || "-",
+      m.oldStock ?? "-",
+      m.newStock ?? "-",
+      m.referenceId ?? "-",
+    ]);
+    downloadCsv(
+      `stok-hareketleri-${isoDate(new Date())}.csv`,
+      [
+        "Tarih",
+        "Ürün ID",
+        "Ürün",
+        "Miktar",
+        "Tür",
+        "Eski Stok",
+        "Yeni Stok",
+        "Referans",
+      ],
+      rows
+    );
+  };
+
   return (
-    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 px-1">
-        <h5 className="fw-bold mb-0" style={{ fontSize: "1rem" }}>
-          <i className="fas fa-chart-bar me-2" style={{ color: "#f97316" }}></i>
-          Raporlar
-        </h5>
+    <div className="admin-reports">
+      <div className="reports-header">
+        <div>
+          <h4 className="reports-title">
+            <span className="reports-title__icon">
+              <i className="fas fa-chart-bar"></i>
+            </span>
+            Raporlar
+          </h4>
+          <p className="reports-subtitle">
+            Satış, stok ve ERP süreçlerini tek ekranda izleyin.
+          </p>
+        </div>
       </div>
       {errorMsg && (
-        <div
-          className="alert alert-danger py-2 mx-1"
-          style={{ fontSize: "0.75rem" }}
-        >
+        <div className="alert alert-danger py-2 px-3 reports-alert">
           {errorMsg}
         </div>
       )}
 
       {/* Sales Summary */}
-      <div
-        className="card border-0 shadow-sm mb-3 mx-1"
-        style={{ borderRadius: "8px" }}
-      >
-        <div className="card-header bg-white py-2 px-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
-          <span style={{ fontSize: "0.8rem" }}>
-            <i className="fas fa-chart-line me-1 text-warning"></i>Satış Özeti
-          </span>
-          <select
-            className="form-select form-select-sm"
-            style={{
-              width: "auto",
-              fontSize: "0.7rem",
-              padding: "0.2rem 0.5rem",
-            }}
-            value={salesPeriod}
-            onChange={(e) => {
-              setSalesPeriod(e.target.value);
-              loadSales();
-            }}
-          >
-            <option value="daily">Günlük</option>
-            <option value="weekly">Haftalık</option>
-            <option value="monthly">Aylık</option>
-          </select>
+      <div className="card report-card report-card--summary">
+        <div className="report-card__header">
+          <div className="report-card__title">
+            <i className="fas fa-chart-line text-warning"></i>
+            <span>Satış Özeti</span>
+          </div>
+          <div className="report-card__actions">
+            <select
+              className="form-select form-select-sm report-select"
+              value={salesPeriod}
+              onChange={(e) => {
+                const nextPeriod = e.target.value;
+                setSalesPeriod(nextPeriod);
+                loadSales(nextPeriod);
+              }}
+            >
+              <option value="daily">Günlük</option>
+              <option value="weekly">Haftalık</option>
+              <option value="monthly">Aylık</option>
+            </select>
+            <button
+              className="btn btn-sm btn-outline-dark report-button"
+              onClick={handleExportSales}
+            >
+              Excel indir
+            </button>
+          </div>
         </div>
-        <div className="card-body p-2">
+        <div className="card-body report-card__body">
           {loadingSales ? (
             <div className="text-muted small">Yükleniyor...</div>
           ) : sales ? (
-            <div className="row g-2 text-center">
-              <div className="col-6 col-md-3">
-                <div className="fw-bold" style={{ fontSize: "0.7rem" }}>
-                  Sipariş
-                </div>
-                <div style={{ fontSize: "0.85rem" }}>{sales.ordersCount}</div>
+            <div className="report-metrics">
+              <div className="report-metric">
+                <span className="report-metric__label">Sipariş</span>
+                <span className="report-metric__value">
+                  {sales.ordersCount}
+                </span>
               </div>
-              <div className="col-6 col-md-3">
-                <div className="fw-bold" style={{ fontSize: "0.7rem" }}>
-                  Gelir
-                </div>
-                <div style={{ fontSize: "0.85rem" }}>
+              <div className="report-metric">
+                <span className="report-metric__label">Gelir</span>
+                <span className="report-metric__value">
                   ₺{Number(sales.revenue || 0).toLocaleString("tr-TR")}
-                </div>
+                </span>
               </div>
-              <div className="col-6 col-md-3">
-                <div className="fw-bold" style={{ fontSize: "0.7rem" }}>
-                  Adet
-                </div>
-                <div style={{ fontSize: "0.85rem" }}>{sales.itemsSold}</div>
+              <div className="report-metric">
+                <span className="report-metric__label">Adet</span>
+                <span className="report-metric__value">{sales.itemsSold}</span>
               </div>
-              <div className="col-6 col-md-3">
-                <div className="fw-bold" style={{ fontSize: "0.7rem" }}>
-                  En Çok
-                </div>
-                <div className="text-truncate" style={{ fontSize: "0.75rem" }}>
+              <div className="report-metric">
+                <span className="report-metric__label">En Çok</span>
+                <span className="report-metric__value report-metric__value--muted">
                   {sales.topProducts
                     ?.slice(0, 2)
                     .map((p) => `#${p.productId}`)
                     .join(", ") || "-"}
-                </div>
+                </span>
               </div>
             </div>
           ) : (
@@ -173,54 +295,48 @@ export default function AdminReports() {
       </div>
 
       {/* ERP Sync Status */}
-      <div
-        className="card border-0 shadow-sm mb-3 mx-1"
-        style={{ borderRadius: "8px" }}
-      >
-        <div className="card-header bg-white py-2 px-2 d-flex flex-wrap align-items-center justify-content-between gap-1">
-          <span style={{ fontSize: "0.8rem" }}>
-            <i className="fas fa-sync-alt me-1 text-primary"></i>ERP Senkron
-          </span>
-          <div className="d-flex gap-1 flex-wrap">
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{
-                fontSize: "0.65rem",
-                padding: "0.15rem 0.3rem",
-                width: "100px",
-              }}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
-            <input
-              type="date"
-              className="form-control form-control-sm"
-              style={{
-                fontSize: "0.65rem",
-                padding: "0.15rem 0.3rem",
-                width: "100px",
-              }}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
+      <div className="card report-card">
+        <div className="report-card__header">
+          <div className="report-card__title">
+            <i className="fas fa-sync-alt text-primary"></i>
+            <span>ERP Senkron</span>
+          </div>
+          <div className="report-card__actions report-card__actions--dense">
+            <div className="report-date">
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
             <button
-              className="btn btn-sm btn-outline-secondary px-2 py-0"
-              style={{ fontSize: "0.65rem" }}
+              className="btn btn-sm btn-outline-secondary report-button"
               onClick={loadErp}
             >
-              Git
+              Güncelle
+            </button>
+            <button
+              className="btn btn-sm btn-outline-dark report-button"
+              onClick={handleExportErp}
+            >
+              Excel indir
             </button>
           </div>
         </div>
-        <div className="card-body p-2">
+        <div className="card-body report-card__body">
           {loadingErp ? (
             <div className="text-muted small">Yükleniyor...</div>
           ) : erp.groups?.length ? (
             <div className="table-responsive">
               <table
-                className="table table-sm mb-0"
-                style={{ fontSize: "0.65rem" }}
+                className="table table-sm mb-0 report-table"
               >
                 <thead>
                   <tr>
@@ -272,33 +388,36 @@ export default function AdminReports() {
         </div>
       </div>
 
-      <div className="row g-2 mx-0">
+      <div className="row g-2">
         {/* Low Stock */}
         <div className="col-12 col-lg-6">
-          <div
-            className="card border-0 shadow-sm h-100"
-            style={{ borderRadius: "8px" }}
-          >
-            <div className="card-header bg-white py-2 px-2 d-flex justify-content-between align-items-center">
-              <span style={{ fontSize: "0.8rem" }}>
-                <i className="fas fa-exclamation-triangle me-1 text-danger"></i>
-                Düşük Stok
-                <small
-                  className="text-muted ms-1"
-                  style={{ fontSize: "0.6rem" }}
+          <div className="card report-card report-card--compact h-100">
+            <div className="report-card__header">
+              <div className="report-card__title">
+                <i className="fas fa-exclamation-triangle text-danger"></i>
+                <span>
+                  Düşük Stok
+                  <small className="text-muted ms-1">
+                    (eşik: {lowStock.threshold})
+                  </small>
+                </span>
+              </div>
+              <div className="report-card__actions">
+                <button
+                  className="btn btn-sm btn-outline-secondary report-button"
+                  onClick={loadLowStock}
                 >
-                  (eşik: {lowStock.threshold})
-                </small>
-              </span>
-              <button
-                className="btn btn-sm btn-outline-secondary px-2 py-0"
-                style={{ fontSize: "0.6rem" }}
-                onClick={loadLowStock}
-              >
-                Yenile
-              </button>
+                  Yenile
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-dark report-button"
+                  onClick={handleExportLowStock}
+                >
+                  Excel indir
+                </button>
+              </div>
             </div>
-            <div className="card-body p-2">
+            <div className="card-body report-card__body">
               {loadingLow ? (
                 <div className="text-muted small">Yükleniyor...</div>
               ) : (
@@ -307,8 +426,7 @@ export default function AdminReports() {
                   style={{ maxHeight: "200px" }}
                 >
                   <table
-                    className="table table-sm mb-0"
-                    style={{ fontSize: "0.65rem" }}
+                    className="table table-sm mb-0 report-table"
                   >
                     <thead>
                       <tr>
@@ -354,26 +472,30 @@ export default function AdminReports() {
           </div>
         </div>
 
-        {/* Inventory Movements */}
-        <div className="col-12 col-lg-6">
-          <div
-            className="card border-0 shadow-sm h-100"
-            style={{ borderRadius: "8px" }}
-          >
-            <div className="card-header bg-white py-2 px-2 d-flex flex-wrap justify-content-between align-items-center gap-1">
-              <span style={{ fontSize: "0.8rem" }}>
-                <i className="fas fa-exchange-alt me-1 text-info"></i>Stok
-                Hareketleri
-              </span>
-              <button
-                className="btn btn-sm btn-outline-secondary px-2 py-0"
-                style={{ fontSize: "0.6rem" }}
-                onClick={loadMovements}
-              >
-                Yenile
-              </button>
+      {/* Inventory Movements */}
+      <div className="col-12 col-lg-6">
+          <div className="card report-card report-card--compact h-100">
+            <div className="report-card__header">
+              <div className="report-card__title">
+                <i className="fas fa-exchange-alt text-info"></i>
+                <span>Stok Hareketleri</span>
+              </div>
+              <div className="report-card__actions">
+                <button
+                  className="btn btn-sm btn-outline-secondary report-button"
+                  onClick={loadMovements}
+                >
+                  Yenile
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-dark report-button"
+                  onClick={handleExportMovements}
+                >
+                  Excel indir
+                </button>
+              </div>
             </div>
-            <div className="card-body p-2">
+            <div className="card-body report-card__body">
               {loadingMov ? (
                 <div className="text-muted small">Yükleniyor...</div>
               ) : (
@@ -382,8 +504,7 @@ export default function AdminReports() {
                   style={{ maxHeight: "200px" }}
                 >
                   <table
-                    className="table table-sm mb-0"
-                    style={{ fontSize: "0.65rem" }}
+                    className="table table-sm mb-0 report-table"
                   >
                     <thead>
                       <tr>
@@ -406,7 +527,9 @@ export default function AdminReports() {
                               className="px-1 text-truncate"
                               style={{ maxWidth: "80px" }}
                             >
-                              #{m.productId}
+                              {m.productName
+                                ? `${m.productName} (#${m.productId})`
+                                : `#${m.productId}`}
                             </td>
                             <td
                               className={`px-1 ${
@@ -446,4 +569,36 @@ function isoDate(d) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("tr-TR");
+}
+
+function downloadCsv(filename, headers, rows) {
+  const escapeCsv = (value) => {
+    const normalized = value == null ? "" : String(value);
+    if (/[\";\n]/.test(normalized)) {
+      return `"${normalized.replace(/"/g, '""')}"`;
+    }
+    return normalized;
+  };
+
+  const lines = [
+    headers.map(escapeCsv).join(";"),
+    ...rows.map((row) => row.map(escapeCsv).join(";")),
+  ];
+  const csvContent = `\ufeff${lines.join("\n")}`;
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

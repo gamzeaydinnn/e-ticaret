@@ -1,0 +1,384 @@
+/* ==========================================================================
+   ToastContainer.css - Toast Bildirimleri Stilleri
+   ==========================================================================
+   Mobil uyumlu, animasyonlu toast bildirimleri için stiller.
+   Swipe gesture desteği, tip bazlı renklendirme ve erişilebilirlik.
+   ========================================================================== */
+
+/* Toast Container */
+.toast-container {
+  position: fixed;
+  top: 80px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 400px;
+  width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+/* Toast Item */
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border-left: 4px solid #007bff;
+  pointer-events: auto;
+  animation: toastSlideIn 0.3s ease-out;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Toast Tipleri */
+.toast-item.toast-success {
+  border-left-color: #28a745;
+  background: linear-gradient(to right, rgba(40, 167, 69, 0.05), #fff);
+}
+
+.toast-item.toast-error {
+  border-left-color: #dc3545;
+  background: linear-gradient(to right, rgba(220, 53, 69, 0.05), #fff);
+}
+
+.toast-item.toast-warning {
+  border-left-color: #ffc107;
+  background: linear-gradient(to right, rgba(255, 193, 7, 0.05), #fff);
+}
+
+.toast-item.toast-info {
+  border-left-color: #007bff;
+  background: linear-gradient(to right, rgba(0, 123, 255, 0.05), #fff);
+}
+
+/* Toast İkon */
+.toast-icon {
+  flex-shrink: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Toast İçerik */
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-title {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.4;
+}
+
+.toast-message {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+/* Toast Action Button */
+.toast-action-btn {
+  margin-top: 10px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #007bff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toast-action-btn:hover {
+  background: #0056b3;
+}
+
+.toast-success .toast-action-btn {
+  background: #28a745;
+}
+
+.toast-success .toast-action-btn:hover {
+  background: #1e7e34;
+}
+
+.toast-error .toast-action-btn {
+  background: #dc3545;
+}
+
+.toast-error .toast-action-btn:hover {
+  background: #c82333;
+}
+
+/* Toast Kapatma Butonu */
+.toast-close-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1;
+  color: #999;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toast-close-btn:hover {
+  color: #333;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.toast-close-btn:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+/* Toast Progress Bar */
+.toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(
+    to right,
+    rgba(0, 123, 255, 0.3),
+    rgba(0, 123, 255, 0.1)
+  );
+  animation: toastProgress 5s linear forwards;
+}
+
+.toast-success .toast-progress {
+  background: linear-gradient(
+    to right,
+    rgba(40, 167, 69, 0.3),
+    rgba(40, 167, 69, 0.1)
+  );
+}
+
+.toast-error .toast-progress {
+  background: linear-gradient(
+    to right,
+    rgba(220, 53, 69, 0.3),
+    rgba(220, 53, 69, 0.1)
+  );
+}
+
+.toast-warning .toast-progress {
+  background: linear-gradient(
+    to right,
+    rgba(255, 193, 7, 0.3),
+    rgba(255, 193, 7, 0.1)
+  );
+}
+
+@keyframes toastProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+/* Swipe Indicator */
+.toast-item::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  width: 16px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 2px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.toast-item:active::after {
+  opacity: 1;
+}
+
+/* ==================== Responsive (Mobil Uyumlu) ==================== */
+
+/* Tablet */
+@media (max-width: 768px) {
+  .toast-container {
+    top: 70px;
+    right: 12px;
+    max-width: 360px;
+    width: calc(100vw - 24px);
+  }
+
+  .toast-item {
+    padding: 14px;
+  }
+}
+
+/* Mobil */
+@media (max-width: 576px) {
+  .toast-container {
+    top: auto;
+    bottom: 16px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+  }
+
+  .toast-item {
+    padding: 12px;
+    border-radius: 10px;
+    animation: toastSlideUp 0.3s ease-out;
+  }
+
+  @keyframes toastSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .toast-icon {
+    font-size: 22px;
+  }
+
+  .toast-title {
+    font-size: 13px;
+  }
+
+  .toast-message {
+    font-size: 12px;
+  }
+
+  .toast-close-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 18px;
+  }
+}
+
+/* Küçük Mobil */
+@media (max-width: 375px) {
+  .toast-container {
+    left: 4px;
+    right: 4px;
+    bottom: 12px;
+  }
+
+  .toast-item {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .toast-icon {
+    font-size: 20px;
+  }
+}
+
+/* ==================== Dark Mode ==================== */
+@media (prefers-color-scheme: dark) {
+  .toast-item {
+    background: #2d2d2d;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .toast-item.toast-success {
+    background: linear-gradient(to right, rgba(40, 167, 69, 0.15), #2d2d2d);
+  }
+
+  .toast-item.toast-error {
+    background: linear-gradient(to right, rgba(220, 53, 69, 0.15), #2d2d2d);
+  }
+
+  .toast-item.toast-warning {
+    background: linear-gradient(to right, rgba(255, 193, 7, 0.15), #2d2d2d);
+  }
+
+  .toast-item.toast-info {
+    background: linear-gradient(to right, rgba(0, 123, 255, 0.15), #2d2d2d);
+  }
+
+  .toast-title {
+    color: #f0f0f0;
+  }
+
+  .toast-message {
+    color: #aaa;
+  }
+
+  .toast-close-btn {
+    color: #888;
+  }
+
+  .toast-close-btn:hover {
+    color: #f0f0f0;
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ==================== Reduced Motion ==================== */
+@media (prefers-reduced-motion: reduce) {
+  .toast-item {
+    animation: none;
+  }
+
+  .toast-progress {
+    animation: none;
+    width: 100%;
+  }
+}
+
+/* ==================== Stacked Toasts ==================== */
+/* 3'ten fazla toast varsa sıkıştır */
+.toast-container:has(.toast-item:nth-child(4)) .toast-item:nth-child(n + 4) {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+
+.toast-container:has(.toast-item:nth-child(5)) .toast-item:nth-child(n + 5) {
+  transform: scale(0.9);
+  opacity: 0.5;
+}
+
+/* Fallback for browsers without :has() support */
+@supports not selector(:has(*)) {
+  .toast-container .toast-item:nth-child(n + 4) {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+}

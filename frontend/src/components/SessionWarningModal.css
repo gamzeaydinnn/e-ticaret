@@ -1,0 +1,195 @@
+/* ============================================================
+   SESSION WARNING MODAL STYLES
+   ============================================================
+   Oturum uyarı modalı için stiller.
+   Modern, dikkat çekici tasarım.
+   ============================================================ */
+
+/* Overlay - Arkaplan karartması */
+.session-warning-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Modal kutusu */
+.session-warning-modal {
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  animation: slideUp 0.4s ease-out;
+}
+
+/* İkon container */
+.session-warning-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  animation: pulse 2s infinite;
+}
+
+.session-warning-icon i {
+  font-size: 36px;
+  color: white;
+}
+
+/* Başlık */
+.session-warning-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+/* Ana mesaj */
+.session-warning-message {
+  font-size: 1rem;
+  color: #4b5563;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+/* Kalan süre vurgusu */
+.session-warning-time {
+  color: #dc2626;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: #fef2f2;
+  padding: 4px 12px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* Alt mesaj */
+.session-warning-submessage {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 24px;
+}
+
+/* Buton container */
+.session-warning-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Ortak buton stili */
+.session-warning-btn {
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+}
+
+/* Oturumu uzat butonu */
+.session-warning-btn.extend {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+}
+
+.session-warning-btn.extend:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+}
+
+/* Çıkış butonu */
+.session-warning-btn.logout {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+}
+
+.session-warning-btn.logout:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+/* Animasyonlar */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 15px rgba(245, 158, 11, 0);
+  }
+}
+
+/* Mobil uyumluluk */
+@media (max-width: 480px) {
+  .session-warning-modal {
+    padding: 24px 20px;
+  }
+
+  .session-warning-icon {
+    width: 64px;
+    height: 64px;
+  }
+
+  .session-warning-icon i {
+    font-size: 28px;
+  }
+
+  .session-warning-title {
+    font-size: 1.25rem;
+  }
+
+  .session-warning-btn {
+    padding: 10px 20px;
+    font-size: 0.875rem;
+    min-width: 130px;
+  }
+}

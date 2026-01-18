@@ -43,7 +43,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const cached = localStorage.getItem("userPermissions");
       if (cached) {
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+        if (Array.isArray(parsed?.permissions)) {
+          return parsed.permissions;
+        }
       }
     } catch (error) {
       console.error("Permission cache okuma hatası:", error);

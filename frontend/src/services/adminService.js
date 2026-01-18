@@ -210,7 +210,7 @@ const clone = (data) => JSON.parse(JSON.stringify(data));
 const ensureBackend = () => {
   if (!isBackendAvailable()) {
     throw new Error(
-      "Backend API devre dışı. Lütfen sunucu bağlantısını kontrol edin."
+      "Backend API devre dışı. Lütfen sunucu bağlantısını kontrol edin.",
     );
   }
 };
@@ -449,6 +449,31 @@ export const AdminService = {
     api.put(`/api/admin/orders/${id}/status`, { status }),
   getRecentOrders: () => api.get("/api/admin/orders/recent"),
 
+  // ============================================================
+  // KURYE ATAMA - Backend'e POST isteği gönderir
+  // ============================================================
+  /**
+   * Siparişe kurye atar.
+   * @param {number} orderId - Sipariş ID
+   * @param {number} courierId - Kurye ID
+   * @returns {Promise<Object>} - Güncellenmiş sipariş bilgisi
+   */
+  assignCourier: async (orderId, courierId) => {
+    ensureBackend();
+    try {
+      const response = await api.post(
+        `/api/admin/orders/${orderId}/assign-courier`,
+        {
+          courierId: courierId,
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error("Kurye atama hatası:", error);
+      throw error;
+    }
+  },
+
   // Reports
   getLowStockProducts: async () => {
     if (shouldUseMockData()) {
@@ -480,7 +505,17 @@ export const AdminService = {
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     const qs = params.length ? `?${params.join("&")}` : "";
     const res = await api.get(`/api/admin/reports/inventory/movements${qs}`);
-    return res;
+    const normalizedMovements = (res?.movements || []).map((movement) => ({
+      ...movement,
+      changeQuantity:
+        movement.changeQuantity ?? movement.quantity ?? movement.Quantity ?? 0,
+      changeType:
+        movement.changeType ?? movement.action ?? movement.Action ?? "-",
+    }));
+    return {
+      ...res,
+      movements: normalizedMovements,
+    };
   },
   getSalesReport: async (period = "daily") => {
     if (shouldUseMockData()) {
@@ -490,7 +525,7 @@ export const AdminService = {
     }
     ensureBackend();
     const res = await api.get(
-      `/api/admin/reports/sales?period=${encodeURIComponent(period)}`
+      `/api/admin/reports/sales?period=${encodeURIComponent(period)}`,
     );
     return res;
   },

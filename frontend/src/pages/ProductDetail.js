@@ -10,6 +10,7 @@ import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
 import getProductCategoryRules from "../config/productCategoryRules";
 import { getVariantsForProduct } from "../utils/variantStore";
+import variantService from "../services/variantService";
 import reviewService from "../services/reviewService";
 import ReviewList from "../components/ReviewList";
 import ReviewForm from "../components/ReviewForm";
@@ -54,8 +55,8 @@ export default function ProductDetail() {
       const revs = Array.isArray(response)
         ? response
         : Array.isArray(response?.items)
-        ? response.items
-        : [];
+          ? response.items
+          : [];
       setReviews(revs);
     } catch (error) {
       console.error("Yorumlar getirilirken hata oluştu:", error);
@@ -86,7 +87,7 @@ export default function ProductDetail() {
         if (!product) return; // guard when product not yet loaded
         let match = (rules || []).find((r) => {
           const examples = (r.examples || []).map((e) =>
-            String(e).toLowerCase()
+            String(e).toLowerCase(),
           );
           const pname = (product.name || "").toLowerCase();
           return (
@@ -136,13 +137,27 @@ export default function ProductDetail() {
           const defaultQ = match.min_quantity || 1;
           setQuantity(defaultQ);
         }
-        // load client-side variants (API not ready yet)
+        // load variants from API (with fallback to client-side variantStore)
         try {
+          // Önce API'den çekmeyi dene
+          const apiVariants = await variantService.getByProduct(product.id);
+          if (apiVariants && apiVariants.length > 0) {
+            setVariants(apiVariants);
+            // Varsayılan varyantı seç (ilk stoklu olanı)
+            const defaultVariant =
+              apiVariants.find((v) => v.stock > 0) || apiVariants[0];
+            setSelectedVariantId(defaultVariant.id);
+          } else {
+            // API'de yoksa local store'a bak (fallback)
+            const v = getVariantsForProduct(product.id);
+            setVariants(v || []);
+            if (v && v.length) setSelectedVariantId(v[0].id);
+          }
+        } catch (e) {
+          // API hatası - local store'a fallback
           const v = getVariantsForProduct(product.id);
           setVariants(v || []);
           if (v && v.length) setSelectedVariantId(v[0].id);
-        } catch (e) {
-          setVariants([]);
         }
       } catch (e) {
         setRule(null);
@@ -163,21 +178,21 @@ export default function ProductDetail() {
         return setValidationError(`Minimum ${min} ${rule.unit} olmalıdır.`);
       if (q > max)
         return setValidationError(
-          `Maksimum ${max} ${rule.unit} ile sınırlıdır.`
+          `Maksimum ${max} ${rule.unit} ile sınırlıdır.`,
         );
       // step validation: allow small float rounding
       const remainder = Math.abs(
-        (q - min) / step - Math.round((q - min) / step)
+        (q - min) / step - Math.round((q - min) / step),
       );
       if (remainder > 1e-6)
         return setValidationError(
-          `Miktar ${step} ${rule.unit} adımlarıyla olmalıdır.`
+          `Miktar ${step} ${rule.unit} adımlarıyla olmalıdır.`,
         );
     } else {
       // default business rule: do not allow >5 units for regular (non-weighted) items
       if (!product.isWeighted && q > 5)
         return setValidationError(
-          "Bu üründen en fazla 5 adet ekleyebilirsiniz."
+          "Bu üründen en fazla 5 adet ekleyebilirsiniz.",
         );
     }
     // pass validation
@@ -286,7 +301,7 @@ export default function ProductDetail() {
             {(() => {
               const basePrice = Number(product.price || 0);
               const special = Number(
-                product.specialPrice ?? product.discountPrice ?? basePrice
+                product.specialPrice ?? product.discountPrice ?? basePrice,
               );
               const hasDiscount =
                 !Number.isNaN(special) && special > 0 && special < basePrice;
@@ -338,37 +353,102 @@ export default function ProductDetail() {
             {variants.length > 0 && (
               <div className="mb-3">
                 <label className="form-label fw-semibold">
-                  <i className="fas fa-boxes me-2 text-warning"></i>Varyant
+                  <i className="fas fa-boxes me-2 text-warning"></i>Seçenek
                 </label>
-                <select
-                  className="form-select"
-                  value={selectedVariantId || ""}
-                  onChange={(e) => {
-                    const vid = e.target.value;
-                    setSelectedVariantId(vid);
-                    const v = variants.find((x) => String(x.id) === String(vid));
-                    if (v) {
-                      if (v.priceAdjustment) {
-                        product.price = (product.price || 0) + (v.priceAdjustment || 0);
+                {/* SKU ve Stok bilgisi */}
+                {selectedVariantId &&
+                  (() => {
+                    const selectedVar = variants.find(
+                      (v) => String(v.id) === String(selectedVariantId),
+                    );
+                    return selectedVar ? (
+                      <div className="d-flex gap-2 mb-2 flex-wrap">
+                        <small className="badge bg-secondary">
+                          SKU: {selectedVar.sku}
+                        </small>
+                        <small
+                          className={`badge ${selectedVar.stock > 0 ? "bg-success" : "bg-danger"}`}
+                        >
+                          Stok: {selectedVar.stock}
+                        </small>
+                        {selectedVar.barcode && (
+                          <small className="badge bg-info">
+                            Barkod: {selectedVar.barcode}
+                          </small>
+                        )}
+                      </div>
+                    ) : null;
+                  })()}
+                {/* Varyant butonları veya dropdown */}
+                {variants.length <= 5 ? (
+                  <div className="d-flex gap-2 flex-wrap">
+                    {variants.map((v) => {
+                      const isSelected =
+                        String(v.id) === String(selectedVariantId);
+                      const isOutOfStock = v.stock <= 0;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`btn ${isSelected ? "btn-warning" : "btn-outline-secondary"} ${isOutOfStock ? "opacity-50" : ""}`}
+                          style={{
+                            borderRadius: "8px",
+                            padding: "8px 16px",
+                            fontSize: "0.9rem",
+                          }}
+                          onClick={() => {
+                            setSelectedVariantId(v.id);
+                            // Fiyat varsa güncelle
+                            if (v.price) {
+                              product.price = v.price;
+                            }
+                          }}
+                          disabled={isOutOfStock}
+                        >
+                          {v.variantTitle || v.sku}
+                          {isOutOfStock && " (Tükendi)"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedVariantId || ""}
+                    onChange={(e) => {
+                      const vid = e.target.value;
+                      setSelectedVariantId(vid);
+                      const v = variants.find(
+                        (x) => String(x.id) === String(vid),
+                      );
+                      if (v && v.price) {
+                        product.price = v.price;
                       }
-                      if (v.quantity) setQuantity(v.quantity);
-                    }
-                  }}
-                >
-                  {variants.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.packageType || `${v.quantity} ${v.unit}`}
-                      {v.expiresAt ? ` — SKT: ${v.expiresAt}` : ""}
-                    </option>
-                  ))}
-                </select>
+                    }}
+                  >
+                    {variants.map((v) => (
+                      <option key={v.id} value={v.id} disabled={v.stock <= 0}>
+                        {v.variantTitle || v.sku} - ₺
+                        {v.price?.toFixed(2) || "0.00"}
+                        {v.stock <= 0 ? " (Tükendi)" : ` (${v.stock} stokta)`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
+            {variants.length === 0 && (
+              <div className="mb-3">
+                {/* Varyant yoksa sadece ana ürün bilgisi göster */}
               </div>
             )}
 
             <div className="row g-2 mb-3 align-items-center">
               <div className="col-auto">
                 <label className="form-label fw-semibold mb-0">
-                  <i className="fas fa-sort-numeric-up me-2 text-warning"></i>Miktar
+                  <i className="fas fa-sort-numeric-up me-2 text-warning"></i>
+                  Miktar
                 </label>
               </div>
               <div className="col-auto">
@@ -377,8 +457,13 @@ export default function ProductDetail() {
                     className="btn btn-outline-warning"
                     type="button"
                     onClick={() => {
-                      const step = rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1;
-                      const newQty = Math.max((parseFloat(quantity) || 0) - step, rule?.min_quantity || step);
+                      const step = rule
+                        ? (rule.step ?? (rule.unit === "kg" ? 0.25 : 1))
+                        : 1;
+                      const newQty = Math.max(
+                        (parseFloat(quantity) || 0) - step,
+                        rule?.min_quantity || step,
+                      );
                       setQuantity(newQty);
                     }}
                   >
@@ -386,7 +471,9 @@ export default function ProductDetail() {
                   </button>
                   <input
                     type="number"
-                    step={rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1}
+                    step={
+                      rule ? (rule.step ?? (rule.unit === "kg" ? 0.25 : 1)) : 1
+                    }
                     value={quantity}
                     onChange={(e) => setQuantity(e.target.value)}
                     className="form-control text-center"
@@ -395,7 +482,9 @@ export default function ProductDetail() {
                     className="btn btn-outline-warning"
                     type="button"
                     onClick={() => {
-                      const step = rule ? rule.step ?? (rule.unit === "kg" ? 0.25 : 1) : 1;
+                      const step = rule
+                        ? (rule.step ?? (rule.unit === "kg" ? 0.25 : 1))
+                        : 1;
                       const newQty = (parseFloat(quantity) || 0) + step;
                       if (!rule || newQty <= rule.max_quantity) {
                         setQuantity(newQty);

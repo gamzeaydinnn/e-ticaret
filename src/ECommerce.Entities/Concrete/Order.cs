@@ -71,5 +71,11 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<StockReservation> StockReservations { get; set; } = new HashSet<StockReservation>();
         public virtual ICollection<WeightReport> WeightReports { get; set; } = new HashSet<WeightReport>();
         public virtual ICollection<OrderStatusHistory> OrderStatusHistories { get; set; } = new HashSet<OrderStatusHistory>();
+        
+        /// <summary>
+        /// Bu siparişte kullanılan kuponların geçmişi
+        /// Tek kupon destekli sistemde tek kayıt olur, ancak geçmiş için collection tutulur
+        /// </summary>
+        public virtual ICollection<CouponUsage> CouponUsages { get; set; } = new HashSet<CouponUsage>();
     }
 }

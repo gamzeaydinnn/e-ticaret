@@ -762,5 +762,68 @@ namespace ECommerce.Business.Services.Managers
             var rnd = Random.Shared.Next(1000, 9999);
             return $"ORD-{ts}-{rnd}";
         }
+
+        // ============================================================
+        // KURYE ATAMA
+        // ============================================================
+        /// <summary>
+        /// Siparişe kurye atar ve durumu günceller.
+        /// GÜVENLİK: Kurye ve sipariş varlığı kontrol edilir.
+        /// </summary>
+        public async Task<OrderListDto?> AssignCourierAsync(int orderId, int courierId)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Include(o => o.User)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return null; // Sipariş bulunamadı
+            }
+
+            // Kuryeyi bul ve varlığını doğrula (User bilgisiyle birlikte)
+            var courier = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == courierId);
+            if (courier == null)
+            {
+                throw new InvalidOperationException($"Kurye bulunamadı: {courierId}");
+            }
+
+            // Önceki durumu kaydet (audit için)
+            var previousStatus = order.Status;
+
+            // Kurye ataması yap
+            order.CourierId = courierId;
+            order.AssignedAt = DateTime.UtcNow;
+
+            // Durumu "Preparing" veya "OutForDelivery" olarak güncelle
+            // Eğer sipariş pending/paid ise -> Preparing
+            // Eğer sipariş preparing ise -> OutForDelivery
+            if (order.Status == OrderStatus.Pending || order.Status == OrderStatus.Paid)
+            {
+                order.Status = OrderStatus.Preparing;
+            }
+            else if (order.Status == OrderStatus.Preparing)
+            {
+                order.Status = OrderStatus.OutForDelivery;
+            }
+
+            // Durum değişikliği geçmişini kaydet
+            // Kurye adını User entity'sinden al
+            var courierName = courier.User?.FullName ?? $"Kurye #{courierId}";
+            if (previousStatus != order.Status)
+            {
+                AddStatusHistory(order, previousStatus, order.Status, $"Kurye atandı: {courierName}");
+            }
+
+            await _context.SaveChangesAsync();
+
+            // DTO'ya dönüştür
+            return MapToDto(order);
+        }
     }
 }

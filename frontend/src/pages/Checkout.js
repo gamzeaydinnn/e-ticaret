@@ -1,8 +1,13 @@
-// Adres, kargo, ödeme adımları
+// ============================================================================
+// CHECKOUT SAYFASI
+// Adres, kargo, ödeme adımları - Hem misafir hem kayıtlı kullanıcı için
+// Varyant bilgileri dahil sipariş oluşturma
+// ============================================================================
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useCart } from "../contexts/CartContext";
 import LoginModal from "../components/LoginModal";
 
 export default function Checkout() {
@@ -11,14 +16,19 @@ export default function Checkout() {
     phone: "",
     email: "",
     address: "",
+    city: "",
   });
-  const [paymentMethod, setPaymentMethod] = useState("card");
-  const [shippingMethod, setShippingMethod] = useState("car"); // car veya motorcycle
-  const [shippingCost, setShippingCost] = useState(30); // Varsayılan araç ücreti
+  const [paymentMethod, setPaymentMethod] = useState("cash"); // Varsayılan: Kapıda ödeme (banka API sonra gelecek)
+  const [shippingMethod, setShippingMethod] = useState("car");
+  const [shippingCost, setShippingCost] = useState(30);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [clientOrderId] = useState(() => {
     try {
-      if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      if (
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+      ) {
         return crypto.randomUUID();
       }
     } catch {
@@ -28,6 +38,7 @@ export default function Checkout() {
   });
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { cartItems, getCartTotal, clearCart } = useCart();
 
   useEffect(() => {
     // Kargo ücretini hesapla
@@ -44,34 +55,109 @@ export default function Checkout() {
     }
   }, [user]);
 
+  // ============================================================================
+  // SİPARİŞ GÖNDERME
+  // Sepet verileri + varyant bilgileri + teslimat bilgileri
+  // Banka API entegrasyonu sonra eklenecek (şimdilik kapıda ödeme/havale)
+  // ============================================================================
   const submit = async (e) => {
     e.preventDefault();
 
-    if (!user) {
-      setShowLoginModal(true);
+    // Sepet boş kontrolü
+    if (!cartItems || cartItems.length === 0) {
+      alert("❌ Sepetiniz boş! Sipariş veremezsiniz.");
+      navigate("/");
       return;
     }
 
+    // Form validasyonu
+    if (!form.name?.trim() || !form.phone?.trim() || !form.address?.trim()) {
+      alert("❌ Lütfen tüm zorunlu alanları doldurun.");
+      return;
+    }
+
+    // Telefon format kontrolü (basit)
+    const phoneRegex = /^[0-9]{10,11}$/;
+    if (!phoneRegex.test(form.phone.replace(/\s/g, ""))) {
+      alert("❌ Geçerli bir telefon numarası girin (10-11 haneli).");
+      return;
+    }
+
+    setSubmitting(true);
+
     try {
+      // ================================================================
+      // SİPARİŞ PAYLOAD - VARYANT BİLGİLERİ DAHİL
+      // Backend'e gönderilecek sipariş verisi
+      // ================================================================
+      const orderItems = cartItems.map((item) => ({
+        productId: item.productId || item.id,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice || item.product?.price || 0,
+        // Varyant bilgileri
+        variantId: item.variantId || null,
+        sku: item.sku || null,
+        variantTitle: item.variantTitle || null,
+      }));
+
       const payload = {
-        customerName: form.name,
-        customerPhone: form.phone,
-        customerEmail: form.email,
-        shippingAddress: form.address,
-        shippingCity: form.city || "",
-        paymentMethod,
+        // Müşteri bilgileri
+        customerName: form.name.trim(),
+        customerPhone: form.phone.trim(),
+        customerEmail: form.email?.trim() || null,
+
+        // Teslimat bilgileri
+        shippingAddress: form.address.trim(),
+        shippingCity: form.city?.trim() || "",
         shippingMethod,
         shippingCost,
+
+        // Ödeme bilgileri
+        paymentMethod, // "cash" (kapıda) veya "bank_transfer" (havale) veya "card" (banka API sonra)
+
+        // Sipariş detayları
+        items: orderItems,
+        subtotal: getCartTotal(),
+        totalPrice: getCartTotal() + shippingCost,
+
+        // Tekrar sipariş engelleme
         clientOrderId,
       };
 
-      const res = await api.post("/orders", payload);
-      if (res.success) {
-        alert("Sipariş alındı!");
-        navigate("/orders");
+      // ================================================================
+      // API ÇAĞRISI - /api/orders/checkout endpoint'i
+      // Hem misafir hem kayıtlı kullanıcı için çalışır
+      // ================================================================
+      const res = await api.post("/orders/checkout", payload);
+
+      if (res.success || res.orderId) {
+        // Başarılı sipariş
+        clearCart(); // Sepeti temizle
+
+        // Başarı mesajı
+        alert(
+          `✅ Siparişiniz alındı!\n\nSipariş No: ${res.orderNumber || res.orderId}\nToplam: ₺${res.finalPrice?.toFixed(2) || payload.totalPrice.toFixed(2)}`,
+        );
+
+        // Siparişler sayfasına yönlendir
+        if (user) {
+          navigate("/orders");
+        } else {
+          navigate("/"); // Misafir kullanıcı ana sayfaya
+        }
+      } else {
+        throw new Error(res.message || "Sipariş oluşturulamadı");
       }
     } catch (err) {
-      alert("Hata: " + (err.message || "Sipariş başarısız"));
+      console.error("Sipariş hatası:", err);
+      alert(
+        "❌ Hata: " +
+          (err.response?.data?.message ||
+            err.message ||
+            "Sipariş oluşturulurken bir hata oluştu"),
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -171,18 +257,69 @@ export default function Checkout() {
         </div>
 
         <div className="mb-4">
-          <label className="block mb-1">Ödeme Yöntemi</label>
+          <label
+            className="block mb-1 font-semibold"
+            style={{ color: "#FF8C00" }}
+          >
+            💳 Ödeme Yöntemi
+          </label>
           <select
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
-            className="border p-2 w-full"
+            className="border p-2 w-full rounded"
+            style={{ borderColor: "#FF8C00" }}
           >
-            <option value="card">Kart ile öde</option>
-            <option value="cash">Kapıda ödeme</option>
+            <option value="cash">💵 Kapıda Nakit Ödeme</option>
+            <option value="cash_card">💳 Kapıda Kart ile Ödeme</option>
+            <option value="bank_transfer">🏦 Havale / EFT</option>
+            {/* Banka API entegrasyonu sonra aktif edilecek */}
+            {/* <option value="card">💳 Online Kart ile Öde</option> */}
           </select>
+          {paymentMethod === "bank_transfer" && (
+            <div
+              className="mt-2 p-3 rounded"
+              style={{
+                background: "#FFF5E6",
+                border: "1px solid #FFE0B2",
+                fontSize: "0.85rem",
+              }}
+            >
+              <p className="mb-1 fw-bold" style={{ color: "#FF8C00" }}>
+                <i className="fas fa-info-circle me-1"></i>
+                Havale Bilgileri:
+              </p>
+              <p className="mb-0 small">
+                Siparişiniz, ödemeniz onaylandıktan sonra hazırlanacaktır.
+                <br />
+                Banka bilgileri sipariş onay ekranında gösterilecektir.
+              </p>
+            </div>
+          )}
         </div>
-        <button className="bg-green-600 text-white p-3 rounded">
-          Siparişi Onayla
+        <button
+          type="submit"
+          className="bg-green-600 text-white p-3 rounded w-full fw-bold"
+          style={{
+            background: submitting
+              ? "#999"
+              : "linear-gradient(135deg, #16a34a, #22c55e)",
+            border: "none",
+            cursor: submitting ? "not-allowed" : "pointer",
+            fontSize: "1.1rem",
+          }}
+          disabled={submitting || cartItems.length === 0}
+        >
+          {submitting ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2"></span>
+              Sipariş Gönderiliyor...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-check-circle me-2"></i>
+              Siparişi Onayla (₺{(getCartTotal() + shippingCost).toFixed(2)})
+            </>
+          )}
         </button>
       </form>
       <LoginModal

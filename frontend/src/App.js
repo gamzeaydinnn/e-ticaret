@@ -39,13 +39,13 @@ import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminWeightReports from "./pages/Admin/AdminWeightReports";
 import PosterManagement from "./pages/Admin/PosterManagement";
 import Dashboard from "./pages/Admin/Dashboard";
+// Kupon Yönetimi
+import CouponManagement from "./pages/Admin/CouponManagement";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
 import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
 // Rol ve İzin Yönetimi Sayfaları
-import AdminRoles from "./pages/Admin/AdminRoles";
-import AdminPermissions from "./pages/Admin/AdminPermissions";
 import AdminAccessDenied from "./pages/Admin/AdminAccessDenied";
 // Kurye sayfaları
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -630,7 +630,7 @@ function Header() {
             {categories.map((cat) => {
               const slug = cat.slug || createSlug(cat.name);
               const isActive = location.pathname.startsWith(
-                `/category/${slug}`
+                `/category/${slug}`,
               );
               return (
                 <button
@@ -855,6 +855,17 @@ function App() {
             </AdminGuard>
           }
         />
+        {/* Kupon Yönetimi Sayfası */}
+        <Route
+          path="/admin/coupons"
+          element={
+            <AdminGuard requiredPermission="coupons.view">
+              <AdminLayout>
+                <CouponManagement />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
         {/* Log Sayfaları - Her biri için spesifik izin kontrolü */}
         <Route
           path="/admin/logs/audit"
@@ -898,26 +909,6 @@ function App() {
         />
 
         {/* Rol ve İzin Yönetimi */}
-        <Route
-          path="/admin/roles"
-          element={
-            <AdminGuard requiredPermission="roles.view">
-              <AdminLayout>
-                <AdminRoles />
-              </AdminLayout>
-            </AdminGuard>
-          }
-        />
-        <Route
-          path="/admin/permissions"
-          element={
-            <AdminGuard requiredPermission="roles.permissions">
-              <AdminLayout>
-                <AdminPermissions />
-              </AdminLayout>
-            </AdminGuard>
-          }
-        />
         <Route
           path="/admin/access-denied"
           element={
@@ -1037,7 +1028,7 @@ function HomePage() {
               title: p.title,
               image: p.imageUrl,
               link: p.linkUrl,
-            }))
+            })),
           );
         } else {
           // Slider için fallback
@@ -1068,7 +1059,7 @@ function HomePage() {
               title: p.title,
               image: p.imageUrl,
               link: p.linkUrl,
-            }))
+            })),
           );
         } else {
           // Promo için fallback
@@ -1185,7 +1176,7 @@ function HomePage() {
               }}
               onClick={() =>
                 setCurrentSlide(
-                  (prev) => (prev - 1 + slides.length) % slides.length
+                  (prev) => (prev - 1 + slides.length) % slides.length,
                 )
               }
               aria-label="Önceki Slayt"

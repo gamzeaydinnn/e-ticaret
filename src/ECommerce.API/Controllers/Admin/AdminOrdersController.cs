@@ -158,6 +158,64 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(orders);
         }
 
+        // ============================================================
+        // KURYE ATAMA ENDPOINT
+        // ============================================================
+        /// <summary>
+        /// Siparişe kurye atar.
+        /// POST /api/admin/orders/{id}/assign-courier
+        /// Body: { "courierId": 123 }
+        /// </summary>
+        [HttpPost("{id:int}/assign-courier")]
+        [HasPermission(Permissions.Orders.UpdateStatus)]
+        public async Task<IActionResult> AssignCourier(int id, [FromBody] AssignCourierDto dto)
+        {
+            // Validation: DTO null veya courierId eksik mi?
+            if (dto == null || dto.CourierId <= 0)
+            {
+                return BadRequest(new { message = "Geçerli bir kurye ID'si gereklidir." });
+            }
+
+            try
+            {
+                // Önceki durumu al (audit için)
+                var oldOrder = await _orderService.GetByIdAsync(id);
+                if (oldOrder == null)
+                {
+                    return NotFound(new { message = "Sipariş bulunamadı." });
+                }
+
+                // Kurye atamasını gerçekleştir
+                var updatedOrder = await _orderService.AssignCourierAsync(id, dto.CourierId);
+                
+                if (updatedOrder == null)
+                {
+                    return NotFound(new { message = "Sipariş güncellenemedi." });
+                }
+
+                // Audit log yaz
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    "CourierAssigned",
+                    "Order",
+                    id.ToString(),
+                    new { oldOrder.Status, OldCourierId = (int?)null },
+                    new { updatedOrder.Status, CourierId = dto.CourierId });
+
+                return Ok(updatedOrder);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Kurye bulunamadı gibi iş mantığı hataları
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // Beklenmeyen hatalar
+                return StatusCode(500, new { message = "Kurye atama sırasında bir hata oluştu.", detail = ex.Message });
+            }
+        }
+
         private async Task<IActionResult> HandleStatusChange(int orderId, Func<Task<OrderListDto?>> action, string auditAction)
         {
             var oldOrder = await _orderService.GetByIdAsync(orderId);

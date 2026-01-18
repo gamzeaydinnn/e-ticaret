@@ -65,6 +65,7 @@
    ============================================================================ */
 .permission-matrix {
   font-size: 0.85rem;
+  min-width: 720px;
 }
 
 .permission-matrix th,
@@ -75,6 +76,10 @@
 
 .permission-matrix .badge {
   font-size: 0.7rem;
+}
+
+.permission-matrix-wrapper {
+  overflow-x: auto;
 }
 
 /* ============================================================================
@@ -174,11 +179,13 @@
   /* İzin Matrisi mobil görünümü */
   .permission-matrix {
     font-size: 0.75rem;
+    min-width: 680px;
   }
 
   .permission-matrix th,
   .permission-matrix td {
     padding: 0.25rem;
+    white-space: nowrap;
   }
 
   .permission-matrix .badge {

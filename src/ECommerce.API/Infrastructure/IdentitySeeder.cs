@@ -36,6 +36,17 @@ namespace ECommerce.API.Infrastructure
             var dbContext = services.GetRequiredService<ECommerceDbContext>();
             var logger = services.GetService<ILogger<Program>>(); // Opsiyonel loglama
 
+            // ⚠️ GÜVENLİK KONTROL: Eğer admin rolü veya kullanıcısı varsa seed'i atla
+            var adminRole = await roleManager.FindByNameAsync("Admin");
+            if (adminRole != null)
+            {
+                Console.WriteLine("ℹ️ IdentitySeeder: Roller zaten mevcut, seed ATLANILIYOR (kullanıcılar KORUNUYOR)");
+                logger?.LogInformation("ℹ️ IdentitySeeder: Roller zaten mevcut, seed ATLANILIYOR");
+                return;
+            }
+            
+            Console.WriteLine("🆕 IdentitySeeder: Roller ve admin kullanıcısı oluşturuluyor...");
+
             try
             {
                 // 1. Rolleri oluştur
