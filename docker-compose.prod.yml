@@ -56,7 +56,8 @@ services:
       - SmsVerification__CodeLength=6
       - SmsVerification__AppName=E-Ticaret
     depends_on:
-      - sqlserver
+      sqlserver:
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
@@ -80,7 +81,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:
-      - api
+      api:
+        condition: service_started
     networks:
       - ecommerce-network
     healthcheck:
