@@ -421,7 +421,14 @@ namespace ECommerce.API.Controllers
 
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                var errors = string.Join("; ", ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage));
+                _logger.LogError("[POSNET-3DS] Validation hatası: {Errors}", errors);
+                return BadRequest(new { 
+                    message = "Geçersiz kart bilgileri",
+                    errors = ModelState 
+                });
             }
 
             try

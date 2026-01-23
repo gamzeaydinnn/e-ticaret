@@ -60,7 +60,7 @@ export const PaymentService = {
       // ExpireDate formatı: YYMM veya MMYY - Ayrıştır
       let expireMonth = paymentData.expireMonth;
       let expireYear = paymentData.expireYear;
-      
+
       // Eğer expireDate geldi ise (YYMM formatında) parse et
       if (paymentData.expireDate && !expireMonth && !expireYear) {
         const exp = paymentData.expireDate.replace(/[\s\-\/]/g, "");
@@ -70,7 +70,7 @@ export const PaymentService = {
           expireMonth = exp.substring(2, 4);
         }
       }
-      
+
       // Backend DTO sadece bu alanları bekliyor - ExtraField hata çıkarır!
       const response = await api.post(`${base}/posnet/3dsecure/initiate`, {
         orderId: paymentData.orderId,
