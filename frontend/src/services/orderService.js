@@ -98,12 +98,21 @@ export const OrderService = {
   updateStatus: (id, status) => api.patch(`${base}/${id}/status`, { status }),
   cancel: (id) => api.post(`${base}/${id}/cancel`),
   checkout: async (payload) => {
+    // GUID format validation: must be valid UUID v4 format
+    // Valid format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    const isValidGuid = (str) => {
+      if (!str || typeof str !== "string") return false;
+      const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return guidRegex.test(str);
+    };
+
     const finalPayload = {
       ...payload,
       couponCode: payload?.couponCode
         ? payload.couponCode.trim()
         : null,
-      clientOrderId: payload?.clientOrderId || generateClientOrderId(),
+      // Only include clientOrderId if it's a valid GUID, otherwise set to null
+      clientOrderId: isValidGuid(payload?.clientOrderId) ? payload.clientOrderId : null,
     };
 
     try {

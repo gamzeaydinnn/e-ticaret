@@ -11,6 +11,23 @@ import LoginModal from "./LoginModal";
 import { CreditCardPreview } from "./payment";
 import "./PaymentPage.css";
 
+// UUID v4 generator for clientOrderId
+const generateUUID = () => {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+  // Fallback UUID v4 generator
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 const PaymentPage = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -70,20 +87,8 @@ const PaymentPage = () => {
   const [deliveryNote, setDeliveryNote] = useState("");
   const [isCardFlipped, setIsCardFlipped] = useState(false); // CVV için kart çevirme
 
-  // Client Order ID
-  const [clientOrderId] = useState(() => {
-    try {
-      if (
-        typeof crypto !== "undefined" &&
-        typeof crypto.randomUUID === "function"
-      ) {
-        return crypto.randomUUID();
-      }
-    } catch {
-      // ignore
-    }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  });
+  // Client Order ID - proper UUID v4 format for backend GUID deserialization
+  const [clientOrderId] = useState(() => generateUUID());
 
   // Önceden uygulanmış kupon varsa yükle
   useEffect(() => {
