@@ -61,9 +61,9 @@ export const PaymentService = {
       let expireMonth = paymentData.expireMonth;
       let expireYear = paymentData.expireYear;
       
-      // Eğer expireDate geldi ise (YYMM veya MMYY formatında) parse et
+      // Eğer expireDate geldi ise (YYMM formatında) parse et
       if (paymentData.expireDate && !expireMonth && !expireYear) {
-        const exp = paymentData.expireDate.replace("/", "").replace("-", "");
+        const exp = paymentData.expireDate.replace(/[\s\-\/]/g, "");
         if (exp.length === 4) {
           // YYMM formatı (backend bekliyor)
           expireYear = exp.substring(0, 2);
@@ -71,25 +71,16 @@ export const PaymentService = {
         }
       }
       
+      // Backend DTO sadece bu alanları bekliyor - ExtraField hata çıkarır!
       const response = await api.post(`${base}/posnet/3dsecure/initiate`, {
         orderId: paymentData.orderId,
         amount: paymentData.amount,
-        paymentMethod: "posnet",
-        currency: paymentData.currency || "TRY",
         cardNumber: paymentData.cardNumber?.replace(/\s/g, ""),
         expireMonth: expireMonth,
         expireYear: expireYear,
         cvv: paymentData.cvv,
         cardHolderName: paymentData.cardHolderName,
         installmentCount: paymentData.installmentCount || 0,
-        use3DSecure: paymentData.use3DSecure !== false, // Varsayılan true
-        successUrl: paymentData.successUrl,
-        failUrl: paymentData.failUrl,
-        useWorldPoints: paymentData.useWorldPoints || false,
-        worldPointsToUse: paymentData.worldPointsToUse,
-        customerEmail: paymentData.customerEmail,
-        customerPhone: paymentData.customerPhone,
-        userId: paymentData.userId,
       });
       return response;
     } catch (error) {
