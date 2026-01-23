@@ -95,6 +95,9 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
                 sqlOptions.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
         });
     }
+    
+    // Suppress pending model changes warning (migrations are properly managed)
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 });
 
 // Global LoggerService (ILogService)
