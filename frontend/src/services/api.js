@@ -35,19 +35,19 @@ api.interceptors.request.use(
         console.warn(
           `[API] ⚠️  ${config.method?.toUpperCase()} ${
             config.url
-          } - Token bulunamadı!`
+          } - Token bulunamadı!`,
         );
       }
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
 );
 
-// Response interceptor: Başarıda data unwrap, hatada normalize
+// Response interceptor: Başarıda data unwrap, hatada normalize + token refresh
 api.interceptors.response.use(
   (res) => res.data,
-  (error) => {
+  async (error) => {
     const status = error?.response?.status ?? 0;
     const data = error?.response?.data;
 
@@ -57,11 +57,57 @@ api.interceptors.response.use(
       error?.message ||
       "Beklenmeyen bir hata oluştu.";
 
+    // 401 Unauthorized - Token süresi dolmuş olabilir
+    if (status === 401) {
+      const refreshToken = localStorage.getItem("refreshToken");
+      const originalConfig = error.config;
+
+      // Eğer refresh token varsa ve bu bir retry değilse, refresh et
+      if (refreshToken && !originalConfig._retry) {
+        originalConfig._retry = true;
+
+        try {
+          // Token refresh isteği yap
+          const response = await axios.post(
+            `${process.env.REACT_APP_API_URL || ""}/api/auth/refresh`,
+            { refreshToken },
+          );
+
+          if (response.data?.token || response.data?.Token) {
+            const newToken = response.data.token || response.data.Token;
+            localStorage.setItem("token", newToken);
+            localStorage.setItem("authToken", newToken);
+
+            // Yeni token ile orijinal isteği tekrar dene
+            originalConfig.headers.Authorization = `Bearer ${newToken}`;
+            return api(originalConfig);
+          }
+        } catch (refreshError) {
+          // Refresh başarısız - logout et
+          localStorage.removeItem("token");
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("adminToken");
+          localStorage.removeItem("refreshToken");
+          localStorage.removeItem("user");
+          localStorage.removeItem("userId");
+          // Sayfayı reload et - AuthContext logout yap
+          window.location.href = "/login?session_expired=true";
+        }
+      } else if (!refreshToken) {
+        // Refresh token yok - logout et
+        localStorage.removeItem("token");
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("adminToken");
+        localStorage.removeItem("user");
+        localStorage.removeItem("userId");
+      }
+    }
+
     const normalizedError = new Error(message);
     normalizedError.status = status;
     normalizedError.raw = error;
 
-    // Development'ta detaylı log (401 unauthorized özellikle önemli)
+    // Development'ta detaylı log
     if (process.env.NODE_ENV === "development") {
       if (status === 401) {
         console.error(`[API] 🔒 401 Unauthorized:`, {
@@ -76,7 +122,7 @@ api.interceptors.response.use(
     }
 
     throw normalizedError;
-  }
+  },
 );
 
 export default api;

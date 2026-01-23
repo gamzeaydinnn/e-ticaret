@@ -16,6 +16,7 @@ using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Infrastructure.Services.Payment;
+using ECommerce.Infrastructure.Services.Payment.Posnet; // POSNET servisleri için
 using ECommerce.Infrastructure.Config;
 using ECommerce.Core.Constants;
 using ECommerce.Infrastructure.Services.Email;
@@ -253,24 +254,44 @@ Environment: {builder.Environment.EnvironmentName}
 =================================
 ");
 
-// Eğer boşsa exception fırlat
-if (string.IsNullOrWhiteSpace(netGsmSection["UserCode"]))
+// NetGSM config kontrolü - boşsa mock SMS kullan
+var useRealNetGsm = !string.IsNullOrWhiteSpace(netGsmSection["UserCode"]) 
+                    && !string.IsNullOrWhiteSpace(netGsmSection["Password"])
+                    && !string.IsNullOrWhiteSpace(netGsmSection["MsgHeader"]);
+
+if (!useRealNetGsm)
 {
-    var msg = $"FATAL: NetGsm:UserCode is empty! Check {debugPath} for details.";
-    File.AppendAllText(debugPath, $"\nFATAL ERROR: {msg}\n");
-    throw new InvalidOperationException(msg);
+    var msg = $"NetGsm config boş - Mock SMS modu aktif. Debug: {debugPath}";
+    File.AppendAllText(debugPath, $"\nWARNING: {msg}\n");
+    Console.WriteLine($"[WARNING] {msg}");
 }
 
 builder.Services.Configure<OtpSettings>(builder.Configuration.GetSection("Otp"));
 builder.Services.Configure<SmsVerificationSettings>(
     builder.Configuration.GetSection("SmsVerification"));
 
-// Typed HttpClient için NetGsmService'i doğru şekilde kaydet
-builder.Services.AddHttpClient<NetGsmService>();
-
-// Interface'ler için factory kullanarak aynı instance'ı kullan
-builder.Services.AddScoped<INetGsmService>(sp => sp.GetRequiredService<NetGsmService>());
-builder.Services.AddScoped<ISmsProvider>(sp => sp.GetRequiredService<NetGsmService>());
+// SMS Provider kayıt - config varsa NetGSM, yoksa Mock kullan
+if (useRealNetGsm)
+{
+    // Typed HttpClient için NetGsmService'i doğru şekilde kaydet
+    builder.Services.AddHttpClient<NetGsmService>();
+    
+    // Interface'ler için factory kullanarak aynı instance'ı kullan
+    builder.Services.AddScoped<INetGsmService>(sp => sp.GetRequiredService<NetGsmService>());
+    builder.Services.AddScoped<ISmsProvider>(sp => sp.GetRequiredService<NetGsmService>());
+    
+    Console.WriteLine("[INFO] NetGSM SMS servisi aktif");
+}
+else
+{
+    // Mock SMS Provider - Development/Test için
+    builder.Services.AddScoped<ISmsProvider, ECommerce.API.Services.Sms.MockSmsProvider>();
+    // INetGsmService için de mock döndür (null olmayacak şekilde)
+    builder.Services.AddScoped<INetGsmService>(sp => 
+        new MockNetGsmService(sp.GetRequiredService<ILogger<MockNetGsmService>>()));
+    
+    Console.WriteLine("[WARNING] Mock SMS servisi aktif - Gerçek SMS gönderilmeyecek!");
+}
 
 builder.Services.AddScoped<IOtpService, OtpService>();
 
@@ -298,6 +319,7 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<ICampaignRepository, CampaignRepository>();
 builder.Services.AddScoped<ICourierRepository, CourierRepository>();
 builder.Services.AddScoped<IWeightReportRepository, WeightReportRepository>();
+builder.Services.AddScoped<IWeightAdjustmentRepository, WeightAdjustmentRepository>();
 
 // Services  
 builder.Services.AddScoped<IUserService, UserManager>();
@@ -305,12 +327,34 @@ builder.Services.AddScoped<IProductService, ProductManager>();
 builder.Services.AddScoped<IOrderService, OrderManager>();
 builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IWeightService, WeightService>();
+builder.Services.AddScoped<IWeightAdjustmentService, WeightAdjustmentService>();
+builder.Services.AddScoped<IWeightBasedPaymentService, WeightBasedPaymentService>();
 // Ödeme sağlayıcıları + PaymentManager (provider seçimi)
-builder.Services.AddScoped<StripePaymentService>();
+// Stripe / PayPal devre dışı: sadece Iyzico + Posnet kullanılıyor
 builder.Services.AddScoped<IyzicoPaymentService>();
-builder.Services.AddScoped<PayPalPaymentService>();
+
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// POSNET / YAPI KREDİ ÖDEME SİSTEMİ
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// Yapı Kredi POSNET XML API entegrasyonu için gerekli servisler
+// Aktif etmek için appsettings.json'da "Payment:Posnet:Enabled": true olmalı
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+var posnetEnabled = builder.Configuration.GetValue<bool>("Payment:Posnet:Enabled");
+if (posnetEnabled)
+{
+    // POSNET servislerini kaydet
+    builder.Services.AddPosnetPaymentServices();
+    
+    builder.Services.AddLogging(logging =>
+    {
+        logging.AddDebug();
+    });
+}
+
+// PaymentManager (tüm provider'ları yönetir)
 builder.Services.AddScoped<PaymentManager>();
 builder.Services.AddScoped<IPaymentService, PaymentManager>();
+builder.Services.AddScoped<IExtendedPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();

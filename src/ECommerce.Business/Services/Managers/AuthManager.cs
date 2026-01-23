@@ -69,6 +69,8 @@ namespace ECommerce.Business.Services.Managers
                 Role = "User",
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
+                PhoneNumber = dto.PhoneNumber, // Telefon numarasını kaydet
+                PhoneNumberConfirmed = false,  // Telefon henüz doğrulanmadı
                 CreatedAt = DateTime.UtcNow,
                 IsActive = true,
             };

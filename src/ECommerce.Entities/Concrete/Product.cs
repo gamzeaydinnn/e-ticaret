@@ -1,4 +1,5 @@
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using System.Collections.Generic;
 using System;
 
@@ -27,6 +28,50 @@ namespace ECommerce.Entities.Concrete
         /// Tartı entegrasyonu için gerekli
         /// </summary>
         public int UnitWeightGrams { get; set; } = 0;
+
+        #region Ağırlık Bazlı Satış Alanları
+        
+        /// <summary>
+        /// Ürün ağırlık bazlı mı satılıyor?
+        /// true: kg/gram bazlı (domates, peynir vb.)
+        /// false: adet bazlı (şişe su, paket makarna vb.)
+        /// </summary>
+        public bool IsWeightBased { get; set; } = false;
+
+        /// <summary>
+        /// Ağırlık birimi (kg, gram, litre vb.)
+        /// Sadece IsWeightBased=true olan ürünlerde kullanılır
+        /// </summary>
+        public WeightUnit WeightUnit { get; set; } = WeightUnit.Piece;
+
+        /// <summary>
+        /// Birim fiyatı (örn: 1 kg = 50₺)
+        /// IsWeightBased=true ise bu fiyat kullanılır
+        /// IsWeightBased=false ise normal Price kullanılır
+        /// </summary>
+        public decimal PricePerUnit { get; set; } = 0m;
+
+        /// <summary>
+        /// Minimum sipariş ağırlığı (gram cinsinden)
+        /// Örn: En az 100 gram sipariş edilebilir
+        /// 0 = limit yok
+        /// </summary>
+        public decimal MinOrderWeight { get; set; } = 0m;
+
+        /// <summary>
+        /// Maksimum sipariş ağırlığı (gram cinsinden)
+        /// Örn: En fazla 5000 gram (5 kg) sipariş edilebilir
+        /// 0 = limit yok
+        /// </summary>
+        public decimal MaxOrderWeight { get; set; } = 0m;
+
+        /// <summary>
+        /// Ağırlık bazlı ürünlerde tahmini tolerans yüzdesi
+        /// Müşteriye bilgi amaçlı gösterilir (örn: "±%10 fark olabilir")
+        /// </summary>
+        public decimal WeightTolerancePercent { get; set; } = 10m;
+
+        #endregion
 
         // Navigation
         public virtual Category Category { get; set; } = null!;

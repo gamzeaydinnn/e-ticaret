@@ -203,7 +203,7 @@ export default function AdminLayout({ children }) {
         permission: PERMISSIONS.BANNERS_VIEW,
       },
       {
-        path: "/admin/weight-reports",
+        path: "/admin/weight-management",
         icon: "fas fa-weight",
         label: "Ağırlık Raporları",
         permission: PERMISSIONS.ORDERS_VIEW,
@@ -553,7 +553,7 @@ export default function AdminLayout({ children }) {
                 >
                   {item.label}
                 </span>
-                {item.path === "/admin/weight-reports" && (
+                {item.path === "/admin/weight-management" && (
                   <span
                     className="position-absolute"
                     style={{

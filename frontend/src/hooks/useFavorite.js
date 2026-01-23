@@ -6,7 +6,8 @@ import { useFavorites } from "../contexts/FavoriteContext";
  */
 export const useFavorite = () => {
   const {
-    favorites,
+    favorites, // ProductListDto array (tam ürün objeleri)
+    favoriteIds, // Sadece ID'ler (hızlı kontrol için)
     loading,
     toggleFavorite,
     removeFromFavorites,
@@ -16,7 +17,8 @@ export const useFavorite = () => {
   } = useFavorites();
 
   return {
-    favorites,
+    favorites, // Artık ProductListDto array
+    favoriteIds, // Sadece ID'ler
     loading,
     isFavorite,
     toggleFavorite,

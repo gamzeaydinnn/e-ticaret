@@ -1,150 +1,265 @@
-// src/services/favoriteService.js
+/**
+ * Favori Servisi
+ * Backend API ile iletişim kurar - localStorage KULLANMAZ (sadece token için)
+ *
+ * Mimari:
+ * - Misafir kullanıcılar: X-Favorites-Token (UUID) header'ı ile backend'e istek atılır
+ * - Kayıtlı kullanıcılar: JWT token ile backend'e istek atılır
+ * - Token localStorage'da saklanır AMA favori verisi BACKEND'de tutulur
+ */
 import api from "./api";
-import {
-  isBackendAvailable,
-  isAuthEnabled,
-  debugLog,
-} from "../config/apiConfig";
 
-// Giriş yapan kullanıcı kontrolü
-const getAuthenticatedUser = () => {
-  if (!isAuthEnabled()) {
-    return null; // Auth sistemi aktif değil
+const base = "/api/favorites";
+const FAVORITES_TOKEN_KEY = "favorites_guest_token";
+
+// ============================================================
+// TOKEN YÖNETİMİ
+// ============================================================
+
+/**
+ * Guest token'ı localStorage'dan alır veya yeni oluşturur
+ * Token: UUID v4 formatında benzersiz kimlik
+ */
+const getOrCreateGuestToken = () => {
+  let token = localStorage.getItem(FAVORITES_TOKEN_KEY);
+  if (!token) {
+    // Crypto API ile güvenli UUID oluştur
+    token = crypto.randomUUID?.() || generateUUID();
+    localStorage.setItem(FAVORITES_TOKEN_KEY, token);
+    console.log(
+      "🆕 Yeni favorites guest token oluşturuldu:",
+      token.substring(0, 8) + "...",
+    );
   }
+  return token;
+};
 
-  // Auth aktifse localStorage'dan kullanıcı bilgisini al
-  const authUser = localStorage.getItem("authUser");
-  return authUser ? JSON.parse(authUser) : null;
+/**
+ * Fallback UUID generator
+ */
+const generateUUID = () => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+/**
+ * Guest token'ı döner (varsa)
+ */
+const getGuestToken = () => {
+  return localStorage.getItem(FAVORITES_TOKEN_KEY);
+};
+
+/**
+ * Guest token'ı temizler (login sonrası merge işleminden sonra)
+ */
+const clearGuestToken = () => {
+  localStorage.removeItem(FAVORITES_TOKEN_KEY);
+  console.log("🗑️ Favorites guest token temizlendi");
 };
 
 export const FavoriteService = {
-  getFavorites: async () => {
-    const user = getAuthenticatedUser();
+  // Token metodlarını dışa aktar
+  getOrCreateGuestToken,
+  getGuestToken,
+  clearGuestToken,
 
-    debugLog("getFavorites çağrıldı", {
-      backendAvailable: isBackendAvailable(),
-      authEnabled: isAuthEnabled(),
-      hasUser: !!user,
-    });
+  // ============================================================
+  // MİSAFİR KULLANICI API'leri
+  // ============================================================
 
-    if (isBackendAvailable() && user) {
-      // Backend API mevcut ve kullanıcı giriş yapmış
-      try {
-        debugLog("Backend'den favoriler çekiliyor", { userId: user.id });
-        const result = await api.get(`/favorites?userId=${user.id}`);
-        return result?.success ? result.data : [];
-      } catch (error) {
-        debugLog("Backend API hatası, localStorage fallback", error);
-        return FavoriteService.getGuestFavorites();
-      }
-    } else {
-      // Backend yok veya kullanıcı giriş yapmamış - localStorage kullan
-      debugLog("localStorage'dan favoriler çekiliyor");
-      return FavoriteService.getGuestFavorites();
+  /**
+   * Misafir kullanıcının favorilerini getirir
+   * @returns {Promise<Array<ProductListDto>>}
+   */
+  getGuestFavorites: async () => {
+    const token = getGuestToken();
+    if (!token) {
+      console.log("📭 Favorites token yok - boş liste");
+      return [];
+    }
+
+    try {
+      // api interceptor zaten res.data döndürüyor
+      // Backend: { success: true, data: [...] } döner
+      const response = await api.get(`${base}/guest`, {
+        headers: { "X-Favorites-Token": token },
+      });
+      const data = response?.data || response || [];
+      console.log(
+        "⭐ Guest favoriler alındı:",
+        Array.isArray(data) ? data.length : 0,
+        "ürün",
+      );
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("❌ Guest favoriler alınamadı:", error);
+      return [];
     }
   },
 
-  toggleFavorite: async (productId) => {
-    const user = getAuthenticatedUser();
+  /**
+   * Misafir kullanıcının favorisine ürün ekler/çıkarır (toggle)
+   * @param {number} productId - Ürün ID
+   * @returns {Promise<{success: boolean, action?: string, error?: string}>}
+   */
+  toggleGuestFavorite: async (productId) => {
+    const token = getOrCreateGuestToken();
 
-    if (isBackendAvailable() && user) {
-      // Backend API mevcut ve kullanıcı giriş yapmış
-      try {
-        const result = await api.post(
-          `/favorites/${productId}?userId=${user.id}`
-        );
-        return result;
-      } catch (error) {
-        console.warn("Backend API hatası, localStorage fallback:", error);
-        // API hatası durumunda localStorage'a fallback
-        const favorites = FavoriteService.getGuestFavorites();
-        if (favorites.includes(productId)) {
-          return {
-            success: true,
-            data: FavoriteService.removeFromGuestFavorites(productId),
-            action: "removed",
-          };
-        } else {
-          return {
-            success: true,
-            data: FavoriteService.addToGuestFavorites(productId),
-            action: "added",
-          };
-        }
-      }
-    } else {
-      // Backend yok veya kullanıcı giriş yapmamış - localStorage kullan
-      const favorites = FavoriteService.getGuestFavorites();
-      if (favorites.includes(productId)) {
-        return {
-          success: true,
-          data: FavoriteService.removeFromGuestFavorites(productId),
-          action: "removed",
-        };
-      } else {
-        return {
-          success: true,
-          data: FavoriteService.addToGuestFavorites(productId),
-          action: "added",
-        };
-      }
-    }
-  },
-
-  removeFavorite: async (productId) => {
-    const user = getAuthenticatedUser();
-
-    if (isBackendAvailable() && user) {
-      // Backend API mevcut ve kullanıcı giriş yapmış
-      try {
-        const result = await api.delete(
-          `/favorites/${productId}?userId=${user.id}`
-        );
-        return result;
-      } catch (error) {
-        console.warn("Backend API hatası, localStorage fallback:", error);
-        return {
-          success: true,
-          data: FavoriteService.removeFromGuestFavorites(productId),
-        };
-      }
-    } else {
-      // Backend yok veya kullanıcı giriş yapmamış - localStorage kullan
+    try {
+      const response = await api.post(`${base}/guest/${productId}`, null, {
+        headers: { "X-Favorites-Token": token },
+      });
+      console.log("⭐ Guest favori toggle:", productId, response?.action);
+      return { success: true, action: response?.action || "toggled" };
+    } catch (error) {
+      console.error("❌ Guest favori toggle başarısız:", error);
       return {
-        success: true,
-        data: FavoriteService.removeFromGuestFavorites(productId),
+        success: false,
+        error: error?.response?.data?.message || "İşlem başarısız",
       };
     }
   },
 
-  // LocalStorage için guest favori yönetimi
-  getGuestFavorites: () => {
-    const favorites = localStorage.getItem("guestFavorites");
-    return favorites ? JSON.parse(favorites) : [];
-  },
+  /**
+   * Misafir kullanıcının favorisinden ürün siler
+   * @param {number} productId - Ürün ID
+   */
+  removeGuestFavorite: async (productId) => {
+    const token = getGuestToken();
+    if (!token) return { success: false, error: "Token yok" };
 
-  addToGuestFavorites: (productId) => {
-    const favorites = FavoriteService.getGuestFavorites();
-    if (!favorites.includes(productId)) {
-      favorites.push(productId);
-      localStorage.setItem("guestFavorites", JSON.stringify(favorites));
+    try {
+      await api.delete(`${base}/guest/${productId}`, {
+        headers: { "X-Favorites-Token": token },
+      });
+      console.log("🗑️ Guest favoriden silindi:", productId);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Guest favoriden silme başarısız:", error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || "Silinemedi",
+      };
     }
-    return favorites;
   },
 
-  removeFromGuestFavorites: (productId) => {
-    const favorites = FavoriteService.getGuestFavorites();
-    const filteredFavorites = favorites.filter((id) => id !== productId);
-    localStorage.setItem("guestFavorites", JSON.stringify(filteredFavorites));
-    return filteredFavorites;
+  // ============================================================
+  // KAYITLI KULLANICI API'leri (JWT bazlı)
+  // ============================================================
+
+  /**
+   * Kayıtlı kullanıcının favorilerini getirir
+   */
+  getFavorites: async () => {
+    try {
+      // Backend: { success: true, data: [...] } döner
+      const response = await api.get(base);
+      const data = response?.data || response || [];
+      console.log(
+        "⭐ Favoriler alındı:",
+        Array.isArray(data) ? data.length : 0,
+        "ürün",
+      );
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("❌ Favoriler alınamadı:", error);
+      return [];
+    }
   },
 
-  clearGuestFavorites: () => {
-    localStorage.removeItem("guestFavorites");
+  /**
+   * Kayıtlı kullanıcının favorisine ürün ekler/çıkarır
+   */
+  toggleFavorite: async (productId) => {
+    try {
+      const response = await api.post(`${base}/${productId}`);
+      console.log("⭐ Favori toggle:", productId);
+      return { success: true, action: response?.action || "toggled" };
+    } catch (error) {
+      console.error("❌ Favori toggle başarısız:", error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || "İşlem başarısız",
+      };
+    }
   },
 
-  getGuestFavoriteCount: () => {
-    const favorites = FavoriteService.getGuestFavorites();
-    return favorites.length;
+  /**
+   * Kayıtlı kullanıcının favorisinden ürün siler
+   */
+  removeFavorite: async (productId) => {
+    try {
+      await api.delete(`${base}/${productId}`);
+      console.log("🗑️ Favoriden silindi:", productId);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Favoriden silme başarısız:", error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || "Silinemedi",
+      };
+    }
+  },
+
+  // ============================================================
+  // MERGE API (Login Sonrası)
+  // ============================================================
+
+  /**
+   * Misafir favorilerini kayıtlı kullanıcıya aktarır
+   * Login başarılı olduktan sonra çağrılmalı
+   * @returns {Promise<{mergedCount: number, message: string}>}
+   */
+  mergeGuestFavorites: async () => {
+    const token = getGuestToken();
+    if (!token) {
+      console.log("📭 Favorites guest token yok - merge atlanıyor");
+      return { mergedCount: 0, message: "Misafir favori yok" };
+    }
+
+    try {
+      const response = await api.post(`${base}/merge`, {
+        guestToken: token,
+      });
+
+      // Başarılı merge sonrası token'ı temizle
+      if (response?.mergedCount > 0) {
+        clearGuestToken();
+      }
+
+      console.log("🔄 Favori merge tamamlandı:", response);
+      return response || { mergedCount: 0, message: "Bilinmiyor" };
+    } catch (error) {
+      console.error("❌ Favori merge başarısız:", error);
+      return { mergedCount: 0, message: "Merge başarısız" };
+    }
+  },
+
+  // ============================================================
+  // FAVORİ KONTROL (Hızlı erişim için ID listesi)
+  // ============================================================
+
+  /**
+   * Favori product ID'lerini döner (isFavorite kontrolü için)
+   * @param {boolean} isAuthenticated - Kullanıcı giriş yapmış mı
+   * @returns {Promise<number[]>}
+   */
+  getFavoriteIds: async (isAuthenticated) => {
+    try {
+      let favorites;
+      if (isAuthenticated) {
+        favorites = await FavoriteService.getFavorites();
+      } else {
+        favorites = await FavoriteService.getGuestFavorites();
+      }
+      // Her bir favori objesinden productId veya id al
+      return favorites.map((f) => f.id || f.productId);
+    } catch (error) {
+      console.error("❌ Favori ID'leri alınamadı:", error);
+      return [];
+    }
   },
 };

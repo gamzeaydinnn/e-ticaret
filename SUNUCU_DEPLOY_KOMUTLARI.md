@@ -14,6 +14,7 @@ REACT_APP_API_URL=""  (boş = relative path, nginx proxy kullan)
 ```
 
 ### Kupon API Route'ları
+
 ```
 Frontend Call:                Backend Controller:
 GET  /api/coupon/check/{code}    → CouponController.cs [Route("api/[controller]")]
@@ -41,18 +42,20 @@ Senaryolar:
 ### Nasıl Korunuyor?
 
 **1. Veritabanı:** `sqlserver-data` Docker volume ile saklanıyor
+
 ```yaml
-volumes:
-  sqlserver-data:/var/opt/mssql  # ✅ Container silinse de veriler kalır
+volumes: sqlserver-data:/var/opt/mssql # ✅ Container silinse de veriler kalır
 ```
 
 **2. Görseller:** `./uploads` klasörü HOST makineye mount ediliyor
+
 ```yaml
 volumes:
-  - ./uploads:/app/uploads  # ✅ Container silinse de görseller kalır
+  - ./uploads:/app/uploads # ✅ Container silinse de görseller kalır
 ```
 
 **3. Seeder'lar:** Sadece ilk kurulumda çalışır
+
 ```csharp
 // ✅ Eğer kategori/ürün VARSA seed çalışmaz
 if (hasAnyCategory || hasAnyProduct) return;
@@ -63,6 +66,7 @@ if (hasAnyCategory || hasAnyProduct) return;
 ## 📋 DEPLOY KOMUTLARI (CHAT İÇİN)
 
 ### 🔹 Adım 1: SSH Bağlantısı
+
 ```bash
 ssh root@31.186.24.78
 ```
@@ -72,6 +76,7 @@ ssh root@31.186.24.78
 ---
 
 ### 🔹 Adım 2: Proje Dizinine Git
+
 ```bash
 cd /home/eticaret
 ```
@@ -79,6 +84,7 @@ cd /home/eticaret
 ---
 
 ### 🔹 Adım 3: Mevcut Durumu Kontrol Et (Opsiyonel)
+
 ```bash
 # Container'ların durumunu gör
 docker ps
@@ -91,11 +97,13 @@ git status
 ---
 
 ### 🔹 Adım 4: Git Pull (Kod Güncellemeleri)
+
 ```bash
 git pull origin main
 ```
 
 **Beklenen Çıktı:**
+
 ```
 Updating a1b2c3d..e4f5g6h
 Fast-forward
@@ -108,6 +116,7 @@ Fast-forward
 ---
 
 ### 🔹 Adım 5: Container'ları Yeniden Başlat
+
 ```bash
 # Önce durdur (veriler KORUNUR)
 docker-compose -f docker-compose.prod.yml down
@@ -119,6 +128,7 @@ docker-compose -f docker-compose.prod.yml up -d --build
 **⏱️ Süre:** ~3-5 dakika
 
 **Beklenen Çıktı:**
+
 ```
 Building api...
 Building frontend...
@@ -132,6 +142,7 @@ Creating ecommerce-frontend-prod ... done
 ---
 
 ### 🔹 Adım 6: Log'ları İzle (VERİ KORUMA KONTROLÜ)
+
 ```bash
 docker logs -f ecommerce-api-prod
 ```
@@ -139,6 +150,7 @@ docker logs -f ecommerce-api-prod
 **CTRL+C ile çıkabilirsiniz**
 
 **✅ ARANACAK MESAJLAR:**
+
 ```
 🔍 Database.Migrate() çağrılıyor...
 ✅ Database migrations uygulandı
@@ -164,11 +176,13 @@ Seed'ler çalışmış olabilir - ama bu sadece DB boşsa olur (ilk kurulumda)
 ---
 
 ### 🔹 Adım 7: API Health Check
+
 ```bash
 curl http://localhost:5000/health
 ```
 
 **Beklenen:**
+
 ```
 Healthy
 ```
@@ -176,11 +190,13 @@ Healthy
 ---
 
 ### 🔹 Adım 8: Kupon API Test
+
 ```bash
 curl http://localhost:5000/api/coupon/active
 ```
 
 **Beklenen:**
+
 ```json
 {
   "success": true,
@@ -192,11 +208,13 @@ curl http://localhost:5000/api/coupon/active
 ---
 
 ### 🔹 Adım 9: Container Durumu Kontrol
+
 ```bash
 docker ps
 ```
 
 **Beklenen:**
+
 ```
 CONTAINER ID   IMAGE                    STATUS         PORTS
 abc123def      ecommerce-frontend:latest   Up 2 minutes   0.0.0.0:3000->80/tcp
@@ -207,12 +225,15 @@ mno789pqr      ecommerce-sql-prod          Up 2 minutes   0.0.0.0:1435->1433/tcp
 ---
 
 ### 🔹 Adım 10: Frontend Test
+
 Tarayıcıda aç:
+
 ```
 http://31.186.24.78:3000
 ```
 
 **Kontrol Listesi:**
+
 - [ ] Ana sayfa açılıyor
 - [ ] Ürünler gösteriliyor
 - [ ] Sepete ekleme çalışıyor
@@ -225,6 +246,7 @@ http://31.186.24.78:3000
 ## 🎯 TEST SENARYOSU: VERİ KORUMA
 
 ### Senaryo 1: Kupon Testi
+
 ```bash
 # 1. Admin panelde kupon oluştur
 http://31.186.24.78:3000/admin/coupons
@@ -239,6 +261,7 @@ Min: 1000₺
 ```
 
 ### Senaryo 2: Veri Koruma Testi
+
 ```bash
 # 1. Admin panelden yeni ürün ekle
 # 2. Görsel yükle
@@ -257,6 +280,7 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ## 🚨 SORUN GİDERME
 
 ### ❌ Sorun: API başlamıyor
+
 ```bash
 # Log'lara bak
 docker logs ecommerce-api-prod
@@ -268,6 +292,7 @@ docker exec -it ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd \
 ```
 
 ### ❌ Sorun: Frontend boş sayfa
+
 ```bash
 # Frontend log'larına bak
 docker logs ecommerce-frontend-prod
@@ -277,6 +302,7 @@ docker exec -it ecommerce-frontend-prod cat /etc/nginx/conf.d/default.conf
 ```
 
 ### ❌ Sorun: 404 hatası (kupon)
+
 ```bash
 # Backend'de endpoint var mı?
 docker exec -it ecommerce-api-prod ls /app
@@ -286,6 +312,7 @@ curl http://localhost:5000/api/coupon/active
 ```
 
 ### ❌ Sorun: Görseller görünmüyor
+
 ```bash
 # Uploads klasörü var mı?
 ls -lah /home/eticaret/uploads/
@@ -313,17 +340,20 @@ docker inspect ecommerce-api-prod | grep -A 5 "Mounts"
 ## 📊 PERFORMANS İZLEME
 
 ### Container Resource Kullanımı
+
 ```bash
 docker stats --no-stream
 ```
 
 ### Disk Kullanımı
+
 ```bash
 df -h
 du -sh /home/eticaret/uploads
 ```
 
 ### Log Boyutu
+
 ```bash
 du -sh /home/eticaret/logs
 ```
@@ -333,6 +363,7 @@ du -sh /home/eticaret/logs
 ## 🔄 İLK KURULUM vs GÜNCELLEME
 
 ### İLK KURULUM (Sunucu Boş):
+
 ```
 1. git clone
 2. docker-compose up -d --build
@@ -342,6 +373,7 @@ du -sh /home/eticaret/logs
 ```
 
 ### GÜNCELLEME (Sunucuda Veri Var):
+
 ```
 1. git pull
 2. docker-compose down
@@ -356,6 +388,7 @@ du -sh /home/eticaret/logs
 ## 💾 BACKUP ÖNERİSİ
 
 ### Manuel Backup (Haftada 1):
+
 ```bash
 # Veritabanı backup
 docker exec -it ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd \
@@ -371,6 +404,7 @@ tar -czf /home/eticaret/backups/uploads_$(date +%Y%m%d).tar.gz /home/eticaret/up
 ## 📞 DESTEK
 
 Herhangi bir sorun yaşarsanız:
+
 1. Log dosyalarını kontrol edin
 2. Container'ların çalıştığını doğrulayın
 3. API endpoint'lerini test edin

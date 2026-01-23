@@ -1,0 +1,497 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   POSNET KREDİ KARTI FORMU - STİLLER
+   Yapı Kredi POSNET entegrasyonu için kredi kartı form stilleri
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ANA CONTAINER
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 24px;
+  background: linear-gradient(145deg, #ffffff, #f8f9fa);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Kart önizlemesi için container ayarı */
+.posnet-credit-card-form .credit-card-preview-container {
+  margin-bottom: 28px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FORM HEADER
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.posnet-credit-card-form .form-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #212529;
+}
+
+.posnet-credit-card-form .card-type-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FORM GROUPS
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .form-group {
+  margin-bottom: 16px;
+}
+
+.posnet-credit-card-form .form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.posnet-credit-card-form .form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.posnet-credit-card-form .form-group.half {
+  flex: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   INPUT STYLES
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form input[type="text"],
+.posnet-credit-card-form input[type="password"],
+.posnet-credit-card-form input[type="number"] {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1rem;
+  border: 2px solid #dee2e6;
+  border-radius: 10px;
+  background-color: #fff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.posnet-credit-card-form input:focus {
+  outline: none;
+  border-color: #ff8c00;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+}
+
+.posnet-credit-card-form input.error {
+  border-color: #dc3545;
+  background-color: #fff5f5;
+}
+
+.posnet-credit-card-form input:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+
+.posnet-credit-card-form .input-wrapper {
+  position: relative;
+}
+
+.posnet-credit-card-form .input-wrapper .card-icon {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ERROR MESSAGES
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .error-message {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #dc3545;
+}
+
+.posnet-credit-card-form .submit-error {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  color: #721c24;
+  font-size: 0.9rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TAKSİT SEÇENEKLERİ
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .installment-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.posnet-credit-card-form .installment-option {
+  padding: 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.posnet-credit-card-form .installment-option:hover {
+  border-color: #ff8c00;
+  background-color: #fff9f0;
+}
+
+.posnet-credit-card-form .installment-option.selected {
+  border-color: #ff8c00;
+  background-color: #fff5e6;
+  box-shadow: 0 0 0 3px rgba(255, 140, 0, 0.15);
+}
+
+.posnet-credit-card-form .installment-option .option-label {
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 4px;
+}
+
+.posnet-credit-card-form .installment-option .option-amount {
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.posnet-credit-card-form .installment-option .option-amount .monthly {
+  display: block;
+  font-weight: 600;
+  color: #ff8c00;
+}
+
+.posnet-credit-card-form .installment-option .option-amount .total {
+  display: block;
+  font-size: 0.8rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WORLD PUAN
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .world-points {
+  padding: 16px;
+  background-color: #e8f5e9;
+  border-radius: 12px;
+  border: 1px solid #c8e6c9;
+}
+
+.posnet-credit-card-form .world-points-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.posnet-credit-card-form .world-points-header label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.posnet-credit-card-form .query-points-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.posnet-credit-card-form .query-points-btn:hover {
+  background-color: #43a047;
+}
+
+.posnet-credit-card-form .points-loading {
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.posnet-credit-card-form .points-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #c8e6c9;
+}
+
+.posnet-credit-card-form .points-info input {
+  width: 100px;
+  padding: 6px 10px;
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GÜVENLİK OPSİYONU
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .security-option {
+  padding: 12px 16px;
+  background-color: #e3f2fd;
+  border-radius: 10px;
+  border: 1px solid #bbdefb;
+}
+
+.posnet-credit-card-form .security-option label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+
+.posnet-credit-card-form .security-option small {
+  display: block;
+  margin-left: 24px;
+  font-size: 0.8rem;
+  color: #666;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ÖDEME ÖZETİ
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .payment-summary {
+  margin: 20px 0;
+  padding: 16px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.posnet-credit-card-form .summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.posnet-credit-card-form .summary-row.discount {
+  color: #28a745;
+}
+
+.posnet-credit-card-form .summary-row.total {
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 2px solid #dee2e6;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #212529;
+}
+
+.posnet-credit-card-form .summary-row.monthly {
+  font-size: 0.85rem;
+  color: #ff8c00;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BUTONLAR
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.posnet-credit-card-form .cancel-btn {
+  flex: 1;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #6c757d;
+  background-color: #e9ecef;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.posnet-credit-card-form .cancel-btn:hover {
+  background-color: #dee2e6;
+}
+
+.posnet-credit-card-form .submit-btn {
+  flex: 2;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #ff8c00, #ffa500);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.posnet-credit-card-form .submit-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #e67e00, #ff8c00);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+.posnet-credit-card-form .submit-btn:disabled {
+  background: #adb5bd;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.posnet-credit-card-form .submit-btn .spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   GÜVENLİK BİLGİSİ
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form .security-info {
+  margin-top: 20px;
+  text-align: center;
+}
+
+.posnet-credit-card-form .security-badges {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.posnet-credit-card-form .security-badges span {
+  font-size: 0.8rem;
+  color: #28a745;
+  font-weight: 500;
+}
+
+.posnet-credit-card-form .security-info p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CHECKBOX STİLLERİ
+   ───────────────────────────────────────────────────────────────────────── */
+.posnet-credit-card-form input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff8c00;
+  cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   RESPONSİVE
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 576px) {
+  .posnet-credit-card-form {
+    padding: 16px;
+    border-radius: 12px;
+  }
+
+  .posnet-credit-card-form .form-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .posnet-credit-card-form .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .posnet-credit-card-form .installment-options {
+    grid-template-columns: 1fr;
+  }
+
+  .posnet-credit-card-form .form-actions {
+    flex-direction: column;
+  }
+
+  .posnet-credit-card-form .cancel-btn,
+  .posnet-credit-card-form .submit-btn {
+    width: 100%;
+  }
+
+  .posnet-credit-card-form .world-points-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .posnet-credit-card-form .points-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .posnet-credit-card-form .points-info input {
+    width: 100%;
+  }
+
+  .posnet-credit-card-form .security-badges {
+    flex-wrap: wrap;
+  }
+
+  /* Kart önizlemesi mobil ayarları */
+  .posnet-credit-card-form .credit-card-preview-container {
+    margin-bottom: 20px;
+  }
+}
+
+/* Küçük mobil cihazlar */
+@media (max-width: 360px) {
+  .posnet-credit-card-form {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .posnet-credit-card-form .form-header h3 {
+    font-size: 1rem;
+  }
+
+  .posnet-credit-card-form .card-type-indicator {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+  }
+}

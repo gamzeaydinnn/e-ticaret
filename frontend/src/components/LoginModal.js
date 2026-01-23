@@ -2,7 +2,7 @@
 // Giriş ve Kayıt Modalı - SMS OTP doğrulama ile kullanıcı kayıt akışı
 import React, { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import otpService from "../services/otpService";
+import otpService, { SmsVerificationPurpose } from "../services/otpService";
 
 const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   // ==================== STATE TANIMLARI ====================
@@ -10,6 +10,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPasswordRegister, setConfirmPasswordRegister] = useState(""); // Kayıt için şifre onayı
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -54,8 +55,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setLoading(true);
     setError("");
 
-    // Yeni backend API'yi kullan - purpose: 'registration'
-    const result = await otpService.sendOtp(phoneNumber, "registration");
+    // Yeni backend API'yi kullan - purpose: Registration (1)
+    const result = await otpService.sendOtp(
+      phoneNumber,
+      SmsVerificationPurpose.Registration,
+    );
 
     if (result.success) {
       setOtpSent(true);
@@ -96,11 +100,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setLoading(true);
     setError("");
 
-    // Yeni backend API'yi kullan - purpose: 'registration'
+    // Yeni backend API'yi kullan - purpose: Registration (1)
     const result = await otpService.verifyOtp(
       phoneNumber,
       otpCode,
-      "registration"
+      SmsVerificationPurpose.Registration,
     );
 
     if (result.success) {
@@ -111,7 +115,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       setError(result.message || "Kod doğrulanamadı");
       if (result.remainingAttempts !== undefined) {
         setError(
-          `${result.message} (${result.remainingAttempts} deneme kaldı)`
+          `${result.message} (${result.remainingAttempts} deneme kaldı)`,
         );
       }
     }
@@ -138,7 +142,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     if (result.success) {
       setForgotPasswordStep(2);
       setSuccess("Doğrulama kodu telefonunuza gönderildi.");
-      setOtpCountdown(result.expiresInSeconds || 120);
+      setOtpCountdown(result.expiresInSeconds || 180);
 
       const timer = setInterval(() => {
         setOtpCountdown((prev) => {
@@ -150,7 +154,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
         });
       }, 1000);
     } else {
-      setError(result.error || "SMS gönderilemedi");
+      setError(result.message || result.error || "SMS gönderilemedi");
     }
 
     setLoading(false);
@@ -167,34 +171,12 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       return;
     }
 
-    setLoading(true);
+    // NOTE: Şifre sıfırlama akışında OTP, backend'de reset sırasında doğrulanır.
+    // Burada ayrıca /api/sms/verify-otp çağırmak kodu "Verified" yapıp
+    // reset endpoint'inde tekrar doğrulama yapıldığı için hata yaratıyordu.
     setError("");
-
-    // Backend'e OTP doğrulama isteği gönder (purpose: PasswordReset = 2)
-    const result = await otpService.verifyOtp(
-      forgotPasswordPhone,
-      forgotPasswordCode,
-      2 // SmsVerificationPurpose.PasswordReset enum değeri (backend ile uyumlu)
-    );
-
-    if (result.success) {
-      // Kod backend tarafından doğrulandı, şifre adımına geç
-      setForgotPasswordStep(3);
-      setSuccess("Kod doğrulandı! Yeni şifrenizi belirleyin.");
-      setError("");
-    } else {
-      // Doğrulama başarısız - hata mesajını göster
-      let errorMessage = result.message || "Kod doğrulanamadı";
-      if (
-        result.remainingAttempts !== undefined &&
-        result.remainingAttempts > 0
-      ) {
-        errorMessage += ` (${result.remainingAttempts} deneme hakkı kaldı)`;
-      }
-      setError(errorMessage);
-    }
-
-    setLoading(false);
+    setForgotPasswordStep(3);
+    setSuccess("Yeni şifrenizi belirleyin.");
   };
 
   /**
@@ -219,7 +201,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     const result = await resetPasswordByPhone(
       forgotPasswordPhone,
       forgotPasswordCode,
-      newPassword
+      newPassword,
+      confirmPassword,
     );
 
     if (result.success) {
@@ -266,7 +249,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
-        }
+        },
       );
 
       if (response.ok) {
@@ -291,10 +274,25 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     e.preventDefault();
     setError("");
 
-    // Kayıt için OTP zorunlu
-    if (!isLogin && !otpVerified) {
-      setError("Lütfen telefon numaranızı doğrulayın");
-      return;
+    // Kayıt için validasyonlar
+    if (!isLogin) {
+      // OTP zorunlu
+      if (!otpVerified) {
+        setError("Lütfen telefon numaranızı doğrulayın");
+        return;
+      }
+
+      // Şifre minimum 6 karakter
+      if (password.length < 6) {
+        setError("Şifre en az 6 karakter olmalıdır");
+        return;
+      }
+
+      // Şifre onayı kontrolü
+      if (password !== confirmPasswordRegister) {
+        setError("Şifreler eşleşmiyor");
+        return;
+      }
     }
 
     setLoading(true);
@@ -310,7 +308,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
           password,
           firstName,
           lastName,
-          phoneNumber
+          phoneNumber,
+          confirmPasswordRegister, // Şifre onayı eklendi
         );
       }
 
@@ -320,6 +319,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
         // Formu temizle
         setEmail("");
         setPassword("");
+        setConfirmPasswordRegister("");
         setFirstName("");
         setLastName("");
         setPhoneNumber("");
@@ -400,8 +400,8 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
               {isForgotPassword
                 ? "Şifremi Unuttum"
                 : isLogin
-                ? "Giriş Yap"
-                : "Hesap Oluştur"}
+                  ? "Giriş Yap"
+                  : "Hesap Oluştur"}
             </h5>
             <button
               type="button"
@@ -508,7 +508,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         value={forgotPasswordPhone}
                         onChange={(e) =>
                           setForgotPasswordPhone(
-                            e.target.value.replace(/\D/g, "")
+                            e.target.value.replace(/\D/g, ""),
                           )
                         }
                         placeholder="05XXXXXXXXX"
@@ -574,7 +574,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         value={forgotPasswordCode}
                         onChange={(e) =>
                           setForgotPasswordCode(
-                            e.target.value.replace(/\D/g, "")
+                            e.target.value.replace(/\D/g, ""),
                           )
                         }
                         placeholder="123456"
@@ -986,6 +986,11 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                   <div className="mb-4">
                     <label htmlFor="password" className="form-label">
                       <i className="fas fa-lock me-2"></i>Şifre
+                      {!isLogin && (
+                        <small className="text-muted ms-1">
+                          (en az 6 karakter)
+                        </small>
+                      )}
                     </label>
                     <input
                       type="password"
@@ -994,7 +999,10 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      placeholder="Şifrenizi girin"
+                      minLength={!isLogin ? 6 : undefined}
+                      placeholder={
+                        isLogin ? "Şifrenizi girin" : "En az 6 karakter"
+                      }
                       style={{
                         borderRadius: "12px",
                         border: "2px solid #e0e0e0",
@@ -1004,6 +1012,62 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                     />
                   </div>
+
+                  {/* Şifre Onayı - Sadece kayıt için */}
+                  {!isLogin && (
+                    <div className="mb-4">
+                      <label
+                        htmlFor="confirmPasswordRegister"
+                        className="form-label"
+                      >
+                        <i className="fas fa-lock me-2"></i>Şifre Tekrar
+                        {password &&
+                          confirmPasswordRegister &&
+                          password === confirmPasswordRegister && (
+                            <i className="fas fa-check-circle text-success ms-2"></i>
+                          )}
+                      </label>
+                      <input
+                        type="password"
+                        className="form-control form-control-lg"
+                        id="confirmPasswordRegister"
+                        value={confirmPasswordRegister}
+                        onChange={(e) =>
+                          setConfirmPasswordRegister(e.target.value)
+                        }
+                        required
+                        placeholder="Şifrenizi tekrar girin"
+                        style={{
+                          borderRadius: "12px",
+                          border:
+                            password &&
+                            confirmPasswordRegister &&
+                            password !== confirmPasswordRegister
+                              ? "2px solid #dc3545"
+                              : "2px solid #e0e0e0",
+                          padding: "12px 16px",
+                        }}
+                        onFocus={(e) =>
+                          (e.target.style.borderColor = "#ff6b35")
+                        }
+                        onBlur={(e) =>
+                          (e.target.style.borderColor =
+                            password &&
+                            confirmPasswordRegister &&
+                            password !== confirmPasswordRegister
+                              ? "#dc3545"
+                              : "#e0e0e0")
+                        }
+                      />
+                      {password &&
+                        confirmPasswordRegister &&
+                        password !== confirmPasswordRegister && (
+                          <small className="text-danger">
+                            Şifreler eşleşmiyor
+                          </small>
+                        )}
+                    </div>
+                  )}
 
                   <button
                     type="submit"
@@ -1068,6 +1132,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         setShowOtpInput(false);
                         setPhoneNumber("");
                         setOtpCode("");
+                        setConfirmPasswordRegister("");
                       }}
                       style={{ color: "#ff6b35" }}
                     >

@@ -37,6 +37,20 @@ namespace ECommerce.Core.DTOs.Cart
         /// </summary>
         public string? ProductImageUrl { get; set; }
 
+        /// <summary>
+        /// ProductImage alias (frontend uyumluluğu için)
+        /// </summary>
+        public string? ProductImage 
+        { 
+            get => ProductImageUrl; 
+            set => ProductImageUrl = value; 
+        }
+
+        /// <summary>
+        /// Sku alias (frontend uyumluluğu için)
+        /// </summary>
+        public string? Sku { get; set; }
+
         #endregion
 
         #region Varyant Bilgileri
@@ -45,6 +59,15 @@ namespace ECommerce.Core.DTOs.Cart
         /// Varyant ID (nullable - varyantsız ürünler için null)
         /// </summary>
         public int? ProductVariantId { get; set; }
+
+        /// <summary>
+        /// VariantId alias (frontend uyumluluğu için)
+        /// </summary>
+        public int? VariantId 
+        { 
+            get => ProductVariantId; 
+            set => ProductVariantId = value; 
+        }
 
         /// <summary>
         /// Varyant başlığı

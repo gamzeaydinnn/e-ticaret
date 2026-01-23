@@ -1,135 +1,336 @@
+/**
+ * Sepet Servisi
+ * Backend API ile iletişim kurar - localStorage KULLANMAZ (sadece token için)
+ *
+ * Mimari:
+ * - Misafir kullanıcılar: CartToken (UUID) ile tanımlanır
+ * - Kayıtlı kullanıcılar: JWT token ile tanımlanır
+ * - Token localStorage'da saklanır AMA sepet verisi BACKEND'de tutulur
+ */
 import api from "./api";
 
 const base = "/api/cartitems";
+const CART_TOKEN_KEY = "cart_guest_token";
+
+// ============================================================
+// TOKEN YÖNETİMİ
+// ============================================================
+
+/**
+ * Guest token'ı localStorage'dan alır veya yeni oluşturur
+ * Token: UUID v4 formatında benzersiz kimlik
+ */
+const getOrCreateGuestToken = () => {
+  let token = localStorage.getItem(CART_TOKEN_KEY);
+  if (!token) {
+    // Crypto API ile güvenli UUID oluştur
+    token = crypto.randomUUID?.() || generateUUID();
+    localStorage.setItem(CART_TOKEN_KEY, token);
+    console.log(
+      "🆕 Yeni guest token oluşturuldu:",
+      token.substring(0, 8) + "...",
+    );
+  }
+  return token;
+};
+
+/**
+ * Fallback UUID generator (crypto.randomUUID desteklenmiyorsa)
+ */
+const generateUUID = () => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+/**
+ * Guest token'ı döner (varsa)
+ */
+const getGuestToken = () => {
+  return localStorage.getItem(CART_TOKEN_KEY);
+};
+
+/**
+ * Guest token'ı temizler (login sonrası veya logout)
+ */
+const clearGuestToken = () => {
+  localStorage.removeItem(CART_TOKEN_KEY);
+  console.log("🗑️ Guest token temizlendi");
+};
 
 export const CartService = {
-  // Sepet öğelerini getir
+  // Token metodlarını dışa aktar
+  getOrCreateGuestToken,
+  getGuestToken,
+  clearGuestToken,
+
+  // ============================================================
+  // MİSAFİR KULLANICI API'leri (CartToken bazlı)
+  // ============================================================
+
+  /**
+   * Misafir kullanıcının sepetini getirir
+   * @returns {Promise<CartSummaryDto>}
+   */
+  getGuestCart: async () => {
+    const token = getGuestToken();
+    if (!token) {
+      console.log("📭 Guest token yok - boş sepet");
+      return { items: [], total: 0 };
+    }
+
+    try {
+      const response = await api.get(`${base}/guest`, {
+        headers: { "X-Cart-Token": token },
+      });
+      console.log(
+        "🛒 Guest sepet alındı:",
+        response?.items?.length || 0,
+        "ürün",
+      );
+      return response;
+    } catch (error) {
+      console.error("❌ Guest sepet alınamadı:", error);
+      return { items: [], total: 0 };
+    }
+  },
+
+  /**
+   * Misafir kullanıcının sepetine ürün ekler
+   * @param {number} productId - Ürün ID
+   * @param {number} quantity - Miktar
+   * @param {number|null} variantId - Varyant ID (opsiyonel)
+   * @returns {Promise<{success: boolean, data?: CartItemDto, error?: string}>}
+   */
+  addToGuestCart: async (productId, quantity = 1, variantId = null) => {
+    const token = getOrCreateGuestToken();
+
+    try {
+      const response = await api.post(
+        `${base}/guest`,
+        {
+          cartToken: token,
+          productId,
+          quantity,
+          variantId,
+        },
+        {
+          headers: { "X-Cart-Token": token },
+        },
+      );
+      console.log("✅ Guest sepete eklendi:", productId, "x", quantity);
+      return { success: true, data: response };
+    } catch (error) {
+      console.error("❌ Guest sepete ekleme başarısız:", error);
+      const errorMessage =
+        error?.response?.data?.message || error?.message || "Sepete eklenemedi";
+      return { success: false, error: errorMessage };
+    }
+  },
+
+  /**
+   * Misafir kullanıcının sepet öğesini günceller
+   * @param {number} productId - Ürün ID
+   * @param {number} quantity - Yeni miktar (0 = sil)
+   * @param {number|null} variantId - Varyant ID (opsiyonel)
+   */
+  updateGuestCartItem: async (productId, quantity, variantId = null) => {
+    const token = getGuestToken();
+    if (!token) return { success: false, error: "Token yok" };
+
+    try {
+      await api.put(
+        `${base}/guest`,
+        {
+          cartToken: token,
+          productId,
+          quantity,
+          variantId,
+        },
+        {
+          headers: { "X-Cart-Token": token },
+        },
+      );
+      console.log("✏️ Guest sepet güncellendi:", productId, "=>", quantity);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Guest sepet güncellenemedi:", error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || "Güncellenemedi",
+      };
+    }
+  },
+
+  /**
+   * Misafir kullanıcının sepetinden ürün siler
+   * @param {number} productId - Ürün ID
+   * @param {number|null} variantId - Varyant ID (opsiyonel)
+   */
+  removeFromGuestCart: async (productId, variantId = null) => {
+    const token = getGuestToken();
+    if (!token) return { success: false, error: "Token yok" };
+
+    try {
+      let url = `${base}/guest/${productId}`;
+      if (variantId) {
+        url += `?variantId=${variantId}`;
+      }
+      await api.delete(url, {
+        headers: { "X-Cart-Token": token },
+      });
+      console.log("🗑️ Guest sepetten silindi:", productId);
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Guest sepetten silme başarısız:", error);
+      return {
+        success: false,
+        error: error?.response?.data?.message || "Silinemedi",
+      };
+    }
+  },
+
+  /**
+   * Misafir kullanıcının sepetini temizler
+   */
+  clearGuestCart: async () => {
+    const token = getGuestToken();
+    if (!token) return { success: true }; // Zaten boş
+
+    try {
+      await api.delete(`${base}/guest/clear`, {
+        headers: { "X-Cart-Token": token },
+      });
+      console.log("🧹 Guest sepet temizlendi");
+      return { success: true };
+    } catch (error) {
+      console.error("❌ Guest sepet temizlenemedi:", error);
+      return { success: false };
+    }
+  },
+
+  /**
+   * Misafir sepet ürün sayısını döner
+   */
+  getGuestCartCount: async () => {
+    const cart = await CartService.getGuestCart();
+    return (
+      cart?.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0
+    );
+  },
+
+  // ============================================================
+  // KAYITLI KULLANICI API'leri (JWT bazlı)
+  // ============================================================
+
+  /**
+   * Kayıtlı kullanıcının sepetini getirir
+   */
   getCartItems: () => api.get(base),
 
-  // Sepete ürün ekle
-  addItem: (productId, quantity = 1) => api.post(base, { productId, quantity }),
+  /**
+   * Kayıtlı kullanıcının sepetine ürün ekler
+   */
+  addItem: (productId, quantity = 1, variantId = null) =>
+    api.post(base, { productId, quantity, variantId }),
 
-  // Sepet ürününü güncelle
+  /**
+   * Kayıtlı kullanıcının sepet öğesini günceller
+   */
   updateItem: async (id, productId, quantity) => {
     try {
       return await api.put(`${base}/${id}`, { productId, quantity });
     } catch (error) {
-      console.log("Backend bağlantısı yok, localStorage kullanılıyor");
-      // Backend hatası durumunda localStorage'e güncelle
-      CartService.updateGuestCartItem(productId, quantity);
-      return { success: true, fallback: true };
+      console.error("Backend sepet güncellenemedi:", error);
+      throw error;
     }
   },
 
-  // Sepet ürününü sil
-  removeItem: async (id, productId) => {
+  /**
+   * Kayıtlı kullanıcının sepetinden öğe siler
+   */
+  removeItem: async (id) => {
     try {
       return await api.delete(`${base}/${id}`);
     } catch (error) {
-      console.log("Backend bağlantısı yok, localStorage kullanılıyor");
-      // Backend hatası durumunda localStorage'den sil
-      CartService.removeFromGuestCart(productId);
-      return { success: true, fallback: true };
+      console.error("Backend sepetten silme başarısız:", error);
+      throw error;
     }
   },
 
-  // LocalStorage için guest sepet yönetimi
-  getGuestCart: () => {
-    const cart = localStorage.getItem("guestCart");
-    return cart ? JSON.parse(cart) : [];
-  },
+  // ============================================================
+  // MERGE API (Login Sonrası)
+  // ============================================================
 
-  addToGuestCart: (productId, quantity = 1) => {
-    const cart = CartService.getGuestCart();
-    const existingItem = cart.find((item) => item.productId === productId);
-
-    if (existingItem) {
-      existingItem.quantity += quantity;
-    } else {
-      cart.push({
-        productId,
-        quantity,
-        addedAt: new Date().toISOString(),
-      });
+  /**
+   * Misafir sepetini kayıtlı kullanıcıya aktarır
+   * Login başarılı olduktan sonra çağrılmalı
+   * @returns {Promise<{mergedCount: number, message: string}>}
+   */
+  mergeGuestCart: async () => {
+    const token = getGuestToken();
+    if (!token) {
+      console.log("📭 Guest token yok - merge atlanıyor");
+      return { mergedCount: 0, message: "Misafir sepet yok" };
     }
 
-    localStorage.setItem("guestCart", JSON.stringify(cart));
-    return cart;
-  },
+    try {
+      const response = await api.post(
+        `${base}/merge`,
+        {
+          cartToken: token,
+        },
+        {
+          headers: { "X-Cart-Token": token },
+        },
+      );
 
-  updateGuestCartItem: (productId, quantity) => {
-    const cart = CartService.getGuestCart();
-    const itemIndex = cart.findIndex((item) => item.productId === productId);
-
-    if (itemIndex !== -1) {
-      if (quantity <= 0) {
-        cart.splice(itemIndex, 1);
-      } else {
-        cart[itemIndex].quantity = quantity;
+      // Başarılı merge sonrası token'ı temizle
+      if (response?.mergedCount > 0) {
+        clearGuestToken();
       }
-      localStorage.setItem("guestCart", JSON.stringify(cart));
+
+      console.log("🔄 Sepet merge tamamlandı:", response);
+      return response;
+    } catch (error) {
+      console.error("❌ Sepet merge başarısız:", error);
+      return { mergedCount: 0, message: "Merge başarısız" };
     }
-
-    return cart;
   },
 
-  removeFromGuestCart: (productId) => {
-    const cart = CartService.getGuestCart();
-    const filteredCart = cart.filter((item) => item.productId !== productId);
-    localStorage.setItem("guestCart", JSON.stringify(filteredCart));
-    return filteredCart;
-  },
+  // ============================================================
+  // FİYAT HESAPLAMA
+  // ============================================================
 
-  clearGuestCart: () => {
-    localStorage.removeItem("guestCart");
-  },
-
-  getGuestCartCount: () => {
-    const cart = CartService.getGuestCart();
-    return cart.reduce((total, item) => total + item.quantity, 0);
-  },
-
-  // Shipping method persistence for guest flow (frontend only)
-  getShippingMethod: () => {
-    return localStorage.getItem("shippingMethod") || "motorcycle"; // default motokurye
-  },
-
-  setShippingMethod: (method) => {
-    localStorage.setItem("shippingMethod", method);
-  },
-
+  /**
+   * Sepet fiyat önizlemesi
+   */
   previewPrice: (payload) => api.post(`${base}/price-preview`, payload),
 
-  // ========================================
+  // ============================================================
   // KUPON İŞLEMLERİ
-  // ========================================
-  
+  // ============================================================
+
   /**
    * Kupon kodunu kontrol et (basit doğrulama)
-   * @param {string} code - Kupon kodu
-   * @returns {Promise<{isValid: boolean, message: string, coupon?: object}>}
    */
   checkCoupon: async (code) => {
     try {
       const response = await api.get(
-        `/api/coupon/check/${encodeURIComponent(code)}`
+        `/api/coupon/check/${encodeURIComponent(code)}`,
       );
       return response;
     } catch (error) {
       const errorData = error?.raw?.response?.data || error?.response?.data;
-      if (errorData) {
-        return errorData;
-      }
+      if (errorData) return errorData;
       throw error;
     }
   },
 
   /**
    * Kupon kodunu sepet detaylarıyla doğrula ve indirim hesapla
-   * @param {string} couponCode - Kupon kodu
-   * @param {Array} cartItems - Sepet ürünleri [{productId, quantity, unitPrice}]
-   * @param {number} subtotal - Ara toplam
-   * @returns {Promise<CouponValidationResult>}
    */
   validateCoupon: async (couponCode, cartItems, subtotal, shippingCost = 0) => {
     try {
@@ -141,14 +342,15 @@ export const CartService = {
       normalizedItems.forEach((item) => {
         const productId = item.productId || item.id;
         const categoryId =
-          item.categoryId || item?.product?.categoryId || item?.product?.category?.id;
+          item.categoryId ||
+          item?.product?.categoryId ||
+          item?.product?.category?.id;
 
         if (productId != null) {
           productIds.push(productId);
           productQuantities[productId] =
             (productQuantities[productId] || 0) + (item.quantity || 0);
         }
-
         if (categoryId != null) {
           categoryIds.push(categoryId);
         }
@@ -162,32 +364,31 @@ export const CartService = {
         categoryIds: [...new Set(categoryIds)],
         productQuantities,
       };
-      const response = await api.post("/api/coupon/validate", payload);
-      return response;
+
+      return await api.post("/api/coupon/validate", payload);
     } catch (error) {
       const errorData = error?.raw?.response?.data || error?.response?.data;
-      if (errorData) {
-        return errorData;
-      }
+      if (errorData) return errorData;
       throw error;
     }
   },
 
   /**
    * Aktif kuponları getir
-   * @returns {Promise<Array>}
    */
   getActiveCoupons: async () => {
     try {
-      const response = await api.get("/api/coupon/active");
-      return response;
+      return await api.get("/api/coupon/active");
     } catch (error) {
       console.error("Aktif kuponlar alınamadı:", error);
       return [];
     }
   },
 
-  // Uygulanan kupon bilgisini localStorage'da sakla
+  // ============================================================
+  // KUPON STATE (localStorage - sadece UI state için)
+  // ============================================================
+
   getAppliedCoupon: () => {
     const coupon = localStorage.getItem("appliedCoupon");
     return coupon ? JSON.parse(coupon) : null;
@@ -203,5 +404,19 @@ export const CartService = {
 
   clearAppliedCoupon: () => {
     localStorage.removeItem("appliedCoupon");
-  }
+  },
+
+  // ============================================================
+  // KARGO YÖNTEMİ (localStorage - UI preference)
+  // ============================================================
+
+  getShippingMethod: () => {
+    return localStorage.getItem("shippingMethod") || "motorcycle";
+  },
+
+  setShippingMethod: (method) => {
+    localStorage.setItem("shippingMethod", method);
+  },
 };
+
+export default CartService;

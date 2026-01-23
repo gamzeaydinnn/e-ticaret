@@ -35,15 +35,15 @@ namespace ECommerce.API.Data
                 logger.LogInformation("🖼️ BannerSeeder: Başlatılıyor...");
                 Console.WriteLine("🖼️ BannerSeeder: Başlatılıyor...");
 
-                // Eğer zaten banner varsa, seed etme (ilk çalıştırma için)
+                // ⚠️ GÜVENLİK: Eğer zaten banner varsa, seed etme (veriler KORUNUR)
                 if (context.Banners.Any())
                 {
-                    Console.WriteLine("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed atlanıyor");
-                    logger.LogInformation("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed atlanıyor");
+                    Console.WriteLine("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed ATLANILIYOR (banner'lar KORUNUYOR)");
+                    logger.LogInformation("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed ATLANILIYOR");
                     return;
                 }
 
-                // Görsel dosyalarını kopyala
+                // Görsel dosyalarını kopyala (Docker'da başarısız olabilir, sorun değil)
                 CopyBannerImages(environment.ContentRootPath, logger);
 
                 logger.LogInformation("📝 BannerSeeder: Varsayılan banner'lar oluşturuluyor...");

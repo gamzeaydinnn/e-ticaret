@@ -1,4 +1,13 @@
-// src/contexts/FavoriteContext.js
+/**
+ * Favori Context - Backend API Entegrasyonlu
+ *
+ * Tüm favori verileri BACKEND'de tutulur - localStorage KULLANILMAZ (sadece token için)
+ *
+ * Mimari:
+ * - Misafir: X-Favorites-Token (UUID) ile backend'e istek atılır
+ * - Kayıtlı: JWT token ile backend'e istek atılır
+ * - Login sonrası: Misafir favoriler → Kullanıcı favorilerine merge edilir
+ */
 import {
   createContext,
   useContext,
@@ -19,136 +28,221 @@ export const useFavorites = () => {
   return context;
 };
 
-// Storage key - kullanıcı veya misafir
-const getFavoriteKey = (userId) =>
-  userId ? `favorites_user_${userId}` : "favorites_guest";
-
 export const FavoriteProvider = ({ children }) => {
-  const [favorites, setFavorites] = useState([]);
+  // State
+  const [favorites, setFavorites] = useState([]); // Favori ürün objeleri (ProductListDto)
+  const [favoriteIds, setFavoriteIds] = useState([]); // Sadece ID'ler (hızlı kontrol için)
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Auth context
   const { user } = useAuth();
+  const isAuthenticated = !!user?.id;
 
-  // Kullanıcı değiştiğinde favorileri yükle
-  useEffect(() => {
-    loadFavorites();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  // Favorileri yükle
-  const loadFavorites = useCallback(() => {
+  // ============================================================
+  // FAVORİLERİ YÜKLE - Backend'den
+  // ============================================================
+  const loadFavorites = useCallback(async () => {
     setLoading(true);
+    setError(null);
+
     try {
-      const key = getFavoriteKey(user?.id);
-      const stored = localStorage.getItem(key);
-      setFavorites(stored ? JSON.parse(stored) : []);
-    } catch (error) {
-      console.error("Favoriler yüklenirken hata:", error);
+      let favoritesData;
+
+      if (isAuthenticated) {
+        // Kayıtlı kullanıcı - JWT ile favorileri al
+        console.log("🔐 Kayıtlı kullanıcı favorileri yükleniyor...");
+        favoritesData = await FavoriteService.getFavorites();
+      } else {
+        // Misafir kullanıcı - Token ile favorileri al
+        console.log("👤 Misafir favorileri yükleniyor...");
+        favoritesData = await FavoriteService.getGuestFavorites();
+      }
+
+      // Favorileri ve ID'leri ayarla
+      setFavorites(favoritesData || []);
+      const ids = (favoritesData || []).map((f) => f.id || f.productId);
+      setFavoriteIds(ids);
+
+      console.log("⭐ Favoriler yüklendi:", ids.length, "ürün");
+    } catch (err) {
+      console.error("❌ Favoriler yüklenirken hata:", err);
+      setError("Favoriler yüklenemedi");
       setFavorites([]);
+      setFavoriteIds([]);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [isAuthenticated]);
 
-  // Favorileri kaydet
-  const saveFavorites = useCallback(
-    (items) => {
-      const key = getFavoriteKey(user?.id);
-      localStorage.setItem(key, JSON.stringify(items));
-      setFavorites(items);
-      window.dispatchEvent(new Event("favorites:updated"));
-    },
-    [user?.id]
-  );
+  // Kullanıcı değiştiğinde favorileri yükle ve merge et
+  const [prevUserId, setPrevUserId] = useState(null);
 
-  // Favoriye ekle/çıkar (toggle) - HEM MİSAFİR HEM KULLANICI İÇİN ÇALIŞIR
+  useEffect(() => {
+    const handleUserChange = async () => {
+      const currentUserId = user?.id || null;
+
+      // Kullanıcı login olduysa (misafir → kayıtlı)
+      if (currentUserId && !prevUserId) {
+        console.log("🔄 Login algılandı, misafir favoriler merge ediliyor...");
+        try {
+          const result = await FavoriteService.mergeGuestFavorites();
+          if (result.mergedCount > 0) {
+            console.log(
+              "✅ Favori merge başarılı:",
+              result.mergedCount,
+              "ürün eklendi",
+            );
+          }
+        } catch (err) {
+          console.error("❌ Favori merge hatası (sessizce devam):", err);
+        }
+      }
+
+      // Favorileri yükle
+      await loadFavorites();
+      setPrevUserId(currentUserId);
+    };
+
+    handleUserChange();
+  }, [user?.id, prevUserId, loadFavorites]);
+
+  // ============================================================
+  // FAVORİYE EKLE/ÇIKAR (TOGGLE)
+  // ============================================================
   const toggleFavorite = useCallback(
-    (productId) => {
-      const isFav = favorites.includes(productId);
-      let updatedFavorites;
+    async (productId) => {
+      try {
+        let result;
 
-      if (isFav) {
-        updatedFavorites = favorites.filter((id) => id !== productId);
-      } else {
-        updatedFavorites = [...favorites, productId];
+        if (isAuthenticated) {
+          result = await FavoriteService.toggleFavorite(productId);
+        } else {
+          result = await FavoriteService.toggleGuestFavorite(productId);
+        }
+
+        if (result.success) {
+          // Favorileri yeniden yükle
+          await loadFavorites();
+
+          // Event dispatch et
+          window.dispatchEvent(new Event("favorites:updated"));
+
+          return result;
+        }
+
+        return { success: false, error: result.error };
+      } catch (err) {
+        console.error("❌ Favori toggle hatası:", err);
+        return { success: false, error: err?.message };
       }
-
-      saveFavorites(updatedFavorites);
-
-      // Backend sync (sadece giriş yapmış kullanıcılar için)
-      if (user?.id) {
-        FavoriteService.toggleFavorite(productId).catch(() => {});
-      }
-
-      return { success: true, action: isFav ? "removed" : "added" };
     },
-    [favorites, user?.id, saveFavorites]
+    [isAuthenticated, loadFavorites],
   );
 
-  // Favoriye ekle
+  // ============================================================
+  // FAVORİYE EKLE
+  // ============================================================
   const addToFavorites = useCallback(
-    (productId) => {
-      if (favorites.includes(productId)) {
+    async (productId) => {
+      // Zaten favorideyse işlem yapma
+      if (favoriteIds.includes(productId)) {
         return { success: true, message: "Ürün zaten favorilerde" };
       }
 
-      const updatedFavorites = [...favorites, productId];
-      saveFavorites(updatedFavorites);
-
-      if (user?.id) {
-        FavoriteService.toggleFavorite(productId).catch(() => {});
-      }
-
-      return { success: true };
+      return toggleFavorite(productId);
     },
-    [favorites, user?.id, saveFavorites]
+    [favoriteIds, toggleFavorite],
   );
 
-  // Favoriden çıkar
+  // ============================================================
+  // FAVORİDEN ÇIKAR
+  // ============================================================
   const removeFromFavorites = useCallback(
-    (productId) => {
-      const updatedFavorites = favorites.filter((id) => id !== productId);
-      saveFavorites(updatedFavorites);
+    async (productId) => {
+      try {
+        let result;
 
-      if (user?.id) {
-        FavoriteService.removeFavorite(productId).catch(() => {});
+        if (isAuthenticated) {
+          result = await FavoriteService.removeFavorite(productId);
+        } else {
+          result = await FavoriteService.removeGuestFavorite(productId);
+        }
+
+        if (result.success) {
+          // Favorileri yeniden yükle
+          await loadFavorites();
+          window.dispatchEvent(new Event("favorites:updated"));
+        }
+
+        return result;
+      } catch (err) {
+        console.error("❌ Favoriden çıkarma hatası:", err);
+        return { success: false, error: err?.message };
       }
-
-      return { success: true };
     },
-    [favorites, user?.id, saveFavorites]
+    [isAuthenticated, loadFavorites],
   );
 
-  // Favorileri temizle
-  const clearFavorites = useCallback(() => {
-    const key = getFavoriteKey(user?.id);
-    localStorage.removeItem(key);
-    setFavorites([]);
-    window.dispatchEvent(new Event("favorites:updated"));
-  }, [user?.id]);
+  // ============================================================
+  // FAVORİLERİ TEMİZLE
+  // ============================================================
+  const clearFavorites = useCallback(async () => {
+    try {
+      // Her favoriyi tek tek sil
+      for (const id of favoriteIds) {
+        if (isAuthenticated) {
+          await FavoriteService.removeFavorite(id);
+        } else {
+          await FavoriteService.removeGuestFavorite(id);
+        }
+      }
 
-  // Favori mi kontrol et
+      setFavorites([]);
+      setFavoriteIds([]);
+      window.dispatchEvent(new Event("favorites:updated"));
+    } catch (err) {
+      console.error("❌ Favorileri temizleme hatası:", err);
+    }
+  }, [favoriteIds, isAuthenticated]);
+
+  // ============================================================
+  // FAVORİ Mİ KONTROL ET
+  // ============================================================
   const isFavorite = useCallback(
     (productId) => {
-      return favorites.includes(productId);
+      return favoriteIds.includes(productId);
     },
-    [favorites]
+    [favoriteIds],
   );
 
-  // Favori sayısı
+  // ============================================================
+  // FAVORİ SAYISI
+  // ============================================================
   const getFavoriteCount = useCallback(() => {
-    return favorites.length;
-  }, [favorites]);
+    return favoriteIds.length;
+  }, [favoriteIds]);
 
+  // ============================================================
+  // CONTEXT VALUE
+  // ============================================================
   const value = {
+    // State
     favorites,
+    favoriteIds,
     loading,
+    error,
+
+    // Actions
     toggleFavorite,
     addToFavorites,
     removeFromFavorites,
     clearFavorites,
+    loadFavorites,
+
+    // Computed
     isFavorite,
     getFavoriteCount,
-    loadFavorites,
   };
 
   return (
@@ -157,3 +251,5 @@ export const FavoriteProvider = ({ children }) => {
     </FavoriteContext.Provider>
   );
 };
+
+export default FavoriteContext;

@@ -21,6 +21,11 @@ namespace ECommerce.Core.DTOs.Auth
         [MinLength(6, ErrorMessage = "Şifre en az 6 karakter olmalıdır.")]
         public string Password { get; set; } = string.Empty;
 
+        /// <summary>Şifre onayı (Password ile aynı olmalı)</summary>
+        [Required(ErrorMessage = "Şifre onayı gereklidir.")]
+        [Compare("Password", ErrorMessage = "Şifreler eşleşmiyor.")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+
         /// <summary>Ad</summary>
         [Required(ErrorMessage = "Ad gereklidir.")]
         public string FirstName { get; set; } = string.Empty;

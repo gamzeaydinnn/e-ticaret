@@ -306,27 +306,32 @@ namespace ECommerce.Business.Services.Managers
                 throw new Exception("Insufficient stock");
             }
 
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            try
+            // ExecutionStrategy kullanarak transaction yönetimi
+            var strategy = _context.Database.CreateExecutionStrategy();
+            
+            var createdOrderId = await strategy.ExecuteAsync(async () =>
             {
-                var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
-                decimal itemsTotal = 0m;
-                var items = new List<OrderItem>();
-                foreach (var item in dto.OrderItems)
+                using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    var product = await _context.Products.FindAsync(item.ProductId);
-                    if (product == null)
-                        throw new Exception($"Ürün bulunamadı: {item.ProductId}");
-                    var unitPrice = product.SpecialPrice ?? product.Price;
-                    itemsTotal += unitPrice * item.Quantity;
-                    items.Add(new OrderItem
+                    var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
+                    decimal itemsTotal = 0m;
+                    var items = new List<OrderItem>();
+                    foreach (var item in dto.OrderItems)
                     {
-                        ProductId = product.Id,
-                        Quantity = item.Quantity,
-                        UnitPrice = unitPrice,
-                        ExpectedWeightGrams = product.UnitWeightGrams * item.Quantity
-                    });
-                }
+                        var product = await _context.Products.FindAsync(item.ProductId);
+                        if (product == null)
+                            throw new Exception($"Ürün bulunamadı: {item.ProductId}");
+                        var unitPrice = product.SpecialPrice ?? product.Price;
+                        itemsTotal += unitPrice * item.Quantity;
+                        items.Add(new OrderItem
+                        {
+                            ProductId = product.Id,
+                            Quantity = item.Quantity,
+                            UnitPrice = unitPrice,
+                            ExpectedWeightGrams = product.UnitWeightGrams * item.Quantity
+                        });
+                    }
                 // Compute shipping server-side (whitelist + fixed costs)
                 var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
                 var shippingCost = ComputeShippingCost(shippingMethod);
@@ -401,23 +406,26 @@ namespace ECommerce.Business.Services.Managers
                 await _inventoryService.CommitReservationAsync(clientOrderId);
                 await transaction.CommitAsync();
 
-                // Fire-and-forget notification (do not block checkout)
-                if (_notificationService != null)
-                {
-                    _ = _notificationService.SendOrderConfirmationAsync(order.Id);
+                return order.Id;
                 }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    if (reservationSucceeded)
+                    {
+                        await _inventoryService.ReleaseReservationAsync(clientOrderId);
+                    }
+                    throw;
+                }
+            });
 
-                return await GetByIdAsync(order.Id) ?? throw new Exception("Sipariş oluşturulamadı.");
-            }
-            catch
+            // Notification (await to avoid DbContext concurrency issues)
+            if (_notificationService != null)
             {
-                await transaction.RollbackAsync();
-                if (reservationSucceeded)
-                {
-                    await _inventoryService.ReleaseReservationAsync(clientOrderId);
-                }
-                throw;
+                await _notificationService.SendOrderConfirmationAsync(createdOrderId);
             }
+
+            return await GetByIdAsync(createdOrderId) ?? throw new Exception("Sipariş oluşturulamadı.");
         }
 
         public async Task<bool> CancelOrderAsync(int orderId, int userId)

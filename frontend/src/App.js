@@ -36,7 +36,7 @@ import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
-import AdminWeightReports from "./pages/Admin/AdminWeightReports";
+import AdminWeightManagement from "./pages/Admin/AdminWeightManagement";
 import PosterManagement from "./pages/Admin/PosterManagement";
 import Dashboard from "./pages/Admin/Dashboard";
 // Kupon Yönetimi
@@ -51,6 +51,8 @@ import AdminAccessDenied from "./pages/Admin/AdminAccessDenied";
 import CourierDashboard from "./pages/Courier/CourierDashboard";
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierOrders from "./pages/Courier/CourierOrders";
+import CourierDeliveryDetail from "./pages/Courier/CourierDeliveryDetail";
+import CourierWeightEntry from "./pages/Courier/CourierWeightEntry";
 // Admin guards
 import Footer from "./components/Footer";
 import { GlobalToastContainer } from "./components/ToastProvider";
@@ -86,6 +88,12 @@ import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
+// 3D Secure Ödeme Callback Sayfaları
+import {
+  PaymentSuccessPage,
+  PaymentFailurePage,
+  ThreeDSecureCallbackPage,
+} from "./components/payment/PaymentResultPages";
 // Mobil Bottom Navigation
 import MobileBottomNav from "./components/MobileBottomNav";
 import "./styles/mobileNav.css";
@@ -706,6 +714,13 @@ function App() {
         <Route path="/campaigns/:slug" element={<CampaignDetail />} />
         <Route path="/product/:id" element={<Product />} />
         <Route path="/checkout" element={<Checkout />} />
+        {/* 3D Secure Ödeme Callback Sayfaları */}
+        <Route path="/checkout/success" element={<PaymentSuccessPage />} />
+        <Route path="/checkout/fail" element={<PaymentFailurePage />} />
+        <Route
+          path="/checkout/3dsecure-callback"
+          element={<ThreeDSecureCallbackPage />}
+        />
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
         {/* Destek / Bilgi sayfaları */}
@@ -840,7 +855,18 @@ function App() {
           element={
             <AdminGuard requiredPermission={["reports.weight", "orders.view"]}>
               <AdminLayout>
-                <AdminWeightReports />
+                <AdminWeightManagement />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        {/* Weight Management: Ağırlık Bazlı Ödeme Yönetimi */}
+        <Route
+          path="/admin/weight-management"
+          element={
+            <AdminGuard requiredPermission={["orders.view", "orders.manage"]}>
+              <AdminLayout>
+                <AdminWeightManagement />
               </AdminLayout>
             </AdminGuard>
           }
@@ -924,6 +950,14 @@ function App() {
         <Route path="/courier/login" element={<CourierLogin />} />
         <Route path="/courier/dashboard" element={<CourierDashboard />} />
         <Route path="/courier/orders" element={<CourierOrders />} />
+        <Route
+          path="/courier/orders/:taskId"
+          element={<CourierDeliveryDetail />}
+        />
+        <Route
+          path="/courier/orders/:orderId/weight"
+          element={<CourierWeightEntry />}
+        />
       </Routes>
 
       {/* Footer - Mobilde gizli (desktop-only-footer class'ı ile) */}

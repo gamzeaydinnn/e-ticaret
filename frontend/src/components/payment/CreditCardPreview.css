@@ -1,0 +1,465 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   KREDİ KARTI ÖNİZLEME - STİLLER
+   Gerçek zamanlı kart görünümü için responsive ve mobil uyumlu stiller
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CONTAINER
+   ───────────────────────────────────────────────────────────────────────── */
+.credit-card-preview-container {
+  perspective: 1000px;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto 24px auto;
+  position: relative;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   KART ANİMASYONU
+   ───────────────────────────────────────────────────────────────────────── */
+.credit-card-preview {
+  width: 100%;
+  aspect-ratio: 1.586 / 1; /* Standart kredi kartı oranı */
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.credit-card-preview.flipped {
+  transform: rotateY(180deg);
+}
+
+.credit-card-preview:hover {
+  transform: translateY(-5px);
+}
+
+.credit-card-preview.flipped:hover {
+  transform: rotateY(180deg) translateY(-5px);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   KART YÜZLERİ (ORTAK)
+   ───────────────────────────────────────────────────────────────────────── */
+.card-front,
+.card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.25),
+    0 4px 10px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ÖN YÜZ
+   ───────────────────────────────────────────────────────────────────────── */
+.card-front {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: white;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6b35 100%);
+}
+
+/* Parlama efekti */
+.card-front::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.15),
+    transparent
+  );
+  transition: left 0.8s ease;
+}
+
+.credit-card-preview:hover .card-front::before {
+  left: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CHIP
+   ───────────────────────────────────────────────────────────────────────── */
+.card-chip {
+  width: 50px;
+  height: 40px;
+}
+
+.chip-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   TEMASSIZ ÖDEME İKONU
+   ───────────────────────────────────────────────────────────────────────── */
+.contactless-icon {
+  position: absolute;
+  top: 20px;
+  right: 70px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.8;
+  transform: rotate(90deg);
+}
+
+.contactless-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LOGO
+   ───────────────────────────────────────────────────────────────────────── */
+.card-logo {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  width: 70px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.card-logo-svg {
+  max-width: 100%;
+  max-height: 100%;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.card-logo-unknown {
+  width: 40px;
+  height: 40px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   KART NUMARASI
+   ───────────────────────────────────────────────────────────────────────── */
+.card-number {
+  font-family: "Courier New", "Consolas", monospace;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  letter-spacing: 3px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin: auto 0;
+  text-align: center;
+  word-spacing: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ALT BİLGİLER
+   ───────────────────────────────────────────────────────────────────────── */
+.card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.card-holder,
+.card-expiry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-holder .label,
+.card-expiry .label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+.card-holder .value {
+  font-size: clamp(0.75rem, 2.5vw, 0.95rem);
+  font-weight: 600;
+  letter-spacing: 1px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.card-expiry .value {
+  font-size: clamp(0.85rem, 3vw, 1.1rem);
+  font-weight: 600;
+  font-family: "Courier New", monospace;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ARKA YÜZ
+   ───────────────────────────────────────────────────────────────────────── */
+.card-back {
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6b35 100%);
+  transform: rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+  padding-top: 25px;
+}
+
+.card-stripe {
+  width: 100%;
+  height: 45px;
+  background: linear-gradient(90deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+  margin-bottom: 20px;
+}
+
+.card-cvv-section {
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.cvv-label {
+  font-size: 0.7rem;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.cvv-band {
+  background: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  min-width: 60px;
+  text-align: right;
+}
+
+.cvv-value {
+  font-family: "Courier New", monospace;
+  font-size: 1rem;
+  color: #333;
+  font-style: italic;
+}
+
+.card-back-info {
+  margin-top: auto;
+  padding: 15px 20px;
+  text-align: center;
+}
+
+.card-back-info p {
+  margin: 0;
+  font-size: 0.65rem;
+  color: #888;
+  line-height: 1.4;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   KART TİPİ ETİKETİ
+   ───────────────────────────────────────────────────────────────────────── */
+.card-type-badge {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  color: #333;
+  padding: 4px 16px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE TASARIM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Tablet */
+@media (max-width: 768px) {
+  .credit-card-preview-container {
+    max-width: 340px;
+  }
+
+  .card-front {
+    padding: 16px;
+  }
+
+  .card-chip {
+    width: 42px;
+    height: 34px;
+  }
+
+  .card-logo {
+    width: 60px;
+    height: 38px;
+    top: 12px;
+    right: 16px;
+  }
+
+  .contactless-icon {
+    width: 26px;
+    height: 26px;
+    top: 16px;
+    right: 58px;
+  }
+
+  .card-number {
+    letter-spacing: 2px;
+    word-spacing: 6px;
+  }
+}
+
+/* Mobil */
+@media (max-width: 480px) {
+  .credit-card-preview-container {
+    max-width: 300px;
+    margin-bottom: 20px;
+  }
+
+  .card-front,
+  .card-back {
+    border-radius: 12px;
+  }
+
+  .card-front {
+    padding: 14px;
+  }
+
+  .card-chip {
+    width: 36px;
+    height: 28px;
+  }
+
+  .card-logo {
+    width: 50px;
+    height: 32px;
+    top: 10px;
+    right: 14px;
+  }
+
+  .contactless-icon {
+    width: 22px;
+    height: 22px;
+    top: 12px;
+    right: 50px;
+  }
+
+  .card-number {
+    font-size: 1rem;
+    letter-spacing: 1.5px;
+    word-spacing: 4px;
+  }
+
+  .card-holder .label,
+  .card-expiry .label {
+    font-size: 0.5rem;
+  }
+
+  .card-holder .value {
+    font-size: 0.7rem;
+    max-width: 140px;
+  }
+
+  .card-expiry .value {
+    font-size: 0.8rem;
+  }
+
+  .card-stripe {
+    height: 35px;
+    margin-bottom: 15px;
+  }
+
+  .cvv-band {
+    padding: 6px 12px;
+    min-width: 50px;
+  }
+
+  .cvv-value {
+    font-size: 0.9rem;
+  }
+
+  .card-type-badge {
+    font-size: 0.65rem;
+    padding: 3px 12px;
+  }
+}
+
+/* Küçük mobil */
+@media (max-width: 360px) {
+  .credit-card-preview-container {
+    max-width: 260px;
+  }
+
+  .card-front {
+    padding: 12px;
+  }
+
+  .card-chip {
+    width: 30px;
+    height: 24px;
+  }
+
+  .card-logo {
+    width: 42px;
+    height: 28px;
+  }
+
+  .contactless-icon {
+    display: none;
+  }
+
+  .card-number {
+    font-size: 0.9rem;
+    letter-spacing: 1px;
+    word-spacing: 3px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANİMASYONLAR
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes cardFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.credit-card-preview-container:focus-within .credit-card-preview {
+  animation: cardFloat 3s ease-in-out infinite;
+}
+
+/* Kart numarası girişi animasyonu */
+@keyframes numberPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.card-number {
+  transition: all 0.3s ease;
+}
+
+/* Dark mode desteği */
+@media (prefers-color-scheme: dark) {
+  .card-type-badge {
+    background: #2d2d2d;
+    color: #fff;
+  }
+}

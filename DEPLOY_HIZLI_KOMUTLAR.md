@@ -3,6 +3,7 @@
 ## 🚀 TEK TEK KOPYALA YAPIŞTIR
 
 ### 1. SSH Bağlantısı
+
 ```bash
 ssh root@31.186.24.78
 ```
@@ -10,6 +11,7 @@ ssh root@31.186.24.78
 ---
 
 ### 2. Proje Dizinine Git
+
 ```bash
 cd /home/eticaret
 ```
@@ -17,6 +19,7 @@ cd /home/eticaret
 ---
 
 ### 3. Güncellemeleri Çek
+
 ```bash
 git pull origin main
 ```
@@ -24,6 +27,7 @@ git pull origin main
 ---
 
 ### 4. Container'ları Durdur
+
 ```bash
 docker-compose -f docker-compose.prod.yml down
 ```
@@ -31,6 +35,7 @@ docker-compose -f docker-compose.prod.yml down
 ---
 
 ### 5. Container'ları Yeniden Başlat (Build ile)
+
 ```bash
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
@@ -40,11 +45,13 @@ docker-compose -f docker-compose.prod.yml up -d --build
 ---
 
 ### 6. Log'ları İzle (CTRL+C ile çık)
+
 ```bash
 docker logs -f ecommerce-api-prod
 ```
 
 **ARANACAK MESAJLAR:**
+
 ```
 ℹ️ IdentitySeeder: Roller zaten mevcut, seed ATLANILIYOR
 ℹ️ ProductSeeder: Mevcut veriler var, seed ATLANILIYOR
@@ -54,6 +61,7 @@ docker logs -f ecommerce-api-prod
 ---
 
 ### 7. Health Check
+
 ```bash
 curl http://localhost:5000/health
 ```
@@ -63,6 +71,7 @@ curl http://localhost:5000/health
 ---
 
 ### 8. Kupon API Test
+
 ```bash
 curl http://localhost:5000/api/coupon/active
 ```
@@ -72,6 +81,7 @@ curl http://localhost:5000/api/coupon/active
 ---
 
 ### 9. Container Durumu
+
 ```bash
 docker ps
 ```
@@ -81,7 +91,9 @@ docker ps
 ---
 
 ### 10. Frontend Test
+
 Tarayıcıda aç:
+
 ```
 http://31.186.24.78:3000
 ```
@@ -91,6 +103,7 @@ http://31.186.24.78:3000
 ## 📊 EK KOMUTLAR
 
 ### Container Log'larını Göster (Son 100 satır)
+
 ```bash
 docker logs --tail 100 ecommerce-api-prod
 ```
@@ -98,6 +111,7 @@ docker logs --tail 100 ecommerce-api-prod
 ---
 
 ### Tüm Container'ların Durumu
+
 ```bash
 docker ps -a
 ```
@@ -105,6 +119,7 @@ docker ps -a
 ---
 
 ### Volume Listesi
+
 ```bash
 docker volume ls
 ```
@@ -112,6 +127,7 @@ docker volume ls
 ---
 
 ### Disk Kullanımı
+
 ```bash
 df -h
 ```
@@ -119,6 +135,7 @@ df -h
 ---
 
 ### Uploads Klasörü
+
 ```bash
 ls -lah /home/eticaret/uploads/
 ```
@@ -126,11 +143,13 @@ ls -lah /home/eticaret/uploads/
 ---
 
 ### SQL Server Bağlantısı
+
 ```bash
 docker exec -it ecommerce-sql-prod /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'ECom1234' -C
 ```
 
 **SQL Komutları:**
+
 ```sql
 -- Tabloları listele
 SELECT name FROM sys.tables ORDER BY name;

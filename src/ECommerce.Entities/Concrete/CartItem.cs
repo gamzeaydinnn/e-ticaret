@@ -20,8 +20,9 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Kullanıcı ID'si (Foreign Key)
         /// Giriş yapmış kullanıcılar için
+        /// Misafir kullanıcılar için NULL olabilir
         /// </summary>
-        public int UserId { get; set; }
+        public int? UserId { get; set; }
 
         /// <summary>
         /// Ürün ID'si (Foreign Key)

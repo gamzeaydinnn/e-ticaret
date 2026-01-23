@@ -1,4 +1,13 @@
-// src/contexts/CartContext.js
+/**
+ * Sepet Context - Backend API Entegrasyonlu
+ *
+ * Tüm sepet verileri BACKEND'de tutulur - localStorage KULLANILMAZ (sadece token için)
+ *
+ * Mimari:
+ * - Misafir: CartToken (UUID) ile backend'e istek atılır
+ * - Kayıtlı: JWT token ile backend'e istek atılır
+ * - Login sonrası: Misafir sepet → Kullanıcı sepetine merge edilir
+ */
 import {
   createContext,
   useContext,
@@ -19,207 +28,235 @@ export const useCart = () => {
   return context;
 };
 
-// Storage key - kullanıcı veya misafir
-const getCartKey = (userId) => (userId ? `cart_user_${userId}` : "cart_guest");
-
 export const CartProvider = ({ children }) => {
+  // State
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const [error, setError] = useState(null);
 
-  // Kullanıcı değiştiğinde sepeti yükle
-  useEffect(() => {
-    loadCart();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  // Auth context - kullanıcı durumunu takip et
+  const { user, isAuthenticated } = useAuth();
 
-  // Sepeti yükle
-  const loadCart = useCallback(() => {
+  // ============================================================
+  // SEPETİ YÜKLE - Backend'den
+  // ============================================================
+  const loadCart = useCallback(async () => {
     setLoading(true);
+    setError(null);
+
     try {
-      const key = getCartKey(user?.id);
-      const stored = localStorage.getItem(key);
-      setCartItems(stored ? JSON.parse(stored) : []);
-    } catch (error) {
-      console.error("Sepet yüklenirken hata:", error);
+      let cartData;
+
+      if (isAuthenticated && user?.id) {
+        // Kayıtlı kullanıcı - JWT ile sepet al
+        console.log("🔐 Kayıtlı kullanıcı sepeti yükleniyor...");
+        const response = await CartService.getCartItems();
+        // Backend CartItem[] döner, CartSummaryDto'ya dönüştür
+        cartData = {
+          items: Array.isArray(response) ? response.map(mapBackendItem) : [],
+          total: 0,
+        };
+        cartData.total = cartData.items.reduce(
+          (sum, item) => sum + (item.unitPrice || 0) * (item.quantity || 0),
+          0,
+        );
+      } else {
+        // Misafir kullanıcı - CartToken ile sepet al
+        console.log("👤 Misafir sepeti yükleniyor...");
+        cartData = await CartService.getGuestCart();
+        // Backend CartSummaryDto döner
+        cartData = {
+          items: Array.isArray(cartData?.items)
+            ? cartData.items.map(mapBackendItem)
+            : [],
+          total: cartData?.total || 0,
+        };
+      }
+
+      setCartItems(cartData.items);
+      console.log("🛒 Sepet yüklendi:", cartData.items.length, "ürün");
+    } catch (err) {
+      console.error("❌ Sepet yüklenirken hata:", err);
+      setError("Sepet yüklenemedi");
       setCartItems([]);
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [isAuthenticated, user?.id]);
 
-  // Sepeti kaydet
-  const saveCart = useCallback(
-    (items) => {
-      const key = getCartKey(user?.id);
-      localStorage.setItem(key, JSON.stringify(items));
-      setCartItems(items);
-      window.dispatchEvent(new Event("cart:updated"));
-    },
-    [user?.id],
-  );
+  // Kullanıcı değiştiğinde sepeti yükle
+  // Login sonrası misafir sepetini merge et
+  const [prevUserId, setPrevUserId] = useState(null);
 
-  // ============================================================================
-  // Sepete ürün ekle - HEM MİSAFİR HEM KULLANICI İÇİN ÇALIŞIR
-  // VARYANT DESTEĞİ: variantInfo parametresi ile varyant bilgisi alınır
-  // variantInfo = { variantId, sku, variantTitle, price, stock }
-  // ============================================================================
+  useEffect(() => {
+    const handleUserChange = async () => {
+      const currentUserId = user?.id || null;
+
+      // Kullanıcı login olduysa (misafir → kayıtlı)
+      if (currentUserId && !prevUserId) {
+        console.log("🔄 Login algılandı, misafir sepeti merge ediliyor...");
+        try {
+          const result = await CartService.mergeGuestCart();
+          if (result.mergedCount > 0) {
+            console.log(
+              "✅ Merge başarılı:",
+              result.mergedCount,
+              "ürün eklendi",
+            );
+          }
+        } catch (err) {
+          console.error("❌ Merge hatası (sessizce devam):", err);
+        }
+      }
+
+      // Sepeti yükle
+      await loadCart();
+      setPrevUserId(currentUserId);
+    };
+
+    handleUserChange();
+  }, [user?.id, prevUserId, loadCart]);
+
+  // ============================================================
+  // SEPETE ÜRÜN EKLE - Varyant destekli
+  // ============================================================
   const addToCart = useCallback(
-    (product, quantity = 1, variantInfo = null) => {
+    async (product, quantity = 1, variantInfo = null) => {
       const productId = product.id || product.productId;
+      const variantId = variantInfo?.variantId || null;
 
-      // Varyantlı ürünlerde benzersiz key: productId + variantId
-      // Böylece aynı ürünün farklı varyantları sepette ayrı satır olur
-      const cartKey = variantInfo?.variantId
-        ? `${productId}_${variantInfo.variantId}`
-        : String(productId);
-
-      const existingIndex = cartItems.findIndex((item) => {
-        const itemKey = item.variantId
-          ? `${item.productId || item.id}_${item.variantId}`
-          : String(item.productId || item.id);
-        return itemKey === cartKey;
-      });
-
-      // Varyant bilgisi varsa fiyatı varyanttan al
-      const unitPrice =
-        variantInfo?.price || product.specialPrice || product.price;
-
-      let updatedCart;
-      if (existingIndex >= 0) {
-        // Mevcut öğeyi güncelle - miktarı artır
-        updatedCart = cartItems.map((item, index) =>
-          index === existingIndex
-            ? { ...item, quantity: item.quantity + quantity }
-            : item,
-        );
-      } else {
-        // Yeni öğe ekle - varyant bilgisi dahil
-        const newItem = {
-          id: Date.now(),
-          productId: productId,
-          product: product,
-          quantity: quantity,
-          unitPrice: unitPrice,
-          addedAt: new Date().toISOString(),
-          // === VARYANT BİLGİLERİ ===
-          variantId: variantInfo?.variantId || null,
-          sku: variantInfo?.sku || null,
-          variantTitle: variantInfo?.variantTitle || null,
-          barcode: variantInfo?.barcode || null,
-        };
-        updatedCart = [...cartItems, newItem];
-      }
-
-      saveCart(updatedCart);
-
-      // Backend sync (sadece giriş yapmış kullanıcılar için)
-      if (user?.id) {
-        CartService.addItem(productId, quantity, variantInfo?.variantId).catch(
-          () => {},
-        );
-      }
-
-      return { success: true };
-    },
-    [cartItems, user?.id, saveCart],
-  );
-
-  // ============================================================================
-  // Sepetten ürün çıkar - VARYANT DESTEKLİ
-  // productId ve opsiyonel variantId ile benzersiz item bulunur
-  // ============================================================================
-  const removeFromCart = useCallback(
-    (productId, variantId = null) => {
-      const updatedCart = cartItems.filter((item) => {
-        // Varyantlı karşılaştırma
-        if (variantId) {
-          return !(
-            (item.productId || item.id) === productId &&
-            item.variantId === variantId
+      try {
+        if (isAuthenticated && user?.id) {
+          // Kayıtlı kullanıcı
+          await CartService.addItem(productId, quantity, variantId);
+        } else {
+          // Misafir kullanıcı
+          const result = await CartService.addToGuestCart(
+            productId,
+            quantity,
+            variantId,
           );
-        }
-        // Varyantlı item'ı silmek için hem productId hem variantId eşleşmeli
-        if (item.variantId) {
-          return true; // Bu item varyantlı ama biz varyant belirtmedik, silme
-        }
-        return (item.productId || item.id) !== productId;
-      });
-      saveCart(updatedCart);
-
-      if (user?.id) {
-        const item = cartItems.find((i) => {
-          if (variantId) {
-            return (
-              (i.productId || i.id) === productId && i.variantId === variantId
-            );
+          if (!result.success) {
+            return { success: false, error: result.error };
           }
-          return (i.productId || i.id) === productId && !i.variantId;
-        });
-        if (item?.id) {
-          CartService.removeItem(item.id, productId).catch(() => {});
         }
-      }
 
-      return { success: true };
+        // Sepeti yeniden yükle
+        await loadCart();
+
+        // Cart updated event - diğer componentler dinleyebilir
+        window.dispatchEvent(new Event("cart:updated"));
+
+        return { success: true };
+      } catch (err) {
+        console.error("❌ Sepete ekleme hatası:", err);
+        const errorMsg = err?.response?.data?.message || "Sepete eklenemedi";
+        return { success: false, error: errorMsg };
+      }
     },
-    [cartItems, user?.id, saveCart],
+    [isAuthenticated, user?.id, loadCart],
   );
 
-  // ============================================================================
-  // Ürün miktarını güncelle - VARYANT DESTEKLİ
-  // ============================================================================
+  // ============================================================
+  // SEPETTEN ÜRÜN ÇIKAR - Varyant destekli
+  // ============================================================
+  const removeFromCart = useCallback(
+    async (productId, variantId = null) => {
+      try {
+        if (isAuthenticated && user?.id) {
+          // Kayıtlı kullanıcı - cart item ID'sini bul
+          const item = cartItems.find(
+            (i) =>
+              (i.productId || i.id) === productId &&
+              (variantId ? i.variantId === variantId : !i.variantId),
+          );
+          if (item?.id) {
+            await CartService.removeItem(item.id);
+          }
+        } else {
+          // Misafir kullanıcı
+          await CartService.removeFromGuestCart(productId, variantId);
+        }
+
+        // Sepeti yeniden yükle
+        await loadCart();
+        window.dispatchEvent(new Event("cart:updated"));
+
+        return { success: true };
+      } catch (err) {
+        console.error("❌ Sepetten silme hatası:", err);
+        return { success: false, error: err?.message };
+      }
+    },
+    [isAuthenticated, user?.id, cartItems, loadCart],
+  );
+
+  // ============================================================
+  // ÜRÜN MİKTARINI GÜNCELLE
+  // ============================================================
   const updateQuantity = useCallback(
-    (productId, quantity, variantId = null) => {
-      if (quantity <= 0) return removeFromCart(productId, variantId);
-
-      const updatedCart = cartItems.map((item) => {
-        // Varyantlı karşılaştırma
-        if (variantId) {
-          if (
-            (item.productId || item.id) === productId &&
-            item.variantId === variantId
-          ) {
-            return { ...item, quantity };
-          }
-          return item;
-        }
-        // Varyantsız karşılaştırma
-        if ((item.productId || item.id) === productId && !item.variantId) {
-          return { ...item, quantity };
-        }
-        return item;
-      });
-      saveCart(updatedCart);
-
-      if (user?.id) {
-        const item = cartItems.find((i) => {
-          if (variantId) {
-            return (
-              (i.productId || i.id) === productId && i.variantId === variantId
-            );
-          }
-          return (i.productId || i.id) === productId && !i.variantId;
-        });
-        if (item?.id) {
-          CartService.updateItem(item.id, productId, quantity).catch(() => {});
-        }
+    async (productId, quantity, variantId = null) => {
+      // Miktar 0 veya altı = sil
+      if (quantity <= 0) {
+        return removeFromCart(productId, variantId);
       }
 
-      return { success: true };
+      try {
+        if (isAuthenticated && user?.id) {
+          // Kayıtlı kullanıcı - cart item ID'sini bul
+          const item = cartItems.find(
+            (i) =>
+              (i.productId || i.id) === productId &&
+              (variantId ? i.variantId === variantId : !i.variantId),
+          );
+          if (item?.id) {
+            await CartService.updateItem(item.id, productId, quantity);
+          }
+        } else {
+          // Misafir kullanıcı
+          await CartService.updateGuestCartItem(productId, quantity, variantId);
+        }
+
+        // Sepeti yeniden yükle
+        await loadCart();
+        window.dispatchEvent(new Event("cart:updated"));
+
+        return { success: true };
+      } catch (err) {
+        console.error("❌ Miktar güncelleme hatası:", err);
+        return { success: false, error: err?.message };
+      }
     },
-    [cartItems, user?.id, saveCart, removeFromCart],
+    [isAuthenticated, user?.id, cartItems, loadCart, removeFromCart],
   );
 
-  // Sepeti temizle
-  const clearCart = useCallback(() => {
-    const key = getCartKey(user?.id);
-    localStorage.removeItem(key);
-    setCartItems([]);
-    window.dispatchEvent(new Event("cart:updated"));
-  }, [user?.id]);
+  // ============================================================
+  // SEPETİ TEMİZLE
+  // ============================================================
+  const clearCart = useCallback(async () => {
+    try {
+      if (isAuthenticated && user?.id) {
+        // Kayıtlı kullanıcı - tüm öğeleri sil
+        for (const item of cartItems) {
+          if (item.id) {
+            await CartService.removeItem(item.id);
+          }
+        }
+      } else {
+        // Misafir kullanıcı
+        await CartService.clearGuestCart();
+      }
 
-  // Sepet toplamı
+      setCartItems([]);
+      window.dispatchEvent(new Event("cart:updated"));
+    } catch (err) {
+      console.error("❌ Sepet temizleme hatası:", err);
+    }
+  }, [isAuthenticated, user?.id, cartItems]);
+
+  // ============================================================
+  // SEPET TOPLAMI
+  // ============================================================
   const getCartTotal = useCallback(() => {
     return cartItems.reduce((total, item) => {
       const price =
@@ -227,18 +264,20 @@ export const CartProvider = ({ children }) => {
         item.product?.specialPrice ||
         item.product?.price ||
         0;
-      return total + price * item.quantity;
+      return total + price * (item.quantity || 0);
     }, 0);
   }, [cartItems]);
 
-  // Sepet ürün sayısı
+  // ============================================================
+  // SEPET ÜRÜN SAYISI
+  // ============================================================
   const getCartCount = useCallback(() => {
-    return cartItems.reduce((count, item) => count + item.quantity, 0);
+    return cartItems.reduce((count, item) => count + (item.quantity || 0), 0);
   }, [cartItems]);
 
-  // ============================================================================
-  // Sepette ürün var mı kontrol - VARYANT DESTEKLİ
-  // ============================================================================
+  // ============================================================
+  // SEPETTE ÜRÜN VAR MI? - Varyant destekli
+  // ============================================================
   const isInCart = useCallback(
     (productId, variantId = null) => {
       return cartItems.some((item) => {
@@ -254,9 +293,9 @@ export const CartProvider = ({ children }) => {
     [cartItems],
   );
 
-  // ============================================================================
-  // Sepetteki belirli bir ürünün/varyantın miktarını getir
-  // ============================================================================
+  // ============================================================
+  // SEPETTEKİ ÜRÜN MİKTARINI GETİR
+  // ============================================================
   const getItemQuantity = useCallback(
     (productId, variantId = null) => {
       const item = cartItems.find((i) => {
@@ -272,19 +311,81 @@ export const CartProvider = ({ children }) => {
     [cartItems],
   );
 
+  // ============================================================
+  // MERGE CART (Login sonrası çağrılır)
+  // ============================================================
+  const mergeGuestCart = useCallback(async () => {
+    if (!isAuthenticated || !user?.id) {
+      return { mergedCount: 0 };
+    }
+
+    try {
+      const result = await CartService.mergeGuestCart();
+      if (result.mergedCount > 0) {
+        // Merge başarılı - sepeti yeniden yükle
+        await loadCart();
+        console.log("✅ Misafir sepet aktarıldı:", result.mergedCount, "ürün");
+      }
+      return result;
+    } catch (err) {
+      console.error("❌ Sepet merge hatası:", err);
+      return { mergedCount: 0 };
+    }
+  }, [isAuthenticated, user?.id, loadCart]);
+
+  // ============================================================
+  // CONTEXT VALUE
+  // ============================================================
   const value = {
+    // State
     cartItems,
     loading,
+    error,
+
+    // Actions
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
+    loadCart,
+    mergeGuestCart,
+
+    // Computed
     getCartTotal,
     getCartCount,
     isInCart,
-    getItemQuantity, // Yeni eklenen
-    loadCart,
+    getItemQuantity,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
+
+// ============================================================
+// HELPER: Backend item'ı frontend formatına dönüştür
+// ============================================================
+function mapBackendItem(item) {
+  return {
+    id: item.id,
+    productId: item.productId,
+    variantId: item.productVariantId || item.variantId,
+    quantity: item.quantity,
+    unitPrice:
+      item.unitPrice || item.product?.specialPrice || item.product?.price || 0,
+    // Ürün bilgileri (backend'den gelirse)
+    productName: item.productName || item.product?.name,
+    productImage:
+      item.productImageUrl || item.productImage || item.product?.imageUrl,
+    variantTitle: item.variantTitle,
+    sku: item.sku || item.variantSku,
+    // Backward compat
+    product: item.product || {
+      id: item.productId,
+      name: item.productName,
+      imageUrl: item.productImageUrl || item.productImage,
+      price: item.unitPrice,
+      specialPrice: item.unitPrice,
+    },
+  };
+}
+
+export default CartContext;

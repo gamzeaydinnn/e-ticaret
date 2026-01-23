@@ -72,9 +72,16 @@ const smsService = {
   async verifyOtp(
     phoneNumber,
     code,
-    purpose = SmsVerificationPurpose.Registration
+    purpose = SmsVerificationPurpose.Registration,
   ) {
     try {
+      console.log(
+        "[SmsService] VerifyOtp çağrıldı - Phone:",
+        phoneNumber,
+        "Purpose:",
+        purpose,
+      );
+
       const response = await api.post("/api/sms/verify-otp", {
         phoneNumber,
         code,
@@ -138,7 +145,7 @@ const smsService = {
         `/api/sms/status/${encodeURIComponent(phoneNumber)}`,
         {
           params: { purpose },
-        }
+        },
       );
       return {
         success: true,
@@ -191,7 +198,7 @@ const smsService = {
     try {
       const response = await api.post(
         "/api/auth/register-with-phone",
-        userData
+        userData,
       );
       console.log("[SmsService] Kayıt başlatıldı:", response.data);
       return {
@@ -240,24 +247,42 @@ const smsService = {
   /**
    * Telefon ile şifre sıfırlama kodu gönderir
    * @param {string} phoneNumber - Telefon numarası
-   * @returns {Promise<Object>} { success, message }
+   * @returns {Promise<Object>} { success, message, expiresInSeconds }
    */
   async forgotPasswordByPhone(phoneNumber) {
     try {
-      const response = await api.post("/api/auth/forgot-password-by-phone", {
+      // Yeni SMS servisi endpoint'ini kullan - purpose: PasswordReset (2)
+      const response = await api.post("/api/sms/send-otp", {
         phoneNumber,
+        purpose: SmsVerificationPurpose.PasswordReset, // 2
       });
-      console.log("[SmsService] Şifre sıfırlama kodu gönderildi");
+
+      console.log("[SmsService] Şifre sıfırlama tam yanıt:", response);
+      console.log("[SmsService] Şifre sıfırlama response.data:", response.data);
+
+      // Backend Success (büyük S) döndürür
+      const data = response?.data || response;
+
+      // Eğer data hala undefined ise response'un kendisi data'dır
+      const actualData = data || {};
+
       return {
-        success: true,
-        ...response.data,
+        success:
+          actualData.success !== undefined
+            ? actualData.success
+            : actualData.Success !== undefined
+              ? actualData.Success
+              : true,
+        message: actualData.message || actualData.Message || "Kod gönderildi",
+        expiresInSeconds:
+          actualData.expiresInSeconds || actualData.ExpiresInSeconds || 180,
       };
     } catch (error) {
       console.error("[SmsService] Şifre sıfırlama hatası:", error);
       const data = error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "İşlem başarısız",
+        message: data.Message || data.message || "İşlem başarısız",
       };
     }
   },
@@ -296,14 +321,13 @@ const smsService = {
 
 // Eski API uyumluluğu için (backward compatibility)
 const otpService = {
-  sendOtp: (phoneNumber) =>
-    smsService.sendOtp(phoneNumber, SmsVerificationPurpose.Registration),
-  verifyOtp: (phoneNumber, code) =>
-    smsService.verifyOtp(
-      phoneNumber,
-      code,
-      SmsVerificationPurpose.Registration
-    ),
+  sendOtp: (phoneNumber, purpose = SmsVerificationPurpose.Registration) =>
+    smsService.sendOtp(phoneNumber, purpose),
+  verifyOtp: (
+    phoneNumber,
+    code,
+    purpose = SmsVerificationPurpose.Registration,
+  ) => smsService.verifyOtp(phoneNumber, code, purpose),
   canSendOtp: (phoneNumber) =>
     smsService.canSendOtp(phoneNumber).then((r) => r.canSend),
 };

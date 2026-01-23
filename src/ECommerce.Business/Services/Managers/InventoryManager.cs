@@ -191,17 +191,20 @@ namespace ECommerce.Business.Services.Managers
 
             var expiration = now.AddMinutes(Math.Max(1, _inventorySettings.ReservationExpiryMinutes));
             var ownsTransaction = _context.Database.CurrentTransaction == null;
-            IDbContextTransaction? transaction = null;
-            if (ownsTransaction)
+
+            async Task<bool> DoWorkAsync(bool useTransaction)
             {
-                transaction = await TryBeginTransactionAsync();
-                if (transaction == null)
+                IDbContextTransaction? transaction = null;
+                if (useTransaction)
                 {
-                    ownsTransaction = false;
+                    transaction = await TryBeginTransactionAsync();
+                    if (transaction == null)
+                    {
+                        useTransaction = false;
+                    }
                 }
-            }
-            try
-            {
+                try
+                {
                 var existing = await _context.StockReservations
                     .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
                     .ToListAsync();
@@ -255,37 +258,56 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 await _context.SaveChangesAsync();
-                await CommitIfNeededAsync(transaction, ownsTransaction);
+                await CommitIfNeededAsync(transaction, useTransaction);
                 return true;
+                }
+                catch
+                {
+                    await RollbackIfNeededAsync(transaction, useTransaction);
+                    throw;
+                }
+                finally
+                {
+                    if (transaction != null)
+                    {
+                        await transaction.DisposeAsync();
+                    }
+                }
             }
-            catch
+
+            if (!ownsTransaction)
             {
-                await RollbackIfNeededAsync(transaction, ownsTransaction);
-                throw;
+                return await DoWorkAsync(false);
             }
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(() => DoWorkAsync(true));
         }
 
         public async Task ReleaseReservationAsync(Guid clientOrderId)
         {
             var now = DateTime.UtcNow;
             var ownsTransaction = _context.Database.CurrentTransaction == null;
-            IDbContextTransaction? transaction = null;
-            if (ownsTransaction)
+
+            async Task DoWorkAsync(bool useTransaction)
             {
-                transaction = await TryBeginTransactionAsync();
-                if (transaction == null)
+                IDbContextTransaction? transaction = null;
+                if (useTransaction)
                 {
-                    ownsTransaction = false;
+                    transaction = await TryBeginTransactionAsync();
+                    if (transaction == null)
+                    {
+                        useTransaction = false;
+                    }
                 }
-            }
-            try
-            {
+                try
+                {
                 var reservations = await _context.StockReservations
                     .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
                     .ToListAsync();
                 if (reservations.Count == 0)
                 {
-                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    await CommitIfNeededAsync(transaction, useTransaction);
                     return;
                 }
 
@@ -324,36 +346,56 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 await _context.SaveChangesAsync();
-                await CommitIfNeededAsync(transaction, ownsTransaction);
+                await CommitIfNeededAsync(transaction, useTransaction);
+                }
+                catch
+                {
+                    await RollbackIfNeededAsync(transaction, useTransaction);
+                    throw;
+                }
+                finally
+                {
+                    if (transaction != null)
+                    {
+                        await transaction.DisposeAsync();
+                    }
+                }
             }
-            catch
+
+            if (!ownsTransaction)
             {
-                await RollbackIfNeededAsync(transaction, ownsTransaction);
-                throw;
+                await DoWorkAsync(false);
+                return;
             }
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(() => DoWorkAsync(true));
         }
 
         public async Task CommitReservationAsync(Guid clientOrderId)
         {
             var now = DateTime.UtcNow;
             var ownsTransaction = _context.Database.CurrentTransaction == null;
-            IDbContextTransaction? transaction = null;
-            if (ownsTransaction)
+
+            async Task DoWorkAsync(bool useTransaction)
             {
-                transaction = await TryBeginTransactionAsync();
-                if (transaction == null)
+                IDbContextTransaction? transaction = null;
+                if (useTransaction)
                 {
-                    ownsTransaction = false;
+                    transaction = await TryBeginTransactionAsync();
+                    if (transaction == null)
+                    {
+                        useTransaction = false;
+                    }
                 }
-            }
-            try
-            {
+                try
+                {
                 var reservations = await _context.StockReservations
                     .Where(r => r.ClientOrderId == clientOrderId && !r.IsReleased)
                     .ToListAsync();
                 if (reservations.Count == 0)
                 {
-                    await CommitIfNeededAsync(transaction, ownsTransaction);
+                    await CommitIfNeededAsync(transaction, useTransaction);
                     return;
                 }
 
@@ -398,13 +440,30 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 await _context.SaveChangesAsync();
-                await CommitIfNeededAsync(transaction, ownsTransaction);
+                await CommitIfNeededAsync(transaction, useTransaction);
+                }
+                catch
+                {
+                    await RollbackIfNeededAsync(transaction, useTransaction);
+                    throw;
+                }
+                finally
+                {
+                    if (transaction != null)
+                    {
+                        await transaction.DisposeAsync();
+                    }
+                }
             }
-            catch
+
+            if (!ownsTransaction)
             {
-                await RollbackIfNeededAsync(transaction, ownsTransaction);
-                throw;
+                await DoWorkAsync(false);
+                return;
             }
+
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(() => DoWorkAsync(true));
         }
 
         private async Task<int> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)

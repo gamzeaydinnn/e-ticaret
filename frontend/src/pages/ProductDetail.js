@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
+import { CampaignService } from "../services/campaignService";
 import getProductCategoryRules from "../config/productCategoryRules";
 import { getVariantsForProduct } from "../utils/variantStore";
 import variantService from "../services/variantService";
@@ -22,6 +23,7 @@ export default function ProductDetail() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [campaignInfo, setCampaignInfo] = useState(null);
   const [reviews, setReviews] = useState([]);
   const { user } = useAuth();
   const { addToCart: ctxAddToCart } = useCart();
@@ -46,6 +48,67 @@ export default function ProductDetail() {
         setLoading(false);
       });
   }, [id]);
+
+  // Ürüne özel kampanya bilgisini getir (admin panelle bağlı endpoint)
+  useEffect(() => {
+    let mounted = true;
+    if (!product?.id) return;
+
+    const loadCampaign = async () => {
+      try {
+        const categoryId = product.categoryId ?? product.category?.id ?? null;
+        let campaigns = await CampaignService.getCampaignsForProduct(
+          product.id,
+          categoryId,
+        );
+        if (!Array.isArray(campaigns) || campaigns.length === 0) {
+          const active = await CampaignService.getActiveCampaigns();
+          campaigns = (active || []).filter((c) => {
+            const targetType = c?.targetType ?? c?.targetKind ?? c?.target;
+            const targetIds = Array.isArray(c?.targetIds) ? c.targetIds : [];
+            const hasTargetIds = targetIds.length > 0;
+            const cProductId = c?.productId ?? c?.targetId;
+            const cCategoryId = c?.categoryId;
+            if (targetType === "All" || targetType === 0 || !targetType) return true;
+            if (targetType === "Product" || targetType === 2)
+              return hasTargetIds
+                ? targetIds.some((id) => String(id) === String(product.id))
+                : String(cProductId) === String(product.id);
+            if (targetType === "Category" || targetType === 1)
+              return hasTargetIds
+                ? targetIds.some((id) => String(id) === String(categoryId))
+                : String(cCategoryId) === String(categoryId);
+            return false;
+          });
+        }
+
+        const pickBest = (list) => {
+          if (!Array.isArray(list) || list.length === 0) return null;
+          const score = (c) => {
+            const type = typeof c.type === "string" ? parseInt(c.type) : c.type;
+            const value = Number(c.discountValue || 0);
+            if (type === 2) return 10;
+            if (type === 3) return 5;
+            return value;
+          };
+          return list.reduce((best, current) =>
+            score(current) > score(best) ? current : best,
+          );
+        };
+
+        if (mounted) setCampaignInfo(pickBest(campaigns));
+      } catch (err) {
+        if (mounted) setCampaignInfo(null);
+      } finally {
+        // no-op
+      }
+    };
+
+    loadCampaign();
+    return () => {
+      mounted = false;
+    };
+  }, [product]);
 
   // Yorumları getir
   const fetchReviews = async () => {
@@ -331,6 +394,22 @@ export default function ProductDetail() {
                     <div className="fs-2 fw-bold text-warning">
                       ₺{currentPrice.toFixed(2)}
                     </div>
+                    {campaignInfo && (
+                      <div className="mt-2 d-flex flex-wrap align-items-center gap-2">
+                        <span
+                          className={`badge bg-${CampaignService.getCampaignBadge(campaignInfo.type).color}`}
+                          style={{ fontSize: "0.75rem" }}
+                        >
+                          <i
+                            className={`fas ${CampaignService.getCampaignBadge(campaignInfo.type).icon} me-1`}
+                          ></i>
+                          {CampaignService.getDiscountText(campaignInfo)}
+                        </span>
+                        <span className="text-muted small">
+                          Kampanya otomatik uygulanır
+                        </span>
+                      </div>
+                    )}
                   </div>
                   {isOutOfStock && (
                     <div className="alert alert-danger py-2 mb-3">

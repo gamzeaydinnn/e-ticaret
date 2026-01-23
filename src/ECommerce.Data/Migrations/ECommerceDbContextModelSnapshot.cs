@@ -258,6 +258,9 @@ namespace ECommerce.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BuyQty")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -265,24 +268,61 @@ namespace ECommerce.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<decimal>("DiscountValue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsStackable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<decimal?>("MaxDiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinCartTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("MinQuantity")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("PayQty")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(100);
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("TargetType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsActive", "StartDate", "EndDate")
+                        .HasDatabaseName("IX_Campaigns_ActiveDateRange");
 
                     b.ToTable("Campaigns", (string)null);
                 });
@@ -354,6 +394,41 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("CampaignRules", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CampaignTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CampaignId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TargetKind")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId", "TargetId", "TargetKind")
+                        .IsUnique()
+                        .HasDatabaseName("IX_CampaignTargets_Unique");
+
+                    b.ToTable("CampaignTargets", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.CartItem", b =>
                 {
                     b.Property<int>("Id")
@@ -386,7 +461,7 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("int");
 
                     b.Property<int?>("UserId1")
@@ -404,7 +479,7 @@ namespace ECommerce.Data.Migrations
 
                     b.HasIndex("UserId", "ProductId", "ProductVariantId")
                         .IsUnique()
-                        .HasFilter("[ProductVariantId] IS NOT NULL");
+                        .HasFilter("[UserId] IS NOT NULL AND [ProductVariantId] IS NOT NULL");
 
                     b.ToTable("CartItems", (string)null);
                 });
@@ -849,6 +924,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("GuestToken")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -858,7 +936,7 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -1012,6 +1090,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("AddressId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("AllItemsWeighed")
+                        .HasColumnType("bit");
+
                     b.Property<string>("AppliedCouponCode")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -1058,6 +1139,12 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("DeliverySlotId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("DifferenceSettled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("DifferenceSettledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -1065,9 +1152,16 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("EstimatedDelivery")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("FinalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("FinalPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("HasWeightBasedItems")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -1083,11 +1177,30 @@ namespace ECommerce.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<int>("PaymentStatus")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("PickedUpAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<string>("PosnetTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("PreAuthAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("PreAuthDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreAuthHostLogKey")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Priority")
                         .IsRequired()
@@ -1121,6 +1234,14 @@ namespace ECommerce.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("TotalPriceDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalWeightDifference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<string>("TrackingNumber")
                         .HasColumnType("nvarchar(max)");
 
@@ -1132,6 +1253,15 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<decimal>("VatAmount")
                         .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("WeighingCompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("WeightAdjustmentStatus")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("WeightDifference")
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
@@ -1162,8 +1292,24 @@ namespace ECommerce.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<decimal?>("ActualPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ActualWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("EstimatedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("EstimatedWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int>("ExpectedWeightGrams")
                         .HasColumnType("int");
@@ -1171,8 +1317,22 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsWeighed")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsWeightBased")
+                        .HasColumnType("bit");
+
                     b.Property<int>("OrderId")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("PriceDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
@@ -1197,6 +1357,19 @@ namespace ECommerce.Data.Migrations
                     b.Property<string>("VariantTitle")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("WeighedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("WeighedByCourierId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("WeightDifference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("WeightUnit")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1265,10 +1438,59 @@ namespace ECommerce.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("AuthCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardBin")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardLastFour")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardType")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Cavv")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("TRY");
+
+                    b.Property<string>("Eci")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("HostLogKey")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("InstallmentCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("MdStatus")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
                     b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OriginalPaymentId")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("PaidAt")
@@ -1276,20 +1498,61 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<string>("Provider")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("ProviderPaymentId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("RawResponse")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("RefundedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UsedWorldPoints")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_Payments_CreatedAt");
+
+                    b.HasIndex("HostLogKey")
+                        .HasDatabaseName("IX_Payments_HostLogKey");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("IX_Payments_OrderId");
+
+                    b.HasIndex("OriginalPaymentId");
+
+                    b.HasIndex("Provider")
+                        .HasDatabaseName("IX_Payments_Provider");
+
+                    b.HasIndex("TransactionId")
+                        .HasDatabaseName("IX_Payments_TransactionId");
+
+                    b.HasIndex("Provider", "Status")
+                        .HasDatabaseName("IX_Payments_Provider_Status");
 
                     b.ToTable("Payments");
                 });
@@ -1348,6 +1611,189 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("Permissions", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.PosnetTransactionLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long?>("AmountInKurus")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ApprovedCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("AuthCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardBin")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("CardLastFour")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("CardType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Cavv")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ClientIpAddress")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("Eci")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<long?>("ElapsedMilliseconds")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Environment")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("HostLogKey")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("InstallmentCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Is3DSecure")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MdStatus")
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("MerchantId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestHeaders")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("RequestSentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RequestUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RequestXml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ResponseReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResponseXml")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TerminalId")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TransactionId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TransactionSubType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("IX_PosnetLog_CorrelationId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_PosnetLog_CreatedAt");
+
+                    b.HasIndex("HostLogKey")
+                        .HasDatabaseName("IX_PosnetLog_HostLogKey");
+
+                    b.HasIndex("IsSuccess")
+                        .HasDatabaseName("IX_PosnetLog_IsSuccess");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("IX_PosnetLog_OrderId");
+
+                    b.HasIndex("PaymentId")
+                        .HasDatabaseName("IX_PosnetLog_PaymentId");
+
+                    b.HasIndex("TransactionType")
+                        .HasDatabaseName("IX_PosnetLog_TransactionType");
+
+                    b.HasIndex("TransactionType", "IsSuccess", "CreatedAt")
+                        .HasDatabaseName("IX_PosnetLog_Type_Success_Date");
+
+                    b.ToTable("PosnetTransactionLogs", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.Product", b =>
                 {
                     b.Property<int>("Id")
@@ -1381,12 +1827,27 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsWeightBased")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("MaxOrderWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("MinOrderWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<decimal>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PricePerUnit")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
@@ -1411,6 +1872,13 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("WeightTolerancePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int>("WeightUnit")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -2185,6 +2653,157 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("VariantOptionValues", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.WeightAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ActualPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ActualWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("AdminAdjustedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool?>("AdminApproved")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("AdminReviewed")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("AdminReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("AdminUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("AdminUserName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("CustomerNotified")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("CustomerNotifiedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("DifferencePercent")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("EstimatedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("EstimatedWeight")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSettled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NotificationType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrderItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("PriceDifference")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PricePerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProductName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("RequiresAdminApproval")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("SettledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("WeighedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("WeighedByCourierId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WeighedByCourierName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal>("WeightDifference")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("WeightUnit")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AdminUserId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_WeightAdjustments_CreatedAt");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("IX_WeightAdjustments_OrderId");
+
+                    b.HasIndex("OrderItemId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_WeightAdjustments_Status");
+
+                    b.HasIndex("WeighedByCourierId");
+
+                    b.HasIndex("Status", "RequiresAdminApproval")
+                        .HasDatabaseName("IX_WeightAdjustments_StatusAdmin");
+
+                    b.ToTable("WeightAdjustments", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.WeightReport", b =>
                 {
                     b.Property<int>("Id")
@@ -2549,6 +3168,17 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("Campaign");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.CampaignTarget", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Campaign", "Campaign")
+                        .WithMany("Targets")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Campaign");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.CartItem", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
@@ -2569,8 +3199,7 @@ namespace ECommerce.Data.Migrations
                     b.HasOne("ECommerce.Entities.Concrete.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("ECommerce.Entities.Concrete.User", null)
                         .WithMany("CartItems")
@@ -2673,9 +3302,7 @@ namespace ECommerce.Data.Migrations
 
                     b.HasOne("ECommerce.Entities.Concrete.User", "User")
                         .WithMany("Favorites")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UserId");
 
                     b.Navigation("Product");
 
@@ -2765,6 +3392,41 @@ namespace ECommerce.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.Payments", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Payments", "OriginalPayment")
+                        .WithMany("RefundPayments")
+                        .HasForeignKey("OriginalPaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OriginalPayment");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.PosnetTransactionLog", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ECommerce.Entities.Concrete.Payments", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Product", b =>
@@ -2936,6 +3598,47 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("Variant");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.WeightAdjustment", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.User", "AdminUser")
+                        .WithMany()
+                        .HasForeignKey("AdminUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany("WeightAdjustments")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.OrderItem", "OrderItem")
+                        .WithMany()
+                        .HasForeignKey("OrderItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Courier", "WeighedByCourier")
+                        .WithMany()
+                        .HasForeignKey("WeighedByCourierId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AdminUser");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("OrderItem");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("WeighedByCourier");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.WeightReport", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.User", "ApprovedBy")
@@ -3022,6 +3725,8 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("Rewards");
 
                     b.Navigation("Rules");
+
+                    b.Navigation("Targets");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Category", b =>
@@ -3058,12 +3763,19 @@ namespace ECommerce.Data.Migrations
 
                     b.Navigation("StockReservations");
 
+                    b.Navigation("WeightAdjustments");
+
                     b.Navigation("WeightReports");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.OrderItem", b =>
                 {
                     b.Navigation("WeightReports");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.Payments", b =>
+                {
+                    b.Navigation("RefundPayments");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Permission", b =>

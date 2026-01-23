@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
+import { CampaignService } from "../services/campaignService";
+import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
 import "./CartPage.css";
 
 const CartPage = () => {
@@ -31,6 +33,12 @@ const CartPage = () => {
   const [pricingError, setPricingError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+
+  // =================================================================
+  // KAMPANYA SİSTEMİ STATE'LERİ
+  // =================================================================
+  const [appliedCampaigns, setAppliedCampaigns] = useState([]);
+  const [campaignDiscountTotal, setCampaignDiscountTotal] = useState(0);
 
   // Sayfa yüklendiğinde önceden uygulanmış kupon varsa geri yükle
   useEffect(() => {
@@ -94,6 +102,48 @@ const CartPage = () => {
   useEffect(() => {
     loadProductData();
   }, [loadProductData]);
+
+  // Kampanya önizlemesini otomatik yükle (kupon olmasa da)
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPricingPreview = async () => {
+      if (!cartItems || cartItems.length === 0) {
+        setPricing(null);
+        setAppliedCampaigns([]);
+        setCampaignDiscountTotal(0);
+        return;
+      }
+
+      setPricingLoading(true);
+      setPricingError("");
+      try {
+        const result = await CartService.previewPrice({
+          items: cartItems.map((item) => ({
+            productId: item.productId || item.id,
+            quantity: item.quantity,
+          })),
+          couponCode: appliedCoupon?.code || undefined,
+        });
+
+        if (!mounted) return;
+        setPricing(result);
+        setAppliedCampaigns(result?.appliedCampaigns || []);
+        setCampaignDiscountTotal(result?.campaignDiscountTotal || 0);
+      } catch (err) {
+        if (!mounted) return;
+        setPricingError("Kampanya bilgileri alınamadı.");
+      } finally {
+        if (mounted) setPricingLoading(false);
+      }
+    };
+
+    loadPricingPreview();
+
+    return () => {
+      mounted = false;
+    };
+  }, [cartItems, appliedCoupon?.code]);
 
   const getItemUnitPrice = (item) => {
     if (
@@ -197,7 +247,8 @@ const CartPage = () => {
           code: code,
           couponType: validationResult.couponType,
           discountAmount,
-          finalTotal: validationResult.finalTotal ?? validationResult.finalPrice,
+          finalTotal:
+            validationResult.finalTotal ?? validationResult.finalPrice,
           message: validationResult.message || validationResult.errorMessage,
         };
         setAppliedCoupon(couponData);
@@ -216,6 +267,13 @@ const CartPage = () => {
             couponCode: code,
           });
           setPricing(pricingResult);
+          // Kampanya bilgilerini güncelle
+          if (pricingResult.appliedCampaigns) {
+            setAppliedCampaigns(pricingResult.appliedCampaigns);
+          }
+          if (pricingResult.campaignDiscountTotal) {
+            setCampaignDiscountTotal(pricingResult.campaignDiscountTotal);
+          }
         } catch (e) {
           console.log("Price preview hatası:", e);
         }
@@ -237,6 +295,13 @@ const CartPage = () => {
           couponCode: code,
         });
         setPricing(result);
+        // Kampanya bilgilerini güncelle
+        if (result.appliedCampaigns) {
+          setAppliedCampaigns(result.appliedCampaigns);
+        }
+        if (result.campaignDiscountTotal) {
+          setCampaignDiscountTotal(result.campaignDiscountTotal);
+        }
         if (result.couponDiscountTotal > 0 || result.appliedCouponCode) {
           const couponData = {
             code: result.appliedCouponCode || code,
@@ -280,6 +345,36 @@ const CartPage = () => {
     return Math.max(0, subtotal + shipping - discount);
   };
 
+  // ================================================================
+  // AĞIRLIK BAZLI ÜRÜNLERİ FİLTRELE
+  // Sepetteki ağırlık bazlı ürünleri tespit et
+  // ================================================================
+  const weightBasedItems = useMemo(() => {
+    return cartItems
+      .filter((item) => {
+        const product = products[item.productId || item.id];
+        // Product'ta isWeightBased varsa veya weightUnit kg/gram ise
+        return (
+          product?.isWeightBased ||
+          product?.weightUnit === "Kilogram" ||
+          product?.weightUnit === "Gram" ||
+          product?.weightUnit === 2 || // Kilogram enum
+          product?.weightUnit === 1 || // Gram enum
+          item.isWeightBased
+        );
+      })
+      .map((item) => {
+        const product = products[item.productId || item.id];
+        return {
+          ...item,
+          name: product?.name || item.productName || "Ürün",
+          weightUnit: product?.weightUnit || item.weightUnit,
+          estimatedPrice: item.unitPrice || product?.price || 0,
+          isWeightBased: true,
+        };
+      });
+  }, [cartItems, products]);
+
   // Empty Cart State
   if (!loading && cartItems.length === 0) {
     return (
@@ -322,6 +417,12 @@ const CartPage = () => {
           </Link>
         </div>
 
+        {/* Ağırlık Bazlı Ürün Uyarısı */}
+        <WeightBasedProductAlert
+          weightBasedItems={weightBasedItems}
+          variant="cart"
+        />
+
         <div className="cart-content">
           {/* Cart Items */}
           <div className="cart-items-section">
@@ -334,8 +435,19 @@ const CartPage = () => {
               <div className="cart-items-list">
                 {cartItems.map((item) => {
                   const product = products[item.productId];
+                  // Ağırlık bazlı ürün mü kontrol et
+                  const isWeightBasedItem =
+                    product?.isWeightBased ||
+                    product?.weightUnit === "Kilogram" ||
+                    product?.weightUnit === "Gram" ||
+                    product?.weightUnit === 2 ||
+                    product?.weightUnit === 1 ||
+                    item.isWeightBased;
                   return (
-                    <div key={item.id || item.productId} className="cart-item">
+                    <div
+                      key={item.id || item.productId}
+                      className={`cart-item ${isWeightBasedItem ? "weight-based" : ""}`}
+                    >
                       <div className="item-image">
                         <img
                           src={product?.imageUrl || "/images/placeholder.png"}
@@ -344,6 +456,11 @@ const CartPage = () => {
                             e.target.src = "/images/placeholder.png";
                           }}
                         />
+                        {isWeightBasedItem && (
+                          <span className="weight-badge-small">
+                            <i className="fas fa-balance-scale"></i>
+                          </span>
+                        )}
                       </div>
 
                       <div className="item-details">
@@ -362,6 +479,63 @@ const CartPage = () => {
                             )}
                           </div>
                         )}
+                        {/* Ağırlık bazlı ürünlere tahmini etiketi */}
+                        <WeightEstimateIndicator
+                          isWeightBased={isWeightBasedItem}
+                        />
+                        {/* ========== KAMPANYA BİLGİSİ ========== */}
+                        {(() => {
+                          // Pricing'den bu ürüne uygulanan kampanya var mı kontrol et
+                          const itemPricing = pricing?.items?.find(
+                            (pi) =>
+                              pi.productId === (item.productId || item.id),
+                          );
+                          const campaignDisplay =
+                            itemPricing?.campaignDisplayText ||
+                            itemPricing?.appliedCampaignName;
+                          const campaignDiscount =
+                            itemPricing?.lineCampaignDiscount || 0;
+
+                          if (campaignDisplay && campaignDiscount > 0) {
+                            return (
+                              <div
+                                className="item-campaign-info"
+                                style={{
+                                  marginTop: "6px",
+                                  padding: "4px 8px",
+                                  backgroundColor: "#e8f5e9",
+                                  borderRadius: "6px",
+                                  fontSize: "0.75rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                }}
+                                >
+                                <i
+                                  className="fas fa-tag text-success"
+                                  style={{ fontSize: "0.7rem" }}
+                                ></i>
+                                <span
+                                  style={{
+                                    color: "#2e7d32",
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {campaignDisplay}
+                                </span>
+                                <span
+                                  style={{
+                                    color: "#388e3c",
+                                    marginLeft: "auto",
+                                  }}
+                                >
+                                  -₺{campaignDiscount.toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         <div className="item-price-mobile">
                           ₺{getItemUnitPrice(item).toFixed(2)}
                         </div>
@@ -570,11 +744,83 @@ const CartPage = () => {
                   <span>₺{getTotalPrice().toFixed(2)}</span>
                 </div>
 
+                {/* ========== KAMPANYA İNDİRİMİ ========== */}
+                {(campaignDiscountTotal > 0 ||
+                  pricing?.campaignDiscountTotal > 0) && (
+                  <div
+                    className="summary-row discount"
+                    style={{ color: "#2e7d32" }}
+                  >
+                    <span>
+                      <i className="fas fa-gift me-1"></i>
+                      Kampanya İndirimi
+                    </span>
+                    <span>
+                      -₺
+                      {(
+                        campaignDiscountTotal ||
+                        pricing?.campaignDiscountTotal ||
+                        0
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
+                {/* ========== UYGULANAN KAMPANYALAR LİSTESİ ========== */}
+                {appliedCampaigns.length > 0 && (
+                  <div
+                    className="applied-campaigns-list"
+                    style={{
+                      padding: "8px 0",
+                      borderTop: "1px dashed #e0e0e0",
+                      marginTop: "8px",
+                    }}
+                  >
+                        {appliedCampaigns.map((campaign, index) => (
+                          <div
+                            key={index}
+                            className="campaign-item"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "4px 0",
+                          fontSize: "0.8rem",
+                        }}
+                          >
+                            <span
+                              style={{
+                                color: "#666",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "6px",
+                              }}
+                            >
+                              <i
+                                className={`fas ${CampaignService.getCampaignBadge(campaign.type).icon}`}
+                                style={{ color: "#ff6b35", fontSize: "0.75rem" }}
+                              ></i>
+                              {campaign.displayText ||
+                                campaign.campaignName ||
+                                campaign.name ||
+                                CampaignService.getDiscountText(campaign)}
+                            </span>
+                            {campaign.discountAmount > 0 && (
+                              <span style={{ color: "#2e7d32", fontWeight: "600" }}>
+                                -₺{campaign.discountAmount.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                  </div>
+                )}
+
+                {/* ========== KUPON İNDİRİMİ ========== */}
                 {getDiscountAmount() > 0 && (
                   <div className="summary-row discount">
                     <span>
                       <i className="fas fa-tag me-1"></i>
-                      İndirim
+                      Kupon İndirimi
                     </span>
                     <span>-₺{getDiscountAmount().toFixed(2)}</span>
                   </div>
@@ -591,7 +837,15 @@ const CartPage = () => {
 
                 <div className="summary-row total">
                   <span>Toplam</span>
-                  <span>₺{getFinalTotal().toFixed(2)}</span>
+                  <span>
+                    ₺
+                    {(
+                      getFinalTotal() -
+                      (campaignDiscountTotal ||
+                        pricing?.campaignDiscountTotal ||
+                        0)
+                    ).toFixed(2)}
+                  </span>
                 </div>
               </div>
 

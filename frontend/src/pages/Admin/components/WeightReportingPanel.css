@@ -1,0 +1,786 @@
+/* ==========================================================================
+   WeightReportingPanel.css - Ağırlık Raporlama Paneli Stilleri
+   ========================================================================== */
+
+/* Ana Panel */
+.weight-reporting-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Header */
+.reporting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header-title h5 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 4px 0;
+}
+
+.header-title p {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-actions .form-select {
+  min-width: 120px;
+}
+
+/* Tab Navigation */
+.reporting-tabs {
+  display: flex;
+  border-bottom: 2px solid #f0f0f0;
+  padding: 0 24px;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 14px 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--primary-color, #4361ee);
+}
+
+.tab-btn.active {
+  color: var(--primary-color, #4361ee);
+  border-bottom-color: var(--primary-color, #4361ee);
+}
+
+/* Content Area */
+.reporting-content {
+  padding: 24px;
+}
+
+/* Section Title */
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%);
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+
+.bg-primary-light {
+  background: rgba(67, 97, 238, 0.12);
+  color: #4361ee;
+}
+
+.bg-success-light {
+  background: rgba(40, 167, 69, 0.12);
+  color: #28a745;
+}
+
+.bg-warning-light {
+  background: rgba(255, 193, 7, 0.15);
+  color: #e6a700;
+}
+
+.bg-info-light {
+  background: rgba(23, 162, 184, 0.12);
+  color: #17a2b8;
+}
+
+.card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.card-label {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+/* Daily Trend Chart */
+.daily-trend-section {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: #f9fafc;
+  border-radius: 12px;
+}
+
+.trend-chart {
+  margin-top: 16px;
+}
+
+.chart-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 160px;
+  padding: 0 10px;
+}
+
+.chart-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 60px;
+}
+
+.chart-bar-container {
+  height: 120px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.chart-bar {
+  width: 32px;
+  min-height: 8px;
+  background: linear-gradient(180deg, #4361ee 0%, #7048e8 100%);
+  border-radius: 6px 6px 0 0;
+  transition: all 0.3s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.chart-bar:hover {
+  filter: brightness(1.1);
+}
+
+.bar-tooltip {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.bar-tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0 6px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
+}
+
+.chart-bar:hover .bar-tooltip {
+  opacity: 1;
+}
+
+.chart-label {
+  margin-top: 10px;
+  font-size: 0.75rem;
+  color: #888;
+  font-weight: 500;
+}
+
+/* Status Distribution */
+.status-distribution-section {
+  padding: 20px;
+  background: #f9fafc;
+  border-radius: 12px;
+}
+
+.status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-bar {
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.status-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.status-item.completed .status-fill {
+  background: linear-gradient(90deg, #28a745, #34d058);
+}
+
+.status-item.pending .status-fill {
+  background: linear-gradient(90deg, #ffc107, #ffdd57);
+}
+
+.status-item.refund .status-fill {
+  background: linear-gradient(90deg, #17a2b8, #3dd5f3);
+}
+
+.status-item.admin-review .status-fill {
+  background: linear-gradient(90deg, #6f42c1, #9146ff);
+}
+
+.status-item.cancelled .status-fill {
+  background: linear-gradient(90deg, #dc3545, #ff6b6b);
+}
+
+.status-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-name {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.status-count {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Products Tab */
+.products-tab .products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.product-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #f9fafc;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.product-item:hover {
+  background: #f0f2f5;
+}
+
+.product-rank {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4361ee, #7048e8);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 50%;
+}
+
+.product-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-name {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.product-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.product-stats .stat {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.product-bar {
+  width: 100px;
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.product-bar .bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* Recommendations */
+.product-recommendations {
+  margin-top: 24px;
+}
+
+.recommendation-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recommendation-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #fffdf7 0%, #fff 100%);
+  border: 1px solid #f0e9d8;
+  border-radius: 10px;
+}
+
+.recommendation-card i {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.recommendation-card strong {
+  display: block;
+  font-size: 0.9rem;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.recommendation-card p {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ========================================================================== 
+   Kurye Performans Stili
+   ========================================================================== */
+.courier-performance {
+  padding: 0;
+}
+
+.performance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.date-filter .form-select {
+  min-width: 120px;
+}
+
+.courier-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.courier-card {
+  background: #f9fafc;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.courier-card:hover {
+  background: #f0f2f5;
+}
+
+.courier-card.selected {
+  border-color: var(--primary-color, #4361ee);
+  background: #f0f4ff;
+}
+
+.courier-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.courier-avatar {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4361ee, #7048e8);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 1.1rem;
+}
+
+.courier-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.courier-name {
+  display: block;
+  font-weight: 600;
+  color: #333;
+}
+
+.courier-last-active {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.accuracy-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+.courier-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+.courier-details {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed #ddd;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.detail-label {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.detail-value {
+  font-weight: 600;
+}
+
+.progress-wrapper {
+  margin-top: 12px;
+}
+
+.progress-wrapper small {
+  display: block;
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* Performance Summary */
+.performance-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%);
+  border-radius: 12px;
+  border: 1px solid #e8e8e8;
+}
+
+.performance-summary .summary-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.performance-summary .summary-card i {
+  font-size: 1.5rem;
+}
+
+.summary-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* ========================================================================== 
+   Mobil Uyumluluk
+   ========================================================================== */
+@media (max-width: 768px) {
+  .reporting-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .header-actions {
+    justify-content: space-between;
+  }
+
+  .reporting-tabs {
+    padding: 0 16px;
+  }
+
+  .tab-btn {
+    padding: 12px 14px;
+    font-size: 0.85rem;
+  }
+
+  .tab-btn i {
+    display: none;
+  }
+
+  .reporting-content {
+    padding: 16px;
+  }
+
+  .summary-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .summary-card {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .card-value {
+    font-size: 1.1rem;
+  }
+
+  .chart-container {
+    height: 120px;
+  }
+
+  .chart-bar {
+    width: 24px;
+  }
+
+  .product-item {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .product-bar {
+    width: 100%;
+    order: 3;
+  }
+
+  .courier-stats {
+    gap: 16px;
+    justify-content: space-around;
+  }
+
+  .stat-value {
+    font-size: 1.1rem;
+  }
+
+  .performance-summary {
+    grid-template-columns: repeat(3, 1fr);
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .performance-summary .summary-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 6px;
+  }
+
+  .summary-value {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-container {
+    height: 100px;
+    padding: 0;
+  }
+
+  .chart-bar-wrapper {
+    max-width: 45px;
+  }
+
+  .chart-bar {
+    width: 20px;
+  }
+
+  .chart-label {
+    font-size: 0.65rem;
+  }
+
+  .product-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+/* Loading State */
+.reporting-panel-loading {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .weight-reporting-panel {
+    background: #1e1e1e;
+  }
+
+  .reporting-header {
+    border-bottom-color: #333;
+  }
+
+  .header-title h5 {
+    color: #eee;
+  }
+
+  .summary-card,
+  .daily-trend-section,
+  .status-distribution-section,
+  .product-item,
+  .courier-card {
+    background: #2d2d2d;
+    border-color: #444;
+  }
+
+  .card-value,
+  .status-count,
+  .product-name,
+  .courier-name,
+  .stat-value,
+  .detail-value,
+  .summary-value,
+  .section-title {
+    color: #eee;
+  }
+
+  .tab-btn {
+    color: #aaa;
+  }
+
+  .tab-btn.active {
+    color: #6c8cff;
+    border-bottom-color: #6c8cff;
+  }
+}

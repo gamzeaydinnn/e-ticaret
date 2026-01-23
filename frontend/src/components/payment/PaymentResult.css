@@ -1,0 +1,436 @@
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   PAYMENT RESULT PAGES STYLING
+   Başarılı/Başarısız ödeme sayfaları için CSS
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Ana Container */
+.payment-result-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+}
+
+/* Sonuç Kartı */
+.result-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Yükleniyor Durumu */
+.result-container.loading {
+  padding: 60px 40px;
+}
+
+.result-container.loading p {
+  color: #666;
+  margin-top: 20px;
+  font-size: 16px;
+}
+
+/* Büyük Spinner */
+.spinner-large {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sonuç İkonu */
+.result-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  margin: 0 auto 20px;
+  animation: scaleIn 0.4s ease-out 0.2s both;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Başarılı İkon */
+.result-icon.success-icon {
+  background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
+}
+
+/* Başarısız İkon */
+.result-icon.failure-icon {
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(244, 67, 54, 0.4);
+}
+
+/* Başlıklar */
+.result-container h1 {
+  font-size: 28px;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.result-container.success h1 {
+  color: #4caf50;
+}
+
+.result-container.failure h1 {
+  color: #f44336;
+}
+
+.result-container.warning h1 {
+  color: #ff9800;
+}
+
+.result-container h2 {
+  font-size: 22px;
+  color: #333;
+  margin-bottom: 10px;
+}
+
+/* Paragraflar */
+.result-container > p {
+  color: #666;
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.info-text {
+  font-size: 14px;
+  color: #888;
+  margin-top: 10px;
+}
+
+/* Ödeme Detayları */
+.payment-details {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row span {
+  color: #666;
+  font-size: 14px;
+}
+
+.detail-row strong {
+  color: #333;
+  font-size: 15px;
+}
+
+/* Sonuç Mesajları */
+.result-message {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-radius: 10px;
+  padding: 15px;
+  margin: 20px 0;
+}
+
+.result-message p {
+  margin: 8px 0;
+  color: #2e7d32;
+  font-size: 14px;
+}
+
+/* Hata Mesajları */
+.error-message {
+  color: #d32f2f !important;
+  font-weight: 500;
+  background: #ffebee;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 15px !important;
+}
+
+.error-description {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+/* Başarısızlık İpuçları */
+.failure-tips {
+  background: #fff8e1;
+  border-radius: 10px;
+  padding: 15px 20px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.failure-tips h4 {
+  color: #f57c00;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.failure-tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.failure-tips li {
+  padding: 6px 0;
+  font-size: 13px;
+  color: #666;
+  position: relative;
+  padding-left: 20px;
+}
+
+.failure-tips li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: #f57c00;
+  font-weight: bold;
+}
+
+/* Aksiyon Butonları */
+.result-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 25px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 160px;
+}
+
+.primary-btn:hover {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+}
+
+.secondary-btn {
+  background: white;
+  color: #666;
+  border: 2px solid #e0e0e0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 140px;
+}
+
+.secondary-btn:hover {
+  border-color: #bdbdbd;
+  color: #333;
+  background: #fafafa;
+}
+
+/* Destek Bilgisi */
+.support-info {
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
+}
+
+.support-info p {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+.support-link {
+  color: #2196f3;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  transition: color 0.2s;
+}
+
+.support-link:hover {
+  color: #1976d2;
+  text-decoration: underline;
+}
+
+/* Uyarı Stili */
+.result-container.warning .result-icon {
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  color: white;
+  box-shadow: 0 4px 20px rgba(255, 152, 0, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .payment-result-page {
+    padding: 10px;
+    min-height: auto;
+  }
+
+  .result-container {
+    padding: 30px 20px;
+    border-radius: 12px;
+  }
+
+  .result-container h1 {
+    font-size: 24px;
+  }
+
+  .result-icon {
+    width: 70px;
+    height: 70px;
+    font-size: 35px;
+  }
+
+  .result-actions {
+    flex-direction: column;
+  }
+
+  .primary-btn,
+  .secondary-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .payment-details {
+    padding: 15px;
+  }
+
+  .detail-row {
+    flex-direction: column;
+    text-align: center;
+    gap: 5px;
+  }
+}
+
+/* Dark Mode Desteği */
+@media (prefers-color-scheme: dark) {
+  .payment-result-page {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+
+  .result-container {
+    background: #1f2937;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .result-container h1,
+  .result-container h2 {
+    color: #f3f4f6;
+  }
+
+  .result-container > p {
+    color: #9ca3af;
+  }
+
+  .payment-details {
+    background: #374151;
+  }
+
+  .detail-row {
+    border-bottom-color: #4b5563;
+  }
+
+  .detail-row span {
+    color: #9ca3af;
+  }
+
+  .detail-row strong {
+    color: #f3f4f6;
+  }
+
+  .result-message {
+    background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 100%);
+  }
+
+  .result-message p {
+    color: #a7f3d0;
+  }
+
+  .failure-tips {
+    background: #451a03;
+  }
+
+  .failure-tips h4 {
+    color: #fb923c;
+  }
+
+  .failure-tips li {
+    color: #d6d3d1;
+  }
+
+  .secondary-btn {
+    background: #374151;
+    border-color: #4b5563;
+    color: #d1d5db;
+  }
+
+  .secondary-btn:hover {
+    background: #4b5563;
+    border-color: #6b7280;
+    color: #f3f4f6;
+  }
+
+  .support-info {
+    border-top-color: #374151;
+  }
+
+  .support-info p {
+    color: #6b7280;
+  }
+}

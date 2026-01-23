@@ -60,6 +60,103 @@ namespace ECommerce.Entities.Concrete
         public ECommerce.Entities.Enums.PaymentStatus PaymentStatus { get; set; } = ECommerce.Entities.Enums.PaymentStatus.Pending;
         public Guid? ReservationId { get; set; }
 
+        #region Ağırlık Bazlı Ödeme Alanları
+
+        /// <summary>
+        /// Siparişte ağırlık bazlı ürün var mı?
+        /// true ise tartı ve fark hesaplama işlemleri yapılacak
+        /// </summary>
+        public bool HasWeightBasedItems { get; set; } = false;
+
+        /// <summary>
+        /// Ağırlık fark durumu
+        /// Tartı sonrası ödeme sürecinin takibi için
+        /// </summary>
+        public WeightAdjustmentStatus WeightAdjustmentStatus { get; set; } = WeightAdjustmentStatus.NotApplicable;
+
+        /// <summary>
+        /// Ön provizyon tutarı (TL)
+        /// Sipariş oluşturulurken tahmini tutara göre alınan provizyon
+        /// Kredi kartı ödemelerinde Pre-Authorization tutarı
+        /// </summary>
+        public decimal PreAuthAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Kesin tutar (TL)
+        /// Tartı sonrası hesaplanan gerçek toplam tutar
+        /// Bu tutar karttan çekilir veya kapıda ödenir
+        /// </summary>
+        public decimal FinalAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Toplam ağırlık farkı (gram)
+        /// Tüm ağırlık bazlı ürünlerin fark toplamı
+        /// Pozitif: Fazla, Negatif: Eksik
+        /// </summary>
+        public decimal TotalWeightDifference { get; set; } = 0m;
+
+        /// <summary>
+        /// Toplam fiyat farkı (TL)
+        /// Tüm ağırlık bazlı ürünlerin fiyat farkı toplamı
+        /// Pozitif: Ek ödeme, Negatif: İade
+        /// </summary>
+        public decimal TotalPriceDifference { get; set; } = 0m;
+
+        /// <summary>
+        /// Ödeme türü
+        /// credit_card, cash_on_delivery vb.
+        /// </summary>
+        public string PaymentMethod { get; set; } = "cash_on_delivery";
+
+        /// <summary>
+        /// POSNET işlem referans numarası
+        /// Pre-auth ve post-auth işlemleri için
+        /// </summary>
+        public string? PosnetTransactionId { get; set; }
+
+        /// <summary>
+        /// Pre-Authorization HostLogKey
+        /// POSNET provizyonu için referans anahtarı
+        /// Finansallaştırma (capture) ve iade işlemlerinde kullanılır
+        /// </summary>
+        public string? PreAuthHostLogKey { get; set; }
+
+        /// <summary>
+        /// Ağırlık farkı (TL olarak)
+        /// Pozitif: Müşteriye iade, Negatif: Müşteriden tahsilat
+        /// </summary>
+        public decimal WeightDifference { get; set; } = 0m;
+
+        /// <summary>
+        /// Pre-authorization tarihi
+        /// Provizyon alındığı tarih (48 saat geçerlilik kontrolü için)
+        /// </summary>
+        public DateTime? PreAuthDate { get; set; }
+
+        /// <summary>
+        /// Tüm tartılar tamamlandı mı?
+        /// true: Siparişin kesin tutarı hesaplanabilir
+        /// </summary>
+        public bool AllItemsWeighed { get; set; } = false;
+
+        /// <summary>
+        /// Tartı tamamlanma tarihi
+        /// Son ürün tartıldığı an
+        /// </summary>
+        public DateTime? WeighingCompletedAt { get; set; }
+
+        /// <summary>
+        /// Fark ödemesi/iadesi yapıldı mı?
+        /// </summary>
+        public bool DifferenceSettled { get; set; } = false;
+
+        /// <summary>
+        /// Fark ödemesi/iadesi tarihi
+        /// </summary>
+        public DateTime? DifferenceSettledAt { get; set; }
+
+        #endregion
+
         // Address normalization
         public int? AddressId { get; set; }
         public virtual Address? Address { get; set; }
@@ -77,5 +174,11 @@ namespace ECommerce.Entities.Concrete
         /// Tek kupon destekli sistemde tek kayıt olur, ancak geçmiş için collection tutulur
         /// </summary>
         public virtual ICollection<CouponUsage> CouponUsages { get; set; } = new HashSet<CouponUsage>();
+
+        /// <summary>
+        /// Bu siparişin ağırlık fark kayıtları
+        /// Her ağırlık bazlı ürün için bir kayıt oluşturulur
+        /// </summary>
+        public virtual ICollection<WeightAdjustment> WeightAdjustments { get; set; } = new HashSet<WeightAdjustment>();
     }
 }

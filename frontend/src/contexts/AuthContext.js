@@ -204,7 +204,7 @@ export const AuthProvider = ({ children }) => {
         // Cache'e kaydet - rol bilgisi ile birlikte
         localStorage.setItem(
           "userPermissions",
-          JSON.stringify(loadedPermissions)
+          JSON.stringify(loadedPermissions),
         );
         localStorage.setItem("permissionsCacheTime", Date.now().toString());
         localStorage.setItem("permissionsCacheRole", userData.role);
@@ -232,7 +232,7 @@ export const AuthProvider = ({ children }) => {
         setPermissionsLoading(false);
       }
     },
-    []
+    [],
   );
 
   // =========================================================================
@@ -252,7 +252,7 @@ export const AuthProvider = ({ children }) => {
       // İzin listesinde var mı?
       return permissions.includes(permission);
     },
-    [user, permissions]
+    [user, permissions],
   );
 
   /**
@@ -265,7 +265,7 @@ export const AuthProvider = ({ children }) => {
 
       return permissionList.some((p) => permissions.includes(p));
     },
-    [user, permissions]
+    [user, permissions],
   );
 
   /**
@@ -278,7 +278,7 @@ export const AuthProvider = ({ children }) => {
 
       return permissionList.every((p) => permissions.includes(p));
     },
-    [user, permissions]
+    [user, permissions],
   );
 
   /**
@@ -305,7 +305,7 @@ export const AuthProvider = ({ children }) => {
       (p) =>
         p.startsWith("dashboard.") ||
         p.startsWith("products.") ||
-        p.startsWith("orders.")
+        p.startsWith("orders."),
     );
   }, [user, permissions]);
 
@@ -376,9 +376,13 @@ export const AuthProvider = ({ children }) => {
             isAdmin: data.isAdmin,
           };
         const token = data.token || data.Token;
+        const refreshToken = data.refreshToken || data.RefreshToken;
 
         // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(token);
+        if (refreshToken) {
+          localStorage.setItem("refreshToken", refreshToken);
+        }
         localStorage.setItem("user", JSON.stringify(userData));
         if (userData?.id != null) {
           localStorage.setItem("userId", String(userData.id));
@@ -401,7 +405,7 @@ export const AuthProvider = ({ children }) => {
 
       // Backend bağlantısı yoksa demo login'e geç
       const demoUser = demoUsers.find(
-        (u) => u.email === email && u.password === password
+        (u) => u.email === email && u.password === password,
       );
 
       if (demoUser) {
@@ -446,6 +450,7 @@ export const AuthProvider = ({ children }) => {
     AuthService.removeToken();
     localStorage.removeItem("user");
     localStorage.removeItem("userId");
+    localStorage.removeItem("refreshToken");
 
     // Permission verileri (Madde 5 düzeltmesi - rol bilgisi de temizleniyor)
     localStorage.removeItem("userPermissions");
@@ -466,14 +471,23 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const register = async (email, password, firstName, lastName) => {
+  const register = async (
+    email,
+    password,
+    firstName,
+    lastName,
+    phoneNumber,
+    confirmPassword,
+  ) => {
     try {
       // Backend API çağrısı
       const resp = await AuthService.register({
         email,
         password,
+        confirmPassword: confirmPassword || password, // Backend için şifre onayı
         firstName,
         lastName,
+        phoneNumber, // Telefon numarası eklendi
       });
 
       const data = resp && resp.data === undefined ? resp : resp.data;
@@ -555,7 +569,7 @@ export const AuthProvider = ({ children }) => {
     password,
     firstName,
     lastName,
-    phoneNumber
+    phoneNumber,
   ) => {
     try {
       const result = await smsService.registerWithPhone({
@@ -597,7 +611,7 @@ export const AuthProvider = ({ children }) => {
       const result = await smsService.verifyPhoneRegistration(
         phoneNumber,
         code,
-        email
+        email,
       );
 
       if (result.success && result.token) {
@@ -644,11 +658,14 @@ export const AuthProvider = ({ children }) => {
       return {
         success: result.success,
         message: result.message,
+        error: result.message, // Hata durumu için de message'ı error olarak da döndür
+        expiresInSeconds: result.expiresInSeconds || 180,
       };
     } catch (error) {
       console.error("ForgotPasswordByPhone error:", error);
       return {
         success: false,
+        message: "İşlem sırasında bir hata oluştu.",
         error: "İşlem sırasında bir hata oluştu.",
       };
     }
@@ -661,14 +678,14 @@ export const AuthProvider = ({ children }) => {
     phoneNumber,
     code,
     newPassword,
-    confirmPassword
+    confirmPassword,
   ) => {
     try {
       const result = await smsService.resetPasswordByPhone(
         phoneNumber,
         code,
         newPassword,
-        confirmPassword
+        confirmPassword,
       );
       return {
         success: result.success,

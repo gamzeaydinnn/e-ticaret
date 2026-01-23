@@ -1,154 +1,347 @@
-import React from "react";
+// ==========================================================================
+// OrderDetailModal.jsx - Sipariş Detay Modal Komponenti
+// ==========================================================================
+// Sipariş detaylarını ve ağırlık fark bilgilerini gösteren modal.
+// Profesyonel tasarım, mobil uyumlu.
+// ==========================================================================
+
+import React, { useState } from "react";
+import "./OrderDetailModal.css";
+
+/**
+ * Durum badge'ini render et
+ */
+const StatusBadge = ({ status }) => {
+  const statusConfig = {
+    Pending: { label: "Beklemede", color: "#ffc107", icon: "clock" },
+    Processing: { label: "Hazırlanıyor", color: "#17a2b8", icon: "cog" },
+    Shipped: { label: "Kargoda", color: "#6f42c1", icon: "truck" },
+    OutForDelivery: {
+      label: "Dağıtımda",
+      color: "#fd7e14",
+      icon: "motorcycle",
+    },
+    Delivered: {
+      label: "Teslim Edildi",
+      color: "#28a745",
+      icon: "check-circle",
+    },
+    Cancelled: { label: "İptal", color: "#dc3545", icon: "times-circle" },
+    Refunded: { label: "İade Edildi", color: "#6c757d", icon: "undo" },
+    WeightPending: {
+      label: "Tartım Bekleniyor",
+      color: "#ff9800",
+      icon: "balance-scale",
+    },
+    WeightAdjusted: { label: "Tartıldı", color: "#4caf50", icon: "check" },
+    AdminReview: {
+      label: "Admin İncelemede",
+      color: "#9c27b0",
+      icon: "user-shield",
+    },
+  };
+
+  const config = statusConfig[status] || {
+    label: status,
+    color: "#6c757d",
+    icon: "info",
+  };
+
+  return (
+    <span className="status-badge" style={{ backgroundColor: config.color }}>
+      <i className={`fas fa-${config.icon}`}></i>
+      {config.label}
+    </span>
+  );
+};
+
+/**
+ * Ağırlık Fark Kartı Komponenti
+ */
+const WeightDifferenceCard = ({ weightAdjustment }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!weightAdjustment) return null;
+
+  const estimatedTotal =
+    weightAdjustment.estimatedTotal || weightAdjustment.expectedWeight || 0;
+  const actualTotal =
+    weightAdjustment.actualTotal || weightAdjustment.reportedWeight || 0;
+  const difference =
+    weightAdjustment.differenceAmount ||
+    weightAdjustment.overageAmount ||
+    actualTotal - estimatedTotal;
+  const isRefund = difference < 0;
+
+  const getStatusInfo = () => {
+    const status = weightAdjustment.status;
+    switch (status) {
+      case "Completed":
+      case "Approved":
+        return { label: "Tamamlandı", color: "success", icon: "check-circle" };
+      case "Pending":
+      case "Weighed":
+        return { label: "Beklemede", color: "warning", icon: "clock" };
+      case "AdminReviewRequired":
+        return {
+          label: "Admin İncelemede",
+          color: "info",
+          icon: "user-shield",
+        };
+      case "RefundRequired":
+        return { label: "İade Bekleniyor", color: "primary", icon: "undo" };
+      default:
+        return { label: "İşleniyor", color: "secondary", icon: "spinner" };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
+
+  return (
+    <div className={`weight-difference-card ${isRefund ? "refund" : "charge"}`}>
+      <div className="wdc-header">
+        <div className="wdc-icon">
+          <i className="fas fa-balance-scale"></i>
+        </div>
+        <div className="wdc-title">
+          <h6>Ağırlık Fark Özeti</h6>
+          <span className={`badge bg-${statusInfo.color}`}>
+            <i className={`fas fa-${statusInfo.icon} me-1`}></i>
+            {statusInfo.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="wdc-summary">
+        <div className="summary-row">
+          <span className="label">Tahmini Tutar:</span>
+          <span className="value">₺{Number(estimatedTotal).toFixed(2)}</span>
+        </div>
+        <div className="summary-row">
+          <span className="label">Gerçek Tutar:</span>
+          <span className="value highlight">
+            ₺{Number(actualTotal).toFixed(2)}
+          </span>
+        </div>
+        <div className={`summary-row total ${isRefund ? "refund" : "charge"}`}>
+          <span className="label">Fark:</span>
+          <span className="value">
+            {isRefund ? "" : "+"}₺{Math.abs(Number(difference)).toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      {weightAdjustment.items && weightAdjustment.items.length > 0 && (
+        <>
+          <button
+            className="wdc-expand-btn"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            <span>
+              {isExpanded ? "Detayları Gizle" : "Ürün Bazlı Detaylar"}
+            </span>
+            <i className={`fas fa-chevron-${isExpanded ? "up" : "down"}`}></i>
+          </button>
+
+          {isExpanded && (
+            <div className="wdc-details">
+              {weightAdjustment.items.map((item, index) => {
+                const itemDiff =
+                  (item.actualPrice || 0) - (item.estimatedPrice || 0);
+                return (
+                  <div key={index} className="wdc-item">
+                    <div className="item-info">
+                      <span className="item-name">{item.productName}</span>
+                      <span className="item-weights">
+                        {item.estimatedQuantity} → {item.actualQuantity}{" "}
+                        {item.weightUnit || "g"}
+                      </span>
+                    </div>
+                    <div className="item-prices">
+                      <span
+                        className={`diff ${itemDiff >= 0 ? "positive" : "negative"}`}
+                      >
+                        {itemDiff >= 0 ? "+" : ""}₺{itemDiff.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="wdc-message">
+        {isRefund ? (
+          <>
+            <i className="fas fa-info-circle text-primary"></i>
+            <span>Fark tutarı iade edilecektir.</span>
+          </>
+        ) : difference > 0 ? (
+          <>
+            <i className="fas fa-info-circle text-warning"></i>
+            <span>Ek tutar ödemenize eklenmiştir.</span>
+          </>
+        ) : (
+          <>
+            <i className="fas fa-check-circle text-success"></i>
+            <span>Tahmin ve gerçek tutar eşleşiyor.</span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function OrderDetailModal({ show, onHide, order }) {
   if (!show || !order) return null;
 
-  // Demo: Ağırlık fazlalığı var mı kontrol et
-  const hasWeightReport = order.weightReport || Math.random() > 0.6;
-  const weightReport = order.weightReport || {
-    expectedWeight: 2500, // gram
-    reportedWeight: 2650,
-    overageGrams: 150,
-    overageAmount: 75,
-    status: "Approved",
-  };
+  const weightAdjustment = order.weightAdjustment || order.weightReport;
+  const hasWeightAdjustment = !!weightAdjustment;
+  const hasWeightBasedItems = (order.orderItems || []).some(
+    (item) => item.isWeightBased || item.weightUnit,
+  );
 
   return (
     <div
-      className="modal fade show d-block"
-      tabIndex="-1"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      className="order-detail-modal-overlay"
       onClick={(e) => e.target === e.currentTarget && onHide()}
     >
-      <div className="modal-dialog modal-lg modal-dialog-centered">
-        <div
-          className="modal-content border-0 shadow-lg"
-          style={{ borderRadius: "20px" }}
-        >
-          <div className="modal-header border-0 p-0">
-            <div
-              className="w-100 d-flex justify-content-between align-items-center p-3"
-              style={{
-                background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                borderRadius: "20px 20px 0 0",
-              }}
-            >
-              <h5 className="modal-title text-white fw-bold mb-0">
-                <i className="fas fa-info-circle me-2"></i>
-                Sipariş Detayları
-              </h5>
-              <button
-                type="button"
-                className="btn btn-link text-white p-0 border-0"
-                onClick={onHide}
-                style={{
-                  fontSize: "1.5rem",
-                  textDecoration: "none",
-                  opacity: 0.9,
-                }}
-              >
-                <i className="fas fa-times"></i>
-              </button>
+      <div className="order-detail-modal">
+        {/* Header */}
+        <div className="modal-header-custom">
+          <div className="header-content">
+            <div className="order-badge">
+              <i className="fas fa-receipt"></i>
+              <span>#{order.id || order.orderNumber}</span>
             </div>
+            <h5>Sipariş Detayları</h5>
+            <StatusBadge status={order.status} />
           </div>
-          <div className="modal-body px-4 pb-4">
-            {hasWeightReport && weightReport.status === "Approved" && (
-              <div
-                className="alert alert-warning border-0 mb-3"
-                style={{
-                  borderRadius: "12px",
-                  background:
-                    "linear-gradient(135deg, #fff8e1 0%, #fff3cd 100%)",
-                }}
-              >
-                <div className="d-flex align-items-center">
-                  <i className="fas fa-balance-scale fs-4 me-3 text-warning"></i>
-                  <div className="flex-grow-1">
-                    <h6 className="fw-bold mb-1 text-dark">
-                      ⚖️ Ağırlık Fazlalığı Tespit Edildi
-                    </h6>
-                    <div className="small">
-                      <div>
-                        <strong>Beklenen Ağırlık:</strong>{" "}
-                        {weightReport.expectedWeight}g
-                      </div>
-                      <div>
-                        <strong>Ölçülen Ağırlık:</strong>{" "}
-                        {weightReport.reportedWeight}g
-                      </div>
-                      <div className="text-danger fw-bold mt-1">
-                        <i className="fas fa-exclamation-triangle me-1"></i>
-                        Fazlalık: +{weightReport.overageGrams}g | Ek Ödeme: +
-                        {weightReport.overageAmount} ₺
-                      </div>
-                    </div>
-                  </div>
-                  <span className="badge bg-success px-3 py-2">Onaylandı</span>
+          <button className="close-btn" onClick={onHide}>
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="modal-body-custom">
+          {hasWeightAdjustment && (
+            <WeightDifferenceCard weightAdjustment={weightAdjustment} />
+          )}
+
+          {hasWeightBasedItems &&
+            !hasWeightAdjustment &&
+            order.status !== "Delivered" && (
+              <div className="weight-pending-notice">
+                <i className="fas fa-balance-scale"></i>
+                <div>
+                  <strong>Tartılı Ürün İçeriyor</strong>
+                  <p>Bu siparişte ağırlık bazlı ürünler bulunmaktadır.</p>
                 </div>
               </div>
             )}
-            <div className="row mb-3">
-              <div className="col-md-6">
-                <div className="mb-2">
-                  <strong>Sipariş No:</strong> {order.id}
-                </div>
-                <div className="mb-2">
-                  <strong>Tarih:</strong>{" "}
+
+          {/* Sipariş Bilgileri */}
+          <div className="order-info-grid">
+            <div className="info-section">
+              <h6>
+                <i className="fas fa-info-circle"></i> Sipariş Bilgileri
+              </h6>
+              <div className="info-row">
+                <span className="label">Tarih</span>
+                <span className="value">
                   {order.orderDate
-                    ? new Date(order.orderDate).toLocaleString()
+                    ? new Date(order.orderDate).toLocaleString("tr-TR")
                     : "-"}
-                </div>
-                <div className="mb-2">
-                  <strong>Durum:</strong> {order.status}
-                </div>
-                <div className="mb-2">
-                  <strong>Tutar:</strong> ₺{order.totalAmount}
-                </div>
-                <div className="mb-2">
-                  <strong>Kargo:</strong> {order.shippingMethod} (
-                  {order.shippingCost ? `₺${order.shippingCost}` : "-"})
-                </div>
-                <div className="mb-2">
-                  <strong>Adres:</strong> {order.shippingAddress}
-                </div>
-                <div className="mb-2">
-                  <strong>Müşteri:</strong> {order.customerName}{" "}
-                  {order.customerPhone && `(${order.customerPhone})`}
-                </div>
-                {order.deliveryNotes && (
-                  <div className="mb-2">
-                    <strong>Not:</strong> {order.deliveryNotes}
-                  </div>
-                )}
+                </span>
               </div>
-              <div className="col-md-6">
-                <div className="fw-bold mb-2">Ürünler</div>
-                <ul className="list-group">
-                  {(order.orderItems || []).map((item, idx) => (
-                    <li
-                      key={idx}
-                      className="list-group-item d-flex justify-content-between align-items-center"
-                    >
-                      <span>{item.productName}</span>
-                      <span className="badge bg-secondary rounded-pill">
-                        x{item.quantity}
-                      </span>
-                      <span>₺{item.unitPrice}</span>
-                    </li>
-                  ))}
-                </ul>
+              <div className="info-row">
+                <span className="label">Durum</span>
+                <span className="value">{order.status}</span>
+              </div>
+              <div className="info-row">
+                <span className="label">Kargo</span>
+                <span className="value">
+                  {order.shippingMethod}
+                  {order.shippingCost ? ` (₺${order.shippingCost})` : ""}
+                </span>
               </div>
             </div>
-            <div className="d-flex justify-content-end mt-4">
-              <button
-                className="btn btn-outline-secondary"
-                onClick={onHide}
-                style={{ borderRadius: "12px" }}
-              >
-                Kapat
-              </button>
+
+            <div className="info-section">
+              <h6>
+                <i className="fas fa-map-marker-alt"></i> Teslimat
+              </h6>
+              <div className="info-row">
+                <span className="label">Alıcı</span>
+                <span className="value">{order.customerName}</span>
+              </div>
+              {order.customerPhone && (
+                <div className="info-row">
+                  <span className="label">Telefon</span>
+                  <span className="value">{order.customerPhone}</span>
+                </div>
+              )}
+              <div className="info-row">
+                <span className="label">Adres</span>
+                <span className="value address">{order.shippingAddress}</span>
+              </div>
             </div>
           </div>
+
+          {/* Ürünler */}
+          <div className="products-section">
+            <h6>
+              <i className="fas fa-box"></i> Ürünler
+            </h6>
+            <div className="products-list">
+              {(order.orderItems || []).map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`product-item ${item.isWeightBased ? "weight-based" : ""}`}
+                >
+                  <div className="product-info">
+                    <span className="product-name">{item.productName}</span>
+                    <div className="product-meta">
+                      <span className="quantity">x{item.quantity}</span>
+                      {item.isWeightBased && (
+                        <span className="weight-badge-sm">
+                          <i className="fas fa-balance-scale"></i>
+                          Tartılı
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="product-price">₺{item.unitPrice}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Özet */}
+          <div className="order-summary">
+            <div className="summary-row">
+              <span>Toplam</span>
+              <span className="total-price">₺{order.totalAmount}</span>
+            </div>
+          </div>
+
+          {order.deliveryNotes && (
+            <div className="delivery-notes">
+              <h6>
+                <i className="fas fa-sticky-note"></i> Not
+              </h6>
+              <p>{order.deliveryNotes}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="modal-footer-custom">
+          <button className="btn-close-modal" onClick={onHide}>
+            Kapat
+          </button>
         </div>
       </div>
     </div>

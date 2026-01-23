@@ -10,9 +10,15 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import { useCourierSignalR } from "../../contexts/CourierSignalRContext";
 import { CourierService } from "../../services/courierService";
+import {
+  WeightAdjustmentService,
+  WeightPaymentService,
+} from "../../services/weightAdjustmentService";
 import CourierActionButtons from "./CourierActionButtons";
 import CourierPODCapture from "./CourierPODCapture";
 import CourierFailureModal from "./CourierFailureModal";
+import WeightEntryCard from "./components/WeightEntryCard";
+import WeightDifferenceSummary from "./components/WeightDifferenceSummary";
 
 export default function CourierDeliveryDetail() {
   const { taskId } = useParams();
@@ -29,7 +35,13 @@ export default function CourierDeliveryDetail() {
   const [error, setError] = useState(null);
   const [showPODModal, setShowPODModal] = useState(false);
   const [showFailureModal, setShowFailureModal] = useState(false);
-  const [activeTab, setActiveTab] = useState("info"); // info, items, timeline
+  const [activeTab, setActiveTab] = useState("info"); // info, items, weight, timeline
+
+  // Ağırlık giriş state'leri
+  const [weightItems, setWeightItems] = useState([]);
+  const [weightSummary, setWeightSummary] = useState(null);
+  const [weightLoading, setWeightLoading] = useState(false);
+  const [weightSubmitting, setWeightSubmitting] = useState(false);
 
   // =========================================================================
   // AUTH CHECK
@@ -72,6 +84,169 @@ export default function CourierDeliveryDetail() {
       loadTaskDetail();
     }
   }, [courier?.id, taskId, loadTaskDetail]);
+
+  // =========================================================================
+  // AĞIRLIK VERİLERİNİ YÜKLEME
+  // =========================================================================
+  const loadWeightData = useCallback(async () => {
+    if (!task?.orderId && !taskId) return;
+
+    const orderId = task?.orderId || taskId;
+
+    try {
+      setWeightLoading(true);
+      const summaryData =
+        await WeightAdjustmentService.getOrderWeightSummary(orderId);
+
+      if (summaryData) {
+        setWeightSummary(summaryData);
+
+        // Ağırlık bazlı ürünleri ayarla
+        if (summaryData.adjustments) {
+          setWeightItems(
+            summaryData.adjustments.map((adj) => ({
+              ...adj,
+              id: adj.orderItemId,
+              isWeightBased: true,
+            })),
+          );
+        } else if (task?.items) {
+          // Task'tan weight-based ürünleri filtrele
+          const weightBasedItems = task.items.filter(
+            (item) =>
+              item.isWeightBased ||
+              item.weightUnit === "Gram" ||
+              item.weightUnit === "Kilogram",
+          );
+          setWeightItems(weightBasedItems);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[CourierDeliveryDetail] Ağırlık verileri yüklenemedi:",
+        err,
+      );
+      // Hata durumunda sessizce devam et - ağırlık bazlı ürün olmayabilir
+    } finally {
+      setWeightLoading(false);
+    }
+  }, [task, taskId]);
+
+  // Sekme değiştiğinde ağırlık verilerini yükle
+  useEffect(() => {
+    if (activeTab === "weight" && task) {
+      loadWeightData();
+    }
+  }, [activeTab, task, loadWeightData]);
+
+  // =========================================================================
+  // AĞIRLIK GİRİŞ HANDLERLERİ
+  // =========================================================================
+
+  /**
+   * Tek ürün için ağırlık kaydet
+   */
+  const handleWeightSubmit = async (weightData) => {
+    const orderId = task?.orderId || taskId;
+
+    try {
+      setWeightSubmitting(true);
+
+      await WeightAdjustmentService.recordWeight(
+        orderId,
+        weightData.orderItemId,
+        {
+          actualWeightGrams: weightData.actualWeightGrams,
+          notes: weightData.notes,
+        },
+      );
+
+      // Verileri yenile
+      await loadWeightData();
+    } catch (err) {
+      console.error("[CourierDeliveryDetail] Ağırlık kaydedilemedi:", err);
+      throw new Error(err.response?.data?.message || "Ağırlık kaydedilemedi");
+    } finally {
+      setWeightSubmitting(false);
+    }
+  };
+
+  /**
+   * Ağırlık bazlı teslimatı tamamla
+   */
+  const handleWeightBasedDelivery = async () => {
+    const orderId = task?.orderId || taskId;
+
+    // Tüm ürünler tartıldı mı kontrol et
+    if (weightSummary && !weightSummary.allItemsWeighed) {
+      if (
+        !window.confirm(
+          "Bazı ürünler henüz tartılmadı. Yine de devam etmek istiyor musunuz?",
+        )
+      ) {
+        return;
+      }
+    }
+
+    // Yüksek fark uyarısı
+    if (weightSummary && Math.abs(weightSummary.differencePercent) > 20) {
+      const confirmMsg =
+        weightSummary.differencePercent > 0
+          ? `Toplam fark +%${weightSummary.differencePercent.toFixed(1)} (${weightSummary.totalDifference.toFixed(2)} ₺ ek ödeme). Devam edilsin mi?`
+          : `Toplam fark ${weightSummary.differencePercent.toFixed(1)}% (${Math.abs(weightSummary.totalDifference).toFixed(2)} ₺ iade). Devam edilsin mi?`;
+
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+    }
+
+    try {
+      setUpdating(true);
+
+      // Teslimatı tamamla
+      const result = await WeightPaymentService.finalizeDelivery(orderId, {
+        courierNotes: `Ağırlık tartımı tamamlandı. Kurye: ${courier?.name || "Bilinmiyor"}`,
+      });
+
+      if (result.success) {
+        alert("Teslimat başarıyla tamamlandı!");
+        // POD modal aç veya listeye dön
+        if (task.requiredProofMethods?.length > 0) {
+          setShowPODModal(true);
+        } else {
+          setTask((prev) => ({ ...prev, status: "Delivered" }));
+          setTimeout(() => navigate("/courier/orders"), 1500);
+        }
+      } else if (result.requiresAdminApproval) {
+        alert("Yüksek fark tespit edildi. Admin onayı bekleniyor.");
+      } else {
+        alert(result.message || "Teslimat tamamlanamadı");
+      }
+    } catch (err) {
+      console.error("[CourierDeliveryDetail] Teslimat tamamlanamadı:", err);
+      alert(
+        err.response?.data?.message || "Teslimat tamamlanırken bir hata oluştu",
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  /**
+   * Siparişte ağırlık bazlı ürün var mı?
+   */
+  const hasWeightBasedItems = useCallback(() => {
+    if (weightItems.length > 0) return true;
+    if (task?.items) {
+      return task.items.some(
+        (item) =>
+          item.isWeightBased ||
+          item.weightUnit === "Gram" ||
+          item.weightUnit === "Kilogram",
+      );
+    }
+    return false;
+  }, [weightItems, task]);
 
   // Real-time event listener
   useEffect(() => {
@@ -385,6 +560,38 @@ export default function CourierDeliveryDetail() {
             <i className="fas fa-box me-2"></i>
             Ürünler
           </button>
+          {/* Ağırlık Sekmesi - Sadece ağırlık bazlı ürün varsa göster */}
+          {hasWeightBasedItems() && (
+            <button
+              className={`detail-tab flex-shrink-0 ${activeTab === "weight" ? "active" : ""}`}
+              onClick={() => setActiveTab("weight")}
+              style={{ position: "relative" }}
+            >
+              <i className="fas fa-balance-scale me-2"></i>
+              Tartı
+              {/* Bekleyen tartı sayısı badge */}
+              {weightSummary && !weightSummary.allItemsWeighed && (
+                <span
+                  className="badge bg-danger ms-1"
+                  style={{
+                    fontSize: "10px",
+                    position: "absolute",
+                    top: "5px",
+                    right: "5px",
+                    minWidth: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {(weightSummary.weightBasedItemCount || 0) -
+                    (weightSummary.weighedItemCount || 0)}
+                </span>
+              )}
+            </button>
+          )}
           <button
             className={`detail-tab flex-shrink-0 ${activeTab === "timeline" ? "active" : ""}`}
             onClick={() => setActiveTab("timeline")}
@@ -644,6 +851,159 @@ export default function CourierDeliveryDetail() {
                   ></i>
                   <p className="mb-0">Ürün listesi mevcut değil</p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* WEIGHT TAB - AĞIRLIK GİRİŞ SEKMESİ */}
+          {activeTab === "weight" && (
+            <div className="weight-entry-section">
+              {/* Yükleniyor */}
+              {weightLoading ? (
+                <div className="text-center py-5">
+                  <div className="spinner-border text-primary mb-3"></div>
+                  <p className="text-muted">Ağırlık bilgileri yükleniyor...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Bilgi Kartı */}
+                  <div
+                    className="info-card shadow-sm mb-3"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #fff5f0 0%, #ffe8dc 100%)",
+                      border: "1px solid #ffccb8",
+                    }}
+                  >
+                    <div className="d-flex align-items-center">
+                      <div
+                        className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                        style={{
+                          width: "48px",
+                          height: "48px",
+                          backgroundColor: "#ff6b35",
+                          color: "white",
+                        }}
+                      >
+                        <i className="fas fa-balance-scale"></i>
+                      </div>
+                      <div>
+                        <h6 className="mb-1 fw-bold">Ağırlık Bazlı Ürünler</h6>
+                        <small className="text-muted">
+                          Lütfen her ürünü tartarak gerçek ağırlığını girin.
+                          {task.paymentMethod === "Cash" &&
+                            " Fark nakit olarak alınacak/verilecek."}
+                          {(task.paymentMethod === "Card" ||
+                            task.paymentMethod === "Online") &&
+                            " Fark karta yansıtılacak."}
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ağırlık Fark Özeti */}
+                  <WeightDifferenceSummary
+                    summary={weightSummary}
+                    paymentMethod={task.paymentMethod || "Cash"}
+                    loading={weightSubmitting}
+                  />
+
+                  {/* Ürün Kartları */}
+                  {weightItems.length > 0 ? (
+                    <>
+                      <h6 className="text-muted mb-3 d-flex align-items-center justify-content-between">
+                        <span>
+                          <i className="fas fa-list me-2"></i>
+                          Tartılacak Ürünler
+                        </span>
+                        <span className="badge bg-primary">
+                          {weightSummary?.weighedItemCount || 0}/
+                          {weightSummary?.weightBasedItemCount ||
+                            weightItems.length}
+                        </span>
+                      </h6>
+
+                      {weightItems.map((item, index) => (
+                        <WeightEntryCard
+                          key={item.id || item.orderItemId || index}
+                          item={item}
+                          onWeightSubmit={handleWeightSubmit}
+                          disabled={weightSubmitting || updating}
+                          loading={weightSubmitting}
+                        />
+                      ))}
+
+                      {/* Teslimatı Tamamla Butonu */}
+                      {!["Delivered", "Failed", "Cancelled"].includes(
+                        task.status,
+                      ) && (
+                        <div className="mt-4">
+                          <button
+                            className="btn btn-success w-100 py-3"
+                            onClick={handleWeightBasedDelivery}
+                            disabled={
+                              updating ||
+                              weightSubmitting ||
+                              (weightSummary &&
+                                weightSummary.weighedItemCount === 0)
+                            }
+                            style={{
+                              borderRadius: "12px",
+                              fontSize: "16px",
+                              fontWeight: "600",
+                              boxShadow: "0 4px 15px rgba(40, 167, 69, 0.3)",
+                            }}
+                          >
+                            {updating || weightSubmitting ? (
+                              <>
+                                <span className="spinner-border spinner-border-sm me-2"></span>
+                                İşleniyor...
+                              </>
+                            ) : (
+                              <>
+                                <i className="fas fa-check-circle me-2"></i>
+                                Teslimatı Tamamla
+                                {weightSummary?.totalDifference !== 0 &&
+                                  weightSummary?.totalDifference !==
+                                    undefined && (
+                                    <span className="ms-2 badge bg-light text-dark">
+                                      {weightSummary.totalDifference >= 0
+                                        ? "+"
+                                        : ""}
+                                      {weightSummary.totalDifference.toFixed(2)}{" "}
+                                      ₺
+                                    </span>
+                                  )}
+                              </>
+                            )}
+                          </button>
+
+                          {/* Uyarı */}
+                          {weightSummary && !weightSummary.allItemsWeighed && (
+                            <div className="text-center mt-2">
+                              <small className="text-warning">
+                                <i className="fas fa-exclamation-triangle me-1"></i>
+                                {(weightSummary.weightBasedItemCount || 0) -
+                                  (weightSummary.weighedItemCount || 0)}{" "}
+                                ürün henüz tartılmadı
+                              </small>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-5">
+                      <i
+                        className="fas fa-box-open text-muted mb-3"
+                        style={{ fontSize: "48px" }}
+                      ></i>
+                      <p className="text-muted mb-0">
+                        Bu siparişte ağırlık bazlı ürün bulunmuyor.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

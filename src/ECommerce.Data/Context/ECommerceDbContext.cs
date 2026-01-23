@@ -48,6 +48,13 @@ namespace ECommerce.Data.Context
         public virtual DbSet<CampaignRule> CampaignRules { get; set; }
         public virtual DbSet<CampaignReward> CampaignRewards { get; set; }
         
+        // Kampanya Hedefleri Tablosu
+        /// <summary>
+        /// Kampanya hedeflerini tutar (ürün veya kategori bazlı).
+        /// Campaign.TargetType = All ise bu tablo kullanılmaz.
+        /// </summary>
+        public virtual DbSet<CampaignTarget> CampaignTargets { get; set; }
+        
         // Kupon Sistemi Tabloları
         /// <summary>
         /// Kupon kullanım geçmişini tutar.
@@ -60,6 +67,13 @@ namespace ECommerce.Data.Context
         /// Belirli ürünlere özel kuponlar tanımlamak için kullanılır.
         /// </summary>
         public virtual DbSet<CouponProduct> CouponProducts { get; set; }
+
+        // Ağırlık Bazlı Ödeme Sistemi
+        /// <summary>
+        /// Ağırlık fark kayıtlarını tutar.
+        /// Tartı sonrası fiyat değişikliklerini ve admin müdahalelerini takip eder.
+        /// </summary>
+        public virtual DbSet<WeightAdjustment> WeightAdjustments { get; set; }
         
         // SMS Doğrulama Tabloları
         public virtual DbSet<SmsVerification> SmsVerifications { get; set; }
@@ -77,6 +91,17 @@ namespace ECommerce.Data.Context
         /// Hangi rolün hangi izinlere sahip olduğunu tanımlar.
         /// </summary>
         public virtual DbSet<RolePermission> RolePermissions { get; set; }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // POSNET ÖDEME SİSTEMİ TABLOLARI
+        // Yapı Kredi POSNET entegrasyonu için eklenen tablolar
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// POSNET işlem logları - Detaylı audit trail
+        /// Her XML isteği ve yanıtı saklanır
+        /// </summary>
+        public virtual DbSet<PosnetTransactionLog> PosnetTransactionLogs { get; set; }
 
         // -------------------
         // XML/Varyant Sistemi Tabloları
@@ -522,13 +547,61 @@ namespace ECommerce.Data.Context
                       .OnDelete(DeleteBehavior.SetNull);
             });
 
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // KAMPANYA SİSTEMİ KONFİGÜRASYONU
+            // Otomatik uygulanan indirimler: %, TL, 3Al2Öde, Kargo Bedava
+            // ═══════════════════════════════════════════════════════════════════════════════
+
             modelBuilder.Entity<Campaign>(entity =>
             {
                 entity.ToTable("Campaigns");
+                
+                // Temel alanlar
                 entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(1000);
+                
+                // Kampanya türü ve hedef türü (enum olarak saklanır)
+                entity.Property(e => e.Type).HasConversion<int>();
+                entity.Property(e => e.TargetType).HasConversion<int>();
+                
+                // İndirim değerleri (decimal precision)
+                entity.Property(e => e.DiscountValue).HasPrecision(18, 2);
+                entity.Property(e => e.MaxDiscountAmount).HasPrecision(18, 2);
+                entity.Property(e => e.MinCartTotal).HasPrecision(18, 2);
+                
+                // Varsayılan değerler
+                entity.Property(e => e.Priority).HasDefaultValue(100);
+                entity.Property(e => e.IsStackable).HasDefaultValue(true);
+                
+                // Performans için index: aktif kampanyaları hızlı bulmak için
+                entity.HasIndex(e => new { e.IsActive, e.StartDate, e.EndDate })
+                      .HasDatabaseName("IX_Campaigns_ActiveDateRange");
             });
 
+            // Kampanya Hedefleri (ürün veya kategori bazlı hedefleme)
+            modelBuilder.Entity<CampaignTarget>(entity =>
+            {
+                entity.ToTable("CampaignTargets");
+                
+                entity.Property(e => e.TargetKind).HasConversion<int>();
+                
+                // Campaign ile ilişki
+                entity.HasOne(e => e.Campaign)
+                      .WithMany(c => c.Targets)
+                      .HasForeignKey(e => e.CampaignId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                
+                // Not: TargetId hem Product hem Category ID'si olabilir
+                // EF Core'da polimorfik FK desteklenmediği için navigation property kullanmıyoruz
+                // Servis katmanında TargetKind'a göre manuel join yapılacak
+                
+                // Unique constraint: Aynı kampanyada aynı hedef iki kez olamaz
+                entity.HasIndex(e => new { e.CampaignId, e.TargetId, e.TargetKind })
+                      .IsUnique()
+                      .HasDatabaseName("IX_CampaignTargets_Unique");
+            });
+
+            // Eski kampanya kuralları (geriye dönük uyumluluk için)
             modelBuilder.Entity<CampaignRule>(entity =>
             {
                 entity.ToTable("CampaignRules");
@@ -539,6 +612,7 @@ namespace ECommerce.Data.Context
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
+            // Eski kampanya ödülleri (geriye dönük uyumluluk için)
             modelBuilder.Entity<CampaignReward>(entity =>
             {
                 entity.ToTable("CampaignRewards");
@@ -578,7 +652,101 @@ namespace ECommerce.Data.Context
 
             modelBuilder.Entity<Payments>(entity =>
             {
+                // ═══════════════════════════════════════════════════════════════════════════════
+                // PAYMENTS ENTITY KONFİGÜRASYONU
+                // Tüm ödeme sağlayıcıları için ortak yapı + POSNET özel alanları
+                // ═══════════════════════════════════════════════════════════════════════════════
+
+                // Tutar alanları
                 entity.Property(p => p.Amount).HasPrecision(18, 2);
+                entity.Property(p => p.RefundedAmount).HasPrecision(18, 2);
+
+                // String alanları - Maksimum uzunluklar
+                entity.Property(p => p.Provider).HasMaxLength(50).IsRequired();
+                entity.Property(p => p.ProviderPaymentId).HasMaxLength(100);
+                entity.Property(p => p.Status).HasMaxLength(50).IsRequired();
+                entity.Property(p => p.Currency).HasMaxLength(10).HasDefaultValue("TRY");
+
+                // POSNET özel alanları
+                entity.Property(p => p.HostLogKey).HasMaxLength(20);
+                entity.Property(p => p.AuthCode).HasMaxLength(10);
+                entity.Property(p => p.MdStatus).HasMaxLength(5);
+                entity.Property(p => p.Eci).HasMaxLength(5);
+                entity.Property(p => p.Cavv).HasMaxLength(100);
+                entity.Property(p => p.CardBin).HasMaxLength(10);
+                entity.Property(p => p.CardLastFour).HasMaxLength(10);
+                entity.Property(p => p.CardType).HasMaxLength(30);
+                entity.Property(p => p.TransactionType).HasMaxLength(30);
+                entity.Property(p => p.TransactionId).HasMaxLength(50);
+                entity.Property(p => p.IpAddress).HasMaxLength(50);
+
+                // RawResponse - Large text
+                entity.Property(p => p.RawResponse).HasColumnType("nvarchar(max)");
+
+                // İndeksler - Performans optimizasyonu
+                entity.HasIndex(p => p.OrderId).HasDatabaseName("IX_Payments_OrderId");
+                entity.HasIndex(p => p.Provider).HasDatabaseName("IX_Payments_Provider");
+                entity.HasIndex(p => p.HostLogKey).HasDatabaseName("IX_Payments_HostLogKey");
+                entity.HasIndex(p => p.TransactionId).HasDatabaseName("IX_Payments_TransactionId");
+                entity.HasIndex(p => new { p.Provider, p.Status }).HasDatabaseName("IX_Payments_Provider_Status");
+                entity.HasIndex(p => p.CreatedAt).HasDatabaseName("IX_Payments_CreatedAt");
+
+                // Self-referencing relationship (iade işlemleri için)
+                entity.HasOne(p => p.OriginalPayment)
+                      .WithMany(p => p.RefundPayments)
+                      .HasForeignKey(p => p.OriginalPaymentId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Order ilişkisi
+                entity.HasOne(p => p.Order)
+                      .WithMany()
+                      .HasForeignKey(p => p.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // POSNET TRANSACTION LOG KONFİGÜRASYONU
+            // Detaylı işlem logları - Audit trail
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<PosnetTransactionLog>(entity =>
+            {
+                entity.ToTable("PosnetTransactionLogs");
+
+                // Primary Key
+                entity.HasKey(e => e.Id);
+
+                // Tutar alanları
+                entity.Property(e => e.Amount).HasPrecision(18, 2);
+
+                // Large text alanları
+                entity.Property(e => e.RequestXml).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.ResponseXml).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.RequestHeaders).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.Notes).HasColumnType("nvarchar(max)");
+
+                // İndeksler - Performans ve arama optimizasyonu
+                entity.HasIndex(e => e.CorrelationId).HasDatabaseName("IX_PosnetLog_CorrelationId");
+                entity.HasIndex(e => e.PaymentId).HasDatabaseName("IX_PosnetLog_PaymentId");
+                entity.HasIndex(e => e.OrderId).HasDatabaseName("IX_PosnetLog_OrderId");
+                entity.HasIndex(e => e.TransactionType).HasDatabaseName("IX_PosnetLog_TransactionType");
+                entity.HasIndex(e => e.CreatedAt).HasDatabaseName("IX_PosnetLog_CreatedAt");
+                entity.HasIndex(e => e.HostLogKey).HasDatabaseName("IX_PosnetLog_HostLogKey");
+                entity.HasIndex(e => e.IsSuccess).HasDatabaseName("IX_PosnetLog_IsSuccess");
+
+                // Composite index - Sık kullanılan sorgular için
+                entity.HasIndex(e => new { e.TransactionType, e.IsSuccess, e.CreatedAt })
+                      .HasDatabaseName("IX_PosnetLog_Type_Success_Date");
+
+                // İlişkiler
+                entity.HasOne(e => e.Payment)
+                      .WithMany()
+                      .HasForeignKey(e => e.PaymentId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.Order)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<Coupon>(entity =>
@@ -855,6 +1023,108 @@ namespace ECommerce.Data.Context
                 // Role bazlı sorgular için index (kullanıcının izinlerini hızlı çekmek için)
                 entity.HasIndex(e => e.RoleId)
                       .HasDatabaseName("IX_RolePermissions_RoleId");
+            });
+
+            // -------------------
+            // WeightAdjustment Configuration (Ağırlık Fark Yönetimi)
+            // -------------------
+            modelBuilder.Entity<WeightAdjustment>(entity =>
+            {
+                entity.ToTable("WeightAdjustments");
+                
+                // Decimal precision ayarları (para birimi için 18,2)
+                entity.Property(e => e.EstimatedWeight).HasPrecision(18, 4);
+                entity.Property(e => e.ActualWeight).HasPrecision(18, 4);
+                entity.Property(e => e.WeightDifference).HasPrecision(18, 4);
+                entity.Property(e => e.DifferencePercent).HasPrecision(18, 4);
+                entity.Property(e => e.PricePerUnit).HasPrecision(18, 2);
+                entity.Property(e => e.EstimatedPrice).HasPrecision(18, 2);
+                entity.Property(e => e.ActualPrice).HasPrecision(18, 2);
+                entity.Property(e => e.PriceDifference).HasPrecision(18, 2);
+                entity.Property(e => e.AdminAdjustedPrice).HasPrecision(18, 2);
+                
+                // String uzunlukları
+                entity.Property(e => e.ProductName).HasMaxLength(200);
+                entity.Property(e => e.WeighedByCourierName).HasMaxLength(200);
+                entity.Property(e => e.AdminUserName).HasMaxLength(200);
+                entity.Property(e => e.AdminNote).HasMaxLength(1000);
+                entity.Property(e => e.PaymentTransactionId).HasMaxLength(100);
+                entity.Property(e => e.NotificationType).HasMaxLength(50);
+
+                // Order ilişkisi - NO ACTION (cascade döngüsü önleme)
+                entity.HasOne(e => e.Order)
+                      .WithMany(o => o.WeightAdjustments)
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // OrderItem ilişkisi - NO ACTION (cascade döngüsü önleme)
+                entity.HasOne(e => e.OrderItem)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrderItemId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // Product ilişkisi - NO ACTION (ürün silinse bile fark kaydı korunur)
+                entity.HasOne(e => e.Product)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProductId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                // Courier ilişkisi - SET NULL (kurye silinirse audit bilgisi korunur)
+                entity.HasOne(e => e.WeighedByCourier)
+                      .WithMany()
+                      .HasForeignKey(e => e.WeighedByCourierId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Admin User ilişkisi - SET NULL
+                entity.HasOne(e => e.AdminUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.AdminUserId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Index'ler - Performans için kritik sorgular
+                entity.HasIndex(e => e.OrderId).HasDatabaseName("IX_WeightAdjustments_OrderId");
+                entity.HasIndex(e => e.Status).HasDatabaseName("IX_WeightAdjustments_Status");
+                entity.HasIndex(e => new { e.Status, e.RequiresAdminApproval })
+                      .HasDatabaseName("IX_WeightAdjustments_StatusAdmin");
+                entity.HasIndex(e => e.CreatedAt).HasDatabaseName("IX_WeightAdjustments_CreatedAt");
+            });
+
+            // -------------------
+            // Order için ek decimal precision ayarları (Ağırlık Sistemi)
+            // -------------------
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.Property(e => e.PreAuthAmount).HasPrecision(18, 2);
+                entity.Property(e => e.FinalAmount).HasPrecision(18, 2);
+                entity.Property(e => e.TotalWeightDifference).HasPrecision(18, 4);
+                entity.Property(e => e.TotalPriceDifference).HasPrecision(18, 2);
+                entity.Property(e => e.PaymentMethod).HasMaxLength(50);
+                entity.Property(e => e.PosnetTransactionId).HasMaxLength(100);
+            });
+
+            // -------------------
+            // OrderItem için ek decimal precision ayarları (Ağırlık Sistemi)
+            // -------------------
+            modelBuilder.Entity<OrderItem>(entity =>
+            {
+                entity.Property(e => e.EstimatedWeight).HasPrecision(18, 4);
+                entity.Property(e => e.ActualWeight).HasPrecision(18, 4);
+                entity.Property(e => e.EstimatedPrice).HasPrecision(18, 2);
+                entity.Property(e => e.ActualPrice).HasPrecision(18, 2);
+                entity.Property(e => e.PricePerUnit).HasPrecision(18, 2);
+                entity.Property(e => e.WeightDifference).HasPrecision(18, 4);
+                entity.Property(e => e.PriceDifference).HasPrecision(18, 2);
+            });
+
+            // -------------------
+            // Product için ek decimal precision ayarları (Ağırlık Sistemi)
+            // -------------------
+            modelBuilder.Entity<Product>(entity =>
+            {
+                entity.Property(e => e.PricePerUnit).HasPrecision(18, 2);
+                entity.Property(e => e.MinOrderWeight).HasPrecision(18, 4);
+                entity.Property(e => e.MaxOrderWeight).HasPrecision(18, 4);
+                entity.Property(e => e.WeightTolerancePercent).HasPrecision(5, 2);
             });
 
             // -------------------

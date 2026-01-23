@@ -1,10 +1,10 @@
 import React from "react";
-import WeightReportsPanel from "../../admin/WeightReportsPanel";
+import AdminWeightManagement from "./AdminWeightManagement";
 
 export default function AdminWeightReports() {
   return (
     <div className="container-fluid">
-      <WeightReportsPanel />
+      <AdminWeightManagement />
     </div>
   );
 }

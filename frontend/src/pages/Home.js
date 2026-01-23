@@ -15,6 +15,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ProductService } from "../services/productService";
+import { CampaignService } from "../services/campaignService";
 import bannerService from "../services/bannerService";
 import categoryServiceReal from "../services/categoryServiceReal";
 import { Helmet } from "react-helmet-async";
@@ -40,6 +41,7 @@ export default function Home() {
   const [featured, setFeatured] = useState([]);
   const [productLoading, setProductLoading] = useState(true);
   const [productError, setProductError] = useState(null);
+  const [activeCampaigns, setActiveCampaigns] = useState([]);
 
   // Banner state'leri
   const [sliderBanners, setSliderBanners] = useState([]);
@@ -87,6 +89,15 @@ export default function Home() {
       setFeatured([]);
     } finally {
       setProductLoading(false);
+    }
+
+    // Aktif kampanyaları yükle (admin panel ile bağlı endpoint)
+    try {
+      const campaigns = await CampaignService.getActiveCampaigns();
+      setActiveCampaigns(Array.isArray(campaigns) ? campaigns : []);
+    } catch (err) {
+      console.error("[Home] Campaigns error:", err?.message || err);
+      setActiveCampaigns([]);
     }
 
     // Banner'ları yükle (paralel olarak)
@@ -143,6 +154,52 @@ export default function Home() {
       unsubscribe();
     };
   }, [loadData]);
+
+  // Kampanya seçimi - ürün ve kategori hedeflerine göre eşleştirir
+  const getProductCategoryId = (product) =>
+    product?.categoryId ?? product?.category?.id ?? null;
+
+  const getCampaignForProduct = (product) => {
+    if (!product || activeCampaigns.length === 0) return null;
+
+    const productId = product.id;
+    const categoryId = getProductCategoryId(product);
+
+    const applicable = activeCampaigns.filter((c) => {
+      const targetType = c?.targetType ?? c?.targetKind ?? c?.target;
+      const targetIds = Array.isArray(c?.targetIds) ? c.targetIds : [];
+      const targetKinds = Array.isArray(c?.targetKinds) ? c.targetKinds : [];
+      const hasTargetIds = targetIds.length > 0;
+      const cProductId = c?.productId ?? c?.targetId;
+      const cCategoryId = c?.categoryId;
+
+      if (targetType === "All" || targetType === 0 || !targetType) return true;
+      if (targetType === "Product" || targetType === 2)
+        return hasTargetIds
+          ? targetIds.some((id) => String(id) === String(productId))
+          : String(cProductId) === String(productId);
+      if (targetType === "Category" || targetType === 1)
+        return hasTargetIds
+          ? targetIds.some((id) => String(id) === String(categoryId))
+          : String(cCategoryId) === String(categoryId);
+      return false;
+    });
+
+    if (applicable.length === 0) return null;
+
+    // UI için en yüksek indirimi seç (backend önceliği yoksa)
+    const score = (c) => {
+      const type = typeof c.type === "string" ? parseInt(c.type) : c.type;
+      const value = Number(c.discountValue || 0);
+      if (type === 2) return 10; // BuyXPayY görsel öncelik
+      if (type === 3) return 5; // FreeShipping
+      return value;
+    };
+
+    return applicable.reduce((best, current) =>
+      score(current) > score(best) ? current : best,
+    );
+  };
 
   // ============================================
   // FAVORİ İŞLEMLERİ
@@ -676,6 +733,7 @@ export default function Home() {
               <ProductCard
                 key={p.id}
                 product={p}
+                campaign={getCampaignForProduct(p)}
                 onToggleFavorite={handleToggleFavorite}
                 isFavorite={favorites.includes(p.id)}
                 onAddToCart={handleAddToCart}

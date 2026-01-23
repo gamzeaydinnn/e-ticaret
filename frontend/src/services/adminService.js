@@ -681,6 +681,87 @@ export const AdminService = {
     ensureBackend();
     return api.delete(`/api/admin/campaigns/${id}`);
   },
+
+  // ========== NEW CAMPAIGN SYSTEM METHODS ==========
+
+  // Get campaign type enum values
+  getCampaignTypes: async () => {
+    if (shouldUseMockData()) {
+      return [
+        { value: 0, label: "Yüzde İndirim" },
+        { value: 1, label: "Sabit Tutar İndirim" },
+        { value: 2, label: "X Al Y Öde" },
+        { value: 3, label: "Ücretsiz Kargo" },
+      ];
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns/types");
+  },
+
+  // Get campaign target type enum values
+  getCampaignTargetTypes: async () => {
+    if (shouldUseMockData()) {
+      return [
+        { value: 0, label: "Tüm Ürünler" },
+        { value: 1, label: "Kategori" },
+        { value: 2, label: "Ürün" },
+      ];
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns/target-types");
+  },
+
+  // Get all products for campaign target selection
+  getCampaignProducts: async () => {
+    if (shouldUseMockData()) {
+      return [
+        { id: 1, name: "Test Ürün 1", price: 100 },
+        { id: 2, name: "Test Ürün 2", price: 200 },
+      ];
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns/products");
+  },
+
+  // Get all categories for campaign target selection
+  getCampaignCategories: async () => {
+    if (shouldUseMockData()) {
+      return [
+        { id: 1, name: "Elektronik", parentId: null },
+        { id: 2, name: "Giyim", parentId: null },
+      ];
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns/categories");
+  },
+
+  // Toggle campaign active status
+  toggleCampaignActive: async (id) => {
+    if (shouldUseMockData()) {
+      const idx = mockCampaigns.findIndex((c) => c.id === Number(id));
+      if (idx === -1) throw new Error("Kampanya bulunamadı");
+      mockCampaigns[idx].isActive = !mockCampaigns[idx].isActive;
+      return { ...mockCampaigns[idx] };
+    }
+    ensureBackend();
+    return api.patch(`/api/admin/campaigns/${id}/toggle`);
+  },
+
+  // Get campaign statistics
+  getCampaignStats: async () => {
+    if (shouldUseMockData()) {
+      return {
+        total: mockCampaigns.length,
+        active: mockCampaigns.filter((c) => c.isActive).length,
+        percentage: 1,
+        fixedAmount: 0,
+        buyXPayY: 0,
+        freeShipping: 0,
+      };
+    }
+    ensureBackend();
+    return api.get("/api/admin/campaigns/stats");
+  },
 };
 
 export default AdminService;

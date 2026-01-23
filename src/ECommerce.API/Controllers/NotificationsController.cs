@@ -19,17 +19,16 @@ namespace ECommerce.API.Controllers
         [HttpPost("order-confirmation/{orderId}")]
         public async Task<IActionResult> SendOrderConfirmation(int orderId)
         {
-            // fire-and-forget pattern: start the send and return accepted
-            _ = _notifier.SendOrderConfirmationAsync(orderId);
-            return Accepted(new { orderId });
+            await _notifier.SendOrderConfirmationAsync(orderId);
+            return Ok(new { orderId });
         }
 
         // POST api/notifications/shipment/{orderId}
         [HttpPost("shipment/{orderId}")]
         public async Task<IActionResult> SendShipmentNotification(int orderId, [FromQuery] string tracking = "")
         {
-            _ = _notifier.SendShipmentNotificationAsync(orderId, tracking);
-            return Accepted(new { orderId, tracking });
+            await _notifier.SendShipmentNotificationAsync(orderId, tracking);
+            return Ok(new { orderId, tracking });
         }
     }
 }
