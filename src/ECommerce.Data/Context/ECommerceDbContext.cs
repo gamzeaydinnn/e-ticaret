@@ -341,12 +341,12 @@ namespace ECommerce.Data.Context
                 entity.HasKey(c => c.Id);
 
                 entity.HasOne(c => c.User)
-                      .WithMany()
+                      .WithMany(u => u.CartItems)
                       .HasForeignKey(c => c.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasOne(c => c.Product)
-                      .WithMany()
+                      .WithMany(p => p.CartItems)
                       .HasForeignKey(c => c.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
                 
@@ -505,7 +505,7 @@ namespace ECommerce.Data.Context
             // -------------------
             modelBuilder.Entity<Stocks>()
                         .HasOne(s => s.ProductVariant)
-                        .WithMany()
+                        .WithMany(pv => pv.Stocks)
                         .HasForeignKey(s => s.ProductVariantId)
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -520,7 +520,7 @@ namespace ECommerce.Data.Context
 
             modelBuilder.Entity<ProductReview>()
                         .HasOne(r => r.User)
-                        .WithMany()
+                        .WithMany(u => u.ProductReviews)
                         .HasForeignKey(r => r.UserId)
                         .OnDelete(DeleteBehavior.Restrict);
 
