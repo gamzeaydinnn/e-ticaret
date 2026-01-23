@@ -319,8 +319,7 @@ namespace ECommerce.Data.Migrations
                         name: "FK_WeightAdjustments_Users_AdminUserId",
                         column: x => x.AdminUserId,
                         principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(
