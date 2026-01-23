@@ -14,6 +14,12 @@ const api = axios.create({
 // Request interceptor: Token varsa ekle
 api.interceptors.request.use(
   (config) => {
+    // Checkout endpoint'i Authorization header'ı gerektirmez (guest checkout)
+    if (config.url?.includes("/orders/checkout") || config.url?.includes("/payments/posnet")) {
+      delete config.headers.Authorization;
+      return config;
+    }
+
     // Tüm olası token key'lerini kontrol et (uyumluluk için)
     const token =
       localStorage.getItem("token") ||
