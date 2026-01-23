@@ -449,9 +449,6 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("ProductId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("ProductId1")
-                        .HasColumnType("int");
-
                     b.Property<int?>("ProductVariantId")
                         .HasColumnType("int");
 
@@ -464,18 +461,11 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UserId1")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
 
-                    b.HasIndex("ProductId1");
-
                     b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("UserId1");
 
                     b.HasIndex("UserId", "ProductId", "ProductVariantId")
                         .IsUnique()
@@ -2046,16 +2036,11 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("UserId1")
-                        .HasColumnType("int");
-
                     b.HasKey("Id");
 
                     b.HasIndex("ProductId");
 
                     b.HasIndex("UserId");
-
-                    b.HasIndex("UserId1");
 
                     b.ToTable("ProductReviews");
                 });
@@ -2488,9 +2473,6 @@ namespace ECommerce.Data.Migrations
                     b.Property<int>("ProductVariantId")
                         .HasColumnType("int");
 
-                    b.Property<int?>("ProductVariantId1")
-                        .HasColumnType("int");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("int");
 
@@ -2506,8 +2488,6 @@ namespace ECommerce.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("ProductVariantId1");
 
                     b.ToTable("Stocks");
                 });
@@ -3182,14 +3162,10 @@ namespace ECommerce.Data.Migrations
             modelBuilder.Entity("ECommerce.Entities.Concrete.CartItem", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
-                        .WithMany()
+                        .WithMany("CartItems")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("ECommerce.Entities.Concrete.Product", null)
-                        .WithMany("CartItems")
-                        .HasForeignKey("ProductId1");
 
                     b.HasOne("ECommerce.Entities.Concrete.ProductVariant", "ProductVariant")
                         .WithMany()
@@ -3197,13 +3173,9 @@ namespace ECommerce.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("ECommerce.Entities.Concrete.User", "User")
-                        .WithMany()
+                        .WithMany("CartItems")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("ECommerce.Entities.Concrete.User", null)
-                        .WithMany("CartItems")
-                        .HasForeignKey("UserId1");
 
                     b.Navigation("Product");
 
@@ -3478,14 +3450,10 @@ namespace ECommerce.Data.Migrations
                         .IsRequired();
 
                     b.HasOne("ECommerce.Entities.Concrete.User", "User")
-                        .WithMany()
+                        .WithMany("ProductReviews")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("ECommerce.Entities.Concrete.User", null)
-                        .WithMany("ProductReviews")
-                        .HasForeignKey("UserId1");
 
                     b.Navigation("Product");
 
@@ -3563,14 +3531,10 @@ namespace ECommerce.Data.Migrations
             modelBuilder.Entity("ECommerce.Entities.Concrete.Stocks", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.ProductVariant", "ProductVariant")
-                        .WithMany()
+                        .WithMany("Stocks")
                         .HasForeignKey("ProductVariantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("ECommerce.Entities.Concrete.ProductVariant", null)
-                        .WithMany("Stocks")
-                        .HasForeignKey("ProductVariantId1");
 
                     b.Navigation("ProductVariant");
                 });
