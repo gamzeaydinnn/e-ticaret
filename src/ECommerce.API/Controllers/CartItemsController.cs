@@ -49,7 +49,7 @@ namespace ECommerce.API.Controllers
         /// Misafir kullanıcının sepetini getirir
         /// CartToken header veya query string'den alınır
         /// </summary>
-        [HttpGet("guest")]
+        [HttpGet("guest", Order = 0)]
         [AllowAnonymous]
         public async Task<ActionResult<CartSummaryDto>> GetGuestCart(
             [FromHeader(Name = "X-Cart-Token")] string? headerToken,
@@ -71,7 +71,7 @@ namespace ECommerce.API.Controllers
         /// Misafir kullanıcının sepetine ürün ekler
         /// Aynı ürün varsa miktarı artırır
         /// </summary>
-        [HttpPost("guest")]
+        [HttpPost("guest", Order = 0)]
         [AllowAnonymous]
         public async Task<ActionResult<CartItemDto>> AddToGuestCart(
             [FromHeader(Name = "X-Cart-Token")] string? headerToken,
@@ -204,9 +204,9 @@ namespace ECommerce.API.Controllers
         /// <summary>
         /// Misafir kullanıcının sepetinden ürün siler
         /// </summary>
-        [HttpDelete("guest/{productId}")]
+        [HttpDelete("guest/{productId}", Order = 0)]
         [AllowAnonymous]
-        public async Task<IActionResult> RemoveFromGuestCart(
+        public async Task<ActionResult> RemoveFromGuestCart(
             [FromHeader(Name = "X-Cart-Token")] string? headerToken,
             [FromQuery] string? cartToken,
             int productId,
@@ -226,9 +226,9 @@ namespace ECommerce.API.Controllers
         /// <summary>
         /// Misafir kullanıcının sepetini temizler
         /// </summary>
-        [HttpDelete("guest/clear")]
+        [HttpDelete("guest/clear", Order = 0)]
         [AllowAnonymous]
-        public async Task<IActionResult> ClearGuestCart(
+        public async Task<ActionResult> ClearGuestCart(
             [FromHeader(Name = "X-Cart-Token")] string? headerToken,
             [FromQuery] string? cartToken)
         {
@@ -328,14 +328,23 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = $"Yetersiz stok. Maksimum {product.StockQuantity} adet." });
             }
 
+            // Kullanıcı ID veya CartToken kontrolü
+            var userId = GetCurrentUserId();
+            var cartToken = GetCartToken();
+
+            if (!userId.HasValue && string.IsNullOrEmpty(cartToken))
+            {
+                return BadRequest(new { message = "Kullanıcı veya sepet bilgisi bulunamadı." });
+            }
+
             // Entity oluşturma
             var item = new CartItem
             {
                 ProductId = dto.ProductId,
                 ProductVariantId = dto.VariantId,
                 Quantity = dto.Quantity,
-                UserId = GetCurrentUserId() ?? 0,
-                CartToken = GetCartToken(),
+                UserId = userId, // Nullable - null olabilir
+                CartToken = cartToken,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
