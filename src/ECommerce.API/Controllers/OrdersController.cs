@@ -103,6 +103,28 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = "Geçersiz istek gövdesi" });
 
             // Validation handled by FluentValidation
+            if (!ModelState.IsValid)
+            {
+                var errors = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage)
+                    .ToList();
+                
+                var errorMessage = string.Join("; ", errors);
+                
+                // Log validation errors
+                var logger = HttpContext.RequestServices.GetService(typeof(ILogger<OrdersController>)) as ILogger<OrdersController>;
+                logger?.LogError("[CHECKOUT] Validation hatası: {Errors}", errorMessage);
+                
+                return BadRequest(new 
+                { 
+                    message = "Validation hatası",
+                    errors = ModelState.ToDictionary(
+                        x => x.Key, 
+                        x => x.Value.Errors.Select(e => e.ErrorMessage).ToArray()
+                    )
+                });
+            }
 
             if (dto.ClientOrderId.HasValue)
             {
