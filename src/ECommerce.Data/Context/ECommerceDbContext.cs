@@ -1135,30 +1135,8 @@ namespace ECommerce.Data.Context
 
         private void SeedData(ModelBuilder modelBuilder)
         {
-            var fixedDate = new DateTime(2024, 01, 01, 0, 0, 0, DateTimeKind.Utc);
-
-            modelBuilder.Entity<Category>().HasData(
-                new Category
-                {
-                    Id = 1,
-                    Name = "Elektronik",
-                    Description = "Elektronik ürünler",
-                    SortOrder = 1,
-                    Slug = "elektronik",
-                    CreatedAt = fixedDate,
-                    IsActive = true
-                },
-                new Category
-                {
-                    Id = 2,
-                    Name = "Giyim",
-                    Description = "Giyim ürünleri",
-                    SortOrder = 2,
-                    Slug = "giyim",
-                    CreatedAt = fixedDate,
-                    IsActive = true
-                }
-            );
+            // Seed data removed - ProductSeeder will handle initial categories and products
+            // Bu migration seed'i kaldırıldı çünkü ProductSeeder doğru kategorileri ekliyor
         }
     }
 }
