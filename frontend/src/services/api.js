@@ -20,7 +20,8 @@ api.interceptors.request.use(
       localStorage.getItem("authToken") ||
       localStorage.getItem("adminToken");
 
-    if (token) {
+    // Token sadece geçerliyse ekle (boş string veya null değil)
+    if (token && token.trim().length > 0) {
       config.headers.Authorization = `Bearer ${token}`;
       // Debug: Token gönderildiğini log'la
       if (process.env.NODE_ENV === "development") {
@@ -35,9 +36,11 @@ api.interceptors.request.use(
         console.warn(
           `[API] ⚠️  ${config.method?.toUpperCase()} ${
             config.url
-          } - Token bulunamadı!`,
+          } - Token bulunamadı, Authorization header'ı eklenmedi!`,
         );
       }
+      // Token yoksa Authorization header'ını sil (başka bir yerde set edilmiş olabilir)
+      delete config.headers.Authorization;
     }
     return config;
   },
