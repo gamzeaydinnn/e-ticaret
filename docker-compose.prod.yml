@@ -55,6 +55,11 @@ services:
       - SmsVerification__MaxWrongAttempts=3
       - SmsVerification__CodeLength=6
       - SmsVerification__AppName=E-Ticaret
+      # POSNET Configuration - YAPILACAK: Banka tarafından sağlanan gerçek değerlerle değiştir!
+      - POSNET_MERCHANT_ID=6700972665
+      - POSNET_TERMINAL_ID=00123456
+      - POSNET_ID=GOLKOYG
+      - POSNET_ENC_KEY=POSNET_ENCRYPTION_KEY
     depends_on:
       sqlserver:
         condition: service_healthy
