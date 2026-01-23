@@ -634,12 +634,10 @@ namespace ECommerce.Data.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    UserId = table.Column<int>(type: "int", nullable: false),
+                    UserId = table.Column<int>(type: "int", nullable: true),
                     ProductId = table.Column<int>(type: "int", nullable: false),
                     Quantity = table.Column<int>(type: "int", nullable: false),
                     CartToken = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ProductId1 = table.Column<int>(type: "int", nullable: true),
-                    UserId1 = table.Column<int>(type: "int", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
@@ -650,12 +648,6 @@ namespace ECommerce.Data.Migrations
                     table.ForeignKey(
                         name: "FK_CartItems_Users_UserId",
                         column: x => x.UserId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_CartItems_Users_UserId1",
-                        column: x => x.UserId1,
                         principalTable: "Users",
                         principalColumn: "Id");
                 });
@@ -1098,20 +1090,11 @@ namespace ECommerce.Data.Migrations
                 column: "ProductId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CartItems_ProductId1",
-                table: "CartItems",
-                column: "ProductId1");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CartItems_UserId_ProductId",
                 table: "CartItems",
                 columns: new[] { "UserId", "ProductId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CartItems_UserId1",
-                table: "CartItems",
-                column: "UserId1");
+                unique: true,
+                filter: "[UserId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Categories_ParentId",
@@ -1323,13 +1306,6 @@ namespace ECommerce.Data.Migrations
                 principalTable: "Products",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_CartItems_Products_ProductId1",
-                table: "CartItems",
-                column: "ProductId1",
-                principalTable: "Products",
-                principalColumn: "Id");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_Categories_Products_ProductId",
