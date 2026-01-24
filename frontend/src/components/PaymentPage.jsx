@@ -14,7 +14,10 @@ import "./PaymentPage.css";
 // UUID v4 generator for clientOrderId
 const generateUUID = () => {
   try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return crypto.randomUUID();
     }
   } catch {
@@ -437,22 +440,21 @@ const PaymentPage = () => {
         (orderRes.finalPrice ?? orderRes.totalPrice ?? total).toFixed(2),
       );
 
-      // Kart son kullanma tarihi formatını hazırla: YYMM
-      const expireDate = `${formData.expiryYear.slice(-2)}${formData.expiryMonth.padStart(2, "0")}`;
+      // Kart son kullanma tarihi - ayrı ayrı gönderilmeli (Backend DTO beklentisi)
+      // ExpireMonth: 01-12 formatında (2 haneli)
+      // ExpireYear: YY formatında (2 haneli, örn: 25)
+      const expireMonth = formData.expiryMonth.padStart(2, "0");
+      const expireYear = formData.expiryYear.slice(-2);
 
       const initResult = await PaymentService.initiatePosnet3DSecure({
         orderId: orderRes.orderId,
         amount: amountToCharge,
         cardNumber: formData.cardNumber.replace(/\s/g, ""),
-        expireDate: expireDate,
+        expireMonth: expireMonth,
+        expireYear: expireYear,
         cvv: formData.cvv,
         cardHolderName: formData.cardName,
         installmentCount: 0, // Peşin
-        use3DSecure: true,
-        customerEmail: formData.email,
-        customerPhone: formData.phone,
-        successUrl: `${window.location.origin}/order-success?orderId=${orderRes.orderId}`,
-        failUrl: `${window.location.origin}/checkout/fail?orderId=${orderRes.orderId}`,
       });
 
       // 3D Secure HTML formu varsa submit et - CSP uyumlu

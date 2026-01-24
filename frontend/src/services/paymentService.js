@@ -57,21 +57,33 @@ export const PaymentService = {
    */
   initiatePosnet3DSecure: async (paymentData) => {
     try {
-      // ExpireDate formatı: YYMM veya MMYY - Ayrıştır
+      // ExpireMonth ve ExpireYear - Backend DTO beklentisi
+      // Eğer ayrı ayrı geliyorsa direkt kullan, expireDate geliyorsa ayrıştır
       let expireMonth = paymentData.expireMonth;
       let expireYear = paymentData.expireYear;
 
-      // Eğer expireDate geldi ise (YYMM formatında) parse et
-      if (paymentData.expireDate && !expireMonth && !expireYear) {
+      // Eğer expireDate geldi ve month/year boşsa parse et (geriye uyumluluk)
+      if (paymentData.expireDate && (!expireMonth || !expireYear)) {
         const exp = paymentData.expireDate.replace(/[\s\-\/]/g, "");
         if (exp.length === 4) {
-          // YYMM formatı (backend bekliyor)
+          // YYMM formatı varsayılır
           expireYear = exp.substring(0, 2);
           expireMonth = exp.substring(2, 4);
         }
       }
 
-      // Backend DTO sadece bu alanları bekliyor - ExtraField hata çıkarır!
+      // Validation - expireMonth ve expireYear zorunlu
+      if (!expireMonth || !expireYear) {
+        throw new Error(
+          "Son kullanma tarihi eksik (expireMonth ve expireYear gerekli)",
+        );
+      }
+
+      // Format kontrolü - 2 haneli olmalı
+      expireMonth = String(expireMonth).padStart(2, "0");
+      expireYear = String(expireYear).slice(-2).padStart(2, "0");
+
+      // Backend DTO'ya uygun payload - sadece kabul edilen alanlar!
       const response = await api.post(`${base}/posnet/3dsecure/initiate`, {
         orderId: paymentData.orderId,
         amount: paymentData.amount,

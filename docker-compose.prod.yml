@@ -55,11 +55,25 @@ services:
       - SmsVerification__MaxWrongAttempts=3
       - SmsVerification__CodeLength=6
       - SmsVerification__AppName=E-Ticaret
-      # POSNET Configuration - YAPILACAK: Banka tarafından sağlanan gerçek değerlerle değiştir!
-      - POSNET_MERCHANT_ID=6700972665
-      - POSNET_TERMINAL_ID=00123456
-      - POSNET_ID=GOLKOYG
-      - POSNET_ENC_KEY=POSNET_ENCRYPTION_KEY
+      # POSNET Enabled Flag - POSNET servislerinin kaydedilmesi için gerekli!
+      - Payment__Posnet__Enabled=true
+      # POSNET Configuration (Yapı Kredi 3D Secure)
+      - PaymentSettings__PosnetMerchantId=6700972665
+      - PaymentSettings__PosnetTerminalId=67C35037
+      - PaymentSettings__PosnetId=1010078654940127
+      - PaymentSettings__PosnetEncKey=10,10,10,10,10,10,10,10
+      - PaymentSettings__PosnetXmlServiceUrl=https://setmpos.ykb.com/PosnetWebService/XML
+      - PaymentSettings__Posnet3DServiceUrl=https://setmpos.ykb.com/3DSWebService/YKBPaymentService
+      - PaymentSettings__PosnetCallbackUrl=https://golkoygurme.com.tr/api/payments/posnet/3d-callback
+      - PaymentSettings__PosnetIsTestEnvironment=true
+      - PaymentSettings__PosnetTimeoutSeconds=60
+      - PaymentSettings__PosnetWorldPointEnabled=true
+      # CORS Configuration for production
+      - Cors__AllowedOrigins__0=https://golkoygurme.com.tr
+      - Cors__AllowedOrigins__1=https://www.golkoygurme.com.tr
+      - Cors__AllowedOrigins__2=http://golkoygurme.com.tr
+      - Cors__AllowedOrigins__3=http://www.golkoygurme.com.tr
+      - Cors__AllowedOrigins__4=http://localhost:3000
     depends_on:
       sqlserver:
         condition: service_healthy
