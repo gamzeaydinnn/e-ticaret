@@ -392,6 +392,12 @@ builder.Services.AddScoped<IAdminLogService, LogManager>();
 builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 
 // =============================================
+// Newsletter (Bülten) Sistemi
+// Email abonelik yönetimi ve toplu mail gönderimi
+// =============================================
+builder.Services.AddScoped<INewsletterService, NewsletterManager>();
+
+// =============================================
 // XML/Variant Sistemi - Repository ve Service Kayıtları
 // =============================================
 

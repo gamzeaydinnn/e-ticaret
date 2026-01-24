@@ -223,6 +223,15 @@ export default function AdminLayout({ children }) {
         label: "Kupon Yönetimi",
         permission: PERMISSIONS.COUPONS_VIEW,
       },
+      // =============================================================================
+      // Bülten Yönetimi - Newsletter aboneleri ve toplu e-posta
+      // =============================================================================
+      {
+        path: "/admin/newsletter",
+        icon: "fas fa-envelope-open-text",
+        label: "Bülten Yönetimi",
+        permission: PERMISSIONS.NEWSLETTER_VIEW,
+      },
       {
         label: "Loglar",
         icon: "fas fa-clipboard-list",

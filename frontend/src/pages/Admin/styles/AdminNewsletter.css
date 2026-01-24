@@ -1,0 +1,242 @@
+/* =============================================================================
+   AdminNewsletter.css - Bülten Yönetimi Sayfa Stilleri
+   =============================================================================
+   Bu dosya admin panelindeki bülten yönetimi sayfasının özel stillerini içerir.
+   Bootstrap ile uyumlu, mobil responsive tasarım.
+   ============================================================================= */
+
+/* =============================================================================
+   İSTATİSTİK KARTLARI
+   ============================================================================= */
+.admin-newsletter .stat-card {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-newsletter .stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+}
+
+.admin-newsletter .stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+/* =============================================================================
+   ABONE LİSTESİ TABLOSU
+   ============================================================================= */
+.admin-newsletter .subscriber-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.admin-newsletter .table th {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 0.875rem 1rem;
+}
+
+.admin-newsletter .table td {
+  padding: 0.875rem 1rem;
+  vertical-align: middle;
+}
+
+.admin-newsletter .table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* =============================================================================
+   BADGE STİLLERİ
+   ============================================================================= */
+.admin-newsletter .badge {
+  font-weight: 500;
+  padding: 0.375em 0.65em;
+}
+
+/* =============================================================================
+   MODAL STİLLERİ
+   ============================================================================= */
+.admin-newsletter .modal-content {
+  border: none;
+  border-radius: 12px;
+}
+
+.admin-newsletter .modal-header {
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+}
+
+.admin-newsletter .modal-body {
+  padding: 1.5rem;
+}
+
+.admin-newsletter .modal-footer {
+  border-top: 1px solid #e5e7eb;
+  padding: 1rem 1.5rem;
+}
+
+/* E-posta içerik textarea */
+.admin-newsletter textarea.form-control {
+  resize: vertical;
+  min-height: 200px;
+}
+
+/* =============================================================================
+   SAYFALAMA
+   ============================================================================= */
+.admin-newsletter .pagination .page-link {
+  border: none;
+  padding: 0.5rem 0.75rem;
+  margin: 0 2px;
+  border-radius: 6px;
+  color: #374151;
+}
+
+.admin-newsletter .pagination .page-link:hover {
+  background-color: #e5e7eb;
+}
+
+.admin-newsletter .pagination .page-item.active .page-link {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.admin-newsletter .pagination .page-item.disabled .page-link {
+  color: #9ca3af;
+}
+
+/* =============================================================================
+   TOAST MESAJI
+   ============================================================================= */
+.admin-newsletter .toast {
+  min-width: 300px;
+  border: none;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.admin-newsletter .toast-header {
+  border-bottom: none;
+}
+
+.admin-newsletter .toast-body {
+  padding: 0.75rem 1rem;
+}
+
+/* =============================================================================
+   RESPONSIVE DÜZENLEMELERİ
+   ============================================================================= */
+
+/* Tablet ve altı */
+@media (max-width: 991.98px) {
+  .admin-newsletter h1.h3 {
+    font-size: 1.5rem;
+  }
+
+  .admin-newsletter .stat-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
+  }
+
+  .admin-newsletter .stat-card .card-body h3 {
+    font-size: 1.25rem;
+  }
+}
+
+/* Mobil */
+@media (max-width: 575.98px) {
+  .admin-newsletter .d-flex.justify-content-between {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .admin-newsletter .d-flex.justify-content-between .btn {
+    width: 100%;
+  }
+
+  /* Tablo mobil görünümü */
+  .admin-newsletter .table-responsive {
+    font-size: 0.875rem;
+  }
+
+  .admin-newsletter .table th,
+  .admin-newsletter .table td {
+    padding: 0.5rem;
+    white-space: nowrap;
+  }
+
+  .admin-newsletter .subscriber-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  /* Modal mobil */
+  .admin-newsletter .modal-dialog {
+    margin: 0.5rem;
+  }
+
+  .admin-newsletter .modal-lg {
+    max-width: calc(100% - 1rem);
+  }
+
+  /* Filtre alanları */
+  .admin-newsletter .row.g-3 > div {
+    width: 100%;
+  }
+}
+
+/* =============================================================================
+   YÜKLEME ANİMASYONU
+   ============================================================================= */
+.admin-newsletter .spinner-border {
+  width: 2rem;
+  height: 2rem;
+}
+
+/* =============================================================================
+   BOŞ DURUM GÖRÜNTÜLERİ
+   ============================================================================= */
+.admin-newsletter .fa-inbox {
+  opacity: 0.5;
+}
+
+/* =============================================================================
+   FORM KONTROLLER
+   ============================================================================= */
+.admin-newsletter .form-control:focus,
+.admin-newsletter .form-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.15);
+}
+
+.admin-newsletter .input-group-text {
+  border-color: #dee2e6;
+}
+
+.admin-newsletter .form-label {
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}

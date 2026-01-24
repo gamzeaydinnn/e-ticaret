@@ -114,7 +114,7 @@ export const permissionService = {
   togglePermissionStatus: async (id) => {
     try {
       const response = await api.put(
-        `/api/admin/permissions/${id}/toggle-status`
+        `/api/admin/permissions/${id}/toggle-status`,
       );
       return response.data;
     } catch (error) {
@@ -233,7 +233,7 @@ export const permissionService = {
   addPermissionToRole: async (roleId, permissionId) => {
     try {
       const response = await api.post(
-        `/api/admin/roles/${roleId}/permissions/${permissionId}`
+        `/api/admin/roles/${roleId}/permissions/${permissionId}`,
       );
       return response.data;
     } catch (error) {
@@ -252,13 +252,13 @@ export const permissionService = {
   removePermissionFromRole: async (roleId, permissionId) => {
     try {
       const response = await api.delete(
-        `/api/admin/roles/${roleId}/permissions/${permissionId}`
+        `/api/admin/roles/${roleId}/permissions/${permissionId}`,
       );
       return response.data;
     } catch (error) {
       console.error(
         "[PermissionService] removePermissionFromRole error:",
-        error
+        error,
       );
       throw error;
     }
@@ -273,13 +273,13 @@ export const permissionService = {
   getAvailablePermissionsForRole: async (roleId) => {
     try {
       const response = await api.get(
-        `/api/admin/roles/${roleId}/available-permissions`
+        `/api/admin/roles/${roleId}/available-permissions`,
       );
       return response.data?.data || [];
     } catch (error) {
       console.error(
         "[PermissionService] getAvailablePermissionsForRole error:",
-        error
+        error,
       );
       throw error;
     }
@@ -298,7 +298,7 @@ export const permissionService = {
     } catch (error) {
       console.error(
         "[PermissionService] getRolePermissionMatrix error:",
-        error
+        error,
       );
       throw error;
     }
@@ -430,6 +430,12 @@ export const PERMISSIONS = {
   LOGS_AUDIT: "logs.audit",
   LOGS_ERROR: "logs.error",
   LOGS_EXPORT: "logs.export",
+
+  // Newsletter (Bülten)
+  NEWSLETTER_VIEW: "newsletter.view",
+  NEWSLETTER_SEND: "newsletter.send",
+  NEWSLETTER_DELETE: "newsletter.delete",
+  NEWSLETTER_STATS: "newsletter.stats",
 };
 
 // Modül bazlı izin grupları (UI için)
@@ -515,6 +521,12 @@ export const PERMISSION_MODULES = {
     PERMISSIONS.LOGS_AUDIT,
     PERMISSIONS.LOGS_ERROR,
     PERMISSIONS.LOGS_EXPORT,
+  ],
+  Newsletter: [
+    PERMISSIONS.NEWSLETTER_VIEW,
+    PERMISSIONS.NEWSLETTER_SEND,
+    PERMISSIONS.NEWSLETTER_DELETE,
+    PERMISSIONS.NEWSLETTER_STATS,
   ],
 };
 

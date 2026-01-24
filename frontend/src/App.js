@@ -41,6 +41,8 @@ import PosterManagement from "./pages/Admin/PosterManagement";
 import Dashboard from "./pages/Admin/Dashboard";
 // Kupon Yönetimi
 import CouponManagement from "./pages/Admin/CouponManagement";
+// Bülten Yönetimi
+import AdminNewsletter from "./pages/Admin/AdminNewsletter";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
@@ -88,6 +90,7 @@ import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
+import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
 // 3D Secure Ödeme Callback Sayfaları
 import {
   PaymentSuccessPage,
@@ -892,6 +895,17 @@ function App() {
             </AdminGuard>
           }
         />
+        {/* Bülten Yönetimi Sayfası */}
+        <Route
+          path="/admin/newsletter"
+          element={
+            <AdminGuard requiredPermission="newsletter.view">
+              <AdminLayout>
+                <AdminNewsletter />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
         {/* Log Sayfaları - Her biri için spesifik izin kontrolü */}
         <Route
           path="/admin/logs/audit"
@@ -1035,11 +1049,25 @@ function ScrollToTop() {
   return null;
 }
 
+const NEWSLETTER_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function HomePage() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [isPaused, setIsPaused] = React.useState(false);
   const [slides, setSlides] = React.useState([]);
   const [promoImages, setPromoImages] = React.useState([]);
+  const [newsletterEmail, setNewsletterEmail] = React.useState("");
+  const [newsletterStatus, setNewsletterStatus] = React.useState("idle");
+  const [newsletterMessage, setNewsletterMessage] = React.useState("");
+  const [isNewsletterSubscribed, setIsNewsletterSubscribed] =
+    React.useState(false);
+
+  React.useEffect(() => {
+    const cachedSubscription = localStorage.getItem("newsletter_subscribed");
+    if (cachedSubscription) {
+      setIsNewsletterSubscribed(true);
+    }
+  }, []);
 
   // Posterleri API'den çek - bannerService kullanarak
   React.useEffect(() => {
@@ -1166,6 +1194,63 @@ function HomePage() {
     };
     fetchPosters();
   }, []);
+
+  const handleNewsletterSubmit = async (event) => {
+    event.preventDefault();
+
+    const emailValue = newsletterEmail.trim();
+
+    if (!emailValue) {
+      setNewsletterStatus("error");
+      setNewsletterMessage("Lütfen e-posta adresinizi girin.");
+      return;
+    }
+
+    if (!NEWSLETTER_EMAIL_REGEX.test(emailValue)) {
+      setNewsletterStatus("error");
+      setNewsletterMessage("Geçerli bir e-posta adresi girin.");
+      return;
+    }
+
+    try {
+      setNewsletterStatus("loading");
+      setNewsletterMessage("");
+
+      const result = await subscribe({
+        email: emailValue,
+        fullName: null,
+        source: SUBSCRIPTION_SOURCES.WEB_FOOTER,
+      });
+
+      if (result.success) {
+        localStorage.setItem(
+          "newsletter_subscribed",
+          JSON.stringify({
+            email: emailValue.toLowerCase(),
+            subscribedAt: new Date().toISOString(),
+            source: SUBSCRIPTION_SOURCES.WEB_FOOTER,
+            subscriberId: result.subscriberId,
+          }),
+        );
+
+        setNewsletterStatus("success");
+        setNewsletterMessage(
+          result.message || "Bültenimize başarıyla abone oldunuz!",
+        );
+        setIsNewsletterSubscribed(true);
+        setNewsletterEmail("");
+      } else {
+        setNewsletterStatus("error");
+        setNewsletterMessage(
+          result.message || "Abonelik işlemi başarısız oldu.",
+        );
+      }
+    } catch (error) {
+      console.error("[HomePage] Newsletter subscribe error:", error);
+      setNewsletterStatus("error");
+      setNewsletterMessage("Bağlantı hatası, lütfen tekrar deneyin.");
+    }
+  };
 
   // Auto-slide effect
   React.useEffect(() => {
@@ -1559,23 +1644,74 @@ function HomePage() {
                 katıl
               </p>
 
-              <div className="newsletter-form newsletter-form-animated">
+              <form
+                onSubmit={handleNewsletterSubmit}
+                className="newsletter-form newsletter-form-animated"
+              >
                 <div className="input-group newsletter-input-group">
                   <input
                     type="email"
                     className="form-control form-control-lg newsletter-input"
                     placeholder="E-mail adresiniz"
+                    value={newsletterEmail}
+                    onChange={(event) => {
+                      setNewsletterEmail(event.target.value);
+                      if (newsletterStatus === "error") {
+                        setNewsletterStatus("idle");
+                        setNewsletterMessage("");
+                      }
+                    }}
+                    disabled={
+                      newsletterStatus === "loading" || isNewsletterSubscribed
+                    }
+                    aria-label="E-posta adresi"
+                    aria-invalid={newsletterStatus === "error"}
                   />
-                  <button className="btn btn-light btn-lg newsletter-btn">
-                    <i className="fas fa-paper-plane me-2"></i>
-                    Katıl
+                  <button
+                    type="submit"
+                    className="btn btn-light btn-lg newsletter-btn"
+                    disabled={
+                      newsletterStatus === "loading" || isNewsletterSubscribed
+                    }
+                  >
+                    {newsletterStatus === "loading" ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        Gönderiliyor...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-paper-plane me-2"></i>
+                        Katıl
+                      </>
+                    )}
                   </button>
                 </div>
+
+                {newsletterMessage && (
+                  <div
+                    className={`mt-3 alert ${
+                      newsletterStatus === "success"
+                        ? "alert-success"
+                        : "alert-danger"
+                    } py-2`}
+                    role={newsletterStatus === "success" ? "status" : "alert"}
+                  >
+                    {newsletterMessage}
+                  </div>
+                )}
+
+                {isNewsletterSubscribed && !newsletterMessage && (
+                  <div className="mt-3 alert alert-info py-2" role="status">
+                    Zaten bültene kayıtlısınız.
+                  </div>
+                )}
+
                 <div className="newsletter-note mt-3 newsletter-note-animated">
                   <i className="fas fa-heart me-2 beating-heart"></i>
                   Spam göndermiyoruz, sadece değerli içerik
                 </div>
-              </div>
+              </form>
             </div>
           </div>
         </div>

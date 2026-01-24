@@ -131,6 +131,17 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<XmlFeedSource> XmlFeedSources { get; set; }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // NEWSLETTER (BÜLTEN) SİSTEMİ
+        // Kullanıcıların e-posta bülteni aboneliklerini yönetir
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Newsletter abonelerini tutar.
+        /// GDPR uyumlu abonelik ve token bazlı iptal mekanizması içerir.
+        /// </summary>
+        public virtual DbSet<NewsletterSubscriber> NewsletterSubscribers { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -1125,6 +1136,61 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.MinOrderWeight).HasPrecision(18, 4);
                 entity.Property(e => e.MaxOrderWeight).HasPrecision(18, 4);
                 entity.Property(e => e.WeightTolerancePercent).HasPrecision(5, 2);
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // NEWSLETTER (BÜLTEN) SİSTEMİ KONFIGÜRASYONU
+            // Email ve UnsubscribeToken için index, unique constraint ve ilişki tanımları
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<NewsletterSubscriber>(entity =>
+            {
+                entity.ToTable("NewsletterSubscribers");
+
+                // Email alanı - benzersiz olmalı, case-insensitive arama için index
+                entity.Property(e => e.Email)
+                    .HasMaxLength(256)
+                    .IsRequired();
+
+                // Email için unique index
+                entity.HasIndex(e => e.Email)
+                    .IsUnique()
+                    .HasDatabaseName("IX_NewsletterSubscribers_Email");
+
+                // UnsubscribeToken için unique index - hızlı token araması için
+                entity.Property(e => e.UnsubscribeToken)
+                    .HasMaxLength(64)
+                    .IsRequired();
+
+                entity.HasIndex(e => e.UnsubscribeToken)
+                    .IsUnique()
+                    .HasDatabaseName("IX_NewsletterSubscribers_UnsubscribeToken");
+
+                // Kaynak alanı
+                entity.Property(e => e.Source)
+                    .HasMaxLength(50)
+                    .HasDefaultValue("web_footer");
+
+                // FullName alanı
+                entity.Property(e => e.FullName)
+                    .HasMaxLength(100);
+
+                // IP adresi
+                entity.Property(e => e.IpAddress)
+                    .HasMaxLength(45); // IPv6 desteği
+
+                // ConfirmationToken
+                entity.Property(e => e.ConfirmationToken)
+                    .HasMaxLength(64);
+
+                // Aktif aboneler için composite index (toplu mail gönderiminde performans)
+                entity.HasIndex(e => new { e.IsActive, e.IsConfirmed })
+                    .HasDatabaseName("IX_NewsletterSubscribers_Active_Confirmed");
+
+                // User ilişkisi (opsiyonel)
+                entity.HasOne(e => e.User)
+                    .WithMany()
+                    .HasForeignKey(e => e.UserId)
+                    .OnDelete(DeleteBehavior.SetNull); // Kullanıcı silinirse ilişki null olur
             });
 
             // -------------------

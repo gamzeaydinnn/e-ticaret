@@ -7,20 +7,27 @@
  * Özellikler:
  * - Turuncu gradient arka plan
  * - Dekoratif blur efektleri
- * - E-posta validasyonu (regex)
+ * - E-posta validasyonu (regex + backend)
  * - Form state yönetimi (idle, loading, success, error)
- * - LocalStorage ile abonelik durumu kaydetme
+ * - Backend API entegrasyonu (newsletterService)
+ * - LocalStorage ile abonelik durumu önbelleği
+ *
+ * API ENTEGRASYONU:
+ * - POST /api/newsletter/subscribe endpoint'ine bağlı
+ * - IP adresi backend'de otomatik kaydedilir (KVKK)
+ * - Resubscribe desteği (pasif aboneler yeniden aktif edilebilir)
  *
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6
  */
 
 import React, { useState, useEffect } from "react";
+import { subscribe, SUBSCRIPTION_SOURCES } from "../services/newsletterService";
 import "../styles/newsletterForm.css";
 
 // E-posta validasyon regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// LocalStorage key
+// LocalStorage key - abonelik önbelleği için
 const NEWSLETTER_STORAGE_KEY = "newsletter_subscribed";
 
 const NewsletterForm = ({ className = "" }) => {
@@ -72,26 +79,51 @@ const NewsletterForm = ({ className = "" }) => {
     setMessage("");
 
     try {
-      // Simüle edilmiş API çağrısı (gerçek API entegrasyonu için değiştirilebilir)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // ══════════════════════════════════════════════════════════════════════
+      // BACKEND API ÇAĞRISI
+      // newsletterService.subscribe() fonksiyonu çağrılır
+      // Backend'de email normalizasyonu, IP kaydı ve duplicate kontrolü yapılır
+      // ══════════════════════════════════════════════════════════════════════
 
-      // Başarılı abonelik
-      localStorage.setItem(
-        NEWSLETTER_STORAGE_KEY,
-        JSON.stringify({
-          email: email,
-          subscribedAt: new Date().toISOString(),
-          source: window.innerWidth <= 768 ? "mobile" : "web",
-        })
-      );
+      // Abonelik kaynağını belirle (mobil/web)
+      const source =
+        window.innerWidth <= 768
+          ? SUBSCRIPTION_SOURCES.WEB_FOOTER // Mobil de web_footer olarak sayılır
+          : SUBSCRIPTION_SOURCES.WEB_FOOTER;
 
-      setStatus("success");
-      setMessage("Bültenimize başarıyla abone oldunuz!");
-      setIsAlreadySubscribed(true);
-      setEmail("");
+      const result = await subscribe({
+        email: email.trim(),
+        fullName: null, // Footer formunda isim alanı yok
+        source: source,
+      });
+
+      if (result.success) {
+        // Başarılı abonelik - LocalStorage'a önbellek olarak kaydet
+        localStorage.setItem(
+          NEWSLETTER_STORAGE_KEY,
+          JSON.stringify({
+            email: email.trim().toLowerCase(),
+            subscribedAt: new Date().toISOString(),
+            source: source,
+            subscriberId: result.subscriberId,
+          }),
+        );
+
+        setStatus("success");
+        // Backend'den gelen mesajı kullan
+        setMessage(result.message || "Bültenimize başarıyla abone oldunuz!");
+        setIsAlreadySubscribed(true);
+        setEmail("");
+      } else {
+        // Backend'den hata döndü
+        setStatus("error");
+        setMessage(result.message || "Abonelik işlemi başarısız oldu.");
+      }
     } catch (error) {
+      // Ağ hatası veya beklenmeyen hata
+      console.error("[NewsletterForm] Subscription error:", error);
       setStatus("error");
-      setMessage("Bağlantı hatası, tekrar deneyin");
+      setMessage("Bağlantı hatası, lütfen tekrar deneyin.");
     }
   };
 

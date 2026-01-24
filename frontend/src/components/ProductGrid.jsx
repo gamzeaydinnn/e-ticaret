@@ -9,6 +9,7 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
+import ProductDetailModal from "./ProductDetailModal";
 
 const DEMO_PRODUCTS = [
   // Et ve Et Ürünleri (categoryId: 1)
@@ -217,8 +218,12 @@ export default function ProductGrid({
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [rules, setRules] = useState([]);
+  // Modal state'leri artık ProductDetailModal içinde yönetiliyor
+  // eslint-disable-next-line no-unused-vars
   const [modalQuantity, setModalQuantity] = useState(1);
+  // eslint-disable-next-line no-unused-vars
   const [modalRule, setModalRule] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [modalError, setModalError] = useState("");
   const [showLoginRequired, setShowLoginRequired] = useState(false);
   const [loginAction, setLoginAction] = useState(null); // 'cart' or 'favorite'
@@ -231,6 +236,7 @@ export default function ProductGrid({
   const {
     toggleFavorite: ctxToggleFavorite,
     isFavorite: ctxIsFavorite,
+    // eslint-disable-next-line no-unused-vars
     favorites,
   } = useFavorites();
   const { toggleCompare, isInCompare } = useCompare();
@@ -394,8 +400,8 @@ export default function ProductGrid({
         const products = Array.isArray(response)
           ? response
           : Array.isArray(response?.items)
-          ? response.items
-          : [];
+            ? response.items
+            : [];
 
         setData(products);
         setError("");
@@ -564,8 +570,8 @@ export default function ProductGrid({
               p.discountPercentage > 0
                 ? p.discountPercentage
                 : hasDiscount && originalPrice
-                ? Math.round(100 - (currentPrice / originalPrice) * 100)
-                : 0;
+                  ? Math.round(100 - (currentPrice / originalPrice) * 100)
+                  : 0;
 
             return (
               <div key={p.id} className="col-6 col-md-4 col-lg-3 mb-3">
@@ -614,8 +620,8 @@ export default function ProductGrid({
                             p.badge === "İndirim"
                               ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
                               : p.badge === "Yeni"
-                              ? "linear-gradient(135deg, #28a745, #20c997)"
-                              : "linear-gradient(135deg, #ffc107, #fd7e14)",
+                                ? "linear-gradient(135deg, #28a745, #20c997)"
+                                : "linear-gradient(135deg, #ffc107, #fd7e14)",
                           color: "white",
                           padding: "3px 10px",
                           borderRadius: "12px",
@@ -960,7 +966,7 @@ export default function ProductGrid({
                             let match =
                               (rules || []).find((r) => {
                                 const examples = (r.examples || []).map((ex) =>
-                                  String(ex).toLowerCase()
+                                  String(ex).toLowerCase(),
                                 );
                                 const pname = (p.name || "").toLowerCase();
                                 return (
@@ -969,7 +975,7 @@ export default function ProductGrid({
                                     .includes(pname) ||
                                   examples.some(
                                     (ex) =>
-                                      pname.includes(ex) || ex.includes(pname)
+                                      pname.includes(ex) || ex.includes(pname),
                                   ) ||
                                   (p.categoryName || "")
                                     .toLowerCase()
@@ -989,7 +995,7 @@ export default function ProductGrid({
                             ) {
                               match =
                                 (rules || []).find(
-                                  (r) => (r.unit || "").toLowerCase() === "kg"
+                                  (r) => (r.unit || "").toLowerCase() === "kg",
                                 ) || null;
                             }
                             // categories that should be sold as units with min 1 max 10
@@ -1019,7 +1025,7 @@ export default function ProductGrid({
                             }
                             setModalRule(match);
                             setModalQuantity(
-                              match ? match.min_quantity || 1 : 1
+                              match ? match.min_quantity || 1 : 1,
                             );
                             setModalError("");
                             setShowModal(true);
@@ -1053,339 +1059,24 @@ export default function ProductGrid({
         </div>
       )}
 
-      {/* Product Detail Modal */}
-      {showModal && selectedProduct && (
-        <div
-          className="modal fade show d-block"
-          tabIndex="-1"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-          onClick={(e) => e.target === e.currentTarget && closeModal()}
-        >
-          <div className="modal-dialog modal-lg modal-dialog-centered">
-            <div
-              className="modal-content border-0 shadow-lg"
-              style={{ borderRadius: "20px" }}
-            >
-              <div className="modal-header border-0 p-0">
-                <div
-                  className="w-100 d-flex justify-content-between align-items-center p-3"
-                  style={{
-                    background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                    borderRadius: "20px 20px 0 0",
-                  }}
-                >
-                  <h5 className="modal-title text-white fw-bold mb-0">
-                    <i className="fas fa-info-circle me-2"></i>
-                    Ürün Detayları
-                  </h5>
-                  <button
-                    type="button"
-                    className="btn btn-link text-white p-0 border-0"
-                    onClick={closeModal}
-                    style={{
-                      fontSize: "1.5rem",
-                      textDecoration: "none",
-                      opacity: 0.9,
-                      transition: "all 0.3s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.opacity = "1";
-                      e.target.style.transform = "scale(1.1)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.opacity = "0.9";
-                      e.target.style.transform = "scale(1)";
-                    }}
-                  >
-                    <i className="fas fa-times"></i>
-                  </button>
-                </div>
-              </div>
-
-              <div className="modal-body px-4 pb-4">
-                <div className="row align-items-center">
-                  <div className="col-md-5 text-center">
-                    <div
-                      className="product-image-large mb-3"
-                      style={{
-                        background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
-                        borderRadius: "20px",
-                        padding: "30px",
-                        height: "300px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {selectedProduct.imageUrl ? (
-                        <img
-                          src={selectedProduct.imageUrl}
-                          alt={selectedProduct.name}
-                          style={{
-                            maxHeight: "240px",
-                            maxWidth: "240px",
-                            objectFit: "contain",
-                            filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.1))",
-                          }}
-                        />
-                      ) : (
-                        <div style={{ fontSize: "4rem", color: "#dee2e6" }}>
-                          🛒
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-md-7">
-                    <div className="product-details">
-                      {selectedProduct.badge && (
-                        <span
-                          className="badge mb-3"
-                          style={{
-                            background:
-                              selectedProduct.badge === "İndirim"
-                                ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
-                                : "linear-gradient(135deg, #28a745, #20c997)",
-                            color: "white",
-                            padding: "6px 15px",
-                            borderRadius: "20px",
-                            fontSize: "0.8rem",
-                            fontWeight: "700",
-                          }}
-                        >
-                          {selectedProduct.badge}
-                        </span>
-                      )}
-
-                      <h3
-                        className="product-title mb-3"
-                        style={{
-                          fontWeight: "700",
-                          color: "#2c3e50",
-                          lineHeight: "1.3",
-                        }}
-                      >
-                        {selectedProduct.name}
-                      </h3>
-
-                      {selectedProduct.rating && (
-                        <div className="rating mb-3 d-flex align-items-center">
-                          <div className="stars me-2">
-                            {[...Array(5)].map((_, i) => (
-                              <i
-                                key={i}
-                                className={`fas fa-star ${
-                                  i < Math.floor(selectedProduct.rating)
-                                    ? "text-warning"
-                                    : "text-muted"
-                                }`}
-                              ></i>
-                            ))}
-                          </div>
-                          <span className="text-muted">
-                            ({selectedProduct.reviewCount || 0} değerlendirme)
-                          </span>
-                        </div>
-                      )}
-
-                      <p
-                        className="product-description mb-4 text-muted"
-                        style={{
-                          fontSize: "1.1rem",
-                          lineHeight: "1.6",
-                        }}
-                      >
-                        {selectedProduct.description ||
-                          "Bu ürün hakkında detaylı bilgi için müşteri hizmetleri ile iletişime geçebilirsiniz."}
-                      </p>
-
-                      <div className="price-info mb-4">
-                        {selectedProduct.originalPrice ? (
-                          <div>
-                            <span
-                              className="old-price me-3"
-                              style={{
-                                fontSize: "1.1rem",
-                                textDecoration: "line-through",
-                                color: "#6c757d",
-                              }}
-                            >
-                              {selectedProduct.originalPrice.toFixed(2)} TL
-                            </span>
-                            <span
-                              className="current-price"
-                              style={{
-                                fontSize: "2rem",
-                                fontWeight: "800",
-                                background:
-                                  "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                                backgroundClip: "text",
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
-                              }}
-                            >
-                              {selectedProduct.price.toFixed(2)} TL
-                            </span>
-                          </div>
-                        ) : (
-                          <span
-                            className="current-price"
-                            style={{
-                              fontSize: "2rem",
-                              fontWeight: "800",
-                              background:
-                                "linear-gradient(135deg, #28a745, #20c997)",
-                              backgroundClip: "text",
-                              WebkitBackgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
-                            }}
-                          >
-                            {selectedProduct.price.toFixed(2)} TL
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="product-actions d-flex justify-content-center flex-column align-items-center">
-                        <div className="d-flex align-items-center gap-2 mb-3">
-                          <input
-                            type="number"
-                            className="form-control"
-                            style={{ width: 120 }}
-                            value={modalQuantity}
-                            step={
-                              modalRule
-                                ? modalRule.step ??
-                                  (modalRule.unit === "kg" ? 0.25 : 1)
-                                : 1
-                            }
-                            onChange={(e) => setModalQuantity(e.target.value)}
-                          />
-                          <div className="text-muted">
-                            {modalRule
-                              ? modalRule.unit
-                              : selectedProduct.unit || "adet"}
-                          </div>
-                        </div>
-
-                        {modalRule && (
-                          <div className="text-muted small mb-2">
-                            Min: {modalRule.min_quantity} — Max:{" "}
-                            {modalRule.max_quantity} — Adım:{" "}
-                            {modalRule.step ??
-                              (modalRule.unit === "kg" ? 0.25 : 1)}{" "}
-                            {modalRule.unit}
-                          </div>
-                        )}
-
-                        {modalError && (
-                          <div className="text-danger small mb-2">
-                            {modalError}
-                          </div>
-                        )}
-
-                        <button
-                          className="btn btn-lg w-75"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                            border: "none",
-                            borderRadius: "25px",
-                            padding: "15px 40px",
-                            color: "white",
-                            fontWeight: "700",
-                            fontSize: "1.1rem",
-                            boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
-                            transition: "all 0.3s ease",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                          onClick={async () => {
-                            setModalError("");
-                            const q = parseFloat(modalQuantity);
-                            if (isNaN(q) || q <= 0)
-                              return setModalError("Geçerli miktar girin.");
-                            if (modalRule) {
-                              const min = parseFloat(
-                                modalRule.min_quantity ?? -Infinity
-                              );
-                              const max = parseFloat(
-                                modalRule.max_quantity ?? Infinity
-                              );
-                              const step = parseFloat(
-                                modalRule.step ??
-                                  (modalRule.unit === "kg" ? 0.25 : 1)
-                              );
-                              if (q < min)
-                                return setModalError(
-                                  `Minimum ${min} ${modalRule.unit} olmalıdır.`
-                                );
-                              if (q > max)
-                                return setModalError(
-                                  `Maksimum ${max} ${modalRule.unit} ile sınırlıdır.`
-                                );
-                              const remainder = Math.abs(
-                                (q - min) / step - Math.round((q - min) / step)
-                              );
-                              if (remainder > 1e-6)
-                                return setModalError(
-                                  `Miktar ${step} ${modalRule.unit} adımlarıyla olmalıdır.`
-                                );
-                            } else {
-                              if (!selectedProduct.isWeighted && q > 5)
-                                return setModalError(
-                                  "Bu üründen en fazla 5 adet ekleyebilirsiniz."
-                                );
-                            }
-
-                            try {
-                              if (!user) {
-                                // ask user to login or continue guest
-                                setLoginAction("cart");
-                                setShowLoginRequired(true);
-                                localStorage.setItem(
-                                  "tempProductId",
-                                  selectedProduct.id
-                                );
-                                localStorage.setItem("tempProductQty", q);
-                                return;
-                              }
-                              ctxAddToCart(selectedProduct, q);
-                              showCartNotification(
-                                selectedProduct,
-                                "registered"
-                              );
-                            } catch (err) {
-                              console.error("Sepete ekleme hatası:", err);
-                              ctxAddToCart(selectedProduct, q);
-                              showCartNotification(selectedProduct, "guest");
-                            }
-
-                            closeModal();
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.transform =
-                              "translateY(-3px) scale(1.05)";
-                            e.target.style.boxShadow =
-                              "0 8px 25px rgba(255, 107, 53, 0.4)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.transform = "translateY(0) scale(1)";
-                            e.target.style.boxShadow =
-                              "0 4px 15px rgba(255, 107, 53, 0.3)";
-                          }}
-                        >
-                          <i className="fas fa-shopping-cart me-2"></i>
-                          Sepete Ekle
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Yeni Modern Ürün Detay Modalı */}
+      <ProductDetailModal
+        product={selectedProduct}
+        isOpen={showModal}
+        onClose={closeModal}
+        onAddToCart={(product, qty) => {
+          if (!user) {
+            // Misafir ise bilgi sakla ve login sor
+            setLoginAction("cart");
+            setShowLoginRequired(true);
+            localStorage.setItem("tempProductId", product.id);
+            localStorage.setItem("tempProductQty", qty);
+            return;
+          }
+          ctxAddToCart(product, qty);
+          showCartNotification(product, "registered");
+        }}
+      />
 
       {/* Login Alert Modal */}
       {showLoginAlert && (
@@ -1703,16 +1394,16 @@ export default function ProductGrid({
                 cartNotification.type === "success"
                   ? "linear-gradient(145deg, #ffffff, #f8f9fa)"
                   : cartNotification.type === "favorite"
-                  ? "linear-gradient(145deg, #fdf2f8, #fce7f3)"
-                  : "linear-gradient(145deg, #fff5f5, #fed7d7)",
+                    ? "linear-gradient(145deg, #fdf2f8, #fce7f3)"
+                    : "linear-gradient(145deg, #fff5f5, #fed7d7)",
               animation:
                 "slideInRight 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
               border:
                 cartNotification.type === "success"
                   ? "3px solid #10b981"
                   : cartNotification.type === "favorite"
-                  ? "3px solid #e91e63"
-                  : "3px solid #ef4444",
+                    ? "3px solid #e91e63"
+                    : "3px solid #ef4444",
               boxShadow:
                 "0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1)",
             }}
@@ -1724,8 +1415,8 @@ export default function ProductGrid({
                   cartNotification.type === "success"
                     ? "linear-gradient(135deg, #10b981, #059669)"
                     : cartNotification.type === "favorite"
-                    ? "linear-gradient(135deg, #e91e63, #ad1457)"
-                    : "linear-gradient(135deg, #ef4444, #dc2626)",
+                      ? "linear-gradient(135deg, #e91e63, #ad1457)"
+                      : "linear-gradient(135deg, #ef4444, #dc2626)",
                 borderRadius: "22px 22px 0 0",
                 color: "white",
                 padding: "1rem 1.5rem",
@@ -1745,8 +1436,8 @@ export default function ProductGrid({
                       cartNotification.type === "success"
                         ? "fa-check"
                         : cartNotification.type === "favorite"
-                        ? "fa-heart"
-                        : "fa-exclamation"
+                          ? "fa-heart"
+                          : "fa-exclamation"
                     }`}
                     style={{ fontSize: "1.2rem" }}
                   ></i>
@@ -1755,8 +1446,8 @@ export default function ProductGrid({
                   {cartNotification.type === "success"
                     ? "Sepete Eklendi!"
                     : cartNotification.type === "favorite"
-                    ? "Favorilere Eklendi!"
-                    : "Hata Oluştu!"}
+                      ? "Favorilere Eklendi!"
+                      : "Hata Oluştu!"}
                 </strong>
               </div>
               <button

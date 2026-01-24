@@ -297,6 +297,29 @@ namespace ECommerce.Core.Constants
 
         #endregion
 
+        #region Newsletter (Bülten) İzinleri
+
+        /// <summary>
+        /// Bülten abonelik yönetimi izinleri.
+        /// Abone listesi görüntüleme, toplu e-posta gönderimi.
+        /// </summary>
+        public static class Newsletter
+        {
+            /// <summary>Abone listesini görüntüleme izni</summary>
+            public const string View = "newsletter.view";
+            /// <summary>Toplu e-posta gönderme izni</summary>
+            public const string Send = "newsletter.send";
+            /// <summary>Aboneyi silme/kaldırma izni</summary>
+            public const string Delete = "newsletter.delete";
+            /// <summary>Bülten istatistiklerini görüntüleme izni</summary>
+            public const string Stats = "newsletter.stats";
+            
+            /// <summary>Newsletter modülündeki tüm izinler</summary>
+            public static string[] All => new[] { View, Send, Delete, Stats };
+        }
+
+        #endregion
+
         #region Log İzinleri
 
         /// <summary>
@@ -385,6 +408,10 @@ namespace ECommerce.Core.Constants
             // Logs
             foreach (var p in Logs.All)
                 yield return (p, "Logs");
+
+            // Newsletter (Bülten)
+            foreach (var p in Newsletter.All)
+                yield return (p, "Newsletter");
         }
 
         /// <summary>
@@ -419,6 +446,7 @@ namespace ECommerce.Core.Constants
                 "brands" => "Marka",
                 "settings" => "Ayar",
                 "logs" => "Log",
+                "newsletter" => "Bülten",
                 _ => module
             };
 
@@ -463,6 +491,8 @@ namespace ECommerce.Core.Constants
                 "performance" => "Performans",
                 "details" => "Detay",
                 "system" => "Sistem",
+                "send" => "Gönderme",
+                "stats" => "İstatistikler",
                 _ => action
             };
 
