@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using System;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Constants;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Extensions;
 using ECommerce.API.Infrastructure;
+using Microsoft.Extensions.Logging;
 
 namespace ECommerce.API.Controllers
 {
@@ -14,10 +16,17 @@ namespace ECommerce.API.Controllers
     public class OrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IRealTimeNotificationService _notificationService;
+        private readonly ILogger<OrdersController> _logger;
 
-        public OrdersController(IOrderService orderService)
+        public OrdersController(
+            IOrderService orderService,
+            IRealTimeNotificationService notificationService,
+            ILogger<OrdersController> logger)
         {
             _orderService = orderService;
+            _notificationService = notificationService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -89,6 +98,7 @@ namespace ECommerce.API.Controllers
             dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
 
             var order = await _orderService.CreateAsync(dto);
+            await NotifyNewOrderAsync(order);
             return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
         }
 
@@ -157,6 +167,7 @@ namespace ECommerce.API.Controllers
             try
             {
                 var result = await _orderService.CheckoutAsync(dto);
+                await NotifyNewOrderAsync(result);
 
                 return Ok(new
                 {
@@ -176,6 +187,38 @@ namespace ECommerce.API.Controllers
             catch (System.Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        private async Task NotifyNewOrderAsync(OrderListDto order)
+        {
+            try
+            {
+                var orderNumber = string.IsNullOrWhiteSpace(order.OrderNumber)
+                    ? $"#{order.Id}"
+                    : order.OrderNumber;
+                var customerName = string.IsNullOrWhiteSpace(order.CustomerName)
+                    ? "Müşteri"
+                    : order.CustomerName;
+
+                await _notificationService.NotifyNewOrderAsync(
+                    order.Id,
+                    orderNumber,
+                    customerName,
+                    order.FinalPrice,
+                    order.TotalItems);
+
+                await _notificationService.NotifyStoreAttendantNewOrderAsync(
+                    order.Id,
+                    orderNumber,
+                    customerName,
+                    order.TotalItems,
+                    order.FinalPrice,
+                    order.OrderDate);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Yeni sipariş bildirimleri gönderilemedi. OrderId={OrderId}", order.Id);
             }
         }
         /// <summary>

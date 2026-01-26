@@ -22,6 +22,16 @@ export default function Dashboard() {
     totalProducts: 0,
     recentOrders: [],
     topProducts: [],
+    // Yeni: Sipariş akış istatistikleri
+    orderFlow: {
+      pending: 0,
+      confirmed: 0,
+      preparing: 0,
+      ready: 0,
+      inDelivery: 0,
+      delivered: 0,
+    },
+    activeCouriers: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -49,6 +59,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardStats();
+
+    // Her 30 saniyede bir otomatik güncelleme
+    const interval = setInterval(loadDashboardStats, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -89,6 +103,138 @@ export default function Dashboard() {
   return (
     <div style={{ overflow: "hidden", maxWidth: "100%" }}>
       <div className="container-fluid px-2 px-md-3">
+        {/* ================================================================
+            SİPARİŞ AKIŞ DURUMU - Canlı takip kartları
+            Hazırlanıyor, Kurye Bekleyen, Yolda, Aktif Kurye sayıları
+            ================================================================ */}
+        {canViewStatistics && (
+          <div className="row g-2 mb-3">
+            {/* Hazırlanıyor */}
+            <div className="col-6 col-md-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #fd7e14 0%, #fb8c00 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(253, 126, 20, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3 d-flex align-items-center">
+                  <div className="flex-shrink-0 me-2">
+                    <i className="fas fa-utensils fa-2x opacity-75"></i>
+                  </div>
+                  <div>
+                    <p
+                      className="mb-0 opacity-75 text-uppercase"
+                      style={{ fontSize: "0.6rem" }}
+                    >
+                      Hazırlanıyor
+                    </p>
+                    <h4 className="mb-0 fw-bold">
+                      {stats.orderFlow?.preparing || 0}
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Kurye Bekleyen */}
+            <div className="col-6 col-md-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(40, 167, 69, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3 d-flex align-items-center">
+                  <div className="flex-shrink-0 me-2">
+                    <i className="fas fa-box fa-2x opacity-75"></i>
+                  </div>
+                  <div>
+                    <p
+                      className="mb-0 opacity-75 text-uppercase"
+                      style={{ fontSize: "0.6rem" }}
+                    >
+                      Kurye Bekleyen
+                    </p>
+                    <h4 className="mb-0 fw-bold">
+                      {stats.orderFlow?.ready || 0}
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Yolda */}
+            <div className="col-6 col-md-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #6f42c1 0%, #9c27b0 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(111, 66, 193, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3 d-flex align-items-center">
+                  <div className="flex-shrink-0 me-2">
+                    <i className="fas fa-motorcycle fa-2x opacity-75"></i>
+                  </div>
+                  <div>
+                    <p
+                      className="mb-0 opacity-75 text-uppercase"
+                      style={{ fontSize: "0.6rem" }}
+                    >
+                      Yolda
+                    </p>
+                    <h4 className="mb-0 fw-bold">
+                      {stats.orderFlow?.inDelivery || 0}
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Aktif Kuryeler */}
+            <div className="col-6 col-md-3">
+              <div
+                className="card border-0 h-100"
+                style={{
+                  borderRadius: "10px",
+                  background:
+                    "linear-gradient(135deg, #17a2b8 0%, #00bcd4 100%)",
+                  color: "white",
+                  boxShadow: "0 4px 15px rgba(23, 162, 184, 0.25)",
+                }}
+              >
+                <div className="card-body p-2 p-md-3 d-flex align-items-center">
+                  <div className="flex-shrink-0 me-2">
+                    <i className="fas fa-user-check fa-2x opacity-75"></i>
+                  </div>
+                  <div>
+                    <p
+                      className="mb-0 opacity-75 text-uppercase"
+                      style={{ fontSize: "0.6rem" }}
+                    >
+                      Aktif Kurye
+                    </p>
+                    <h4 className="mb-0 fw-bold">
+                      {stats.activeCouriers || 0}
+                    </h4>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modern Stats Cards - İzin kontrolü ile */}
         <div className="row g-2 g-md-3 mb-3 mb-md-4">
           {/* Kullanıcılar - dashboard.statistics izni gerekli */}
@@ -282,8 +428,8 @@ export default function Dashboard() {
                                   order.status === "Completed"
                                     ? "bg-success"
                                     : order.status === "Processing"
-                                    ? "bg-warning"
-                                    : "bg-info"
+                                      ? "bg-warning"
+                                      : "bg-info"
                                 }`}
                                 style={{
                                   fontSize: "0.6rem",
@@ -293,8 +439,8 @@ export default function Dashboard() {
                                 {order.status === "Completed"
                                   ? "Tamam"
                                   : order.status === "Processing"
-                                  ? "İşlem"
-                                  : "Kargo"}
+                                    ? "İşlem"
+                                    : "Kargo"}
                               </span>
                             </td>
                             <td className="text-muted border-0 px-1 d-none d-sm-table-cell">

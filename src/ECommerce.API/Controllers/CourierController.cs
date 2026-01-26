@@ -13,6 +13,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
+using ECommerce.Core.Constants;
+using ECommerce.Data.Context;
+using Microsoft.EntityFrameworkCore;
 
 
 namespace ECommerce.API.Controllers
@@ -27,6 +30,8 @@ namespace ECommerce.API.Controllers
     private readonly IWeightService _weightService;
     private readonly IWeightReportRepository _weightReportRepository;
     private readonly ILogger<CourierController> _logger;
+    private readonly RoleManager<IdentityRole<int>> _roleManager;
+    private readonly ECommerceDbContext _context;
 
         public CourierController(
             ICourierService courierService, 
@@ -34,7 +39,9 @@ namespace ECommerce.API.Controllers
             IHostEnvironment env,
             IWeightService weightService,
             IWeightReportRepository weightReportRepository,
-            ILogger<CourierController> logger)
+            ILogger<CourierController> logger,
+            RoleManager<IdentityRole<int>> roleManager,
+            ECommerceDbContext context)
         {
             _courierService = courierService;
             _userManager = userManager;
@@ -42,6 +49,8 @@ namespace ECommerce.API.Controllers
             _weightService = weightService;
             _weightReportRepository = weightReportRepository;
             _logger = logger;
+            _roleManager = roleManager;
+            _context = context;
         }
         // DEVELOPMENT: Demo kurye ve user ekler
         [HttpPost("seed-demo")]
@@ -53,6 +62,13 @@ namespace ECommerce.API.Controllers
             var email = "ahmet@courier.com";
             var password = "123456";
             var phone = "05321234567";
+            var courierRole = Roles.Courier;
+
+            // Courier rolü yoksa oluştur
+            if (!await _roleManager.RoleExistsAsync(courierRole))
+            {
+                await _roleManager.CreateAsync(new IdentityRole<int>(courierRole));
+            }
 
             // User zaten var mı?
             var existingUser = await _userManager.FindByEmailAsync(email);
@@ -70,6 +86,29 @@ namespace ECommerce.API.Controllers
                 if (!result.Succeeded)
                     return BadRequest(result.Errors);
                 existingUser = user;
+            }
+            else
+            {
+                if (!existingUser.EmailConfirmed)
+                {
+                    existingUser.EmailConfirmed = true;
+                }
+                if (!existingUser.IsActive)
+                {
+                    existingUser.IsActive = true;
+                }
+                await _userManager.UpdateAsync(existingUser);
+            }
+
+            // Role alanını ve role membership'i güncelle
+            if (!string.Equals(existingUser.Role, courierRole, StringComparison.OrdinalIgnoreCase))
+            {
+                existingUser.Role = courierRole;
+                await _userManager.UpdateAsync(existingUser);
+            }
+            if (!await _userManager.IsInRoleAsync(existingUser, courierRole))
+            {
+                await _userManager.AddToRoleAsync(existingUser, courierRole);
             }
 
             // Courier zaten var mı?
@@ -98,8 +137,26 @@ namespace ECommerce.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var couriers = await _courierService.GetAllAsync();
-            return Ok(couriers);
+            var couriers = await _context.Couriers
+                .Include(c => c.User)
+                .Where(c => c.IsActive)
+                .ToListAsync();
+            var result = couriers.Select(c => new
+            {
+                id = c.Id,
+                userId = c.UserId,
+                name = c.User?.FullName ?? string.Empty,
+                email = c.User?.Email ?? string.Empty,
+                phone = c.Phone ?? c.User?.PhoneNumber ?? string.Empty,
+                vehicle = c.VehicleType ?? c.Vehicle ?? "motorcycle",
+                status = c.Status,
+                location = c.Location,
+                rating = c.Rating,
+                activeOrders = c.ActiveOrders,
+                completedToday = c.CompletedToday,
+                isOnline = c.IsOnline
+            });
+            return Ok(result);
         }
 
         // GET: api/courier/5
@@ -113,23 +170,104 @@ namespace ECommerce.API.Controllers
 
         // POST: api/courier
         [HttpPost]
-        public async Task<IActionResult> Add([FromBody] Courier courier)
+        public async Task<IActionResult> Add([FromBody] CourierCreateRequestDto dto)
         {
+            if (dto == null)
+                return BadRequest(new { message = "Geçersiz istek" });
+            if (string.IsNullOrWhiteSpace(dto.Name))
+                return BadRequest(new { message = "İsim zorunludur." });
+            if (string.IsNullOrWhiteSpace(dto.Email))
+                return BadRequest(new { message = "E-posta zorunludur." });
+            if (string.IsNullOrWhiteSpace(dto.Phone))
+                return BadRequest(new { message = "Telefon zorunludur." });
+            if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 6)
+                return BadRequest(new { message = "Şifre en az 6 karakter olmalıdır." });
+
+            var existingUser = await _userManager.FindByEmailAsync(dto.Email);
+            if (existingUser != null)
+            {
+                return BadRequest(new { message = "Bu e-posta zaten kayıtlı." });
+            }
+
+            var courierRole = Roles.Courier;
+            if (!await _roleManager.RoleExistsAsync(courierRole))
+            {
+                await _roleManager.CreateAsync(new IdentityRole<int>(courierRole));
+            }
+
+            var user = new User
+            {
+                UserName = dto.Email,
+                Email = dto.Email,
+                PhoneNumber = dto.Phone,
+                EmailConfirmed = true,
+                FullName = dto.Name,
+                IsActive = true,
+                Role = courierRole
+            };
+
+            var createResult = await _userManager.CreateAsync(user, dto.Password);
+            if (!createResult.Succeeded)
+            {
+                return BadRequest(new { message = "Kurye kullanıcı oluşturulamadı.", errors = createResult.Errors });
+            }
+
+            if (!await _userManager.IsInRoleAsync(user, courierRole))
+            {
+                await _userManager.AddToRoleAsync(user, courierRole);
+            }
+
+            var courier = new Courier
+            {
+                UserId = user.Id,
+                Phone = dto.Phone,
+                Vehicle = dto.Vehicle,
+                VehicleType = dto.Vehicle,
+                Status = "active",
+                IsActive = true
+            };
+
             await _courierService.AddAsync(courier);
+
             return CreatedAtAction(nameof(GetById), new { id = courier.Id }, courier);
         }
 
         // PUT: api/courier/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] Courier courier)
+        public async Task<IActionResult> Update(int id, [FromBody] CourierUpdateRequestDto dto)
         {
             var existing = await _courierService.GetByIdAsync(id);
             if (existing == null) return NotFound();
 
-            existing.UserId = courier.UserId;
-            // Diğer alanlar eklenirse buraya
+            if (!string.IsNullOrWhiteSpace(dto.Phone))
+            {
+                existing.Phone = dto.Phone;
+            }
+            if (!string.IsNullOrWhiteSpace(dto.Vehicle))
+            {
+                existing.Vehicle = dto.Vehicle;
+                existing.VehicleType = dto.Vehicle;
+            }
 
             await _courierService.UpdateAsync(existing);
+            var user = await _userManager.FindByIdAsync(existing.UserId.ToString());
+            if (user != null)
+            {
+                if (!string.IsNullOrWhiteSpace(dto.Name))
+                {
+                    user.FullName = dto.Name;
+                }
+                if (!string.IsNullOrWhiteSpace(dto.Email))
+                {
+                    user.Email = dto.Email;
+                    user.UserName = dto.Email;
+                }
+                if (!string.IsNullOrWhiteSpace(dto.Phone))
+                {
+                    user.PhoneNumber = dto.Phone;
+                }
+                await _userManager.UpdateAsync(user);
+            }
             return NoContent();
         }
 
@@ -142,6 +280,54 @@ namespace ECommerce.API.Controllers
 
             await _courierService.DeleteAsync(courier);
             return NoContent();
+        }
+
+        [HttpPost("{id}/reset-password")]
+        public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetCourierPasswordDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.NewPassword) || dto.NewPassword.Length < 6)
+            {
+                return BadRequest(new { message = "Şifre en az 6 karakter olmalıdır." });
+            }
+
+            var courier = await _courierService.GetByIdAsync(id);
+            if (courier == null) return NotFound();
+
+            var user = await _userManager.FindByIdAsync(courier.UserId.ToString());
+            if (user == null) return NotFound();
+
+            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
+            if (!result.Succeeded)
+            {
+                return BadRequest(new { message = "Şifre sıfırlanamadı.", errors = result.Errors });
+            }
+
+            return Ok(new { success = true });
+        }
+
+        public class CourierCreateRequestDto
+        {
+            public string Name { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string Phone { get; set; } = string.Empty;
+            public string Password { get; set; } = string.Empty;
+            public string Vehicle { get; set; } = "motorcycle";
+            public string? PlateNumber { get; set; }
+        }
+
+        public class ResetCourierPasswordDto
+        {
+            public string NewPassword { get; set; } = string.Empty;
+        }
+
+        public class CourierUpdateRequestDto
+        {
+            public string Name { get; set; } = string.Empty;
+            public string Email { get; set; } = string.Empty;
+            public string Phone { get; set; } = string.Empty;
+            public string Vehicle { get; set; } = "motorcycle";
+            public string? PlateNumber { get; set; }
         }
 
         // GET: api/courier/count

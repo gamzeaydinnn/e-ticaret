@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { CourierService } from "../../services/courierService";
+import { AdminService } from "../../services/adminService";
 
 export default function AdminCouriers() {
   const [couriers, setCouriers] = useState([]);
@@ -7,6 +8,26 @@ export default function AdminCouriers() {
   const [selectedCourier, setSelectedCourier] = useState(null);
   const [performance, setPerformance] = useState(null);
   const [loadingPerformance, setLoadingPerformance] = useState(false);
+
+  // Kurye Ekleme/Düzenleme Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCourier, setEditingCourier] = useState(null);
+  const [courierForm, setCourierForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    password: "",
+    vehicle: "motorcycle",
+    plateNumber: "",
+  });
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Şifre Sıfırlama Modal State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordCourier, setPasswordCourier] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   useEffect(() => {
     loadCouriers();
@@ -32,6 +53,148 @@ export default function AdminCouriers() {
       console.error("Performans verileri yüklenemedi:", error);
     } finally {
       setLoadingPerformance(false);
+    }
+  };
+
+  // ============================================================
+  // KURYE EKLEME/DÜZENLEME İŞLEMLERİ
+  // ============================================================
+  const openAddModal = () => {
+    setEditingCourier(null);
+    setCourierForm({
+      name: "",
+      phone: "",
+      email: "",
+      password: "",
+      vehicle: "motorcycle",
+      plateNumber: "",
+    });
+    setFormError("");
+    setShowEditModal(true);
+  };
+
+  const openEditModal = (courier) => {
+    setEditingCourier(courier);
+    setCourierForm({
+      name: courier.name || "",
+      phone: courier.phone || "",
+      email: courier.email || "",
+      password: "",
+      vehicle: courier.vehicle || "motorcycle",
+      plateNumber: courier.plateNumber || "",
+    });
+    setFormError("");
+    setShowEditModal(true);
+  };
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setCourierForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveCourier = async () => {
+    // Validasyon
+    if (!courierForm.name.trim()) {
+      setFormError("İsim zorunludur");
+      return;
+    }
+    if (!courierForm.phone.trim()) {
+      setFormError("Telefon zorunludur");
+      return;
+    }
+    if (!editingCourier) {
+      if (!courierForm.email.trim()) {
+        setFormError("E-posta zorunludur");
+        return;
+      }
+      if (!courierForm.password || courierForm.password.length < 6) {
+        setFormError("Şifre en az 6 karakter olmalıdır");
+        return;
+      }
+    }
+
+    setSaving(true);
+    setFormError("");
+
+    try {
+      if (editingCourier) {
+        // Güncelleme
+        const updatePayload = {
+          name: courierForm.name,
+          phone: courierForm.phone,
+          email: courierForm.email,
+          vehicle: courierForm.vehicle,
+          plateNumber: courierForm.plateNumber,
+        };
+        await CourierService.updateCourier(editingCourier.id, updatePayload);
+        console.log("✅ Kurye güncellendi:", editingCourier.id);
+      } else {
+        // Yeni ekleme
+        await CourierService.createCourier(courierForm);
+        console.log("✅ Yeni kurye eklendi");
+      }
+
+      // Listeyi yenile ve modalı kapat
+      await loadCouriers();
+      setShowEditModal(false);
+    } catch (error) {
+      console.error("Kurye kaydetme hatası:", error);
+      // Backend'den gelen hata mesajını göster
+      const errorMsg =
+        error?.raw?.response?.data?.message ||
+        error?.message ||
+        "Kurye kaydedilemedi";
+      setFormError(errorMsg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCourier = async (courier) => {
+    if (
+      !window.confirm(
+        `${courier.name} isimli kuryeyi silmek istediğinize emin misiniz?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await CourierService.deleteCourier(courier.id);
+      console.log("✅ Kurye silindi:", courier.id);
+      await loadCouriers();
+    } catch (error) {
+      console.error("Kurye silme hatası:", error);
+      alert("Kurye silinemedi: " + (error.message || "Bilinmeyen hata"));
+    }
+  };
+
+  // ============================================================
+  // ŞİFRE SIFIRLAMA İŞLEMLERİ
+  // ============================================================
+  const openPasswordModal = (courier) => {
+    setPasswordCourier(courier);
+    setNewPassword("");
+    setShowPasswordModal(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      alert("Şifre en az 6 karakter olmalıdır");
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      await CourierService.resetPassword(passwordCourier.id, newPassword);
+      console.log("✅ Şifre sıfırlandı:", passwordCourier.id);
+      alert("Şifre başarıyla sıfırlandı");
+      setShowPasswordModal(false);
+    } catch (error) {
+      console.error("Şifre sıfırlama hatası:", error);
+      alert("Şifre sıfırlanamadı: " + (error.message || "Bilinmeyen hata"));
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -86,10 +249,11 @@ export default function AdminCouriers() {
         </div>
         <div className="d-flex gap-1">
           <button
+            onClick={openAddModal}
             className="btn btn-outline-primary btn-sm px-2 py-1"
             style={{ fontSize: "0.7rem" }}
           >
-            <i className="fas fa-plus me-1"></i>Yeni
+            <i className="fas fa-plus me-1"></i>Yeni Kurye
           </button>
           <button
             onClick={loadCouriers}
@@ -259,7 +423,8 @@ export default function AdminCouriers() {
                       ></i>
                     </td>
                     <td className="px-1 py-2">
-                      <div className="d-flex gap-1">
+                      <div className="d-flex gap-1 flex-wrap">
+                        {/* Performans Butonu */}
                         <button
                           onClick={() => {
                             setSelectedCourier(courier);
@@ -271,12 +436,32 @@ export default function AdminCouriers() {
                         >
                           <i className="fas fa-chart-line"></i>
                         </button>
+                        {/* Düzenle Butonu */}
                         <button
-                          className="btn btn-outline-secondary p-1 d-none d-sm-inline-block"
+                          onClick={() => openEditModal(courier)}
+                          className="btn btn-outline-secondary p-1"
                           style={{ fontSize: "0.6rem", lineHeight: 1 }}
                           title="Düzenle"
                         >
                           <i className="fas fa-edit"></i>
+                        </button>
+                        {/* Şifre Sıfırla Butonu */}
+                        <button
+                          onClick={() => openPasswordModal(courier)}
+                          className="btn btn-outline-warning p-1 d-none d-md-inline-block"
+                          style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                          title="Şifre Sıfırla"
+                        >
+                          <i className="fas fa-key"></i>
+                        </button>
+                        {/* Sil Butonu */}
+                        <button
+                          onClick={() => handleDeleteCourier(courier)}
+                          className="btn btn-outline-danger p-1 d-none d-md-inline-block"
+                          style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                          title="Sil"
+                        >
+                          <i className="fas fa-trash"></i>
                         </button>
                       </div>
                     </td>
@@ -389,7 +574,7 @@ export default function AdminCouriers() {
                         >
                           <div
                             className={`rounded-circle bg-${getStatusColor(
-                              item.status
+                              item.status,
                             )} text-white d-flex align-items-center justify-content-center`}
                             style={{
                               width: "20px",
@@ -416,6 +601,245 @@ export default function AdminCouriers() {
                     <p className="text-muted small mb-0">Veri yüklenemedi.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          KURYE EKLEME/DÜZENLEME MODAL
+          ================================================================ */}
+      {showEditModal && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered mx-2">
+            <div className="modal-content" style={{ borderRadius: "12px" }}>
+              <div className="modal-header py-2 px-3">
+                <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
+                  <i
+                    className={`fas fa-${editingCourier ? "edit" : "plus"} me-2`}
+                  ></i>
+                  {editingCourier ? "Kurye Düzenle" : "Yeni Kurye Ekle"}
+                </h6>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="btn-close btn-close-sm"
+                ></button>
+              </div>
+              <div className="modal-body p-3">
+                {formError && (
+                  <div
+                    className="alert alert-danger py-2 mb-3"
+                    style={{ fontSize: "0.75rem" }}
+                  >
+                    <i className="fas fa-exclamation-circle me-1"></i>
+                    {formError}
+                  </div>
+                )}
+
+                {/* İsim */}
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-user me-1"></i>İsim Soyisim *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={courierForm.name}
+                    onChange={handleFormChange}
+                    className="form-control form-control-sm"
+                    placeholder="Kurye adı soyadı"
+                  />
+                </div>
+
+                {/* Telefon */}
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-phone me-1"></i>Telefon *
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={courierForm.phone}
+                    onChange={handleFormChange}
+                    className="form-control form-control-sm"
+                    placeholder="05XX XXX XXXX"
+                  />
+                </div>
+
+                {/* E-posta */}
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-envelope me-1"></i>E-posta
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={courierForm.email}
+                    onChange={handleFormChange}
+                    className="form-control form-control-sm"
+                    placeholder="kurye@ornek.com"
+                  />
+                </div>
+
+                {!editingCourier && (
+                  <div className="mb-3">
+                    <label className="form-label small fw-bold">
+                      <i className="fas fa-key me-1"></i>Kurye Şifresi *
+                    </label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={courierForm.password}
+                      onChange={handleFormChange}
+                      className="form-control form-control-sm"
+                      placeholder="En az 6 karakter"
+                    />
+                  </div>
+                )}
+
+                {/* Araç Tipi */}
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-motorcycle me-1"></i>Araç Tipi
+                  </label>
+                  <select
+                    name="vehicle"
+                    value={courierForm.vehicle}
+                    onChange={handleFormChange}
+                    className="form-select form-select-sm"
+                  >
+                    <option value="motorcycle">🏍️ Motosiklet</option>
+                    <option value="bicycle">🚴 Bisiklet</option>
+                    <option value="car">🚗 Araba</option>
+                    <option value="scooter">🛵 Scooter</option>
+                    <option value="walk">🚶 Yaya</option>
+                  </select>
+                </div>
+
+                {/* Plaka */}
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-id-card me-1"></i>Plaka No
+                  </label>
+                  <input
+                    type="text"
+                    name="plateNumber"
+                    value={courierForm.plateNumber}
+                    onChange={handleFormChange}
+                    className="form-control form-control-sm"
+                    placeholder="34 ABC 123"
+                  />
+                </div>
+              </div>
+              <div className="modal-footer py-2 px-3">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="btn btn-outline-secondary btn-sm"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleSaveCourier}
+                  className="btn btn-primary btn-sm"
+                  style={{ fontSize: "0.75rem" }}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1"></span>
+                      Kaydediliyor...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save me-1"></i>
+                      {editingCourier ? "Güncelle" : "Kaydet"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          ŞİFRE SIFIRLAMA MODAL
+          ================================================================ */}
+      {showPasswordModal && passwordCourier && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-sm mx-2">
+            <div className="modal-content" style={{ borderRadius: "12px" }}>
+              <div className="modal-header py-2 px-3">
+                <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
+                  <i className="fas fa-key me-2 text-warning"></i>
+                  Şifre Sıfırla
+                </h6>
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="btn-close btn-close-sm"
+                ></button>
+              </div>
+              <div className="modal-body p-3">
+                <div
+                  className="alert alert-info py-2 mb-3"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  <i className="fas fa-info-circle me-1"></i>
+                  <strong>{passwordCourier.name}</strong> için yeni şifre
+                  belirleyin.
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label small fw-bold">
+                    <i className="fas fa-lock me-1"></i>Yeni Şifre
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="form-control form-control-sm"
+                    placeholder="En az 6 karakter"
+                    minLength={6}
+                  />
+                  <small className="text-muted">En az 6 karakter giriniz</small>
+                </div>
+              </div>
+              <div className="modal-footer py-2 px-3">
+                <button
+                  onClick={() => setShowPasswordModal(false)}
+                  className="btn btn-outline-secondary btn-sm"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleResetPassword}
+                  className="btn btn-warning btn-sm"
+                  style={{ fontSize: "0.75rem" }}
+                  disabled={resettingPassword || newPassword.length < 6}
+                >
+                  {resettingPassword ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1"></span>
+                      Sıfırlanıyor...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-key me-1"></i>
+                      Şifreyi Sıfırla
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

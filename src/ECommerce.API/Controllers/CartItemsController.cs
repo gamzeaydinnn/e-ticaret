@@ -293,20 +293,70 @@ namespace ECommerce.API.Controllers
         #region Mevcut Endpoint'ler (Backward Compatibility)
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<CartItem>>> GetCartItems()
-            => await _context.CartItems
+        public async Task<IActionResult> GetCartItems()
+        {
+            var items = await _context.CartItems
                 .Include(c => c.Product)
                 .Where(c => c.IsActive)
                 .ToListAsync();
 
+            // DTO'ya çevir - JSON cycle hatasını önlemek için
+            var result = items.Select(c => new
+            {
+                c.Id,
+                c.UserId,
+                c.ProductId,
+                c.Quantity,
+                c.IsActive,
+                c.CreatedAt,
+                c.UpdatedAt,
+                Product = c.Product == null ? null : new
+                {
+                    c.Product.Id,
+                    c.Product.Name,
+                    c.Product.Description,
+                    c.Product.Price,
+                    c.Product.StockQuantity,
+                    c.Product.ImageUrl,
+                    c.Product.IsActive
+                }
+            });
+
+            return Ok(result);
+        }
+
         [HttpGet("{id}")]
-        public async Task<ActionResult<CartItem>> GetCartItem(int id)
+        public async Task<IActionResult> GetCartItem(int id)
         {
             var item = await _context.CartItems
                 .Include(c => c.Product)
                 .FirstOrDefaultAsync(c => c.Id == id && c.IsActive);
+            
             if (item == null) return NotFound();
-            return item;
+
+            // DTO'ya çevir - JSON cycle hatasını önlemek için
+            var result = new
+            {
+                item.Id,
+                item.UserId,
+                item.ProductId,
+                item.Quantity,
+                item.IsActive,
+                item.CreatedAt,
+                item.UpdatedAt,
+                Product = item.Product == null ? null : new
+                {
+                    item.Product.Id,
+                    item.Product.Name,
+                    item.Product.Description,
+                    item.Product.Price,
+                    item.Product.StockQuantity,
+                    item.Product.ImageUrl,
+                    item.Product.IsActive
+                }
+            };
+
+            return Ok(result);
         }
 
         [HttpPost]

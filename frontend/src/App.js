@@ -24,6 +24,8 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { CartProvider, useCart } from "./contexts/CartContext";
 import { FavoriteProvider, useFavorites } from "./contexts/FavoriteContext";
 import { ProductProvider } from "./contexts/ProductContext";
+import { CourierAuthProvider } from "./contexts/CourierAuthContext";
+import { CourierSignalRProvider } from "./contexts/CourierSignalRContext";
 import { useCartCount } from "./hooks/useCartCount";
 import AdminIndex from "./pages/Admin/AdminIndex.jsx";
 import AdminMicro from "./pages/Admin/AdminMicro";
@@ -55,6 +57,22 @@ import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierOrders from "./pages/Courier/CourierOrders";
 import CourierDeliveryDetail from "./pages/Courier/CourierDeliveryDetail";
 import CourierWeightEntry from "./pages/Courier/CourierWeightEntry";
+// Dispatcher (Sevkiyat Görevlisi) sayfaları
+import DispatcherLogin from "./pages/Dispatcher/DispatcherLogin";
+import DispatcherDashboard from "./pages/Dispatcher/DispatcherDashboard";
+import { DispatcherAuthProvider } from "./contexts/DispatcherAuthContext";
+import {
+  DispatcherGuard,
+  DispatcherLoginGuard,
+} from "./guards/DispatcherGuard";
+// Store Attendant (Market Görevlisi) sayfaları
+import StoreAttendantLogin from "./pages/StoreAttendant/StoreAttendantLogin";
+import StoreAttendantDashboard from "./pages/StoreAttendant/StoreAttendantDashboard";
+import { StoreAttendantAuthProvider } from "./contexts/StoreAttendantAuthContext";
+import {
+  StoreAttendantGuard,
+  StoreAttendantLoginGuard,
+} from "./guards/StoreAttendantGuard";
 // Admin guards
 import Footer from "./components/Footer";
 import { GlobalToastContainer } from "./components/ToastProvider";
@@ -100,6 +118,7 @@ import {
 // Mobil Bottom Navigation
 import MobileBottomNav from "./components/MobileBottomNav";
 import "./styles/mobileNav.css";
+import "./styles/panelMobile.css"; // Panel sayfaları için mobil stiller
 
 function Header() {
   const { count: cartCount } = useCartCount();
@@ -689,10 +708,16 @@ function App() {
   const location = useLocation();
   const showGlobalFooter = location.pathname !== "/";
 
-  // Admin ve kurye sayfalarında Header'ı gizle
+  // Admin, kurye, dispatcher ve store attendant sayfalarında Header'ı gizle
   const isAdminPage = location.pathname.startsWith("/admin");
   const isCourierPage = location.pathname.startsWith("/courier");
-  const showHeader = !isAdminPage && !isCourierPage;
+  const isDispatcherPage = location.pathname.startsWith("/dispatch");
+  const isStoreAttendantPage = location.pathname.startsWith("/store");
+  const showHeader =
+    !isAdminPage &&
+    !isCourierPage &&
+    !isDispatcherPage &&
+    !isStoreAttendantPage;
 
   return (
     <div className="App">
@@ -972,6 +997,58 @@ function App() {
           path="/courier/orders/:orderId/weight"
           element={<CourierWeightEntry />}
         />
+
+        {/* Dispatcher (Sevkiyat Görevlisi) Panel Rotaları */}
+        <Route
+          path="/dispatch/login"
+          element={
+            <DispatcherLoginGuard>
+              <DispatcherLogin />
+            </DispatcherLoginGuard>
+          }
+        />
+        <Route
+          path="/dispatch/dashboard"
+          element={
+            <DispatcherGuard>
+              <DispatcherDashboard />
+            </DispatcherGuard>
+          }
+        />
+        <Route
+          path="/dispatch"
+          element={
+            <DispatcherGuard>
+              <DispatcherDashboard />
+            </DispatcherGuard>
+          }
+        />
+
+        {/* Store Attendant (Market Görevlisi) Panel Rotaları */}
+        <Route
+          path="/store/login"
+          element={
+            <StoreAttendantLoginGuard>
+              <StoreAttendantLogin />
+            </StoreAttendantLoginGuard>
+          }
+        />
+        <Route
+          path="/store/dashboard"
+          element={
+            <StoreAttendantGuard>
+              <StoreAttendantDashboard />
+            </StoreAttendantGuard>
+          }
+        />
+        <Route
+          path="/store"
+          element={
+            <StoreAttendantGuard>
+              <StoreAttendantDashboard />
+            </StoreAttendantGuard>
+          }
+        />
       </Routes>
 
       {/* Footer - Mobilde gizli (desktop-only-footer class'ı ile) */}
@@ -986,19 +1063,27 @@ function App() {
 function AppWithProviders() {
   return (
     <AuthProvider>
-      <ProductProvider>
-        <CartProvider>
-          <FavoriteProvider>
-            <CompareProvider>
-              <Router>
-                <ScrollToTop />
-                <App />
-                <CompareFloatingButton />
-              </Router>
-            </CompareProvider>
-          </FavoriteProvider>
-        </CartProvider>
-      </ProductProvider>
+      <CourierAuthProvider>
+        <CourierSignalRProvider>
+          <DispatcherAuthProvider>
+            <StoreAttendantAuthProvider>
+              <ProductProvider>
+                <CartProvider>
+                  <FavoriteProvider>
+                    <CompareProvider>
+                      <Router>
+                        <ScrollToTop />
+                        <App />
+                        <CompareFloatingButton />
+                      </Router>
+                    </CompareProvider>
+                  </FavoriteProvider>
+                </CartProvider>
+              </ProductProvider>
+            </StoreAttendantAuthProvider>
+          </DispatcherAuthProvider>
+        </CourierSignalRProvider>
+      </CourierAuthProvider>
     </AuthProvider>
   );
 }
@@ -1009,10 +1094,12 @@ function CompareFloatingButton() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Admin veya kurye sayfalarında gösterme
+  // Admin, kurye, dispatcher veya store attendant sayfalarında gösterme
   if (
     location.pathname.startsWith("/admin") ||
-    location.pathname.startsWith("/courier")
+    location.pathname.startsWith("/courier") ||
+    location.pathname.startsWith("/dispatch") ||
+    location.pathname.startsWith("/store")
   ) {
     return null;
   }

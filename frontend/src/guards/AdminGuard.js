@@ -6,7 +6,7 @@
 // Hem rol hem de spesifik izin kontrolleri yapılabilir.
 // =============================================================================
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -17,6 +17,8 @@ const ADMIN_ROLES = [
   "StoreManager",
   "CustomerSupport",
   "Logistics",
+  "StoreAttendant", // Market Görevlisi
+  "Dispatcher", // Sevkiyat Görevlisi
 ];
 
 /**
@@ -47,6 +49,21 @@ export const AdminGuard = ({
     loadUserPermissions, // İzin yükleme fonksiyonu
   } = useAuth();
   const location = useLocation();
+  const permissionLoadRequestedRef = useRef(false);
+  const [permissionWaitTimeout, setPermissionWaitTimeout] = useState(false);
+
+  useEffect(() => {
+    if (!permissionsLoading) {
+      setPermissionWaitTimeout(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPermissionWaitTimeout(true);
+    }, 2000);
+
+    return () => clearTimeout(timeout);
+  }, [permissionsLoading]);
 
   const normalizedPermissions = Array.isArray(contextPermissions)
     ? contextPermissions
@@ -64,7 +81,7 @@ export const AdminGuard = ({
   // YÜKLEME DURUMU - Hem user hem de permissions yüklenene kadar bekle
   // Race condition düzeltmesi: İzinler yüklenmeden izin kontrolü yapılmamalı
   // ============================================================================
-  if (loading || permissionsLoading) {
+  if (loading) {
     return (
       <div
         className="d-flex justify-content-center align-items-center"
@@ -104,6 +121,54 @@ export const AdminGuard = ({
     return <Navigate to="/" replace />;
   }
 
+  // İzin yüklemesi uzarsa StoreAttendant/Dispatcher için takılmayı engelle
+  if (
+    permissionsLoading &&
+    permissionWaitTimeout &&
+    (user.role === "StoreAttendant" || user.role === "Dispatcher")
+  ) {
+    return children;
+  }
+
+  // ========================================================================
+  // KRİTİK: İlk yüklemede izinler henüz gelmemişse 403'e düşme.
+  // Permissions boşsa yüklemeyi tetikle ve spinner göster.
+  // ========================================================================
+  if (
+    isAdmin &&
+    requiredPermission &&
+    normalizedPermissions.length === 0 &&
+    !permissionsLoading
+  ) {
+    if (!permissionLoadRequestedRef.current) {
+      permissionLoadRequestedRef.current = true;
+      loadUserPermissions?.(user, true);
+    }
+    return (
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ minHeight: "100vh" }}
+      >
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Yükleniyor...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (permissionsLoading) {
+    return (
+      <div
+        className="d-flex justify-content-center align-items-center"
+        style={{ minHeight: "100vh" }}
+      >
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Yükleniyor...</span>
+        </div>
+      </div>
+    );
+  }
+
   // Spesifik izin kontrolü
   if (requiredPermission) {
     const reqPerms = Array.isArray(requiredPermission)
@@ -113,6 +178,52 @@ export const AdminGuard = ({
     // SuperAdmin her şeye erişebilir
     if (user.role !== "SuperAdmin") {
       let hasAccess = false;
+
+      // ============================================================================
+      // ROL BAZLI BYPASS - StoreAttendant ve Dispatcher için temel sayfalar
+      // Bu roller için dashboard ve orders sayfalarına erişim otomatik verilir
+      // ============================================================================
+      const storeAttendantAllowedPerms = [
+        "dashboard.view",
+        "orders.view",
+        "orders.viewdetails",
+        "orders.updatestatus",
+        "products.view",
+        "categories.view",
+      ];
+      const dispatcherAllowedPerms = [
+        "dashboard.view",
+        "orders.view",
+        "orders.viewdetails",
+        "orders.updatestatus",
+        "orders.assigncourier",
+        "couriers.view",
+      ];
+
+      if (user.role === "StoreAttendant") {
+        const normalizedReqPerms = reqPerms.map((p) => p.toLowerCase());
+        hasAccess = normalizedReqPerms.some((p) =>
+          storeAttendantAllowedPerms.includes(p),
+        );
+        if (hasAccess) {
+          console.log(
+            "[AdminGuard] StoreAttendant bypass izin verildi:",
+            reqPerms,
+          );
+          return children;
+        }
+      }
+
+      if (user.role === "Dispatcher") {
+        const normalizedReqPerms = reqPerms.map((p) => p.toLowerCase());
+        hasAccess = normalizedReqPerms.some((p) =>
+          dispatcherAllowedPerms.includes(p),
+        );
+        if (hasAccess) {
+          console.log("[AdminGuard] Dispatcher bypass izin verildi:", reqPerms);
+          return children;
+        }
+      }
 
       // ============================================================================
       // İZİN KONTROLÜ - Önce context, sonra localStorage fallback
@@ -153,7 +264,7 @@ export const AdminGuard = ({
               // Cache'de bulunduysa, context'e de yükle (sync için)
               // NOT: Bu sadece fallback, normalde login'de yüklenmeli
               console.log(
-                "[AdminGuard] Cache'den izin bulundu, context sync bekleniyor"
+                "[AdminGuard] Cache'den izin bulundu, context sync bekleniyor",
               );
             }
           }
@@ -309,7 +420,7 @@ export const RoleGuard = ({
       state={{
         from: location,
         message: `Bu sayfaya erişmek için şu rollerden birine sahip olmanız gerekmektedir: ${roles.join(
-          ", "
+          ", ",
         )}`,
       }}
       replace

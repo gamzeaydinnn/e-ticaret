@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
 import { CourierService } from "../../services/courierService";
 import "./CourierOrders.css";
@@ -12,22 +13,24 @@ export default function CourierOrders() {
   const [weightReports, setWeightReports] = useState({});
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const navigate = useNavigate();
+  const { courier, isAuthenticated, loading: authLoading } = useCourierAuth();
 
   useEffect(() => {
-    const courierData = localStorage.getItem("courierData");
-    if (!courierData) {
+    if (!authLoading && !isAuthenticated) {
       navigate("/courier/login");
       return;
     }
+    if (courier?.id) {
+      loadOrders();
+    }
+  }, [navigate, authLoading, isAuthenticated, courier?.id]);
 
-    const courier = JSON.parse(courierData);
-    loadOrders(courier.id);
-  }, [navigate]);
-
-  const loadOrders = async (courierId) => {
+  const loadOrders = async () => {
     try {
-      const orderData = await CourierService.getAssignedOrders(courierId);
+      const { orders: orderData = [] } =
+        (await CourierService.getAssignedOrders()) || {};
       setOrders(orderData);
 
       // Her sipariş için ağırlık raporlarını yükle
@@ -41,7 +44,7 @@ export default function CourierOrders() {
         } catch (error) {
           console.error(
             `Sipariş ${order.id} için ağırlık raporu yüklenemedi:`,
-            error
+            error,
           );
         }
       }
@@ -80,7 +83,7 @@ export default function CourierOrders() {
       // Backend'e teslimat isteği gönder - ödeme otomatik yapılacak
       const response = await CourierService.updateOrderStatus(
         orderId,
-        "delivered"
+        "delivered",
       );
 
       if (response.success) {
@@ -93,7 +96,7 @@ export default function CourierOrders() {
         if (response.paymentProcessed && response.paymentAmount > 0) {
           message += `\n💰 EK ÖDEME TAHSİLATI:\n`;
           message += `Ağırlık Farkı Ücreti: +${response.paymentAmount.toFixed(
-            2
+            2,
           )} ₺\n`;
           message += `\n📊 Toplam Tahsilat: ${(
             parseFloat(pendingDeliveryOrder.totalAmount) +
@@ -113,13 +116,12 @@ export default function CourierOrders() {
           `⚠️ Uyarı!\n\n${
             response.message ||
             "Teslimat tamamlandı ancak bazı ödemeler başarısız oldu."
-          }`
+          }`,
         );
       }
 
       // Siparişleri yeniden yükle
-      const courierData = JSON.parse(localStorage.getItem("courierData"));
-      await loadOrders(courierData.id);
+      await loadOrders();
 
       setSelectedOrder(null);
       setPendingDeliveryOrder(null);
@@ -130,7 +132,7 @@ export default function CourierOrders() {
           error.response?.data?.message ||
           error.message ||
           "Bilinmeyen bir hata oluştu"
-        }`
+        }`,
       );
     } finally {
       setUpdating(false);
@@ -151,9 +153,7 @@ export default function CourierOrders() {
     setUpdating(true);
     try {
       await CourierService.updateOrderStatus(orderId, newStatus, notes);
-
-      const courierData = JSON.parse(localStorage.getItem("courierData"));
-      await loadOrders(courierData.id);
+      await loadOrders();
 
       setSelectedOrder(null);
     } catch (error) {
@@ -163,47 +163,115 @@ export default function CourierOrders() {
     }
   };
 
-  const getStatusText = (status) => {
+  const getStatusText = (status, fallbackText) => {
+    if (fallbackText) return fallbackText;
+    const normalized = (status || "").toLowerCase();
     const statusMap = {
       preparing: "Hazırlanıyor",
       ready: "Teslim Alınmaya Hazır",
-      picked_up: "Teslim Alındı",
+      assigned: "Size Atandı",
+      out_for_delivery: "Yolda",
+      outfordelivery: "Yolda",
       in_transit: "Yolda",
+      picked_up: "Teslim Alındı",
       delivered: "Teslim Edildi",
+      delivery_failed: "Başarısız",
+      deliveryfailed: "Başarısız",
+      deliverypaymentpending: "Ödeme Bekliyor",
     };
-    return statusMap[status] || status;
+    return statusMap[normalized] || status;
   };
 
-  const getStatusColor = (status) => {
+  const openOrderDetail = async (order) => {
+    setDetailLoading(true);
+    try {
+      const detail = await CourierService.getTaskDetail(order.id);
+      setSelectedOrder({
+        ...order,
+        ...detail,
+        address: detail?.deliveryAddress || order.address,
+        totalAmount: detail?.orderTotal ?? order.totalAmount,
+        items: detail?.items?.map((item) => item.name) || order.items,
+      });
+    } catch (error) {
+      console.error("Sipariş detayları yüklenemedi:", error);
+      setSelectedOrder(order);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const getStatusColor = (status, fallbackColor) => {
+    if (fallbackColor) return fallbackColor;
+    const normalized = (status || "").toLowerCase();
     const colorMap = {
       preparing: "warning",
       ready: "info",
-      picked_up: "primary",
-      in_transit: "success",
-      delivered: "secondary",
+      assigned: "warning", // 🟡 Sarı - Atandı
+      picked_up: "info", // 🔵 Açık mavi - Teslim Alındı
+      pickedup: "info",
+      out_for_delivery: "primary", // 🔵 Mavi - Yolda
+      outfordelivery: "primary",
+      in_transit: "primary",
+      delivered: "success", // 🟢 Yeşil - Teslim Edildi
+      delivery_failed: "danger",
+      deliveryfailed: "danger",
+      deliverypaymentpending: "warning",
     };
-    return colorMap[status] || "secondary";
+    return colorMap[normalized] || "secondary";
   };
 
+  // =========================================================================
+  // DURUM AKIŞI - Kurye için sipariş durumu geçişleri
+  // Assigned → PickedUp → OutForDelivery → Delivered
+  // =========================================================================
   const getNextStatus = (currentStatus) => {
+    const normalized = (currentStatus || "").toLowerCase();
     const statusFlow = {
-      preparing: null, // Hazırlanıyor durumunda kurye bekler
-      ready: "picked_up", // Hazır -> Teslim Al
-      picked_up: "in_transit", // Teslim Alındı -> Yola Çık
-      in_transit: "delivered", // Yolda -> Teslim Et
-      delivered: null, // Son durum
+      preparing: null, // Hazırlanıyor - kurye henüz işlem yapamaz
+      ready: null, // Hazır - kurye henüz atanmamış
+      assigned: "picked_up", // ✅ Atandı → Teslim Aldım
+      picked_up: "out_for_delivery", // ✅ Teslim Alındı → Yola Çık
+      pickedup: "out_for_delivery",
+      out_for_delivery: "delivered", // ✅ Yolda → Teslim Et
+      outfordelivery: "delivered",
+      in_transit: "delivered",
+      delivered: null, // Tamamlandı - işlem yok
     };
-    return statusFlow[currentStatus];
+    return statusFlow[normalized];
   };
 
+  // Sonraki durum için buton metni
   const getNextStatusText = (currentStatus) => {
     const nextStatus = getNextStatus(currentStatus);
     const actionMap = {
-      picked_up: "Teslim Al",
-      in_transit: "Yola Çık",
-      delivered: "Teslim Et",
+      picked_up: "📦 Teslim Aldım", // Assigned durumunda gösterilir
+      out_for_delivery: "🏍️ Yola Çıktım", // PickedUp durumunda gösterilir
+      delivered: "✅ Teslim Et", // OutForDelivery durumunda gösterilir
     };
     return actionMap[nextStatus];
+  };
+
+  // Sonraki durum için buton ikonu
+  const getNextStatusIcon = (currentStatus) => {
+    const nextStatus = getNextStatus(currentStatus);
+    const iconMap = {
+      picked_up: "fa-hand-holding-box",
+      out_for_delivery: "fa-motorcycle",
+      delivered: "fa-check-circle",
+    };
+    return iconMap[nextStatus] || "fa-arrow-right";
+  };
+
+  // Sonraki durum için buton rengi
+  const getNextStatusButtonClass = (currentStatus) => {
+    const nextStatus = getNextStatus(currentStatus);
+    const colorMap = {
+      picked_up: "btn-info", // Mavi - Teslim Al
+      out_for_delivery: "btn-primary", // Koyu mavi - Yola Çık
+      delivered: "btn-success", // Yeşil - Teslim Et
+    };
+    return colorMap[nextStatus] || "btn-primary";
   };
 
   if (loading) {
@@ -280,8 +348,8 @@ export default function CourierOrders() {
                                 hasPendingWeight
                                   ? "table-warning"
                                   : hasApprovedWeight
-                                  ? "table-info"
-                                  : ""
+                                    ? "table-info"
+                                    : ""
                               }
                             >
                               <td>
@@ -321,9 +389,11 @@ export default function CourierOrders() {
                                   )}
                                   <br />
                                   <small className="text-muted">
-                                    {new Date(order.orderTime).toLocaleString(
-                                      "tr-TR"
-                                    )}
+                                    {order.orderTime
+                                      ? new Date(
+                                          order.orderTime,
+                                        ).toLocaleString("tr-TR")
+                                      : "-"}
                                   </small>
                                 </div>
                               </td>
@@ -341,16 +411,17 @@ export default function CourierOrders() {
                               <td>
                                 <span
                                   className="text-muted"
-                                  title={order.address}
+                                  title={order.address || "-"}
                                 >
-                                  {order.address.length > 40
-                                    ? order.address.substring(0, 40) + "..."
-                                    : order.address}
+                                  {(order.address || "-").length > 40
+                                    ? (order.address || "-").substring(0, 40) +
+                                      "..."
+                                    : order.address || "-"}
                                 </span>
                               </td>
                               <td>
                                 <span className="fw-bold text-success">
-                                  {order.totalAmount.toFixed(2)} ₺
+                                  {Number(order.totalAmount || 0).toFixed(2)} ₺
                                 </span>
                                 {hasApprovedWeight && (
                                   <div>
@@ -373,55 +444,73 @@ export default function CourierOrders() {
                                   {order.shippingMethod === "car"
                                     ? "Araç"
                                     : order.shippingMethod === "motorcycle"
-                                    ? "Motosiklet"
-                                    : order.shippingMethod || "-"}
+                                      ? "Motosiklet"
+                                      : order.shippingMethod || "-"}
                                 </span>
                               </td>
                               <td>
                                 <span
                                   className={`badge bg-${getStatusColor(
-                                    order.status
+                                    order.status,
+                                    order.statusColor,
                                   )}`}
                                 >
-                                  {getStatusText(order.status)}
+                                  {getStatusText(
+                                    order.status,
+                                    order.statusText,
+                                  )}
                                 </span>
                               </td>
                               <td>
-                                <div className="d-flex gap-2">
+                                <div className="d-flex gap-2 flex-wrap">
                                   <button
-                                    onClick={() => setSelectedOrder(order)}
+                                    onClick={() => openOrderDetail(order)}
                                     className="btn btn-outline-primary btn-sm"
                                     title="Detayları Gör"
+                                    disabled={detailLoading}
                                   >
-                                    <i className="fas fa-eye"></i>
+                                    {detailLoading ? (
+                                      <span className="spinner-border spinner-border-sm"></span>
+                                    ) : (
+                                      <i className="fas fa-eye"></i>
+                                    )}
                                   </button>
+
+                                  {/* Durum Değiştirme Butonu - Yeni akış: Assigned → PickedUp → OutForDelivery → Delivered */}
                                   {getNextStatus(order.status) && (
                                     <button
                                       onClick={() =>
                                         updateOrderStatus(
                                           order.id,
-                                          getNextStatus(order.status)
+                                          getNextStatus(order.status),
                                         )
                                       }
-                                      disabled={updating}
+                                      disabled={
+                                        updating ||
+                                        (getNextStatus(order.status) ===
+                                          "delivered" &&
+                                          hasPendingWeight)
+                                      }
                                       className={`btn btn-sm ${
                                         getNextStatus(order.status) ===
                                         "delivered"
                                           ? hasPendingWeight
                                             ? "btn-warning"
                                             : hasApprovedWeight
-                                            ? "btn-success"
-                                            : "btn-primary"
-                                          : "btn-primary"
+                                              ? "btn-success"
+                                              : "btn-success"
+                                          : getNextStatusButtonClass(
+                                              order.status,
+                                            )
                                       }`}
                                       title={
                                         getNextStatus(order.status) ===
                                         "delivered"
                                           ? hasPendingWeight
-                                            ? "⚠️ Admin onayı bekleniyor"
+                                            ? "⚠️ Admin onayı bekleniyor - teslimat yapılamaz"
                                             : hasApprovedWeight
-                                            ? `Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
-                                            : "Teslim Et"
+                                              ? `✅ Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
+                                              : "✅ Teslim Et"
                                           : getNextStatusText(order.status)
                                       }
                                     >
@@ -429,18 +518,12 @@ export default function CourierOrders() {
                                         <span className="spinner-border spinner-border-sm"></span>
                                       ) : (
                                         <>
-                                          {getNextStatus(order.status) ===
-                                          "delivered" ? (
-                                            hasPendingWeight ? (
-                                              <i className="fas fa-clock"></i>
-                                            ) : hasApprovedWeight ? (
-                                              <i className="fas fa-hand-holding-usd"></i>
-                                            ) : (
-                                              <i className="fas fa-check"></i>
-                                            )
-                                          ) : (
-                                            <i className="fas fa-arrow-right"></i>
-                                          )}
+                                          <i
+                                            className={`fas ${getNextStatusIcon(order.status)} me-1`}
+                                          ></i>
+                                          <span className="d-none d-md-inline">
+                                            {getNextStatusText(order.status)}
+                                          </span>
                                         </>
                                       )}
                                     </button>
@@ -620,15 +703,17 @@ export default function CourierOrders() {
                     <div className="mb-2">
                       <small className="text-muted">Sipariş Zamanı</small>
                       <p className="mb-0 fw-semibold">
-                        {new Date(selectedOrder.orderTime).toLocaleString(
-                          "tr-TR"
-                        )}
+                        {selectedOrder.orderTime
+                          ? new Date(selectedOrder.orderTime).toLocaleString(
+                              "tr-TR",
+                            )
+                          : "-"}
                       </p>
                     </div>
                     <div className="mb-2">
                       <small className="text-muted">Tutar</small>
                       <p className="mb-0 fw-semibold text-success">
-                        {selectedOrder.totalAmount.toFixed(2)} ₺
+                        {Number(selectedOrder.totalAmount || 0).toFixed(2)} ₺
                       </p>
                     </div>
                     <div className="mb-2">
@@ -653,10 +738,14 @@ export default function CourierOrders() {
                       <p className="mb-0">
                         <span
                           className={`badge bg-${getStatusColor(
-                            selectedOrder.status
+                            selectedOrder.status,
+                            selectedOrder.statusColor,
                           )}`}
                         >
-                          {getStatusText(selectedOrder.status)}
+                          {getStatusText(
+                            selectedOrder.status,
+                            selectedOrder.statusText,
+                          )}
                         </span>
                       </p>
                     </div>
@@ -669,19 +758,25 @@ export default function CourierOrders() {
                   <i className="fas fa-shopping-basket me-2 text-primary"></i>
                   Ürünler
                 </h6>
-                <ul className="list-group">
-                  {selectedOrder.items.map((item, index) => (
-                    <li
-                      key={index}
-                      className="list-group-item d-flex justify-content-between align-items-center"
-                    >
-                      <span>
-                        <i className="fas fa-check text-success me-2"></i>
-                        {item}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                  <ul className="list-group">
+                    {selectedOrder.items.map((item, index) => (
+                      <li
+                        key={index}
+                        className="list-group-item d-flex justify-content-between align-items-center"
+                      >
+                        <span>
+                          <i className="fas fa-check text-success me-2"></i>
+                          {item}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-muted small">
+                    Ürün listesi mevcut değil.
+                  </div>
+                )}
 
                 {getNextStatus(selectedOrder.status) && (
                   <div className="mt-4 text-center">
@@ -690,7 +785,7 @@ export default function CourierOrders() {
                         setSelectedOrder(null);
                         updateOrderStatus(
                           selectedOrder.id,
-                          getNextStatus(selectedOrder.status)
+                          getNextStatus(selectedOrder.status),
                         );
                       }}
                       disabled={updating}

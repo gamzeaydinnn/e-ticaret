@@ -22,11 +22,16 @@ namespace ECommerce.API.Controllers.Admin
     {
         private readonly IOrderService _orderService;
         private readonly IAuditLogService _auditLogService;
+        private readonly IRealTimeNotificationService _notificationService;
 
-        public AdminOrdersController(IOrderService orderService, IAuditLogService auditLogService)
+        public AdminOrdersController(
+            IOrderService orderService,
+            IAuditLogService auditLogService,
+            IRealTimeNotificationService notificationService)
         {
             _orderService = orderService;
             _auditLogService = auditLogService;
+            _notificationService = notificationService;
         }
 
         [HttpPatch("{id:int}/tracking-number")]
@@ -94,6 +99,34 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> CreateOrder([FromBody] OrderCreateDto dto)
         {
             var order = await _orderService.CreateAsync(dto);
+            try
+            {
+                var orderNumber = string.IsNullOrWhiteSpace(order.OrderNumber)
+                    ? $"#{order.Id}"
+                    : order.OrderNumber;
+                var customerName = string.IsNullOrWhiteSpace(order.CustomerName)
+                    ? "Müşteri"
+                    : order.CustomerName;
+
+                await _notificationService.NotifyNewOrderAsync(
+                    order.Id,
+                    orderNumber,
+                    customerName,
+                    order.FinalPrice,
+                    order.TotalItems);
+
+                await _notificationService.NotifyStoreAttendantNewOrderAsync(
+                    order.Id,
+                    orderNumber,
+                    customerName,
+                    order.TotalItems,
+                    order.FinalPrice,
+                    order.OrderDate);
+            }
+            catch
+            {
+                // Bildirim hatası admin akışını bozmasın
+            }
             return Ok(order);
         }
 
@@ -117,6 +150,15 @@ namespace ECommerce.API.Controllers.Admin
                     id.ToString(),
                     new { oldOrder.Status },
                     updatedOrder != null ? new { updatedOrder.Status } : null);
+                if (updatedOrder != null)
+                {
+                    await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        oldOrder.Status,
+                        updatedOrder.Status,
+                        "Admin");
+                }
             }
             return NoContent();
         }
@@ -234,6 +276,12 @@ namespace ECommerce.API.Controllers.Admin
                     orderId.ToString(),
                     new { oldOrder.Status },
                     new { order.Status });
+                await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                    order.Id,
+                    order.OrderNumber ?? $"#{order.Id}",
+                    oldOrder.Status,
+                    order.Status,
+                    "Admin");
                 return Ok(order);
             }
             catch (InvalidOperationException ex)

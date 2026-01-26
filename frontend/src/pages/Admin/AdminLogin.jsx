@@ -53,6 +53,7 @@ export default function AdminLogin() {
         // Admin Paneline Erişim Kontrolü
         // Backend'deki Roles.GetAdminPanelRoles() ile senkronize tutulmalı
         // Tüm yönetici rolleri: SuperAdmin, Admin, StoreManager, CustomerSupport, Logistics
+        // YENİ: StoreAttendant (Market Görevlisi), Dispatcher (Sevkiyat Görevlisi)
         // ============================================================================
         const ADMIN_PANEL_ROLES = [
           "SuperAdmin",
@@ -60,13 +61,15 @@ export default function AdminLogin() {
           "StoreManager",
           "CustomerSupport",
           "Logistics",
+          "StoreAttendant", // Market Görevlisi
+          "Dispatcher", // Sevkiyat Görevlisi
         ];
 
         const userRole = userData.role || "";
         const hasAdminAccess =
           userData.isAdmin === true ||
           ADMIN_PANEL_ROLES.some(
-            (role) => role.toLowerCase() === userRole.toLowerCase()
+            (role) => role.toLowerCase() === userRole.toLowerCase(),
           );
 
         if (!hasAdminAccess) {
@@ -107,18 +110,18 @@ export default function AdminLogin() {
               console.log(
                 "✅ İzinler yüklendi:",
                 loadedPermissions.length,
-                "adet"
+                "adet",
               );
             } else {
               // İzin bulunamadı - localStorage'a varsayılan dashboard.view ekle (fallback)
               const fallbackPerms = ["dashboard.view"];
               localStorage.setItem(
                 "userPermissions",
-                JSON.stringify(fallbackPerms)
+                JSON.stringify(fallbackPerms),
               );
               localStorage.setItem(
                 "permissionsCacheTime",
-                Date.now().toString()
+                Date.now().toString(),
               );
               localStorage.setItem("permissionsCacheRole", userData.role);
               console.warn("⚠️ İzin bulunamadı, fallback kullanılıyor");
@@ -139,7 +142,23 @@ export default function AdminLogin() {
         console.log("✅ User data:", userData);
         console.log("✅ Permissions ready:", permissionsReady);
 
-        navigate("/admin/dashboard");
+        // ============================================================================
+        // ROL BAZLI YÖNLENDİRME
+        // StoreAttendant ve Dispatcher için özel sayfalar
+        // ============================================================================
+        let targetPage = "/admin/dashboard";
+
+        if (userData.role === "StoreAttendant") {
+          targetPage = "/admin/orders"; // Sipariş hazırlama sayfasına yönlendir
+        } else if (userData.role === "Dispatcher") {
+          targetPage = "/admin/orders"; // Sevkiyat için sipariş sayfasına yönlendir
+        }
+
+        // ============================================================================
+        // SAYFA YENİLEME - State senkronizasyonu için
+        // navigate yerine window.location kullan (tam sayfa yenileme)
+        // ============================================================================
+        window.location.href = targetPage;
         return;
       }
 

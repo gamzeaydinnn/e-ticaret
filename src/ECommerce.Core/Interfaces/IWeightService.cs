@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Entities.Concrete;
@@ -13,6 +14,32 @@ namespace ECommerce.Core.Interfaces
         /// Tartı cihazından gelen raporu işle
         /// </summary>
         Task<WeightReport> ProcessReportAsync(MicroWeightReportDto dto);
+
+        /// <summary>
+        /// Webhook'tan gelen tartı verisini işle
+        /// </summary>
+        Task<MicroWeightWebhookResponseDto> ProcessWebhookAsync(MicroWeightWebhookRequestDto dto);
+
+        /// <summary>
+        /// Kurye tarafından manuel girilen tartı farkını işle
+        /// </summary>
+        Task<CourierWeightAdjustmentResponseDto> ProcessCourierAdjustmentAsync(
+            CourierWeightAdjustmentDto dto, int courierId);
+
+        /// <summary>
+        /// Sipariş için tartı bazlı final tutarı hesapla
+        /// </summary>
+        Task<decimal> CalculateFinalAmountForOrderAsync(int orderId);
+
+        /// <summary>
+        /// Sipariş için toplam tartı farkı tutarını getir
+        /// </summary>
+        Task<decimal> GetTotalWeightDifferenceAmountAsync(int orderId);
+
+        /// <summary>
+        /// Sipariş için bekleyen tartı raporlarını getir
+        /// </summary>
+        Task<IEnumerable<WeightReport>> GetPendingReportsForOrderAsync(int orderId);
 
         /// <summary>
         /// Raporu onayla ve ödeme işlemini başlat

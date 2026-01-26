@@ -12,10 +12,14 @@ namespace ECommerce.API.Infrastructure
 {
     /// <summary>
     /// Uygulama başlangıcında Identity verilerini seed eder.
-    /// - Roller (SuperAdmin, StoreManager, CustomerSupport, Logistics, User)
+    /// - Roller (SuperAdmin, StoreManager, CustomerSupport, Logistics, StoreAttendant, Dispatcher, User, Courier)
     /// - Varsayılan admin kullanıcı
     /// - Permission tanımları
     /// - Rol-Permission atamaları
+    /// 
+    /// YENİ EKLENEN ROLLER:
+    /// - StoreAttendant (Market Görevlisi): Sipariş hazırlama, tartı girişi
+    /// - Dispatcher (Sevkiyat Görevlisi): Kurye atama, sevkiyat yönetimi
     /// 
     /// Neden ayrı bir seeder:
     /// - Program.cs'i temiz tutmak için
@@ -36,16 +40,19 @@ namespace ECommerce.API.Infrastructure
             var dbContext = services.GetRequiredService<ECommerceDbContext>();
             var logger = services.GetService<ILogger<Program>>(); // Opsiyonel loglama
 
-            // ⚠️ GÜVENLİK KONTROL: Eğer admin rolü veya kullanıcısı varsa seed'i atla
+            // ⚠️ NOT: Seeder idempotent olduğu için roller/izinler her başlangıçta kontrol edilebilir.
+            // Daha önce sadece "Admin" rolü varsa komple çıkılıyordu; bu yeni rollerin izinlerinin
+            // hiç yazılmamasına neden oluyordu. Artık seed akışı devam eder.
             var adminRole = await roleManager.FindByNameAsync("Admin");
             if (adminRole != null)
             {
-                Console.WriteLine("ℹ️ IdentitySeeder: Roller zaten mevcut, seed ATLANILIYOR (kullanıcılar KORUNUYOR)");
-                logger?.LogInformation("ℹ️ IdentitySeeder: Roller zaten mevcut, seed ATLANILIYOR");
-                return;
+                Console.WriteLine("ℹ️ IdentitySeeder: Roller mevcut, seed devam ediyor (eksikler tamamlanacak)");
+                logger?.LogInformation("ℹ️ IdentitySeeder: Roller mevcut, seed devam ediyor (eksikler tamamlanacak)");
             }
-            
-            Console.WriteLine("🆕 IdentitySeeder: Roller ve admin kullanıcısı oluşturuluyor...");
+            else
+            {
+                Console.WriteLine("🆕 IdentitySeeder: Roller ve admin kullanıcısı oluşturuluyor...");
+            }
 
             try
             {
@@ -55,10 +62,13 @@ namespace ECommerce.API.Infrastructure
                 // 2. Varsayılan admin kullanıcıyı oluştur
                 await SeedAdminUserAsync(userManager, config, logger);
 
-                // 3. Permission'ları seed et
+                // 3. Test kullanıcılarını oluştur (StoreAttendant, Dispatcher)
+                await SeedTestUsersAsync(userManager, logger);
+
+                // 4. Permission'ları seed et
                 await SeedPermissionsAsync(dbContext, logger);
 
-                // 4. Role-Permission atamalarını yap
+                // 5. Role-Permission atamalarını yap
                 await SeedRolePermissionsAsync(dbContext, roleManager, logger);
 
                 logger?.LogInformation("✅ IdentitySeeder tüm işlemleri başarıyla tamamladı");
@@ -170,6 +180,96 @@ namespace ECommerce.API.Infrastructure
                 if (!await userManager.IsInRoleAsync(adminUser, Core.Constants.Roles.SuperAdmin))
                 {
                     await userManager.AddToRoleAsync(adminUser, Core.Constants.Roles.SuperAdmin);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Test kullanıcılarını oluşturur (StoreAttendant, Dispatcher).
+        /// Geliştirme ve test ortamları için kullanılır.
+        /// 
+        /// Oluşturulan test kullanıcıları:
+        /// - storeattendant@test.com (Market Görevlisi)
+        /// - dispatcher@test.com (Sevkiyat Görevlisi)
+        /// 
+        /// Varsayılan şifre: Test123!
+        /// </summary>
+        private static async Task SeedTestUsersAsync(UserManager<User> userManager, ILogger? logger)
+        {
+            // Test kullanıcıları tanımla
+            var testUsers = new[]
+            {
+                new 
+                { 
+                    Email = "storeattendant@test.com", 
+                    FirstName = "Market",
+                    LastName = "Görevlisi",
+                    Role = Core.Constants.Roles.StoreAttendant,
+                    Password = "Test123!"
+                },
+                new 
+                { 
+                    Email = "dispatcher@test.com", 
+                    FirstName = "Sevkiyat",
+                    LastName = "Görevlisi",
+                    Role = Core.Constants.Roles.Dispatcher,
+                    Password = "Test123!"
+                }
+            };
+
+            foreach (var testUser in testUsers)
+            {
+                // Kullanıcı zaten var mı kontrol et
+                var existingUser = await userManager.FindByEmailAsync(testUser.Email);
+                
+                if (existingUser != null)
+                {
+                    // Mevcut kullanıcının rolünü güncelle (gerekirse)
+                    if (existingUser.Role != testUser.Role)
+                    {
+                        existingUser.Role = testUser.Role;
+                        existingUser.UpdatedAt = DateTime.UtcNow;
+                        await userManager.UpdateAsync(existingUser);
+                    }
+
+                    // Role atamasını kontrol et
+                    if (!await userManager.IsInRoleAsync(existingUser, testUser.Role))
+                    {
+                        await userManager.AddToRoleAsync(existingUser, testUser.Role);
+                        logger?.LogInformation("✅ Test kullanıcısına rol atandı: {Email} -> {Role}", 
+                            testUser.Email, testUser.Role);
+                    }
+                    continue;
+                }
+
+                // Yeni test kullanıcısı oluştur
+                var newUser = new User
+                {
+                    UserName = testUser.Email,
+                    Email = testUser.Email,
+                    FirstName = testUser.FirstName,
+                    LastName = testUser.LastName,
+                    FullName = $"{testUser.FirstName} {testUser.LastName}",
+                    EmailConfirmed = true,
+                    IsActive = true,
+                    Role = testUser.Role,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var createResult = await userManager.CreateAsync(newUser, testUser.Password);
+                
+                if (createResult.Succeeded)
+                {
+                    // Role ata
+                    await userManager.AddToRoleAsync(newUser, testUser.Role);
+                    logger?.LogInformation("✅ Test kullanıcısı oluşturuldu: {Email} ({Role})", 
+                        testUser.Email, testUser.Role);
+                }
+                else
+                {
+                    logger?.LogWarning("⚠️ Test kullanıcısı oluşturulamadı: {Email} - {Errors}", 
+                        testUser.Email, 
+                        string.Join(", ", createResult.Errors.Select(e => e.Description)));
                 }
             }
         }
@@ -462,7 +562,75 @@ namespace ECommerce.API.Infrastructure
 
                 // User/Customer: Müşteri izinleri (admin paneli erişimi yok)
                 [Core.Constants.Roles.User] = Array.Empty<string>(),
-                [Core.Constants.Roles.Customer] = Array.Empty<string>()
+                [Core.Constants.Roles.Customer] = Array.Empty<string>(),
+
+                // ============================================================================
+                // STORE ATTENDANT (Market Görevlisi): Sipariş hazırlama işlemleri
+                // Siparişi fiziksel olarak hazırlayan, tartan personel.
+                // En az yetki prensibi: Sadece hazırlama süreciyle ilgili izinler.
+                // ============================================================================
+                [Core.Constants.Roles.StoreAttendant] = new[]
+                {
+                    // Dashboard - Sadece temel görüntüleme
+                    Permissions.Dashboard.View,
+                    
+                    // Store Operations - Tam yetki (ana sorumluluk alanı)
+                    Permissions.StoreOperations.ViewPendingOrders,
+                    Permissions.StoreOperations.StartPreparing,
+                    Permissions.StoreOperations.MarkAsReady,
+                    Permissions.StoreOperations.EnterWeight,
+                    Permissions.StoreOperations.ViewOrderDetails,
+                    Permissions.StoreOperations.ViewSummary,
+                    
+                    // Ürünler - Sadece görüntüleme (stok kontrolü için)
+                    Permissions.Products.View,
+                    
+                    // Kategoriler - Sadece görüntüleme
+                    Permissions.Categories.View,
+                    
+                    // Siparişler - Durum güncellemesi dahil
+                    Permissions.Orders.View,
+                    Permissions.Orders.ViewDetails,
+                    Permissions.Orders.UpdateStatus  // MVP için sipariş durumu değiştirme yetkisi
+                },
+
+                // ============================================================================
+                // DISPATCHER (Sevkiyat Görevlisi): Kurye atama ve sevkiyat yönetimi
+                // Hazır siparişlere kurye atayan ve sevkiyat sürecini yöneten personel.
+                // En az yetki prensibi: Sadece sevkiyat süreciyle ilgili izinler.
+                // ============================================================================
+                [Core.Constants.Roles.Dispatcher] = new[]
+                {
+                    // Dashboard - Sadece temel görüntüleme
+                    Permissions.Dashboard.View,
+                    
+                    // Dispatch Operations - Tam yetki (ana sorumluluk alanı)
+                    Permissions.Dispatch.ViewReadyOrders,
+                    Permissions.Dispatch.AssignCourier,
+                    Permissions.Dispatch.ReassignCourier,
+                    Permissions.Dispatch.ViewCouriers,
+                    Permissions.Dispatch.ViewCourierDetails,
+                    Permissions.Dispatch.ViewStatistics,
+                    Permissions.Dispatch.SendCourierMessage,
+                    Permissions.Dispatch.ViewOrderDetails,
+                    
+                    // Siparişler - Görüntüleme, kurye atama ve durum değiştirme
+                    Permissions.Orders.View,
+                    Permissions.Orders.ViewDetails,
+                    Permissions.Orders.AssignCourier,
+                    Permissions.Orders.ViewCustomerInfo, // Teslimat adresi için gerekli
+                    Permissions.Orders.UpdateStatus,     // MVP için sipariş durumu değiştirme
+                    
+                    // Kuryeler - Görüntüleme ve atama
+                    Permissions.Couriers.View,
+                    Permissions.Couriers.AssignOrders,
+                    Permissions.Couriers.ViewPerformance,
+                    
+                    // Kargo - Görüntüleme
+                    Permissions.Shipping.ViewPendingShipments
+                    // NOT: Shipping.MarkAsShipped YOK - Bu kurye tarafından yapılır
+                    // NOT: Shipping.MarkAsDelivered YOK - Bu kurye tarafından yapılır
+                }
             };
         }
     }

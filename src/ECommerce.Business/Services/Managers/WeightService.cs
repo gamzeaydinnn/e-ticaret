@@ -1,16 +1,27 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.Business.Services.Managers
 {
     /// <summary>
-    /// Ağırlık raporu işleme servisi
+    /// Ağırlık raporu işleme servisi.
+    /// 
+    /// Mikro API (tartı cihazı) entegrasyonu:
+    /// - Webhook ile gelen tartı verilerini işler
+    /// - Kurye manuel tartı farkı girişini destekler
+    /// - Final tutar hesaplaması yapar
+    /// 
+    /// Güvenlik:
+    /// - Idempotency kontrolü (ExternalReportId)
+    /// - Sipariş ownership doğrulaması
     /// </summary>
     public class WeightService : IWeightService
     {
@@ -291,5 +302,384 @@ namespace ECommerce.Business.Services.Managers
         {
             return await _weightReportRepository.GetByExternalReportIdAsync(externalReportId);
         }
+
+        #region Yeni Webhook ve Kurye Entegrasyon Metotları
+
+        /// <summary>
+        /// Webhook'tan gelen tartı verisini işler.
+        /// 
+        /// Akış:
+        /// 1. Idempotency kontrolü (ExternalReportId)
+        /// 2. Sipariş doğrulama
+        /// 3. WeightReport oluşturma
+        /// 4. OrderItem.ActualWeight güncelleme
+        /// 5. Fark hesaplama
+        /// </summary>
+        public async Task<MicroWeightWebhookResponseDto> ProcessWebhookAsync(MicroWeightWebhookRequestDto dto)
+        {
+            try
+            {
+                _logger.LogInformation("Webhook tartı verisi alındı: ReportId={ReportId}, OrderId={OrderId}, Weight={Weight}g",
+                    dto.ReportId, dto.OrderId, dto.ReportedWeightGrams);
+
+                // 1. Idempotency kontrolü
+                var existingReport = await _weightReportRepository.GetByExternalReportIdAsync(dto.ReportId);
+                if (existingReport != null)
+                {
+                    _logger.LogInformation("Rapor zaten mevcut, idempotent yanıt dönülüyor: {ReportId}", dto.ReportId);
+                    return new MicroWeightWebhookResponseDto
+                    {
+                        Success = true,
+                        Message = "Rapor zaten işlenmiş",
+                        ReportId = existingReport.Id,
+                        Status = existingReport.Status.ToString(),
+                        OverageGrams = existingReport.OverageGrams,
+                        OverageAmount = existingReport.OverageAmount
+                    };
+                }
+
+                // 2. Siparişi doğrula
+                var order = await _orderRepository.GetByIdAsync(dto.OrderId);
+                if (order == null)
+                {
+                    _logger.LogWarning("Sipariş bulunamadı: {OrderId}", dto.OrderId);
+                    return new MicroWeightWebhookResponseDto
+                    {
+                        Success = false,
+                        Message = "Sipariş bulunamadı",
+                        ErrorCode = "ORDER_NOT_FOUND"
+                    };
+                }
+
+                // 3. MicroWeightReportDto'ya dönüştür ve işle
+                var microDto = new MicroWeightReportDto
+                {
+                    ReportId = dto.ReportId,
+                    OrderId = dto.OrderId,
+                    OrderItemId = dto.OrderItemId,
+                    ReportedWeightGrams = dto.ReportedWeightGrams,
+                    Source = dto.Source,
+                    Timestamp = dto.Timestamp,
+                    Metadata = dto.Metadata
+                };
+
+                var report = await ProcessReportAsync(microDto);
+
+                // 4. OrderItem güncelle (eğer belirli bir item için ise)
+                await UpdateOrderItemActualWeightAsync(order, dto.OrderItemId, dto.ReportedWeightGrams);
+
+                // 5. Kurye notu varsa ekle
+                if (!string.IsNullOrWhiteSpace(dto.CourierNote))
+                {
+                    report.CourierNote = dto.CourierNote;
+                    await _weightReportRepository.UpdateAsync(report);
+                }
+
+                _logger.LogInformation("Webhook tartı verisi başarıyla işlendi: ReportId={ReportId}, Overage={OverageGrams}g",
+                    dto.ReportId, report.OverageGrams);
+
+                return new MicroWeightWebhookResponseDto
+                {
+                    Success = true,
+                    Message = report.OverageGrams > 0 
+                        ? $"Tartı farkı tespit edildi: {report.OverageGrams}g fazla"
+                        : "Tartı kaydedildi",
+                    ReportId = report.Id,
+                    Status = report.Status.ToString(),
+                    OverageGrams = report.OverageGrams,
+                    OverageAmount = report.OverageAmount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Webhook tartı verisi işlenirken hata: {ReportId}", dto.ReportId);
+                return new MicroWeightWebhookResponseDto
+                {
+                    Success = false,
+                    Message = "Tartı verisi işlenirken hata oluştu",
+                    ErrorCode = "PROCESSING_ERROR"
+                };
+            }
+        }
+
+        /// <summary>
+        /// Kurye tarafından manuel girilen tartı farkını işler.
+        /// 
+        /// Kullanım Senaryoları:
+        /// - Mikro API yokken kurye teslimat sırasında tartı farkı bildirir
+        /// - Paket hasarlı/eksik geldiğinde fark kaydı
+        /// </summary>
+        public async Task<CourierWeightAdjustmentResponseDto> ProcessCourierAdjustmentAsync(
+            CourierWeightAdjustmentDto dto, int courierId)
+        {
+            try
+            {
+                _logger.LogInformation("Kurye #{CourierId} tartı farkı bildirdi: OrderId={OrderId}, Fark={Diff}g",
+                    courierId, dto.OrderId, dto.WeightDifferenceGrams);
+
+                // 1. Siparişi doğrula
+                var order = await _orderRepository.GetByIdAsync(dto.OrderId);
+                if (order == null)
+                {
+                    return new CourierWeightAdjustmentResponseDto
+                    {
+                        Success = false,
+                        Message = "Sipariş bulunamadı"
+                    };
+                }
+
+                // 2. Kurye ownership kontrolü
+                if (order.CourierId != courierId)
+                {
+                    _logger.LogWarning("Yetkisiz tartı farkı girişi denemesi: Kurye #{CourierId} -> Sipariş #{OrderId}",
+                        courierId, dto.OrderId);
+                    return new CourierWeightAdjustmentResponseDto
+                    {
+                        Success = false,
+                        Message = "Bu siparişe erişim yetkiniz yok"
+                    };
+                }
+
+                // 3. Beklenen ağırlığı hesapla
+                int expectedWeightGrams;
+                if (dto.OrderItemId.HasValue)
+                {
+                    var orderItem = order.OrderItems?.FirstOrDefault(oi => oi.Id == dto.OrderItemId.Value);
+                    if (orderItem == null)
+                    {
+                        return new CourierWeightAdjustmentResponseDto
+                        {
+                            Success = false,
+                            Message = "Sipariş kalemi bulunamadı"
+                        };
+                    }
+                    expectedWeightGrams = orderItem.ExpectedWeightGrams;
+                }
+                else
+                {
+                    expectedWeightGrams = order.OrderItems?.Sum(oi => oi.ExpectedWeightGrams) ?? 0;
+                }
+
+                // 4. Gerçek ağırlığı hesapla
+                var reportedWeightGrams = expectedWeightGrams + dto.WeightDifferenceGrams;
+                if (reportedWeightGrams < 0)
+                {
+                    return new CourierWeightAdjustmentResponseDto
+                    {
+                        Success = false,
+                        Message = "Geçersiz ağırlık farkı: Toplam ağırlık negatif olamaz"
+                    };
+                }
+
+                // 5. Benzersiz rapor ID oluştur
+                var externalReportId = $"COURIER_{courierId}_{dto.OrderId}_{DateTime.UtcNow:yyyyMMddHHmmss}";
+
+                // 6. MicroWeightReportDto oluştur ve işle
+                var microDto = new MicroWeightReportDto
+                {
+                    ReportId = externalReportId,
+                    OrderId = dto.OrderId,
+                    OrderItemId = dto.OrderItemId,
+                    ReportedWeightGrams = reportedWeightGrams,
+                    Source = $"Courier#{courierId}",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Metadata = dto.Note != null ? $"{{\"courierNote\":\"{dto.Note}\"}}" : null
+                };
+
+                var report = await ProcessReportAsync(microDto);
+
+                // 7. Kurye notunu kaydet
+                if (!string.IsNullOrWhiteSpace(dto.Note))
+                {
+                    report.CourierNote = dto.Note;
+                    await _weightReportRepository.UpdateAsync(report);
+                }
+
+                // 8. OrderItem güncelle
+                await UpdateOrderItemActualWeightAsync(order, dto.OrderItemId, reportedWeightGrams);
+
+                // 9. Fark tutarını hesapla
+                var differenceAmount = report.OverageGrams > 0 ? report.OverageAmount : 
+                    (dto.WeightDifferenceGrams < 0 ? CalculateRefundAmount(order, Math.Abs(dto.WeightDifferenceGrams)) : 0);
+
+                // 10. Yeni toplam tutarı hesapla
+                var newTotalAmount = await CalculateFinalAmountForOrderAsync(dto.OrderId);
+
+                _logger.LogInformation("Kurye tartı farkı kaydedildi: ReportId={ReportId}, Fark={Diff}g, Tutar={Amount}",
+                    report.Id, dto.WeightDifferenceGrams, differenceAmount);
+
+                return new CourierWeightAdjustmentResponseDto
+                {
+                    Success = true,
+                    Message = dto.WeightDifferenceGrams > 0 
+                        ? $"Fazla tartı kaydedildi: {dto.WeightDifferenceGrams}g"
+                        : dto.WeightDifferenceGrams < 0 
+                            ? $"Eksik tartı kaydedildi: {Math.Abs(dto.WeightDifferenceGrams)}g"
+                            : "Tartı farkı yok",
+                    ReportId = report.Id,
+                    DifferenceAmount = differenceAmount,
+                    NewTotalAmount = newTotalAmount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kurye tartı farkı işlenirken hata: OrderId={OrderId}", dto.OrderId);
+                return new CourierWeightAdjustmentResponseDto
+                {
+                    Success = false,
+                    Message = "Tartı farkı işlenirken hata oluştu"
+                };
+            }
+        }
+
+        /// <summary>
+        /// Sipariş için tartı bazlı final tutarı hesaplar.
+        /// 
+        /// Hesaplama:
+        /// - Orijinal sipariş tutarı
+        /// + Onaylanan fazla ağırlık tutarları
+        /// - Reddedilen/eksik ağırlık iade tutarları
+        /// </summary>
+        public async Task<decimal> CalculateFinalAmountForOrderAsync(int orderId)
+        {
+            try
+            {
+                var order = await _orderRepository.GetByIdAsync(orderId);
+                if (order == null)
+                {
+                    _logger.LogWarning("Final tutar hesaplama: Sipariş bulunamadı: {OrderId}", orderId);
+                    return 0;
+                }
+
+                // Orijinal sipariş tutarı
+                var baseAmount = order.TotalPrice;
+
+                // Onaylanan tartı farkı tutarlarını topla
+                var approvedOverageAmount = await GetTotalWeightDifferenceAmountAsync(orderId);
+
+                var finalAmount = baseAmount + approvedOverageAmount;
+
+                _logger.LogDebug("Final tutar hesaplandı: OrderId={OrderId}, Base={Base}, Overage={Overage}, Final={Final}",
+                    orderId, baseAmount, approvedOverageAmount, finalAmount);
+
+                return Math.Max(0, finalAmount);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Final tutar hesaplanırken hata: OrderId={OrderId}", orderId);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Sipariş için toplam onaylanan tartı farkı tutarını getirir.
+        /// </summary>
+        public async Task<decimal> GetTotalWeightDifferenceAmountAsync(int orderId)
+        {
+            try
+            {
+                var reports = await _weightReportRepository.GetByOrderIdAsync(orderId);
+                
+                // Sadece onaylanan veya otomatik onaylanan raporları dahil et
+                var approvedAmount = reports
+                    .Where(r => r.Status == WeightReportStatus.Approved || 
+                               r.Status == WeightReportStatus.AutoApproved ||
+                               r.Status == WeightReportStatus.Charged)
+                    .Sum(r => r.OverageAmount);
+
+                return approvedAmount;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Tartı farkı tutarı hesaplanırken hata: OrderId={OrderId}", orderId);
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Sipariş için bekleyen (admin onayı bekleyen) tartı raporlarını getirir.
+        /// </summary>
+        public async Task<IEnumerable<WeightReport>> GetPendingReportsForOrderAsync(int orderId)
+        {
+            try
+            {
+                var reports = await _weightReportRepository.GetByOrderIdAsync(orderId);
+                return reports.Where(r => r.Status == WeightReportStatus.Pending);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Bekleyen raporlar alınırken hata: OrderId={OrderId}", orderId);
+                return Enumerable.Empty<WeightReport>();
+            }
+        }
+
+        #endregion
+
+        #region Private Helpers
+
+        /// <summary>
+        /// OrderItem'ın ActualWeight alanını günceller.
+        /// </summary>
+        private async Task UpdateOrderItemActualWeightAsync(Order order, int? orderItemId, int reportedWeightGrams)
+        {
+            try
+            {
+                if (order.OrderItems == null || !order.OrderItems.Any())
+                    return;
+
+                if (orderItemId.HasValue)
+                {
+                    // Belirli bir item için güncelle
+                    var item = order.OrderItems.FirstOrDefault(oi => oi.Id == orderItemId.Value);
+                    if (item != null)
+                    {
+                        item.ActualWeight = reportedWeightGrams;
+                        item.WeightDifference = reportedWeightGrams - (decimal)item.ExpectedWeightGrams;
+                        item.IsWeighed = true;
+                        item.WeighedAt = DateTime.UtcNow;
+                        item.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    // Tüm sipariş için orantılı dağıt
+                    var totalExpected = order.OrderItems.Sum(oi => oi.ExpectedWeightGrams);
+                    if (totalExpected > 0)
+                    {
+                        foreach (var item in order.OrderItems)
+                        {
+                            var ratio = (decimal)item.ExpectedWeightGrams / totalExpected;
+                            item.ActualWeight = reportedWeightGrams * ratio;
+                            item.WeightDifference = item.ActualWeight - (decimal)item.ExpectedWeightGrams;
+                            item.IsWeighed = true;
+                            item.WeighedAt = DateTime.UtcNow;
+                            item.UpdatedAt = DateTime.UtcNow;
+                        }
+                    }
+                }
+
+                await _orderRepository.UpdateAsync(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OrderItem ağırlık güncelleme hatası: OrderId={OrderId}", order.Id);
+            }
+        }
+
+        /// <summary>
+        /// Eksik ağırlık için iade tutarını hesaplar.
+        /// </summary>
+        private decimal CalculateRefundAmount(Order order, int shortageGrams)
+        {
+            if (shortageGrams <= 0) return 0;
+
+            var expectedWeight = order.OrderItems?.Sum(oi => oi.ExpectedWeightGrams) ?? 0;
+            if (expectedWeight <= 0) return 0;
+
+            var pricePerGram = order.TotalPrice / expectedWeight;
+            return Math.Round(shortageGrams * pricePerGram, 2);
+        }
+
+        #endregion
     }
 }

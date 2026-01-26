@@ -23,6 +23,8 @@ const ADMIN_PANEL_ROLES = [
   "StoreManager",
   "CustomerSupport",
   "Logistics",
+  "StoreAttendant", // Yeni: Market Görevlisi
+  "Dispatcher", // Yeni: Sevkiyat Görevlisi
 ];
 
 // ============================================================================
@@ -58,6 +60,23 @@ const ROLE_DESCRIPTIONS = {
     color: "secondary",
     icon: "🚚",
   },
+  // =========================================================================
+  // YENİ ROLLER - Order-Courier-Panel Sistemi için
+  // =========================================================================
+  StoreAttendant: {
+    name: "Market Görevlisi",
+    description:
+      "Sipariş hazırlama sürecinden sorumludur. Bekleyen siparişleri görme, hazırlamaya başla/hazır işaretleme, tartı girişi yapma yetkilerine sahiptir. Sadece Store Attendant paneline erişir.",
+    color: "primary",
+    icon: "📦",
+  },
+  Dispatcher: {
+    name: "Sevkiyat Görevlisi",
+    description:
+      "Kurye atama ve takip sürecinden sorumludur. Hazır siparişleri görme, kurye atama/değiştirme, kurye listesini görüntüleme yetkilerine sahiptir. Sadece Dispatcher paneline erişir.",
+    color: "success",
+    icon: "🗂️",
+  },
   Admin: {
     name: "Admin (Eski)",
     description:
@@ -78,6 +97,13 @@ const ROLE_DESCRIPTIONS = {
       "Sitenin son kullanıcısıdır. Ürün satın alma, kendi profilini düzenleme, sipariş geçmişini görüntüleme yetkilerine sahiptir.",
     color: "light",
     icon: "👤",
+  },
+  Courier: {
+    name: "Kurye",
+    description:
+      "Teslimat sürecinden sorumludur. Atanan siparişleri teslim alma, yola çıkma ve teslimat yapma yetkilerine sahiptir. Kurye paneline erişir.",
+    color: "purple",
+    icon: "🏍️",
   },
 };
 
@@ -104,6 +130,20 @@ const ASSIGNABLE_ROLES = [
     label: "Lojistik Görevlisi",
     requiresSuperAdmin: false,
   },
+  // =========================================================================
+  // YENİ ROLLER - Order-Courier-Panel Sistemi için
+  // =========================================================================
+  {
+    value: "StoreAttendant",
+    label: "📦 Market Görevlisi",
+    requiresSuperAdmin: false,
+  },
+  {
+    value: "Dispatcher",
+    label: "🗂️ Sevkiyat Görevlisi",
+    requiresSuperAdmin: false,
+  },
+  // NOT: Kurye rolü burada yok - Kurye ekleme "Kurye Paneli" bölümünden yapılır
   { value: "User", label: "Müşteri", requiresSuperAdmin: false },
 ];
 
@@ -214,8 +254,8 @@ const AdminUsers = () => {
       const list = Array.isArray(payload?.data)
         ? payload.data
         : Array.isArray(payload)
-        ? payload
-        : [];
+          ? payload
+          : [];
       setUsers(list);
     } catch (err) {
       console.error("Kullanıcılar yükleme hatası:", err);
@@ -297,7 +337,7 @@ const AdminUsers = () => {
     // Email format validasyonu
     if (!isValidEmail(createForm.email.trim())) {
       setCreateError(
-        "Geçerli bir email adresi giriniz. (örn: kullanici@domain.com)"
+        "Geçerli bir email adresi giriniz. (örn: kullanici@domain.com)",
       );
       return;
     }
@@ -311,7 +351,7 @@ const AdminUsers = () => {
     const desiredRole = createForm.role || "User";
     if (desiredRole === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
       setCreateError(
-        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız."
+        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız.",
       );
       return;
     }
@@ -335,7 +375,7 @@ const AdminUsers = () => {
       console.error("Kullanıcı oluşturma hatası:", err);
       // Türkçe hata mesajı çevirisi
       const errorMessage = translateError(
-        err?.response?.data || err?.message || err
+        err?.response?.data || err?.message || err,
       );
       setCreateError(errorMessage);
     } finally {
@@ -386,8 +426,8 @@ const AdminUsers = () => {
       // UI'ı güncelle
       setUsers((prev) =>
         prev.map((u) =>
-          u.id === selectedUser.id ? { ...u, role: selectedRole } : u
-        )
+          u.id === selectedUser.id ? { ...u, role: selectedRole } : u,
+        ),
       );
       closeRoleModal();
 
@@ -397,7 +437,7 @@ const AdminUsers = () => {
       console.error("Rol güncelleme hatası:", err);
       // Türkçe hata mesajı çevirisi
       const errorMessage = translateError(
-        err?.response?.data || err?.message || err
+        err?.response?.data || err?.message || err,
       );
       alert(errorMessage);
     } finally {
@@ -464,7 +504,7 @@ const AdminUsers = () => {
       console.error("Kullanıcı silme hatası:", err);
       // Türkçe hata mesajı çevirisi
       const errorMessage = translateError(
-        err?.response?.data || err?.message || err
+        err?.response?.data || err?.message || err,
       );
       alert(errorMessage);
     } finally {
@@ -484,7 +524,7 @@ const AdminUsers = () => {
     setSelectedUserIds((prev) =>
       prev.includes(userId)
         ? prev.filter((id) => id !== userId)
-        : [...prev, userId]
+        : [...prev, userId],
     );
   };
 
@@ -496,13 +536,13 @@ const AdminUsers = () => {
     const selectableIds = selectableUsers.map((u) => u.id);
 
     const allSelected = selectableIds.every((id) =>
-      selectedUserIds.includes(id)
+      selectedUserIds.includes(id),
     );
 
     if (allSelected) {
       // Tümünü kaldır
       setSelectedUserIds((prev) =>
-        prev.filter((id) => !selectableIds.includes(id))
+        prev.filter((id) => !selectableIds.includes(id)),
       );
     } else {
       // Tümünü seç
@@ -519,7 +559,7 @@ const AdminUsers = () => {
     // SuperAdmin rolü için yetki kontrolü
     if (newRole === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
       alert(
-        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız."
+        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız.",
       );
       return;
     }
@@ -535,21 +575,21 @@ const AdminUsers = () => {
       // Paralel olarak tüm kullanıcıların rolünü güncelle
       const results = await Promise.allSettled(
         selectedUserIds.map((userId) =>
-          AdminService.updateUserRole(userId, newRole)
-        )
+          AdminService.updateUserRole(userId, newRole),
+        ),
       );
 
       // Başarılı güncellemeleri say
       const successCount = results.filter(
-        (r) => r.status === "fulfilled"
+        (r) => r.status === "fulfilled",
       ).length;
       const failCount = results.filter((r) => r.status === "rejected").length;
 
       // UI'ı güncelle
       setUsers((prev) =>
         prev.map((u) =>
-          selectedUserIds.includes(u.id) ? { ...u, role: newRole } : u
-        )
+          selectedUserIds.includes(u.id) ? { ...u, role: newRole } : u,
+        ),
       );
 
       // Seçimleri temizle
@@ -558,7 +598,7 @@ const AdminUsers = () => {
       // Sonuç bildirimi
       if (failCount > 0) {
         alert(
-          `${successCount} kullanıcı güncellendi, ${failCount} kullanıcı güncellenemedi.`
+          `${successCount} kullanıcı güncellendi, ${failCount} kullanıcı güncellenemedi.`,
         );
       } else {
         alert(`${successCount} kullanıcının rolü başarıyla güncellendi.`);
@@ -589,19 +629,19 @@ const AdminUsers = () => {
         selectedUserIds.map(
           (userId) =>
             AdminService.updateUserStatus?.(userId, isActive) ||
-            Promise.resolve()
-        )
+            Promise.resolve(),
+        ),
       );
 
       const successCount = results.filter(
-        (r) => r.status === "fulfilled"
+        (r) => r.status === "fulfilled",
       ).length;
 
       // UI'ı güncelle
       setUsers((prev) =>
         prev.map((u) =>
-          selectedUserIds.includes(u.id) ? { ...u, isActive } : u
-        )
+          selectedUserIds.includes(u.id) ? { ...u, isActive } : u,
+        ),
       );
 
       setSelectedUserIds([]);
@@ -688,7 +728,7 @@ const AdminUsers = () => {
       alert(
         `"${
           passwordModalUser.fullName || passwordModalUser.email
-        }" kullanıcısının şifresi başarıyla güncellendi.`
+        }" kullanıcısının şifresi başarıyla güncellendi.`,
       );
 
       closePasswordModal();
@@ -696,7 +736,7 @@ const AdminUsers = () => {
       console.error("Şifre güncelleme hatası:", err);
       // Türkçe hata mesajı çevirisi
       const errorMessage = translateError(
-        err?.response?.data || err?.message || err
+        err?.response?.data || err?.message || err,
       );
       setPasswordError(errorMessage);
     } finally {

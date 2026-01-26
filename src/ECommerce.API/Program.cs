@@ -27,6 +27,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using ECommerce.API.Infrastructure;
+using ECommerce.API.Services; // RealTimeNotificationService için
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using ECommerce.API.Services.Sms;
@@ -35,6 +36,7 @@ using ECommerce.API.Services.Otp;
 using ECommerce.Entities.Enums;
 using ECommerce.API.Data;
 using ECommerce.API.Authorization;
+using ECommerce.API.Hubs; // SignalR Hub'ları için
 
 
 // using ECommerce.Infrastructure.Services.BackgroundJobs;
@@ -51,6 +53,7 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 });
 
 // CORS (ortama göre sıkılaştırma)
+// SignalR için AllowCredentials gerekli
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Default", policy =>
@@ -60,13 +63,36 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins(allowed)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // SignalR için gerekli
         }
         else
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // SignalR için gerekli
+        }
+    });
+    
+    // SignalR özel CORS policy (WebSocket ve Long Polling desteği için)
+    options.AddPolicy("SignalR", policy =>
+    {
+        var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (allowed != null && allowed.Length > 0)
+        {
+            policy.WithOrigins(allowed)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials()
+                  .SetIsOriginAllowed(_ => true); // WebSocket için gerekebilir
+        }
+        else
+        {
+            policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
     });
 });
@@ -172,6 +198,20 @@ builder.Services.AddAuthentication(options =>
             {
                 var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
                 var authHeader = ctx.Request.Headers["Authorization"].ToString();
+                
+                // SignalR WebSocket bağlantıları için query string'den token al
+                // WebSocket'ler HTTP header göndermediğinden token query param olarak gönderilir
+                var path = ctx.Request.Path;
+                if (path.StartsWithSegments("/hubs"))
+                {
+                    var accessToken = ctx.Request.Query["access_token"];
+                    if (!string.IsNullOrEmpty(accessToken))
+                    {
+                        ctx.Token = accessToken;
+                        logger.LogInformation("🔵 SignalR JWT: Token alındı query string'den, Path={Path}", path);
+                    }
+                }
+                
                 logger.LogInformation("🔵 JWT OnMessageReceived: Path={Path}, HasAuth={HasAuth}", 
                     ctx.Request.Path, !string.IsNullOrEmpty(authHeader));
                 return Task.CompletedTask;
@@ -366,6 +406,22 @@ builder.Services.AddScoped<CartManager>();
 builder.Services.AddScoped<InventoryManager>();
 builder.Services.AddScoped<IInventoryService, InventoryManager>();
 builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.INotificationService, ECommerce.Business.Services.Managers.NotificationService>();
+
+// OrderStateMachine - Sipariş durum geçişlerini yönetir
+builder.Services.AddScoped<IOrderStateMachine, OrderStateMachine>();
+
+// PaymentCaptureService - Authorize/Capture ödeme akışını yönetir
+builder.Services.AddScoped<IPaymentCaptureService, PaymentCaptureService>();
+
+// WebhookValidationService - Webhook güvenlik doğrulama (HMAC, timestamp, idempotency)
+builder.Services.AddScoped<IWebhookValidationService, WebhookValidationService>();
+
+// CourierAuthService - Kurye authentication işlemleri (login, logout, refresh token)
+builder.Services.AddScoped<ICourierAuthService, CourierAuthManager>();
+
+// CourierOrderService - Kurye sipariş işlemleri (listeleme, teslimat, problem bildirimi)
+builder.Services.AddScoped<ICourierOrderService, CourierOrderManager>();
+
 builder.Services.AddScoped<MicroSyncManager>();
 builder.Services.AddScoped<IBannerService, BannerManager>();
 builder.Services.AddScoped<IBrandRepository, BrandRepository>();
@@ -482,6 +538,21 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ECommerce.Business.Services.Interfaces.ILoginRateLimitService, ECommerce.Business.Services.Managers.LoginRateLimitService>();
 // Token deny list (in-memory). Can be swapped with Redis implementation later.
 builder.Services.AddSingleton<ECommerce.Core.Interfaces.ITokenDenyList, ECommerce.Infrastructure.Services.MemoryTokenDenyList>();
+
+// =============================================
+// SignalR Gerçek Zamanlı Bildirim Servisi
+// Order tracking, Admin notifications, Courier updates
+// =============================================
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.MaximumReceiveMessageSize = 32 * 1024; // 32 KB - güvenlik için sınırlı
+});
+
+// RealTimeNotificationService - Hub'lara bildirim göndermek için merkezi servis
+builder.Services.AddScoped<IRealTimeNotificationService, ECommerce.API.Services.RealTimeNotificationService>();
 
 // CSRF protection (for cookie-based flows). For SPA using Authorization header this is not strictly
 // necessary, but we expose a token endpoint for cases where a cookie+header double-submit is used.
@@ -723,6 +794,32 @@ app.UseMiddleware<ECommerce.API.Infrastructure.CsrfLoggingMiddleware>();
 
 // Global exception handler (en sonda değil, controller'lardan önce)
 app.UseMiddleware<ECommerce.API.Infrastructure.GlobalExceptionMiddleware>();
+
+// =============================================
+// SignalR Hub Endpoint'leri
+// Gerçek zamanlı bildirim kanalları
+// =============================================
+// Müşteri sipariş takibi için hub
+app.MapHub<OrderHub>("/hubs/order")
+    .RequireCors("SignalR"); // SignalR CORS policy
+
+// Admin bildirimleri için hub (yeni siparişler, teslimat sorunları)
+app.MapHub<AdminNotificationHub>("/hubs/admin")
+    .RequireCors("SignalR");
+
+// Kurye bildirimleri için hub (atamalar, iptal bildirimleri)
+app.MapHub<CourierHub>("/hubs/courier")
+    .RequireCors("SignalR");
+
+// Market Görevlisi (Store Attendant) bildirimleri için hub
+// Sipariş onaylandığında, hazırlanmaya başlandığında bildirim alır
+app.MapHub<StoreAttendantHub>("/hubs/store")
+    .RequireCors("SignalR");
+
+// Sevkiyat Görevlisi (Dispatcher) bildirimleri için hub
+// Sipariş hazır olduğunda, kurye atandığında bildirim alır
+app.MapHub<DispatcherHub>("/hubs/dispatch")
+    .RequireCors("SignalR");
 
 app.MapControllers();
 app.Run();

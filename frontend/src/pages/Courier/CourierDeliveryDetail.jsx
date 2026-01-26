@@ -60,11 +60,7 @@ export default function CourierDeliveryDetail() {
 
     try {
       setLoading(true);
-      const data =
-        (await CourierService.getTaskDetail?.(taskId)) ||
-        (await CourierService.getAssignedOrders(courier?.id).then((tasks) =>
-          tasks.find((t) => t.id === parseInt(taskId)),
-        ));
+      const data = await CourierService.getTaskDetail?.(taskId);
 
       if (data) {
         setTask(data);
@@ -333,10 +329,15 @@ export default function CourierDeliveryDetail() {
   const getStatusText = (status) => {
     const statusMap = {
       Pending: "Bekliyor",
+      Preparing: "Hazırlanıyor",
+      Ready: "Teslim Alınmaya Hazır",
       Assigned: "Atandı",
       PickedUp: "Alındı",
       InTransit: "Yolda",
+      OutForDelivery: "Yolda",
       Delivered: "Teslim Edildi",
+      DeliveryFailed: "Başarısız",
+      DeliveryPaymentPending: "Ödeme Bekliyor",
       Failed: "Başarısız",
       Cancelled: "İptal",
     };
@@ -349,7 +350,10 @@ export default function CourierDeliveryDetail() {
       Assigned: "info",
       PickedUp: "primary",
       InTransit: "success",
+      OutForDelivery: "primary",
       Delivered: "secondary",
+      DeliveryFailed: "danger",
+      DeliveryPaymentPending: "warning",
       Failed: "danger",
       Cancelled: "dark",
     };
@@ -357,7 +361,9 @@ export default function CourierDeliveryDetail() {
   };
 
   const openGoogleMaps = () => {
-    if (task?.deliveryLatitude && task?.deliveryLongitude) {
+    if (task?.googleMapsUrl) {
+      window.open(task.googleMapsUrl, "_blank");
+    } else if (task?.deliveryLatitude && task?.deliveryLongitude) {
       window.open(
         `https://www.google.com/maps/dir/?api=1&destination=${task.deliveryLatitude},${task.deliveryLongitude}`,
         "_blank",
@@ -367,12 +373,16 @@ export default function CourierDeliveryDetail() {
         `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(task.deliveryAddress)}`,
         "_blank",
       );
+    } else {
+      alert("Adres bilgisi yok");
     }
   };
 
   const callCustomer = () => {
     if (task?.customerPhone) {
       window.location.href = `tel:${task.customerPhone}`;
+    } else {
+      alert("Telefon bilgisi yok");
     }
   };
 
@@ -438,6 +448,19 @@ export default function CourierDeliveryDetail() {
           border-radius: 16px;
           padding: 16px;
           margin-bottom: 12px;
+        }
+        .quick-action-btn {
+          width: 40px;
+          height: 40px;
+          border-radius: 999px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+        .quick-action-btn i {
+          font-size: 16px;
+          line-height: 1;
         }
         .action-btn-group {
           position: fixed;
@@ -516,7 +539,7 @@ export default function CourierDeliveryDetail() {
                     className={`badge bg-${getStatusColor(task.status)}`}
                     style={{ fontSize: "10px" }}
                   >
-                    {getStatusText(task.status)}
+                    {task.statusText || getStatusText(task.status)}
                   </span>
                 </div>
               </div>
@@ -524,19 +547,19 @@ export default function CourierDeliveryDetail() {
 
             {/* Quick Actions */}
             <div className="d-flex gap-2">
-              {task.customerPhone && (
-                <button
-                  className="btn btn-light btn-sm rounded-circle"
-                  onClick={callCustomer}
-                  style={{ width: "36px", height: "36px" }}
-                >
-                  <i className="fas fa-phone text-success"></i>
-                </button>
-              )}
               <button
-                className="btn btn-light btn-sm rounded-circle"
+                className="btn btn-light quick-action-btn shadow-sm"
+                onClick={callCustomer}
+                aria-label="Müşteriyi ara"
+                title="Müşteriyi ara"
+              >
+                <i className="fas fa-phone-alt text-success"></i>
+              </button>
+              <button
+                className="btn btn-light quick-action-btn shadow-sm"
                 onClick={openGoogleMaps}
-                style={{ width: "36px", height: "36px" }}
+                aria-label="Haritada aç"
+                title="Haritada aç"
               >
                 <i className="fas fa-map-marker-alt text-primary"></i>
               </button>
@@ -623,19 +646,18 @@ export default function CourierDeliveryDetail() {
                     <h6 className="mb-0 fw-bold">
                       {task.customerName || "Müşteri"}
                     </h6>
-                    {task.customerPhone && (
-                      <small className="text-muted">{task.customerPhone}</small>
-                    )}
+                    <small className="text-muted">
+                      {task.customerPhone || "Telefon bilgisi yok"}
+                    </small>
                   </div>
-                  {task.customerPhone && (
-                    <button
-                      className="btn btn-success btn-sm rounded-circle"
-                      onClick={callCustomer}
-                      style={{ width: "40px", height: "40px" }}
-                    >
-                      <i className="fas fa-phone"></i>
-                    </button>
-                  )}
+                  <button
+                    className="btn btn-success quick-action-btn flex-shrink-0"
+                    onClick={callCustomer}
+                    aria-label="Müşteriyi ara"
+                    title="Müşteriyi ara"
+                  >
+                    <i className="fas fa-phone-alt"></i>
+                  </button>
                 </div>
 
                 {task.notesForCourier && (
@@ -709,11 +731,7 @@ export default function CourierDeliveryDetail() {
                     <div className="bg-light rounded p-2 text-center">
                       <small className="text-muted d-block">Ödeme</small>
                       <span className="fw-bold">
-                        {task.paymentMethod === "Cash"
-                          ? "Nakit"
-                          : task.paymentMethod === "Card"
-                            ? "Kart"
-                            : "Online"}
+                        {task.paymentMethod || "Ödeme"}
                       </span>
                     </div>
                   </div>
@@ -891,10 +909,9 @@ export default function CourierDeliveryDetail() {
                         <h6 className="mb-1 fw-bold">Ağırlık Bazlı Ürünler</h6>
                         <small className="text-muted">
                           Lütfen her ürünü tartarak gerçek ağırlığını girin.
-                          {task.paymentMethod === "Cash" &&
+                          {/kapıda|nakit/i.test(task.paymentMethod || "") &&
                             " Fark nakit olarak alınacak/verilecek."}
-                          {(task.paymentMethod === "Card" ||
-                            task.paymentMethod === "Online") &&
+                          {/kart|kredi|online/i.test(task.paymentMethod || "") &&
                             " Fark karta yansıtılacak."}
                         </small>
                       </div>
@@ -904,7 +921,13 @@ export default function CourierDeliveryDetail() {
                   {/* Ağırlık Fark Özeti */}
                   <WeightDifferenceSummary
                     summary={weightSummary}
-                    paymentMethod={task.paymentMethod || "Cash"}
+                    paymentMethod={
+                      /kapıda|nakit/i.test(task.paymentMethod || "")
+                        ? "Cash"
+                        : /kart|kredi|online/i.test(task.paymentMethod || "")
+                          ? "Card"
+                          : "Cash"
+                    }
                     loading={weightSubmitting}
                   />
 

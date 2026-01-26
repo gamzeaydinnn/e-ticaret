@@ -75,6 +75,8 @@ export const AuthProvider = ({ children }) => {
           "StoreManager",
           "CustomerSupport",
           "Logistics",
+          "StoreAttendant",
+          "Dispatcher",
         ];
         // Eğer admin kullanıcı ve cache'de permission yoksa, loading=true başla
         const cachedPerms = localStorage.getItem("userPermissions");
@@ -146,6 +148,8 @@ export const AuthProvider = ({ children }) => {
             "StoreManager",
             "CustomerSupport",
             "Logistics",
+            "StoreAttendant",
+            "Dispatcher",
           ].includes(userData.role))
       ) {
         setPermissions([]);
@@ -294,6 +298,8 @@ export const AuthProvider = ({ children }) => {
       "StoreManager",
       "CustomerSupport",
       "Logistics",
+      "StoreAttendant",
+      "Dispatcher",
     ];
     if (adminRoles.includes(user.role)) return true;
 

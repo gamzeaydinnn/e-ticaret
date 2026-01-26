@@ -7,34 +7,11 @@
 
 import React from "react";
 
-// Durum geçiş kuralları (State Machine)
-const STATE_TRANSITIONS = {
-  Pending: ["Assigned"], // Bekliyor → Kabul Et
-  Assigned: ["PickedUp"], // Atandı → Teslim Al
-  PickedUp: ["InTransit"], // Alındı → Yola Çık
-  InTransit: ["Delivered", "Failed"], // Yolda → Teslim Et / Başarısız
-  Delivered: [], // Final state
-  Failed: [], // Final state
-  Cancelled: [], // Final state
-};
-
 // Buton konfigürasyonları
 const BUTTON_CONFIG = {
-  Assigned: {
-    label: "Görevi Kabul Et",
-    icon: "fa-check",
-    color: "success",
-    gradient: "linear-gradient(135deg, #28a745, #20c997)",
-  },
-  PickedUp: {
-    label: "Siparişi Aldım",
-    icon: "fa-box",
-    color: "primary",
-    gradient: "linear-gradient(135deg, #667eea, #764ba2)",
-  },
-  InTransit: {
+  OutForDelivery: {
     label: "Yola Çıktım",
-    icon: "fa-truck",
+    icon: "fa-motorcycle",
     color: "info",
     gradient: "linear-gradient(135deg, #11998e, #38ef7d)",
   },
@@ -60,57 +37,43 @@ export default function CourierActionButtons({
   if (!task) return null;
 
   const currentStatus = task.status;
-  const nextStates = STATE_TRANSITIONS[currentStatus] || [];
+  const allowed = task.allowedActions || {};
+  const canStart =
+    allowed.canStartDelivery ?? currentStatus === "Assigned";
+  const canDeliver =
+    allowed.canMarkDelivered ??
+    ["OutForDelivery", "InTransit"].includes(currentStatus);
+  const canFail =
+    allowed.canReportProblem ?? !["Delivered", "Failed", "Cancelled"].includes(currentStatus);
 
-  // Final state ise buton gösterme
-  if (nextStates.length === 0) {
+  if (!canStart && !canDeliver && !canFail) {
     return null;
   }
 
   return (
     <div className="d-flex flex-column gap-2">
       {/* Ana Aksiyon Butonu */}
-      {nextStates.length > 0 && (
+      {(canStart || canDeliver) && (
         <div className="d-flex gap-2">
-          {/* Primary Action (Delivered hariç ilk durum) */}
-          {nextStates
-            .filter((s) => s !== "Failed")
-            .map((nextStatus) => {
-              const config = BUTTON_CONFIG[nextStatus];
-              if (!config) return null;
-
-              return (
-                <button
-                  key={nextStatus}
-                  className="btn btn-lg flex-grow-1 text-white fw-bold shadow"
-                  style={{
-                    background: config.gradient,
-                    border: "none",
-                    borderRadius: "14px",
-                    padding: "14px 20px",
-                  }}
-                  onClick={() => onStatusChange(nextStatus)}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2"></span>
-                      İşleniyor...
-                    </>
-                  ) : (
-                    <>
-                      <i className={`fas ${config.icon} me-2`}></i>
-                      {config.label}
-                    </>
-                  )}
-                </button>
-              );
-            })}
+          {canStart && (
+            <PrimaryActionButton
+              config={BUTTON_CONFIG.OutForDelivery}
+              loading={loading}
+              onClick={() => onStatusChange("OutForDelivery")}
+            />
+          )}
+          {canDeliver && (
+            <PrimaryActionButton
+              config={BUTTON_CONFIG.Delivered}
+              loading={loading}
+              onClick={() => onStatusChange("Delivered")}
+            />
+          )}
         </div>
       )}
 
-      {/* Başarısız Butonu (Sadece InTransit durumunda) */}
-      {nextStates.includes("Failed") && (
+      {/* Başarısız Butonu */}
+      {canFail && (
         <button
           className="btn btn-outline-danger w-100 fw-semibold"
           style={{
@@ -144,13 +107,40 @@ function getStatusHint(status) {
       return "Bu görevi kabul etmek için butona tıklayın";
     case "Assigned":
       return "Siparişi teslim aldığınızda butona tıklayın";
-    case "PickedUp":
-      return "Teslimat adresine yola çıktığınızda butona tıklayın";
+    case "OutForDelivery":
     case "InTransit":
       return "Teslimatı tamamladığınızda onay butonuna tıklayın";
     default:
       return "";
   }
+}
+
+function PrimaryActionButton({ config, loading, onClick }) {
+  return (
+    <button
+      className="btn btn-lg flex-grow-1 text-white fw-bold shadow"
+      style={{
+        background: config.gradient,
+        border: "none",
+        borderRadius: "14px",
+        padding: "14px 20px",
+      }}
+      onClick={onClick}
+      disabled={loading}
+    >
+      {loading ? (
+        <>
+          <span className="spinner-border spinner-border-sm me-2"></span>
+          İşleniyor...
+        </>
+      ) : (
+        <>
+          <i className={`fas ${config.icon} me-2`}></i>
+          {config.label}
+        </>
+      )}
+    </button>
+  );
 }
 
 // =========================================================================

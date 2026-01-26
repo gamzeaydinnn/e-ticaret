@@ -38,6 +38,12 @@ namespace ECommerce.API.Infrastructure
                 await _next(context);
                 return;
             }
+            // Skip CSRF for SignalR hubs (negotiate/postback uses auth headers or query token)
+            if (path.StartsWith("/hubs", StringComparison.OrdinalIgnoreCase))
+            {
+                await _next(context);
+                return;
+            }
 
             try
             {

@@ -31,43 +31,113 @@ namespace ECommerce.Business.Services.Managers
         private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
+        // YENİ AKIŞ: New → Confirmed → Preparing → Ready → Assigned → PickedUp → OutForDelivery → Delivered
         private static readonly IReadOnlyDictionary<OrderStatus, HashSet<OrderStatus>> AllowedTransitions =
             new Dictionary<OrderStatus, HashSet<OrderStatus>>
             {
-                // Önerilen basit akış:
-                // Pending → Paid/Cancelled (ve projedeki testler için doğrudan Delivered izni)
-                [OrderStatus.Pending] = new HashSet<OrderStatus>
+                // ═══════════════════════════════════════════════════════════════════════════════
+                // YENİ SİPARİŞ AKIŞI (Ana akış)
+                // ═══════════════════════════════════════════════════════════════════════════════
+                
+                // New → Confirmed (Admin onayı) veya Cancelled
+                [OrderStatus.New] = new HashSet<OrderStatus>
                 {
-                    OrderStatus.Paid,
-                    OrderStatus.Cancelled,
-                    OrderStatus.Delivered,
-                    OrderStatus.Preparing
+                    OrderStatus.Confirmed,
+                    OrderStatus.Cancelled
                 },
-                // Paid → Preparing/Cancelled
-                [OrderStatus.Paid] = new HashSet<OrderStatus>
+                
+                // Confirmed → Preparing (Market görevlisi hazırlamaya başladı) veya Cancelled
+                [OrderStatus.Confirmed] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Preparing,
                     OrderStatus.Cancelled
                 },
-                // Preparing → Shipped/OutForDelivery
+                
+                // Preparing → Ready (Market görevlisi hazırladı) veya Cancelled
+                // ⚠️ DÜZELTME: OutForDelivery kısa yolu KALDIRILDI - akış kilitlendi
                 [OrderStatus.Preparing] = new HashSet<OrderStatus>
                 {
-                    OrderStatus.Shipped,
-                    OrderStatus.OutForDelivery,
+                    OrderStatus.Ready,
+                    // OrderStatus.Shipped,        // KALDIRILDI: Kısa yol
+                    // OrderStatus.OutForDelivery, // KALDIRILDI: Assigned olmadan geçiş yapılamaz
                     OrderStatus.Cancelled
                 },
-                // Shipped → Delivered
+                
+                // Ready → Assigned (Dispatcher kurye atadı) veya Cancelled
+                // ⚠️ DÜZELTME: OutForDelivery kısa yolu KALDIRILDI - akış kilitlendi
+                [OrderStatus.Ready] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Assigned,
+                    // OrderStatus.OutForDelivery, // KALDIRILDI: Assigned olmadan geçiş yapılamaz
+                    OrderStatus.Cancelled
+                },
+                
+                // Assigned → PickedUp (Kurye teslim aldı), OutForDelivery veya Cancelled
+                [OrderStatus.Assigned] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.PickedUp,
+                    OrderStatus.OutForDelivery,
+                    OrderStatus.Ready, // Kurye değişikliği için geri alınabilir
+                    OrderStatus.Cancelled
+                },
+                
+                // PickedUp → OutForDelivery (Kurye yola çıktı)
+                [OrderStatus.PickedUp] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.OutForDelivery,
+                    OrderStatus.Delivered,
+                    OrderStatus.DeliveryFailed
+                },
+                
+                // OutForDelivery → Delivered veya DeliveryFailed
+                [OrderStatus.OutForDelivery] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Delivered,
+                    OrderStatus.DeliveryFailed
+                },
+                
+                // DeliveryFailed → Assigned (yeniden kurye atama) veya Cancelled
+                [OrderStatus.DeliveryFailed] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Assigned,
+                    OrderStatus.Ready,
+                    OrderStatus.Cancelled
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════════════════
+                // ESKİ/ALTERNATİF AKIŞLAR (Geriye uyumluluk için - KISITLANMIŞ)
+                // ═══════════════════════════════════════════════════════════════════════════════
+                
+                // Pending → Confirmed (Admin onayı gerekli) veya Cancelled
+                // ✅ DÜZELTME: Admin panelinde Preparing'e geçiş eklendi
+                [OrderStatus.Pending] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Paid,
+                    OrderStatus.Confirmed,
+                    OrderStatus.Preparing, // Admin panelinden doğrudan hazırlamaya geçiş için
+                    OrderStatus.Cancelled
+                },
+                
+                // Paid → Confirmed (Admin onayı gerekli) veya Cancelled
+                // ✅ DÜZELTME: Admin panelinde Preparing'e geçiş eklendi
+                [OrderStatus.Paid] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Preparing,  // Admin panelinden doğrudan hazırlamaya geçiş için
+                    OrderStatus.Confirmed,
+                    OrderStatus.Cancelled
+                },
+                
+                // Shipped → OutForDelivery veya Delivered (eski kargo akışı için)
                 [OrderStatus.Shipped] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Delivered,
                     OrderStatus.OutForDelivery
                 },
-                // OutForDelivery → Delivered
-                [OrderStatus.OutForDelivery] = new HashSet<OrderStatus>
-                {
-                    OrderStatus.Delivered
-                },
-                // Terminal durumlar
+                
+                // ═══════════════════════════════════════════════════════════════════════════════
+                // TERMİNAL DURUMLAR
+                // ═══════════════════════════════════════════════════════════════════════════════
+                
                 [OrderStatus.Delivered] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Refunded
@@ -82,10 +152,12 @@ namespace ECommerce.Business.Services.Managers
                 },
                 [OrderStatus.Refunded] = new HashSet<OrderStatus>(),
                 [OrderStatus.PaymentFailed] = new HashSet<OrderStatus>(),
-                // Eski/alternatif akışlar için makul geçişler
+                
+                // Eski Processing durumu
                 [OrderStatus.Processing] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Shipped,
+                    OrderStatus.Preparing,
                     OrderStatus.Cancelled
                 }
             };
@@ -572,7 +644,11 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders.FindAsync(id);
             if (order == null) return;
 
-            if (Enum.TryParse<OrderStatus>(status, out var statusEnum))
+            // Normalize status: snake_case → PascalCase (out_for_delivery → OutForDelivery)
+            var normalizedStatus = NormalizeStatusString(status);
+
+            // Case-insensitive parse: "preparing" → OrderStatus.Preparing
+            if (Enum.TryParse<OrderStatus>(normalizedStatus, ignoreCase: true, out var statusEnum))
             {
                 var previous = order.Status;
                 // Aynı duruma geçiş yapmaya çalışıyorsa, hiçbir şey yapma
@@ -804,21 +880,17 @@ namespace ECommerce.Business.Services.Managers
             // Önceki durumu kaydet (audit için)
             var previousStatus = order.Status;
 
+            // Dokümana göre kurye ataması sadece Ready durumundaki siparişlere yapılabilir
+            // Akış: Ready → Assigned
+            if (order.Status != OrderStatus.Ready)
+            {
+                throw new InvalidOperationException($"Kurye ataması sadece 'Ready' durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
+            }
+
             // Kurye ataması yap
             order.CourierId = courierId;
             order.AssignedAt = DateTime.UtcNow;
-
-            // Durumu "Preparing" veya "OutForDelivery" olarak güncelle
-            // Eğer sipariş pending/paid ise -> Preparing
-            // Eğer sipariş preparing ise -> OutForDelivery
-            if (order.Status == OrderStatus.Pending || order.Status == OrderStatus.Paid)
-            {
-                order.Status = OrderStatus.Preparing;
-            }
-            else if (order.Status == OrderStatus.Preparing)
-            {
-                order.Status = OrderStatus.OutForDelivery;
-            }
+            order.Status = OrderStatus.Assigned;
 
             // Durum değişikliği geçmişini kaydet
             // Kurye adını User entity'sinden al
@@ -832,6 +904,820 @@ namespace ECommerce.Business.Services.Managers
 
             // DTO'ya dönüştür
             return MapToDto(order);
+        }
+
+        // ============================================================
+        // STORE ATTENDANT (MARKET GÖREVLİSİ) METODLARI
+        // ============================================================
+
+        /// <inheritdoc />
+        public async Task<OrderListDto?> MarkOrderAsConfirmedAsync(int orderId, string confirmedBy)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            // Sadece New durumundan Confirmed'a geçiş yapılabilir
+            if (order.Status != OrderStatus.New && order.Status != OrderStatus.Pending && order.Status != OrderStatus.Paid)
+            {
+                throw new InvalidOperationException($"Sipariş onaylanamaz. Mevcut durum: {order.Status}");
+            }
+
+            var previousStatus = order.Status;
+            order.Status = OrderStatus.Confirmed;
+            order.ConfirmedAt = DateTime.UtcNow;
+            
+            AddStatusHistory(order, previousStatus, OrderStatus.Confirmed, $"Admin tarafından onaylandı: {confirmedBy}");
+            
+            await _context.SaveChangesAsync();
+
+            return MapToDto(order);
+        }
+
+        /// <inheritdoc />
+        public async Task<OrderListDto?> StartPreparingAsync(int orderId, string preparedBy)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            // Sadece Confirmed durumundan Preparing'e geçiş yapılabilir
+            // Dokümantasyona göre: Confirmed → Preparing (Paid veya Pending değil!)
+            if (order.Status != OrderStatus.Confirmed)
+            {
+                throw new InvalidOperationException($"Sipariş hazırlanamaz. Sadece 'Confirmed' durumundaki siparişler hazırlanabilir. Mevcut durum: {order.Status}");
+            }
+
+            var previousStatus = order.Status;
+            order.Status = OrderStatus.Preparing;
+            order.PreparingStartedAt = DateTime.UtcNow;
+            order.PreparedBy = preparedBy;
+            
+            AddStatusHistory(order, previousStatus, OrderStatus.Preparing, $"Hazırlanmaya başlandı: {preparedBy}");
+            
+            await _context.SaveChangesAsync();
+
+            return MapToDto(order);
+        }
+
+        /// <inheritdoc />
+        public async Task<OrderListDto?> MarkOrderAsReadyAsync(int orderId, string readyBy, int? weightInGrams = null)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            // Sadece Preparing durumundan Ready'ye geçiş yapılabilir
+            if (order.Status != OrderStatus.Preparing)
+            {
+                throw new InvalidOperationException($"Sipariş hazır olarak işaretlenemez. Mevcut durum: {order.Status}");
+            }
+
+            var previousStatus = order.Status;
+            order.Status = OrderStatus.Ready;
+            order.ReadyAt = DateTime.UtcNow;
+            
+            // Ağırlık bilgisi varsa kaydet
+            if (weightInGrams.HasValue)
+            {
+                order.WeightInGrams = weightInGrams.Value;
+            }
+            
+            var note = $"Hazır: {readyBy}";
+            if (weightInGrams.HasValue)
+            {
+                note += $" (Ağırlık: {weightInGrams.Value}g)";
+            }
+            
+            AddStatusHistory(order, previousStatus, OrderStatus.Ready, note);
+            
+            await _context.SaveChangesAsync();
+
+            return MapToDto(order);
+        }
+
+        /// <inheritdoc />
+        public async Task<StoreAttendantOrderListResponseDto> GetOrdersForStoreAttendantAsync(StoreAttendantOrderFilterDto? filter)
+        {
+            filter ??= new StoreAttendantOrderFilterDto();
+            
+            // Sayfa boyutu sınırlaması
+            if (filter.PageSize > 100) filter.PageSize = 100;
+            if (filter.PageSize < 1) filter.PageSize = 20;
+            if (filter.Page < 1) filter.Page = 1;
+
+            // Market görevlisi için gösterilecek durumlar
+            var allowedStatuses = new List<OrderStatus> 
+            { 
+                OrderStatus.Confirmed, 
+                OrderStatus.Preparing, 
+                OrderStatus.Ready,
+                OrderStatus.New, // Admin panelinden yeni siparişler de görünsün
+                OrderStatus.Paid
+            };
+
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Where(o => allowedStatuses.Contains(o.Status))
+                .AsQueryable();
+
+            // Durum filtresi
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                if (Enum.TryParse<OrderStatus>(filter.Status, true, out var statusFilter))
+                {
+                    query = query.Where(o => o.Status == statusFilter);
+                }
+                else if (filter.Status.ToLower() == "pending")
+                {
+                    // "pending" = Confirmed + Paid + New
+                    query = query.Where(o => o.Status == OrderStatus.Confirmed || 
+                                             o.Status == OrderStatus.Paid || 
+                                             o.Status == OrderStatus.New);
+                }
+            }
+
+            // Toplam sayı
+            var totalCount = await query.CountAsync();
+
+            // Sıralama
+            query = filter.SortOrder?.ToLower() == "asc" 
+                ? query.OrderBy(o => o.OrderDate) 
+                : query.OrderByDescending(o => o.OrderDate);
+
+            // Sayfalama
+            var orders = await query
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            // DTO'lara dönüştür
+            var orderDtos = orders.Select(o => MapToStoreAttendantDto(o)).ToList();
+
+            // Özet istatistikleri hesapla
+            var summary = await GetStoreAttendantSummaryAsync();
+
+            return new StoreAttendantOrderListResponseDto
+            {
+                Orders = orderDtos,
+                Summary = summary,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize),
+                CurrentPage = filter.Page
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<StoreAttendantSummaryDto> GetStoreAttendantSummaryAsync()
+        {
+            var today = DateTime.UtcNow.Date;
+
+            // İstatistikleri hesapla
+            var pendingCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Confirmed || 
+                                 o.Status == OrderStatus.New || 
+                                 o.Status == OrderStatus.Paid);
+
+            var preparingCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Preparing);
+
+            var readyCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Ready);
+
+            // Bugün tamamlanan (Ready, Assigned, OutForDelivery, Delivered olan)
+            var completedTodayCount = await _context.Orders
+                .CountAsync(o => o.ReadyAt.HasValue && 
+                                 o.ReadyAt.Value.Date == today);
+
+            var todayTotalAmount = await _context.Orders
+                .Where(o => o.ReadyAt.HasValue && o.ReadyAt.Value.Date == today)
+                .SumAsync(o => o.FinalPrice);
+
+            // Ortalama hazırlık süresi (son 50 sipariş)
+            var avgPrepTime = await _context.Orders
+                .Where(o => o.PreparingStartedAt.HasValue && o.ReadyAt.HasValue)
+                .OrderByDescending(o => o.ReadyAt)
+                .Take(50)
+                .Select(o => EF.Functions.DateDiffMinute(o.PreparingStartedAt, o.ReadyAt))
+                .AverageAsync() ?? 0;
+
+            return new StoreAttendantSummaryDto
+            {
+                PendingCount = pendingCount,
+                PreparingCount = preparingCount,
+                ReadyCount = readyCount,
+                CompletedTodayCount = completedTodayCount,
+                TodayTotalAmount = todayTotalAmount,
+                AveragePreparationTimeMinutes = avgPrepTime,
+                LastUpdated = DateTime.UtcNow
+            };
+        }
+
+        // ============================================================
+        // DISPATCHER (SEVKİYAT GÖREVLİSİ) METODLARI
+        // ============================================================
+
+        /// <inheritdoc />
+        public async Task<DispatcherOrderListResponseDto> GetOrdersForDispatcherAsync(DispatcherOrderFilterDto? filter)
+        {
+            filter ??= new DispatcherOrderFilterDto();
+            
+            // Sayfa boyutu sınırlaması
+            if (filter.PageSize > 100) filter.PageSize = 100;
+            if (filter.PageSize < 1) filter.PageSize = 20;
+            if (filter.Page < 1) filter.Page = 1;
+
+            // Sevkiyat görevlisi için gösterilecek durumlar
+            var allowedStatuses = new List<OrderStatus> 
+            { 
+                OrderStatus.Ready, 
+                OrderStatus.Assigned, 
+                OrderStatus.PickedUp,
+                OrderStatus.OutForDelivery,
+                OrderStatus.DeliveryFailed
+            };
+
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
+                .Where(o => allowedStatuses.Contains(o.Status))
+                .AsQueryable();
+
+            // Durum filtresi
+            if (!string.IsNullOrWhiteSpace(filter.Status))
+            {
+                if (Enum.TryParse<OrderStatus>(filter.Status, true, out var statusFilter))
+                {
+                    query = query.Where(o => o.Status == statusFilter);
+                }
+                else if (filter.Status.ToLower() == "out_for_delivery")
+                {
+                    query = query.Where(o => o.Status == OrderStatus.OutForDelivery || 
+                                             o.Status == OrderStatus.PickedUp);
+                }
+            }
+
+            // Kurye filtresi
+            if (filter.CourierId.HasValue)
+            {
+                query = query.Where(o => o.CourierId == filter.CourierId.Value);
+            }
+
+            // Acil siparişler (30+ dk bekleyen)
+            if (filter.UrgentOnly == true)
+            {
+                var urgentThreshold = DateTime.UtcNow.AddMinutes(-30);
+                query = query.Where(o => o.Status == OrderStatus.Ready && 
+                                         o.ReadyAt.HasValue && 
+                                         o.ReadyAt.Value < urgentThreshold);
+            }
+
+            // Toplam sayı
+            var totalCount = await query.CountAsync();
+
+            // Sıralama (varsayılan: en eski hazır olan önce)
+            if (filter.SortBy?.ToLower() == "totalamount")
+            {
+                query = filter.SortOrder?.ToLower() == "desc" 
+                    ? query.OrderByDescending(o => o.FinalPrice) 
+                    : query.OrderBy(o => o.FinalPrice);
+            }
+            else
+            {
+                query = filter.SortOrder?.ToLower() == "desc" 
+                    ? query.OrderByDescending(o => o.ReadyAt ?? o.OrderDate) 
+                    : query.OrderBy(o => o.ReadyAt ?? o.OrderDate);
+            }
+
+            // Sayfalama
+            var orders = await query
+                .Skip((filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .ToListAsync();
+
+            // DTO'lara dönüştür
+            var orderDtos = orders.Select(o => MapToDispatcherDto(o)).ToList();
+
+            // Özet istatistikleri hesapla
+            var summary = await GetDispatcherSummaryAsync();
+
+            return new DispatcherOrderListResponseDto
+            {
+                Orders = orderDtos,
+                Summary = summary,
+                TotalCount = totalCount,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize),
+                CurrentPage = filter.Page
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<DispatcherSummaryDto> GetDispatcherSummaryAsync()
+        {
+            var today = DateTime.UtcNow.Date;
+            var urgentThreshold = DateTime.UtcNow.AddMinutes(-30);
+
+            var readyCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Ready);
+
+            var assignedCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Assigned);
+
+            var outForDeliveryCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.OutForDelivery || 
+                                 o.Status == OrderStatus.PickedUp);
+
+            var deliveredTodayCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Delivered && 
+                                 o.DeliveredAt.HasValue && 
+                                 o.DeliveredAt.Value.Date == today);
+
+            var failedTodayCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.DeliveryFailed && 
+                                 o.OrderDate.Date == today);
+
+            var urgentCount = await _context.Orders
+                .CountAsync(o => o.Status == OrderStatus.Ready && 
+                                 o.ReadyAt.HasValue && 
+                                 o.ReadyAt.Value < urgentThreshold);
+
+            // Online kuryeler
+            var onlineCouriersCount = await _context.Couriers
+                .CountAsync(c => c.IsActive && c.IsOnline);
+
+            // Müsait kuryeler (online ve 5'ten az aktif sipariş)
+            var availableCouriersCount = await _context.Couriers
+                .Where(c => c.IsActive && c.IsOnline)
+                .CountAsync(c => !_context.Orders
+                    .Any(o => o.CourierId == c.Id && 
+                             (o.Status == OrderStatus.Assigned || 
+                              o.Status == OrderStatus.PickedUp || 
+                              o.Status == OrderStatus.OutForDelivery)));
+
+            // Ortalama bekleme süresi
+            var avgWaitingTime = await _context.Orders
+                .Where(o => o.Status == OrderStatus.Ready && o.ReadyAt.HasValue)
+                .Select(o => EF.Functions.DateDiffMinute(o.ReadyAt, DateTime.UtcNow))
+                .AverageAsync() ?? 0;
+
+            // Bugünkü toplam teslimat tutarı
+            var todayTotalDelivered = await _context.Orders
+                .Where(o => o.Status == OrderStatus.Delivered && 
+                           o.DeliveredAt.HasValue && 
+                           o.DeliveredAt.Value.Date == today)
+                .SumAsync(o => o.FinalPrice);
+
+            return new DispatcherSummaryDto
+            {
+                ReadyCount = readyCount,
+                AssignedCount = assignedCount,
+                OutForDeliveryCount = outForDeliveryCount,
+                DeliveredTodayCount = deliveredTodayCount,
+                FailedTodayCount = failedTodayCount,
+                UrgentCount = urgentCount,
+                OnlineCouriersCount = onlineCouriersCount,
+                AvailableCouriersCount = availableCouriersCount,
+                AverageWaitingTimeMinutes = avgWaitingTime,
+                TodayTotalDeliveredAmount = todayTotalDelivered,
+                LastUpdated = DateTime.UtcNow
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<AssignCourierResponseDto> AssignCourierToOrderAsync(int orderId, int courierId, string assignedBy, string? notes = null)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Sipariş bulunamadı."
+                };
+            }
+
+            // Sadece Ready durumundan Assigned'a geçiş yapılabilir
+            if (order.Status != OrderStatus.Ready && order.Status != OrderStatus.DeliveryFailed)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = $"Sipariş şu an kurye ataması için uygun değil. Mevcut durum: {order.Status}"
+                };
+            }
+
+            // Kuryeyi bul
+            var courier = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == courierId);
+
+            if (courier == null)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Kurye bulunamadı."
+                };
+            }
+
+            if (!courier.IsActive)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Seçilen kurye aktif değil."
+                };
+            }
+
+            var previousStatus = order.Status;
+            order.Status = OrderStatus.Assigned;
+            order.CourierId = courierId;
+            order.AssignedAt = DateTime.UtcNow;
+            
+            var historyNote = $"Kurye atandı: {courier.User?.FullName ?? $"#{courierId}"} - Atayan: {assignedBy}";
+            if (!string.IsNullOrWhiteSpace(notes))
+            {
+                historyNote += $" - Not: {notes}";
+            }
+            
+            AddStatusHistory(order, previousStatus, OrderStatus.Assigned, historyNote);
+            
+            await _context.SaveChangesAsync();
+
+            return new AssignCourierResponseDto
+            {
+                Success = true,
+                Message = "Kurye başarıyla atandı.",
+                Order = MapToDispatcherDto(order),
+                Courier = MapToCourierDto(courier)
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<AssignCourierResponseDto> ReassignCourierAsync(int orderId, int newCourierId, string reassignedBy, string reason)
+        {
+            // Siparişi bul
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Sipariş bulunamadı."
+                };
+            }
+
+            // Kurye değişikliği yapılabilecek durumlar
+            var allowedStatuses = new[] { OrderStatus.Assigned, OrderStatus.DeliveryFailed };
+            if (!allowedStatuses.Contains(order.Status))
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = $"Bu sipariş için kurye değiştirilemez. Mevcut durum: {order.Status}"
+                };
+            }
+
+            // Yeni kuryeyi bul
+            var newCourier = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == newCourierId);
+
+            if (newCourier == null)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Yeni kurye bulunamadı."
+                };
+            }
+
+            if (!newCourier.IsActive)
+            {
+                return new AssignCourierResponseDto
+                {
+                    Success = false,
+                    Message = "Seçilen kurye aktif değil."
+                };
+            }
+
+            var oldCourierId = order.CourierId;
+            var oldCourierName = order.Courier?.User?.FullName ?? $"#{oldCourierId}";
+            
+            var previousStatus = order.Status;
+            order.CourierId = newCourierId;
+            order.AssignedAt = DateTime.UtcNow;
+            order.Status = OrderStatus.Assigned; // Yeniden Assigned durumuna al
+            
+            var historyNote = $"Kurye değiştirildi: {oldCourierName} → {newCourier.User?.FullName ?? $"#{newCourierId}"} - " +
+                             $"Neden: {reason} - Değiştiren: {reassignedBy}";
+            
+            AddStatusHistory(order, previousStatus, OrderStatus.Assigned, historyNote);
+            
+            await _context.SaveChangesAsync();
+
+            return new AssignCourierResponseDto
+            {
+                Success = true,
+                Message = "Kurye başarıyla değiştirildi.",
+                Order = MapToDispatcherDto(order),
+                Courier = MapToCourierDto(newCourier)
+            };
+        }
+
+        /// <inheritdoc />
+        public async Task<DispatcherCourierListResponseDto> GetAvailableCouriersAsync()
+        {
+            var couriers = await _context.Couriers
+                .Include(c => c.User)
+                .Where(c => c.IsActive)
+                .ToListAsync();
+
+            // Her kurye için aktif sipariş sayısını hesapla
+            var courierDtos = new List<DispatcherCourierDto>();
+            foreach (var courier in couriers)
+            {
+                var activeOrderCount = await _context.Orders
+                    .CountAsync(o => o.CourierId == courier.Id && 
+                                    (o.Status == OrderStatus.Assigned || 
+                                     o.Status == OrderStatus.PickedUp || 
+                                     o.Status == OrderStatus.OutForDelivery));
+
+                var deliveredTodayCount = await _context.Orders
+                    .CountAsync(o => o.CourierId == courier.Id && 
+                                    o.Status == OrderStatus.Delivered && 
+                                    o.DeliveredAt.HasValue && 
+                                    o.DeliveredAt.Value.Date == DateTime.UtcNow.Date);
+
+                courierDtos.Add(new DispatcherCourierDto
+                {
+                    Id = courier.Id,
+                    Name = courier.User?.FullName ?? $"Kurye #{courier.Id}",
+                    Phone = courier.User?.PhoneNumber ?? string.Empty,
+                    Status = courier.IsOnline ? (activeOrderCount >= 5 ? "busy" : "online") : "offline",
+                    StatusText = courier.IsOnline ? (activeOrderCount >= 5 ? "Meşgul" : "Müsait") : "Çevrimdışı",
+                    StatusColor = courier.IsOnline ? (activeOrderCount >= 5 ? "yellow" : "green") : "red",
+                    ActiveOrderCount = activeOrderCount,
+                    DeliveredTodayCount = deliveredTodayCount,
+                    VehicleType = courier.VehicleType ?? "motorcycle",
+                    VehicleTypeText = GetVehicleTypeText(courier.VehicleType),
+                    IsAvailable = courier.IsOnline && activeOrderCount < 5,
+                    LastSeenAt = courier.LastSeenAt
+                });
+            }
+
+            return new DispatcherCourierListResponseDto
+            {
+                Couriers = courierDtos.OrderByDescending(c => c.IsAvailable)
+                                      .ThenBy(c => c.ActiveOrderCount)
+                                      .ToList(),
+                OnlineCount = courierDtos.Count(c => c.Status != "offline"),
+                AvailableCount = courierDtos.Count(c => c.IsAvailable),
+                BusyCount = courierDtos.Count(c => c.Status == "busy"),
+                OfflineCount = courierDtos.Count(c => c.Status == "offline")
+            };
+        }
+
+        // ============================================================
+        // YARDIMCI MAPPER METODLARI
+        // ============================================================
+
+        /// <summary>
+        /// Order entity'sini StoreAttendantOrderDto'ya dönüştürür.
+        /// </summary>
+        private StoreAttendantOrderDto MapToStoreAttendantDto(Order order)
+        {
+            var now = DateTime.UtcNow;
+            var timeAgo = CalculateTimeAgo(order.OrderDate, now);
+
+            return new StoreAttendantOrderDto
+            {
+                Id = order.Id,
+                OrderNumber = order.OrderNumber ?? $"#{order.Id}",
+                CustomerName = order.CustomerName ?? "Misafir",
+                CustomerPhone = order.CustomerPhone,
+                Status = order.Status.ToString(),
+                StatusText = GetStatusText(order.Status),
+                TotalAmount = order.FinalPrice,
+                ItemCount = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
+                CreatedAt = order.OrderDate,
+                ConfirmedAt = order.ConfirmedAt,
+                PreparingStartedAt = order.PreparingStartedAt,
+                ReadyAt = order.ReadyAt,
+                PaymentMethod = order.PaymentMethod ?? "card",
+                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true || 
+                                   order.PaymentMethod?.ToLower().Contains("kapida") == true,
+                OrderNotes = order.DeliveryNotes,
+                DeliveryAddress = order.ShippingAddress,
+                Items = order.OrderItems?.Take(3).Select(oi => new StoreOrderItemSummaryDto
+                {
+                    ProductId = oi.ProductId,
+                    ProductName = oi.Product?.Name ?? "Ürün",
+                    Quantity = oi.Quantity,
+                    UnitPrice = oi.UnitPrice,
+                    ImageUrl = oi.Product?.ImageUrl
+                }).ToList() ?? new List<StoreOrderItemSummaryDto>(),
+                PreparedBy = order.PreparedBy,
+                TimeAgo = timeAgo,
+                WeightInGrams = order.WeightInGrams,
+                HasWeightBasedItems = order.OrderItems?.Any(oi => oi.Product?.IsWeightBased == true) ?? false
+            };
+        }
+
+        /// <summary>
+        /// Order entity'sini DispatcherOrderDto'ya dönüştürür.
+        /// </summary>
+        private DispatcherOrderDto MapToDispatcherDto(Order order)
+        {
+            var now = DateTime.UtcNow;
+            var readyAt = order.ReadyAt ?? order.OrderDate;
+            var waitingMinutes = (int)(now - readyAt).TotalMinutes;
+            var timeAgo = CalculateTimeAgo(readyAt, now);
+
+            return new DispatcherOrderDto
+            {
+                Id = order.Id,
+                OrderNumber = order.OrderNumber ?? $"#{order.Id}",
+                CustomerName = order.CustomerName ?? "Misafir",
+                CustomerPhone = order.CustomerPhone,
+                Status = order.Status.ToString(),
+                StatusText = GetStatusText(order.Status),
+                TotalAmount = order.FinalPrice,
+                ItemCount = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
+                DeliveryAddress = order.ShippingAddress ?? string.Empty,
+                DeliveryNotes = order.DeliveryNotes,
+                PaymentMethod = order.PaymentMethod ?? "card",
+                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true || 
+                                   order.PaymentMethod?.ToLower().Contains("kapida") == true,
+                ReadyAt = order.ReadyAt,
+                AssignedAt = order.AssignedAt,
+                PickedUpAt = order.PickedUpAt,
+                CourierId = order.CourierId,
+                CourierName = order.Courier?.User?.FullName,
+                CourierPhone = order.Courier?.User?.PhoneNumber,
+                TimeAgo = timeAgo,
+                WaitingMinutes = waitingMinutes,
+                IsUrgent = waitingMinutes > 30 && order.Status == OrderStatus.Ready,
+                WeightInGrams = order.WeightInGrams
+            };
+        }
+
+        /// <summary>
+        /// Courier entity'sini DispatcherCourierDto'ya dönüştürür.
+        /// </summary>
+        private DispatcherCourierDto MapToCourierDto(Courier courier)
+        {
+            return new DispatcherCourierDto
+            {
+                Id = courier.Id,
+                Name = courier.User?.FullName ?? $"Kurye #{courier.Id}",
+                Phone = courier.User?.PhoneNumber ?? string.Empty,
+                Status = courier.IsOnline ? "online" : "offline",
+                StatusText = courier.IsOnline ? "Müsait" : "Çevrimdışı",
+                StatusColor = courier.IsOnline ? "green" : "red",
+                VehicleType = courier.VehicleType ?? "motorcycle",
+                VehicleTypeText = GetVehicleTypeText(courier.VehicleType),
+                IsAvailable = courier.IsActive && courier.IsOnline,
+                LastSeenAt = courier.LastSeenAt
+            };
+        }
+
+        /// <summary>
+        /// Sipariş durumu için Türkçe metin döner.
+        /// </summary>
+        private static string GetStatusText(OrderStatus status)
+        {
+            switch (status)
+            {
+                case OrderStatus.New:
+                    return "Yeni Sipariş";
+                case OrderStatus.Confirmed:
+                    return "Onaylandı";
+                case OrderStatus.Preparing:
+                    return "Hazırlanıyor";
+                case OrderStatus.Ready:
+                    return "Hazır";
+                case OrderStatus.Assigned:
+                    return "Kurye Atandı";
+                case OrderStatus.PickedUp:
+                    return "Teslim Alındı";
+                case OrderStatus.OutForDelivery:
+                    return "Yolda";
+                case OrderStatus.Delivered:
+                    return "Teslim Edildi";
+                case OrderStatus.Cancelled:
+                    return "İptal Edildi";
+                case OrderStatus.DeliveryFailed:
+                    return "Teslimat Başarısız";
+                case OrderStatus.Pending:
+                    return "Beklemede";
+                case OrderStatus.Paid:
+                    return "Ödendi";
+                default:
+                    return status.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Araç tipi için Türkçe metin döner.
+        /// </summary>
+        private static string GetVehicleTypeText(string? vehicleType)
+        {
+            return vehicleType?.ToLower() switch
+            {
+                "motorcycle" => "Motorsiklet",
+                "car" => "Araba",
+                "bicycle" => "Bisiklet",
+                "on_foot" => "Yaya",
+                _ => "Motorsiklet"
+            };
+        }
+
+        /// <summary>
+        /// Zaman farkını "X dk önce" formatında hesaplar.
+        /// </summary>
+        private static string CalculateTimeAgo(DateTime past, DateTime now)
+        {
+            var diff = now - past;
+            
+            if (diff.TotalMinutes < 1)
+                return "Az önce";
+            if (diff.TotalMinutes < 60)
+                return $"{(int)diff.TotalMinutes} dk önce";
+            if (diff.TotalHours < 24)
+                return $"{(int)diff.TotalHours} saat önce";
+            
+            return $"{(int)diff.TotalDays} gün önce";
+        }
+
+        /// <summary>
+        /// Status string'ini normalize eder: snake_case → PascalCase dönüşümü yapar.
+        /// Frontend'den gelen "out_for_delivery" → "OutForDelivery" olur.
+        /// </summary>
+        private static string NormalizeStatusString(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return status;
+
+            // Özel mapping: snake_case frontend değerleri → PascalCase enum değerleri
+            var statusMappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "out_for_delivery", "OutForDelivery" },
+                { "outfordelivery", "OutForDelivery" },
+                { "picked_up", "PickedUp" },
+                { "pickedup", "PickedUp" },
+                { "in_transit", "InTransit" },
+                { "intransit", "InTransit" },
+                { "delivery_failed", "DeliveryFailed" },
+                { "deliveryfailed", "DeliveryFailed" },
+                { "delivery_payment_pending", "DeliveryPaymentPending" },
+                { "deliverypaymentpending", "DeliveryPaymentPending" },
+                { "payment_failed", "PaymentFailed" },
+                { "paymentfailed", "PaymentFailed" },
+                { "chargeback_pending", "ChargebackPending" },
+                { "chargebackpending", "ChargebackPending" },
+                { "ready_for_pickup", "ReadyForPickup" },
+                { "readyforpickup", "ReadyForPickup" },
+                { "partial_refund", "PartialRefund" },
+                { "partialrefund", "PartialRefund" }
+            };
+
+            // Mapping varsa dönüştür, yoksa olduğu gibi döndür
+            return statusMappings.TryGetValue(status, out var mapped) ? mapped : status;
         }
     }
 }

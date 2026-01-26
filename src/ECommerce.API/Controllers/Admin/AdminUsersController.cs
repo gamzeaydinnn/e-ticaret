@@ -487,7 +487,8 @@ namespace ECommerce.API.Controllers.Admin
 
         /// <summary>
         /// Sistemde tanımlı geçerli roller listesi.
-        /// 5 temel rol + geriye dönük uyumluluk için Admin ve Customer
+        /// Tüm admin paneli rolleri + müşteri rolleri
+        /// NOT: Courier rolü burada yok çünkü kurye ekleme Kurye Paneli'nden yapılır
         /// </summary>
         private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -496,6 +497,8 @@ namespace ECommerce.API.Controllers.Admin
             Roles.StoreManager,
             Roles.CustomerSupport,
             Roles.Logistics,
+            Roles.StoreAttendant,  // Market Görevlisi
+            Roles.Dispatcher,      // Sevkiyat Görevlisi
             Roles.User,
             Roles.Customer          // User ile aynı, semantik
         };

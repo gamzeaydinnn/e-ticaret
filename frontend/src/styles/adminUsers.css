@@ -5,11 +5,37 @@
    ============================================================================ */
 
 /* ============================================================================
+   SAYFA CONTAINER - Mobilde taşma önleme
+   ============================================================================ */
+.admin-users-page {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  width: 100% !important;
+}
+
+.admin-users-page .card {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+.admin-users-page .card-body {
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  padding: 1rem;
+}
+
+.admin-users-page .table-responsive {
+  max-width: 100% !important;
+  overflow-x: auto;
+}
+
+/* ============================================================================
    Tablo Genel Stilleri
    ============================================================================ */
 .admin-users-table {
   table-layout: fixed;
   width: 100%;
+  max-width: 100%;
 }
 
 .admin-users-table th,
@@ -86,27 +112,64 @@
    Mobil Responsive Stiller (768px altı)
    ============================================================================ */
 @media (max-width: 768px) {
+  /* Container taşma önleme */
+  .admin-users-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .admin-users-page .card {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    width: 100% !important;
+  }
+
+  .admin-users-page .card-body {
+    padding: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  /* table-responsive override */
+  .admin-users-page .table-responsive {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow-x: visible !important;
+    width: 100% !important;
+  }
+
   /* Tablo kart görünümüne geçiş */
   .admin-users-table {
-    display: block;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    table-layout: auto !important;
   }
 
   .admin-users-table thead {
-    display: none;
+    display: none !important;
   }
 
   .admin-users-table tbody {
-    display: block;
+    display: block !important;
+    width: 100% !important;
   }
 
   .admin-users-table tr {
     display: block;
-    margin-bottom: 1rem;
+    margin: 0 0 0.75rem 0;
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    padding: 0.5rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    padding: 0;
     border: 1px solid #e2e8f0;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden;
   }
 
   .admin-users-table tr.table-primary {
@@ -118,11 +181,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 1rem !important;
+    padding: 0.5rem 0.75rem !important;
     border-bottom: 1px solid #f1f5f9;
     text-align: right;
     white-space: normal;
     overflow: visible;
+    width: 100% !important;
+    box-sizing: border-box;
   }
 
   .admin-users-table td:last-child {
@@ -133,10 +198,11 @@
     content: attr(data-label);
     font-weight: 600;
     color: #64748b;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     text-align: left;
     flex: 1;
-    margin-right: 1rem;
+    margin-right: 0.5rem;
+    min-width: 80px;
   }
 
   .admin-users-table td > * {
@@ -144,10 +210,21 @@
     text-align: right;
   }
 
+  /* ID sütununu gizle - mobilde gereksiz */
+  .admin-users-table td[data-label="ID"] {
+    display: none;
+  }
+
+  /* Kayıt tarihi ve son giriş mobilde gizle */
+  .admin-users-table td[data-label="Kayıt Tarihi"],
+  .admin-users-table td[data-label="Son Giriş"] {
+    display: none;
+  }
+
   /* Checkbox hücresi için özel stil */
   .admin-users-table td:first-child {
     justify-content: flex-start;
-    padding: 0.5rem 1rem !important;
+    padding: 0.4rem 0.8rem !important;
     border-bottom: 2px solid #e2e8f0;
   }
 
@@ -213,17 +290,55 @@
    Küçük Mobil Cihazlar (576px altı)
    ============================================================================ */
 @media (max-width: 576px) {
+  .admin-users-page {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  .admin-users-page .container-fluid,
+  .admin-users-page .container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: 100% !important;
+  }
+
   .admin-users-header h2 {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
   }
 
   .admin-users-actions .btn {
     width: 100%;
+    font-size: 0.8rem;
   }
 
   /* Filtre bileşeni mobil */
   .admin-users-page .card-body .row > div {
     margin-bottom: 0.5rem;
+  }
+
+  /* Card header */
+  .admin-users-page .card-header {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.85rem;
+  }
+
+  /* Tablo kartları */
+  .admin-users-table tr {
+    margin: 0 0 0.5rem 0 !important;
+    border-radius: 6px !important;
+  }
+
+  .admin-users-table td {
+    padding: 0.4rem 0.5rem !important;
+    font-size: 0.8rem;
+  }
+
+  .admin-users-table td::before {
+    font-size: 0.7rem !important;
+    min-width: 70px !important;
   }
 
   /* Sayfalama mobil */
@@ -234,6 +349,11 @@
 
   .pagination .page-item {
     margin: 0.125rem;
+  }
+
+  .pagination .page-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
   }
 }
 

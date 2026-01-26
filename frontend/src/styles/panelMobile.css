@@ -1,0 +1,655 @@
+/* ==============================================================================
+   panelMobile.css - Tüm Panel Sayfaları için Ortak Mobil Stiller
+   ==============================================================================
+   Store Attendant, Dispatcher ve Courier panelleri için ortak responsive stiller.
+   Breakpoints: 576px (xs), 768px (sm), 992px (md)
+   Touch-friendly: minimum 44x44px buton boyutları
+   ============================================================================== */
+
+/* ==============================================================================
+   CSS DEĞİŞKENLERİ - Panel Tema Renkleri
+   ============================================================================== */
+:root {
+  /* Store Attendant - Yeşil Tema */
+  --store-primary: #2e7d32;
+  --store-secondary: #43a047;
+  --store-light: #66bb6a;
+
+  /* Dispatcher - Mor Tema */
+  --dispatch-primary: #667eea;
+  --dispatch-secondary: #764ba2;
+  --dispatch-dark: #1a1a2e;
+
+  /* Courier - Turuncu Tema */
+  --courier-primary: #ff6b35;
+  --courier-secondary: #ff8c00;
+  --courier-light: #ffa726;
+
+  /* Ortak Değerler */
+  --panel-radius: 16px;
+  --panel-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --touch-min-size: 44px;
+  --bottom-nav-height: 65px;
+}
+
+/* ==============================================================================
+   PANEL HEADER - Sticky Navigation
+   ============================================================================== */
+.panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 1040;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+@media (max-width: 768px) {
+  .panel-header {
+    padding: 8px 12px !important;
+  }
+
+  .panel-header .navbar-brand {
+    font-size: 0.95rem !important;
+  }
+
+  .panel-header .btn {
+    padding: 6px 10px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* ==============================================================================
+   STAT KARTLARI - 2x2 Grid Mobilde
+   ============================================================================== */
+.panel-stat-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 768px) {
+  .panel-stat-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+}
+
+.panel-stat-card {
+  border-radius: var(--panel-radius) !important;
+  border: none !important;
+  box-shadow: var(--panel-shadow);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
+}
+
+.panel-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .panel-stat-card .card-body {
+    padding: 12px 8px !important;
+  }
+
+  .panel-stat-card h3,
+  .panel-stat-card .stat-value {
+    font-size: 1.5rem !important;
+  }
+
+  .panel-stat-card small,
+  .panel-stat-card .stat-label {
+    font-size: 0.65rem !important;
+  }
+
+  .panel-stat-card i {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* ==============================================================================
+   SİPARİŞ KARTLARI - Responsive Grid
+   ============================================================================== */
+.panel-order-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 576px) {
+  .panel-order-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 992px) {
+  .panel-order-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1200px) {
+  .panel-order-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.panel-order-card {
+  border-radius: var(--panel-radius) !important;
+  border: none !important;
+  box-shadow: var(--panel-shadow);
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.panel-order-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+}
+
+/* Durum çizgisi - sol kenar */
+.panel-order-card.status-confirmed {
+  border-left: 4px solid #0d6efd !important;
+}
+.panel-order-card.status-preparing {
+  border-left: 4px solid #fd7e14 !important;
+}
+.panel-order-card.status-ready {
+  border-left: 4px solid #198754 !important;
+}
+.panel-order-card.status-assigned {
+  border-left: 4px solid #ffc107 !important;
+}
+.panel-order-card.status-picked_up,
+.panel-order-card.status-pickedup {
+  border-left: 4px solid #17a2b8 !important;
+}
+.panel-order-card.status-out_for_delivery,
+.panel-order-card.status-outfordelivery {
+  border-left: 4px solid #0d6efd !important;
+}
+.panel-order-card.status-delivered {
+  border-left: 4px solid #198754 !important;
+}
+.panel-order-card.status-failed,
+.panel-order-card.status-delivery_failed {
+  border-left: 4px solid #dc3545 !important;
+}
+
+/* ==============================================================================
+   TOUCH-FRIENDLY BUTONLAR
+   ============================================================================== */
+.panel-action-btn {
+  min-height: var(--touch-min-size);
+  min-width: var(--touch-min-size);
+  padding: 12px 20px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.panel-action-btn:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 768px) {
+  .panel-action-btn {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Büyük Aksiyon Butonu - Mobil için */
+.panel-action-btn-lg {
+  min-height: 56px;
+  padding: 16px 24px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 14px;
+}
+
+/* ==============================================================================
+   BOTTOM NAVIGATION - Mobil Alt Menü
+   ============================================================================== */
+.panel-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--bottom-nav-height);
+  background: #ffffff;
+  box-shadow: 0 -2px 15px rgba(0, 0, 0, 0.1);
+  z-index: 1050;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@media (min-width: 769px) {
+  .panel-bottom-nav {
+    display: none !important;
+  }
+}
+
+.panel-bottom-nav-container {
+  display: flex;
+  height: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.panel-bottom-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
+  color: #6c757d;
+  text-decoration: none;
+  font-size: 0.65rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.panel-bottom-nav-item i {
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+  transition: transform 0.2s ease;
+}
+
+.panel-bottom-nav-item.active {
+  color: var(--store-primary);
+}
+
+.panel-bottom-nav-item.active i {
+  transform: scale(1.1);
+}
+
+/* Store Attendant tema */
+.panel-bottom-nav.store-theme .panel-bottom-nav-item.active {
+  color: var(--store-primary);
+}
+
+/* Dispatcher tema */
+.panel-bottom-nav.dispatch-theme .panel-bottom-nav-item.active {
+  color: var(--dispatch-primary);
+}
+
+/* Courier tema */
+.panel-bottom-nav.courier-theme .panel-bottom-nav-item.active {
+  color: var(--courier-primary);
+}
+
+/* Badge - Bottom nav item üzerinde */
+.panel-bottom-nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 15%;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  color: white;
+}
+
+/* ==============================================================================
+   SAYFA İÇERİĞİ - Bottom nav için padding
+   ============================================================================== */
+.panel-content {
+  padding-bottom: calc(var(--bottom-nav-height) + 20px);
+}
+
+@media (min-width: 769px) {
+  .panel-content {
+    padding-bottom: 20px;
+  }
+}
+
+/* ==============================================================================
+   ARAMA ÇUBUĞU - Mobil Responsive
+   ============================================================================== */
+.panel-search {
+  position: relative;
+}
+
+.panel-search .form-control {
+  padding-left: 40px;
+  border-radius: 12px;
+  border: 2px solid #e9ecef;
+  min-height: var(--touch-min-size);
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+}
+
+.panel-search .form-control:focus {
+  border-color: var(--store-primary);
+  box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.15);
+}
+
+.panel-search .search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #adb5bd;
+  pointer-events: none;
+}
+
+/* Mobilde sabit arama çubuğu (opsiyonel) */
+@media (max-width: 768px) {
+  .panel-search-fixed {
+    position: fixed;
+    bottom: calc(var(--bottom-nav-height) + 10px);
+    left: 10px;
+    right: 10px;
+    z-index: 1040;
+    background: white;
+    padding: 10px;
+    border-radius: 16px;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* ==============================================================================
+   TAB NAVİGASYON - Mobil Kaydırılabilir
+   ============================================================================== */
+.panel-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panel-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.panel-tab {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: 500;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 768px) {
+  .panel-tab {
+    padding: 8px 16px;
+    font-size: 0.8rem;
+  }
+}
+
+/* ==============================================================================
+   MODAL - Mobil Full Screen
+   ============================================================================== */
+@media (max-width: 576px) {
+  .panel-modal .modal-dialog {
+    margin: 0;
+    max-width: 100%;
+    min-height: 100vh;
+  }
+
+  .panel-modal .modal-content {
+    border-radius: 0;
+    min-height: 100vh;
+    border: none;
+  }
+
+  .panel-modal .modal-header {
+    padding: 16px;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .panel-modal .modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .panel-modal .modal-footer {
+    padding: 16px;
+    border-top: 1px solid #e9ecef;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ==============================================================================
+   PULL TO REFRESH İNDİKATÖRÜ
+   ============================================================================== */
+.panel-refresh-indicator {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  z-index: 1060;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+/* ==============================================================================
+   BOŞ DURUM VE LOADING
+   ============================================================================== */
+.panel-empty {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.panel-empty i {
+  font-size: 3rem;
+  color: #dee2e6;
+  margin-bottom: 16px;
+}
+
+.panel-empty p {
+  color: #6c757d;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.panel-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+/* ==============================================================================
+   ANİMASYONLAR
+   ============================================================================== */
+@keyframes panelPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(46, 125, 50, 0);
+  }
+}
+
+@keyframes panelShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-2px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes panelSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panelFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.panel-pulse {
+  animation: panelPulse 1.5s infinite;
+}
+.panel-shake {
+  animation: panelShake 0.5s ease-in-out;
+}
+.panel-slide-up {
+  animation: panelSlideUp 0.3s ease-out;
+}
+.panel-fade-in {
+  animation: panelFadeIn 0.3s ease-out;
+}
+
+/* Yeni sipariş glow efekti */
+@keyframes panelGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(46, 125, 50, 0.4);
+  }
+  50% {
+    box-shadow:
+      0 0 20px rgba(46, 125, 50, 0.6),
+      0 0 30px rgba(46, 125, 50, 0.3);
+  }
+}
+
+.panel-glow {
+  animation: panelGlow 1.5s ease-in-out infinite;
+}
+
+/* ==============================================================================
+   TELEFON VE HARİTA LİNKLERİ
+   ============================================================================== */
+.panel-phone-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #0d6efd;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-height: var(--touch-min-size);
+}
+
+.panel-phone-link:hover,
+.panel-phone-link:active {
+  background: rgba(13, 110, 253, 0.1);
+  color: #0a58ca;
+}
+
+.panel-map-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #198754;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  min-height: var(--touch-min-size);
+}
+
+.panel-map-link:hover,
+.panel-map-link:active {
+  background: rgba(25, 135, 84, 0.1);
+  color: #146c43;
+}
+
+/* ==============================================================================
+   BADGE STİLLERİ
+   ============================================================================== */
+.panel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .panel-badge {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+  }
+}
+
+/* ==============================================================================
+   RESPONSIVE SPACING
+   ============================================================================== */
+.panel-p-responsive {
+  padding: 12px;
+}
+
+@media (min-width: 768px) {
+  .panel-p-responsive {
+    padding: 20px;
+  }
+}
+
+@media (min-width: 992px) {
+  .panel-p-responsive {
+    padding: 24px;
+  }
+}
+
+/* ==============================================================================
+   SAFE AREA - iPhone X ve sonrası için
+   ============================================================================== */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .panel-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .panel-content {
+    padding-bottom: calc(
+      var(--bottom-nav-height) + env(safe-area-inset-bottom) + 20px
+    );
+  }
+}

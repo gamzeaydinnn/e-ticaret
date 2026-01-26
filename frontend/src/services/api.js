@@ -20,8 +20,19 @@ api.interceptors.request.use(
       return config;
     }
 
+    const url = config.url || "";
+    const isCourierRequest =
+      url.includes("/api/courier") ||
+      url.includes("/weight-adjustment") ||
+      url.includes("/weight-payment");
+
+    const courierToken =
+      localStorage.getItem("courierToken") ||
+      sessionStorage.getItem("courierToken");
+
     // Tüm olası token key'lerini kontrol et (uyumluluk için)
     const token =
+      (isCourierRequest ? courierToken : null) ||
       localStorage.getItem("token") ||
       localStorage.getItem("authToken") ||
       localStorage.getItem("adminToken");
@@ -59,6 +70,11 @@ api.interceptors.response.use(
   async (error) => {
     const status = error?.response?.status ?? 0;
     const data = error?.response?.data;
+    const url = error?.config?.url || "";
+    const isCourierRequest =
+      url.includes("/api/courier") ||
+      url.includes("/weight-adjustment") ||
+      url.includes("/weight-payment");
 
     const message =
       data?.message ||
@@ -68,47 +84,97 @@ api.interceptors.response.use(
 
     // 401 Unauthorized - Token süresi dolmuş olabilir
     if (status === 401) {
-      const refreshToken = localStorage.getItem("refreshToken");
       const originalConfig = error.config;
-
-      // Eğer refresh token varsa ve bu bir retry değilse, refresh et
-      if (refreshToken && !originalConfig._retry) {
+      const shouldRetry = !!originalConfig && !originalConfig._retry;
+      if (shouldRetry) {
         originalConfig._retry = true;
+      }
 
-        try {
-          // Token refresh isteği yap
-          const response = await axios.post(
-            `${process.env.REACT_APP_API_URL || ""}/api/auth/refresh`,
-            { refreshToken },
-          );
+      if (isCourierRequest) {
+        const courierRefreshToken =
+          localStorage.getItem("courierRefreshToken") ||
+          sessionStorage.getItem("courierRefreshToken");
+        const courierToken =
+          localStorage.getItem("courierToken") ||
+          sessionStorage.getItem("courierToken");
 
-          if (response.data?.token || response.data?.Token) {
-            const newToken = response.data.token || response.data.Token;
-            localStorage.setItem("token", newToken);
-            localStorage.setItem("authToken", newToken);
+        if (courierRefreshToken && shouldRetry) {
+          try {
+            const response = await axios.post(
+              `${process.env.REACT_APP_API_URL || ""}/api/courier/auth/refresh`,
+              { accessToken: courierToken, refreshToken: courierRefreshToken },
+            );
 
-            // Yeni token ile orijinal isteği tekrar dene
-            originalConfig.headers.Authorization = `Bearer ${newToken}`;
-            return api(originalConfig);
+            if (response.data?.accessToken || response.data?.AccessToken) {
+              const newToken =
+                response.data.accessToken || response.data.AccessToken;
+              const newRefresh =
+                response.data.refreshToken || response.data.RefreshToken;
+              const storage =
+                localStorage.getItem("courierToken") !== null
+                  ? localStorage
+                  : sessionStorage;
+
+              storage.setItem("courierToken", newToken);
+              if (newRefresh) {
+                storage.setItem("courierRefreshToken", newRefresh);
+              }
+
+              originalConfig.headers.Authorization = `Bearer ${newToken}`;
+              return api(originalConfig);
+            }
+          } catch (refreshError) {
+            localStorage.removeItem("courierToken");
+            localStorage.removeItem("courierRefreshToken");
+            sessionStorage.removeItem("courierToken");
+            sessionStorage.removeItem("courierRefreshToken");
+            window.location.href = "/courier/login?session_expired=true";
           }
-        } catch (refreshError) {
-          // Refresh başarısız - logout et
+        } else {
+          localStorage.removeItem("courierToken");
+          localStorage.removeItem("courierRefreshToken");
+          sessionStorage.removeItem("courierToken");
+          sessionStorage.removeItem("courierRefreshToken");
+        }
+      } else {
+        const refreshToken = localStorage.getItem("refreshToken");
+
+        if (refreshToken && shouldRetry) {
+          try {
+            // Token refresh isteği yap
+            const response = await axios.post(
+              `${process.env.REACT_APP_API_URL || ""}/api/auth/refresh`,
+              { refreshToken },
+            );
+
+            if (response.data?.token || response.data?.Token) {
+              const newToken = response.data.token || response.data.Token;
+              localStorage.setItem("token", newToken);
+              localStorage.setItem("authToken", newToken);
+
+              // Yeni token ile orijinal isteği tekrar dene
+              originalConfig.headers.Authorization = `Bearer ${newToken}`;
+              return api(originalConfig);
+            }
+          } catch (refreshError) {
+            // Refresh başarısız - logout et
+            localStorage.removeItem("token");
+            localStorage.removeItem("authToken");
+            localStorage.removeItem("adminToken");
+            localStorage.removeItem("refreshToken");
+            localStorage.removeItem("user");
+            localStorage.removeItem("userId");
+            // Sayfayı reload et - AuthContext logout yap
+            window.location.href = "/login?session_expired=true";
+          }
+        } else if (!refreshToken) {
+          // Refresh token yok - logout et
           localStorage.removeItem("token");
           localStorage.removeItem("authToken");
           localStorage.removeItem("adminToken");
-          localStorage.removeItem("refreshToken");
           localStorage.removeItem("user");
           localStorage.removeItem("userId");
-          // Sayfayı reload et - AuthContext logout yap
-          window.location.href = "/login?session_expired=true";
         }
-      } else if (!refreshToken) {
-        // Refresh token yok - logout et
-        localStorage.removeItem("token");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("adminToken");
-        localStorage.removeItem("user");
-        localStorage.removeItem("userId");
       }
     }
 

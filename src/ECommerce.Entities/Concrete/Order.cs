@@ -60,6 +60,129 @@ namespace ECommerce.Entities.Concrete
         public ECommerce.Entities.Enums.PaymentStatus PaymentStatus { get; set; } = ECommerce.Entities.Enums.PaymentStatus.Pending;
         public Guid? ReservationId { get; set; }
 
+        #region Provizyon ve Capture Alanları (Ödeme Çekim Akışı)
+
+        /// <summary>
+        /// Sipariş onaylandı tarihi
+        /// Ödeme başarılı veya kapıda ödeme onaylandığı an
+        /// </summary>
+        public DateTime? ConfirmedAt { get; set; }
+
+        /// <summary>
+        /// Hazırlanmaya başlandı tarihi
+        /// Depo/personel siparişi hazırlamaya başladığı an
+        /// </summary>
+        public DateTime? ProcessingStartedAt { get; set; }
+
+        /// <summary>
+        /// Market görevlisi hazırlanmaya başladı tarihi
+        /// Store Attendant "Hazırlanıyor" butonu tıkladığı an
+        /// </summary>
+        public DateTime? PreparingStartedAt { get; set; }
+
+        /// <summary>
+        /// Siparişi hazırlayan kişi
+        /// </summary>
+        public string? PreparedBy { get; set; }
+
+        /// <summary>
+        /// Sipariş hazır tarihi
+        /// Market görevlisi "Hazır" butonu tıkladığı an
+        /// </summary>
+        public DateTime? ReadyAt { get; set; }
+
+        /// <summary>
+        /// Kargoya verilme tarihi
+        /// Kurye siparişi aldığı an
+        /// </summary>
+        public DateTime? ShippedAt { get; set; }
+
+        /// <summary>
+        /// Sipariş iptal tarihi
+        /// </summary>
+        public DateTime? CancelledAt { get; set; }
+
+        /// <summary>
+        /// Sipariş iptal sebebi
+        /// </summary>
+        public string? CancelReason { get; set; }
+
+        /// <summary>
+        /// İade tarihi
+        /// </summary>
+        public DateTime? RefundedAt { get; set; }
+
+        /// <summary>
+        /// Tahmini teslimat tarihi
+        /// Müşteriye gösterilen tahmini teslimat zamanı
+        /// </summary>
+        public DateTime? EstimatedDeliveryDate { get; set; }
+
+        /// <summary>
+        /// Authorize edilen tutar (TL)
+        /// Sipariş oluşturulurken %10 tolerans ile alınan provizyon tutarı
+        /// Örnek: Sipariş 100 TL ise, authorize 110 TL olur
+        /// </summary>
+        public decimal AuthorizedAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Capture edilen (çekilen) tutar (TL)
+        /// Teslim anında gerçekten çekilen tutar
+        /// Final tutar authorize'dan küçük veya eşit olmalı
+        /// </summary>
+        public decimal CapturedAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Capture (çekim) durumu
+        /// Provizyon → Capture akışının takibi için
+        /// </summary>
+        public CaptureStatus CaptureStatus { get; set; } = CaptureStatus.Pending;
+
+        /// <summary>
+        /// Capture işlem tarihi
+        /// Teslim anında çekim yapıldığı tarih
+        /// </summary>
+        public DateTime? CapturedAt { get; set; }
+
+        /// <summary>
+        /// Kurye tarafından girilen ağırlık farkı (gram)
+        /// Teslim anında kurye tarafından girilen tartı farkı
+        /// Pozitif: Fazla gram, Negatif: Eksik gram
+        /// </summary>
+        public decimal CourierWeightAdjustment { get; set; } = 0m;
+
+        /// <summary>
+        /// Siparişin toplam ağırlığı (gram cinsinden)
+        /// Market görevlisi tarafından tartılıp girilir
+        /// </summary>
+        public int? WeightInGrams { get; set; }
+
+        /// <summary>
+        /// Yola çıkış tarihi
+        /// Kurye "Yola Çıktım" dediği an
+        /// </summary>
+        public DateTime? OutForDeliveryAt { get; set; }
+
+        /// <summary>
+        /// Teslimat problemi açıklaması
+        /// "Sorun var" durumunda kurye tarafından girilen sebep
+        /// </summary>
+        public string? DeliveryProblemReason { get; set; }
+
+        /// <summary>
+        /// Teslimat problemi tarihi
+        /// </summary>
+        public DateTime? DeliveryProblemAt { get; set; }
+
+        /// <summary>
+        /// Tolerans yüzdesi
+        /// Authorize tutarı hesaplamak için kullanılan tolerans
+        /// Varsayılan %10 (0.10)
+        /// </summary>
+        public decimal TolerancePercentage { get; set; } = 0.10m;
+
+        #endregion
+
         #region Ağırlık Bazlı Ödeme Alanları
 
         /// <summary>

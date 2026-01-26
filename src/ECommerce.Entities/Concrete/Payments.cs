@@ -1,8 +1,10 @@
 //	• Payments (Id, OrderId, Provider, ProviderPaymentId, Amount, Status, CreatedAt, RawResponse)
 // Ödeme işlem kayıtları entity'si - Tüm ödeme sağlayıcıları için ortak
 // POSNET entegrasyonu için genişletilmiş alanlar eklendi (v2.0)
+// Authorize/Capture akışı için alanlar eklendi (v2.1)
 using System;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using System.Collections.Generic;
 
 namespace ECommerce.Entities.Concrete
@@ -162,6 +164,72 @@ namespace ECommerce.Entities.Concrete
         /// Son güncelleme tarihi
         /// </summary>
         public DateTime? UpdatedAt { get; set; }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // AUTHORIZE / CAPTURE ALANLARI (v2.1)
+        // Pre-authorization ve post-authorization (capture) akışı için gerekli alanlar
+        // Tartı farkı olan siparişlerde: Önce provizyon al, teslimde gerçek tutarı çek
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Authorize (provizyon) tutarı
+        /// Sipariş oluşturulurken tolerans dahil alınan provizyon
+        /// Örnek: Sipariş 100 TL, tolerans %10 → AuthorizedAmount = 110 TL
+        /// </summary>
+        public decimal AuthorizedAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Capture (çekim) tutarı
+        /// Teslim anında gerçekten çekilen tutar
+        /// Tartı farkı varsa bu tutar AuthorizedAmount'tan farklı olabilir
+        /// CapturedAmount <= AuthorizedAmount olmalı
+        /// </summary>
+        public decimal CapturedAmount { get; set; } = 0m;
+
+        /// <summary>
+        /// Capture durumu
+        /// Provizyon → Capture akışının durumunu takip eder
+        /// </summary>
+        public CaptureStatus CaptureStatus { get; set; } = CaptureStatus.Pending;
+
+        /// <summary>
+        /// Capture işlem tarihi (UTC)
+        /// Teslim anında çekim yapıldığı zaman
+        /// </summary>
+        public DateTime? CapturedAt { get; set; }
+
+        /// <summary>
+        /// Tolerans yüzdesi
+        /// Authorize tutarı hesaplamak için kullanılan tolerans
+        /// Varsayılan %10 (0.10), ağırlık bazlı ürünlerde %20 (0.20) olabilir
+        /// </summary>
+        public decimal TolerancePercentage { get; set; } = 0.10m;
+
+        /// <summary>
+        /// Authorize işlem referansı
+        /// Capture sırasında banka/sağlayıcıya gönderilir
+        /// POSNET için: PreAuthHostLogKey
+        /// </summary>
+        public string? AuthorizationReference { get; set; }
+
+        /// <summary>
+        /// Authorize tarihi (UTC)
+        /// Provizyonun ne zaman alındığını gösterir
+        /// Provizyonlar genellikle 7-30 gün geçerli
+        /// </summary>
+        public DateTime? AuthorizedAt { get; set; }
+
+        /// <summary>
+        /// Provizyon son geçerlilik tarihi
+        /// Bu tarihten sonra capture yapılamaz, yeniden authorize gerekir
+        /// </summary>
+        public DateTime? AuthorizationExpiresAt { get; set; }
+
+        /// <summary>
+        /// Capture başarısız olma nedeni
+        /// CaptureStatus = Failed ise bu alanda neden belirtilir
+        /// </summary>
+        public string? CaptureFailureReason { get; set; }
 
         // ═══════════════════════════════════════════════════════════════════════════════
         // NAVIGATION PROPERTIES

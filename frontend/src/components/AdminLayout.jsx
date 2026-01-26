@@ -263,9 +263,18 @@ export default function AdminLayout({ children }) {
     [],
   );
 
+  // StoreAttendant rolü kontrolü
+  const isStoreAttendant = user?.role === "StoreAttendant";
+
   // Filtrelenmiş menü öğeleri
   const filteredMenuItems = useMemo(() => {
     return menuItems.filter((item) => {
+      // StoreAttendant için sadece Dashboard ve Siparişler göster
+      if (isStoreAttendant) {
+        const allowedPaths = ["/admin/dashboard", "/admin/orders"];
+        if (!allowedPaths.includes(item.path)) return false;
+      }
+
       // SuperAdmin kontrolü
       if (item.superAdminOnly && !isSuperAdmin) return false;
 
@@ -289,7 +298,7 @@ export default function AdminLayout({ children }) {
 
       return true;
     });
-  }, [menuItems, isSuperAdmin, checkPermission]);
+  }, [menuItems, isSuperAdmin, isStoreAttendant, checkPermission]);
 
   // Mobilde menü öğesine tıklandığında sidebar'ı kapat
   const handleMenuClick = useCallback(() => {
@@ -380,7 +389,9 @@ export default function AdminLayout({ children }) {
               className="fas fa-shield-alt me-2"
               style={{ color: "#f57c00" }}
             ></i>
-            Admin Panel
+            {user?.role === "StoreAttendant"
+              ? "Sipariş Hazırlık"
+              : "Admin Panel"}
           </h5>
           {/* Mobilde sidebar kapatma butonu */}
           <button
@@ -402,11 +413,14 @@ export default function AdminLayout({ children }) {
               style={{
                 width: "36px",
                 height: "36px",
-                background: "linear-gradient(135deg, #f57c00, #ff9800)",
+                background:
+                  user?.role === "StoreAttendant"
+                    ? "linear-gradient(135deg, #3b82f6, #60a5fa)"
+                    : "linear-gradient(135deg, #f57c00, #ff9800)",
               }}
             >
               <i
-                className="fas fa-user text-white"
+                className={`fas ${user?.role === "StoreAttendant" ? "fa-box" : "fa-user"} text-white`}
                 style={{ fontSize: "0.85rem" }}
               ></i>
             </div>
@@ -417,7 +431,9 @@ export default function AdminLayout({ children }) {
               <small
                 style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.75rem" }}
               >
-                {user?.role || "Yönetici"}
+                {user?.role === "StoreAttendant"
+                  ? "Market Görevlisi"
+                  : user?.role || "Yönetici"}
               </small>
             </div>
           </div>
@@ -718,7 +734,15 @@ export default function AdminLayout({ children }) {
         </nav>
 
         {/* Page Content */}
-        <main className="p-4 admin-layout-main">{children}</main>
+        <main
+          className="p-4 p-md-4 p-sm-2 admin-layout-main"
+          style={{
+            maxWidth: "100%",
+            overflowX: "hidden",
+          }}
+        >
+          {children}
+        </main>
       </div>
 
       {/* ================================================================

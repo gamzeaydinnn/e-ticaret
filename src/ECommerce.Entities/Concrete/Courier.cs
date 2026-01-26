@@ -18,6 +18,28 @@ namespace ECommerce.Entities.Concrete
         public int ActiveOrders { get; set; } = 0;
         public int CompletedToday { get; set; } = 0;
         public DateTime? LastActiveAt { get; set; }
+
+        // Dispatcher panel için eklenen alanlar
+        /// <summary>
+        /// Kurye aktif mi? (sisteme kayıtlı ve çalışabilir durumda)
+        /// BaseEntity'den miras alınan IsActive'i override eder
+        /// </summary>
+        public new bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// Kurye şu an online mı? (uygulamaya giriş yapmış ve sipariş alabilir)
+        /// </summary>
+        public bool IsOnline { get; set; } = false;
+
+        /// <summary>
+        /// Araç tipi: motorcycle, car, bicycle, on_foot
+        /// </summary>
+        public string? VehicleType { get; set; } = "motorcycle";
+
+        /// <summary>
+        /// Son görülme zamanı
+        /// </summary>
+        public DateTime? LastSeenAt { get; set; }
         
         // Navigation properties
         public ICollection<Order> AssignedOrders { get; set; } = new List<Order>();

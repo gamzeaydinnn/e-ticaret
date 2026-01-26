@@ -733,7 +733,13 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime?>("LastActiveAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastSeenAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Location")
@@ -762,6 +768,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<string>("Vehicle")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("VehicleType")
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
@@ -1153,12 +1162,33 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("AssignedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("AuthorizedAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("CampaignDiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CaptureStatus")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CapturedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("ClientOrderId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<decimal>("CouponDiscountAmount")
                         .HasPrecision(18, 2)
@@ -1166,6 +1196,9 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<int?>("CourierId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("CourierWeightAdjustment")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1189,6 +1222,12 @@ namespace ECommerce.Data.Migrations
                     b.Property<string>("DeliveryNotes")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("DeliveryProblemAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeliveryProblemReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("DeliverySlotId")
                         .HasColumnType("int");
 
@@ -1203,6 +1242,9 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("EstimatedDelivery")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("EstimatedDeliveryDate")
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("FinalAmount")
@@ -1230,6 +1272,9 @@ namespace ECommerce.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<DateTime?>("OutForDeliveryAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1255,12 +1300,30 @@ namespace ECommerce.Data.Migrations
                     b.Property<string>("PreAuthHostLogKey")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("PreparedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("PreparingStartedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<DateTime?>("ProcessingStartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ReadyAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ShippedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ShippingAddress")
                         .IsRequired()
@@ -1282,6 +1345,9 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("TolerancePercentage")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("TotalPrice")
                         .HasPrecision(18, 2)
@@ -1316,6 +1382,9 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<decimal>("WeightDifference")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("WeightInGrams")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -1479,6 +1548,113 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("OrderStatusHistories", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.PaymentWebhookEvent", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("EventTimestamp")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("HttpHeaders")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PaymentId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentIntentId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Pending");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ProviderEventId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("RawPayload")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Signature")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<bool>("SignatureValid")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("SourceIpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("PaymentId");
+
+                    b.HasIndex("PaymentIntentId")
+                        .HasDatabaseName("IX_PaymentWebhookEvents_PaymentIntentId");
+
+                    b.HasIndex("ProcessingStatus")
+                        .HasDatabaseName("IX_PaymentWebhookEvents_ProcessingStatus");
+
+                    b.HasIndex("ReceivedAt")
+                        .HasDatabaseName("IX_PaymentWebhookEvents_ReceivedAt");
+
+                    b.HasIndex("Provider", "ProcessingStatus")
+                        .HasDatabaseName("IX_PaymentWebhookEvents_Provider_Status");
+
+                    b.HasIndex("Provider", "ProviderEventId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PaymentWebhookEvents_Provider_EventId");
+
+                    b.ToTable("PaymentWebhookEvents", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.Payments", b =>
                 {
                     b.Property<int>("Id")
@@ -1494,6 +1670,34 @@ namespace ECommerce.Data.Migrations
                     b.Property<string>("AuthCode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("AuthorizationExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AuthorizationReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<decimal>("AuthorizedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("AuthorizedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CaptureFailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("CaptureStatus")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CapturedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("CardBin")
                         .HasMaxLength(10)
@@ -1570,6 +1774,12 @@ namespace ECommerce.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("TolerancePercentage")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)")
+                        .HasDefaultValue(0.10m);
 
                     b.Property<string>("TransactionId")
                         .HasMaxLength(50)
@@ -3437,6 +3647,23 @@ namespace ECommerce.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.PaymentWebhookEvent", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany()
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECommerce.Entities.Concrete.Payments", "Payment")
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.Payments", b =>

@@ -215,6 +215,148 @@ namespace ECommerce.Core.Constants
 
         #endregion
 
+        #region Market/Mağaza Operasyonları İzinleri (Store Operations)
+
+        /// <summary>
+        /// Market/Mağaza operasyonları izinleri.
+        /// StoreAttendant (Market Görevlisi) rolü için tasarlanmış izinler.
+        /// 
+        /// Bu izinler sipariş hazırlama sürecinde kullanılır:
+        /// - Onaylanmış siparişleri görme
+        /// - Hazırlamaya başla aksiyonu
+        /// - Tartı girişi yapma
+        /// - Hazır olarak işaretleme
+        /// </summary>
+        public static class StoreOperations
+        {
+            /// <summary>
+            /// Bekleyen/onaylanmış siparişleri görme izni.
+            /// StoreAttendant'ın hangi siparişlerin hazırlanması gerektiğini görmesi için.
+            /// </summary>
+            public const string ViewPendingOrders = "store.orders.pending";
+            
+            /// <summary>
+            /// Siparişi "Hazırlanıyor" durumuna geçirme izni.
+            /// Sipariş hazırlamaya başlandığında kullanılır.
+            /// </summary>
+            public const string StartPreparing = "store.orders.prepare";
+            
+            /// <summary>
+            /// Siparişi "Hazır" durumuna geçirme izni.
+            /// Sipariş hazırlandıktan sonra kurye ataması için bekletilir.
+            /// </summary>
+            public const string MarkAsReady = "store.orders.ready";
+            
+            /// <summary>
+            /// Ağırlık girişi yapma izni.
+            /// Tartılı ürünlerin gerçek ağırlığını girme yetkisi.
+            /// </summary>
+            public const string EnterWeight = "store.orders.weight";
+            
+            /// <summary>
+            /// Sipariş detaylarını görme izni.
+            /// Ürün listesi, müşteri notu gibi bilgilere erişim.
+            /// </summary>
+            public const string ViewOrderDetails = "store.orders.details";
+            
+            /// <summary>
+            /// Günlük özet istatistikleri görme izni.
+            /// Hazırlanan, bekleyen sipariş sayıları.
+            /// </summary>
+            public const string ViewSummary = "store.summary";
+            
+            /// <summary>StoreOperations modülündeki tüm izinler</summary>
+            public static string[] All => new[] 
+            { 
+                ViewPendingOrders, 
+                StartPreparing, 
+                MarkAsReady, 
+                EnterWeight, 
+                ViewOrderDetails, 
+                ViewSummary 
+            };
+        }
+
+        #endregion
+
+        #region Sevkiyat/Dispatch İzinleri
+
+        /// <summary>
+        /// Sevkiyat operasyonları izinleri.
+        /// Dispatcher (Sevkiyat Görevlisi) rolü için tasarlanmış izinler.
+        /// 
+        /// Bu izinler kurye atama sürecinde kullanılır:
+        /// - Hazır siparişleri görme
+        /// - Müsait kuryeleri listeleme
+        /// - Kurye atama/değiştirme
+        /// - Sevkiyat performansını izleme
+        /// </summary>
+        public static class Dispatch
+        {
+            /// <summary>
+            /// Hazır/kurye bekleyen siparişleri görme izni.
+            /// Dispatcher'ın hangi siparişlerin gönderilmesi gerektiğini görmesi için.
+            /// </summary>
+            public const string ViewReadyOrders = "dispatch.orders.ready";
+            
+            /// <summary>
+            /// Kurye atama izni.
+            /// Hazır siparişe kurye atama yetkisi.
+            /// </summary>
+            public const string AssignCourier = "dispatch.orders.assign";
+            
+            /// <summary>
+            /// Kurye değiştirme izni.
+            /// Atanmış kuryeyi başka biriyle değiştirme yetkisi.
+            /// </summary>
+            public const string ReassignCourier = "dispatch.orders.reassign";
+            
+            /// <summary>
+            /// Kurye listesi görme izni.
+            /// Müsait/meşgul kuryeleri listeleme yetkisi.
+            /// </summary>
+            public const string ViewCouriers = "dispatch.couriers.view";
+            
+            /// <summary>
+            /// Kurye detaylarını görme izni.
+            /// Aktif siparişleri, performans metrikleri.
+            /// </summary>
+            public const string ViewCourierDetails = "dispatch.couriers.details";
+            
+            /// <summary>
+            /// Sevkiyat istatistiklerini görme izni.
+            /// Günlük teslimat sayıları, ortalama süre vb.
+            /// </summary>
+            public const string ViewStatistics = "dispatch.statistics";
+            
+            /// <summary>
+            /// Kuryeye mesaj gönderme izni.
+            /// Acil durumlarda kurye ile iletişim.
+            /// </summary>
+            public const string SendCourierMessage = "dispatch.couriers.message";
+            
+            /// <summary>
+            /// Sipariş detaylarını görme izni (sevkiyat perspektifinden).
+            /// Teslimat adresi, müşteri telefonu gibi bilgiler.
+            /// </summary>
+            public const string ViewOrderDetails = "dispatch.orders.details";
+            
+            /// <summary>Dispatch modülündeki tüm izinler</summary>
+            public static string[] All => new[] 
+            { 
+                ViewReadyOrders, 
+                AssignCourier, 
+                ReassignCourier, 
+                ViewCouriers, 
+                ViewCourierDetails,
+                ViewStatistics, 
+                SendCourierMessage,
+                ViewOrderDetails
+            };
+        }
+
+        #endregion
+
         #region Rapor İzinleri
 
         /// <summary>
@@ -389,6 +531,14 @@ namespace ECommerce.Core.Constants
             foreach (var p in Shipping.All)
                 yield return (p, "Shipping");
 
+            // StoreOperations (Market Görevlisi)
+            foreach (var p in StoreOperations.All)
+                yield return (p, "StoreOperations");
+
+            // Dispatch (Sevkiyat Görevlisi)
+            foreach (var p in Dispatch.All)
+                yield return (p, "Dispatch");
+
             // Reports
             foreach (var p in Reports.All)
                 yield return (p, "Reports");
@@ -447,6 +597,8 @@ namespace ECommerce.Core.Constants
                 "settings" => "Ayar",
                 "logs" => "Log",
                 "newsletter" => "Bülten",
+                "store" => "Market Operasyonları",
+                "dispatch" => "Sevkiyat",
                 _ => module
             };
 
@@ -493,6 +645,11 @@ namespace ECommerce.Core.Constants
                 "system" => "Sistem",
                 "send" => "Gönderme",
                 "stats" => "İstatistikler",
+                "prepare" => "Hazırlamaya Başla",
+                "ready" => "Hazır İşaretle",
+                "reassign" => "Yeniden Ata",
+                "message" => "Mesaj Gönder",
+                "summary" => "Özet",
                 _ => action
             };
 

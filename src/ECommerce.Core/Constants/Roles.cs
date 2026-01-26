@@ -23,6 +23,14 @@ namespace ECommerce.Core.Constants
     /// 
     /// 6. User/Customer: Sistemin son kullanıcısı, alışveriş yapan müşteri.
     /// 
+    /// 7. StoreAttendant (Market Görevlisi): Siparişleri hazırlayan personel.
+    ///    Sipariş hazırlama, tartı girişi, "Hazır" durumuna geçirme yetkisi.
+    ///    Kurye atama veya sipariş onaylama yetkisi YOK.
+    ///    
+    /// 8. Dispatcher (Sevkiyat Görevlisi): Kurye atama ve sevkiyat yönetimi.
+    ///    Hazır siparişleri görme, kurye atama, kurye performans takibi.
+    ///    Sipariş hazırlama veya ürün yönetimi yetkisi YOK.
+    /// 
     /// Güvenlik Prensibi: "En Az Yetki" (Least Privilege)
     /// Her role sadece işini yapması için gereken minimum yetki verilir.
     /// </summary>
@@ -74,6 +82,42 @@ namespace ECommerce.Core.Constants
         /// </summary>
         public const string Customer = "Customer";
 
+        /// <summary>
+        /// Kurye rolü.
+        /// Teslimat operasyonları için kullanılır.
+        /// </summary>
+        public const string Courier = "Courier";
+
+        /// <summary>
+        /// Market Görevlisi (Store Attendant) rolü.
+        /// Siparişleri fiziksel olarak hazırlayan, tartan ve "Hazır" durumuna getiren personel.
+        /// Sorumlulukları:
+        /// - Onaylanmış siparişleri görme
+        /// - "Hazırlanıyor" durumuna geçirme
+        /// - Ağırlık bazlı ürünleri tartma
+        /// - "Hazır" durumuna geçirme
+        /// Kısıtlamalar:
+        /// - Sipariş onaylama yetkisi YOK
+        /// - Kurye atama yetkisi YOK
+        /// - Ürün/fiyat değiştirme yetkisi YOK
+        /// </summary>
+        public const string StoreAttendant = "StoreAttendant";
+
+        /// <summary>
+        /// Sevkiyat/Kargo Görevlisi (Dispatcher) rolü.
+        /// Hazır siparişlere kurye atayan ve sevkiyat sürecini yöneten personel.
+        /// Sorumlulukları:
+        /// - Hazır siparişleri görme
+        /// - Müsait kuryeleri listeleme
+        /// - Kurye atama/değiştirme
+        /// - Sevkiyat performansını izleme
+        /// Kısıtlamalar:
+        /// - Sipariş hazırlama yetkisi YOK
+        /// - Sipariş onaylama yetkisi YOK
+        /// - Ürün/fiyat değiştirme yetkisi YOK
+        /// </summary>
+        public const string Dispatcher = "Dispatcher";
+
         #endregion
 
         #region Rol Grupları - Yetkilendirme Kolaylığı İçin
@@ -88,7 +132,7 @@ namespace ECommerce.Core.Constants
         /// Tüm personel rolleri - Şirket çalışanları.
         /// Müşteri dışındaki tüm roller.
         /// </summary>
-        public const string AllStaff = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics;
+        public const string AllStaff = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics + "," + StoreAttendant + "," + Dispatcher;
 
         /// <summary>
         /// Sipariş yönetimi yapabilecek roller.
@@ -108,6 +152,32 @@ namespace ECommerce.Core.Constants
         /// </summary>
         public const string UserManagement = SuperAdmin + "," + Admin;
 
+        /// <summary>
+        /// Sipariş hazırlama yetkisine sahip roller (OrderPrepare).
+        /// Market görevlisi ve üst düzey yetkililer.
+        /// Bu roller siparişi "Hazırlanıyor" ve "Hazır" durumuna geçirebilir.
+        /// </summary>
+        public const string OrderPrepare = SuperAdmin + "," + Admin + "," + StoreManager + "," + StoreAttendant;
+
+        /// <summary>
+        /// Kurye atama yetkisine sahip roller (OrderDispatch).
+        /// Sevkiyat görevlisi ve üst düzey yetkililer.
+        /// Bu roller hazır siparişlere kurye atayabilir.
+        /// </summary>
+        public const string OrderDispatch = SuperAdmin + "," + Admin + "," + StoreManager + "," + Dispatcher;
+
+        /// <summary>
+        /// Market operasyonları için yetkili roller.
+        /// Store Attendant paneline erişim hakkı.
+        /// </summary>
+        public const string StoreOperations = SuperAdmin + "," + Admin + "," + StoreManager + "," + StoreAttendant;
+
+        /// <summary>
+        /// Sevkiyat operasyonları için yetkili roller.
+        /// Dispatcher paneline erişim hakkı.
+        /// </summary>
+        public const string DispatchOperations = SuperAdmin + "," + Admin + "," + StoreManager + "," + Dispatcher;
+
         #endregion
 
         #region Yardımcı Metodlar
@@ -124,11 +194,15 @@ namespace ECommerce.Core.Constants
             CustomerSupport,
             Logistics,
             User,
-            Customer
+            Customer,
+            Courier,
+            StoreAttendant,
+            Dispatcher
         };
 
         /// <summary>
         /// Yönetici paneline erişebilecek rolleri döndürür.
+        /// Bu roller admin panel ana sayfasına erişebilir.
         /// </summary>
         public static string[] GetAdminPanelRoles() => new[]
         {
@@ -136,7 +210,33 @@ namespace ECommerce.Core.Constants
             Admin,
             StoreManager,
             CustomerSupport,
-            Logistics
+            Logistics,
+            StoreAttendant,
+            Dispatcher
+        };
+
+        /// <summary>
+        /// Sipariş hazırlama yetkisine sahip rolleri döndürür.
+        /// Store Attendant paneline erişim için kullanılır.
+        /// </summary>
+        public static string[] GetOrderPrepareRoles() => new[]
+        {
+            SuperAdmin,
+            Admin,
+            StoreManager,
+            StoreAttendant
+        };
+
+        /// <summary>
+        /// Kurye atama yetkisine sahip rolleri döndürür.
+        /// Dispatcher paneline erişim için kullanılır.
+        /// </summary>
+        public static string[] GetOrderDispatchRoles() => new[]
+        {
+            SuperAdmin,
+            Admin,
+            StoreManager,
+            Dispatcher
         };
 
         /// <summary>
@@ -160,6 +260,52 @@ namespace ECommerce.Core.Constants
         {
             return !string.IsNullOrWhiteSpace(roleName) &&
                    roleName.Equals(SuperAdmin, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Verilen rolün sipariş hazırlama yetkisi olup olmadığını kontrol eder.
+        /// </summary>
+        /// <param name="roleName">Kontrol edilecek rol adı</param>
+        /// <returns>Sipariş hazırlama yetkisi varsa true</returns>
+        public static bool CanPrepareOrders(string? roleName)
+        {
+            if (string.IsNullOrWhiteSpace(roleName))
+                return false;
+
+            var prepareRoles = GetOrderPrepareRoles();
+            return prepareRoles.Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Verilen rolün kurye atama yetkisi olup olmadığını kontrol eder.
+        /// </summary>
+        /// <param name="roleName">Kontrol edilecek rol adı</param>
+        /// <returns>Kurye atama yetkisi varsa true</returns>
+        public static bool CanDispatchOrders(string? roleName)
+        {
+            if (string.IsNullOrWhiteSpace(roleName))
+                return false;
+
+            var dispatchRoles = GetOrderDispatchRoles();
+            return dispatchRoles.Any(r => r.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// Verilen rolün Market Görevlisi olup olmadığını kontrol eder.
+        /// </summary>
+        public static bool IsStoreAttendant(string? roleName)
+        {
+            return !string.IsNullOrWhiteSpace(roleName) &&
+                   roleName.Equals(StoreAttendant, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Verilen rolün Sevkiyat Görevlisi olup olmadığını kontrol eder.
+        /// </summary>
+        public static bool IsDispatcher(string? roleName)
+        {
+            return !string.IsNullOrWhiteSpace(roleName) &&
+                   roleName.Equals(Dispatcher, StringComparison.OrdinalIgnoreCase);
         }
 
         #endregion

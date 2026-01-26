@@ -79,6 +79,18 @@ namespace ECommerce.Data.Context
         public virtual DbSet<SmsVerification> SmsVerifications { get; set; }
         public virtual DbSet<SmsRateLimit> SmsRateLimits { get; set; }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // WEBHOOK VE ÖDEME TAKİP TABLOLARI
+        // Idempotency ve audit için webhook event kayıtları
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Ödeme sağlayıcılarından gelen webhook event'lerini saklar
+        /// Idempotency için kritik: Aynı event'in birden fazla işlenmesini önler
+        /// Replay attack koruması ve audit amaçlı loglar
+        /// </summary>
+        public virtual DbSet<PaymentWebhookEvent> PaymentWebhookEvents { get; set; }
+
         // RBAC (Rol Tabanlı Yetkilendirme) Tabloları
         /// <summary>
         /// Sistemdeki tüm izinleri (permissions) tutar.
@@ -672,6 +684,13 @@ namespace ECommerce.Data.Context
                 entity.Property(p => p.Amount).HasPrecision(18, 2);
                 entity.Property(p => p.RefundedAmount).HasPrecision(18, 2);
 
+                // Authorize/Capture alanları (v2.1)
+                entity.Property(p => p.AuthorizedAmount).HasPrecision(18, 2);
+                entity.Property(p => p.CapturedAmount).HasPrecision(18, 2);
+                entity.Property(p => p.TolerancePercentage).HasPrecision(5, 2).HasDefaultValue(0.10m);
+                entity.Property(p => p.AuthorizationReference).HasMaxLength(100);
+                entity.Property(p => p.CaptureFailureReason).HasMaxLength(500);
+
                 // String alanları - Maksimum uzunluklar
                 entity.Property(p => p.Provider).HasMaxLength(50).IsRequired();
                 entity.Property(p => p.ProviderPaymentId).HasMaxLength(100);
@@ -712,6 +731,64 @@ namespace ECommerce.Data.Context
                 entity.HasOne(p => p.Order)
                       .WithMany()
                       .HasForeignKey(p => p.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // PAYMENT WEBHOOK EVENT KONFİGÜRASYONU
+            // Idempotency ve audit için webhook event kayıtları
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<PaymentWebhookEvent>(entity =>
+            {
+                entity.ToTable("PaymentWebhookEvents");
+
+                // Primary Key (BaseEntity'den geliyor)
+                entity.HasKey(e => e.Id);
+
+                // Provider bilgileri
+                entity.Property(e => e.Provider).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.ProviderEventId).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.PaymentIntentId).HasMaxLength(255);
+                entity.Property(e => e.EventType).HasMaxLength(100).IsRequired();
+
+                // İşleme durumu
+                entity.Property(e => e.ProcessingStatus).HasMaxLength(20).HasDefaultValue("Pending");
+                entity.Property(e => e.ErrorMessage).HasMaxLength(1000);
+
+                // Güvenlik alanları
+                entity.Property(e => e.Signature).HasMaxLength(512);
+                entity.Property(e => e.SourceIpAddress).HasMaxLength(45);
+
+                // Large text alanları
+                entity.Property(e => e.RawPayload).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.HttpHeaders).HasColumnType("nvarchar(max)");
+
+                // ╔═══════════════════════════════════════════════════════════════════════════════╗
+                // ║ UNIQUE CONSTRAINT - IDEMPOTENCY İÇİN KRİTİK!                                   ║
+                // ║ Aynı event'in birden fazla kez işlenmesini engeller                           ║
+                // ║ Provider + ProviderEventId kombinasyonu benzersiz olmalı                       ║
+                // ╚═══════════════════════════════════════════════════════════════════════════════╝
+                entity.HasIndex(e => new { e.Provider, e.ProviderEventId })
+                      .IsUnique()
+                      .HasDatabaseName("UQ_PaymentWebhookEvents_Provider_EventId");
+
+                // İndeksler - Performans optimizasyonu
+                entity.HasIndex(e => e.PaymentIntentId).HasDatabaseName("IX_PaymentWebhookEvents_PaymentIntentId");
+                entity.HasIndex(e => e.ReceivedAt).HasDatabaseName("IX_PaymentWebhookEvents_ReceivedAt");
+                entity.HasIndex(e => e.ProcessingStatus).HasDatabaseName("IX_PaymentWebhookEvents_ProcessingStatus");
+                entity.HasIndex(e => new { e.Provider, e.ProcessingStatus })
+                      .HasDatabaseName("IX_PaymentWebhookEvents_Provider_Status");
+
+                // Order ilişkisi (opsiyonel)
+                entity.HasOne(e => e.Order)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Payment ilişkisi (opsiyonel)
+                entity.HasOne(e => e.Payment)
+                      .WithMany()
+                      .HasForeignKey(e => e.PaymentId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
