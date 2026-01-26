@@ -59,8 +59,8 @@ namespace ECommerce.API.Controllers
             if (!_env.IsDevelopment())
                 return Forbid();
 
-            var email = "ahmett@courier.com";
-            var password = "ahmet.123";
+            var email = "ahmet@courier.com";
+            var password = "Ahmet.123";
             var phone = "05321234567";
             var courierRole = Roles.Courier;
 
@@ -122,12 +122,24 @@ namespace ECommerce.API.Controllers
                     Status = "active",
                     Phone = phone,
                     Vehicle = "Motosiklet",
+                    VehicleType = "motorcycle",
                     Location = "Kadıköy, İstanbul",
                     Rating = 4.8m,
                     ActiveOrders = 3,
-                    CompletedToday = 12
+                    CompletedToday = 12,
+                    IsActive = true,
+                    IsOnline = false
                 };
                 await _courierService.AddAsync(courier);
+            }
+            else
+            {
+                // Courier varsa aktif yap
+                if (!existingCourier.IsActive)
+                {
+                    existingCourier.IsActive = true;
+                    await _courierService.UpdateAsync(existingCourier);
+                }
             }
 
             return Ok(new { message = "Demo kurye ve user başarıyla eklendi." });
