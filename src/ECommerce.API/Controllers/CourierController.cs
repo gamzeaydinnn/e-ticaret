@@ -59,7 +59,7 @@ namespace ECommerce.API.Controllers
             if (!_env.IsDevelopment())
                 return Forbid();
 
-            var email = "ahmet@courier.com";
+            var email = "ahmett@courier.com";
             var password = "Ahmet.123";
             var phone = "05321234567";
             var courierRole = Roles.Courier;
