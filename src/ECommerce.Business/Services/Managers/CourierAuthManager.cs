@@ -82,14 +82,7 @@ namespace ECommerce.Business.Services.Managers
                     return CreateFailResponse("Geçersiz e-posta veya şifre.");
                 }
 
-                // 2. Kullanıcının aktif olduğunu kontrol et
-                if (!user.IsActive)
-                {
-                    _logger.LogWarning("Kurye giriş başarısız - hesap pasif: {Email}", dto.Email);
-                    return CreateFailResponse("Hesabınız pasif durumda. Lütfen yönetici ile iletişime geçin.");
-                }
-
-                // 3. Şifreyi doğrula
+                // 2. Şifreyi doğrula
                 var passwordValid = await _userManager.CheckPasswordAsync(user, dto.Password);
                 if (!passwordValid)
                 {
@@ -97,14 +90,22 @@ namespace ECommerce.Business.Services.Managers
                     return CreateFailResponse("Geçersiz e-posta veya şifre.");
                 }
 
-                // 4. Rol kontrolü - Sadece "Courier" rolündeki kullanıcılar girebilir
+                // 2.5 Kullanıcı pasif ise aktif et
+                if (!user.IsActive)
+                {
+                    _logger.LogInformation("Kurye aktif ediliyorr: {Email}", dto.Email);
+                    user.IsActive = true;
+                    await _userManager.UpdateAsync(user);
+                }
+
+                // 3. Rol kontrolü - Sadece "Courier" rolündeki kullanıcılar girebilir
                 if (!string.Equals(user.Role, COURIER_ROLE, StringComparison.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Kurye giriş başarısız - yetkisiz rol: {Email}, Role: {Role}", dto.Email, user.Role);
                     return CreateFailResponse("Bu hesap kurye yetkisine sahip değil.");
                 }
 
-                // 5. Courier entity kaydını kontrol et
+                // 4. Courier entity kaydını kontrol et
                 var courier = await _context.Couriers
                     .Include(c => c.User)
                     .FirstOrDefaultAsync(c => c.UserId == user.Id);
@@ -115,14 +116,21 @@ namespace ECommerce.Business.Services.Managers
                     return CreateFailResponse("Kurye kaydı bulunamadı. Lütfen yönetici ile iletişime geçin.");
                 }
 
-                // 6. Token çifti oluştur
+                // 4.5 Courier pasif ise aktif et
+                if (!courier.IsActive)
+                {
+                    _logger.LogInformation("Courier aktif ediliyorr: {CourierId}", courier.Id);
+                    courier.IsActive = true;
+                }
+
+                // 5. Token çifti oluştur
                 var (accessToken, refreshToken, expiresIn) = await CreateTokenPairAsync(user, ipAddress, dto.RememberMe);
 
-                // 7. Son giriş tarihini güncelle
+                // 6. Son giriş tarihini güncelle
                 user.LastLoginAt = DateTime.UtcNow;
                 await _userManager.UpdateAsync(user);
 
-                // 8. Kurye durumunu online yap
+                // 7. Kurye durumunu online yap
                 courier.Status = "active";
                 courier.LastActiveAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();

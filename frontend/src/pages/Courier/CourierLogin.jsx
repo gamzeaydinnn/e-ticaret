@@ -335,7 +335,7 @@ export default function CourierLogin() {
                         setFormData((prev) => ({
                           ...prev,
                           emailOrPhone: "ahmett@courier.com",
-                          password: "ahmet.123",
+                          password: "Ahmet.123",
                         }))
                       }
                     >
@@ -349,7 +349,7 @@ export default function CourierLogin() {
                         setFormData((prev) => ({
                           ...prev,
                           emailOrPhone: "0532 123 4567",
-                          password: "ahmet.123",
+                          password: "Ahmet.123",
                         }))
                       }
                     >
@@ -361,7 +361,7 @@ export default function CourierLogin() {
                     className="text-muted d-block mt-1"
                     style={{ fontSize: "0.7rem" }}
                   >
-                    Şifre: ahmet.123
+                    Şifre: Ahmet.123
                   </small>
                 </div>
               </div>
