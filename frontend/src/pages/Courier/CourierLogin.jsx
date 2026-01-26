@@ -334,13 +334,13 @@ export default function CourierLogin() {
                       onClick={() =>
                         setFormData((prev) => ({
                           ...prev,
-                          emailOrPhone: "ahmet@courier.com",
-                          password: "123456",
+                          emailOrPhone: "ahmett@courier.com",
+                          password: "ahmet.123",
                         }))
                       }
                     >
                       <i className="fas fa-envelope me-1"></i>
-                      ahmet@courier.com
+                      ahmett@courier.com
                     </span>
                     <span
                       className="badge bg-light text-dark"
@@ -349,7 +349,7 @@ export default function CourierLogin() {
                         setFormData((prev) => ({
                           ...prev,
                           emailOrPhone: "0532 123 4567",
-                          password: "123456",
+                          password: "ahmet.123",
                         }))
                       }
                     >
@@ -361,7 +361,7 @@ export default function CourierLogin() {
                     className="text-muted d-block mt-1"
                     style={{ fontSize: "0.7rem" }}
                   >
-                    Şifre: 123456
+                    Şifre: ahmet.123
                   </small>
                 </div>
               </div>

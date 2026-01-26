@@ -271,7 +271,7 @@ export const AdminService = {
             firstName: "Ahmet",
             lastName: "Yılmaz",
             username: "ahmet123",
-            email: "ahmet@example.com",
+            email: "ahmett@example.com",
             phoneNumber: "0555 123 4567",
             role: "Customer",
             createdAt: "2024-01-15",

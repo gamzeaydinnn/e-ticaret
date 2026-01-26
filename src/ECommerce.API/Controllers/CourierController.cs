@@ -59,8 +59,8 @@ namespace ECommerce.API.Controllers
             if (!_env.IsDevelopment())
                 return Forbid();
 
-            var email = "ahmet@courier.com";
-            var password = "123456";
+            var email = "ahmett@courier.com";
+            var password = "ahmet.123";
             var phone = "05321234567";
             var courierRole = Roles.Courier;
 
@@ -172,16 +172,33 @@ namespace ECommerce.API.Controllers
         [HttpPost]
         public async Task<IActionResult> Add([FromBody] CourierCreateRequestDto dto)
         {
+            _logger.LogInformation("Kurye oluşturma isteği alındı: {@Dto}", new { dto.Name, dto.Email, dto.Phone, dto.Vehicle });
+            
             if (dto == null)
+            {
+                _logger.LogWarning("Dto null");
                 return BadRequest(new { message = "Geçersiz istek" });
+            }
             if (string.IsNullOrWhiteSpace(dto.Name))
+            {
+                _logger.LogWarning("İsim boş");
                 return BadRequest(new { message = "İsim zorunludur." });
+            }
             if (string.IsNullOrWhiteSpace(dto.Email))
+            {
+                _logger.LogWarning("Email boş");
                 return BadRequest(new { message = "E-posta zorunludur." });
+            }
             if (string.IsNullOrWhiteSpace(dto.Phone))
+            {
+                _logger.LogWarning("Telefon boş");
                 return BadRequest(new { message = "Telefon zorunludur." });
+            }
             if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 6)
+            {
+                _logger.LogWarning("Şifre hatalı: {Length}", dto.Password?.Length ?? 0);
                 return BadRequest(new { message = "Şifre en az 6 karakter olmalıdır." });
+            }
 
             var existingUser = await _userManager.FindByEmailAsync(dto.Email);
             if (existingUser != null)
@@ -209,8 +226,12 @@ namespace ECommerce.API.Controllers
             var createResult = await _userManager.CreateAsync(user, dto.Password);
             if (!createResult.Succeeded)
             {
-                return BadRequest(new { message = "Kurye kullanıcı oluşturulamadı.", errors = createResult.Errors });
+                var errors = string.Join(", ", createResult.Errors.Select(e => $"{e.Code}: {e.Description}"));
+                _logger.LogError("User oluşturulamadı: {Errors}", errors);
+                return BadRequest(new { message = "Kurye kullanıcı oluşturulamadı.", errors = createResult.Errors.Select(e => e.Description).ToList() });
             }
+
+            _logger.LogInformation("User oluşturuldu: {UserId}", user.Id);
 
             if (!await _userManager.IsInRoleAsync(user, courierRole))
             {
@@ -227,18 +248,35 @@ namespace ECommerce.API.Controllers
                 IsActive = true
             };
 
-            await _courierService.AddAsync(courier);
-
-            return CreatedAtAction(nameof(GetById), new { id = courier.Id }, courier);
+            try
+            {
+                await _courierService.AddAsync(courier);
+                _logger.LogInformation("Kurye oluşturuldu: CourierId={CourierId}, UserId={UserId}", courier.Id, user.Id);
+                return CreatedAtAction(nameof(GetById), new { id = courier.Id }, courier);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kurye eklenirken hata: UserId={UserId}", user.Id);
+                return StatusCode(500, new { message = "Kurye eklenirken hata oluştu.", error = ex.Message });
+            }
         }
 
         // PUT: api/courier/5
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] CourierUpdateRequestDto dto)
         {
-            var existing = await _courierService.GetByIdAsync(id);
-            if (existing == null) return NotFound();
+            // Courier'ı User ile birlikte yükle
+            var existing = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == id);
+            
+            if (existing == null)
+            {
+                _logger.LogWarning("Güncellenecek kurye bulunamadı: {CourierId}", id);
+                return NotFound(new { message = "Kurye bulunamadı." });
+            }
 
+            // Courier bilgilerini güncelle
             if (!string.IsNullOrWhiteSpace(dto.Phone))
             {
                 existing.Phone = dto.Phone;
@@ -249,25 +287,32 @@ namespace ECommerce.API.Controllers
                 existing.VehicleType = dto.Vehicle;
             }
 
-            await _courierService.UpdateAsync(existing);
-            var user = await _userManager.FindByIdAsync(existing.UserId.ToString());
-            if (user != null)
+            existing.UpdatedAt = DateTime.UtcNow;
+
+            // User bilgilerini güncelle
+            if (existing.User != null)
             {
                 if (!string.IsNullOrWhiteSpace(dto.Name))
                 {
-                    user.FullName = dto.Name;
+                    existing.User.FullName = dto.Name;
                 }
                 if (!string.IsNullOrWhiteSpace(dto.Email))
                 {
-                    user.Email = dto.Email;
-                    user.UserName = dto.Email;
+                    existing.User.Email = dto.Email;
+                    existing.User.UserName = dto.Email;
+                    existing.User.NormalizedEmail = dto.Email.ToUpperInvariant();
+                    existing.User.NormalizedUserName = dto.Email.ToUpperInvariant();
                 }
                 if (!string.IsNullOrWhiteSpace(dto.Phone))
                 {
-                    user.PhoneNumber = dto.Phone;
+                    existing.User.PhoneNumber = dto.Phone;
                 }
-                await _userManager.UpdateAsync(user);
+                existing.User.UpdatedAt = DateTime.UtcNow;
             }
+
+            await _context.SaveChangesAsync();
+            
+            _logger.LogInformation("Kurye güncellendi: {CourierId}, UserId: {UserId}", id, existing.UserId);
             return NoContent();
         }
 
@@ -275,10 +320,26 @@ namespace ECommerce.API.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            var courier = await _courierService.GetByIdAsync(id);
+            // Courier'ı User ile birlikte yükle
+            var courier = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == id);
+            
             if (courier == null) return NotFound();
 
-            await _courierService.DeleteAsync(courier);
+            // Soft delete: Hem Courier hem User'ı pasif yap
+            courier.IsActive = false;
+            courier.UpdatedAt = DateTime.UtcNow;
+            
+            if (courier.User != null)
+            {
+                courier.User.IsActive = false;
+                courier.User.UpdatedAt = DateTime.UtcNow;
+            }
+            
+            await _context.SaveChangesAsync();
+            
+            _logger.LogInformation("Kurye silindi (soft delete): {CourierId}, UserId: {UserId}", id, courier.UserId);
             return NoContent();
         }
 
@@ -290,20 +351,36 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = "Şifre en az 6 karakter olmalıdır." });
             }
 
-            var courier = await _courierService.GetByIdAsync(id);
-            if (courier == null) return NotFound();
-
-            var user = await _userManager.FindByIdAsync(courier.UserId.ToString());
-            if (user == null) return NotFound();
-
-            var token = await _userManager.GeneratePasswordResetTokenAsync(user);
-            var result = await _userManager.ResetPasswordAsync(user, token, dto.NewPassword);
-            if (!result.Succeeded)
+            // Courier'ı User ile birlikte yükle
+            var courier = await _context.Couriers
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == id);
+            
+            if (courier == null)
             {
-                return BadRequest(new { message = "Şifre sıfırlanamadı.", errors = result.Errors });
+                _logger.LogWarning("Kurye bulunamadı: {CourierId}", id);
+                return NotFound(new { message = "Kurye bulunamadı." });
             }
 
-            return Ok(new { success = true });
+            if (courier.User == null)
+            {
+                _logger.LogError("Kurye'ye bağlı User bulunamadı: CourierId={CourierId}, UserId={UserId}", id, courier.UserId);
+                return NotFound(new { message = "Kurye kullanıcısı bulunamadı." });
+            }
+
+            // Şifre sıfırlama token'ı oluştur ve şifreyi değiştir
+            var token = await _userManager.GeneratePasswordResetTokenAsync(courier.User);
+            var result = await _userManager.ResetPasswordAsync(courier.User, token, dto.NewPassword);
+            
+            if (!result.Succeeded)
+            {
+                var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                _logger.LogError("Şifre sıfırlanamadı: CourierId={CourierId}, Errors={Errors}", id, errors);
+                return BadRequest(new { message = "Şifre sıfırlanamadı.", errors = result.Errors.Select(e => e.Description) });
+            }
+
+            _logger.LogInformation("Kurye şifresi sıfırlandı: {CourierId}, UserId: {UserId}", id, courier.UserId);
+            return Ok(new { success = true, message = "Şifre başarıyla sıfırlandı." });
         }
 
         public class CourierCreateRequestDto

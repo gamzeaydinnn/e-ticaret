@@ -111,6 +111,16 @@ export default function AdminCouriers() {
         setFormError("Şifre en az 6 karakter olmalıdır");
         return;
       }
+      // Şifre politikası kontrolü
+      const hasUpperCase = /[A-Z]/.test(courierForm.password);
+      const hasLowerCase = /[a-z]/.test(courierForm.password);
+      const hasNumber = /[0-9]/.test(courierForm.password);
+      if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+        setFormError(
+          "Şifre en az 1 büyük harf, 1 küçük harf ve 1 rakam içermelidir",
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -163,9 +173,16 @@ export default function AdminCouriers() {
       await CourierService.deleteCourier(courier.id);
       console.log("✅ Kurye silindi:", courier.id);
       await loadCouriers();
+      alert("Kurye başarıyla silindi");
     } catch (error) {
       console.error("Kurye silme hatası:", error);
-      alert("Kurye silinemedi: " + (error.message || "Bilinmeyen hata"));
+      // Backend'den gelen detaylı hata mesajını göster
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.raw?.response?.data?.message ||
+        error?.message ||
+        "Bilinmeyen hata";
+      alert(`Kurye silinemedi: ${errorMsg}`);
     }
   };
 
@@ -186,13 +203,32 @@ export default function AdminCouriers() {
 
     setResettingPassword(true);
     try {
-      await CourierService.resetPassword(passwordCourier.id, newPassword);
-      console.log("✅ Şifre sıfırlandı:", passwordCourier.id);
-      alert("Şifre başarıyla sıfırlandı");
+      const result = await CourierService.resetPassword(
+        passwordCourier.id,
+        newPassword,
+      );
+      console.log("✅ Şifre sıfırlandı:", passwordCourier.id, result);
+      alert(result?.message || "Şifre başarıyla sıfırlandı");
       setShowPasswordModal(false);
+      setNewPassword("");
     } catch (error) {
       console.error("Şifre sıfırlama hatası:", error);
-      alert("Şifre sıfırlanamadı: " + (error.message || "Bilinmeyen hata"));
+      // Backend'den gelen detaylı hata mesajını göster
+      const errorMsg =
+        error?.response?.data?.message ||
+        error?.raw?.response?.data?.message ||
+        error?.message ||
+        "Bilinmeyen hata";
+
+      // Eğer errors array varsa, onu da göster
+      const errors =
+        error?.response?.data?.errors || error?.raw?.response?.data?.errors;
+      const fullError =
+        errors && errors.length > 0
+          ? `${errorMsg}\n\nDetaylar:\n${errors.join("\n")}`
+          : errorMsg;
+
+      alert(`Şifre sıfırlanamadı:\n${fullError}`);
     } finally {
       setResettingPassword(false);
     }
@@ -699,6 +735,10 @@ export default function AdminCouriers() {
                       className="form-control form-control-sm"
                       placeholder="En az 6 karakter"
                     />
+                    <small className="text-muted d-block mt-1">
+                      Şifre en az 6 karakter, 1 büyük harf, 1 küçük harf ve 1
+                      rakam içermelidir
+                    </small>
                   </div>
                 )}
 
