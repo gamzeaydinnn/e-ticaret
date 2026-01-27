@@ -31,17 +31,20 @@ namespace ECommerce.API.Controllers.Admin
     public class AdminCampaignsController : ControllerBase
     {
         private readonly ICampaignService _campaignService;
+        private readonly ICampaignApplicationService _campaignApplicationService;
         private readonly IProductRepository _productRepository;
         private readonly ICategoryRepository _categoryRepository;
         private readonly ILogger<AdminCampaignsController> _logger;
 
         public AdminCampaignsController(
             ICampaignService campaignService,
+            ICampaignApplicationService campaignApplicationService,
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
             ILogger<AdminCampaignsController> logger)
         {
             _campaignService = campaignService ?? throw new ArgumentNullException(nameof(campaignService));
+            _campaignApplicationService = campaignApplicationService ?? throw new ArgumentNullException(nameof(campaignApplicationService));
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _categoryRepository = categoryRepository ?? throw new ArgumentNullException(nameof(categoryRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -111,6 +114,13 @@ namespace ECommerce.API.Controllers.Admin
                 }
 
                 var created = await _campaignService.CreateAsync(dto);
+                
+                // Kampanya Uygulama Motoru: Ürünlere otomatik indirim uygula
+                var updatedProductCount = await _campaignApplicationService.ApplyCampaignToProductsAsync(created.Id);
+                _logger.LogInformation(
+                    "Kampanya ürünlere uygulandı. Kampanya ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                    created.Id, updatedProductCount);
+                
                 var detailDto = await MapToDetailDtoAsync(created);
                 
                 _logger.LogInformation(
@@ -153,6 +163,13 @@ namespace ECommerce.API.Controllers.Admin
                 }
 
                 var updated = await _campaignService.UpdateAsync(id, dto);
+                
+                // Kampanya Uygulama Motoru: Ürünlere güncel indirimi uygula
+                var updatedProductCount = await _campaignApplicationService.ApplyCampaignToProductsAsync(updated.Id);
+                _logger.LogInformation(
+                    "Kampanya güncellemesi ürünlere uygulandı. Kampanya ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                    updated.Id, updatedProductCount);
+                
                 var detailDto = await MapToDetailDtoAsync(updated);
                 
                 _logger.LogInformation(
@@ -185,6 +202,12 @@ namespace ECommerce.API.Controllers.Admin
         {
             try
             {
+                // Önce kampanya indirimlerini ürünlerden kaldır
+                var removedProductCount = await _campaignApplicationService.RemoveCampaignFromProductsAsync(id);
+                _logger.LogInformation(
+                    "Kampanya indirimleri ürünlerden kaldırıldı. Kampanya ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                    id, removedProductCount);
+                
                 var deleted = await _campaignService.DeleteAsync(id);
                 if (!deleted)
                 {
@@ -223,6 +246,22 @@ namespace ECommerce.API.Controllers.Admin
                 // Güncel durumu getir
                 var campaign = await _campaignService.GetByIdAsync(id);
                 
+                // Kampanya Uygulama Motoru: Duruma göre indirimleri uygula/kaldır
+                if (campaign?.IsActive == true)
+                {
+                    var updatedCount = await _campaignApplicationService.ApplyCampaignToProductsAsync(id);
+                    _logger.LogInformation(
+                        "Kampanya aktif edildi, indirimler uygulandı. ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                        id, updatedCount);
+                }
+                else
+                {
+                    var updatedCount = await _campaignApplicationService.RemoveCampaignFromProductsAsync(id);
+                    _logger.LogInformation(
+                        "Kampanya pasif edildi, indirimler kaldırıldı. ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                        id, updatedCount);
+                }
+                
                 _logger.LogInformation(
                     "Kampanya durumu değiştirildi. ID: {CampaignId}, Yeni Durum: {IsActive}",
                     id, campaign?.IsActive);
@@ -258,6 +297,12 @@ namespace ECommerce.API.Controllers.Admin
                 if (!campaign.IsActive)
                 {
                     await _campaignService.ToggleActiveAsync(id);
+                    
+                    // Kampanya Uygulama Motoru: İndirimleri uygula
+                    var updatedCount = await _campaignApplicationService.ApplyCampaignToProductsAsync(id);
+                    _logger.LogInformation(
+                        "Kampanya aktif edildi, indirimler uygulandı. ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                        id, updatedCount);
                 }
                 
                 return Ok(new { success = true, message = "Kampanya aktif edildi." });
@@ -285,6 +330,12 @@ namespace ECommerce.API.Controllers.Admin
 
                 if (campaign.IsActive)
                 {
+                    // Önce indirimleri kaldır
+                    var updatedCount = await _campaignApplicationService.RemoveCampaignFromProductsAsync(id);
+                    _logger.LogInformation(
+                        "Kampanya pasif edildi, indirimler kaldırıldı. ID: {CampaignId}, Güncellenen ürün: {UpdatedCount}",
+                        id, updatedCount);
+                    
                     await _campaignService.ToggleActiveAsync(id);
                 }
                 
@@ -294,6 +345,37 @@ namespace ECommerce.API.Controllers.Admin
             {
                 _logger.LogError(ex, "Kampanya pasif etme hatası. ID: {CampaignId}", id);
                 return StatusCode(500, new { message = "Kampanya pasif edilirken hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Tüm aktif kampanyaların ürün indirimlerini yeniden hesaplar.
+        /// Bakım veya toplu güncelleme için kullanılır.
+        /// </summary>
+        [HttpPost("recalculate-all")]
+        public async Task<ActionResult<object>> RecalculateAllCampaigns()
+        {
+            try
+            {
+                _logger.LogInformation("Tüm kampanyalar yeniden hesaplanıyor...");
+                
+                var updatedCount = await _campaignApplicationService.RecalculateAllCampaignsAsync();
+                
+                _logger.LogInformation(
+                    "Tüm kampanyalar yeniden hesaplandı. Güncellenen ürün: {UpdatedCount}",
+                    updatedCount);
+                
+                return Ok(new 
+                { 
+                    success = true, 
+                    updatedProductCount = updatedCount,
+                    message = $"{updatedCount} ürünün indirimli fiyatı güncellendi."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kampanya yeniden hesaplama hatası");
+                return StatusCode(500, new { message = "Kampanyalar yeniden hesaplanırken hata oluştu." });
             }
         }
 
@@ -425,6 +507,204 @@ namespace ECommerce.API.Controllers.Admin
                 _logger.LogError(ex, "Kampanya istatistikleri getirme hatası");
                 return StatusCode(500, new { message = "İstatistikler yüklenirken hata oluştu." });
             }
+        }
+
+        #endregion
+
+        #region Kampanya Önizleme
+
+        /// <summary>
+        /// Kampanya önizlemesi - Kampanyanın etkileyeceği ürünleri ve fiyat değişikliklerini gösterir.
+        /// Admin panelden "Önizle" butonuyla çağrılır.
+        /// </summary>
+        /// <param name="dto">Kampanya bilgileri (henüz kaydedilmemiş olabilir)</param>
+        /// <returns>Etkilenecek ürünler, eski/yeni fiyatlar ve toplam indirim tutarı</returns>
+        [HttpPost("preview")]
+        public async Task<ActionResult<CampaignPreviewResult>> PreviewCampaign([FromBody] CampaignSaveDto dto)
+        {
+            try
+            {
+                if (dto == null)
+                {
+                    return BadRequest(new { message = "Kampanya bilgileri gerekli." });
+                }
+
+                // Kampanya türüne göre fiyat hesaplama
+                // Sadece Percentage ve FixedAmount türleri için önizleme yapılır
+                if (dto.Type != CampaignType.Percentage && dto.Type != CampaignType.FixedAmount)
+                {
+                    return Ok(new CampaignPreviewResult
+                    {
+                        Message = $"{GetCampaignTypeDisplayName(dto.Type)} kampanyaları sepette uygulanır, ürün fiyatlarını değiştirmez.",
+                        AffectedProducts = new List<CampaignPreviewProduct>(),
+                        TotalDiscount = 0
+                    });
+                }
+
+                // Hedef ürünleri bul
+                var products = await GetTargetProductsAsync(dto);
+                if (!products.Any())
+                {
+                    return Ok(new CampaignPreviewResult
+                    {
+                        Message = "Bu kampanya için hedef ürün bulunamadı.",
+                        AffectedProducts = new List<CampaignPreviewProduct>(),
+                        TotalDiscount = 0
+                    });
+                }
+
+                // Her ürün için indirimli fiyat hesapla
+                var affectedProducts = new List<CampaignPreviewProduct>();
+                decimal totalDiscount = 0;
+
+                foreach (var product in products)
+                {
+                    decimal discount = CalculateDiscount(dto, product.Price);
+                    
+                    // MaxDiscountAmount kontrolü
+                    if (dto.MaxDiscountAmount.HasValue && discount > dto.MaxDiscountAmount.Value)
+                    {
+                        discount = dto.MaxDiscountAmount.Value;
+                    }
+
+                    decimal newPrice = product.Price - discount;
+                    if (newPrice < 0) newPrice = 0;
+
+                    affectedProducts.Add(new CampaignPreviewProduct
+                    {
+                        ProductId = product.Id,
+                        ProductName = product.Name,
+                        CategoryName = product.Category?.Name ?? "Kategori Yok",
+                        OriginalPrice = product.Price,
+                        NewPrice = newPrice,
+                        DiscountAmount = discount,
+                        DiscountPercentage = product.Price > 0 
+                            ? Math.Round((discount / product.Price) * 100, 1) 
+                            : 0
+                    });
+
+                    totalDiscount += discount;
+                }
+
+                // Sonuçları döndür
+                return Ok(new CampaignPreviewResult
+                {
+                    Message = $"{affectedProducts.Count} ürün bu kampanyadan etkilenecek.",
+                    AffectedProducts = affectedProducts
+                        .OrderByDescending(p => p.DiscountAmount)
+                        .ToList(),
+                    TotalDiscount = totalDiscount,
+                    TotalProductCount = affectedProducts.Count,
+                    AverageDiscountPercentage = affectedProducts.Any() 
+                        ? Math.Round(affectedProducts.Average(p => p.DiscountPercentage), 1) 
+                        : 0
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kampanya önizleme hatası");
+                return StatusCode(500, new { message = "Önizleme hesaplanırken hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Mevcut bir kampanyanın önizlemesini getirir.
+        /// </summary>
+        [HttpGet("{id:int}/preview")]
+        public async Task<ActionResult<CampaignPreviewResult>> PreviewExistingCampaign(int id)
+        {
+            try
+            {
+                var campaign = await _campaignService.GetByIdAsync(id);
+                if (campaign == null)
+                {
+                    return NotFound(new { message = "Kampanya bulunamadı." });
+                }
+
+                // Campaign'ı DTO'ya çevir ve preview yap
+                var dto = new CampaignSaveDto
+                {
+                    Name = campaign.Name,
+                    Description = campaign.Description,
+                    StartDate = campaign.StartDate,
+                    EndDate = campaign.EndDate,
+                    IsActive = campaign.IsActive,
+                    Type = campaign.Type,
+                    TargetType = campaign.TargetType,
+                    DiscountValue = campaign.DiscountValue,
+                    MaxDiscountAmount = campaign.MaxDiscountAmount,
+                    TargetIds = campaign.Targets?.Select(t => t.TargetId).ToList() ?? new List<int>()
+                };
+
+                // Mevcut preview metodunu çağır
+                return await PreviewCampaign(dto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Mevcut kampanya önizleme hatası. ID: {CampaignId}", id);
+                return StatusCode(500, new { message = "Önizleme hesaplanırken hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Kampanya hedeflerine göre ürünleri getirir (önizleme için).
+        /// </summary>
+        private async Task<List<Product>> GetTargetProductsAsync(CampaignSaveDto dto)
+        {
+            var products = new List<Product>();
+
+            switch (dto.TargetType)
+            {
+                case CampaignTargetType.All:
+                    // Tüm aktif ürünler
+                    var allProducts = await _productRepository.GetAllAsync();
+                    products = allProducts.Where(p => p.IsActive).ToList();
+                    break;
+
+                case CampaignTargetType.Product:
+                    // Belirli ürünler
+                    if (dto.TargetIds?.Any() == true)
+                    {
+                        foreach (var productId in dto.TargetIds)
+                        {
+                            var product = await _productRepository.GetByIdAsync(productId);
+                            if (product != null && product.IsActive)
+                            {
+                                products.Add(product);
+                            }
+                        }
+                    }
+                    break;
+
+                case CampaignTargetType.Category:
+                    // Belirli kategorilerdeki ürünler
+                    if (dto.TargetIds?.Any() == true)
+                    {
+                        foreach (var categoryId in dto.TargetIds)
+                        {
+                            var categoryProducts = await _productRepository.GetByCategoryIdAsync(categoryId);
+                            products.AddRange(categoryProducts.Where(p => p.IsActive));
+                        }
+                        // Tekrarları kaldır
+                        products = products.GroupBy(p => p.Id).Select(g => g.First()).ToList();
+                    }
+                    break;
+            }
+
+            return products;
+        }
+
+        /// <summary>
+        /// Kampanya türüne göre indirim tutarını hesaplar.
+        /// </summary>
+        private decimal CalculateDiscount(CampaignSaveDto dto, decimal price)
+        {
+            return dto.Type switch
+            {
+                CampaignType.Percentage => price * (dto.DiscountValue / 100m),
+                CampaignType.FixedAmount => dto.DiscountValue,
+                _ => 0
+            };
         }
 
         #endregion

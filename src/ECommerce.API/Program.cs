@@ -444,6 +444,7 @@ builder.Services.AddScoped<ICategoryService, CategoryManager>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
 builder.Services.AddScoped<ICampaignService, CampaignManager>();
+builder.Services.AddScoped<ICampaignApplicationService, CampaignApplicationService>(); // Kampanya Uygulama Motoru
 builder.Services.AddScoped<IAdminLogService, LogManager>();
 builder.Services.AddScoped<IInventoryLogService, InventoryLogService>();
 

@@ -160,11 +160,28 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Kampanyanın şu anda geçerli olup olmadığını kontrol eder
         /// IsActive && StartDate <= now && EndDate >= now
+        /// Tarih karşılaştırması: Önce UTC, sonra yerel zaman denenir
         /// </summary>
         public bool IsCurrentlyValid()
         {
-            var now = DateTime.UtcNow;
-            return IsActive && StartDate <= now && EndDate >= now;
+            if (!IsActive) return false;
+            
+            var nowUtc = DateTime.UtcNow;
+            var nowLocal = DateTime.Now;
+            
+            // UTC ile kontrol
+            if (StartDate <= nowUtc && EndDate >= nowUtc)
+                return true;
+            
+            // Yerel zaman ile kontrol (tarihlerin yerel zaman olarak kaydedilmiş olabileceği için)
+            if (StartDate <= nowLocal && EndDate >= nowLocal)
+                return true;
+            
+            // Sadece tarih karşılaştırması (saat farkı sorunu için)
+            if (StartDate.Date <= nowLocal.Date && EndDate.Date >= nowLocal.Date)
+                return true;
+                
+            return false;
         }
 
         /// <summary>

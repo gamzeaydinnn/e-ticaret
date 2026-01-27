@@ -13,7 +13,12 @@
 }
 
 .App {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto",
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Roboto",
     sans-serif;
   line-height: 1.6;
   color: var(--warm-gray);
@@ -195,7 +200,9 @@
 }
 
 .search-container .form-control::placeholder {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 }
 
 .search-container .form-control:focus::placeholder {
@@ -206,7 +213,9 @@
 .search-container .form-control:focus {
   border-color: var(--primary-orange);
   background: white;
-  box-shadow: 0 0 0 3px var(--shadow-color), inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 0 0 3px var(--shadow-color),
+    inset 0 2px 4px rgba(0, 0, 0, 0.05);
   transform: translateY(-1px);
 }
 
@@ -239,7 +248,9 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
   transform: translate(-50%, -50%);
-  transition: width 0.6s ease, height 0.6s ease;
+  transition:
+    width 0.6s ease,
+    height 0.6s ease;
 }
 
 .search-container .btn:hover::before {
@@ -413,7 +424,9 @@
   height: 0;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.5);
-  transition: width 0.3s ease, height 0.3s ease;
+  transition:
+    width 0.3s ease,
+    height 0.3s ease;
 }
 
 .slide-indicator:hover::after {
@@ -795,7 +808,8 @@
   background: linear-gradient(135deg, #ff9500 0%, #ff6b00 50%, #e65100 100%);
   border-radius: 6px 6px 3px 3px;
   position: relative;
-  box-shadow: 0 8px 16px rgba(255, 149, 0, 0.4),
+  box-shadow:
+    0 8px 16px rgba(255, 149, 0, 0.4),
     inset 0 2px 4px rgba(255, 255, 255, 0.3),
     inset 0 -2px 4px rgba(0, 0, 0, 0.2);
 }
@@ -835,7 +849,8 @@
   height: 12px;
   background: linear-gradient(135deg, #ff9500 0%, #ff6b00 50%, #e65100 100%);
   border-radius: 8px 8px 0 0;
-  box-shadow: 0 2px 6px rgba(255, 149, 0, 0.3),
+  box-shadow:
+    0 2px 6px rgba(255, 149, 0, 0.3),
     inset 0 1px 2px rgba(255, 255, 255, 0.4);
 }
 
@@ -1358,6 +1373,43 @@
   }
   50% {
     transform: scale(1.05);
+  }
+}
+
+/* Kampanyalı Fiyat Pulse Animasyonu */
+@keyframes price-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.02);
+    filter: brightness(1.1);
+  }
+}
+
+/* Kampanya Rozeti Glow Efekti */
+@keyframes campaign-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow:
+      0 0 15px rgba(239, 68, 68, 0.8),
+      0 0 25px rgba(239, 68, 68, 0.4);
+  }
+}
+
+/* Kampanyalı Ürün Kartı Border Animasyonu */
+@keyframes campaign-border-pulse {
+  0%,
+  100% {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.6);
   }
 }
 
@@ -1886,7 +1938,9 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
   transform: translate(-50%, -50%);
-  transition: width 0.6s ease, height 0.6s ease;
+  transition:
+    width 0.6s ease,
+    height 0.6s ease;
 }
 
 .btn-add-cart:active::before {
@@ -2232,7 +2286,9 @@ html {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.5);
   transform: translate(-50%, -50%);
-  transition: width 0.6s ease, height 0.6s ease;
+  transition:
+    width 0.6s ease,
+    height 0.6s ease;
 }
 
 .btn-ripple:active::after {
@@ -2322,7 +2378,9 @@ html {
   height: 0;
   background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  transition: width 0.5s ease, height 0.5s ease;
+  transition:
+    width 0.5s ease,
+    height 0.5s ease;
   z-index: 2;
   pointer-events: none;
 }
@@ -3120,11 +3178,11 @@ html {
   .hero-slider-container [style*="height: 240px"] {
     height: 220px !important;
   }
-  
+
   .hero-slider-container h2 {
     font-size: 1.2rem !important;
   }
-  
+
   .hero-slider-container p {
     font-size: 0.9rem !important;
   }
@@ -3134,15 +3192,15 @@ html {
   .hero-slider-container {
     max-width: 700px;
   }
-  
+
   .hero-slider-container [style*="height"] {
     height: 200px !important;
   }
-  
+
   .hero-slider-container h2 {
     font-size: 1.1rem !important;
   }
-  
+
   .hero-slider-container button[style*="width: 38px"] {
     width: 32px !important;
     height: 32px !important;
@@ -3154,20 +3212,20 @@ html {
   .hero-slider-container {
     max-width: 600px;
   }
-  
+
   .hero-slider-container [style*="height"] {
     height: 180px !important;
   }
-  
+
   .hero-slider-container h2 {
     font-size: 1rem !important;
     margin-bottom: 4px !important;
   }
-  
+
   .hero-slider-container p {
     font-size: 0.8rem !important;
   }
-  
+
   .hero-slider-container [style*="padding"] {
     padding: 20px 16px 16px !important;
   }
@@ -3177,25 +3235,25 @@ html {
   .hero-slider-container {
     max-width: 100%;
   }
-  
+
   .hero-slider-container [style*="height"] {
     height: 160px !important;
   }
-  
+
   .hero-slider-container h2 {
     font-size: 0.9rem !important;
   }
-  
+
   .hero-slider-container p {
     font-size: 0.75rem !important;
   }
-  
+
   .hero-slider-container button[style*="width"] {
     width: 28px !important;
     height: 28px !important;
     font-size: 0.7rem !important;
   }
-  
+
   .hero-slider-container [style*="width: 10px"][style*="height: 10px"] {
     width: 8px !important;
     height: 8px !important;
@@ -3252,7 +3310,7 @@ html {
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
-  
+
   .chef-card {
     max-width: 100%;
   }
@@ -3262,7 +3320,7 @@ html {
   .chef-recommendations {
     gap: 10px !important;
   }
-  
+
   section h2 {
     font-size: 1.1rem !important;
   }
@@ -3288,15 +3346,15 @@ html {
   .feature-card {
     padding: 20px !important;
   }
-  
+
   .feature-icon i {
     font-size: 2rem !important;
   }
-  
+
   .feature-title {
     font-size: 0.95rem !important;
   }
-  
+
   .feature-desc {
     font-size: 0.8rem !important;
   }
@@ -3306,7 +3364,7 @@ html {
   .feature-card {
     padding: 16px !important;
   }
-  
+
   .feature-card > div[style*="gridTemplateColumns"] {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 12px !important;
@@ -3317,20 +3375,20 @@ html {
   .feature-card {
     padding: 16px 12px !important;
   }
-  
+
   .feature-icon {
     margin-bottom: 12px !important;
   }
-  
+
   .feature-icon i {
     font-size: 1.8rem !important;
   }
-  
+
   .feature-title {
     font-size: 0.875rem !important;
     margin-bottom: 6px !important;
   }
-  
+
   .feature-desc {
     font-size: 0.75rem !important;
   }
@@ -3356,7 +3414,7 @@ html {
     max-width: 220px !important;
     min-height: 380px !important;
   }
-  
+
   .modern-product-card .card-body {
     padding: 10px !important;
   }
@@ -3367,12 +3425,12 @@ html {
     max-width: 200px !important;
     min-height: 360px !important;
   }
-  
+
   .modern-product-card .product-title {
     font-size: 0.8rem !important;
     height: 38px !important;
   }
-  
+
   .modern-product-card .current-price {
     font-size: 1.1rem !important;
   }
@@ -3383,36 +3441,35 @@ html {
     max-width: 180px !important;
     min-height: 340px !important;
   }
-  
+
   .modern-product-card .product-image-container {
     height: 140px !important;
   }
-  
+
   .modern-product-card img {
     max-height: 110px !important;
     max-width: 110px !important;
   }
-  
+
   .modern-product-card .card-body {
     padding: 8px !important;
     min-height: 180px !important;
   }
-  
+
   .modern-product-card .product-title {
     font-size: 0.75rem !important;
     height: 36px !important;
   }
-  
+
   .modern-product-card .action-buttons {
     padding: 8px !important;
   }
-  
+
   .modern-product-card .modern-add-btn {
     padding: 8px 16px !important;
     font-size: 0.75rem !important;
   }
 }
-
 
 .badge-modern {
   animation: badgePulse 3s infinite;

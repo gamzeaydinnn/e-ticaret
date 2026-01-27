@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { debugLog } from "../config/apiConfig";
 import getProductCategoryRules from "../config/productCategoryRules";
 import { useAuth } from "../contexts/AuthContext";
@@ -9,7 +10,6 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
-import ProductDetailModal from "./ProductDetailModal";
 
 const DEMO_PRODUCTS = [
   // Et ve Et Ürünleri (categoryId: 1)
@@ -211,12 +211,11 @@ export default function ProductGrid({
   products: initialProducts,
   categoryId,
 } = {}) {
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [usingMockData, setUsingMockData] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showModal, setShowModal] = useState(false);
   const [rules, setRules] = useState([]);
   // Modal state'leri artık ProductDetailModal içinde yönetiliyor
   // eslint-disable-next-line no-unused-vars
@@ -225,6 +224,8 @@ export default function ProductGrid({
   const [modalRule, setModalRule] = useState(null);
   // eslint-disable-next-line no-unused-vars
   const [modalError, setModalError] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [showLoginRequired, setShowLoginRequired] = useState(false);
   const [loginAction, setLoginAction] = useState(null); // 'cart' or 'favorite'
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -276,13 +277,19 @@ export default function ProductGrid({
 
     if (loginAction === "cart") {
       const productId = localStorage.getItem("tempProductId");
+      // Misafir modundan devam edilirken seçilen miktarı al (varsayılan: 1)
+      const savedQty = localStorage.getItem("tempProductQty");
+      const quantity = savedQty ? parseFloat(savedQty) : 1;
+
       if (productId) {
         const product = data.find((p) => p.id === parseInt(productId));
         if (product) {
-          ctxAddToCart(product, 1);
+          // Kullanıcının seçtiği miktarı doğru şekilde sepete ekle
+          ctxAddToCart(product, quantity);
           showCartNotification(product, "guest");
         }
         localStorage.removeItem("tempProductId");
+        localStorage.removeItem("tempProductQty");
       }
     } else if (loginAction === "favorite") {
       const productId = localStorage.getItem("tempFavoriteProductId");
@@ -357,7 +364,7 @@ export default function ProductGrid({
   };
 
   const handleProductClick = (product, event) => {
-    // Sepete ekle butonuna tıklanmışsa modal açma
+    // Sepete ekle butonuna tıklanmışsa yönlendirme yapma
     if (
       event.target.closest(".modern-add-btn") ||
       event.target.closest(".btn-favorite")
@@ -365,13 +372,8 @@ export default function ProductGrid({
       return;
     }
 
-    setSelectedProduct(product);
-    setShowModal(true);
-  };
-
-  const closeModal = () => {
-    setShowModal(false);
-    setSelectedProduct(null);
+    // Modal yerine ürün detay sayfasına yönlendir
+    navigate(`/product/${product.id}`);
   };
 
   useEffect(() => {
@@ -556,22 +558,26 @@ export default function ProductGrid({
             const isOutOfStock = stock <= 0;
             const isLowStock = !isOutOfStock && stock <= 5;
 
-            const hasDiscount =
-              typeof p.originalPrice === "number" &&
-              p.originalPrice > 0 &&
-              typeof p.price === "number" &&
-              p.price < p.originalPrice;
+            // Kampanya/indirim bilgisi hesaplama
+            // Backend'den gelen specialPrice veya originalPrice'ı kontrol et
+            const basePrice = p.originalPrice || p.price || 0;
+            const specialPrice = p.specialPrice;
+            const hasDiscount = specialPrice && specialPrice < basePrice;
 
-            const currentPrice = typeof p.price === "number" ? p.price : 0;
-            const originalPrice =
-              typeof p.originalPrice === "number" ? p.originalPrice : null;
-            const discountPercentage =
-              typeof p.discountPercentage === "number" &&
-              p.discountPercentage > 0
-                ? p.discountPercentage
-                : hasDiscount && originalPrice
-                  ? Math.round(100 - (currentPrice / originalPrice) * 100)
-                  : 0;
+            const currentPrice = hasDiscount
+              ? specialPrice
+              : typeof p.price === "number"
+                ? p.price
+                : 0;
+            const originalPrice = hasDiscount ? basePrice : null;
+
+            // İndirim yüzdesi: Sadece specialPrice ve price varsa hesapla, eski discountPercentage kullanma
+            const discountPercentage = 0; // Yüzde badge'i devre dışı - yanlış veri gösteriyordu
+
+            // Kampanya bilgileri
+            const hasCampaign =
+              p.hasActiveCampaign || (p.campaignId && hasDiscount);
+            const campaignName = p.campaignName;
 
             return (
               <div key={p.id} className="col-6 col-md-4 col-lg-3 mb-3">
@@ -580,7 +586,9 @@ export default function ProductGrid({
                   style={{
                     background: "#ffffff",
                     borderRadius: "20px",
-                    border: "1px solid rgba(255, 107, 53, 0.1)",
+                    border: hasCampaign
+                      ? "2px solid rgba(239, 68, 68, 0.3)"
+                      : "1px solid rgba(255, 107, 53, 0.1)",
                     overflow: "hidden",
                     position: "relative",
                     animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
@@ -588,54 +596,32 @@ export default function ProductGrid({
                     minHeight: "380px",
                     display: "flex",
                     flexDirection: "column",
-                    boxShadow: "0 5px 15px rgba(0, 0, 0, 0.08)",
+                    boxShadow: hasCampaign
+                      ? "0 5px 20px rgba(239, 68, 68, 0.15)"
+                      : "0 5px 15px rgba(0, 0, 0, 0.08)",
                   }}
                   onClick={(e) => handleProductClick(p, e)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform =
                       "translateY(-8px) scale(1.02)";
-                    e.currentTarget.style.boxShadow =
-                      "0 20px 40px rgba(255, 107, 53, 0.15)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(255, 107, 53, 0.3)";
+                    e.currentTarget.style.boxShadow = hasCampaign
+                      ? "0 20px 40px rgba(239, 68, 68, 0.25)"
+                      : "0 20px 40px rgba(255, 107, 53, 0.15)";
+                    e.currentTarget.style.borderColor = hasCampaign
+                      ? "rgba(239, 68, 68, 0.5)"
+                      : "rgba(255, 107, 53, 0.3)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "translateY(0) scale(1)";
-                    e.currentTarget.style.boxShadow =
-                      "0 5px 15px rgba(0, 0, 0, 0.08)";
-                    e.currentTarget.style.borderColor =
-                      "rgba(255, 107, 53, 0.1)";
+                    e.currentTarget.style.boxShadow = hasCampaign
+                      ? "0 5px 20px rgba(239, 68, 68, 0.15)"
+                      : "0 5px 15px rgba(0, 0, 0, 0.08)";
+                    e.currentTarget.style.borderColor = hasCampaign
+                      ? "rgba(239, 68, 68, 0.3)"
+                      : "rgba(255, 107, 53, 0.1)";
                   }}
                 >
-                  {/* Badge - Sol Üst */}
-                  {p.badge && (
-                    <div
-                      className="position-absolute top-0 start-0 p-2"
-                      style={{ zIndex: 3 }}
-                    >
-                      <span
-                        className="badge-modern"
-                        style={{
-                          background:
-                            p.badge === "İndirim"
-                              ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
-                              : p.badge === "Yeni"
-                                ? "linear-gradient(135deg, #28a745, #20c997)"
-                                : "linear-gradient(135deg, #ffc107, #fd7e14)",
-                          color: "white",
-                          padding: "3px 10px",
-                          borderRadius: "12px",
-                          fontSize: "0.65rem",
-                          fontWeight: "700",
-                          textTransform: "uppercase",
-                          boxShadow: "0 2px 8px rgba(255, 107, 53, 0.3)",
-                          animation: "pulse 2s infinite",
-                        }}
-                      >
-                        {p.badge}
-                      </span>
-                    </div>
-                  )}
+                  {/* Kampanya İndirim Rozeti - Kaldırıldı (yanlış veri gösteriyordu) */}
 
                   {/* Stok Rozetleri */}
                   {isLowStock && !isOutOfStock && (
@@ -844,57 +830,84 @@ export default function ProductGrid({
 
                     {/* Content Area - Flexible */}
                     <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
+                      {/* Kampanya Adı (varsa) */}
+                      {campaignName && (
+                        <div
+                          className="campaign-name-badge mb-2"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #dbeafe, #bfdbfe)",
+                            color: "#1d4ed8",
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.65rem",
+                            fontWeight: "600",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            width: "fit-content",
+                          }}
+                        >
+                          <i
+                            className="fas fa-tag"
+                            style={{ fontSize: "0.55rem" }}
+                          ></i>
+                          {campaignName}
+                        </div>
+                      )}
+
                       {/* Modern Fiyat Bilgileri */}
                       <div
                         className="price-section mb-3"
                         style={{ minHeight: "72px" }}
                       >
-                        {originalPrice ? (
+                        {hasDiscount && originalPrice ? (
                           <div className="price-container">
+                            {/* Eski Fiyat - Üzeri Çizili */}
                             <div className="d-flex align-items-center mb-2">
                               <span
                                 className="old-price me-2"
                                 style={{
-                                  fontSize: "0.8rem",
+                                  fontSize: "0.85rem",
                                   textDecoration: "line-through",
-                                  color: "#6c757d",
+                                  textDecorationColor: "#ef4444",
+                                  textDecorationThickness: "2px",
+                                  color: "#9ca3af",
                                 }}
                               >
                                 {originalPrice.toFixed(2)} TL
                               </span>
-                              {discountPercentage > 0 && (
-                                <span
-                                  className="discount-badge"
-                                  style={{
-                                    background:
-                                      "linear-gradient(135deg, #dc3545, #c82333)",
-                                    color: "white",
-                                    padding: "3px 7px",
-                                    borderRadius: "10px",
-                                    fontSize: "0.65rem",
-                                    fontWeight: "700",
-                                    animation: "bounce 2s infinite",
-                                  }}
-                                >
-                                  -%{discountPercentage}
-                                </span>
-                              )}
                             </div>
+                            {/* Yeni Fiyat - Kırmızı, Bold, Büyük */}
                             <div
                               className="current-price"
                               style={{
-                                fontSize: "1.15rem",
+                                fontSize: "1.3rem",
                                 fontWeight: "800",
                                 background:
-                                  "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                                  "linear-gradient(135deg, #dc2626, #ef4444)",
                                 backgroundClip: "text",
                                 WebkitBackgroundClip: "text",
                                 WebkitTextFillColor: "transparent",
                                 display: "inline-block",
-                                textShadow: "0 2px 4px rgba(255,107,53,0.3)",
+                                animation: hasCampaign
+                                  ? "price-pulse 2s ease-in-out infinite"
+                                  : "none",
                               }}
                             >
                               {currentPrice.toFixed(2)} TL
+                            </div>
+                            {/* Tasarruf Bilgisi */}
+                            <div
+                              className="savings-info mt-1"
+                              style={{
+                                fontSize: "0.7rem",
+                                color: "#059669",
+                                fontWeight: "600",
+                              }}
+                            >
+                              💰 {(originalPrice - currentPrice).toFixed(2)} TL
+                              tasarruf
                             </div>
                           </div>
                         ) : (
@@ -1058,25 +1071,6 @@ export default function ProductGrid({
           })}
         </div>
       )}
-
-      {/* Yeni Modern Ürün Detay Modalı */}
-      <ProductDetailModal
-        product={selectedProduct}
-        isOpen={showModal}
-        onClose={closeModal}
-        onAddToCart={(product, qty) => {
-          if (!user) {
-            // Misafir ise bilgi sakla ve login sor
-            setLoginAction("cart");
-            setShowLoginRequired(true);
-            localStorage.setItem("tempProductId", product.id);
-            localStorage.setItem("tempProductQty", qty);
-            return;
-          }
-          ctxAddToCart(product, qty);
-          showCartNotification(product, "registered");
-        }}
-      />
 
       {/* Login Alert Modal */}
       {showLoginAlert && (

@@ -21,11 +21,13 @@ namespace ECommerce.Data.Repositories
         }
 
         /// <summary>
-        /// Tüm kampanyaları hedefleriyle birlikte getirir
+        /// Tüm AKTİF kampanyaları hedefleriyle birlikte getirir.
+        /// Soft delete yapılan kampanyalar (IsActive = false) listelenmez.
         /// </summary>
         public override async Task<IEnumerable<Campaign>> GetAllAsync()
         {
             return await _context.Campaigns
+                .Where(c => c.IsActive) // Sadece aktif (silinmemiş) kampanyalar
                 .Include(c => c.Targets)
                 #pragma warning disable CS0618 // Geriye dönük uyumluluk için eski alanları da dahil ediyoruz
                 .Include(c => c.Rules)
@@ -36,9 +38,42 @@ namespace ECommerce.Data.Repositories
         }
 
         /// <summary>
-        /// ID'ye göre kampanya getirir (hedefler dahil)
+        /// Tüm kampanyaları (silinen dahil) hedefleriyle birlikte getirir.
+        /// Admin panelde silinenleri de görmek için kullanılır.
+        /// </summary>
+        public async Task<IEnumerable<Campaign>> GetAllIncludingDeletedAsync()
+        {
+            return await _context.Campaigns
+                .Include(c => c.Targets)
+                #pragma warning disable CS0618
+                .Include(c => c.Rules)
+                .Include(c => c.Rewards)
+                #pragma warning restore CS0618
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+        }
+
+        /// <summary>
+        /// ID'ye göre aktif kampanya getirir (hedefler dahil).
+        /// Soft delete yapılmış kampanyalar için null döner.
         /// </summary>
         public override async Task<Campaign?> GetByIdAsync(int id)
+        {
+            return await _context.Campaigns
+                .Where(c => c.IsActive) // Silinmiş kampanyaları getirme
+                .Include(c => c.Targets)
+                #pragma warning disable CS0618
+                .Include(c => c.Rules)
+                .Include(c => c.Rewards)
+                #pragma warning restore CS0618
+                .FirstOrDefaultAsync(c => c.Id == id);
+        }
+
+        /// <summary>
+        /// ID'ye göre kampanya getirir (silinen dahil).
+        /// Hard delete veya restore işlemleri için kullanılır.
+        /// </summary>
+        public async Task<Campaign?> GetByIdIncludingDeletedAsync(int id)
         {
             return await _context.Campaigns
                 .Include(c => c.Targets)

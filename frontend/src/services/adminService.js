@@ -747,6 +747,87 @@ export const AdminService = {
     return api.patch(`/api/admin/campaigns/${id}/toggle`);
   },
 
+  // ========== KAMPANYA ÖNİZLEME FONKSİYONLARI ==========
+
+  /**
+   * Mevcut bir kampanyanın önizlemesini getirir
+   * @param {number} id - Kampanya ID
+   * @returns {Promise<Object>} - Önizleme sonucu (etkilenen ürünler, fiyat değişimleri)
+   */
+  previewCampaign: async (id) => {
+    if (shouldUseMockData()) {
+      // Mock data için basit önizleme
+      return {
+        message: "Bu kampanya 5 ürünü etkileyecek.",
+        affectedProducts: [
+          {
+            productId: 1,
+            productName: "Test Ürün 1",
+            categoryName: "Elektronik",
+            originalPrice: 100,
+            newPrice: 90,
+            discountAmount: 10,
+            discountPercentage: 10,
+          },
+          {
+            productId: 2,
+            productName: "Test Ürün 2",
+            categoryName: "Giyim",
+            originalPrice: 200,
+            newPrice: 180,
+            discountAmount: 20,
+            discountPercentage: 10,
+          },
+        ],
+        totalDiscount: 30,
+        totalProductCount: 2,
+        averageDiscountPercentage: 10,
+      };
+    }
+    ensureBackend();
+    return api.get(`/api/admin/campaigns/${id}/preview`);
+  },
+
+  /**
+   * Form verilerine göre kampanya önizlemesi yapar (henüz kaydedilmemiş)
+   * @param {Object} campaignData - Kampanya form verileri
+   * @returns {Promise<Object>} - Önizleme sonucu
+   */
+  previewCampaignData: async (campaignData) => {
+    if (shouldUseMockData()) {
+      // Mock data için basit önizleme
+      const discountValue = campaignData.discountValue || 10;
+      return {
+        message: `Bu kampanya tüm ürünleri etkileyecek. (%${discountValue} indirim)`,
+        affectedProducts: [
+          {
+            productId: 1,
+            productName: "Test Ürün 1",
+            categoryName: "Elektronik",
+            originalPrice: 100,
+            newPrice: 100 - discountValue,
+            discountAmount: discountValue,
+            discountPercentage: discountValue,
+          },
+          {
+            productId: 2,
+            productName: "Test Ürün 2",
+            categoryName: "Giyim",
+            originalPrice: 200,
+            newPrice: 200 - (200 * discountValue) / 100,
+            discountAmount: (200 * discountValue) / 100,
+            discountPercentage: discountValue,
+          },
+        ],
+        totalDiscount: discountValue + (200 * discountValue) / 100,
+        totalProductCount: 2,
+        averageDiscountPercentage: discountValue,
+      };
+    }
+    ensureBackend();
+    return api.post("/api/admin/campaigns/preview", campaignData);
+  },
+
   // Get campaign statistics
   getCampaignStats: async () => {
     if (shouldUseMockData()) {

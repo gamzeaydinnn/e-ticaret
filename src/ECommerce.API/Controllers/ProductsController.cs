@@ -65,7 +65,8 @@ namespace ECommerce.API.Controllers
         public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int size = 100, [FromQuery] int? categoryId = null)
         {
             // Default size 100 - ana sayfa tüm ürünleri gösterebilsin
-            var products = await _productService.GetActiveProductsAsync(page, size, categoryId);
+            // Kampanya bilgileriyle birlikte getir
+            var products = await _productService.GetActiveProductsWithCampaignAsync(page, size, categoryId);
             return Ok(products);
         }
 
@@ -81,7 +82,8 @@ namespace ECommerce.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProduct(int id)
         {
-            var product = await _productService.GetProductByIdAsync(id);
+            // Kampanya bilgileriyle birlikte getir
+            var product = await _productService.GetProductByIdWithCampaignAsync(id);
             if (product == null) return NotFound();
             return Ok(product);
         }

@@ -43,6 +43,18 @@ namespace ECommerce.Core.Interfaces
         /// Kampanya hedeflerini temizler
         /// </summary>
         Task ClearTargetsAsync(int campaignId);
+
+        /// <summary>
+        /// Tüm kampanyaları (silinen dahil) hedefleriyle birlikte getirir.
+        /// Admin panelde silinenleri de görmek için kullanılır.
+        /// </summary>
+        Task<IEnumerable<Campaign>> GetAllIncludingDeletedAsync();
+
+        /// <summary>
+        /// ID'ye göre kampanya getirir (silinen dahil).
+        /// Hard delete veya restore işlemleri için kullanılır.
+        /// </summary>
+        Task<Campaign?> GetByIdIncludingDeletedAsync(int id);
     }
 }
 

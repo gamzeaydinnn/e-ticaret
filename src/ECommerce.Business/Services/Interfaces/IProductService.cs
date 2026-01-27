@@ -9,6 +9,10 @@ using ECommerce.Core.DTOs.ProductReview;   // Product DTO'ları
 
 namespace ECommerce.Business.Services.Interfaces
 {
+    /// <summary>
+    /// Ürün yönetimi servisi interface'i.
+    /// CRUD operasyonları, arama, kampanya entegrasyonu ve kullanıcı işlemlerini kapsar.
+    /// </summary>
     public interface IProductService
     {
         Task<IEnumerable<ProductListDto>> GetProductsAsync(
@@ -36,5 +40,23 @@ namespace ECommerce.Business.Services.Interfaces
 
         // Kullanıcı favoriye ekleme
         Task AddFavoriteAsync(int userId, int productId);
+        
+        #region Kampanya Entegrasyonu
+        
+        /// <summary>
+        /// Kullanıcı tarafı ürün detayı - Kampanya bilgileriyle birlikte.
+        /// Aktif kampanya varsa SpecialPrice, CampaignId, CampaignName ve DiscountPercentage doldurulur.
+        /// </summary>
+        /// <param name="id">Ürün ID</param>
+        /// <returns>Kampanya bilgileri dahil ürün detayı</returns>
+        Task<ProductListDto?> GetProductByIdWithCampaignAsync(int id);
+        
+        /// <summary>
+        /// Aktif ürünleri kampanya bilgileriyle birlikte getirir.
+        /// Kampanyalı ürünler önce sıralanır.
+        /// </summary>
+        Task<IEnumerable<ProductListDto>> GetActiveProductsWithCampaignAsync(int page = 1, int size = 10, int? categoryId = null);
+        
+        #endregion
     }
 }

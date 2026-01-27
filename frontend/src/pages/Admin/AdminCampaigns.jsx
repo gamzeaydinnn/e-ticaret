@@ -122,7 +122,11 @@ const getCampaignTypeColor = (type) => {
 };
 
 export default function AdminCampaigns() {
-  // State tanımlamaları
+  // =========================================================================
+  // STATE TANIMLAMALARI
+  // =========================================================================
+
+  // Kampanya listesi state'leri
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -138,6 +142,26 @@ export default function AdminCampaigns() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
+
+  // =========================================================================
+  // KAMPANYA ÖNİZLEME STATE'LERİ
+  // =========================================================================
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+
+  // =========================================================================
+  // GELİŞMİŞ ÜRÜN ARAMA SİSTEMİ STATE'LERİ
+  // =========================================================================
+
+  // Ürün arama inputu (debounced search için)
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+  // Debounce için timeout ref
+  const [productSearchDebounce, setProductSearchDebounce] = useState(null);
+  // Sayfalama state'leri
+  const [productPage, setProductPage] = useState(1);
+  const PRODUCTS_PER_PAGE = 20;
 
   // Kampanyaları yükle
   const loadCampaigns = useCallback(async () => {
@@ -196,10 +220,133 @@ export default function AdminCampaigns() {
     });
   }, [campaigns, search]);
 
+  // =========================================================================
+  // GELİŞMİŞ ÜRÜN ARAMA SİSTEMİ
+  // =========================================================================
+
+  /**
+   * Ürün arama fonksiyonu - ID, İsim, SKU, Kategori ile arama
+   * Debounced search (300ms) ile performans optimize edildi
+   */
+  const filteredProducts = useMemo(() => {
+    const query = productSearchQuery.trim().toLowerCase();
+    if (!query) return products;
+
+    return products.filter((product) => {
+      // ID ile arama (# ile başlıyorsa veya sayı ise)
+      if (query.startsWith("#")) {
+        const idQuery = query.slice(1);
+        return product.id?.toString() === idQuery;
+      }
+      if (/^\d+$/.test(query)) {
+        return product.id?.toString().includes(query);
+      }
+
+      // İsim ile arama (Türkçe karakter destekli)
+      if (product.name?.toLowerCase().includes(query)) return true;
+
+      // SKU ile arama
+      if (product.sku?.toLowerCase().includes(query)) return true;
+
+      // Kategori adı ile arama
+      if (product.categoryName?.toLowerCase().includes(query)) return true;
+
+      // Fiyat ile arama (₺ veya TL içeriyorsa)
+      if ((query.includes("₺") || query.includes("tl")) && product.price) {
+        const priceQuery = query.replace(/[₺tl\s]/gi, "");
+        if (!isNaN(priceQuery)) {
+          return product.price.toString().includes(priceQuery);
+        }
+      }
+
+      return false;
+    });
+  }, [products, productSearchQuery]);
+
+  // Sayfalanmış ürünler (performans için)
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (productPage - 1) * PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(startIndex, startIndex + PRODUCTS_PER_PAGE);
+  }, [filteredProducts, productPage]);
+
+  // Toplam sayfa sayısı
+  const totalProductPages = useMemo(() => {
+    return Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+  }, [filteredProducts]);
+
+  /**
+   * Ürün arama input değişikliği - Debounced (300ms)
+   */
+  const handleProductSearchChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+
+      // Önceki debounce timeout'unu temizle
+      if (productSearchDebounce) {
+        clearTimeout(productSearchDebounce);
+      }
+
+      // 300ms sonra arama yap (debounce)
+      const timeout = setTimeout(() => {
+        setProductSearchQuery(value);
+        setProductPage(1); // Arama yapıldığında ilk sayfaya dön
+      }, 300);
+
+      setProductSearchDebounce(timeout);
+    },
+    [productSearchDebounce],
+  );
+
+  /**
+   * Ürün seçme/kaldırma fonksiyonu
+   */
+  const handleProductToggle = useCallback((productId) => {
+    setForm((prev) => {
+      const currentIds = prev.targetIds || [];
+      const isSelected = currentIds.includes(productId);
+
+      return {
+        ...prev,
+        targetIds: isSelected
+          ? currentIds.filter((id) => id !== productId)
+          : [...currentIds, productId],
+      };
+    });
+  }, []);
+
+  /**
+   * Tümünü seç fonksiyonu
+   */
+  const handleSelectAllProducts = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      targetIds: filteredProducts.map((p) => p.id),
+    }));
+  }, [filteredProducts]);
+
+  /**
+   * Tümünü kaldır fonksiyonu
+   */
+  const handleClearAllProducts = useCallback(() => {
+    setForm((prev) => ({
+      ...prev,
+      targetIds: [],
+    }));
+  }, []);
+
+  /**
+   * Seçili ürün bilgilerini getir (badge gösterimi için)
+   */
+  const selectedProducts = useMemo(() => {
+    return products.filter((p) => form.targetIds?.includes(p.id));
+  }, [products, form.targetIds]);
+
   // Modal açma - Yeni kampanya
   function openCreateModal() {
     setEditingId(null);
     setForm(initialForm);
+    setProductSearchQuery(""); // Arama sıfırla
+    setProductPage(1); // Sayfalama sıfırla
     setShowModal(true);
     setModalLoading(false);
   }
@@ -209,6 +356,8 @@ export default function AdminCampaigns() {
     setEditingId(campaign.id);
     setShowModal(true);
     setModalLoading(true);
+    setProductSearchQuery(""); // Arama sıfırla
+    setProductPage(1); // Sayfalama sıfırla
 
     try {
       const detail = await AdminService.getCampaignById(campaign.id);
@@ -251,6 +400,75 @@ export default function AdminCampaigns() {
     setModalLoading(false);
     setEditingId(null);
     setForm(initialForm);
+    setProductSearchQuery(""); // Arama sıfırla
+    setProductPage(1); // Sayfalama sıfırla
+  }
+
+  // =========================================================================
+  // KAMPANYA ÖNİZLEME FONKSİYONLARI
+  // =========================================================================
+
+  /**
+   * Mevcut bir kampanyanın önizlemesini gösterir (ID ile)
+   */
+  async function handlePreviewCampaign(campaignId) {
+    try {
+      setPreviewLoading(true);
+      setPreviewError("");
+      setShowPreviewModal(true);
+
+      const response = await AdminService.previewCampaign(campaignId);
+      setPreviewData(response);
+    } catch (err) {
+      setPreviewError(err.message || "Önizleme yüklenemedi.");
+      console.error("Önizleme hatası:", err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  /**
+   * Form verilerine göre önizleme yapar (henüz kaydedilmemiş kampanya)
+   */
+  async function handlePreviewFormData() {
+    try {
+      setPreviewLoading(true);
+      setPreviewError("");
+      setShowPreviewModal(true);
+
+      // Form verilerini API formatına çevir
+      const previewDto = {
+        name: form.name,
+        description: form.description,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        isActive: form.isActive,
+        type: parseInt(form.type),
+        targetType: parseInt(form.targetType),
+        discountValue: parseFloat(form.discountValue) || 0,
+        maxDiscountAmount: form.maxDiscountAmount
+          ? parseFloat(form.maxDiscountAmount)
+          : null,
+        targetIds: form.targetIds || [],
+      };
+
+      const response = await AdminService.previewCampaignData(previewDto);
+      setPreviewData(response);
+    } catch (err) {
+      setPreviewError(err.message || "Önizleme yüklenemedi.");
+      console.error("Önizleme hatası:", err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  /**
+   * Önizleme modalını kapatır
+   */
+  function closePreviewModal() {
+    setShowPreviewModal(false);
+    setPreviewData(null);
+    setPreviewError("");
   }
 
   // Form değişikliği
@@ -712,6 +930,14 @@ export default function AdminCampaigns() {
                         <td data-label="İşlem" className="px-2">
                           <div className="d-flex gap-1 justify-content-end">
                             <button
+                              className="btn btn-outline-info btn-sm"
+                              style={{ minWidth: "36px", minHeight: "36px" }}
+                              onClick={() => handlePreviewCampaign(c.id)}
+                              title="Önizle"
+                            >
+                              <i className="fas fa-eye"></i>
+                            </button>
+                            <button
                               className="btn btn-outline-primary btn-sm"
                               style={{ minWidth: "36px", minHeight: "36px" }}
                               onClick={() => openEditModal(c)}
@@ -1148,7 +1374,7 @@ export default function AdminCampaigns() {
                                 </div>
                               )}
 
-                              {/* Ürün seçimi */}
+                              {/* Ürün seçimi - GELİŞMİŞ ARAMA SİSTEMİ */}
                               {parseInt(form.targetType) === 2 && (
                                 <div className="col-12">
                                   <label
@@ -1157,35 +1383,251 @@ export default function AdminCampaigns() {
                                   >
                                     Ürünler{" "}
                                     <span className="text-danger">*</span>
+                                    <span
+                                      className="badge bg-primary ms-2"
+                                      style={{ fontSize: "0.7rem" }}
+                                    >
+                                      {form.targetIds?.length || 0} seçili
+                                    </span>
                                   </label>
+
                                   {productsLoading ? (
-                                    <div className="text-muted">
-                                      Ürünler yükleniyor...
+                                    <div className="text-center py-4">
+                                      <div
+                                        className="spinner-border spinner-border-sm text-primary me-2"
+                                        role="status"
+                                      ></div>
+                                      <span className="text-muted">
+                                        Ürünler yükleniyor...
+                                      </span>
                                     </div>
                                   ) : (
-                                    <select
-                                      className="form-select"
-                                      style={{ minHeight: "120px" }}
-                                      multiple
-                                      value={form.targetIds.map(String)}
-                                      onChange={(e) => {
-                                        const selected = Array.from(
-                                          e.target.selectedOptions,
-                                          (opt) => parseInt(opt.value),
-                                        );
-                                        onTargetIdsChange(selected);
-                                      }}
-                                    >
-                                      {products.map((prod) => (
-                                        <option key={prod.id} value={prod.id}>
-                                          {prod.name} - ₺{prod.price}
-                                        </option>
-                                      ))}
-                                    </select>
+                                    <>
+                                      {/* Arama Input'u */}
+                                      <div className="input-group mb-2">
+                                        <span className="input-group-text bg-light">
+                                          <i className="fas fa-search text-muted"></i>
+                                        </span>
+                                        <input
+                                          type="text"
+                                          className="form-control"
+                                          placeholder="Ürün ara: ID (#123), isim, SKU veya kategori..."
+                                          onChange={handleProductSearchChange}
+                                          style={{ minHeight: "44px" }}
+                                        />
+                                        {productSearchQuery && (
+                                          <button
+                                            type="button"
+                                            className="btn btn-outline-secondary"
+                                            onClick={() =>
+                                              setProductSearchQuery("")
+                                            }
+                                            title="Aramayı temizle"
+                                          >
+                                            <i className="fas fa-times"></i>
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {/* Hızlı İşlem Butonları */}
+                                      <div className="d-flex gap-2 mb-2 flex-wrap">
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-success"
+                                          onClick={handleSelectAllProducts}
+                                          title="Tüm filtrelenmiş ürünleri seç"
+                                        >
+                                          <i className="fas fa-check-double me-1"></i>
+                                          Tümünü Seç ({filteredProducts.length})
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-danger"
+                                          onClick={handleClearAllProducts}
+                                          title="Tüm seçimleri kaldır"
+                                          disabled={!form.targetIds?.length}
+                                        >
+                                          <i className="fas fa-times me-1"></i>
+                                          Tümünü Kaldır
+                                        </button>
+                                        <span
+                                          className="text-muted ms-auto"
+                                          style={{
+                                            fontSize: "0.8rem",
+                                            alignSelf: "center",
+                                          }}
+                                        >
+                                          {filteredProducts.length} ürün bulundu
+                                        </span>
+                                      </div>
+
+                                      {/* Seçili Ürünler Badge'leri */}
+                                      {selectedProducts.length > 0 && (
+                                        <div
+                                          className="mb-2 p-2 bg-light rounded"
+                                          style={{
+                                            maxHeight: "100px",
+                                            overflowY: "auto",
+                                          }}
+                                        >
+                                          <small className="text-muted d-block mb-1">
+                                            Seçili ürünler:
+                                          </small>
+                                          <div className="d-flex flex-wrap gap-1">
+                                            {selectedProducts.map((prod) => (
+                                              <span
+                                                key={prod.id}
+                                                className="badge bg-primary d-inline-flex align-items-center gap-1"
+                                                style={{
+                                                  fontSize: "0.75rem",
+                                                  cursor: "pointer",
+                                                }}
+                                                onClick={() =>
+                                                  handleProductToggle(prod.id)
+                                                }
+                                                title="Kaldırmak için tıklayın"
+                                              >
+                                                #{prod.id}{" "}
+                                                {prod.name?.substring(0, 20)}
+                                                {prod.name?.length > 20 &&
+                                                  "..."}
+                                                <i className="fas fa-times-circle ms-1"></i>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Ürün Listesi */}
+                                      <div
+                                        className="border rounded"
+                                        style={{
+                                          maxHeight: "250px",
+                                          overflowY: "auto",
+                                          backgroundColor: "#fafafa",
+                                        }}
+                                      >
+                                        {paginatedProducts.length === 0 ? (
+                                          <div className="text-center py-4 text-muted">
+                                            <i className="fas fa-search fa-2x mb-2 d-block"></i>
+                                            {productSearchQuery
+                                              ? "Aramanızla eşleşen ürün bulunamadı"
+                                              : "Ürün bulunamadı"}
+                                          </div>
+                                        ) : (
+                                          <div className="list-group list-group-flush">
+                                            {paginatedProducts.map((prod) => {
+                                              const isSelected =
+                                                form.targetIds?.includes(
+                                                  prod.id,
+                                                );
+                                              return (
+                                                <label
+                                                  key={prod.id}
+                                                  className={`list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 ${isSelected ? "bg-primary bg-opacity-10" : ""}`}
+                                                  style={{
+                                                    cursor: "pointer",
+                                                    fontSize: "0.85rem",
+                                                  }}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    className="form-check-input m-0"
+                                                    checked={isSelected}
+                                                    onChange={() =>
+                                                      handleProductToggle(
+                                                        prod.id,
+                                                      )
+                                                    }
+                                                    style={{
+                                                      minWidth: "18px",
+                                                      minHeight: "18px",
+                                                    }}
+                                                  />
+                                                  <span
+                                                    className="badge bg-secondary"
+                                                    style={{ minWidth: "50px" }}
+                                                  >
+                                                    #{prod.id}
+                                                  </span>
+                                                  <div className="flex-grow-1">
+                                                    <div
+                                                      className="fw-medium text-truncate"
+                                                      style={{
+                                                        maxWidth: "200px",
+                                                      }}
+                                                    >
+                                                      {prod.name}
+                                                    </div>
+                                                    {prod.categoryName && (
+                                                      <small className="text-muted">
+                                                        {prod.categoryName}
+                                                      </small>
+                                                    )}
+                                                  </div>
+                                                  <div className="text-end">
+                                                    <div className="fw-bold text-success">
+                                                      ₺
+                                                      {(
+                                                        prod.price || 0
+                                                      ).toFixed(2)}
+                                                    </div>
+                                                    {prod.sku && (
+                                                      <small className="text-muted">
+                                                        SKU: {prod.sku}
+                                                      </small>
+                                                    )}
+                                                  </div>
+                                                </label>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Sayfalama */}
+                                      {totalProductPages > 1 && (
+                                        <div className="d-flex justify-content-between align-items-center mt-2">
+                                          <small className="text-muted">
+                                            Sayfa {productPage} /{" "}
+                                            {totalProductPages}
+                                          </small>
+                                          <div className="btn-group btn-group-sm">
+                                            <button
+                                              type="button"
+                                              className="btn btn-outline-secondary"
+                                              onClick={() =>
+                                                setProductPage((p) =>
+                                                  Math.max(1, p - 1),
+                                                )
+                                              }
+                                              disabled={productPage === 1}
+                                            >
+                                              <i className="fas fa-chevron-left"></i>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="btn btn-outline-secondary"
+                                              onClick={() =>
+                                                setProductPage((p) =>
+                                                  Math.min(
+                                                    totalProductPages,
+                                                    p + 1,
+                                                  ),
+                                                )
+                                              }
+                                              disabled={
+                                                productPage ===
+                                                totalProductPages
+                                              }
+                                            >
+                                              <i className="fas fa-chevron-right"></i>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
                                   )}
-                                  <small className="text-muted">
-                                    Ctrl/Cmd tuşuyla birden fazla seçebilirsiniz
-                                  </small>
                                 </div>
                               )}
                             </div>
@@ -1322,6 +1764,16 @@ export default function AdminCampaigns() {
                     <i className="fas fa-times me-1"></i>İptal
                   </button>
                   <button
+                    type="button"
+                    className="btn btn-outline-info"
+                    style={{ minHeight: "44px", minWidth: "100px" }}
+                    onClick={handlePreviewFormData}
+                    disabled={modalLoading || !form.name || !form.discountValue}
+                    title="Kampanya önizlemesini göster"
+                  >
+                    <i className="fas fa-eye me-1"></i>Önizle
+                  </button>
+                  <button
                     type="submit"
                     className="btn text-white fw-semibold px-4"
                     style={{
@@ -1338,6 +1790,256 @@ export default function AdminCampaigns() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          KAMPANYA ÖNİZLEME MODALI
+          Kampanyanın etkileyeceği ürünleri ve fiyat değişikliklerini gösterir
+          ========================================================================= */}
+      {showPreviewModal && (
+        <div
+          className="modal d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => e.target === e.currentTarget && closePreviewModal()}
+        >
+          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div className="modal-content" style={{ borderRadius: "15px" }}>
+              {/* Modal Header */}
+              <div
+                className="modal-header border-0 py-3 px-4"
+                style={{
+                  background: "linear-gradient(135deg, #17a2b8, #20c997)",
+                }}
+              >
+                <h5 className="modal-title text-white fw-bold">
+                  <i className="fas fa-eye me-2"></i>
+                  Kampanya Önizleme
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={closePreviewModal}
+                ></button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="modal-body p-4">
+                {previewLoading ? (
+                  <div className="text-center py-5">
+                    <div className="spinner-border text-info" role="status">
+                      <span className="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p className="mt-3 text-muted">Önizleme hesaplanıyor...</p>
+                  </div>
+                ) : previewError ? (
+                  <div className="alert alert-danger">
+                    <i className="fas fa-exclamation-circle me-2"></i>
+                    {previewError}
+                  </div>
+                ) : previewData ? (
+                  <>
+                    {/* Özet Bilgiler */}
+                    <div className="alert alert-info mb-4">
+                      <i className="fas fa-info-circle me-2"></i>
+                      {previewData.message}
+                    </div>
+
+                    {/* İstatistik Kartları */}
+                    <div className="row g-3 mb-4">
+                      <div className="col-6 col-md-3">
+                        <div
+                          className="card border-0 shadow-sm h-100"
+                          style={{ borderRadius: "10px" }}
+                        >
+                          <div className="card-body text-center py-3">
+                            <div className="h4 mb-1 text-primary">
+                              {previewData.totalProductCount || 0}
+                            </div>
+                            <small className="text-muted">Etkilenen Ürün</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-3">
+                        <div
+                          className="card border-0 shadow-sm h-100"
+                          style={{ borderRadius: "10px" }}
+                        >
+                          <div className="card-body text-center py-3">
+                            <div className="h4 mb-1 text-success">
+                              ₺
+                              {(previewData.totalDiscount || 0).toLocaleString(
+                                "tr-TR",
+                                { minimumFractionDigits: 2 },
+                              )}
+                            </div>
+                            <small className="text-muted">Toplam İndirim</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-3">
+                        <div
+                          className="card border-0 shadow-sm h-100"
+                          style={{ borderRadius: "10px" }}
+                        >
+                          <div className="card-body text-center py-3">
+                            <div className="h4 mb-1 text-warning">
+                              %
+                              {(
+                                previewData.averageDiscountPercentage || 0
+                              ).toFixed(1)}
+                            </div>
+                            <small className="text-muted">Ort. İndirim</small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-3">
+                        <div
+                          className="card border-0 shadow-sm h-100"
+                          style={{ borderRadius: "10px" }}
+                        >
+                          <div className="card-body text-center py-3">
+                            <div className="h4 mb-1 text-danger">
+                              ₺
+                              {previewData.affectedProducts?.length > 0
+                                ? (
+                                    previewData.affectedProducts.reduce(
+                                      (sum, p) => sum + p.discountAmount,
+                                      0,
+                                    ) / previewData.affectedProducts.length
+                                  ).toLocaleString("tr-TR", {
+                                    minimumFractionDigits: 2,
+                                  })
+                                : "0,00"}
+                            </div>
+                            <small className="text-muted">
+                              Ort. İndirim (₺)
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Ürün Listesi */}
+                    {previewData.affectedProducts?.length > 0 ? (
+                      <div
+                        className="table-responsive"
+                        style={{ maxHeight: "400px", overflowY: "auto" }}
+                      >
+                        <table className="table table-hover table-sm">
+                          <thead className="table-light sticky-top">
+                            <tr>
+                              <th style={{ fontSize: "0.8rem" }}>Ürün</th>
+                              <th style={{ fontSize: "0.8rem" }}>Kategori</th>
+                              <th
+                                className="text-end"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Eski Fiyat
+                              </th>
+                              <th
+                                className="text-end"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Yeni Fiyat
+                              </th>
+                              <th
+                                className="text-end"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                İndirim
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {previewData.affectedProducts.map((product) => (
+                              <tr key={product.productId}>
+                                <td style={{ fontSize: "0.85rem" }}>
+                                  <span className="fw-medium">
+                                    {product.productName}
+                                  </span>
+                                  <br />
+                                  <small className="text-muted">
+                                    #{product.productId}
+                                  </small>
+                                </td>
+                                <td style={{ fontSize: "0.85rem" }}>
+                                  <span className="badge bg-secondary">
+                                    {product.categoryName}
+                                  </span>
+                                </td>
+                                <td
+                                  className="text-end"
+                                  style={{ fontSize: "0.85rem" }}
+                                >
+                                  <span className="text-decoration-line-through text-muted">
+                                    ₺
+                                    {product.originalPrice.toLocaleString(
+                                      "tr-TR",
+                                      { minimumFractionDigits: 2 },
+                                    )}
+                                  </span>
+                                </td>
+                                <td
+                                  className="text-end"
+                                  style={{ fontSize: "0.85rem" }}
+                                >
+                                  <span className="fw-bold text-success">
+                                    ₺
+                                    {product.newPrice.toLocaleString("tr-TR", {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                </td>
+                                <td
+                                  className="text-end"
+                                  style={{ fontSize: "0.85rem" }}
+                                >
+                                  <span className="badge bg-danger">
+                                    -₺
+                                    {product.discountAmount.toLocaleString(
+                                      "tr-TR",
+                                      { minimumFractionDigits: 2 },
+                                    )}
+                                    <br />
+                                    <small>
+                                      (%{product.discountPercentage})
+                                    </small>
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="text-center text-muted py-4">
+                        <i className="fas fa-inbox fa-3x mb-3 opacity-50"></i>
+                        <p>Bu kampanya için etkilenecek ürün bulunamadı.</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center text-muted py-4">
+                    <i className="fas fa-search fa-3x mb-3 opacity-50"></i>
+                    <p>Önizleme verisi yükleniyor...</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="modal-footer border-0 py-3 px-4 bg-light">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ minHeight: "44px", minWidth: "100px" }}
+                  onClick={closePreviewModal}
+                >
+                  <i className="fas fa-times me-1"></i>Kapat
+                </button>
+              </div>
             </div>
           </div>
         </div>

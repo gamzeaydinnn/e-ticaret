@@ -254,9 +254,10 @@ namespace ECommerce.Business.Services.Managers
             // Önce hedefleri temizle
             await _campaignRepository.ClearTargetsAsync(id);
             
-            await _campaignRepository.DeleteAsync(campaign);
+            // HARD DELETE - Kampanyayı veritabanından tamamen sil
+            await _campaignRepository.HardDeleteAsync(campaign);
             
-            _logger?.LogInformation("Kampanya silindi: {CampaignId}", id);
+            _logger?.LogInformation("Kampanya kalıcı olarak silindi: {CampaignId}", id);
             
             return true;
         }

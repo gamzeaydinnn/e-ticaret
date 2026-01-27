@@ -370,6 +370,116 @@ namespace ECommerce.Business.Services.Managers
             return Task.CompletedTask;
         }
 
+        #region Kampanya Entegrasyonu
+        
+        /// <summary>
+        /// Kullanıcı tarafı ürün detayı - Kampanya bilgileriyle birlikte.
+        /// SpecialPrice varsa, kampanya bilgileri de DTO'ya eklenir.
+        /// </summary>
+        public async Task<ProductListDto?> GetProductByIdWithCampaignAsync(int id)
+        {
+            var product = await _productRepository.GetByIdAsync(id);
+            if (product == null) return null;
+
+            var dto = MapToDto(product);
+            
+            // Kampanya bilgilerini hesapla
+            EnrichWithCampaignInfo(dto, product);
+            
+            return dto;
+        }
+        
+        /// <summary>
+        /// Aktif ürünleri kampanya bilgileriyle birlikte getirir.
+        /// Kampanyalı ürünler önce sıralanır (en yüksek indirim önce).
+        /// </summary>
+        public async Task<IEnumerable<ProductListDto>> GetActiveProductsWithCampaignAsync(int page = 1, int size = 10, int? categoryId = null)
+        {
+            var cacheKey = $"active_products_campaign_{categoryId ?? 0}_{page}_{size}";
+            
+            if (!_cache.TryGetValue(cacheKey, out object? cachedObj) || !(cachedObj is IEnumerable<ProductListDto> cached))
+            {
+                var products = await _productRepository.GetAllAsync();
+                
+                // Sadece aktif ürünleri filtrele
+                products = products.Where(p => p.IsActive);
+                
+                // Kategoriye göre filtrele
+                if (categoryId.HasValue)
+                    products = products.Where(p => p.CategoryId == categoryId.Value);
+
+                // DTO'ya çevir ve kampanya bilgilerini ekle
+                var dtoList = products.Select(p => {
+                    var dto = MapToDto(p);
+                    EnrichWithCampaignInfo(dto, p);
+                    return dto;
+                }).ToList();
+                
+                // Kampanyalı ürünler önce, sonra indirim yüzdesine göre sırala
+                cached = dtoList
+                    .OrderByDescending(p => p.HasActiveCampaign)
+                    .ThenByDescending(p => p.DiscountPercentage ?? 0)
+                    .ThenBy(p => p.Name)
+                    .Skip((page - 1) * size)
+                    .Take(size)
+                    .ToList();
+
+                _cache.Set(cacheKey, cached, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30)
+                });
+                TrackCacheKey(cacheKey);
+            }
+
+            return cached;
+        }
+        
+        /// <summary>
+        /// Product entity'sini ProductListDto'ya dönüştürür.
+        /// </summary>
+        private ProductListDto MapToDto(Product product)
+        {
+            return new ProductListDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
+                Price = product.Price,
+                SpecialPrice = product.SpecialPrice,
+                StockQuantity = product.StockQuantity,
+                ImageUrl = product.ImageUrl,
+                Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name ?? string.Empty
+            };
+        }
+        
+        /// <summary>
+        /// DTO'ya kampanya bilgilerini ekler.
+        /// SpecialPrice varsa, OriginalPrice ve DiscountPercentage hesaplanır.
+        /// </summary>
+        private void EnrichWithCampaignInfo(ProductListDto dto, Product product)
+        {
+            // SpecialPrice varsa ve Price'dan küçükse kampanya aktif demektir
+            if (product.SpecialPrice.HasValue && product.SpecialPrice.Value < product.Price)
+            {
+                dto.OriginalPrice = product.Price;
+                dto.SpecialPrice = product.SpecialPrice;
+                
+                // İndirim yüzdesini hesapla
+                dto.DiscountPercentage = (int)Math.Round(
+                    (1 - (product.SpecialPrice.Value / product.Price)) * 100
+                );
+                
+                // NOT: CampaignId ve CampaignName şu an Product entity'sinde saklanmıyor.
+                // Bu bilgiler için CampaignRepository'den sorgu yapılabilir.
+                // Şimdilik sadece fiyat bazlı bilgiler doldurulur.
+            }
+        }
+        
+        #endregion
+
         // Track and invalidate cache keys created by this manager.
         private void TrackCacheKey(string key)
         {
