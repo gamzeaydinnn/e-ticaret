@@ -16,7 +16,7 @@ using ECommerce.API.Authorization;
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.OrderManagement)] // CustomerSupport ve Logistics de erişebilsin
     [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {

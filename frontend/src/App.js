@@ -45,6 +45,8 @@ import Dashboard from "./pages/Admin/Dashboard";
 import CouponManagement from "./pages/Admin/CouponManagement";
 // Bülten Yönetimi
 import AdminNewsletter from "./pages/Admin/AdminNewsletter";
+// Kargo Ayarları
+import AdminShippingSettings from "./pages/Admin/AdminShippingSettings";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
@@ -905,6 +907,17 @@ function App() {
             <AdminGuard requiredPermission="campaigns.view">
               <AdminLayout>
                 <AdminCampaigns />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        {/* Kargo Ayarları Sayfası */}
+        <Route
+          path="/admin/shipping-settings"
+          element={
+            <AdminGuard requiredPermission="settings.system">
+              <AdminLayout>
+                <AdminShippingSettings />
               </AdminLayout>
             </AdminGuard>
           }

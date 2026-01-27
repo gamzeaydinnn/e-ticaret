@@ -7,6 +7,7 @@ import { OrderService } from "../services/orderService";
 import { PaymentService } from "../services/paymentService";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
+import shippingService from "../services/shippingService";
 import LoginModal from "./LoginModal";
 import { CreditCardPreview } from "./payment";
 import "./PaymentPage.css";
@@ -51,6 +52,13 @@ const PaymentPage = () => {
     }
   });
 
+  // Dinamik kargo fiyatları (API'den)
+  const [shippingPrices, setShippingPrices] = useState({
+    motorcycle: 15, // varsayılan değerler
+    car: 30,
+  });
+  const [shippingPricesLoading, setShippingPricesLoading] = useState(true);
+
   // Kupon sistemi
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -92,6 +100,34 @@ const PaymentPage = () => {
 
   // Client Order ID - proper UUID v4 format for backend GUID deserialization
   const [clientOrderId] = useState(() => generateUUID());
+
+  // Kargo fiyatlarını API'den yükle
+  useEffect(() => {
+    const loadShippingPrices = async () => {
+      try {
+        setShippingPricesLoading(true);
+        const settings = await shippingService.getActiveSettings();
+        if (settings && settings.length > 0) {
+          const prices = {};
+          settings.forEach((setting) => {
+            prices[setting.vehicleType] = setting.price;
+          });
+          setShippingPrices((prev) => ({
+            ...prev,
+            ...prices,
+          }));
+        }
+      } catch (error) {
+        console.warn(
+          "Kargo fiyatları yüklenemedi, varsayılan değerler kullanılıyor:",
+          error,
+        );
+      } finally {
+        setShippingPricesLoading(false);
+      }
+    };
+    loadShippingPrices();
+  }, []);
 
   // Önceden uygulanmış kupon varsa yükle
   useEffect(() => {
@@ -215,7 +251,11 @@ const PaymentPage = () => {
     ) {
       return 0;
     }
-    return shippingMethod === "car" || shippingMethod === "express" ? 30 : 15;
+    // Dinamik kargo fiyatlarını kullan
+    if (shippingMethod === "car" || shippingMethod === "express") {
+      return shippingPrices.car || 30;
+    }
+    return shippingPrices.motorcycle || 15;
   };
 
   const getDiscount = () => {
@@ -935,7 +975,13 @@ const PaymentPage = () => {
                       <i className="fas fa-motorcycle"></i>
                       <div>
                         <span className="shipping-name">Motokurye</span>
-                        <span className="shipping-price">₺15</span>
+                        <span className="shipping-price">
+                          {shippingPricesLoading ? (
+                            <i className="fas fa-spinner fa-spin fa-sm"></i>
+                          ) : (
+                            `₺${shippingPrices.motorcycle}`
+                          )}
+                        </span>
                       </div>
                     </label>
                     <label
@@ -953,7 +999,13 @@ const PaymentPage = () => {
                       <i className="fas fa-car"></i>
                       <div>
                         <span className="shipping-name">Araç (Hızlı)</span>
-                        <span className="shipping-price">₺30</span>
+                        <span className="shipping-price">
+                          {shippingPricesLoading ? (
+                            <i className="fas fa-spinner fa-spin fa-sm"></i>
+                          ) : (
+                            `₺${shippingPrices.car}`
+                          )}
+                        </span>
                       </div>
                     </label>
                   </div>

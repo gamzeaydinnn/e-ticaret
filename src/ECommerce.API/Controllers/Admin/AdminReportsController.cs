@@ -15,7 +15,7 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/reports")]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)] // CustomerSupport ve Logistics da raporlara erişebilsin
     public class AdminReportsController : ControllerBase
     {
         private readonly ECommerceDbContext _context;

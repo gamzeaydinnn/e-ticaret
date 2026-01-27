@@ -215,6 +215,15 @@ export default function AdminLayout({ children }) {
         permission: PERMISSIONS.CAMPAIGNS_VIEW,
       },
       // =============================================================================
+      // Kargo Ayarları - Araç tipi bazlı kargo ücretleri yönetimi
+      // =============================================================================
+      {
+        path: "/admin/shipping-settings",
+        icon: "fas fa-shipping-fast",
+        label: "Kargo Ayarları",
+        permission: PERMISSIONS.SETTINGS_SYSTEM,
+      },
+      // =============================================================================
       // Kupon Yönetimi - İndirim kuponları için admin sayfası
       // =============================================================================
       {

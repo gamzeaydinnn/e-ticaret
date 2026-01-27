@@ -5,6 +5,7 @@ import { useCart } from "../contexts/CartContext";
 import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
+import shippingService from "../services/shippingService";
 import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
 import "./CartPage.css";
 
@@ -27,6 +28,14 @@ const CartPage = () => {
       return "motorcycle";
     }
   });
+
+  // Dinamik kargo fiyatları
+  const [shippingPrices, setShippingPrices] = useState({
+    motorcycle: 15,
+    car: 30,
+  });
+  const [shippingPricesLoading, setShippingPricesLoading] = useState(true);
+
   const [couponCode, setCouponCode] = useState("");
   const [pricing, setPricing] = useState(null);
   const [pricingLoading, setPricingLoading] = useState(false);
@@ -39,6 +48,34 @@ const CartPage = () => {
   // =================================================================
   const [appliedCampaigns, setAppliedCampaigns] = useState([]);
   const [campaignDiscountTotal, setCampaignDiscountTotal] = useState(0);
+
+  // Kargo fiyatlarını API'den yükle
+  useEffect(() => {
+    const loadShippingPrices = async () => {
+      try {
+        setShippingPricesLoading(true);
+        const settings = await shippingService.getActiveSettings();
+        if (settings && settings.length > 0) {
+          const prices = {};
+          settings.forEach((setting) => {
+            prices[setting.vehicleType] = setting.price;
+          });
+          setShippingPrices((prev) => ({
+            ...prev,
+            ...prices,
+          }));
+        }
+      } catch (error) {
+        console.warn(
+          "Kargo fiyatları yüklenemedi, varsayılan değerler kullanılıyor:",
+          error,
+        );
+      } finally {
+        setShippingPricesLoading(false);
+      }
+    };
+    loadShippingPrices();
+  }, []);
 
   // Sayfa yüklendiğinde önceden uygulanmış kupon varsa geri yükle
   useEffect(() => {
@@ -184,7 +221,10 @@ const CartPage = () => {
     ) {
       return 0;
     }
-    return shippingMethod === "car" ? 30 : 15;
+    // Dinamik kargo fiyatlarını kullan
+    return shippingMethod === "car"
+      ? shippingPrices.car || 30
+      : shippingPrices.motorcycle || 15;
   };
 
   const getCouponTypeName = (type) => {
@@ -510,7 +550,7 @@ const CartPage = () => {
                                   alignItems: "center",
                                   gap: "6px",
                                 }}
-                                >
+                              >
                                 <i
                                   className="fas fa-tag text-success"
                                   style={{ fontSize: "0.7rem" }}
@@ -692,11 +732,23 @@ const CartPage = () => {
                     <div className="shipping-price">
                       {appliedCoupon?.couponType === "FreeShipping" ? (
                         <>
-                          <span className="original-price">₺15</span>
+                          <span className="original-price">
+                            {shippingPricesLoading ? (
+                              <i className="fas fa-spinner fa-spin fa-sm"></i>
+                            ) : (
+                              `₺${shippingPrices.motorcycle}`
+                            )}
+                          </span>
                           <span className="free">Ücretsiz</span>
                         </>
                       ) : (
-                        <span>₺15</span>
+                        <span>
+                          {shippingPricesLoading ? (
+                            <i className="fas fa-spinner fa-spin fa-sm"></i>
+                          ) : (
+                            `₺${shippingPrices.motorcycle}`
+                          )}
+                        </span>
                       )}
                     </div>
                     <div className="check-icon">
@@ -723,11 +775,23 @@ const CartPage = () => {
                     <div className="shipping-price">
                       {appliedCoupon?.couponType === "FreeShipping" ? (
                         <>
-                          <span className="original-price">₺30</span>
+                          <span className="original-price">
+                            {shippingPricesLoading ? (
+                              <i className="fas fa-spinner fa-spin fa-sm"></i>
+                            ) : (
+                              `₺${shippingPrices.car}`
+                            )}
+                          </span>
                           <span className="free">Ücretsiz</span>
                         </>
                       ) : (
-                        <span>₺30</span>
+                        <span>
+                          {shippingPricesLoading ? (
+                            <i className="fas fa-spinner fa-spin fa-sm"></i>
+                          ) : (
+                            `₺${shippingPrices.car}`
+                          )}
+                        </span>
                       )}
                     </div>
                     <div className="check-icon">
@@ -776,10 +840,10 @@ const CartPage = () => {
                       marginTop: "8px",
                     }}
                   >
-                        {appliedCampaigns.map((campaign, index) => (
-                          <div
-                            key={index}
-                            className="campaign-item"
+                    {appliedCampaigns.map((campaign, index) => (
+                      <div
+                        key={index}
+                        className="campaign-item"
                         style={{
                           display: "flex",
                           alignItems: "center",
@@ -787,31 +851,31 @@ const CartPage = () => {
                           padding: "4px 0",
                           fontSize: "0.8rem",
                         }}
-                          >
-                            <span
-                              style={{
-                                color: "#666",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                              }}
-                            >
-                              <i
-                                className={`fas ${CampaignService.getCampaignBadge(campaign.type).icon}`}
-                                style={{ color: "#ff6b35", fontSize: "0.75rem" }}
-                              ></i>
-                              {campaign.displayText ||
-                                campaign.campaignName ||
-                                campaign.name ||
-                                CampaignService.getDiscountText(campaign)}
-                            </span>
-                            {campaign.discountAmount > 0 && (
-                              <span style={{ color: "#2e7d32", fontWeight: "600" }}>
-                                -₺{campaign.discountAmount.toFixed(2)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+                      >
+                        <span
+                          style={{
+                            color: "#666",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <i
+                            className={`fas ${CampaignService.getCampaignBadge(campaign.type).icon}`}
+                            style={{ color: "#ff6b35", fontSize: "0.75rem" }}
+                          ></i>
+                          {campaign.displayText ||
+                            campaign.campaignName ||
+                            campaign.name ||
+                            CampaignService.getDiscountText(campaign)}
+                        </span>
+                        {campaign.discountAmount > 0 && (
+                          <span style={{ color: "#2e7d32", fontWeight: "600" }}>
+                            -₺{campaign.discountAmount.toFixed(2)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
 

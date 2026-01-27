@@ -154,6 +154,18 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<NewsletterSubscriber> NewsletterSubscribers { get; set; }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // KARGO ÜCRETİ YÖNETİM SİSTEMİ
+        // Araç tipi bazlı (motorcycle/car) dinamik kargo fiyatlandırması
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Kargo ücreti ayarlarını tutar.
+        /// Admin panelinden araç tipine göre (motosiklet/araba) fiyat güncellenebilir.
+        /// Kurye bazlı DEĞİL, sistemdeki araç tipleri bazlı fiyatlandırma.
+        /// </summary>
+        public virtual DbSet<ShippingSetting> ShippingSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -1270,6 +1282,57 @@ namespace ECommerce.Data.Context
                     .OnDelete(DeleteBehavior.SetNull); // Kullanıcı silinirse ilişki null olur
             });
 
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // KARGO ÜCRETİ AYARLARI (ShippingSetting) KONFİGÜRASYONU
+            // Araç tipine göre dinamik fiyatlandırma
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<ShippingSetting>(entity =>
+            {
+                entity.ToTable("ShippingSettings");
+
+                // VehicleType - Benzersiz olmalı (motorcycle, car vb.)
+                entity.Property(e => e.VehicleType)
+                    .HasMaxLength(50)
+                    .IsRequired();
+
+                entity.HasIndex(e => e.VehicleType)
+                    .IsUnique()
+                    .HasDatabaseName("IX_ShippingSettings_VehicleType");
+
+                // DisplayName - Türkçe görüntüleme adı
+                entity.Property(e => e.DisplayName)
+                    .HasMaxLength(100)
+                    .IsRequired();
+
+                // Price - Kargo ücreti (TL)
+                entity.Property(e => e.Price)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+
+                // EstimatedDeliveryTime
+                entity.Property(e => e.EstimatedDeliveryTime)
+                    .HasMaxLength(100);
+
+                // Description
+                entity.Property(e => e.Description)
+                    .HasMaxLength(500);
+
+                // MaxWeight ve MaxVolume
+                entity.Property(e => e.MaxWeight)
+                    .HasPrecision(18, 2);
+
+                entity.Property(e => e.MaxVolume)
+                    .HasPrecision(18, 2);
+
+                // Audit alanları
+                entity.Property(e => e.UpdatedByUserName)
+                    .HasMaxLength(200);
+
+                // Aktif kayıtları hızlı sorgulamak için index
+                entity.HasIndex(e => new { e.IsActive, e.SortOrder })
+                    .HasDatabaseName("IX_ShippingSettings_Active_SortOrder");
+            });
+
             // -------------------
             // Seed Data
             // -------------------
@@ -1278,8 +1341,46 @@ namespace ECommerce.Data.Context
 
         private void SeedData(ModelBuilder modelBuilder)
         {
-            // Seed data removed - ProductSeeder will handle initial categories and products
-            // Bu migration seed'i kaldırıldı çünkü ProductSeeder doğru kategorileri ekliyor
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // KARGO ÜCRETİ VARSAYILAN SEED DATA
+            // Motosiklet: 40 TL, Araba: 60 TL (Admin panelden değiştirilebilir)
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<ShippingSetting>().HasData(
+                new ShippingSetting
+                {
+                    Id = 1,
+                    VehicleType = "motorcycle",
+                    DisplayName = "Motosiklet ile Teslimat",
+                    Price = 40.00m,
+                    EstimatedDeliveryTime = "30-45 dakika",
+                    Description = "Hızlı teslimat, küçük ve orta boy paketler için ideal",
+                    SortOrder = 1,
+                    MaxWeight = 15.0m,  // Motosiklet max 15 kg
+                    MaxVolume = null,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    UpdatedAt = null,
+                    UpdatedByUserId = null,
+                    UpdatedByUserName = null
+                },
+                new ShippingSetting
+                {
+                    Id = 2,
+                    VehicleType = "car",
+                    DisplayName = "Araç ile Teslimat",
+                    Price = 60.00m,
+                    EstimatedDeliveryTime = "1-2 saat",
+                    Description = "Büyük paketler ve ağır ürünler için uygun",
+                    SortOrder = 2,
+                    MaxWeight = 100.0m, // Araba max 100 kg
+                    MaxVolume = null,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    UpdatedAt = null,
+                    UpdatedByUserId = null,
+                    UpdatedByUserName = null
+                }
+            );
         }
     }
 }

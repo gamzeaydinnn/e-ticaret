@@ -410,11 +410,70 @@ namespace ECommerce.API.Infrastructure
                 }
             }
 
-            if (addedCount > 0)
+            // ============================================================================
+            // FAZLA İZİNLERİ TEMİZLE
+            // Rol-izin haritasında tanımlı olmayan ama veritabanında var olan izinleri sil
+            // Bu güvenlik için önemli: Artık geçerli olmayan izinler otomatik kaldırılır
+            // ============================================================================
+            var removedCount = await CleanupExcessPermissionsAsync(dbContext, rolePermissionMap, roles, permissions, logger);
+
+            if (addedCount > 0 || removedCount > 0)
             {
                 await dbContext.SaveChangesAsync();
-                logger?.LogInformation("✅ RolePermissions seed edildi: {Added} atama eklendi", addedCount);
+                logger?.LogInformation("✅ RolePermissions güncellendi: {Added} eklendi, {Removed} kaldırıldı", addedCount, removedCount);
             }
+        }
+
+        /// <summary>
+        /// Rol-Permission haritasında tanımlı olmayan fazla izinleri veritabanından kaldırır.
+        /// Güvenlik için önemli: Eski veya hatalı atanmış izinler temizlenir.
+        /// </summary>
+        private static async Task<int> CleanupExcessPermissionsAsync(
+            ECommerceDbContext dbContext,
+            Dictionary<string, string[]> rolePermissionMap,
+            Dictionary<string, int> roles,
+            Dictionary<string, int> permissions,
+            ILogger? logger)
+        {
+            var removedCount = 0;
+
+            // Her rol için veritabanındaki mevcut izinleri kontrol et
+            foreach (var (roleName, allowedPermissions) in rolePermissionMap)
+            {
+                if (!roles.TryGetValue(roleName, out var roleId))
+                    continue;
+
+                // Bu role ait veritabanındaki tüm izinler
+                var dbRolePermissions = await dbContext.RolePermissions
+                    .Where(rp => rp.RoleId == roleId)
+                    .Include(rp => rp.Permission)
+                    .ToListAsync();
+
+                // İzin verilen permission ID'leri
+                var allowedPermissionIds = allowedPermissions
+                    .Where(p => permissions.ContainsKey(p))
+                    .Select(p => permissions[p])
+                    .ToHashSet();
+
+                // Fazla izinleri bul ve sil
+                var excessPermissions = dbRolePermissions
+                    .Where(rp => !allowedPermissionIds.Contains(rp.PermissionId))
+                    .ToList();
+
+                if (excessPermissions.Any())
+                {
+                    foreach (var excess in excessPermissions)
+                    {
+                        logger?.LogWarning("🗑️ Fazla izin kaldırıldı: {RoleName} -> {PermissionName}", 
+                            roleName, excess.Permission?.Name ?? $"ID:{excess.PermissionId}");
+                    }
+                    
+                    dbContext.RolePermissions.RemoveRange(excessPermissions);
+                    removedCount += excessPermissions.Count;
+                }
+            }
+
+            return removedCount;
         }
 
         /// <summary>
@@ -513,11 +572,14 @@ namespace ECommerce.API.Infrastructure
                     // Dashboard - Sadece görüntüleme
                     Permissions.Dashboard.View,
                     
-                    // Ürünler - Sadece görüntüleme
-                    Permissions.Products.View,
-                    
-                    // Kategoriler - Sadece görüntüleme
-                    Permissions.Categories.View,
+                    // ============================================================================
+                    // ÜRÜN ve KATEGORİ YÖNETİMİ - KALDIRILDI
+                    // CustomerSupport ürün/kategori admin panellerine erişmemeli
+                    // Backend controller'lar AdminLike istiyor, bu izinler 403 hatasına yol açar
+                    // Sipariş detaylarında ürün bilgisi zaten Orders.ViewDetails ile görünür
+                    // ============================================================================
+                    // Permissions.Products.View,    // ❌ KALDIRILDI - AdminProductsController AdminLike istiyor
+                    // Permissions.Categories.View,  // ❌ KALDIRILDI - AdminCategoriesController AdminLike istiyor
                     
                     // Siparişler - Tam yetki (iptal/iade dahil)
                     Permissions.Orders.View,
@@ -527,8 +589,12 @@ namespace ECommerce.API.Infrastructure
                     Permissions.Orders.ProcessRefund,
                     Permissions.Orders.ViewCustomerInfo,
                     
-                    // Kullanıcılar - Sadece görüntüleme (hassas veri hariç)
-                    Permissions.Users.View,
+                    // ============================================================================
+                    // Kullanıcılar - KALDIRILDI
+                    // CustomerSupport kullanıcı listesine erişmemeli
+                    // Sipariş detaylarında müşteri bilgisi zaten Orders.ViewCustomerInfo ile görünür
+                    // ============================================================================
+                    // Permissions.Users.View,  // ❌ KALDIRILDI - Güvenlik için
                     
                     // Raporlar - Genel görüntüleme ve satış
                     Permissions.Reports.View,
