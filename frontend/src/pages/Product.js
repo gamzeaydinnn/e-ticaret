@@ -465,8 +465,7 @@ export default function Product() {
     },
     product.subCategoryName && {
       label: product.subCategoryName,
-      path: null,
-    },
+      path: null,    },
     { label: product.name, path: null },
   ].filter(Boolean);
 

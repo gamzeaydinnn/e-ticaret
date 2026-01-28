@@ -314,8 +314,8 @@ const PosnetCreditCardForm = ({
         customerEmail,
         customerPhone,
         userId,
-        successUrl: successUrl || `${window.location.origin}/checkout/success`,
-        failUrl: failUrl || `${window.location.origin}/checkout/fail`,
+        successUrl: successUrl || `${process.env.REACT_APP_SITE_URL || (window.location.hostname === 'localhost' ? window.location.origin : 'https://golkoygurme.com.tr')}/checkout/success`,
+        failUrl: failUrl || `${process.env.REACT_APP_SITE_URL || (window.location.hostname === 'localhost' ? window.location.origin : 'https://golkoygurme.com.tr')}/checkout/fail`,
       };
 
       const result = await PaymentService.initiatePosnet3DSecure(paymentData);

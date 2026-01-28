@@ -94,13 +94,21 @@ export default function ProductCard({
   const handleFavoriteClick = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    onToggleFavorite(product.id);
+    if (onToggleFavorite) {
+      onToggleFavorite(product.id);
+    }
   };
 
   const handleCartClick = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    onAddToCart(product.id);
+    console.log("🛒 Sepete Ekle tıklandı:", product.id, product.name);
+    if (onAddToCart) {
+      onAddToCart(product.id);
+    } else {
+      console.error("❌ onAddToCart fonksiyonu tanımlı değil!");
+      alert("Sepete ekleme fonksiyonu bulunamadı. Lütfen sayfayı yenileyin.");
+    }
   };
 
   const handleShare = async (e) => {
@@ -396,8 +404,9 @@ export default function ProductCard({
       </div>
 
       {/* Sepete Ekle Butonu - Kartın en altında */}
-      <div className="action-buttons p-3 pt-0" style={{ marginTop: "auto" }}>
+      <div className="action-buttons p-3 pt-0" style={{ marginTop: "auto", position: "relative", zIndex: 10 }}>
         <button
+          type="button"
           className="modern-add-btn w-100"
           onClick={handleCartClick}
           style={{
@@ -410,6 +419,9 @@ export default function ProductCard({
             color: "white",
             transition: "all 0.3s ease",
             boxShadow: "0 3px 12px rgba(255, 107, 53, 0.3)",
+            cursor: "pointer",
+            position: "relative",
+            zIndex: 11,
           }}
         >
           <i

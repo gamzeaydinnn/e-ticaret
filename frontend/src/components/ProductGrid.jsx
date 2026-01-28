@@ -224,8 +224,6 @@ export default function ProductGrid({
   const [modalRule, setModalRule] = useState(null);
   // eslint-disable-next-line no-unused-vars
   const [modalError, setModalError] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [showModal, setShowModal] = useState(false);
   const [showLoginRequired, setShowLoginRequired] = useState(false);
   const [loginAction, setLoginAction] = useState(null); // 'cart' or 'favorite'
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -250,7 +248,9 @@ export default function ProductGrid({
   }, [data, categoryId]);
 
   const handleAddToCart = (productId) => {
-    const product = data.find((p) => p.id === productId);
+    const product = data.find(
+      (p) => String(p.id) === String(productId),
+    );
     if (!product) return;
 
     // Context üzerinden sepete ekle (hem misafir hem kullanıcı için çalışır)
@@ -973,75 +973,7 @@ export default function ProductGrid({
                           onClick={(e) => {
                             e.stopPropagation();
                             if (isOutOfStock) return;
-                            // open modal to choose quantity
-                            setSelectedProduct(p);
-                            // find rule for this product
-                            let match =
-                              (rules || []).find((r) => {
-                                const examples = (r.examples || []).map((ex) =>
-                                  String(ex).toLowerCase(),
-                                );
-                                const pname = (p.name || "").toLowerCase();
-                                return (
-                                  (r.category || "")
-                                    .toLowerCase()
-                                    .includes(pname) ||
-                                  examples.some(
-                                    (ex) =>
-                                      pname.includes(ex) || ex.includes(pname),
-                                  ) ||
-                                  (p.categoryName || "")
-                                    .toLowerCase()
-                                    .includes((r.category || "").toLowerCase())
-                                );
-                              }) || null;
-                            // prefer kg rules for fruits/vegetables and meat categories
-                            const pcat = (p.categoryName || "").toLowerCase();
-                            if (
-                              !match &&
-                              (pcat.includes("meyve") ||
-                                pcat.includes("sebze") ||
-                                pcat.includes("et") ||
-                                pcat.includes("tavuk") ||
-                                pcat.includes("balık") ||
-                                pcat.includes("balik"))
-                            ) {
-                              match =
-                                (rules || []).find(
-                                  (r) => (r.unit || "").toLowerCase() === "kg",
-                                ) || null;
-                            }
-                            // categories that should be sold as units with min 1 max 10
-                            const unitLimitCats = [
-                              "süt",
-                              "süt ürünleri",
-                              "süt urunleri",
-                              "temel gıda",
-                              "temel gida",
-                              "temizlik",
-                              "içecek",
-                              "icecek",
-                              "atıştırmalık",
-                              "atistirmalik",
-                            ];
-                            if (
-                              !match &&
-                              unitLimitCats.some((tok) => pcat.includes(tok))
-                            ) {
-                              match = {
-                                category: "Kategori adedi sınırı",
-                                unit: "adet",
-                                min_quantity: 1,
-                                max_quantity: 10,
-                                step: 1,
-                              };
-                            }
-                            setModalRule(match);
-                            setModalQuantity(
-                              match ? match.min_quantity || 1 : 1,
-                            );
-                            setModalError("");
-                            setShowModal(true);
+                            handleAddToCart(p.id);
                           }}
                           onMouseEnter={(e) => {
                             e.target.style.background =

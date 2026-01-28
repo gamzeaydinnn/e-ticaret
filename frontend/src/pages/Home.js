@@ -23,6 +23,8 @@ import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
 import HeroSlider from "../components/HeroSlider";
 import PromoCards from "../components/PromoCards";
+import { useCart } from "../contexts/CartContext";
+import AddToCartModal from "../components/AddToCartModal";
 
 // ============================================
 // ANA BİLEŞEN
@@ -58,6 +60,13 @@ export default function Home() {
       return [];
     }
   });
+
+  // Sepet context'i
+  const { addToCart } = useCart();
+
+  // Sepete ekleme modal state'i
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [addedProduct, setAddedProduct] = useState(null);
 
   // ============================================
   // VERİ YÜKLEME FONKSİYONU
@@ -222,14 +231,20 @@ export default function Home() {
 
   /** Sepete ürün ekle */
   const handleAddToCart = useCallback(
-    (productId) => {
+    async (productId) => {
       const product = featured.find((p) => p.id === productId);
       if (product) {
-        // TODO: Context veya Redux ile sepet yönetimi
-        alert(`${product.name} sepete eklendi!`);
+        try {
+          await addToCart(product, 1);
+          setAddedProduct(product);
+          setCartModalOpen(true);
+        } catch (error) {
+          console.error("Sepete ekleme hatası:", error);
+          alert("Ürün sepete eklenirken bir hata oluştu.");
+        }
       }
     },
-    [featured]
+    [featured, addToCart]
   );
 
   // ============================================
@@ -742,6 +757,13 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* Sepete Ekleme Modal */}
+      <AddToCartModal
+        isOpen={cartModalOpen}
+        onClose={() => setCartModalOpen(false)}
+        product={addedProduct}
+      />
     </div>
   );
 }

@@ -1,0 +1,221 @@
+/**
+ * AddToCartModal.css - Sepete Ekleme Modal Stilleri
+ */
+
+.add-to-cart-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.add-to-cart-modal {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Header */
+.add-to-cart-modal-header {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+}
+
+.add-to-cart-modal-header .success-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.add-to-cart-modal-header .success-icon i {
+  animation: bounceIn 0.5s ease;
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.add-to-cart-modal-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.add-to-cart-modal-header .close-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.add-to-cart-modal-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Body */
+.add-to-cart-modal-body {
+  padding: 24px;
+}
+
+.add-to-cart-modal-body .product-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.add-to-cart-modal-body .product-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid #f0f0f0;
+}
+
+.add-to-cart-modal-body .product-details {
+  flex: 1;
+}
+
+.add-to-cart-modal-body .product-name {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.add-to-cart-modal-body .product-price {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.add-to-cart-modal-body .original-price {
+  color: #999;
+  text-decoration: line-through;
+  font-size: 0.9rem;
+}
+
+.add-to-cart-modal-body .discounted-price {
+  color: #22c55e;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.add-to-cart-modal-body .current-price {
+  color: #ff6b35;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+/* Footer */
+.add-to-cart-modal-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.add-to-cart-modal-footer button {
+  flex: 1;
+  padding: 14px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-to-cart-modal-footer .btn-continue {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  color: #666;
+}
+
+.add-to-cart-modal-footer .btn-continue:hover {
+  background: #eee;
+  color: #333;
+}
+
+.add-to-cart-modal-footer .btn-go-to-cart {
+  background: linear-gradient(135deg, #ff6b35, #ff8c5a);
+  border: none;
+  color: white;
+}
+
+.add-to-cart-modal-footer .btn-go-to-cart:hover {
+  background: linear-gradient(135deg, #e55a2b, #ff7a47);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .add-to-cart-modal {
+    width: 95%;
+    margin: 10px;
+  }
+
+  .add-to-cart-modal-footer {
+    flex-direction: column;
+  }
+
+  .add-to-cart-modal-footer button {
+    width: 100%;
+  }
+}
