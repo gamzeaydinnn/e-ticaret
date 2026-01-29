@@ -1,6 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { AdminService } from "../../services/adminService";
 import { CourierService } from "../../services/courierService";
+import storeAttendantService from "../../services/storeAttendantService";
+import {
+  assignCourier as dispatcherAssignCourier,
+  getCouriers as dispatcherGetCouriers,
+} from "../../services/dispatcherService";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   signalRService,
@@ -48,7 +53,9 @@ export default function AdminOrders() {
       try {
         if (showLoading) setIsRefreshing(true);
 
-        const couriersData = await CourierService.getAll();
+        const couriersData = isStoreAttendant
+          ? await dispatcherGetCouriers()
+          : await CourierService.getAll();
         // Gerçek siparişleri backend'den çek
         const ordersData = await AdminService.getOrders();
         let filteredOrders = Array.isArray(ordersData) ? ordersData : [];
@@ -58,6 +65,8 @@ export default function AdminOrders() {
         if (isStoreAttendant) {
           const allowedStatuses = [
             "new",
+            "pending",
+            "paid",
             "confirmed",
             "preparing",
             "ready",
@@ -69,7 +78,30 @@ export default function AdminOrders() {
         }
 
         setOrders(filteredOrders);
-        setCouriers(couriersData);
+
+        // Kurye listesini set et
+        let courierList = [];
+        if (isStoreAttendant) {
+          // dispatcherGetCouriers { success, data: { couriers: [...] } } döner
+          const result = couriersData;
+          console.log(
+            "🚴 [AdminOrders] StoreAttendant kurye API yanıtı:",
+            result,
+          );
+          if (result?.success && result?.data) {
+            courierList = result.data.couriers || result.data || [];
+          } else {
+            courierList = result?.couriers || [];
+          }
+        } else {
+          // CourierService.getAll() direkt array döner
+          courierList = Array.isArray(couriersData)
+            ? couriersData
+            : couriersData?.data || [];
+        }
+        console.log("🚴 [AdminOrders] Final kurye listesi:", courierList);
+        setCouriers(Array.isArray(courierList) ? courierList : []);
+
         setLastUpdate(new Date());
       } catch (error) {
         console.error("Veri yükleme hatası:", error);
@@ -113,11 +145,36 @@ export default function AdminOrders() {
     const deliveryHub = signalRService.deliveryHub;
     const adminHub = signalRService.adminHub;
 
-    const handleOrderCreated = (order) => {
-      console.log("📦 Yeni sipariş alındı:", order);
-      setOrders((prev) => [order, ...prev]);
-      setLastUpdate(new Date());
+    // =========================================================================
+    // YENİ SİPARİŞ HANDLER
+    // Backend'den gelen bildirim formatı: { type, orderId, orderNumber, ... }
+    // NEDEN: Backend notification objesi içinde sipariş verisini farklı formatta gönderebilir
+    // =========================================================================
+    const handleOrderCreated = (notification) => {
+      console.log("📦 Yeni sipariş bildirimi alındı:", notification);
+
+      // Bildirim ses çal (önce ses, sonra data)
       playNotificationSound();
+
+      // Eğer notification bir order objesi ise direkt ekle
+      // Eğer notification içinde orderId varsa, API'den yeni veri çek
+      if (notification && (notification.orderId || notification.id)) {
+        // Sipariş listesini yeniden yükle (en güncel veriyi almak için)
+        loadData(false);
+      } else if (notification) {
+        // Eğer gelen veri doğrudan sipariş objesi ise
+        setOrders((prev) => {
+          // Aynı sipariş zaten listede varsa ekleme
+          const exists = prev.some(
+            (o) =>
+              o.id === notification.id ||
+              o.orderNumber === notification.orderNumber,
+          );
+          if (exists) return prev;
+          return [notification, ...prev];
+        });
+      }
+      setLastUpdate(new Date());
     };
 
     const handleOrderStatusChanged = (data) => {
@@ -184,6 +241,18 @@ export default function AdminOrders() {
     adminHub.on("NewOrder", handleOrderCreated);
     adminHub.on("OrderStatusChanged", handleOrderStatusChanged);
 
+    // =========================================================================
+    // SES BİLDİRİMİ DİNLEYİCİSİ
+    // Backend "PlaySound" event'i gönderdiğinde ses çal
+    // NEDEN: Merkezi ses yönetimi için backend kontrollü bildirim
+    // =========================================================================
+    const handlePlaySound = (data) => {
+      console.log("🔊 Backend'den ses bildirimi:", data);
+      playNotificationSound();
+    };
+
+    adminHub.on("PlaySound", handlePlaySound);
+
     // Cleanup
     return () => {
       deliveryHub.off(SignalREvents.ORDER_CREATED, handleOrderCreated);
@@ -199,6 +268,7 @@ export default function AdminOrders() {
       deliveryHub.off(SignalREvents.DELIVERY_FAILED, handleDeliveryFailed);
       adminHub.off("NewOrder", handleOrderCreated);
       adminHub.off("OrderStatusChanged", handleOrderStatusChanged);
+      adminHub.off("PlaySound", handlePlaySound);
     };
   }, []);
 
@@ -280,14 +350,25 @@ export default function AdminOrders() {
         `📝 Sipariş durumu güncelleniyor: #${orderId} → ${newStatus}`,
       );
 
-      // Backend'e durumu güncelle
-      await AdminService.updateOrderStatus(orderId, newStatus);
+      // StoreAttendant kendi endpoint'ini kullanır
+      if (isStoreAttendant) {
+        const result = await storeAttendantService.updateOrderStatus(
+          orderId,
+          newStatus,
+        );
+        if (!result.success) {
+          throw new Error(result.error || "Durum güncellenemedi");
+        }
+        await loadData(false);
+      } else {
+        // Admin endpoint
+        await AdminService.updateOrderStatus(orderId, newStatus);
+        // Listeyi yeniden çek
+        const updated = await AdminService.getOrders();
+        setOrders(Array.isArray(updated) ? updated : []);
+      }
 
       console.log(`✅ Sipariş durumu güncellendi: #${orderId} → ${newStatus}`);
-
-      // Listeyi yeniden çek
-      const updated = await AdminService.getOrders();
-      setOrders(Array.isArray(updated) ? updated : []);
 
       // Seçili sipariş varsa onu da güncelle
       if (selectedOrder && selectedOrder.id === orderId) {
@@ -309,19 +390,62 @@ export default function AdminOrders() {
   };
 
   // ============================================================
+  // SİPARİŞ SİLME (ADMIN)
+  // ============================================================
+  const deleteOrder = async (orderId) => {
+    try {
+      if (
+        !window.confirm("Bu siparişi kalıcı olarak silmek istiyor musunuz?")
+      ) {
+        return;
+      }
+
+      await AdminService.deleteOrder(orderId);
+
+      // NEDEN: Silme sonrası listeyi tazelemek zorundayız.
+      const updated = await AdminService.getOrders();
+      setOrders(Array.isArray(updated) ? updated : []);
+
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(null);
+      }
+    } catch (error) {
+      console.error("❌ Sipariş silme hatası:", error);
+      alert(`Sipariş silinemedi: ${error.message || "Bilinmeyen hata"}`);
+    }
+  };
+
+  // ============================================================
   // KURYE ATAMA - Backend'e POST isteği gönderir
   // ============================================================
   const assignCourier = async (orderId, courierId) => {
     setAssigningCourier(true);
     try {
+      console.log(
+        `🚀 [AdminOrders] Kurye atama başladı: Sipariş #${orderId}, Kurye ID: ${courierId}`,
+      );
+      console.log("🔍 [AdminOrders] Mevcut kuryeler:", couriers);
+
       // Backend'e kurye atama isteği gönder
-      const updatedOrder = await AdminService.assignCourier(orderId, courierId);
+      const updatedOrder = isStoreAttendant
+        ? await dispatcherAssignCourier(orderId, courierId)
+        : await AdminService.assignCourier(orderId, courierId);
+
+      console.log("✅ [AdminOrders] API yanıtı:", updatedOrder);
+
+      if (isStoreAttendant && updatedOrder?.success === false) {
+        throw new Error(updatedOrder.error || "Kurye atama başarısız");
+      }
 
       // Başarılı olursa listeyi güncelle
       if (updatedOrder) {
         // Tüm listeyi yeniden çek (en güncel veri için)
-        const updated = await AdminService.getOrders();
-        setOrders(Array.isArray(updated) ? updated : []);
+        if (isStoreAttendant) {
+          await loadData(false);
+        } else {
+          const updated = await AdminService.getOrders();
+          setOrders(Array.isArray(updated) ? updated : []);
+        }
 
         // Başarı bildirimi (opsiyonel)
         console.log(`✅ Kurye başarıyla atandı: Sipariş #${orderId}`);
@@ -344,7 +468,7 @@ export default function AdminOrders() {
       // Ana Akış Durumları
       new: "secondary", // 🔘 Gri - Yeni sipariş
       pending: "warning", // 🟡 Sarı - Beklemede (eski için uyumluluk)
-      confirmed: "info", // 🔵 Mavi - Onaylandı
+      confirmed: "info", // 🔵 Mavi - Onaylanıyor
       preparing: "orange", // 🟠 Turuncu - Hazırlanıyor
       ready: "success", // 🟢 Yeşil - Hazır
       assigned: "primary", // 🔵 Koyu Mavi - Kuryeye Atandı
@@ -362,7 +486,8 @@ export default function AdminOrders() {
       weight_pending: "info",
       payment_captured: "success",
     };
-    return colorMap[status] || "secondary";
+    const normalized = (status || "").toLowerCase();
+    return colorMap[normalized] || "secondary";
   };
 
   // Durum renk hex kodları (timeline için)
@@ -383,7 +508,8 @@ export default function AdminOrders() {
       cancelled: "#dc3545",
       delivery_failed: "#dc3545",
     };
-    return hexMap[status] || "#6c757d";
+    const normalized = (status || "").toLowerCase();
+    return hexMap[normalized] || "#6c757d";
   };
 
   // =========================================================================
@@ -412,7 +538,9 @@ export default function AdminOrders() {
       weight_pending: "Tartı Onayı Bekliyor",
       payment_captured: "Ödeme Tamamlandı",
     };
-    return statusMap[status] || status;
+    // Status'u küçük harfe çevir ve eşle
+    const normalized = (status || "").toLowerCase();
+    return statusMap[normalized] || status;
   };
 
   // =========================================================================
@@ -435,7 +563,8 @@ export default function AdminOrders() {
       cancelled: "fa-times-circle",
       delivery_failed: "fa-exclamation-triangle",
     };
-    return iconMap[status] || "fa-circle";
+    const normalized = (status || "").toLowerCase();
+    return iconMap[normalized] || "fa-circle";
   };
 
   if (loading) {
@@ -890,216 +1019,254 @@ export default function AdminOrders() {
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <tr key={order.id}>
-                      <td className="px-1 py-2">
-                        <span className="fw-bold">#{order.id}</span>
-                        <br />
-                        <small
-                          className="text-muted d-none d-sm-inline"
-                          style={{ fontSize: "0.6rem" }}
-                        >
-                          {new Date(order.orderDate).toLocaleDateString(
-                            "tr-TR",
-                          )}
-                        </small>
-                      </td>
-                      <td className="px-1 py-2 d-none d-md-table-cell">
-                        <span
-                          className="fw-semibold text-truncate d-block"
-                          style={{ maxWidth: "80px" }}
-                        >
-                          {order.customerName}
-                        </span>
-                      </td>
-                      <td className="px-1 py-2">
-                        <span
-                          className="fw-bold text-success"
-                          style={{ fontSize: "0.7rem" }}
-                        >
-                          {(order.totalAmount ?? 0).toFixed(0)}₺
-                        </span>
-                      </td>
-                      <td className="px-1 py-2">
-                        <span
-                          className={`badge`}
-                          style={{
-                            fontSize: "0.55rem",
-                            padding: "0.25em 0.5em",
-                            backgroundColor: getStatusHexColor(order.status),
-                            color: "white",
-                          }}
-                        >
-                          <i
-                            className={`fas ${getStatusIcon(order.status)} me-1`}
-                          ></i>
-                          {getStatusText(order.status).substring(0, 8)}
-                        </span>
-                      </td>
-                      {/* Ödeme Durumu Sütunu */}
-                      <td className="px-1 py-2 d-none d-sm-table-cell">
-                        {order.paymentStatus === "paid" || order.isPaid ? (
-                          <span
-                            className="badge bg-success"
-                            style={{ fontSize: "0.55rem" }}
-                          >
-                            <i className="fas fa-check me-1"></i>Ödendi
-                          </span>
-                        ) : (
-                          <span
-                            className="badge bg-danger"
-                            style={{ fontSize: "0.55rem" }}
-                          >
-                            <i className="fas fa-clock me-1"></i>Bekliyor
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-1 py-2 d-none d-sm-table-cell">
-                        {order.courierName ? (
-                          <span
-                            className="text-success"
-                            style={{ fontSize: "0.65rem" }}
-                          >
-                            <i className="fas fa-motorcycle me-1"></i>
-                            {order.courierName.split(" ")[0]}
-                          </span>
-                        ) : (
-                          <span
-                            className="text-muted"
+                  filteredOrders.map((order) => {
+                    const normalizedStatus = (order.status || "").toLowerCase();
+                    return (
+                      <tr key={order.id}>
+                        <td className="px-1 py-2">
+                          <span className="fw-bold">#{order.id}</span>
+                          <br />
+                          <small
+                            className="text-muted d-none d-sm-inline"
                             style={{ fontSize: "0.6rem" }}
                           >
-                            -
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-1 py-2">
-                        <div className="d-flex gap-1 flex-wrap">
-                          {/* Detay Butonu */}
-                          <button
-                            onClick={() => setSelectedOrder(order)}
-                            className="btn btn-outline-secondary p-1"
-                            style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                            title="Sipariş Detayı"
+                            {new Date(order.orderDate).toLocaleDateString(
+                              "tr-TR",
+                            )}
+                          </small>
+                        </td>
+                        <td className="px-1 py-2 d-none d-md-table-cell">
+                          <span
+                            className="fw-semibold text-truncate d-block"
+                            style={{ maxWidth: "80px" }}
                           >
-                            <i className="fas fa-eye"></i>
-                          </button>
-
-                          {/* ================================================================
-                              MVP AKIŞ BUTONLARI
-                              New/Paid → Preparing → Ready → OutForDelivery → Delivered
-                              ================================================================ */}
-
-                          {/* 🍳 HAZIRLANIYOR - Yeni sipariş için */}
-                          {(order.status === "new" ||
-                            order.status === "pending" ||
-                            order.status === "paid" ||
-                            order.status === "confirmed") && (
-                            <button
-                              onClick={() =>
-                                updateOrderStatus(order.id, "preparing")
-                              }
-                              className="btn p-1"
-                              style={{
-                                fontSize: "0.6rem",
-                                lineHeight: 1,
-                                backgroundColor: "#fd7e14",
-                                borderColor: "#fd7e14",
-                                color: "white",
-                              }}
-                              title="🍳 Hazırlanıyor Yap"
+                            {order.customerName}
+                          </span>
+                        </td>
+                        <td className="px-1 py-2">
+                          <span
+                            className="fw-bold text-success"
+                            style={{ fontSize: "0.7rem" }}
+                          >
+                            {(order.totalAmount ?? 0).toFixed(0)}₺
+                          </span>
+                        </td>
+                        <td className="px-1 py-2">
+                          <span
+                            className={`badge`}
+                            style={{
+                              fontSize: "0.55rem",
+                              padding: "0.25em 0.5em",
+                              backgroundColor: getStatusHexColor(order.status),
+                              color: "white",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            <i
+                              className={`fas ${getStatusIcon(order.status)} me-1`}
+                            ></i>
+                            {getStatusText(order.status)}
+                          </span>
+                        </td>
+                        {/* Ödeme Durumu Sütunu */}
+                        <td className="px-1 py-2 d-none d-sm-table-cell">
+                          {order.paymentStatus === "paid" || order.isPaid ? (
+                            <span
+                              className="badge bg-success"
+                              style={{ fontSize: "0.55rem" }}
                             >
-                              <i className="fas fa-fire"></i>
-                            </button>
-                          )}
-
-                          {/* 📦 HAZIR - Hazırlanan sipariş için */}
-                          {order.status === "preparing" && (
-                            <button
-                              onClick={() =>
-                                updateOrderStatus(order.id, "ready")
-                              }
-                              className="btn btn-success p-1"
-                              style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                              title="📦 Hazır Yap"
+                              <i className="fas fa-check me-1"></i>Ödendi
+                            </span>
+                          ) : (
+                            <span
+                              className="badge bg-danger"
+                              style={{ fontSize: "0.55rem" }}
                             >
-                              <i className="fas fa-box-open"></i>
-                            </button>
+                              <i className="fas fa-clock me-1"></i>Bekliyor
+                            </span>
                           )}
-
-                          {/* 🚴 KURYE ATA - Hazır sipariş için */}
-                          {order.status === "ready" && (
+                        </td>
+                        <td className="px-1 py-2 d-none d-sm-table-cell">
+                          {order.courierName ? (
+                            <span
+                              className="text-success"
+                              style={{ fontSize: "0.65rem" }}
+                            >
+                              <i className="fas fa-motorcycle me-1"></i>
+                              {order.courierName.split(" ")[0]}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: "0.6rem" }}
+                            >
+                              -
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-1 py-2">
+                          <div className="d-flex gap-1 flex-wrap">
+                            {/* Detay Butonu */}
                             <button
                               onClick={() => setSelectedOrder(order)}
-                              className="btn btn-primary p-1"
+                              className="btn btn-outline-secondary p-1"
                               style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                              title="🚴 Kuryeye Ata"
+                              title="Sipariş Detayı"
                             >
-                              <i className="fas fa-motorcycle"></i>
+                              <i className="fas fa-eye"></i>
                             </button>
-                          )}
 
-                          {/* 🛵 DAĞITIMA ÇIKTI - Kuryeye atanan sipariş için */}
-                          {(order.status === "assigned" ||
-                            order.status === "picked_up" ||
-                            order.status === "pickedup") && (
-                            <button
-                              onClick={() =>
-                                updateOrderStatus(order.id, "out_for_delivery")
-                              }
-                              className="btn p-1"
-                              style={{
-                                fontSize: "0.6rem",
-                                lineHeight: 1,
-                                backgroundColor: "#6f42c1",
-                                borderColor: "#6f42c1",
-                                color: "white",
-                              }}
-                              title="🛵 Dağıtıma Çıktı"
-                            >
-                              <i className="fas fa-shipping-fast"></i>
-                            </button>
-                          )}
+                            {/* ================================================================
+                              MVP AKIŞ BUTONLARI
+                              New/Pending → Confirmed → Preparing → Ready → Assigned → Delivered
+                              ================================================================ */}
 
-                          {/* ✅ TESLİM EDİLDİ - Dağıtımdaki sipariş için */}
-                          {(order.status === "out_for_delivery" ||
-                            order.status === "outfordelivery") && (
-                            <button
-                              onClick={() =>
-                                updateOrderStatus(order.id, "delivered")
-                              }
-                              className="btn btn-dark p-1"
-                              style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                              title="✅ Teslim Edildi"
-                            >
-                              <i className="fas fa-check-double"></i>
-                            </button>
-                          )}
-
-                          {/* 🚫 İPTAL - Sadece Admin için (StoreAttendant iptal edemez) */}
-                          {!isStoreAttendant &&
-                            order.status !== "delivered" &&
-                            order.status !== "cancelled" && (
+                            {/* ✅ ONAYLA - Yeni/Bekleyen sipariş için */}
+                            {(normalizedStatus === "new" ||
+                              normalizedStatus === "pending" ||
+                              normalizedStatus === "paid") && (
                               <button
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Siparişi iptal etmek istediğinize emin misiniz?",
-                                    )
-                                  ) {
-                                    updateOrderStatus(order.id, "cancelled");
-                                  }
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "confirmed")
+                                }
+                                className="btn btn-info p-1"
+                                style={{
+                                  fontSize: "0.6rem",
+                                  lineHeight: 1,
                                 }}
-                                className="btn btn-outline-danger p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                                title="🚫 İptal Et"
+                                title="✅ Onayla"
                               >
-                                <i className="fas fa-times"></i>
+                                <i className="fas fa-check"></i>
                               </button>
                             )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+
+                            {/* 🍳 HAZIRLANIYOR - Onaylı sipariş için */}
+                            {(normalizedStatus === "confirmed" ||
+                              normalizedStatus === "paid") && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "preparing")
+                                }
+                                className="btn p-1"
+                                style={{
+                                  fontSize: "0.6rem",
+                                  lineHeight: 1,
+                                  backgroundColor: "#fd7e14",
+                                  borderColor: "#fd7e14",
+                                  color: "white",
+                                }}
+                                title="🍳 Hazırlanıyor Yap"
+                              >
+                                <i className="fas fa-fire"></i>
+                              </button>
+                            )}
+
+                            {/* 📦 HAZIR - Hazırlanan sipariş için */}
+                            {normalizedStatus === "preparing" && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "ready")
+                                }
+                                className="btn btn-success p-1"
+                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                title="📦 Hazır Yap"
+                              >
+                                <i className="fas fa-box-open"></i>
+                              </button>
+                            )}
+
+                            {/* 🚴 KURYE ATA - Hazır sipariş için */}
+                            {normalizedStatus === "ready" && (
+                              <button
+                                onClick={() => setSelectedOrder(order)}
+                                className="btn btn-primary p-1"
+                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                title="🚴 Kuryeye Ata"
+                              >
+                                <i className="fas fa-motorcycle"></i>
+                              </button>
+                            )}
+
+                            {/* 🛵 DAĞITIMA ÇIKTI - Kuryeye atanan sipariş için */}
+                            {!isStoreAttendant &&
+                              (normalizedStatus === "assigned" ||
+                                normalizedStatus === "picked_up" ||
+                                normalizedStatus === "pickedup") && (
+                                <button
+                                  onClick={() =>
+                                    updateOrderStatus(
+                                      order.id,
+                                      "out_for_delivery",
+                                    )
+                                  }
+                                  className="btn p-1"
+                                  style={{
+                                    fontSize: "0.6rem",
+                                    lineHeight: 1,
+                                    backgroundColor: "#6f42c1",
+                                    borderColor: "#6f42c1",
+                                    color: "white",
+                                  }}
+                                  title="🛵 Dağıtıma Çıktı"
+                                >
+                                  <i className="fas fa-shipping-fast"></i>
+                                </button>
+                              )}
+
+                            {/* ✅ TESLİM EDİLDİ - Dağıtımdaki sipariş için */}
+                            {!isStoreAttendant &&
+                              (normalizedStatus === "out_for_delivery" ||
+                                normalizedStatus === "outfordelivery") && (
+                                <button
+                                  onClick={() =>
+                                    updateOrderStatus(order.id, "delivered")
+                                  }
+                                  className="btn btn-dark p-1"
+                                  style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                  title="✅ Teslim Edildi"
+                                >
+                                  <i className="fas fa-check-double"></i>
+                                </button>
+                              )}
+
+                            {/* 🚫 İPTAL - Sadece Admin için (StoreAttendant iptal edemez) */}
+                            {!isStoreAttendant &&
+                              normalizedStatus !== "delivered" &&
+                              normalizedStatus !== "cancelled" && (
+                                <button
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        "Siparişi iptal etmek istediğinize emin misiniz?",
+                                      )
+                                    ) {
+                                      updateOrderStatus(order.id, "cancelled");
+                                    }
+                                  }}
+                                  className="btn btn-outline-danger p-1"
+                                  style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                  title="🚫 İptal Et"
+                                >
+                                  <i className="fas fa-times"></i>
+                                </button>
+                              )}
+
+                            {/* 🗑️ SİL - Sadece Admin */}
+                            {!isStoreAttendant && (
+                              <button
+                                onClick={() => deleteOrder(order.id)}
+                                className="btn btn-outline-dark p-1"
+                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                title="🗑️ Siparişi Sil"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1108,925 +1275,1157 @@ export default function AdminOrders() {
       </div>
 
       {/* Sipariş Detay Modal */}
-      {selectedOrder && (
-        <div
-          className="modal fade show d-block"
-          tabIndex="-1"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-          onClick={(e) => {
-            // Modal dışına tıklayınca kapat
-            if (e.target === e.currentTarget) setSelectedOrder(null);
-          }}
-        >
-          <div
-            className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: "500px", margin: "auto" }}
-          >
-            <div className="modal-content" style={{ borderRadius: "12px" }}>
-              <div className="modal-header py-2 px-3">
-                <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
-                  <i className="fas fa-receipt me-2"></i>
-                  Sipariş #{selectedOrder.id}
-                </h6>
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="btn-close btn-close-sm"
-                ></button>
-              </div>
-              <div
-                className="modal-body p-2 p-md-3"
-                style={{
-                  fontSize: "0.75rem",
-                  maxHeight: "70vh",
-                  overflowY: "auto",
-                }}
-              >
-                <div className="row g-2">
-                  <div className="col-12 col-md-6">
-                    <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      Müşteri
-                    </h6>
-                    <p className="mb-1">
-                      <strong>Ad:</strong> {selectedOrder.customerName}
-                    </p>
-                    <p className="mb-1">
-                      <strong>Tel:</strong> {selectedOrder.customerPhone}
-                    </p>
-                    <p className="mb-1 text-truncate">
-                      <strong>Adres:</strong> {selectedOrder.address || "-"}
-                    </p>
-                  </div>
-                  <div className="col-12 col-md-6">
-                    <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      <i className="fas fa-receipt me-1 text-primary"></i>
-                      Sipariş Bilgileri
-                    </h6>
-                    <p className="mb-1">
-                      <strong>Tarih:</strong>{" "}
-                      {selectedOrder.orderDate
-                        ? new Date(selectedOrder.orderDate).toLocaleDateString(
-                            "tr-TR",
-                          )
-                        : "-"}
-                    </p>
-                    <p className="mb-1">
-                      <strong>Tutar:</strong>{" "}
-                      <span className="text-success fw-bold">
-                        {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
-                      </span>
-                    </p>
-                    {/* Ödeme Yöntemi */}
-                    <p className="mb-1">
-                      <strong>Ödeme:</strong>{" "}
-                      <span
-                        className={`badge ${
-                          selectedOrder.paymentMethod === "cash"
-                            ? "bg-warning text-dark"
-                            : selectedOrder.paymentMethod === "cash_card"
-                              ? "bg-info"
-                              : selectedOrder.paymentMethod === "bank_transfer"
-                                ? "bg-primary"
-                                : selectedOrder.paymentMethod === "card"
-                                  ? "bg-success"
-                                  : "bg-secondary"
-                        }`}
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {selectedOrder.paymentMethod === "cash"
-                          ? "💵 Kapıda Nakit"
-                          : selectedOrder.paymentMethod === "cash_card"
-                            ? "💳 Kapıda Kart"
-                            : selectedOrder.paymentMethod === "bank_transfer"
-                              ? "🏦 Havale/EFT"
-                              : selectedOrder.paymentMethod === "card"
-                                ? "💳 Online Kart"
-                                : selectedOrder.paymentMethod ||
-                                  "Belirtilmemiş"}
-                      </span>
-                    </p>
-                    <p className="mb-1">
-                      <strong>Durum:</strong>
-                      <span
-                        className={`badge bg-${getStatusColor(
-                          selectedOrder.status,
-                        )} ms-1`}
-                        style={{ fontSize: "0.6rem" }}
-                      >
-                        {getStatusText(selectedOrder.status)}
-                      </span>
-                    </p>
-                    {/* Sipariş Numarası varsa göster */}
-                    {selectedOrder.orderNumber && (
-                      <p className="mb-1">
-                        <strong>Sipariş No:</strong>{" "}
-                        <span
-                          className="badge bg-dark"
-                          style={{ fontSize: "0.6rem" }}
-                        >
-                          {selectedOrder.orderNumber}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                </div>
+      {selectedOrder &&
+        (() => {
+          // Status'u normalize et (backend büyük harfle gönderebilir)
+          const normalizedStatus = (selectedOrder.status || "").toLowerCase();
 
-                {/* ================================================================
+          return (
+            <div
+              className="modal fade show d-block"
+              tabIndex="-1"
+              style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+              onClick={(e) => {
+                // Modal dışına tıklayınca kapat
+                if (e.target === e.currentTarget) setSelectedOrder(null);
+              }}
+            >
+              <div
+                className="modal-dialog modal-dialog-centered"
+                style={{ maxWidth: "500px", margin: "auto" }}
+              >
+                <div className="modal-content" style={{ borderRadius: "12px" }}>
+                  <div className="modal-header py-2 px-3">
+                    <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
+                      <i className="fas fa-receipt me-2"></i>
+                      Sipariş #{selectedOrder.id}
+                    </h6>
+                    {/* Kapat butonu - × simgesi ile */}
+                    <button
+                      onClick={() => setSelectedOrder(null)}
+                      className="btn btn-outline-secondary btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "28px",
+                        height: "28px",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        lineHeight: 1,
+                        padding: 0,
+                        border: "1px solid #dee2e6",
+                      }}
+                      title="Kapat"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div
+                    className="modal-body p-2 p-md-3"
+                    style={{
+                      fontSize: "0.75rem",
+                      maxHeight: "70vh",
+                      overflowY: "auto",
+                    }}
+                  >
+                    <div className="row g-2">
+                      <div className="col-12 col-md-6">
+                        <h6
+                          className="fw-bold mb-1"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          Müşteri
+                        </h6>
+                        <p className="mb-1">
+                          <strong>Ad:</strong>{" "}
+                          {selectedOrder.customerName || "-"}
+                        </p>
+                        <p className="mb-1">
+                          <strong>Tel:</strong>{" "}
+                          {selectedOrder.customerPhone || "-"}
+                        </p>
+                        <p className="mb-1">
+                          <strong>Adres:</strong>{" "}
+                          {selectedOrder.shippingAddress ||
+                            selectedOrder.address ||
+                            "-"}
+                        </p>
+                      </div>
+                      <div className="col-12 col-md-6">
+                        <h6
+                          className="fw-bold mb-1"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-receipt me-1 text-primary"></i>
+                          Sipariş Bilgileri
+                        </h6>
+                        <p className="mb-1">
+                          <strong>Tarih:</strong>{" "}
+                          {selectedOrder.orderDate
+                            ? new Date(
+                                selectedOrder.orderDate,
+                              ).toLocaleDateString("tr-TR")
+                            : "-"}
+                        </p>
+                        <p className="mb-1">
+                          <strong>Tutar:</strong>{" "}
+                          <span className="text-success fw-bold">
+                            {(
+                              selectedOrder.finalPrice ??
+                              selectedOrder.totalPrice ??
+                              selectedOrder.totalAmount ??
+                              0
+                            ).toFixed(2)}{" "}
+                            ₺
+                          </span>
+                        </p>
+                        {/* Ödeme Yöntemi */}
+                        <p className="mb-1">
+                          <strong>Ödeme:</strong>{" "}
+                          <span
+                            className={`badge ${
+                              selectedOrder.paymentMethod === "cash"
+                                ? "bg-warning text-dark"
+                                : selectedOrder.paymentMethod === "cash_card"
+                                  ? "bg-info"
+                                  : selectedOrder.paymentMethod ===
+                                      "bank_transfer"
+                                    ? "bg-primary"
+                                    : selectedOrder.paymentMethod === "card"
+                                      ? "bg-success"
+                                      : "bg-secondary"
+                            }`}
+                            style={{ fontSize: "0.6rem" }}
+                          >
+                            {selectedOrder.paymentMethod === "cash"
+                              ? "💵 Kapıda Nakit"
+                              : selectedOrder.paymentMethod === "cash_card"
+                                ? "💳 Kapıda Kart"
+                                : selectedOrder.paymentMethod ===
+                                    "bank_transfer"
+                                  ? "🏦 Havale/EFT"
+                                  : selectedOrder.paymentMethod === "card"
+                                    ? "💳 Online Kart"
+                                    : selectedOrder.paymentMethod ||
+                                      "Belirtilmemiş"}
+                          </span>
+                        </p>
+                        <p className="mb-1">
+                          <strong>Durum:</strong>
+                          <span
+                            className={`badge bg-${getStatusColor(
+                              selectedOrder.status,
+                            )} ms-1`}
+                            style={{ fontSize: "0.6rem" }}
+                          >
+                            {getStatusText(selectedOrder.status)}
+                          </span>
+                        </p>
+                        {/* Sipariş Numarası varsa göster */}
+                        {selectedOrder.orderNumber && (
+                          <p className="mb-1">
+                            <strong>Sipariş No:</strong>{" "}
+                            <span
+                              className="badge bg-dark"
+                              style={{ fontSize: "0.6rem" }}
+                            >
+                              {selectedOrder.orderNumber}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ================================================================
                     ÜRÜNLER TABLOSU - VARYANT BİLGİSİ DAHİL
                     SKU, varyant başlığı varsa gösterilir
                     ================================================================ */}
-                <h6
-                  className="fw-bold mt-2 mb-1"
-                  style={{ fontSize: "0.8rem" }}
-                >
-                  <i className="fas fa-box-open me-1 text-primary"></i>
-                  Ürünler
-                </h6>
-                <div className="table-responsive">
-                  <table
-                    className="table table-sm mb-0"
-                    style={{ fontSize: "0.7rem" }}
-                  >
-                    <thead className="bg-light">
-                      <tr>
-                        <th className="px-1">Ürün</th>
-                        <th className="px-1 d-none d-sm-table-cell">SKU</th>
-                        <th className="px-1 text-center">Adet</th>
-                        <th className="px-1 text-end">Fiyat</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(Array.isArray(selectedOrder.items)
-                        ? selectedOrder.items
-                        : []
-                      ).map((item, index) => (
-                        <tr key={index}>
-                          <td className="px-1">
-                            <div className="d-flex flex-column">
-                              <span
-                                className="text-truncate fw-semibold"
-                                style={{ maxWidth: "120px" }}
-                              >
-                                {item.name || item.productName || "Ürün"}
-                              </span>
-                              {/* Varyant bilgisi varsa göster */}
-                              {item.variantTitle && (
-                                <span
-                                  className="badge mt-1"
-                                  style={{
-                                    background:
-                                      "linear-gradient(135deg, #10b981, #059669)",
-                                    color: "white",
-                                    fontSize: "0.55rem",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    width: "fit-content",
-                                  }}
-                                >
-                                  {item.variantTitle}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-1 d-none d-sm-table-cell">
-                            {item.sku ? (
-                              <span
-                                className="badge bg-secondary"
-                                style={{ fontSize: "0.55rem" }}
-                              >
-                                {item.sku}
-                              </span>
-                            ) : (
-                              <span className="text-muted">-</span>
-                            )}
-                          </td>
-                          <td className="px-1 text-center">
-                            <span className="badge bg-primary">
-                              {item.quantity}
-                            </span>
-                          </td>
-                          <td className="px-1 text-end">
-                            <span className="fw-bold text-success">
-                              {(
-                                (item.quantity ?? 0) *
-                                (item.price ?? item.unitPrice ?? 0)
-                              ).toFixed(0)}
-                              ₺
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    {/* Toplam satırı */}
-                    <tfoot className="bg-light">
-                      <tr>
-                        <td colSpan="3" className="px-1 text-end fw-bold">
-                          Toplam:
-                        </td>
-                        <td className="px-1 text-end">
-                          <span
-                            className="fw-bold text-success"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
-                          </span>
-                        </td>
-                      </tr>
-                      {/* Tartı Farkı - Eğer varsa göster */}
-                      {selectedOrder.weightDifference !== undefined &&
-                        selectedOrder.weightDifference !== 0 && (
-                          <tr className="bg-warning bg-opacity-25">
-                            <td colSpan="3" className="px-1 text-end fw-bold">
-                              <i className="fas fa-balance-scale me-1"></i>
-                              Tartı Farkı:
-                            </td>
-                            <td className="px-1 text-end">
-                              <span
-                                className={`fw-bold ${selectedOrder.weightDifference > 0 ? "text-success" : "text-danger"}`}
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                {selectedOrder.weightDifference > 0 ? "+" : ""}
-                                {(selectedOrder.weightDifference ?? 0).toFixed(
-                                  2,
-                                )}{" "}
-                                ₺
-                              </span>
-                            </td>
+                    <h6
+                      className="fw-bold mt-2 mb-1"
+                      style={{ fontSize: "0.8rem" }}
+                    >
+                      <i className="fas fa-box-open me-1 text-primary"></i>
+                      Ürünler
+                    </h6>
+                    <div className="table-responsive">
+                      <table
+                        className="table table-sm mb-0"
+                        style={{ fontSize: "0.7rem" }}
+                      >
+                        <thead className="bg-light">
+                          <tr>
+                            <th className="px-1">Ürün</th>
+                            <th className="px-1 d-none d-sm-table-cell">SKU</th>
+                            <th className="px-1 text-center">Adet</th>
+                            <th className="px-1 text-end">Fiyat</th>
                           </tr>
-                        )}
-                      {/* Final Tutar - Tartı farkı varsa göster */}
-                      {selectedOrder.finalAmount !== undefined &&
-                        selectedOrder.finalAmount !==
-                          selectedOrder.totalAmount && (
-                          <tr className="bg-success bg-opacity-25">
+                        </thead>
+                        <tbody>
+                          {(Array.isArray(selectedOrder.orderItems)
+                            ? selectedOrder.orderItems
+                            : Array.isArray(selectedOrder.items)
+                              ? selectedOrder.items
+                              : []
+                          ).map((item, index) => (
+                            <tr key={index}>
+                              <td className="px-1">
+                                <div className="d-flex flex-column">
+                                  <span
+                                    className="text-truncate fw-semibold"
+                                    style={{ maxWidth: "120px" }}
+                                  >
+                                    {item.name || item.productName || "Ürün"}
+                                  </span>
+                                  {/* Varyant bilgisi varsa göster */}
+                                  {item.variantTitle && (
+                                    <span
+                                      className="badge mt-1"
+                                      style={{
+                                        background:
+                                          "linear-gradient(135deg, #10b981, #059669)",
+                                        color: "white",
+                                        fontSize: "0.55rem",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        width: "fit-content",
+                                      }}
+                                    >
+                                      {item.variantTitle}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-1 d-none d-sm-table-cell">
+                                {item.sku ? (
+                                  <span
+                                    className="badge bg-secondary"
+                                    style={{ fontSize: "0.55rem" }}
+                                  >
+                                    {item.sku}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted">-</span>
+                                )}
+                              </td>
+                              <td className="px-1 text-center">
+                                <span className="badge bg-primary">
+                                  {item.quantity}
+                                </span>
+                              </td>
+                              <td className="px-1 text-end">
+                                <span className="fw-bold text-success">
+                                  {(
+                                    (item.quantity ?? 0) *
+                                    (item.price ?? item.unitPrice ?? 0)
+                                  ).toFixed(0)}
+                                  ₺
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {/* Toplam satırı */}
+                        <tfoot className="bg-light">
+                          <tr>
                             <td colSpan="3" className="px-1 text-end fw-bold">
-                              <i className="fas fa-calculator me-1"></i>
-                              Final Tutar:
+                              Toplam:
                             </td>
                             <td className="px-1 text-end">
                               <span
                                 className="fw-bold text-success"
-                                style={{ fontSize: "0.9rem" }}
+                                style={{ fontSize: "0.8rem" }}
                               >
-                                {(selectedOrder.finalAmount ?? 0).toFixed(2)} ₺
+                                {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
                               </span>
                             </td>
                           </tr>
-                        )}
-                    </tfoot>
-                  </table>
-                </div>
+                          {/* Tartı Farkı - Eğer varsa göster */}
+                          {selectedOrder.weightDifference !== undefined &&
+                            selectedOrder.weightDifference !== 0 && (
+                              <tr className="bg-warning bg-opacity-25">
+                                <td
+                                  colSpan="3"
+                                  className="px-1 text-end fw-bold"
+                                >
+                                  <i className="fas fa-balance-scale me-1"></i>
+                                  Tartı Farkı:
+                                </td>
+                                <td className="px-1 text-end">
+                                  <span
+                                    className={`fw-bold ${selectedOrder.weightDifference > 0 ? "text-success" : "text-danger"}`}
+                                    style={{ fontSize: "0.8rem" }}
+                                  >
+                                    {selectedOrder.weightDifference > 0
+                                      ? "+"
+                                      : ""}
+                                    {(
+                                      selectedOrder.weightDifference ?? 0
+                                    ).toFixed(2)}{" "}
+                                    ₺
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
+                          {/* Final Tutar - Tartı farkı varsa göster */}
+                          {selectedOrder.finalAmount !== undefined &&
+                            selectedOrder.finalAmount !==
+                              selectedOrder.totalAmount && (
+                              <tr className="bg-success bg-opacity-25">
+                                <td
+                                  colSpan="3"
+                                  className="px-1 text-end fw-bold"
+                                >
+                                  <i className="fas fa-calculator me-1"></i>
+                                  Final Tutar:
+                                </td>
+                                <td className="px-1 text-end">
+                                  <span
+                                    className="fw-bold text-success"
+                                    style={{ fontSize: "0.9rem" }}
+                                  >
+                                    {(selectedOrder.finalAmount ?? 0).toFixed(
+                                      2,
+                                    )}{" "}
+                                    ₺
+                                  </span>
+                                </td>
+                              </tr>
+                            )}
+                        </tfoot>
+                      </table>
+                    </div>
 
-                {/* ================================================================
+                    {/* ================================================================
                     TARTI FARKI BİLGİSİ - Tartı onayı bekleyenler için
                     ================================================================ */}
-                {(selectedOrder.status === "weight_pending" ||
-                  selectedOrder.status === "delivery_payment_pending") && (
-                  <div
-                    className="alert alert-info mt-2 py-2"
-                    style={{ fontSize: "0.75rem" }}
-                  >
-                    <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      <i className="fas fa-balance-scale me-1"></i>
-                      Tartı Bilgisi
-                    </h6>
-                    <div className="row">
-                      <div className="col-6">
-                        <small className="text-muted">Sipariş Ağırlığı:</small>
-                        <div className="fw-bold">
-                          {(selectedOrder.estimatedWeight ?? 0).toFixed(2)} kg
+                    {(normalizedStatus === "weight_pending" ||
+                      normalizedStatus === "delivery_payment_pending") && (
+                      <div
+                        className="alert alert-info mt-2 py-2"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        <h6
+                          className="fw-bold mb-1"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-balance-scale me-1"></i>
+                          Tartı Bilgisi
+                        </h6>
+                        <div className="row">
+                          <div className="col-6">
+                            <small className="text-muted">
+                              Sipariş Ağırlığı:
+                            </small>
+                            <div className="fw-bold">
+                              {(selectedOrder.estimatedWeight ?? 0).toFixed(2)}{" "}
+                              kg
+                            </div>
+                          </div>
+                          <div className="col-6">
+                            <small className="text-muted">
+                              Tartılan Ağırlık:
+                            </small>
+                            <div className="fw-bold">
+                              {(selectedOrder.actualWeight ?? 0).toFixed(2)} kg
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted">Tartılan Ağırlık:</small>
-                        <div className="fw-bold">
-                          {(selectedOrder.actualWeight ?? 0).toFixed(2)} kg
-                        </div>
-                      </div>
-                    </div>
-                    {selectedOrder.weightDifferenceReason && (
-                      <div className="mt-1">
-                        <small className="text-muted">Fark Sebebi:</small>
-                        <div className="fw-semibold">
-                          {selectedOrder.weightDifferenceReason}
-                        </div>
+                        {selectedOrder.weightDifferenceReason && (
+                          <div className="mt-1">
+                            <small className="text-muted">Fark Sebebi:</small>
+                            <div className="fw-semibold">
+                              {selectedOrder.weightDifferenceReason}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* ================================================================
+                    {/* ================================================================
                     TESLİMAT BAŞARISIZ BİLGİSİ
                     ================================================================ */}
-                {selectedOrder.status === "delivery_failed" && (
-                  <div
-                    className="alert alert-danger mt-2 py-2"
-                    style={{ fontSize: "0.75rem" }}
-                  >
-                    <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      <i className="fas fa-exclamation-triangle me-1"></i>
-                      Teslimat Başarısız
-                    </h6>
-                    <div>
-                      <small className="text-muted">Başarısızlık Sebebi:</small>
-                      <div className="fw-semibold">
-                        {selectedOrder.failureReason || "Belirtilmemiş"}
-                      </div>
-                    </div>
-                    {selectedOrder.failedAt && (
-                      <div className="mt-1">
-                        <small className="text-muted">Tarih:</small>
+                    {normalizedStatus === "delivery_failed" && (
+                      <div
+                        className="alert alert-danger mt-2 py-2"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        <h6
+                          className="fw-bold mb-1"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-exclamation-triangle me-1"></i>
+                          Teslimat Başarısız
+                        </h6>
                         <div>
-                          {new Date(selectedOrder.failedAt).toLocaleString(
-                            "tr-TR",
+                          <small className="text-muted">
+                            Başarısızlık Sebebi:
+                          </small>
+                          <div className="fw-semibold">
+                            {selectedOrder.failureReason || "Belirtilmemiş"}
+                          </div>
+                        </div>
+                        {selectedOrder.failedAt && (
+                          <div className="mt-1">
+                            <small className="text-muted">Tarih:</small>
+                            <div>
+                              {new Date(selectedOrder.failedAt).toLocaleString(
+                                "tr-TR",
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ================================================================
+                    KURYE BİLGİSİ
+                    ================================================================ */}
+                    {selectedOrder.courierName && (
+                      <div
+                        className="alert alert-success mt-2 py-2"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        <h6
+                          className="fw-bold mb-1"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-motorcycle me-1"></i>
+                          Kurye Bilgisi
+                        </h6>
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <strong>{selectedOrder.courierName}</strong>
+                            {selectedOrder.courierPhone && (
+                              <div className="small text-muted">
+                                <i className="fas fa-phone me-1"></i>
+                                {selectedOrder.courierPhone}
+                              </div>
+                            )}
+                          </div>
+                          {selectedOrder.assignedAt && (
+                            <div className="text-end small text-muted">
+                              <div>Atandı:</div>
+                              <div>
+                                {new Date(
+                                  selectedOrder.assignedAt,
+                                ).toLocaleTimeString("tr-TR")}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* ================================================================
-                    KURYE BİLGİSİ
-                    ================================================================ */}
-                {selectedOrder.courierName && (
-                  <div
-                    className="alert alert-success mt-2 py-2"
-                    style={{ fontSize: "0.75rem" }}
-                  >
-                    <h6 className="fw-bold mb-1" style={{ fontSize: "0.8rem" }}>
-                      <i className="fas fa-motorcycle me-1"></i>
-                      Kurye Bilgisi
-                    </h6>
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        <strong>{selectedOrder.courierName}</strong>
-                        {selectedOrder.courierPhone && (
-                          <div className="small text-muted">
-                            <i className="fas fa-phone me-1"></i>
-                            {selectedOrder.courierPhone}
-                          </div>
-                        )}
-                      </div>
-                      {selectedOrder.assignedAt && (
-                        <div className="text-end small text-muted">
-                          <div>Atandı:</div>
-                          <div>
-                            {new Date(
-                              selectedOrder.assignedAt,
-                            ).toLocaleTimeString("tr-TR")}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* ================================================================
+                    {/* ================================================================
                     SİPARİŞ AKIŞ TİMELINE'I - Görsel durum takibi
                     Hangi personelin hangi aksiyonu yaptığını gösterir
                     ================================================================ */}
-                <div className="mt-3">
-                  <h6 className="fw-bold mb-2" style={{ fontSize: "0.8rem" }}>
-                    <i className="fas fa-stream me-1 text-primary"></i>
-                    Sipariş Akış Durumu
-                  </h6>
-
-                  {/* Akış Timeline'ı */}
-                  <div
-                    className="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1"
-                    style={{ fontSize: "0.6rem" }}
-                  >
-                    {/* Yeni */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: [
-                            "pending",
-                            "new",
-                            "confirmed",
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "#6c757d"
-                            : "#e9ecef",
-                          color: [
-                            "pending",
-                            "new",
-                            "confirmed",
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "white"
-                            : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-circle"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Yeni</small>
-                    </div>
-                    <div
-                      className="flex-grow-1 mx-1"
-                      style={{
-                        height: "2px",
-                        backgroundColor: [
-                          "confirmed",
-                          "preparing",
-                          "ready",
-                          "assigned",
-                          "picked_up",
-                          "pickedup",
-                          "out_for_delivery",
-                          "outfordelivery",
-                          "delivered",
-                        ].includes(selectedOrder.status)
-                          ? "#17a2b8"
-                          : "#e9ecef",
-                      }}
-                    ></div>
-
-                    {/* Onaylandı */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: [
-                            "confirmed",
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "#17a2b8"
-                            : "#e9ecef",
-                          color: [
-                            "confirmed",
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "white"
-                            : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-check-circle"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Onaylı</small>
-                    </div>
-                    <div
-                      className="flex-grow-1 mx-1"
-                      style={{
-                        height: "2px",
-                        backgroundColor: [
-                          "preparing",
-                          "ready",
-                          "assigned",
-                          "picked_up",
-                          "pickedup",
-                          "out_for_delivery",
-                          "outfordelivery",
-                          "delivered",
-                        ].includes(selectedOrder.status)
-                          ? "#fd7e14"
-                          : "#e9ecef",
-                      }}
-                    ></div>
-
-                    {/* Hazırlanıyor */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: [
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "#fd7e14"
-                            : "#e9ecef",
-                          color: [
-                            "preparing",
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "white"
-                            : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-utensils"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Hazırl.</small>
-                    </div>
-                    <div
-                      className="flex-grow-1 mx-1"
-                      style={{
-                        height: "2px",
-                        backgroundColor: [
-                          "ready",
-                          "assigned",
-                          "picked_up",
-                          "pickedup",
-                          "out_for_delivery",
-                          "outfordelivery",
-                          "delivered",
-                        ].includes(selectedOrder.status)
-                          ? "#28a745"
-                          : "#e9ecef",
-                      }}
-                    ></div>
-
-                    {/* Hazır */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: [
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "#28a745"
-                            : "#e9ecef",
-                          color: [
-                            "ready",
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "white"
-                            : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-box"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Hazır</small>
-                    </div>
-                    <div
-                      className="flex-grow-1 mx-1"
-                      style={{
-                        height: "2px",
-                        backgroundColor: [
-                          "assigned",
-                          "picked_up",
-                          "pickedup",
-                          "out_for_delivery",
-                          "outfordelivery",
-                          "delivered",
-                        ].includes(selectedOrder.status)
-                          ? "#6f42c1"
-                          : "#e9ecef",
-                      }}
-                    ></div>
-
-                    {/* Yolda */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: [
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "#6f42c1"
-                            : "#e9ecef",
-                          color: [
-                            "assigned",
-                            "picked_up",
-                            "pickedup",
-                            "out_for_delivery",
-                            "outfordelivery",
-                            "delivered",
-                          ].includes(selectedOrder.status)
-                            ? "white"
-                            : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-motorcycle"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Yolda</small>
-                    </div>
-                    <div
-                      className="flex-grow-1 mx-1"
-                      style={{
-                        height: "2px",
-                        backgroundColor:
-                          selectedOrder.status === "delivered"
-                            ? "#343a40"
-                            : "#e9ecef",
-                      }}
-                    ></div>
-
-                    {/* Teslim */}
-                    <div className="text-center">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor:
-                            selectedOrder.status === "delivered"
-                              ? "#343a40"
-                              : "#e9ecef",
-                          color:
-                            selectedOrder.status === "delivered"
-                              ? "white"
-                              : "#6c757d",
-                        }}
-                      >
-                        <i
-                          className="fas fa-check-double"
-                          style={{ fontSize: "0.5rem" }}
-                        ></i>
-                      </div>
-                      <small>Teslim</small>
-                    </div>
-                  </div>
-
-                  {/* Mevcut Durum Badge */}
-                  <div className="text-center mb-2">
-                    <span
-                      className="badge px-3 py-2"
-                      style={{
-                        backgroundColor: getStatusHexColor(
-                          selectedOrder.status,
-                        ),
-                        color: "white",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      <i
-                        className={`fas ${getStatusIcon(selectedOrder.status)} me-1`}
-                      ></i>
-                      {getStatusText(selectedOrder.status)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* ================================================================
-                    DETAYLI DURUM GEÇMİŞİ - Kim, ne zaman, ne yaptı
-                    ================================================================ */}
-                {selectedOrder.statusHistory &&
-                  selectedOrder.statusHistory.length > 0 && (
-                    <div className="mt-2">
+                    <div className="mt-3">
                       <h6
                         className="fw-bold mb-2"
                         style={{ fontSize: "0.8rem" }}
                       >
-                        <i className="fas fa-history me-1 text-info"></i>
-                        Detaylı Geçmiş
+                        <i className="fas fa-stream me-1 text-primary"></i>
+                        Sipariş Akış Durumu
                       </h6>
-                      <div style={{ maxHeight: "150px", overflowY: "auto" }}>
-                        {selectedOrder.statusHistory.map((history, index) => (
-                          <div
-                            key={index}
-                            className="d-flex align-items-start mb-2 pb-2 border-bottom"
-                            style={{ fontSize: "0.7rem" }}
-                          >
-                            {/* Timeline Noktası */}
-                            <div
-                              className="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0"
-                              style={{
-                                width: "24px",
-                                height: "24px",
-                                backgroundColor: getStatusHexColor(
-                                  history.status,
-                                ),
-                                color: "white",
-                              }}
-                            >
-                              <i
-                                className={`fas ${getStatusIcon(history.status)}`}
-                                style={{ fontSize: "0.5rem" }}
-                              ></i>
-                            </div>
 
-                            {/* Detay */}
-                            <div className="flex-grow-1">
-                              <div className="d-flex justify-content-between align-items-start">
-                                <span className="fw-bold">
-                                  {getStatusText(history.status)}
-                                </span>
-                                <small className="text-muted">
-                                  {new Date(history.changedAt).toLocaleString(
-                                    "tr-TR",
-                                    {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    },
-                                  )}
-                                </small>
-                              </div>
-                              {/* Personel bilgisi varsa göster */}
-                              {history.changedBy && (
-                                <small className="text-primary">
-                                  <i className="fas fa-user me-1"></i>
-                                  {history.changedBy}
-                                </small>
-                              )}
-                              {/* Not varsa göster */}
-                              {history.note && (
-                                <small className="text-muted d-block">
-                                  <i className="fas fa-sticky-note me-1"></i>
-                                  {history.note}
-                                </small>
-                              )}
-                            </div>
+                      {/* Akış Timeline'ı */}
+                      <div
+                        className="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-1"
+                        style={{ fontSize: "0.6rem" }}
+                      >
+                        {/* Yeni */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor: [
+                                "pending",
+                                "new",
+                                "confirmed",
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "#6c757d"
+                                : "#e9ecef",
+                              color: [
+                                "pending",
+                                "new",
+                                "confirmed",
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "white"
+                                : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-circle"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
                           </div>
-                        ))}
+                          <small>Yeni</small>
+                        </div>
+                        <div
+                          className="flex-grow-1 mx-1"
+                          style={{
+                            height: "2px",
+                            backgroundColor: [
+                              "confirmed",
+                              "preparing",
+                              "ready",
+                              "assigned",
+                              "picked_up",
+                              "pickedup",
+                              "out_for_delivery",
+                              "outfordelivery",
+                              "delivered",
+                            ].includes(normalizedStatus)
+                              ? "#17a2b8"
+                              : "#e9ecef",
+                          }}
+                        ></div>
+
+                        {/* Onaylandı */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor: [
+                                "confirmed",
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "#17a2b8"
+                                : "#e9ecef",
+                              color: [
+                                "confirmed",
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "white"
+                                : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-check-circle"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
+                          </div>
+                          <small>Onaylı</small>
+                        </div>
+                        <div
+                          className="flex-grow-1 mx-1"
+                          style={{
+                            height: "2px",
+                            backgroundColor: [
+                              "preparing",
+                              "ready",
+                              "assigned",
+                              "picked_up",
+                              "pickedup",
+                              "out_for_delivery",
+                              "outfordelivery",
+                              "delivered",
+                            ].includes(normalizedStatus)
+                              ? "#fd7e14"
+                              : "#e9ecef",
+                          }}
+                        ></div>
+
+                        {/* Hazırlanıyor */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor: [
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "#fd7e14"
+                                : "#e9ecef",
+                              color: [
+                                "preparing",
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "white"
+                                : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-utensils"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
+                          </div>
+                          <small>Hazırl.</small>
+                        </div>
+                        <div
+                          className="flex-grow-1 mx-1"
+                          style={{
+                            height: "2px",
+                            backgroundColor: [
+                              "ready",
+                              "assigned",
+                              "picked_up",
+                              "pickedup",
+                              "out_for_delivery",
+                              "outfordelivery",
+                              "delivered",
+                            ].includes(normalizedStatus)
+                              ? "#28a745"
+                              : "#e9ecef",
+                          }}
+                        ></div>
+
+                        {/* Hazır */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor: [
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "#28a745"
+                                : "#e9ecef",
+                              color: [
+                                "ready",
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "white"
+                                : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-box"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
+                          </div>
+                          <small>Hazır</small>
+                        </div>
+                        <div
+                          className="flex-grow-1 mx-1"
+                          style={{
+                            height: "2px",
+                            backgroundColor: [
+                              "assigned",
+                              "picked_up",
+                              "pickedup",
+                              "out_for_delivery",
+                              "outfordelivery",
+                              "delivered",
+                            ].includes(normalizedStatus)
+                              ? "#6f42c1"
+                              : "#e9ecef",
+                          }}
+                        ></div>
+
+                        {/* Yolda */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor: [
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "#6f42c1"
+                                : "#e9ecef",
+                              color: [
+                                "assigned",
+                                "picked_up",
+                                "pickedup",
+                                "out_for_delivery",
+                                "outfordelivery",
+                                "delivered",
+                              ].includes(normalizedStatus)
+                                ? "white"
+                                : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-motorcycle"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
+                          </div>
+                          <small>Yolda</small>
+                        </div>
+                        <div
+                          className="flex-grow-1 mx-1"
+                          style={{
+                            height: "2px",
+                            backgroundColor:
+                              normalizedStatus === "delivered"
+                                ? "#343a40"
+                                : "#e9ecef",
+                          }}
+                        ></div>
+
+                        {/* Teslim */}
+                        <div className="text-center">
+                          <div
+                            className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-1"
+                            style={{
+                              width: "28px",
+                              height: "28px",
+                              backgroundColor:
+                                normalizedStatus === "delivered"
+                                  ? "#343a40"
+                                  : "#e9ecef",
+                              color:
+                                normalizedStatus === "delivered"
+                                  ? "white"
+                                  : "#6c757d",
+                            }}
+                          >
+                            <i
+                              className="fas fa-check-double"
+                              style={{ fontSize: "0.5rem" }}
+                            ></i>
+                          </div>
+                          <small>Teslim</small>
+                        </div>
+                      </div>
+
+                      {/* Mevcut Durum Badge */}
+                      <div className="text-center mb-2">
+                        <span
+                          className="badge px-3 py-2"
+                          style={{
+                            backgroundColor: getStatusHexColor(
+                              selectedOrder.status,
+                            ),
+                            color: "white",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          <i
+                            className={`fas ${getStatusIcon(selectedOrder.status)} me-1`}
+                          ></i>
+                          {getStatusText(selectedOrder.status)}
+                        </span>
                       </div>
                     </div>
-                  )}
 
-                {/* Kurye Atama */}
-                {selectedOrder.status === "ready" &&
-                  !selectedOrder.courierId && (
-                    <div className="mt-2">
+                    {/* ================================================================
+                    DETAYLI DURUM GEÇMİŞİ - Kim, ne zaman, ne yaptı
+                    ================================================================ */}
+                    {selectedOrder.statusHistory &&
+                      selectedOrder.statusHistory.length > 0 && (
+                        <div className="mt-2">
+                          <h6
+                            className="fw-bold mb-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            <i className="fas fa-history me-1 text-info"></i>
+                            Detaylı Geçmiş
+                          </h6>
+                          <div
+                            style={{ maxHeight: "150px", overflowY: "auto" }}
+                          >
+                            {selectedOrder.statusHistory.map(
+                              (history, index) => (
+                                <div
+                                  key={index}
+                                  className="d-flex align-items-start mb-2 pb-2 border-bottom"
+                                  style={{ fontSize: "0.7rem" }}
+                                >
+                                  {/* Timeline Noktası */}
+                                  <div
+                                    className="rounded-circle d-flex align-items-center justify-content-center me-2 flex-shrink-0"
+                                    style={{
+                                      width: "24px",
+                                      height: "24px",
+                                      backgroundColor: getStatusHexColor(
+                                        history.status,
+                                      ),
+                                      color: "white",
+                                    }}
+                                  >
+                                    <i
+                                      className={`fas ${getStatusIcon(history.status)}`}
+                                      style={{ fontSize: "0.5rem" }}
+                                    ></i>
+                                  </div>
+
+                                  {/* Detay */}
+                                  <div className="flex-grow-1">
+                                    <div className="d-flex justify-content-between align-items-start">
+                                      <span className="fw-bold">
+                                        {getStatusText(history.status)}
+                                      </span>
+                                      <small className="text-muted">
+                                        {new Date(
+                                          history.changedAt,
+                                        ).toLocaleString("tr-TR", {
+                                          day: "2-digit",
+                                          month: "2-digit",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </small>
+                                    </div>
+                                    {/* Personel bilgisi varsa göster */}
+                                    {history.changedBy && (
+                                      <small className="text-primary">
+                                        <i className="fas fa-user me-1"></i>
+                                        {history.changedBy}
+                                      </small>
+                                    )}
+                                    {/* Not varsa göster */}
+                                    {history.note && (
+                                      <small className="text-muted d-block">
+                                        <i className="fas fa-sticky-note me-1"></i>
+                                        {history.note}
+                                      </small>
+                                    )}
+                                  </div>
+                                </div>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Kurye Atama - Confirmed, Preparing veya Ready durumunda ve kurye atanmamışsa */}
+                    {["confirmed", "preparing", "ready"].includes(
+                      normalizedStatus,
+                    ) &&
+                      !selectedOrder.courierId && (
+                        <div className="mt-2 p-2 border border-success rounded bg-light">
+                          <h6
+                            className="fw-bold mb-1 text-success"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            <i className="fas fa-motorcycle me-1"></i>
+                            Kurye Ata
+                          </h6>
+                          <div className="d-flex gap-1 flex-wrap">
+                            {/* Debug: Tüm kuryeleri göster - status filtresini kaldırdık */}
+                            {couriers.length > 0 ? (
+                              couriers.map((courier) => (
+                                <button
+                                  key={courier.id}
+                                  onClick={() =>
+                                    assignCourier(selectedOrder.id, courier.id)
+                                  }
+                                  disabled={assigningCourier}
+                                  className="btn btn-outline-success btn-sm px-2 py-1"
+                                  style={{ fontSize: "0.65rem" }}
+                                  title={`Durum: ${courier.status || "Bilinmiyor"}`}
+                                >
+                                  <i className="fas fa-motorcycle me-1"></i>
+                                  {courier.courierName ||
+                                    courier.name?.split(" ")[0] ||
+                                    `Kurye ${courier.id}`}
+                                  {courier.isOnline && (
+                                    <span className="ms-1 text-success">●</span>
+                                  )}
+                                </button>
+                              ))
+                            ) : (
+                              <span className="text-muted small">
+                                Kurye bulunamadı
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                    {/* Kurye Atama Bilgisi - Uygun durumda olmayan ve kurye atanmamış siparişler için */}
+                    {!["confirmed", "preparing", "ready"].includes(
+                      normalizedStatus,
+                    ) &&
+                      !selectedOrder.courierId &&
+                      ![
+                        "delivered",
+                        "cancelled",
+                        "delivery_failed",
+                        "assigned",
+                        "picked_up",
+                        "out_for_delivery",
+                      ].includes(normalizedStatus) && (
+                        <div className="mt-2 p-2 border border-warning rounded bg-warning bg-opacity-10">
+                          <small className="text-warning">
+                            <i className="fas fa-info-circle me-1"></i>
+                            Kurye atamak için siparişi önce{" "}
+                            <strong>"Onaylandı"</strong>,{" "}
+                            <strong>"Hazırlanıyor"</strong> veya{" "}
+                            <strong>"Hazır"</strong> durumuna getirin.
+                          </small>
+                        </div>
+                      )}
+
+                    {/* Kurye Bilgisi - Kurye atanmışsa göster */}
+                    {selectedOrder.courierId && (
+                      <div className="mt-2 p-2 border border-info rounded bg-info bg-opacity-10">
+                        <h6
+                          className="fw-bold mb-1 text-info"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-motorcycle me-1"></i>
+                          Atanan Kurye
+                        </h6>
+                        <div className="d-flex align-items-center">
+                          <span className="badge bg-info me-2">
+                            Kurye #{selectedOrder.courierId}
+                          </span>
+                          {selectedOrder.courierName && (
+                            <span className="fw-bold">
+                              {selectedOrder.courierName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ================================================================
+                    HIZLI AKSİYON BUTONLARI
+                    Sipariş durumuna göre uygun aksiyonlar gösterilir
+                    ================================================================ */}
+                    <div className="mt-3 p-2 border rounded bg-white">
                       <h6
-                        className="fw-bold mb-1"
+                        className="fw-bold mb-2"
                         style={{ fontSize: "0.8rem" }}
                       >
-                        Kurye Ata
+                        <i className="fas fa-bolt me-1 text-warning"></i>
+                        Hızlı Aksiyonlar
                       </h6>
-                      <div className="d-flex gap-1 flex-wrap">
-                        {couriers
-                          .filter((c) => c.status === "active")
-                          .map((courier) => (
-                            <button
-                              key={courier.id}
-                              onClick={() =>
-                                assignCourier(selectedOrder.id, courier.id)
-                              }
-                              disabled={assigningCourier}
-                              className="btn btn-outline-success btn-sm px-2 py-1"
-                              style={{ fontSize: "0.65rem" }}
-                            >
-                              <i className="fas fa-motorcycle me-1"></i>
-                              {courier.name.split(" ")[0]}
-                            </button>
-                          ))}
+                      <div className="d-flex gap-2 flex-wrap">
+                        {/* Onayla butonu - Yeni/Bekleyen siparişler için */}
+                        {(normalizedStatus === "new" ||
+                          normalizedStatus === "pending" ||
+                          normalizedStatus === "paid") && (
+                          <button
+                            className="btn btn-info btn-sm"
+                            style={{ fontSize: "0.75rem" }}
+                            onClick={() => {
+                              updateOrderStatus(selectedOrder.id, "confirmed");
+                              setSelectedOrder({
+                                ...selectedOrder,
+                                status: "confirmed",
+                              });
+                            }}
+                          >
+                            <i className="fas fa-check me-1"></i>
+                            Onayla
+                          </button>
+                        )}
+
+                        {/* Hazırlanıyor butonu - Onaylı siparişler için */}
+                        {normalizedStatus === "confirmed" && (
+                          <button
+                            className="btn btn-warning btn-sm"
+                            style={{ fontSize: "0.75rem" }}
+                            onClick={() => {
+                              updateOrderStatus(selectedOrder.id, "preparing");
+                              setSelectedOrder({
+                                ...selectedOrder,
+                                status: "preparing",
+                              });
+                            }}
+                          >
+                            <i className="fas fa-fire me-1"></i>
+                            Hazırlamaya Başla
+                          </button>
+                        )}
+
+                        {/* Hazır butonu - Hazırlanan siparişler için */}
+                        {normalizedStatus === "preparing" && (
+                          <button
+                            className="btn btn-success btn-sm"
+                            style={{ fontSize: "0.75rem" }}
+                            onClick={() => {
+                              updateOrderStatus(selectedOrder.id, "ready");
+                              setSelectedOrder({
+                                ...selectedOrder,
+                                status: "ready",
+                              });
+                            }}
+                          >
+                            <i className="fas fa-box me-1"></i>
+                            Hazır
+                          </button>
+                        )}
                       </div>
                     </div>
-                  )}
 
-                {/* ================================================================
+                    {/* ================================================================
                     ADMİN MANUEL DURUM DEĞİŞTİRME
                     Acil durumlar için admin tüm durumları değiştirebilir
                     ================================================================ */}
-                <div className="mt-3 p-2 border rounded bg-light">
-                  <h6 className="fw-bold mb-2" style={{ fontSize: "0.8rem" }}>
-                    <i className="fas fa-cog me-1 text-danger"></i>
-                    Admin Kontrol Paneli
-                  </h6>
-                  <p
-                    className="small text-muted mb-2"
-                    style={{ fontSize: "0.65rem" }}
-                  >
-                    Acil durumlarda siparişin durumunu manuel olarak
-                    değiştirebilirsiniz. Bu işlem tüm taraflara (müşteri, kurye,
-                    mağaza) bildirim gönderir.
-                  </p>
+                    {!isStoreAttendant && (
+                      <div className="mt-3 p-2 border rounded bg-light">
+                        <h6
+                          className="fw-bold mb-2"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <i className="fas fa-cog me-1 text-danger"></i>
+                          Admin Kontrol Paneli
+                        </h6>
+                        <p
+                          className="small text-muted mb-2"
+                          style={{ fontSize: "0.65rem" }}
+                        >
+                          Acil durumlarda siparişin durumunu manuel olarak
+                          değiştirebilirsiniz. Bu işlem tüm taraflara (müşteri,
+                          kurye, mağaza) bildirim gönderir.
+                        </p>
 
-                  <div className="row g-2 align-items-end">
-                    <div className="col-8">
-                      <label
-                        className="form-label small mb-1"
-                        style={{ fontSize: "0.7rem" }}
-                      >
-                        Yeni Durum Seç:
-                      </label>
-                      <select
-                        className="form-select form-select-sm"
-                        style={{ fontSize: "0.75rem" }}
-                        value={selectedOrder.status}
-                        onChange={(e) => {
-                          const newStatus = e.target.value;
-                          if (newStatus !== selectedOrder.status) {
-                            if (
-                              window.confirm(
-                                `Siparişi "${getStatusText(newStatus)}" durumuna güncellemek istediğinize emin misiniz?`,
-                              )
-                            ) {
-                              updateOrderStatus(selectedOrder.id, newStatus);
-                              setSelectedOrder({
-                                ...selectedOrder,
-                                status: newStatus,
-                              });
-                            }
-                          }
-                        }}
-                      >
-                        <option value="new">🆕 Yeni Sipariş</option>
-                        <option value="confirmed">✅ Onaylandı</option>
-                        <option value="preparing">🍳 Hazırlanıyor</option>
-                        <option value="ready">📦 Hazır</option>
-                        <option value="assigned">🚴 Kuryeye Atandı</option>
-                        <option value="picked_up">🤝 Kurye Teslim Aldı</option>
-                        <option value="out_for_delivery">🛵 Yolda</option>
-                        <option value="delivered">✓ Teslim Edildi</option>
-                        <option value="delivery_failed">
-                          ❌ Teslimat Başarısız
-                        </option>
-                        <option value="cancelled">🚫 İptal Edildi</option>
-                      </select>
-                    </div>
-                    <div className="col-4">
-                      <button
-                        className="btn btn-danger btn-sm w-100"
-                        style={{ fontSize: "0.7rem" }}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Bu siparişi İPTAL etmek istediğinize emin misiniz?",
-                            )
-                          ) {
-                            updateOrderStatus(selectedOrder.id, "cancelled");
-                            setSelectedOrder({
-                              ...selectedOrder,
-                              status: "cancelled",
-                            });
-                          }
-                        }}
-                      >
-                        <i className="fas fa-times me-1"></i>
-                        İptal Et
-                      </button>
-                    </div>
+                        <div className="row g-2 align-items-end">
+                          <div className="col-8">
+                            <label
+                              className="form-label small mb-1"
+                              style={{ fontSize: "0.7rem" }}
+                            >
+                              Yeni Durum Seç:
+                            </label>
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ fontSize: "0.75rem" }}
+                              value={(selectedOrder.status || "").toLowerCase()}
+                              onChange={(e) => {
+                                const newStatus = e.target.value;
+                                const currentStatus = (
+                                  selectedOrder.status || ""
+                                ).toLowerCase();
+
+                                // "assigned" durumuna manuel geçiş engelle - kurye atama ile yapılmalı
+                                if (newStatus === "assigned") {
+                                  alert(
+                                    "⚠️ Kurye ataması için lütfen 'Kurye Ata' bölümünü kullanın.\n\nSiparişi önce 'Hazır' durumuna getirin, sonra bir kurye seçin.",
+                                  );
+                                  return;
+                                }
+
+                                if (newStatus !== currentStatus) {
+                                  if (
+                                    window.confirm(
+                                      `Siparişi "${getStatusText(newStatus)}" durumuna güncellemek istediğinize emin misiniz?`,
+                                    )
+                                  ) {
+                                    updateOrderStatus(
+                                      selectedOrder.id,
+                                      newStatus,
+                                    );
+                                    setSelectedOrder({
+                                      ...selectedOrder,
+                                      status: newStatus,
+                                    });
+                                  }
+                                }
+                              }}
+                            >
+                              <option value="new">🆕 Yeni Sipariş</option>
+                              <option value="confirmed">✅ Onaylandı</option>
+                              <option value="preparing">🍳 Hazırlanıyor</option>
+                              <option value="ready">📦 Hazır</option>
+                              <option value="assigned" disabled>
+                                🚴 Kuryeye Atandı (Kurye Ata bölümünden)
+                              </option>
+                              <option value="picked_up">
+                                🤝 Kurye Teslim Aldı
+                              </option>
+                              <option value="out_for_delivery">🛵 Yolda</option>
+                              <option value="delivered">✓ Teslim Edildi</option>
+                              <option value="delivery_failed">
+                                ❌ Teslimat Başarısız
+                              </option>
+                              <option value="cancelled">🚫 İptal Edildi</option>
+                            </select>
+                          </div>
+                          <div className="col-4">
+                            <button
+                              className="btn btn-danger btn-sm w-100"
+                              style={{ fontSize: "0.7rem" }}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    "Bu siparişi İPTAL etmek istediğinize emin misiniz?",
+                                  )
+                                ) {
+                                  updateOrderStatus(
+                                    selectedOrder.id,
+                                    "cancelled",
+                                  );
+                                  setSelectedOrder({
+                                    ...selectedOrder,
+                                    status: "cancelled",
+                                  });
+                                }
+                              }}
+                            >
+                              <i className="fas fa-times me-1"></i>
+                              İptal Et
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })()}
     </div>
   );
 }

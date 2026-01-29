@@ -24,6 +24,183 @@ const MAX_NOTIFICATIONS = 50;
 // LocalStorage key
 const STORAGE_KEY = "notifications";
 
+// Bildirim sesi için key
+const SOUND_ENABLED_KEY = "notificationSoundEnabled";
+
+// ============================================================================
+// AUDIO CONTEXT UNLOCK MEKANIZMASI
+// Browser autoplay politikasını aşmak için kullanıcı etkileşimi gerekiyor
+// İlk tıklamada AudioContext'i unlock eder
+// ============================================================================
+let audioContextUnlocked = false;
+let sharedAudioContext = null;
+
+/**
+ * AudioContext'i unlock et - browser autoplay politikasını aşmak için
+ * NEDEN: Modern browserlar kullanıcı etkileşimi olmadan ses çalmayı engelliyor
+ * Bu fonksiyon ilk tıklamada sessiz bir ses çalarak AudioContext'i açar
+ */
+const unlockAudioContext = () => {
+  if (audioContextUnlocked) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    try {
+      // AudioContext oluştur veya mevcut olanı kullan
+      if (!sharedAudioContext) {
+        sharedAudioContext = new (
+          window.AudioContext || window.webkitAudioContext
+        )();
+      }
+
+      // Suspended durumundaysa resume et
+      if (sharedAudioContext.state === "suspended") {
+        sharedAudioContext
+          .resume()
+          .then(() => {
+            audioContextUnlocked = true;
+            console.log("[NotificationSound] 🔓 AudioContext unlocked");
+            resolve(true);
+          })
+          .catch(() => resolve(false));
+      } else {
+        audioContextUnlocked = true;
+        resolve(true);
+      }
+
+      // Sessiz bir ses çal (unlock için)
+      const buffer = sharedAudioContext.createBuffer(1, 1, 22050);
+      const source = sharedAudioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(sharedAudioContext.destination);
+      source.start(0);
+    } catch (error) {
+      console.warn("[NotificationSound] ⚠️ AudioContext unlock hatası:", error);
+      resolve(false);
+    }
+  });
+};
+
+/**
+ * Kullanıcı etkileşimi event listener'ı ekle
+ * NEDEN: İlk tıklama/dokunma olayında AudioContext'i unlock et
+ */
+const setupAudioUnlockListener = () => {
+  const unlockHandler = () => {
+    unlockAudioContext();
+    // Bir kez çalıştıktan sonra listener'ı kaldır
+    document.removeEventListener("click", unlockHandler);
+    document.removeEventListener("touchstart", unlockHandler);
+    document.removeEventListener("keydown", unlockHandler);
+  };
+
+  document.addEventListener("click", unlockHandler, { once: true });
+  document.addEventListener("touchstart", unlockHandler, { once: true });
+  document.addEventListener("keydown", unlockHandler, { once: true });
+};
+
+// Sayfa yüklendiğinde unlock listener'ı kur
+if (typeof window !== "undefined") {
+  setupAudioUnlockListener();
+
+  // localStorage'da ses ayarı yoksa varsayılan olarak true yap
+  if (localStorage.getItem(SOUND_ENABLED_KEY) === null) {
+    localStorage.setItem(SOUND_ENABLED_KEY, "true");
+    console.log("[NotificationSound] 📢 Bildirim sesi varsayılan olarak açık");
+  }
+}
+
+// ============================================================================
+// BİLDİRİM SESİ ÇALMA FONKSİYONU
+// Browser autoplay politikasını aşmak için kullanıcı etkileşimi gerekebilir
+// Ses dosyaları: /public/sounds/ klasöründe
+// ============================================================================
+const playNotificationSound = (soundType = "new_order") => {
+  try {
+    // Ses ayarını kontrol et - varsayılan olarak açık (null = true kabul edilir)
+    const storedValue = localStorage.getItem(SOUND_ENABLED_KEY);
+    const soundEnabled = storedValue === null || storedValue === "true";
+    if (!soundEnabled) {
+      console.log("[NotificationSound] 🔇 Ses kapalı");
+      return;
+    }
+
+    // Ses dosyası seç
+    const soundFiles = {
+      new_order: "/sounds/mixkit-melodic-race-countdown-1955.wav",
+      payment: "/sounds/mixkit-bell-notification-933.wav",
+      alert: "/sounds/mixkit-happy-bells-notification-937.wav",
+      default: "/sounds/mixkit-bell-notification-933.wav",
+    };
+
+    const soundFile = soundFiles[soundType] || soundFiles.default;
+    const audio = new Audio(soundFile);
+    audio.volume = 0.5;
+
+    // Ses çalmayı dene
+    audio
+      .play()
+      .then(() => {
+        console.log("[NotificationSound] 🔊 Ses çalındı:", soundType);
+      })
+      .catch((error) => {
+        // Browser autoplay politikası nedeniyle ses çalınamadı
+        // Bu durumda sessizce devam et, kullanıcı etkileşimi gerekiyor
+        console.warn(
+          "[NotificationSound] ⚠️ Ses çalınamadı (autoplay politikası):",
+          error.message,
+        );
+
+        // Fallback: Web Audio API ile basit beep sesi
+        try {
+          const audioContext = new (
+            window.AudioContext || window.webkitAudioContext
+          )();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+
+          oscillator.frequency.value = 800; // Hz
+          oscillator.type = "sine";
+          gainNode.gain.value = 0.1;
+
+          oscillator.start();
+          setTimeout(() => {
+            oscillator.stop();
+            audioContext.close();
+          }, 200);
+
+          console.log("[NotificationSound] 🔊 Fallback beep çalındı");
+        } catch (beepError) {
+          console.warn("[NotificationSound] ⚠️ Fallback beep de çalınamadı");
+        }
+      });
+  } catch (error) {
+    console.error("[NotificationSound] ❌ Ses çalma hatası:", error);
+  }
+};
+
+/**
+ * Bildirim sesini aç/kapa
+ * @param {boolean} enabled - Ses açık mı?
+ */
+export const setSoundEnabled = (enabled) => {
+  localStorage.setItem(SOUND_ENABLED_KEY, enabled ? "true" : "false");
+  console.log(
+    `[NotificationSound] ${enabled ? "🔊 Ses açıldı" : "🔇 Ses kapatıldı"}`,
+  );
+};
+
+/**
+ * Bildirim sesi açık mı kontrol et
+ * @returns {boolean}
+ */
+export const isSoundEnabled = () => {
+  const storedValue = localStorage.getItem(SOUND_ENABLED_KEY);
+  return storedValue === null || storedValue === "true";
+};
+
 /**
  * NotificationProvider - Bildirim yönetimi provider
  *
@@ -33,6 +210,7 @@ const STORAGE_KEY = "notifications";
  * - Toast bildirimleri
  * - Real-time SignalR entegrasyonu
  * - LocalStorage persistence
+ * - Ses açma/kapama kontrolü
  */
 export const NotificationProvider = ({ children, signalRConnection }) => {
   // State tanımları
@@ -40,6 +218,7 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [toasts, setToasts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled());
   const toastIdRef = useRef(0);
 
   // LocalStorage'dan bildirimleri yükle
@@ -81,9 +260,47 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
   useEffect(() => {
     if (!signalRConnection) return;
 
+    // ============================================================================
+    // SIGNALR EVENT HANDLERS
+    // Backend ile frontend arasındaki event isimlerinin eşleşmesi kritik
+    // Backend: RealTimeNotificationService.cs'deki SendAsync çağrıları
+    // ============================================================================
+
     // Genel bildirim handler
     const handleNotification = (notification) => {
       addNotification(notification);
+    };
+
+    // ============================================================================
+    // YENİ SİPARİŞ BİLDİRİMİ (Admin için)
+    // Backend: _adminHub.Clients.Group(AdminGroupName).SendAsync("NewOrder", notification)
+    // ============================================================================
+    const handleNewOrder = (data) => {
+      console.log(
+        "[NotificationContext] 🔔 Yeni sipariş bildirimi alındı:",
+        data,
+      );
+      const notification = {
+        id: data.id || `order-${data.orderId || Date.now()}`,
+        type: "order",
+        title: "🛒 Yeni Sipariş",
+        message: `${data.customerName || "Müşteri"} - ₺${(data.totalAmount || 0).toFixed(2)} (${data.itemCount || 0} ürün)`,
+        body: `Sipariş No: ${data.orderNumber || data.orderId}`,
+        data: data,
+        createdAt: data.timestamp || new Date().toISOString(),
+        isRead: false,
+        actionUrl: `/admin/orders/${data.orderId}`,
+      };
+      addNotification(notification);
+    };
+
+    // ============================================================================
+    // SES BİLDİRİMİ
+    // Backend: _adminHub.Clients.Group(AdminGroupName).SendAsync("PlaySound", { soundType, priority })
+    // ============================================================================
+    const handlePlaySound = (data) => {
+      console.log("[NotificationContext] 🔊 Ses bildirimi alındı:", data);
+      playNotificationSound(data?.soundType || "new_order");
     };
 
     // Teslimat bildirimi handler
@@ -116,7 +333,7 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
       addNotification(notification);
     };
 
-    // Sipariş bildirimi handler
+    // Sipariş bildirimi handler (eski format için backward compat)
     const handleOrderNotification = (data) => {
       const notification = {
         id: `order-${Date.now()}`,
@@ -131,8 +348,68 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
       addNotification(notification);
     };
 
-    // Event listener'ları ekle
+    // ============================================================================
+    // ÖDEME BİLDİRİMLERİ
+    // ============================================================================
+    const handlePaymentSuccess = (data) => {
+      console.log("[NotificationContext] 💳 Ödeme başarılı bildirimi:", data);
+      const notification = {
+        id: data.id || `payment-${data.orderId || Date.now()}`,
+        type: "payment",
+        title: "💳 Ödeme Başarılı",
+        message: `Sipariş #${data.orderNumber} - ₺${(data.amount || 0).toFixed(2)}`,
+        data: data,
+        createdAt: data.timestamp || new Date().toISOString(),
+        isRead: false,
+        actionUrl: `/admin/orders/${data.orderId}`,
+      };
+      addNotification(notification);
+    };
+
+    const handlePaymentFailed = (data) => {
+      console.log("[NotificationContext] ❌ Ödeme başarısız bildirimi:", data);
+      const notification = {
+        id: data.id || `payment-failed-${data.orderId || Date.now()}`,
+        type: "alert",
+        title: "❌ Ödeme Başarısız",
+        message: `Sipariş #${data.orderNumber} - ${data.reason || "Bilinmeyen hata"}`,
+        data: data,
+        createdAt: data.timestamp || new Date().toISOString(),
+        isRead: false,
+        actionUrl: `/admin/orders/${data.orderId}`,
+      };
+      addNotification(notification);
+    };
+
+    // ============================================================================
+    // SİPARİŞ DURUMU DEĞİŞİKLİĞİ
+    // Backend: _adminHub.Clients.Group(AdminGroupName).SendAsync("OrderStatusChanged", ...)
+    // ============================================================================
+    const handleOrderStatusChanged = (data) => {
+      console.log("[NotificationContext] 📦 Sipariş durumu değişti:", data);
+      const notification = {
+        id: data.id || `status-${data.orderId || Date.now()}`,
+        type: "order",
+        title: "📦 Sipariş Durumu Güncellendi",
+        message: `Sipariş #${data.orderNumber} → ${data.newStatus || data.status}`,
+        data: data,
+        createdAt: data.timestamp || new Date().toISOString(),
+        isRead: false,
+        actionUrl: `/admin/orders/${data.orderId}`,
+      };
+      addNotification(notification);
+    };
+
+    // ============================================================================
+    // EVENT LISTENER'LARI EKLE
+    // Backend'deki SendAsync çağrılarındaki event isimleri ile eşleşmeli
+    // ============================================================================
     signalRConnection.on("ReceiveNotification", handleNotification);
+    signalRConnection.on("NewOrder", handleNewOrder); // Backend: "NewOrder"
+    signalRConnection.on("PlaySound", handlePlaySound); // Backend: "PlaySound"
+    signalRConnection.on("PaymentSuccess", handlePaymentSuccess); // Backend: "PaymentSuccess"
+    signalRConnection.on("PaymentFailed", handlePaymentFailed); // Backend: "PaymentFailed"
+    signalRConnection.on("OrderStatusChanged", handleOrderStatusChanged); // Backend: "OrderStatusChanged"
     signalRConnection.on("DeliveryNotification", handleDeliveryNotification);
     signalRConnection.on("CourierNotification", handleCourierNotification);
     signalRConnection.on("OrderNotification", handleOrderNotification);
@@ -141,13 +418,18 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
 
     return () => {
       signalRConnection.off("ReceiveNotification", handleNotification);
+      signalRConnection.off("NewOrder", handleNewOrder);
+      signalRConnection.off("PlaySound", handlePlaySound);
+      signalRConnection.off("PaymentSuccess", handlePaymentSuccess);
+      signalRConnection.off("PaymentFailed", handlePaymentFailed);
+      signalRConnection.off("OrderStatusChanged", handleOrderStatusChanged);
       signalRConnection.off("DeliveryNotification", handleDeliveryNotification);
       signalRConnection.off("CourierNotification", handleCourierNotification);
       signalRConnection.off("OrderNotification", handleOrderNotification);
       signalRConnection.off("NewTaskReceived", handleCourierNotification);
       signalRConnection.off("TaskStatusUpdated", handleDeliveryNotification);
     };
-  }, [signalRConnection]);
+  }, [signalRConnection, addNotification]);
 
   /**
    * Yeni bildirim ekle
@@ -308,6 +590,31 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
     return false;
   }, []);
 
+  /**
+   * Ses ayarını değiştir
+   * NEDEN: Kullanıcı bildirim sesini açıp kapatabilmeli
+   */
+  const toggleSound = useCallback(
+    (enabled) => {
+      const newValue = typeof enabled === "boolean" ? enabled : !soundEnabled;
+      setSoundEnabled(newValue);
+      setSoundEnabledState(newValue);
+
+      // Ses açılırsa AudioContext'i unlock et
+      if (newValue) {
+        unlockAudioContext();
+      }
+    },
+    [soundEnabled],
+  );
+
+  /**
+   * Test sesi çal - kullanıcı ses ayarını test edebilsin
+   */
+  const playTestSound = useCallback(() => {
+    playNotificationSound("default");
+  }, []);
+
   // Context değeri
   const value = {
     // Bildirimler
@@ -330,6 +637,12 @@ export const NotificationProvider = ({ children, signalRConnection }) => {
     dismissToast,
     dismissAllToasts,
     removeToast: dismissToast,
+
+    // Ses kontrolü
+    soundEnabled,
+    toggleSound,
+    playTestSound,
+    playNotificationSound,
 
     // Yardımcı
     requestNotificationPermission,

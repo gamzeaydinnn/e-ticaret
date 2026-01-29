@@ -10,6 +10,19 @@ namespace ECommerce.Business.Services.Interfaces
         Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null);
         Task<OrderListDto?> GetByIdAsync(int id);
         Task<OrderListDto?> GetByClientOrderIdAsync(Guid clientOrderId);
+        
+        // ============================================================
+        // MİSAFİR SİPARİŞ SORGULAMA İÇİN EKLENEN METOD
+        // Sipariş numarasına göre sipariş arama (guest-lookup endpoint'i için)
+        // ============================================================
+        /// <summary>
+        /// Sipariş numarasına göre sipariş getirir.
+        /// Misafir kullanıcıların sipariş sorgulaması için kullanılır.
+        /// </summary>
+        /// <param name="orderNumber">Sipariş numarası (ör: ORD-12345)</param>
+        /// <returns>Sipariş DTO'su veya null</returns>
+        Task<OrderListDto?> GetByOrderNumberAsync(string orderNumber);
+        
         Task<OrderListDto> CreateAsync(OrderCreateDto dto);
         Task UpdateAsync(int id, OrderUpdateDto dto);
         Task DeleteAsync(int id);

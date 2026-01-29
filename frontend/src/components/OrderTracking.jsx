@@ -209,6 +209,65 @@ const getStepperProgress = (status) => {
   return info.step >= 0 ? ((info.step + 1) / STEPPER_STEPS.length) * 100 : 0;
 };
 
+const getDisplayOrderNumber = (order) =>
+  order?.orderNumber || order?.id || order?.orderId || "-";
+
+const getOrderDateText = (dateValue) => {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("tr-TR");
+};
+
+const getOrderDateTimeText = (dateValue) => {
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("tr-TR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const getOrderAddress = (order) => {
+  if (!order) return "Belirtilmedi";
+  const candidates = [
+    order.deliveryAddress,
+    order.shippingAddress,
+    order.address,
+    order.fullAddress,
+    order.addressSummary,
+    order.raw?.deliveryAddress,
+    order.raw?.shippingAddress,
+    order.raw?.address,
+    order.raw?.fullAddress,
+    order.raw?.addressSummary,
+  ];
+  const address = candidates.find(
+    (candidate) => typeof candidate === "string" && candidate.trim(),
+  );
+  return address ? address.trim() : "Belirtilmedi";
+};
+
+const getOrderItems = (order) => {
+  if (Array.isArray(order?.items) && order.items.length > 0) {
+    return order.items;
+  }
+  if (Array.isArray(order?.orderItems) && order.orderItems.length > 0) {
+    return order.orderItems;
+  }
+  if (Array.isArray(order?.raw?.orderItems) && order.raw.orderItems.length > 0) {
+    return order.raw.orderItems;
+  }
+  if (Array.isArray(order?.raw?.items) && order.raw.items.length > 0) {
+    return order.raw.items;
+  }
+  return [];
+};
+
 // ==========================================================================
 // ANA COMPONENT
 // ==========================================================================
@@ -218,6 +277,7 @@ const OrderTracking = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [trackingCode, setTrackingCode] = useState("");
   const [connectionStatus, setConnectionStatus] = useState(
     ConnectionState.DISCONNECTED,
@@ -230,14 +290,130 @@ const OrderTracking = () => {
   const loadOrders = useCallback(async () => {
     try {
       const userId = localStorage.getItem("userId");
-      const userOrders = userId
-        ? await OrderService.list(userId)
-        : await OrderService.list();
+      const token = localStorage.getItem("token");
+
+      // ================================================================
+      // MİSAFİR KULLANICI KONTROLÜ
+      // Token yoksa veya userId yoksa misafir siparişlerini storage'dan oku
+      // Önce sessionStorage, sonra localStorage kontrol edilir
+      // Session ID ile filtreleme yapılır (farklı tarayıcı = farklı siparişler)
+      // ================================================================
+      if (!token || !userId) {
+        console.log(
+          "[OrderTracking] Misafir kullanıcı, storage'dan siparişler yükleniyor...",
+        );
+        try {
+          // Önce sessionStorage'dan dene
+          let guestOrders = JSON.parse(
+            sessionStorage.getItem("guestOrders") || "[]",
+          );
+
+          // SessionStorage boşsa localStorage'dan dene
+          if (guestOrders.length === 0) {
+            guestOrders = JSON.parse(
+              localStorage.getItem("guestOrders") || "[]",
+            );
+
+            // Session ID kontrolü - mevcut session'a ait siparişleri filtrele
+            const currentSessionId = sessionStorage.getItem("guest_session_id");
+            if (currentSessionId && guestOrders.length > 0) {
+              guestOrders = guestOrders.filter(
+                (o) => !o.sessionId || o.sessionId === currentSessionId,
+              );
+            }
+          }
+
+          if (guestOrders.length > 0) {
+            console.log(
+              "[OrderTracking] ✅ Storage'dan",
+              guestOrders.length,
+              "misafir siparişi bulundu",
+            );
+            // Misafir siparişlerini görüntüleme formatına dönüştür
+            const formattedOrders = guestOrders.map((order) => ({
+              id: order.orderId,
+              orderNumber: order.orderNumber,
+              status: order.status || "pending",
+              totalAmount: order.totalPrice,
+              finalPrice: order.totalPrice,
+              orderDate: order.createdAt,
+              customerEmail: order.email,
+              isGuestOrder: true,
+            }));
+            setOrders(
+              formattedOrders.sort(
+                (a, b) => new Date(b.orderDate) - new Date(a.orderDate),
+              ),
+            );
+          } else {
+            setOrders([]);
+          }
+        } catch (e) {
+          console.warn("[OrderTracking] Storage okuma hatası:", e);
+          setOrders([]);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Kayıtlı kullanıcı için API'den yükle
+      const userOrders = await OrderService.list(userId);
       setOrders(userOrders || []);
     } catch (error) {
       console.error("Siparişler yüklenemedi:", error);
+
+      // ================================================================
+      // API HATASI DURUMUNDA MİSAFİR SİPARİŞLERİNİ GÖSTER
+      // ================================================================
+      console.log(
+        "[OrderTracking] API hatası, misafir siparişleri deneniyor...",
+      );
+      try {
+        const guestOrders = JSON.parse(
+          localStorage.getItem("guestOrders") || "[]",
+        );
+        if (guestOrders.length > 0) {
+          const formattedOrders = guestOrders.map((order) => ({
+            id: order.orderId,
+            orderNumber: order.orderNumber,
+            status: order.status || "pending",
+            totalAmount: order.totalPrice,
+            finalPrice: order.totalPrice,
+            orderDate: order.createdAt,
+            customerEmail: order.email,
+            isGuestOrder: true,
+          }));
+          setOrders(
+            formattedOrders.sort(
+              (a, b) => new Date(b.orderDate) - new Date(a.orderDate),
+            ),
+          );
+        }
+      } catch (e) {
+        console.warn("[OrderTracking] LocalStorage fallback hatası:", e);
+      }
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const handleOpenOrder = useCallback(async (order) => {
+    if (!order) return;
+    const identifier = order.id || order.orderId || order.orderNumber;
+    if (!identifier) {
+      setSelectedOrder(order);
+      return;
+    }
+
+    setLoadingDetail(true);
+    try {
+      const detail = await OrderService.getById(identifier);
+      setSelectedOrder(detail || order);
+    } catch (error) {
+      console.warn("[OrderTracking] Sipariş detayı alınamadı:", error);
+      setSelectedOrder(order);
+    } finally {
+      setLoadingDetail(false);
     }
   }, []);
 
@@ -294,13 +470,134 @@ const OrderTracking = () => {
   useEffect(() => {
     loadOrders();
 
-    // SignalR bağlantısı kur
+    // ================================================================
+    // MİSAFİR KULLANICI İÇİN SIGNALR BAĞLANTISI YAPMA
+    // Token yoksa SignalR 401 hatası alınır, bu yüzden bağlanma
+    // Bunun yerine polling ile siparişleri düzenli kontrol ederiz
+    // ================================================================
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("[OrderTracking] Misafir kullanıcı, polling aktif edilecek");
+
+      // ================================================================
+      // MİSAFİR İÇİN POLLİNG MEKANİZMASI
+      // Her 15 saniyede sipariş durumunu kontrol et
+      // NEDEN: SignalR yetkisiz kullanıcılar için çalışmaz
+      // ================================================================
+      const pollInterval = setInterval(async () => {
+        try {
+          const guestOrders = JSON.parse(
+            localStorage.getItem("guestOrders") || "[]",
+          );
+          if (guestOrders.length === 0) return;
+
+          // Son sipariş için durum kontrolü yap
+          for (const guestOrder of guestOrders.slice(0, 3)) {
+            // Son 3 sipariş için
+            try {
+              const orderId = guestOrder.orderId;
+              if (!orderId) continue;
+
+              const freshOrder = await OrderService.getById(orderId);
+              if (!freshOrder) continue;
+
+              const oldStatus = guestOrder.status;
+              const newStatus = freshOrder.status;
+
+              // Durum değiştiyse bildirim göster
+              if (
+                oldStatus &&
+                newStatus &&
+                oldStatus.toLowerCase() !== newStatus.toLowerCase()
+              ) {
+                console.log(
+                  `[OrderTracking] Sipariş durumu değişti: ${oldStatus} → ${newStatus}`,
+                );
+
+                // LocalStorage'daki durumu güncelle
+                const updatedOrders = guestOrders.map((o) =>
+                  o.orderId === orderId ? { ...o, status: newStatus } : o,
+                );
+                localStorage.setItem(
+                  "guestOrders",
+                  JSON.stringify(updatedOrders),
+                );
+
+                // State'i güncelle
+                setOrders((prev) =>
+                  prev.map((o) =>
+                    o.id === orderId ? { ...o, status: newStatus } : o,
+                  ),
+                );
+
+                // Bildirim göster
+                const statusInfo = getStatusInfo(newStatus);
+                showBrowserNotification(
+                  `📦 Sipariş #${freshOrder.orderNumber || orderId}`,
+                  statusInfo.label + " - " + (statusInfo.description || ""),
+                  statusInfo.icon,
+                );
+
+                setNotification({
+                  type: "info",
+                  title: `Sipariş #${freshOrder.orderNumber || orderId}`,
+                  message: statusInfo.label,
+                  icon: statusInfo.icon,
+                  color: statusInfo.color,
+                });
+
+                setTimeout(() => setNotification(null), 5000);
+              }
+            } catch (e) {
+              // Tek sipariş için hata ana döngüyü durdurmasın
+              console.warn("[OrderTracking] Sipariş kontrolü hatası:", e);
+            }
+          }
+        } catch (e) {
+          console.warn("[OrderTracking] Polling hatası:", e);
+        }
+      }, 15000); // 15 saniye
+
+      return () => clearInterval(pollInterval);
+    }
+
+    // SignalR bağlantısı kur (sadece giriş yapmış kullanıcılar için)
     const connectSignalR = async () => {
       try {
         const connected = await signalRService.connectCustomer();
         if (connected) {
           setConnectionStatus(ConnectionState.CONNECTED);
           console.log("[OrderTracking] SignalR bağlantısı kuruldu");
+
+          // ================================================================
+          // TÜM SİPARİŞLERİN GRUPLARINA KATIL
+          // NEDEN: Backend "order-{orderId}" grubuna bildirim gönderiyor
+          // Müşteri bu gruplara katılmazsa bildirim alamaz
+          // ================================================================
+          try {
+            const userOrders = await OrderService.list();
+            if (userOrders && userOrders.length > 0) {
+              for (const order of userOrders.slice(0, 10)) {
+                // Son 10 sipariş
+                try {
+                  await signalRService.connectCustomer(order.id);
+                  console.log(
+                    `[OrderTracking] Sipariş #${order.id} grubuna katıldı`,
+                  );
+                } catch (e) {
+                  console.warn(
+                    `[OrderTracking] Sipariş #${order.id} grubuna katılınamadı:`,
+                    e,
+                  );
+                }
+              }
+            }
+          } catch (e) {
+            console.warn(
+              "[OrderTracking] Sipariş gruplarına katılma hatası:",
+              e,
+            );
+          }
         }
       } catch (error) {
         console.error("[OrderTracking] SignalR bağlantı hatası:", error);
@@ -371,11 +668,35 @@ const OrderTracking = () => {
       setConnectionStatus(newState);
     });
 
+    // =========================================================================
+    // SES BİLDİRİMİ DİNLEYİCİSİ (Müşteri için)
+    // Backend "PlaySound" event'i gönderdiğinde ses çal
+    // NEDEN: Sipariş durumu değişikliğinde müşteriyi uyar
+    // =========================================================================
+    const handlePlaySound = (data) => {
+      console.log("[OrderTracking] 🔊 Backend'den ses bildirimi:", data);
+      // Ses dosyası çal
+      const soundEnabled =
+        localStorage.getItem("notificationSoundEnabled") !== "false";
+      if (soundEnabled) {
+        try {
+          const audio = new Audio("/sounds/mixkit-bell-notification-933.wav");
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        } catch (e) {
+          console.warn("[OrderTracking] Ses çalınamadı");
+        }
+      }
+    };
+
+    deliveryHub.on("PlaySound", handlePlaySound);
+
     // Cleanup
     return () => {
       unsubscribeStatus();
       unsubscribeDelivery();
       unsubscribeState();
+      deliveryHub.off("PlaySound", handlePlaySound);
     };
   }, [loadOrders, showBrowserNotification]);
 
@@ -387,7 +708,8 @@ const OrderTracking = () => {
 
     // Önce local listede ara
     const order = orders.find(
-      (o) => o.orderNumber === trackingCode || String(o.id) === String(trackingCode),
+      (o) =>
+        o.orderNumber === trackingCode || String(o.id) === String(trackingCode),
     );
 
     if (order) {
@@ -522,10 +844,23 @@ const OrderTracking = () => {
               <strong>{notification.title}</strong>
               <p className="mb-0 small text-muted">{notification.message}</p>
             </div>
+            {/* Bildirim kapat butonu */}
             <button
-              className="btn-close ms-auto"
+              className="btn btn-sm ms-auto"
               onClick={() => setNotification(null)}
-            ></button>
+              style={{
+                background: "transparent",
+                border: "none",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: notification.color,
+                lineHeight: 1,
+                padding: "0 8px",
+              }}
+              title="Kapat"
+            >
+              ×
+            </button>
           </div>
         )}
 
@@ -537,6 +872,17 @@ const OrderTracking = () => {
             order={selectedOrder}
             onClose={() => setSelectedOrder(null)}
           />
+        )}
+        {loadingDetail && (
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{ background: "rgba(255,255,255,0.5)", zIndex: 1060 }}
+          >
+            <div
+              className="spinner-border text-warning"
+              style={{ width: "4rem", height: "4rem" }}
+            ></div>
+          </div>
         )}
 
         {/* Tüm Siparişler */}
@@ -566,10 +912,13 @@ const OrderTracking = () => {
             ) : (
               <div className="row">
                 {orders.map((order) => (
-                  <div key={order.id} className="col-md-6 mb-4">
+                  <div
+                    key={order.id || order.orderId || order.orderNumber}
+                    className="col-md-6 mb-4"
+                  >
                     <OrderCard
                       order={order}
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => handleOpenOrder(order)}
                     />
                   </div>
                 ))}
@@ -595,6 +944,30 @@ const OrderTracking = () => {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.05); }
         }
+        .order-detail-close-btn {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          border: none;
+          background: rgba(255, 255, 255, 0.2);
+          color: #ffffff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+          backdrop-filter: blur(4px);
+        }
+        .order-detail-close-btn:hover {
+          transform: translateY(-1px) rotate(6deg);
+          background: rgba(255, 255, 255, 0.3);
+        }
+        .order-detail-close-btn:active {
+          transform: translateY(0);
+          box-shadow: none;
+        }
       `}</style>
     </div>
   );
@@ -610,6 +983,8 @@ const OrderTracking = () => {
 const OrderCard = ({ order, onClick }) => {
   const statusInfo = getStatusInfo(order.status);
   const isCancelled = statusInfo.step === -1;
+  const orderNumber = getDisplayOrderNumber(order);
+  const orderDateText = getOrderDateText(order.orderDate);
 
   return (
     <div
@@ -632,7 +1007,7 @@ const OrderCard = ({ order, onClick }) => {
       <div className="card-body" style={{ padding: "1.5rem" }}>
         {/* Header */}
         <div className="d-flex justify-content-between align-items-start mb-3">
-          <h6 className="fw-bold mb-0">Sipariş #{order.orderNumber}</h6>
+          <h6 className="fw-bold mb-0">Sipariş #{orderNumber}</h6>
           <span
             className="badge px-3 py-2"
             style={{
@@ -672,9 +1047,8 @@ const OrderCard = ({ order, onClick }) => {
         {/* Bilgiler */}
         <p className="text-muted mb-2">
           <i className="fas fa-calendar me-2"></i>
-          {new Date(order.orderDate).toLocaleDateString("tr-TR")}
+          {orderDateText}
         </p>
-
 
         <p className="fw-bold mb-3" style={{ color: "#ff6f00" }}>
           <i className="fas fa-tag me-2"></i>₺
@@ -724,6 +1098,10 @@ const MiniStepper = ({ status }) => {
 const OrderDetailCard = ({ order, onClose }) => {
   const statusInfo = getStatusInfo(order.status);
   const isCancelled = statusInfo.step === -1;
+  const orderNumber = getDisplayOrderNumber(order);
+  const orderDateText = getOrderDateTimeText(order.orderDate);
+  const address = getOrderAddress(order);
+  const items = getOrderItems(order);
 
   return (
     <div
@@ -741,12 +1119,15 @@ const OrderDetailCard = ({ order, onClose }) => {
       >
         <h5 className="mb-0 fw-bold">
           <i className="fas fa-package me-2"></i>
-          Sipariş #{order.orderNumber}
+          Sipariş #{orderNumber}
         </h5>
+        {/* Kapat butonu - × simgesi ile */}
         <button
-          className="btn btn-light btn-sm rounded-circle"
+          className="order-detail-close-btn"
           onClick={onClose}
-          style={{ width: "32px", height: "32px" }}
+          type="button"
+          title="Kapat"
+          aria-label="Sipariş detayını kapat"
         >
           <i className="fas fa-times"></i>
         </button>
@@ -785,7 +1166,7 @@ const OrderDetailCard = ({ order, onClose }) => {
               <i className="fas fa-info-circle me-2"></i>Sipariş Bilgileri
             </h6>
             <p className="mb-2">
-              <strong>Sipariş No:</strong> {order.orderNumber}
+              <strong>Sipariş No:</strong> {orderNumber}
             </p>
             <p className="mb-2">
               <strong>Toplam Tutar:</strong>{" "}
@@ -795,13 +1176,7 @@ const OrderDetailCard = ({ order, onClose }) => {
             </p>
             <p className="mb-2">
               <strong>Sipariş Tarihi:</strong>{" "}
-              {new Date(order.orderDate).toLocaleDateString("tr-TR", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {orderDateText}
             </p>
           </div>
           <div className="col-md-6">
@@ -809,7 +1184,7 @@ const OrderDetailCard = ({ order, onClose }) => {
               <i className="fas fa-truck me-2"></i>Teslimat Bilgileri
             </h6>
             <p className="mb-2">
-              <strong>Adres:</strong> {order.deliveryAddress || "Belirtilmedi"}
+              <strong>Adres:</strong> {address}
             </p>
             {order.shippingCompany && (
               <p className="mb-2">
@@ -828,13 +1203,13 @@ const OrderDetailCard = ({ order, onClose }) => {
         </div>
 
         {/* Ürünler */}
-        {order.items && order.items.length > 0 && (
-          <div className="mt-4">
-            <h6 className="fw-bold mb-3" style={{ color: "#ff6f00" }}>
-              <i className="fas fa-shopping-basket me-2"></i>Sipariş Ürünleri
-            </h6>
+        <div className="mt-4">
+          <h6 className="fw-bold mb-3" style={{ color: "#ff6f00" }}>
+            <i className="fas fa-shopping-basket me-2"></i>Sipariş Ürünleri
+          </h6>
+          {items.length > 0 ? (
             <div className="row">
-              {order.items.map((item, index) => (
+              {items.map((item, index) => (
                 <div key={item.id || index} className="col-md-6 mb-3">
                   <div
                     className="card border-0 shadow-sm"
@@ -880,8 +1255,12 @@ const OrderDetailCard = ({ order, onClose }) => {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-muted small">
+              Ürün detayları bulunamadı.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

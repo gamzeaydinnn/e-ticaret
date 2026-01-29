@@ -18,6 +18,9 @@ namespace ECommerce.Core.DTOs.Order
         public decimal CampaignDiscountAmount { get; set; }
         public string? CouponCode { get; set; }
         public string Status { get; set; } = string.Empty;
+        // NEDEN: Admin ve panel filtreleri "ödendi" bilgisini doğrudan ister.
+        public string PaymentStatus { get; set; } = string.Empty;
+        public bool IsPaid { get; set; }
         public DateTime OrderDate { get; set; }
     public int TotalItems { get; set; } // Toplam ürün sayısı
 
@@ -28,6 +31,8 @@ namespace ECommerce.Core.DTOs.Order
         public string? TrackingNumber { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
+    // Misafir sipariş sorgulaması için email alanı eklendi
+    public string? CustomerEmail { get; set; }
     public string DeliveryNotes { get; set; } = string.Empty;
     public List<OrderItemDto> OrderItems { get; set; } = new();
     }

@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
 import bannerService from "../services/bannerService";
@@ -48,6 +49,7 @@ export default function Home() {
   // Banner state'leri
   const [sliderBanners, setSliderBanners] = useState([]);
   const [promoBanners, setPromoBanners] = useState([]);
+  const [recipeBanners, setRecipeBanners] = useState([]); // Şef Tavsiyesi / Tarif posterleri
   const [bannersLoading, setBannersLoading] = useState(true);
 
   // Favori state'i
@@ -109,9 +111,10 @@ export default function Home() {
       setActiveCampaigns([]);
     }
 
-    // Banner'ları yükle (paralel olarak)
+    // Banner'ları yükle (paralel olarak - slider, promo ve recipe)
     setBannersLoading(true);
     try {
+      // Slider ve Promo'yu paralel yükle
       const [sliders, promos] = await Promise.all([
         bannerService.getSliderBanners(),
         bannerService.getPromoBanners(),
@@ -122,11 +125,22 @@ export default function Home() {
 
       setSliderBanners(sliders || []);
       setPromoBanners(promos || []);
+
+      // Recipe'leri ayrı yükle (hata durumunda diğerlerini etkilemesin)
+      try {
+        const recipes = await bannerService.getRecipeBanners();
+        console.log("[Home] 🍳 Recipes loaded:", recipes?.length || 0, recipes);
+        setRecipeBanners(recipes || []);
+      } catch (recipeErr) {
+        console.error("[Home] ⚠️ Recipe banners error:", recipeErr);
+        setRecipeBanners([]);
+      }
     } catch (err) {
       console.error("[Home] Banners error:", err.message);
       // Hata durumunda boş array kullan (fallback)
       setSliderBanners([]);
       setPromoBanners([]);
+      setRecipeBanners([]);
     } finally {
       setBannersLoading(false);
     }
@@ -244,7 +258,7 @@ export default function Home() {
         }
       }
     },
-    [featured, addToCart]
+    [featured, addToCart],
   );
 
   // ============================================
@@ -308,106 +322,6 @@ export default function Home() {
         icon="fa-tags"
         showTitle={true}
       />
-
-      {/* ========== ŞEF TAVSİYESİ SECTION ========== */}
-      <section
-        className="mb-4"
-        style={{ maxWidth: "900px", margin: "0 auto 24px" }}
-      >
-        <h2
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: "700",
-            marginBottom: "16px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            color: "#ff6b35",
-          }}
-        >
-          <i className="fas fa-hat-chef" style={{ color: "#ff6b35" }}></i>
-          Şef Tavsiyesi
-        </h2>
-
-        <div
-          className="chef-recommendations"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "16px",
-          }}
-        >
-          {/* Gurme Lezzetler */}
-          <div
-            className="chef-card"
-            style={{
-              position: "relative",
-              borderRadius: "16px",
-              overflow: "hidden",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-              transition: "transform 0.3s ease, box-shadow 0.3s ease",
-              cursor: "pointer",
-              backgroundColor: "#fff",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow =
-                "0 8px 24px rgba(255,107,53,0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
-            }}
-          >
-            <img
-              src="https://images.migrosone.com/sanalmarket/banner/main_page_slider/144575/146609-banner-20260113145210-29b3cc.jpg"
-              alt="Gurme Lezzetler"
-              style={{
-                width: "100%",
-                height: "auto",
-                display: "block",
-                objectFit: "cover",
-              }}
-              loading="lazy"
-            />
-          </div>
-
-          {/* Şef Tavsiyesi Alayım */}
-          <div
-            className="chef-card"
-            style={{
-              position: "relative",
-              borderRadius: "16px",
-              overflow: "hidden",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-              transition: "transform 0.3s ease, box-shadow 0.3s ease",
-              cursor: "pointer",
-              backgroundColor: "#fff",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-4px)";
-              e.currentTarget.style.boxShadow =
-                "0 8px 24px rgba(255,107,53,0.2)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.1)";
-            }}
-          >
-            <img
-              src="https://images.migrosone.com/sanalmarket/banner/dogal-indirim-banner.png"
-              alt="Şef Tavsiyesi Alayım"
-              style={{
-                width: "100%",
-                height: "auto",
-                display: "block",
-                objectFit: "cover",
-              }}
-              loading="lazy"
-            />
-          </div>
-        </div>
-      </section>
 
       {/* ========== KATEGORİLER SECTION ========== */}
       <section className="mb-4">
@@ -757,6 +671,131 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      {/* ========== NE PİŞİRSEM? - ŞEF TAVSİYESİ SECTION ========== */}
+      {/* 
+        Bu bölüm Admin Panel > Poster Yönetimi'nden kontrol edilir.
+        Banner tipi: "recipe" - Önerilen boyut: 600x300px (2:1 oran)
+        Posterler tıklanabilir, /tarif/:id sayfasına yönlendirir.
+      */}
+      {/* DEBUG: Bu bölüm her zaman görünür olmalı */}
+      {console.log("[Home] 🍳 Ne Pişirsem Bölümü Render - recipeBanners:", recipeBanners?.length || 0)}
+      <section
+        className="chef-recommendation-section"
+        style={{ 
+          marginTop: "40px", 
+          marginBottom: "40px",
+          padding: "24px",
+          backgroundColor: "#fff8f5",
+          borderRadius: "16px",
+          border: "2px solid #ff6b35"
+        }}
+      >
+          <h2
+            style={{
+              fontSize: "1.35rem",
+              fontWeight: "700",
+              marginBottom: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              color: "#ff6b35",
+            }}
+          >
+            <i className="fas fa-utensils" style={{ color: "#ff6b35" }}></i>
+            Ne Pişirsem?
+            <span
+              style={{
+                backgroundColor: "#10b981",
+                color: "white",
+                fontSize: "0.65rem",
+                fontWeight: "600",
+                padding: "2px 8px",
+                borderRadius: "12px",
+                marginLeft: "8px",
+              }}
+            >
+              YENİ
+            </span>
+          </h2>
+
+          <div
+            className="chef-posters-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: "20px",
+            }}
+          >
+            {/* API'den gelen posterler varsa onları göster, yoksa demo posterler */}
+            {(recipeBanners.length > 0 ? recipeBanners : [
+              {
+                id: 'demo1',
+                title: 'Gurme Lezzetler',
+                imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=300&fit=crop&q=80',
+                linkUrl: '/tarif/1'
+              },
+              {
+                id: 'demo2', 
+                title: 'Şef Tavsiyesi',
+                imageUrl: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&h=300&fit=crop&q=80',
+                linkUrl: '/tarif/2'
+              }
+            ]).slice(0, 2).map((banner) => (
+              <Link
+                key={banner.id}
+                to={banner.linkUrl || `/tarif/${banner.id}`}
+                className="chef-poster-card"
+                style={{
+                  display: "block",
+                  position: "relative",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+                  transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                  textDecoration: "none",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform =
+                    "translateY(-6px) scale(1.01)";
+                  e.currentTarget.style.boxShadow =
+                    "0 12px 32px rgba(255,107,53,0.25)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0) scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 16px rgba(0,0,0,0.1)";
+                }}
+              >
+                <img
+                  src={banner.imageUrl}
+                  alt={banner.title || "Şef Tavsiyesi"}
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    aspectRatio: "2 / 1",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                  loading="lazy"
+                />
+              </Link>
+            ))}
+          </div>
+
+          {/* Responsive CSS - Mobilde tek sütun */}
+          <style>{`
+            @media (max-width: 768px) {
+              .chef-posters-grid {
+                grid-template-columns: 1fr !important;
+                gap: 16px !important;
+              }
+              .chef-recommendation-section h2 {
+                font-size: 1.15rem !important;
+              }
+            }
+          `}</style>
+        </section>
 
       {/* Sepete Ekleme Modal */}
       <AddToCartModal

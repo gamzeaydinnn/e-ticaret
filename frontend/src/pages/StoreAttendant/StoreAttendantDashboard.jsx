@@ -44,7 +44,8 @@ export default function StoreAttendantDashboard() {
   const [error, setError] = useState(null);
 
   // Tab ve filtre
-  const [activeTab, setActiveTab] = useState("confirmed"); // confirmed, preparing, ready
+  // DÜZELTME: Default tab "all" olarak değiştirildi - tüm siparişleri göster
+  const [activeTab, setActiveTab] = useState("all"); // all, confirmed, preparing, ready
   const [searchQuery, setSearchQuery] = useState("");
 
   // Tartı modal
@@ -143,17 +144,26 @@ export default function StoreAttendantDashboard() {
     [activeTab],
   );
 
-  // Tab → Status dönüşümü
+  // =========================================================================
+  // TAB → STATUS DÖNÜŞÜMÜ
+  // NEDEN: Backend'e hangi durumların çekileceğini iletir.
+  // "all" veya null → Tüm izin verilen siparişler (Pending, Confirmed, New, Paid, Preparing, Ready)
+  // "pending" → Pending + Confirmed + New + Paid (bekleyen siparişler)
+  // =========================================================================
   const getStatusFromTab = (tab) => {
     switch (tab) {
+      case "all":
+        // Tüm siparişleri getir (status filtresi gönderme)
+        return null;
       case "confirmed":
-        return "Confirmed";
+        // "pending" değeri backend'de Pending, Confirmed, New, Paid durumlarını döndürür
+        return "pending";
       case "preparing":
         return "Preparing";
       case "ready":
         return "Ready";
       default:
-        return "Confirmed";
+        return null; // Tüm siparişler
     }
   };
 
@@ -246,6 +256,17 @@ export default function StoreAttendantDashboard() {
       fetchData(false);
     };
 
+    // =========================================================================
+    // SES BİLDİRİMİ DİNLEYİCİSİ
+    // Backend "PlaySound" event'i gönderdiğinde ses çal
+    // NEDEN: Merkezi ses yönetimi için backend kontrollü bildirim
+    // =========================================================================
+    const handlePlaySound = (data) => {
+      console.log("🔊 [StoreAttendant] Backend'den ses bildirimi:", data);
+      const soundType = data?.soundType || "newOrder";
+      playSound(soundType === "new_order" ? "newOrder" : soundType);
+    };
+
     // Listener'ları kaydet
     signalRService.onStoreAttendantEvent("NewOrderForStore", handleNewOrder);
     signalRService.onStoreAttendantEvent(
@@ -253,6 +274,7 @@ export default function StoreAttendantDashboard() {
       handleOrderStatusChanged,
     );
     signalRService.onStoreAttendantEvent("OrderConfirmed", handleNewOrder);
+    signalRService.onStoreAttendantEvent("PlaySound", handlePlaySound);
 
     // Cleanup
     return () => {
@@ -320,8 +342,8 @@ export default function StoreAttendantDashboard() {
       );
 
       if (result.success) {
-        // Tartı girildikten sonra hazır işaretle
-        await updateOrderStatus(selectedOrder.id, "Ready");
+        // NEDEN: Ağırlık + hazır işaretleme tek istekte tamamlanır.
+        fetchData(true);
         setShowWeightModal(false);
         setSelectedOrder(null);
         setWeightValue("");
@@ -343,19 +365,26 @@ export default function StoreAttendantDashboard() {
   // Kuryeleri yükle
   const loadCouriers = useCallback(async () => {
     try {
-      const data = await getCouriers();
-      // Aktif kuryeleri filtrele
-      const activeCouriers = (data || []).filter(
-        (c) => c.status === "Active" || c.status === "Online" || c.isOnline,
-      );
-      setCouriers(activeCouriers);
+      const result = await getCouriers();
+      console.log("🚴 [StoreAttendant] Kurye API sonucu:", result);
+
+      if (result.success && result.data) {
+        // Backend DispatcherCourierListResponseDto döner: { couriers: [...], onlineCount, ... }
+        const courierList = result.data.couriers || result.data || [];
+        console.log("🚴 [StoreAttendant] Kurye listesi:", courierList);
+        setCouriers(Array.isArray(courierList) ? courierList : []);
+      } else {
+        console.warn(
+          "🚴 [StoreAttendant] Kurye listesi alınamadı:",
+          result.error,
+        );
+        setCouriers([]);
+      }
     } catch (err) {
       console.error("[StoreAttendant] Kurye listesi hatası:", err);
       setCouriers([]);
     }
-  }, []);
-
-  // Kurye modal aç
+  }, []); // Kurye modal aç
   const handleOpenCourierModal = (orderId) => {
     setCourierOrderId(orderId);
     setShowCourierModal(true);
@@ -874,6 +903,20 @@ export default function StoreAttendantDashboard() {
 
                       {/* Aksiyon Butonları */}
                       <div className="d-grid gap-2">
+                        {/* New/Pending → Confirmed (Onayla) */}
+                        {((order.status || "").toLowerCase() === "new" ||
+                          (order.status || "").toLowerCase() === "pending") && (
+                          <button
+                            className="btn btn-info mobile-action-btn fw-semibold"
+                            onClick={() =>
+                              updateOrderStatus(order.id, "Confirmed")
+                            }
+                          >
+                            <i className="fas fa-check me-2"></i>
+                            Onayla
+                          </button>
+                        )}
+
                         {/* Confirmed → Preparing */}
                         {(order.status || "").toLowerCase() === "confirmed" && (
                           <button

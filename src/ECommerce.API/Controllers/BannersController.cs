@@ -74,6 +74,19 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
+        /// Şef Tavsiyesi / Tarif posterlerini getirir (Ne Pişirsem? bölümü için)
+        /// Önerilen boyut: 600x300px (2:1 oran)
+        /// </summary>
+        [HttpGet("recipe")]
+        public async Task<IActionResult> GetRecipeBanners()
+        {
+            _logger.LogInformation("🍳 Şef Tavsiyesi/Tarif banner'ları isteniyor");
+            var banners = await _bannerService.GetByTypeAsync("recipe");
+            _logger.LogInformation("✅ {Count} tarif banner döndürüldü", banners.Count());
+            return Ok(banners);
+        }
+
+        /// <summary>
         /// Tipe göre banner'ları getirir
         /// </summary>
         [HttpGet("type/{type}")]

@@ -103,8 +103,14 @@ export default function PosterManagement() {
       // API'den gelen veriyi frontend formatına dönüştür
       const formattedData = data.map((item) => ({
         ...item,
-        // API "position" kullanıyor, biz "type" olarak gösteriyoruz
-        type: item.position === "homepage-middle" ? "promo" : "slider",
+        // API "type" field'ını kullan, yoksa position'dan türet
+        // recipe tipi için özel kontrol
+        type:
+          item.type === "recipe"
+            ? "recipe"
+            : item.position === "homepage-middle"
+              ? "promo"
+              : "slider",
       }));
 
       setPosters(Array.isArray(formattedData) ? formattedData : []);
@@ -233,7 +239,7 @@ export default function PosterManagement() {
         console.error("[PosterManagement] Dosya yükleme hatası:", err);
         showFeedback(
           err.message || "Görsel yüklenirken hata oluştu",
-          FEEDBACK_TYPES.danger
+          FEEDBACK_TYPES.danger,
         );
 
         // Hata durumunda local preview göster (fallback)
@@ -248,7 +254,7 @@ export default function PosterManagement() {
         setUploading(false);
       }
     },
-    [showFeedback]
+    [showFeedback],
   );
 
   /**
@@ -261,7 +267,7 @@ export default function PosterManagement() {
         handleFileUpload(file);
       }
     },
-    [handleFileUpload]
+    [handleFileUpload],
   );
 
   // ============================================
@@ -303,7 +309,7 @@ export default function PosterManagement() {
         handleFileUpload(files[0]);
       }
     },
-    [handleFileUpload]
+    [handleFileUpload],
   );
 
   // ============================================
@@ -353,13 +359,13 @@ export default function PosterManagement() {
         console.error("[PosterManagement] Kaydetme hatası:", err);
         showFeedback(
           err.message || "Kaydetme sırasında hata oluştu",
-          FEEDBACK_TYPES.danger
+          FEEDBACK_TYPES.danger,
         );
       } finally {
         setSaving(false);
       }
     },
-    [form, closeModal, fetchPosters, showFeedback]
+    [form, closeModal, fetchPosters, showFeedback],
   );
 
   /**
@@ -380,11 +386,11 @@ export default function PosterManagement() {
         console.error("[PosterManagement] Silme hatası:", err);
         showFeedback(
           err.message || "Silme sırasında hata oluştu",
-          FEEDBACK_TYPES.danger
+          FEEDBACK_TYPES.danger,
         );
       }
     },
-    [fetchPosters, showFeedback]
+    [fetchPosters, showFeedback],
   );
 
   /**
@@ -397,18 +403,18 @@ export default function PosterManagement() {
         await bannerService.toggleBanner(poster.id);
         showFeedback(
           poster.isActive ? "Poster pasif yapıldı" : "Poster aktif yapıldı",
-          FEEDBACK_TYPES.success
+          FEEDBACK_TYPES.success,
         );
         await fetchPosters(); // Listeyi yenile
       } catch (err) {
         console.error("[PosterManagement] Toggle hatası:", err);
         showFeedback(
           err.message || "Durum güncellenirken hata oluştu",
-          FEEDBACK_TYPES.danger
+          FEEDBACK_TYPES.danger,
         );
       }
     },
-    [fetchPosters, showFeedback]
+    [fetchPosters, showFeedback],
   );
 
   /**
@@ -417,7 +423,7 @@ export default function PosterManagement() {
   const handleResetToDefault = useCallback(async () => {
     if (
       !window.confirm(
-        "Tüm posterler varsayılana sıfırlanacak. Bu işlem geri alınamaz. Emin misiniz?"
+        "Tüm posterler varsayılana sıfırlanacak. Bu işlem geri alınamaz. Emin misiniz?",
       )
     ) {
       return;
@@ -428,14 +434,14 @@ export default function PosterManagement() {
       const result = await bannerService.resetToDefault();
       showFeedback(
         result.message || "Posterler varsayılana sıfırlandı",
-        FEEDBACK_TYPES.success
+        FEEDBACK_TYPES.success,
       );
       await fetchPosters(); // Listeyi yenile
     } catch (err) {
       console.error("[PosterManagement] Sıfırlama hatası:", err);
       showFeedback(
         err.message || "Sıfırlama sırasında hata oluştu",
-        FEEDBACK_TYPES.danger
+        FEEDBACK_TYPES.danger,
       );
     } finally {
       setLoading(false);
@@ -446,12 +452,16 @@ export default function PosterManagement() {
   // FİLTRELENMİŞ VERİLER
   // ============================================
 
+  // Slider posterleri - recipe tipi HARİÇ tutulmalı
   const sliderPosters = posters.filter(
-    (p) => p.type === "slider" || p.position === "homepage-top"
+    (p) => p.type === "slider" && p.type !== "recipe",
   );
+  // Promo posterleri - recipe tipi HARİÇ tutulmalı  
   const promoPosters = posters.filter(
-    (p) => p.type === "promo" || p.position === "homepage-middle"
+    (p) => (p.type === "promo" || p.position === "homepage-middle") && p.type !== "recipe",
   );
+  // Şef Tavsiyesi / Tarif posterleri (sadece recipe tipi)
+  const recipePosters = posters.filter((p) => p.type === "recipe");
 
   // ============================================
   // LOADING STATE
@@ -578,7 +588,7 @@ export default function PosterManagement() {
             Poster Yönetimi
           </h5>
           <small className="text-muted">
-            Ana sayfa slider ve promosyon görselleri
+            Ana sayfa slider, promosyon ve şef tavsiyesi görselleri
           </small>
         </div>
         <div className="d-flex gap-2 flex-wrap">
@@ -592,6 +602,9 @@ export default function PosterManagement() {
             <option value="all">Tümü ({posters.length})</option>
             <option value="slider">Slider ({sliderPosters.length})</option>
             <option value="promo">Promo ({promoPosters.length})</option>
+            <option value="recipe">
+              🍳 Şef Tavsiyesi ({recipePosters.length})
+            </option>
           </select>
 
           {/* Varsayılana Sıfırla Butonu */}
@@ -685,6 +698,59 @@ export default function PosterManagement() {
                     key={p.id}
                     poster={p}
                     type="slider"
+                    onEdit={() => openModal(p)}
+                    onToggle={() => toggleActive(p)}
+                    onDelete={() => handleDelete(p.id)}
+                  />
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ========== ŞEF TAVSİYESİ POSTERLERİ ========== */}
+      <div className="card border-0 shadow-sm mb-3 mx-1">
+        <div className="card-header text-white py-2 d-flex justify-content-between align-items-center" style={{ backgroundColor: "#ff6b35" }}>
+          <div>
+            <i className="fas fa-utensils me-2"></i>
+            🍳 Şef Tavsiyesi / Ne Pişirsem? ({recipePosters.length})
+            <small className="ms-2 opacity-75">
+              Önerilen: {BANNER_DIMENSIONS.recipe?.text || "600x300px"}
+            </small>
+          </div>
+          <button
+            className="btn btn-light btn-sm"
+            onClick={() => {
+              setForm({ ...INITIAL_FORM, type: "recipe" });
+              setImagePreview("");
+              setShowModal(true);
+            }}
+          >
+            <i className="fas fa-plus me-1"></i>Tarif Posteri Ekle
+          </button>
+        </div>
+        <div className="card-body p-3">
+          <div className="alert alert-info py-2 mb-3">
+            <i className="fas fa-info-circle me-2"></i>
+            <strong>Bilgi:</strong> Bu posterler ana sayfada ürünlerin altında "Ne Pişirsem?" bölümünde yan yana görünür. 
+            Tıklandığında yemek tarifi sayfasına yönlendirir. <strong>Önerilen boyut: 600x300px (2:1 oran)</strong>
+          </div>
+          {recipePosters.length === 0 ? (
+            <p className="text-muted text-center py-4 mb-0">
+              <i className="fas fa-utensils fa-2x mb-2 d-block opacity-50"></i>
+              Henüz şef tavsiyesi posteri yok
+              <br />
+              <small>"Tarif Posteri Ekle" butonuna tıklayarak ekleyebilirsiniz.</small>
+            </p>
+          ) : (
+            <div className="d-flex flex-wrap gap-3 justify-content-center">
+              {recipePosters
+                .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                .map((p) => (
+                  <PosterCard
+                    key={p.id}
+                    poster={p}
+                    type="recipe"
                     onEdit={() => openModal(p)}
                     onToggle={() => toggleActive(p)}
                     onDelete={() => handleDelete(p.id)}
@@ -826,7 +892,19 @@ export default function PosterManagement() {
                           <option value="promo">
                             Promosyon - {BANNER_DIMENSIONS.promo.text}
                           </option>
+                          <option value="recipe">
+                            🍳 Şef Tavsiyesi / Tarif -{" "}
+                            {BANNER_DIMENSIONS.recipe.text}
+                          </option>
                         </select>
+                        {form.type === "recipe" && (
+                          <small className="text-info mt-1 d-block">
+                            <i className="fas fa-info-circle me-1"></i>
+                            Şef tavsiyesi posterleri ana sayfada "Ne Pişirsem?"
+                            bölümünde görünür. Tıklandığında yemek tarifi
+                            sayfasına yönlendirilir.
+                          </small>
+                        )}
                       </div>
 
                       {/* Link URL */}
@@ -838,7 +916,11 @@ export default function PosterManagement() {
                           name="linkUrl"
                           value={form.linkUrl || ""}
                           onChange={handleChange}
-                          placeholder="/kategori/meyve-sebze veya https://..."
+                          placeholder={
+                            form.type === "recipe"
+                              ? "/tarif/1 (otomatik atanır)"
+                              : "/kategori/meyve-sebze veya https://..."
+                          }
                           disabled={saving}
                         />
                         <small className="text-muted">

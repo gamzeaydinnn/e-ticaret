@@ -29,8 +29,15 @@ export default function CourierOrders() {
 
   const loadOrders = async () => {
     try {
-      const { orders: orderData = [] } =
-        (await CourierService.getAssignedOrders()) || {};
+      console.log("🔍 [CourierOrders] Kurye bilgisi:", courier);
+      console.log("🔍 [CourierOrders] Kurye ID:", courier?.id);
+
+      const response = await CourierService.getAssignedOrders();
+      console.log("🔍 [CourierOrders] API yanıtı:", response);
+
+      const { orders: orderData = [] } = response || {};
+      console.log("🔍 [CourierOrders] Gelen siparişler:", orderData);
+
       setOrders(orderData);
 
       // Her sipariş için ağırlık raporlarını yükle

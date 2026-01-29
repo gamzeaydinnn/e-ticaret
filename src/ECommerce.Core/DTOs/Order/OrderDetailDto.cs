@@ -19,6 +19,11 @@ namespace ECommerce.Core.DTOs.Order
         public string? CouponCode { get; set; }
         public string? TrackingNumber { get; set; }
         public string Status { get; set; } = string.Empty;
+        
+        // Ödeme durumu bilgileri - Admin panel filtreleri için gerekli
+        public string PaymentStatus { get; set; } = string.Empty;
+        public bool IsPaid { get; set; }
+        
         public DateTime OrderDate { get; set; }
 
     public List<OrderItemDto> OrderItems { get; set; } = new();

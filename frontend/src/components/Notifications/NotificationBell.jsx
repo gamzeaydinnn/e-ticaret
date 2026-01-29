@@ -3,12 +3,27 @@
 // ==========================================================================
 // Header'da gösterilen bildirim zili bileşeni. Real-time bildirimleri
 // SignalR üzerinden alır ve kullanıcıya gösterir. Mobil uyumlu dropdown
-// tasarımına sahiptir.
+// tasarımına sahiptir. Ses açma/kapama kontrolü içerir.
 // ==========================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import "./NotificationBell.css";
+
+// ============================================================================
+// SES KONTROLÜ
+// localStorage'dan ses ayarını oku/yaz
+// ============================================================================
+const SOUND_ENABLED_KEY = "notificationSoundEnabled";
+
+const isSoundEnabled = () => {
+  const storedValue = localStorage.getItem(SOUND_ENABLED_KEY);
+  return storedValue === null || storedValue === "true";
+};
+
+const setSoundEnabled = (enabled) => {
+  localStorage.setItem(SOUND_ENABLED_KEY, enabled ? "true" : "false");
+};
 
 /**
  * NotificationBell - Header bildirim zili bileşeni
@@ -22,6 +37,7 @@ import "./NotificationBell.css";
  * - onClearAll: Tümünü temizle callback
  * - isLoading: Yükleniyor durumu
  * - maxVisible: Gösterilecek maksimum bildirim sayısı
+ * - showSoundToggle: Ses toggle butonu gösterilsin mi (varsayılan: true)
  */
 const NotificationBell = ({
   notifications = [],
@@ -32,13 +48,26 @@ const NotificationBell = ({
   onClearAll,
   isLoading = false,
   maxVisible = 5,
+  showSoundToggle = true,
 }) => {
   // State tanımları
   const [isOpen, setIsOpen] = useState(false);
   const [animatingBell, setAnimatingBell] = useState(false);
+  const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled());
   const dropdownRef = useRef(null);
   const bellRef = useRef(null);
   const prevUnreadCount = useRef(unreadCount);
+
+  // Ses toggle handler
+  const handleSoundToggle = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const newValue = !soundEnabled;
+      setSoundEnabled(newValue);
+      setSoundEnabledState(newValue);
+    },
+    [soundEnabled],
+  );
 
   // Dışarı tıklandığında dropdown'ı kapat
   useEffect(() => {
@@ -220,6 +249,20 @@ const NotificationBell = ({
             </h3>
 
             <div className="notification-actions">
+              {/* Ses Toggle Butonu */}
+              {showSoundToggle && (
+                <button
+                  className={`notification-action-btn sound-toggle ${soundEnabled ? "active" : ""}`}
+                  onClick={handleSoundToggle}
+                  title={
+                    soundEnabled
+                      ? "Bildirim sesini kapat"
+                      : "Bildirim sesini aç"
+                  }
+                >
+                  {soundEnabled ? "🔊" : "🔇"}
+                </button>
+              )}
               {unreadCount > 0 && (
                 <button
                   className="notification-action-btn"

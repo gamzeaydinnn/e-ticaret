@@ -100,6 +100,7 @@ import PaymentOptions from "./pages/PaymentOptions.jsx";
 import PressKit from "./pages/PressKit.jsx";
 import Product from "./pages/Product";
 import Profile from "./pages/Profile";
+import RecipePage from "./pages/RecipePage"; // Şef Tavsiyesi Tarif Sayfası
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Returns from "./pages/Returns.jsx";
 import SearchPage from "./pages/SearchPage";
@@ -753,6 +754,11 @@ function App() {
         />
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
+
+        {/* Şef Tavsiyesi / Yemek Tarifi Sayfası */}
+        <Route path="/tarif" element={<RecipePage />} />
+        <Route path="/tarif/:id" element={<RecipePage />} />
+
         {/* Destek / Bilgi sayfaları */}
         <Route path="/yardim" element={<HelpCenter />} />
         <Route path="/iletisim" element={<Contact />} />
@@ -1156,6 +1162,7 @@ function HomePage() {
   const [isPaused, setIsPaused] = React.useState(false);
   const [slides, setSlides] = React.useState([]);
   const [promoImages, setPromoImages] = React.useState([]);
+  const [recipeBanners, setRecipeBanners] = React.useState([]);
   const [newsletterEmail, setNewsletterEmail] = React.useState("");
   const [newsletterStatus, setNewsletterStatus] = React.useState("idle");
   const [newsletterMessage, setNewsletterMessage] = React.useState("");
@@ -1173,14 +1180,16 @@ function HomePage() {
   React.useEffect(() => {
     const fetchPosters = async () => {
       try {
-        // Slider ve promo bannerları paralel olarak çek
-        const [sliderData, promoData] = await Promise.all([
+        // Slider, promo ve recipe bannerları paralel olarak çek
+        const [sliderData, promoData, recipeData] = await Promise.all([
           bannerService.getSliderBanners(),
           bannerService.getPromoBanners(),
+          bannerService.getRecipeBanners(),
         ]);
 
         console.log("[HomePage] Slider banners:", sliderData?.length || 0);
         console.log("[HomePage] Promo banners:", promoData?.length || 0);
+        console.log("[HomePage] 🍳 Recipe banners:", recipeData?.length || 0);
 
         // Slider banner'ları ayarla
         if (Array.isArray(sliderData) && sliderData.length > 0) {
@@ -1247,6 +1256,18 @@ function HomePage() {
               image: "/images/ozel-fiyat-koy-sutu.png",
             },
           ]);
+        }
+
+        // Recipe banner'ları ayarla
+        if (Array.isArray(recipeData) && recipeData.length > 0) {
+          setRecipeBanners(
+            recipeData.map((p) => ({
+              id: p.id,
+              title: p.title,
+              image: p.imageUrl,
+              link: p.linkUrl || `/tarif/${p.id}`,
+            })),
+          );
         }
       } catch (error) {
         console.error("[HomePage] Poster yükleme hatası:", error);
@@ -1645,6 +1666,105 @@ function HomePage() {
           <ProductGrid />
         </div>
       </section>
+
+      {/* ========== ŞEF ÖNERİSİ SECTION ========== */}
+      {recipeBanners.length > 0 && (
+        <section 
+          className="recipe-section py-4"
+          style={{
+            background: "#f8f9fa",
+          }}
+        >
+          <div className="container-fluid px-4" style={{ maxWidth: "1100px" }}>
+            <div className="mb-3">
+              <h3
+                className="fw-bold mb-0"
+                style={{
+                  fontSize: "1.5rem",
+                  color: "#333",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                Şef Önerisi
+                <span
+                  className="badge"
+                  style={{
+                    backgroundColor: "#10b981",
+                    color: "white",
+                    fontSize: "0.6rem",
+                    fontWeight: "600",
+                    padding: "3px 8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  YENİ
+                </span>
+              </h3>
+            </div>
+            
+            <div
+              className="recipe-grid"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: "16px",
+              }}
+            >
+              {recipeBanners.slice(0, 2).map((recipe) => (
+                <div
+                  key={recipe.id}
+                  className="recipe-card"
+                  style={{
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
+                    cursor: "pointer",
+                    backgroundColor: "#fff",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-4px)";
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                  }}
+                  onClick={() => recipe.link && (window.location.href = recipe.link)}
+                >
+                  <img
+                    src={recipe.image}
+                    alt={recipe.title || "Şef Önerisi"}
+                    style={{
+                      width: "100%",
+                      height: "160px",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                    onError={(e) => {
+                      e.target.src = "/images/placeholder.png";
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Mobil responsive */}
+            <style>{`
+              @media (max-width: 576px) {
+                .recipe-grid {
+                  grid-template-columns: 1fr !important;
+                }
+                .recipe-card img {
+                  height: 140px !important;
+                }
+              }
+            `}</style>
+          </div>
+        </section>
+      )}
 
       {/* Features Section - 4 Özellik Kartları */}
       <section className="features-section py-5">

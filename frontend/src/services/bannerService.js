@@ -37,6 +37,12 @@ export const BANNER_DIMENSIONS = {
   slider: { width: 1200, height: 400, text: "1200x400px", label: "Slider" },
   promo: { width: 300, height: 200, text: "300x200px", label: "Promosyon" },
   banner: { width: 800, height: 200, text: "800x200px", label: "Banner" },
+  recipe: {
+    width: 600,
+    height: 300,
+    text: "600x300px",
+    label: "Şef Tavsiyesi / Tarif",
+  },
 };
 
 /**
@@ -56,31 +62,31 @@ export const UPLOAD_CONFIG = {
 /**
  * Backend'den gelen relative URL'leri tam URL'ye dönüştürür
  * Sunucuda /uploads/banners/xxx.jpg → http://domain/uploads/banners/xxx.jpg
- * 
+ *
  * @param {string} imageUrl - Backend'den gelen görsel URL'i
  * @returns {string} Tam görsel URL'i
  */
 export const normalizeImageUrl = (imageUrl) => {
   if (!imageUrl) return "";
-  
+
   // Zaten tam URL ise (http:// veya https:// ile başlıyorsa) olduğu gibi döndür
   if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
     return imageUrl;
   }
-  
+
   // Relative URL ise (örn: /uploads/banners/xxx.jpg)
   // API base URL'i ile birleştir
   const apiBaseUrl = process.env.REACT_APP_API_URL || "";
-  
+
   // API base URL boşsa (production'da nginx proxy kullanıyoruz)
   // Direkt browser'ın current origin'ini kullan
   if (!apiBaseUrl) {
     // Nginx proxy'de /api ve /uploads aynı domain'de
     return imageUrl; // Örn: /uploads/banners/xxx.jpg → golkoygurme.com.tr/uploads/banners/xxx.jpg
   }
-  
+
   // Development'ta API base URL varsa onunla birleştir
-  return `${apiBaseUrl}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
+  return `${apiBaseUrl}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
 };
 
 /**
@@ -133,7 +139,7 @@ export const validateFile = (file) => {
     return {
       valid: false,
       error: `İzin verilen formatlar: ${UPLOAD_CONFIG.allowedExtensions.join(
-        ", "
+        ", ",
       )}`,
     };
   }
@@ -142,7 +148,7 @@ export const validateFile = (file) => {
     return {
       valid: false,
       error: `Geçersiz dosya uzantısı. İzin verilenler: ${UPLOAD_CONFIG.allowedExtensions.join(
-        ", "
+        ", ",
       )}`,
     };
   }
@@ -170,20 +176,20 @@ export const getSliderBanners = async () => {
     if (!Array.isArray(data)) {
       console.warn(
         "[BannerService] Slider API beklenmeyen format döndü:",
-        data
+        data,
       );
       return [];
     }
 
     // ImageUrl'leri normalize et (relative → absolute)
-    return data.map(banner => ({
+    return data.map((banner) => ({
       ...banner,
-      imageUrl: normalizeImageUrl(banner.imageUrl)
+      imageUrl: normalizeImageUrl(banner.imageUrl),
     }));
   } catch (error) {
     console.error(
       "[BannerService] Slider banner'ları alınamadı:",
-      error.message
+      error.message,
     );
     throw error;
   }
@@ -206,16 +212,53 @@ export const getPromoBanners = async () => {
     }
 
     // ImageUrl'leri normalize et (relative → absolute)
-    return data.map(banner => ({
+    return data.map((banner) => ({
       ...banner,
-      imageUrl: normalizeImageUrl(banner.imageUrl)
+      imageUrl: normalizeImageUrl(banner.imageUrl),
     }));
   } catch (error) {
     console.error(
       "[BannerService] Promo banner'ları alınamadı:",
-      error.message
+      error.message,
     );
     throw error;
+  }
+};
+
+/**
+ * Şef Tavsiyesi / Tarif posterlerini getirir (sadece aktif olanlar)
+ * Ana sayfa "Ne Pişirsem?" bölümü için kullanılır
+ * Önerilen boyut: 600x300 piksel (2:1 oran, yan yana 2 poster için ideal)
+ *
+ * @returns {Promise<Array>} Tarif poster listesi
+ * @throws {Error} API hatası durumunda
+ */
+export const getRecipeBanners = async () => {
+  try {
+    // API'den "recipe" tipindeki banner'ları çek
+    // Backend: GET /api/banners/recipe
+    const data = await api.get("/api/banners/recipe");
+
+    if (!Array.isArray(data)) {
+      console.warn(
+        "[BannerService] Recipe API beklenmeyen format döndü:",
+        data,
+      );
+      return [];
+    }
+
+    // ImageUrl'leri normalize et (relative → absolute)
+    return data.map((banner) => ({
+      ...banner,
+      imageUrl: normalizeImageUrl(banner.imageUrl),
+    }));
+  } catch (error) {
+    // 404 veya boş dönerse boş array döndür (hata fırlatma)
+    console.warn(
+      "[BannerService] Recipe banner'ları alınamadı:",
+      error.message,
+    );
+    return [];
   }
 };
 
@@ -232,15 +275,15 @@ export const getAllBanners = async () => {
     if (!Array.isArray(data)) {
       console.warn(
         "[BannerService] Banners API beklenmeyen format döndü:",
-        data
+        data,
       );
       return [];
     }
 
     // ImageUrl'leri normalize et (relative → absolute)
-    return data.map(banner => ({
+    return data.map((banner) => ({
       ...banner,
-      imageUrl: normalizeImageUrl(banner.imageUrl)
+      imageUrl: normalizeImageUrl(banner.imageUrl),
     }));
   } catch (error) {
     console.error("[BannerService] Banner'lar alınamadı:", error.message);
@@ -275,14 +318,14 @@ export const getAdminBanners = async () => {
     }
 
     // ImageUrl'leri normalize et (relative → absolute)
-    return data.map(banner => ({
+    return data.map((banner) => ({
       ...banner,
-      imageUrl: normalizeImageUrl(banner.imageUrl)
+      imageUrl: normalizeImageUrl(banner.imageUrl),
     }));
   } catch (error) {
     console.error(
       "[BannerService] Admin banner listesi alınamadı:",
-      error.message
+      error.message,
     );
     throw error;
   }
@@ -305,7 +348,7 @@ export const getBannerById = async (id) => {
     // ImageUrl'i normalize et
     return {
       ...data,
-      imageUrl: normalizeImageUrl(data.imageUrl)
+      imageUrl: normalizeImageUrl(data.imageUrl),
     };
   } catch (error) {
     console.error(`[BannerService] Banner #${id} alınamadı:`, error.message);
@@ -405,7 +448,7 @@ export const updateBanner = async (id, bannerData) => {
   } catch (error) {
     console.error(
       `[BannerService] Banner #${id} güncellenemedi:`,
-      error.message
+      error.message,
     );
     throw error;
   }
@@ -495,7 +538,7 @@ export const toggleBanner = async (id) => {
   } catch (error) {
     console.error(
       `[BannerService] Banner #${id} toggle edilemedi:`,
-      error.message
+      error.message,
     );
     throw error;
   }
@@ -537,7 +580,7 @@ export const resetToDefault = async () => {
   } catch (error) {
     console.error(
       "[BannerService] Varsayılana sıfırlama başarısız:",
-      error.message
+      error.message,
     );
     throw error;
   }
@@ -561,6 +604,7 @@ const bannerService = {
   // Public
   getSliderBanners,
   getPromoBanners,
+  getRecipeBanners,
   getAllBanners,
   getActiveBanners, // deprecated alias
 

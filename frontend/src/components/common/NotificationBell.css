@@ -115,6 +115,35 @@
   color: #1e293b;
 }
 
+/* Header Actions Container */
+.notification-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Ses Toggle Butonu */
+.sound-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.sound-toggle-btn:hover {
+  background: #f1f5f9;
+  opacity: 1;
+}
+
+.sound-toggle-btn.active {
+  opacity: 1;
+  background: #ecfdf5;
+}
+
 .mark-all-read-btn {
   background: none;
   border: none;

@@ -2,9 +2,16 @@ import api from "./api";
 
 const base = "/api/orders";
 
+/**
+ * Tekrar sipariş oluşturulmasını engellemek için benzersiz client order ID üretir
+ * UUID v4 formatında GUID üretir, desteklenmiyorsa fallback kullanır
+ */
 const generateClientOrderId = () => {
   try {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return crypto.randomUUID();
     }
   } catch {
@@ -13,12 +20,18 @@ const generateClientOrderId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
+/**
+ * Backend'den gelen sipariş verisini normalize eder
+ * Farklı response formatlarını standart bir yapıya dönüştürür
+ * @param {Object} order - Backend'den gelen ham sipariş verisi
+ * @returns {Object} Normalize edilmiş sipariş objesi
+ */
 const normalizeOrder = (order = {}) => {
   const itemsSource = Array.isArray(order.orderItems)
     ? order.orderItems
     : Array.isArray(order.items)
-    ? order.items
-    : [];
+      ? order.items
+      : [];
 
   const normalizedItems = itemsSource.map((item, index) => ({
     id: item.id ?? item.productId ?? index,
@@ -36,9 +49,15 @@ const normalizeOrder = (order = {}) => {
     orderNumber: order.orderNumber || fallbackOrderNo,
     // Yeni backend alanı: trackingNumber. Eski client kodları için trackingCode de bırakılıyor.
     trackingNumber:
-      order.trackingNumber || order.trackingCode || order.orderNumber || fallbackOrderNo,
+      order.trackingNumber ||
+      order.trackingCode ||
+      order.orderNumber ||
+      fallbackOrderNo,
     trackingCode:
-      order.trackingNumber || order.trackingCode || order.orderNumber || fallbackOrderNo,
+      order.trackingNumber ||
+      order.trackingCode ||
+      order.orderNumber ||
+      fallbackOrderNo,
     status: (order.status || "").toLowerCase(),
     orderDate: order.orderDate || new Date().toISOString(),
     totalAmount: order.totalAmount ?? order.totalPrice ?? 0,
@@ -56,7 +75,12 @@ const normalizeOrder = (order = {}) => {
     customerName: order.customerName || "",
     customerPhone: order.customerPhone || "",
     deliveryAddress:
-      order.deliveryAddress || order.shippingAddress || "Adres belirtilmedi",
+      order.deliveryAddress ||
+      order.shippingAddress ||
+      order.address ||
+      order.fullAddress ||
+      order.addressSummary ||
+      "Adres belirtilmedi",
     shippingCompany: order.shippingCompany || order.shippingMethod || "",
     estimatedDeliveryDate: order.estimatedDeliveryDate || null,
     shippingMethod: order.shippingMethod || "",
@@ -102,17 +126,18 @@ export const OrderService = {
     // Valid format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     const isValidGuid = (str) => {
       if (!str || typeof str !== "string") return false;
-      const guidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const guidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       return guidRegex.test(str);
     };
 
     const finalPayload = {
       ...payload,
-      couponCode: payload?.couponCode
-        ? payload.couponCode.trim()
-        : null,
+      couponCode: payload?.couponCode ? payload.couponCode.trim() : null,
       // Only include clientOrderId if it's a valid GUID, otherwise set to null
-      clientOrderId: isValidGuid(payload?.clientOrderId) ? payload.clientOrderId : null,
+      clientOrderId: isValidGuid(payload?.clientOrderId)
+        ? payload.clientOrderId
+        : null,
     };
 
     try {
@@ -139,5 +164,66 @@ export const OrderService = {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
+  },
+
+  // ============================================================================
+  // MİSAFİR SİPARİŞ SORGULAMA
+  // Giriş yapmamış kullanıcılar için email + sipariş numarası ile arama
+  // Backend'de /api/orders/guest-lookup endpoint'ine istek atar
+  // ============================================================================
+  findGuestOrder: async (email, orderNumber) => {
+    if (!email || !orderNumber) {
+      throw new Error("E-posta ve sipariş numarası zorunludur");
+    }
+
+    try {
+      console.log("[OrderService] Misafir siparişi aranıyor:", {
+        email,
+        orderNumber,
+      });
+
+      const response = await api.get(`${base}/guest-lookup`, {
+        params: {
+          email: email.trim(),
+          orderNumber: orderNumber.trim(),
+        },
+      });
+
+      // Response kontrolü ve normalizasyon
+      if (!response) {
+        return null;
+      }
+
+      // API'den sipariş geldi, normalize et
+      const order = response?.order || response?.data || response;
+      return normalizeOrder(order);
+    } catch (error) {
+      console.error("[OrderService] Misafir sipariş arama hatası:", error);
+
+      // 404 hatası: Sipariş bulunamadı
+      if (error?.status === 404) {
+        return null;
+      }
+
+      throw error;
+    }
+  },
+
+  // ============================================================================
+  // SİPARİŞ TAKİP NUMARASI İLE SORGULAMA
+  // Takip numarası ile sipariş durumu sorgulama (public endpoint)
+  // ============================================================================
+  trackOrder: async (trackingNumber) => {
+    if (!trackingNumber) {
+      throw new Error("Takip numarası zorunludur");
+    }
+
+    try {
+      const response = await api.get(`${base}/track/${trackingNumber.trim()}`);
+      return normalizeOrder(response);
+    } catch (error) {
+      console.error("[OrderService] Sipariş takip hatası:", error);
+      throw error;
+    }
   },
 };

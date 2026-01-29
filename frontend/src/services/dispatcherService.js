@@ -25,7 +25,9 @@ const DISPATCH_BASE = "/api/DispatcherOrder";
 const getAuthHeaders = () => {
   const token =
     localStorage.getItem("dispatcherToken") ||
-    sessionStorage.getItem("dispatcherToken");
+    sessionStorage.getItem("dispatcherToken") ||
+    localStorage.getItem("storeAttendantToken") ||
+    sessionStorage.getItem("storeAttendantToken");
 
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
@@ -141,12 +143,14 @@ export const getSummary = async () => {
  */
 export const getCouriers = async () => {
   try {
+    // api.js zaten res.data döndürüyor, tekrar .data yapmaya gerek yok
     const response = await api.get(`${DISPATCH_BASE}/couriers`, {
       headers: getAuthHeaders(),
     });
+    console.log("🚴 [DispatcherService] Kurye API yanıtı:", response);
     return {
       success: true,
-      data: response.data,
+      data: response, // response zaten unwrap edilmiş data
     };
   } catch (error) {
     console.error("[DispatcherService] Kuryeler alınamadı:", error);

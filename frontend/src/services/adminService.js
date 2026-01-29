@@ -448,6 +448,8 @@ export const AdminService = {
   updateOrderStatus: (id, status) =>
     api.put(`/api/admin/orders/${id}/status`, { status }),
   getRecentOrders: () => api.get("/api/admin/orders/recent"),
+  // NEDEN: Admin panelinde sipariş silme aksiyonu gerekir.
+  deleteOrder: (id) => api.delete(`/api/admin/orders/${id}`),
 
   // ============================================================
   // KURYE ATAMA - Backend'e POST isteği gönderir

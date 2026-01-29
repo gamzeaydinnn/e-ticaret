@@ -14,13 +14,8 @@ const api = axios.create({
 // Request interceptor: Token varsa ekle
 api.interceptors.request.use(
   (config) => {
-    // Checkout endpoint'i Authorization header'ı gerektirmez (guest checkout)
-    if (config.url?.includes("/orders/checkout") || config.url?.includes("/payments/posnet")) {
-      delete config.headers.Authorization;
-      return config;
-    }
-
     const url = config.url || "";
+    // NEDEN: Checkout akışında login varsa token gönderilmeli; böylece sipariş kullanıcıya bağlanır.
     const isCourierRequest =
       url.includes("/api/courier") ||
       url.includes("/weight-adjustment") ||
@@ -31,11 +26,16 @@ api.interceptors.request.use(
       sessionStorage.getItem("courierToken");
 
     // Tüm olası token key'lerini kontrol et (uyumluluk için)
+    const storeAttendantToken =
+      localStorage.getItem("storeAttendantToken") ||
+      sessionStorage.getItem("storeAttendantToken");
+
     const token =
       (isCourierRequest ? courierToken : null) ||
       localStorage.getItem("token") ||
       localStorage.getItem("authToken") ||
-      localStorage.getItem("adminToken");
+      localStorage.getItem("adminToken") ||
+      storeAttendantToken;
 
     // Token sadece geçerliyse ekle (boş string veya null değil)
     if (token && token.trim().length > 0) {
@@ -161,6 +161,8 @@ api.interceptors.response.use(
             localStorage.removeItem("token");
             localStorage.removeItem("authToken");
             localStorage.removeItem("adminToken");
+            localStorage.removeItem("storeAttendantToken");
+            sessionStorage.removeItem("storeAttendantToken");
             localStorage.removeItem("refreshToken");
             localStorage.removeItem("user");
             localStorage.removeItem("userId");
@@ -172,6 +174,8 @@ api.interceptors.response.use(
           localStorage.removeItem("token");
           localStorage.removeItem("authToken");
           localStorage.removeItem("adminToken");
+          localStorage.removeItem("storeAttendantToken");
+          sessionStorage.removeItem("storeAttendantToken");
           localStorage.removeItem("user");
           localStorage.removeItem("userId");
         }

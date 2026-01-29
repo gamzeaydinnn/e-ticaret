@@ -54,8 +54,8 @@ const PaymentPage = () => {
 
   // Dinamik kargo fiyatları (API'den)
   const [shippingPrices, setShippingPrices] = useState({
-    motorcycle: 15, // varsayılan değerler
-    car: 30,
+    motorcycle: 40, // varsayılan değerler (API'den güncellenir)
+    car: 60,
   });
   const [shippingPricesLoading, setShippingPricesLoading] = useState(true);
 
@@ -244,18 +244,29 @@ const PaymentPage = () => {
     }, 0);
   }, [cartItems, getItemPrice]);
 
-  const getShippingCost = () => {
+  const hasFreeShipping = () => {
     if (
       appliedCoupon?.couponType === "FreeShipping" ||
       appliedCoupon?.type === 4
     ) {
-      return 0;
+      return true;
     }
-    // Dinamik kargo fiyatlarını kullan
+    if (pricing?.isFreeShipping) return true;
+    return appliedCampaigns.some(
+      (campaign) =>
+        campaign?.type === 3 ||
+        campaign?.type === "FreeShipping" ||
+        campaign?.type === "FreeShippingCampaign",
+    );
+  };
+
+  const getShippingCost = () => {
+    if (hasFreeShipping()) return 0;
+    // Dinamik kargo fiyatlarını kullan (API'den güncellenir, fallback 40/60 TL)
     if (shippingMethod === "car" || shippingMethod === "express") {
-      return shippingPrices.car || 30;
+      return shippingPrices.car || 60;
     }
-    return shippingPrices.motorcycle || 15;
+    return shippingPrices.motorcycle || 40;
   };
 
   const getDiscount = () => {

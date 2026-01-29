@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Http;
 using ECommerce.Entities.Concrete;
 using System.Security.Claims;
 using Microsoft.Extensions.Logging;
+using ECommerce.Business.Services.Interfaces;
 
 namespace ECommerce.API.Controllers
 {
@@ -34,12 +35,14 @@ namespace ECommerce.API.Controllers
         private readonly IPosnet3DSecureCallbackHandler? _posnet3DHandler;
         private readonly IPosnetPaymentService? _posnetService;
         private readonly ILogger<PaymentsController> _logger;
+        private readonly IRealTimeNotificationService _notificationService;
 
         public PaymentsController(
             PaymentManager paymentManager, 
             IOptions<PaymentSettings> paymentOptions, 
             ECommerceDbContext db,
             ILogger<PaymentsController> logger,
+            IRealTimeNotificationService notificationService,
             IPosnet3DSecureCallbackHandler? posnet3DHandler = null,
             IPosnetPaymentService? posnetService = null)
         {
@@ -47,6 +50,7 @@ namespace ECommerce.API.Controllers
             _paymentOptions = paymentOptions;
             _db = db;
             _logger = logger;
+            _notificationService = notificationService;
             _posnet3DHandler = posnet3DHandler;
             _posnetService = posnetService;
         }
@@ -322,17 +326,23 @@ namespace ECommerce.API.Controllers
 
                 if (payment != null)
                 {
+                    Order? order = null;
+                    string orderNumber = $"#{orderId}";
+                    decimal totalAmount = 0m;
+
                     if (status == "success")
                     {
                         payment.Status = "Success";
                         payment.PaidAt = DateTime.UtcNow;
                         payment.RawResponse = (payment.RawResponse ?? "") + $"\n[PayTR Callback Success] {DateTime.UtcNow}";
 
-                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                        order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
                         if (order != null)
                         {
                             var previousStatus = order.Status;
                             order.Status = OrderStatus.Paid;
+                            orderNumber = string.IsNullOrWhiteSpace(order.OrderNumber) ? $"#{order.Id}" : order.OrderNumber;
+                            totalAmount = order.FinalPrice;
                             
                             _db.OrderStatusHistories.Add(new OrderStatusHistory
                             {
@@ -352,6 +362,31 @@ namespace ECommerce.API.Controllers
                     }
 
                     await _db.SaveChangesAsync();
+
+                    // NEDEN: Ödeme sonucu admin paneline anlık yansıtılmalı.
+                    try
+                    {
+                        if (status == "success")
+                        {
+                            await _notificationService.NotifyPaymentSuccessAsync(
+                                orderId,
+                                orderNumber,
+                                totalAmount,
+                                "PayTR");
+                        }
+                        else
+                        {
+                            await _notificationService.NotifyPaymentFailedAsync(
+                                orderId,
+                                orderNumber,
+                                failed_reason_msg,
+                                "PayTR");
+                        }
+                    }
+                    catch (Exception notifyEx)
+                    {
+                        _logger.LogWarning(notifyEx, "PayTR bildirimleri gönderilemedi. OrderId={OrderId}", orderId);
+                    }
                 }
 
                 // PayTR'a başarılı yanıt

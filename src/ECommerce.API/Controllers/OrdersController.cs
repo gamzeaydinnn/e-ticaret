@@ -235,6 +235,118 @@ namespace ECommerce.API.Controllers
             return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
         }
 
+        // ============================================================================
+        // MİSAFİR SİPARİŞ SORGULAMA
+        // Giriş yapmamış kullanıcılar email + sipariş numarası ile sipariş sorgulayabilir
+        // Güvenlik: Sadece kendi siparişini görebilir (email doğrulaması ile)
+        // ============================================================================
+        /// <summary>
+        /// Misafir kullanıcılar için sipariş sorgulama.
+        /// Email ve sipariş numarası ile eşleşen siparişi döner.
+        /// </summary>
+        [HttpGet("guest-lookup")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GuestLookup(
+            [FromQuery] string email, 
+            [FromQuery] string orderNumber)
+        {
+            // Parametre validasyonu
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(orderNumber))
+            {
+                return BadRequest(new { 
+                    message = "E-posta ve sipariş numarası zorunludur.",
+                    success = false 
+                });
+            }
+
+            // Email formatı kontrolü
+            var emailTrimmed = email.Trim().ToLowerInvariant();
+            if (!IsValidEmail(emailTrimmed))
+            {
+                return BadRequest(new { 
+                    message = "Geçerli bir e-posta adresi girin.",
+                    success = false 
+                });
+            }
+
+            try
+            {
+                _logger.LogInformation(
+                    "[GUEST-LOOKUP] Misafir sipariş sorgusu: Email={Email}, OrderNumber={OrderNumber}", 
+                    emailTrimmed, 
+                    orderNumber.Trim());
+
+                // Sipariş numarasına göre sipariş bul
+                var order = await _orderService.GetByOrderNumberAsync(orderNumber.Trim());
+                
+                if (order == null)
+                {
+                    _logger.LogWarning(
+                        "[GUEST-LOOKUP] Sipariş bulunamadı: OrderNumber={OrderNumber}", 
+                        orderNumber.Trim());
+                    return NotFound(new { 
+                        message = "Bu sipariş numarasıyla eşleşen sipariş bulunamadı.",
+                        success = false 
+                    });
+                }
+
+                // Email kontrolü - güvenlik için email eşleşmeli
+                // Büyük/küçük harf duyarsız karşılaştırma
+                if (!string.Equals(order.CustomerEmail?.Trim(), emailTrimmed, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "[GUEST-LOOKUP] Email eşleşmedi: Beklenen={Expected}, Gelen={Received}", 
+                        order.CustomerEmail, 
+                        emailTrimmed);
+                    return NotFound(new { 
+                        message = "Bu bilgilerle eşleşen sipariş bulunamadı.",
+                        success = false 
+                    });
+                }
+
+                _logger.LogInformation(
+                    "[GUEST-LOOKUP] Sipariş bulundu: OrderId={OrderId}, Status={Status}", 
+                    order.Id, 
+                    order.Status);
+
+                return Ok(new
+                {
+                    success = true,
+                    order = order
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GUEST-LOOKUP] Sipariş sorgulama hatası");
+                return StatusCode(500, new { 
+                    message = "Sipariş sorgulama sırasında bir hata oluştu.",
+                    success = false 
+                });
+            }
+        }
+
+        /// <summary>
+        /// Basit email format doğrulama yardımcı metodu
+        /// </summary>
+        private static bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return false;
+
+            try
+            {
+                // Basit regex kontrolü
+                var emailRegex = new System.Text.RegularExpressions.Regex(
+                    @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                return emailRegex.IsMatch(email);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         /// <summary>
         /// Ödeme sağlayıcısından veya frontend'den tetiklenen ödeme başarısız senaryosu.
         /// Sipariş durumu PaymentFailed olarak işaretlenir.

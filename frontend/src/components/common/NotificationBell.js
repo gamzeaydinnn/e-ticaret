@@ -2,13 +2,28 @@
 // NotificationBell.js - Bildirim Zili Bileşeni
 // ==========================================================================
 // Header'da gösterilecek bildirim zili. Okunmamış bildirim sayısını gösterir
-// ve tıklandığında bildirim listesini açar.
+// ve tıklandığında bildirim listesini açar. Ses açma/kapama kontrolü içerir.
 // ==========================================================================
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../contexts/NotificationContext";
 import "./NotificationBell.css";
+
+// ============================================================================
+// SES KONTROLÜ
+// localStorage'dan ses ayarını oku/yaz
+// ============================================================================
+const SOUND_ENABLED_KEY = "notificationSoundEnabled";
+
+const isSoundEnabled = () => {
+  const storedValue = localStorage.getItem(SOUND_ENABLED_KEY);
+  return storedValue === null || storedValue === "true";
+};
+
+const setSoundEnabled = (enabled) => {
+  localStorage.setItem(SOUND_ENABLED_KEY, enabled ? "true" : "false");
+};
 
 const NotificationBell = () => {
   const navigate = useNavigate();
@@ -22,7 +37,19 @@ const NotificationBell = () => {
   } = useNotifications();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [soundEnabled, setSoundEnabledState] = useState(isSoundEnabled());
   const dropdownRef = useRef(null);
+
+  // Ses toggle handler
+  const handleSoundToggle = useCallback(
+    (e) => {
+      e.stopPropagation();
+      const newValue = !soundEnabled;
+      setSoundEnabled(newValue);
+      setSoundEnabledState(newValue);
+    },
+    [soundEnabled],
+  );
 
   // Dropdown dışına tıklandığında kapat
   useEffect(() => {
@@ -139,11 +166,26 @@ const NotificationBell = () => {
           {/* Header */}
           <div className="notification-dropdown-header">
             <h3>Bildirimler</h3>
-            {unreadCount > 0 && (
-              <button className="mark-all-read-btn" onClick={handleMarkAllRead}>
-                Tümünü Okundu İşaretle
+            <div className="notification-header-actions">
+              {/* Ses Toggle Butonu */}
+              <button
+                className={`sound-toggle-btn ${soundEnabled ? "active" : ""}`}
+                onClick={handleSoundToggle}
+                title={
+                  soundEnabled ? "Bildirim sesini kapat" : "Bildirim sesini aç"
+                }
+              >
+                {soundEnabled ? "🔊" : "🔇"}
               </button>
-            )}
+              {unreadCount > 0 && (
+                <button
+                  className="mark-all-read-btn"
+                  onClick={handleMarkAllRead}
+                >
+                  Tümünü Okundu İşaretle
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Bildirim Listesi */}

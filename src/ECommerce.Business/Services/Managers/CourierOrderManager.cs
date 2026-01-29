@@ -64,9 +64,20 @@ namespace ECommerce.Business.Services.Managers
         {
             try
             {
-                _logger.LogInformation("Kurye #{CourierId} için sipariş listesi istendi", courierId);
+                _logger.LogInformation("🔍 Kurye #{CourierId} için sipariş listesi istendi", courierId);
 
                 filter ??= new CourierOrderFilterDto();
+
+                // DEBUG: Tüm siparişlerde bu kuryeye atanan var mı kontrol et
+                var allOrdersWithCourier = await _context.Orders
+                    .AsNoTracking()
+                    .Where(o => o.CourierId != null)
+                    .Select(o => new { o.Id, o.CourierId, o.Status })
+                    .ToListAsync();
+                _logger.LogInformation("🔍 Kurye atanmış tüm siparişler: {@Orders}", allOrdersWithCourier);
+                
+                var ordersForThisCourier = allOrdersWithCourier.Where(o => o.CourierId == courierId).ToList();
+                _logger.LogInformation("🔍 Bu kuryeye ({CourierId}) atanan siparişler: {@Orders}", courierId, ordersForThisCourier);
 
                 // Temel sorgu - sadece bu kuryeye atanan siparişler
                 var query = _context.Orders

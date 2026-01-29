@@ -137,8 +137,9 @@ namespace ECommerce.Core.Constants
         /// <summary>
         /// Sipariş yönetimi yapabilecek roller.
         /// Sipariş durumunu güncelleyebilir veya görüntüleyebilir.
+        /// StoreAttendant ve Dispatcher da sipariş görebilir.
         /// </summary>
-        public const string OrderManagement = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics;
+        public const string OrderManagement = SuperAdmin + "," + Admin + "," + StoreManager + "," + CustomerSupport + "," + Logistics + "," + StoreAttendant + "," + Dispatcher;
 
         /// <summary>
         /// Ürün yönetimi yapabilecek roller.

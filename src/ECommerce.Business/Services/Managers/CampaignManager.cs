@@ -420,20 +420,47 @@ namespace ECommerce.Business.Services.Managers
                     }
                 }
 
-                // 3. Ücretsiz kargo kontrolü
-                var freeShippingCampaign = await GetFreeShippingCampaignAsync(cartTotal);
-                if (freeShippingCampaign != null)
+                // 3. Ücretsiz kargo kontrolü (kampanya kapsamına göre)
+                var freeShippingCampaigns = activeCampaigns
+                    .Where(c => c.Type == CampaignType.FreeShipping)
+                    .ToList();
+
+                foreach (var campaign in freeShippingCampaigns)
                 {
+                    var scopedItems = GetScopedItems(campaign, itemsList);
+                    if (!scopedItems.Any())
+                    {
+                        continue;
+                    }
+
+                    if (campaign.TargetType != CampaignTargetType.All &&
+                        scopedItems.Count != itemsList.Count)
+                    {
+                        continue;
+                    }
+
+                    var scopedTotal = scopedItems.Sum(i => i.LineTotal);
+                    var eligibleTotal = campaign.TargetType == CampaignTargetType.All
+                        ? cartTotal
+                        : scopedTotal;
+
+                    if (campaign.MinCartTotal.HasValue &&
+                        eligibleTotal < campaign.MinCartTotal.Value)
+                    {
+                        continue;
+                    }
+
                     result.IsFreeShipping = true;
                     result.AppliedCampaigns.Add(new AppliedCampaignDto
                     {
-                        CampaignId = freeShippingCampaign.Id,
-                        CampaignName = freeShippingCampaign.Name,
+                        CampaignId = campaign.Id,
+                        CampaignName = campaign.Name,
                         Type = CampaignType.FreeShipping,
                         DiscountAmount = 0, // Kargo ücreti ayrıca hesaplanacak
                         DisplayText = "Ücretsiz Kargo",
-                        AppliedToItemIds = new List<int>()
+                        AppliedToItemIds = scopedItems.Select(i => i.ProductId).ToList()
                     });
+                    break;
                 }
 
                 _logger?.LogDebug(

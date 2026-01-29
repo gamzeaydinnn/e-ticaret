@@ -8,6 +8,7 @@ using ECommerce.Core.DTOs.Order;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using ECommerce.API.Authorization;
+using Microsoft.Extensions.Logging;
 /*OrdersController
 •	POST /api/orders (guest veya userId ile) -> sipariş oluşturma. Eğer guest ise, zorunlu alanlar: name, phone, email, address, paymentMethod
 •	GET /api/orders/{id} -> sipariş detay (admin, ilgili kullanıcı veya kurye görmeli)
@@ -23,15 +24,18 @@ namespace ECommerce.API.Controllers.Admin
         private readonly IOrderService _orderService;
         private readonly IAuditLogService _auditLogService;
         private readonly IRealTimeNotificationService _notificationService;
+        private readonly ILogger<AdminOrdersController> _logger;
 
         public AdminOrdersController(
             IOrderService orderService,
             IAuditLogService auditLogService,
-            IRealTimeNotificationService notificationService)
+            IRealTimeNotificationService notificationService,
+            ILogger<AdminOrdersController> logger)
         {
             _orderService = orderService;
             _auditLogService = auditLogService;
             _notificationService = notificationService;
+            _logger = logger;
         }
 
         [HttpPatch("{id:int}/tracking-number")]
@@ -243,6 +247,41 @@ namespace ECommerce.API.Controllers.Admin
                     id.ToString(),
                     new { oldOrder.Status, OldCourierId = (int?)null },
                     new { updatedOrder.Status, CourierId = dto.CourierId });
+
+                // =====================================================================
+                // KURYE BİLDİRİMİ GÖNDER
+                // NEDEN: Kurye siparişin kendisine atandığını anlık olarak bilmeli
+                // Bu sayede sipariş hazır olduğunda hemen harekete geçebilir
+                // =====================================================================
+                try
+                {
+                    await _notificationService.NotifyOrderAssignedToCourierAsync(
+                        dto.CourierId,
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        updatedOrder.ShippingAddress,
+                        updatedOrder.CustomerPhone,
+                        updatedOrder.FinalPrice,
+                        "online" // Ödeme yöntemi - API'den alınabilir
+                    );
+
+                    // Durum değişikliği bildirimi (tüm taraflara)
+                    await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        oldOrder.Status,
+                        updatedOrder.Status,
+                        GetAdminUserId().ToString()
+                    );
+                }
+                catch (Exception notifyEx)
+                {
+                    // Bildirim hatası kurye atamasını engellemez
+                    // Sadece loglama yapılır
+                    _logger.LogWarning(notifyEx, 
+                        "Kurye bildirimi gönderilemedi. OrderId={OrderId}, CourierId={CourierId}", 
+                        id, dto.CourierId);
+                }
 
                 return Ok(updatedOrder);
             }

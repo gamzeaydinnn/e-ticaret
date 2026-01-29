@@ -29,10 +29,10 @@ const CartPage = () => {
     }
   });
 
-  // Dinamik kargo fiyatları
+  // Dinamik kargo fiyatları (API'den güncellenir, fallback değerler)
   const [shippingPrices, setShippingPrices] = useState({
-    motorcycle: 15,
-    car: 30,
+    motorcycle: 40, // Motosiklet teslimat - varsayılan 40 TL
+    car: 60, // Araç teslimat - varsayılan 60 TL
   });
   const [shippingPricesLoading, setShippingPricesLoading] = useState(true);
 
@@ -214,17 +214,28 @@ const CartPage = () => {
     return getCartTotal();
   };
 
-  const getShippingCost = () => {
+  const hasFreeShipping = () => {
     if (
       appliedCoupon?.couponType === "FreeShipping" ||
       appliedCoupon?.type === 4
     ) {
-      return 0;
+      return true;
     }
-    // Dinamik kargo fiyatlarını kullan
+    if (pricing?.isFreeShipping) return true;
+    return appliedCampaigns.some(
+      (campaign) =>
+        campaign?.type === 3 ||
+        campaign?.type === "FreeShipping" ||
+        campaign?.type === "FreeShippingCampaign",
+    );
+  };
+
+  const getShippingCost = () => {
+    if (hasFreeShipping()) return 0;
+    // Dinamik kargo fiyatlarını kullan (API'den güncellenir, fallback 40/60 TL)
     return shippingMethod === "car"
-      ? shippingPrices.car || 30
-      : shippingPrices.motorcycle || 15;
+      ? shippingPrices.car || 60
+      : shippingPrices.motorcycle || 40;
   };
 
   const getCouponTypeName = (type) => {
@@ -730,7 +741,7 @@ const CartPage = () => {
                       <span className="shipping-desc">30-45 dakika içinde</span>
                     </div>
                     <div className="shipping-price">
-                      {appliedCoupon?.couponType === "FreeShipping" ? (
+                      {hasFreeShipping() ? (
                         <>
                           <span className="original-price">
                             {shippingPricesLoading ? (
@@ -773,7 +784,7 @@ const CartPage = () => {
                       </span>
                     </div>
                     <div className="shipping-price">
-                      {appliedCoupon?.couponType === "FreeShipping" ? (
+                      {hasFreeShipping() ? (
                         <>
                           <span className="original-price">
                             {shippingPricesLoading ? (

@@ -2,17 +2,17 @@
  * ============================================================================
  * E-TİCARET - BİLDİRİM ÇANI KOMPONENTİ
  * ============================================================================
- * 
+ *
  * Gerçek zamanlı bildirimleri gösteren header komponenti.
  * SignalR ile yeni sipariş, teslimat güncellemeleri vb. alır.
- * 
+ *
  * Özellikler:
  * - Okunmamış bildirim sayısı badge
  * - Dropdown bildirim listesi
  * - Bildirim türlerine göre ikon ve renk
  * - Tümünü okundu işaretle
  * - Tümünü görüntüle sayfasına yönlendirme
- * 
+ *
  * @author E-Ticaret Ekibi
  * @version 1.0.0
  * ============================================================================
@@ -20,7 +20,57 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { signalRService, SignalREvents, ConnectionState } from "../services/signalRService";
+import {
+  signalRService,
+  SignalREvents,
+  ConnectionState,
+} from "../services/signalRService";
+import {
+  isSoundEnabled,
+  setSoundEnabled,
+} from "../contexts/NotificationContext";
+
+// ============================================================================
+// SES AKTİVASYONU - Browser autoplay politikası için
+// İlk kullanıcı etkileşiminde AudioContext'i unlock eder
+// ============================================================================
+let audioUnlocked = false;
+
+/**
+ * Bildirim sesi çal
+ * NEDEN: Yeni bildirim geldiğinde kullanıcıyı uyarmak için
+ */
+const playNotificationSound = (soundType = "new_order") => {
+  try {
+    // Ses kapalıysa çalma
+    if (!isSoundEnabled()) {
+      console.log("[NotificationBell] 🔇 Ses kapalı, çalınmıyor");
+      return;
+    }
+
+    // Ses dosyası seç
+    const soundFiles = {
+      new_order: "/sounds/mixkit-melodic-race-countdown-1955.wav",
+      alert: "/sounds/mixkit-happy-bells-notification-937.wav",
+      default: "/sounds/mixkit-bell-notification-933.wav",
+    };
+
+    const soundFile = soundFiles[soundType] || soundFiles.default;
+    const audio = new Audio(soundFile);
+    audio.volume = 0.5;
+
+    audio
+      .play()
+      .then(() => {
+        console.log("[NotificationBell] 🔊 Bildirim sesi çalındı:", soundType);
+      })
+      .catch((error) => {
+        console.warn("[NotificationBell] ⚠️ Ses çalınamadı:", error.message);
+      });
+  } catch (error) {
+    console.error("[NotificationBell] ❌ Ses hatası:", error);
+  }
+};
 
 // ============================================================================
 // BİLDİRİM TÜRLERİ
@@ -38,7 +88,7 @@ export const NotificationType = {
   COURIER_OFFLINE: "courier_offline",
   PAYMENT_RECEIVED: "payment_received",
   LOW_STOCK: "low_stock",
-  SYSTEM: "system"
+  SYSTEM: "system",
 };
 
 /**
@@ -48,48 +98,48 @@ const NotificationConfig = {
   [NotificationType.NEW_ORDER]: {
     icon: "fas fa-shopping-cart",
     color: "primary",
-    bgColor: "rgba(13, 110, 253, 0.1)"
+    bgColor: "rgba(13, 110, 253, 0.1)",
   },
   [NotificationType.ORDER_STATUS]: {
     icon: "fas fa-info-circle",
     color: "info",
-    bgColor: "rgba(13, 202, 240, 0.1)"
+    bgColor: "rgba(13, 202, 240, 0.1)",
   },
   [NotificationType.DELIVERY_ASSIGNED]: {
     icon: "fas fa-truck",
     color: "success",
-    bgColor: "rgba(25, 135, 84, 0.1)"
+    bgColor: "rgba(25, 135, 84, 0.1)",
   },
   [NotificationType.DELIVERY_STATUS]: {
     icon: "fas fa-shipping-fast",
     color: "warning",
-    bgColor: "rgba(255, 193, 7, 0.1)"
+    bgColor: "rgba(255, 193, 7, 0.1)",
   },
   [NotificationType.COURIER_ONLINE]: {
     icon: "fas fa-motorcycle",
     color: "success",
-    bgColor: "rgba(25, 135, 84, 0.1)"
+    bgColor: "rgba(25, 135, 84, 0.1)",
   },
   [NotificationType.COURIER_OFFLINE]: {
     icon: "fas fa-user-slash",
     color: "secondary",
-    bgColor: "rgba(108, 117, 125, 0.1)"
+    bgColor: "rgba(108, 117, 125, 0.1)",
   },
   [NotificationType.PAYMENT_RECEIVED]: {
     icon: "fas fa-credit-card",
     color: "success",
-    bgColor: "rgba(25, 135, 84, 0.1)"
+    bgColor: "rgba(25, 135, 84, 0.1)",
   },
   [NotificationType.LOW_STOCK]: {
     icon: "fas fa-exclamation-triangle",
     color: "danger",
-    bgColor: "rgba(220, 53, 69, 0.1)"
+    bgColor: "rgba(220, 53, 69, 0.1)",
   },
   [NotificationType.SYSTEM]: {
     icon: "fas fa-cog",
     color: "secondary",
-    bgColor: "rgba(108, 117, 125, 0.1)"
-  }
+    bgColor: "rgba(108, 117, 125, 0.1)",
+  },
 };
 
 // ============================================================================
@@ -100,15 +150,36 @@ export default function NotificationBell() {
   // =========================================================================
   // STATE YÖNETİMİ
   // =========================================================================
-  
+
   const [notifications, setNotifications] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [soundEnabled, setSoundEnabledLocal] = useState(isSoundEnabled());
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   // Okunmamış bildirim sayısı
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // =========================================================================
+  // SES TOGGLE - Bildirim sesini aç/kapa
+  // NEDEN: Kullanıcı rahatsız olmamak için sesi kapatabilmeli
+  // =========================================================================
+
+  const handleSoundToggle = useCallback(
+    (e) => {
+      e.stopPropagation(); // Dropdown kapanmasını engelle
+      const newValue = !soundEnabled;
+      setSoundEnabled(newValue);
+      setSoundEnabledLocal(newValue);
+
+      // Ses açılıyorsa test sesi çal
+      if (newValue) {
+        playNotificationSound("default");
+      }
+    },
+    [soundEnabled],
+  );
 
   // =========================================================================
   // SIGNALR BAĞLANTISI
@@ -121,25 +192,25 @@ export default function NotificationBell() {
       try {
         // Order Hub bağlantısı
         await signalRService.orderHub.connect();
-        
+
         // Yeni sipariş bildirimi
         const unsubNewOrder = signalRService.orderHub.on(
           SignalREvents.NEW_ORDER,
-          handleNewOrder
+          handleNewOrder,
         );
         unsubscribers.push(unsubNewOrder);
 
         // Sipariş durumu değişikliği
         const unsubOrderStatus = signalRService.orderHub.on(
           SignalREvents.ORDER_STATUS_CHANGED,
-          handleOrderStatusChange
+          handleOrderStatusChange,
         );
         unsubscribers.push(unsubOrderStatus);
 
         // Teslimat atama bildirimi
         const unsubDeliveryAssigned = signalRService.orderHub.on(
           SignalREvents.DELIVERY_ASSIGNED,
-          handleDeliveryAssigned
+          handleDeliveryAssigned,
         );
         unsubscribers.push(unsubDeliveryAssigned);
 
@@ -149,20 +220,20 @@ export default function NotificationBell() {
         // Teslimat durumu değişikliği
         const unsubDeliveryStatus = signalRService.deliveryHub.on(
           SignalREvents.DELIVERY_STATUS_CHANGED,
-          handleDeliveryStatusChange
+          handleDeliveryStatusChange,
         );
         unsubscribers.push(unsubDeliveryStatus);
 
         // Kurye online/offline
         const unsubCourierOnline = signalRService.deliveryHub.on(
           SignalREvents.COURIER_ONLINE,
-          handleCourierOnline
+          handleCourierOnline,
         );
         unsubscribers.push(unsubCourierOnline);
 
         const unsubCourierOffline = signalRService.deliveryHub.on(
           SignalREvents.COURIER_OFFLINE,
-          handleCourierOffline
+          handleCourierOffline,
         );
         unsubscribers.push(unsubCourierOffline);
 
@@ -171,7 +242,6 @@ export default function NotificationBell() {
           setIsConnected(state === ConnectionState.CONNECTED);
         });
         unsubscribers.push(unsubState);
-
       } catch (error) {
         console.error("[NotificationBell] SignalR bağlantı hatası:", error);
       }
@@ -180,7 +250,7 @@ export default function NotificationBell() {
     setupSignalR();
 
     return () => {
-      unsubscribers.forEach(unsub => typeof unsub === "function" && unsub());
+      unsubscribers.forEach((unsub) => typeof unsub === "function" && unsub());
     };
   }, []);
 
@@ -205,89 +275,113 @@ export default function NotificationBell() {
 
   /**
    * Bildirim ekle
+   * NEDEN: Yeni bildirim geldiğinde listeye ekle ve ses çal
    */
   const addNotification = useCallback((notification) => {
     const newNotification = {
       id: Date.now() + Math.random(),
       timestamp: new Date().toISOString(),
       read: false,
-      ...notification
+      ...notification,
     };
 
-    setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Max 50 bildirim
+    setNotifications((prev) => [newNotification, ...prev].slice(0, 50)); // Max 50 bildirim
+
+    // Yeni bildirimde ses çal (kritik bildirimler için)
+    if (notification.playSound !== false) {
+      playNotificationSound(notification.soundType || "new_order");
+    }
   }, []);
 
   /**
    * Yeni sipariş
    */
-  const handleNewOrder = useCallback((data) => {
-    addNotification({
-      type: NotificationType.NEW_ORDER,
-      title: "Yeni Sipariş",
-      message: `#${data.orderId} - ${data.customerName || "Müşteri"}`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleNewOrder = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.NEW_ORDER,
+        title: "Yeni Sipariş",
+        message: `#${data.orderId} - ${data.customerName || "Müşteri"}`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   /**
    * Sipariş durumu değişikliği
    */
-  const handleOrderStatusChange = useCallback((data) => {
-    addNotification({
-      type: NotificationType.ORDER_STATUS,
-      title: "Sipariş Güncellendi",
-      message: `#${data.orderId} - ${data.newStatus}`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleOrderStatusChange = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.ORDER_STATUS,
+        title: "Sipariş Güncellendi",
+        message: `#${data.orderId} - ${data.newStatus}`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   /**
    * Teslimat atandı
    */
-  const handleDeliveryAssigned = useCallback((data) => {
-    addNotification({
-      type: NotificationType.DELIVERY_ASSIGNED,
-      title: "Teslimat Atandı",
-      message: `#${data.orderId} → ${data.courierName || "Kurye"}`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleDeliveryAssigned = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.DELIVERY_ASSIGNED,
+        title: "Teslimat Atandı",
+        message: `#${data.orderId} → ${data.courierName || "Kurye"}`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   /**
    * Teslimat durumu değişikliği
    */
-  const handleDeliveryStatusChange = useCallback((data) => {
-    addNotification({
-      type: NotificationType.DELIVERY_STATUS,
-      title: "Teslimat Güncellendi",
-      message: `Görev #${data.taskId} - ${data.newStatus}`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleDeliveryStatusChange = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.DELIVERY_STATUS,
+        title: "Teslimat Güncellendi",
+        message: `Görev #${data.taskId} - ${data.newStatus}`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   /**
    * Kurye online
    */
-  const handleCourierOnline = useCallback((data) => {
-    addNotification({
-      type: NotificationType.COURIER_ONLINE,
-      title: "Kurye Çevrimiçi",
-      message: `${data.courierName} aktif oldu`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleCourierOnline = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.COURIER_ONLINE,
+        title: "Kurye Çevrimiçi",
+        message: `${data.courierName} aktif oldu`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   /**
    * Kurye offline
    */
-  const handleCourierOffline = useCallback((data) => {
-    addNotification({
-      type: NotificationType.COURIER_OFFLINE,
-      title: "Kurye Çevrimdışı",
-      message: `${data.courierName} çevrimdışı oldu`,
-      data: data
-    });
-  }, [addNotification]);
+  const handleCourierOffline = useCallback(
+    (data) => {
+      addNotification({
+        type: NotificationType.COURIER_OFFLINE,
+        title: "Kurye Çevrimdışı",
+        message: `${data.courierName} çevrimdışı oldu`,
+        data: data,
+      });
+    },
+    [addNotification],
+  );
 
   // =========================================================================
   // EYLEMLER
@@ -297,8 +391,8 @@ export default function NotificationBell() {
    * Bildirimi okundu olarak işaretle
    */
   const markAsRead = useCallback((notificationId) => {
-    setNotifications(prev =>
-      prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)),
     );
   }, []);
 
@@ -306,7 +400,7 @@ export default function NotificationBell() {
    * Tümünü okundu işaretle
    */
   const markAllAsRead = useCallback(() => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   }, []);
 
   /**
@@ -320,28 +414,31 @@ export default function NotificationBell() {
   /**
    * Bildirime tıklama
    */
-  const handleNotificationClick = useCallback((notification) => {
-    markAsRead(notification.id);
-    setIsOpen(false);
+  const handleNotificationClick = useCallback(
+    (notification) => {
+      markAsRead(notification.id);
+      setIsOpen(false);
 
-    // Türe göre yönlendirme
-    switch (notification.type) {
-      case NotificationType.NEW_ORDER:
-      case NotificationType.ORDER_STATUS:
-        navigate(`/admin/orders`);
-        break;
-      case NotificationType.DELIVERY_ASSIGNED:
-      case NotificationType.DELIVERY_STATUS:
-        navigate(`/admin/delivery-tasks`);
-        break;
-      case NotificationType.COURIER_ONLINE:
-      case NotificationType.COURIER_OFFLINE:
-        navigate(`/admin/couriers`);
-        break;
-      default:
-        break;
-    }
-  }, [markAsRead, navigate]);
+      // Türe göre yönlendirme
+      switch (notification.type) {
+        case NotificationType.NEW_ORDER:
+        case NotificationType.ORDER_STATUS:
+          navigate(`/admin/orders`);
+          break;
+        case NotificationType.DELIVERY_ASSIGNED:
+        case NotificationType.DELIVERY_STATUS:
+          navigate(`/admin/delivery-tasks`);
+          break;
+        case NotificationType.COURIER_ONLINE:
+        case NotificationType.COURIER_OFFLINE:
+          navigate(`/admin/couriers`);
+          break;
+        default:
+          break;
+      }
+    },
+    [markAsRead, navigate],
+  );
 
   // =========================================================================
   // YARDIMCI FONKSİYONLAR
@@ -368,7 +465,9 @@ export default function NotificationBell() {
    * Bildirim konfigürasyonu al
    */
   const getConfig = (type) => {
-    return NotificationConfig[type] || NotificationConfig[NotificationType.SYSTEM];
+    return (
+      NotificationConfig[type] || NotificationConfig[NotificationType.SYSTEM]
+    );
   };
 
   // =========================================================================
@@ -382,10 +481,12 @@ export default function NotificationBell() {
         className="btn btn-link position-relative p-2"
         onClick={() => setIsOpen(!isOpen)}
         style={{ color: "#6c757d" }}
-        title={isConnected ? "Bildirimler (Canlı)" : "Bildirimler (Bağlanıyor...)"}
+        title={
+          isConnected ? "Bildirimler (Canlı)" : "Bildirimler (Bağlanıyor...)"
+        }
       >
         <i className="fas fa-bell" style={{ fontSize: "1.1rem" }}></i>
-        
+
         {/* Okunmamış Sayısı Badge */}
         {unreadCount > 0 && (
           <span
@@ -395,7 +496,7 @@ export default function NotificationBell() {
               right: "2px",
               fontSize: "0.6rem",
               padding: "0.25em 0.45em",
-              minWidth: "18px"
+              minWidth: "18px",
             }}
           >
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -410,7 +511,7 @@ export default function NotificationBell() {
             height: "8px",
             bottom: "5px",
             right: "5px",
-            border: "1px solid white"
+            border: "1px solid white",
           }}
         ></span>
       </button>
@@ -425,7 +526,7 @@ export default function NotificationBell() {
             width: "320px",
             maxWidth: "calc(100vw - 20px)",
             zIndex: 1050,
-            animation: "fadeIn 0.2s ease"
+            animation: "fadeIn 0.2s ease",
           }}
         >
           {/* Header */}
@@ -434,12 +535,26 @@ export default function NotificationBell() {
               <i className="fas fa-bell me-2 text-primary"></i>
               Bildirimler
               {unreadCount > 0 && (
-                <span className="badge bg-primary ms-2" style={{ fontSize: "0.7rem" }}>
+                <span
+                  className="badge bg-primary ms-2"
+                  style={{ fontSize: "0.7rem" }}
+                >
                   {unreadCount} yeni
                 </span>
               )}
             </h6>
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 align-items-center">
+              {/* Ses Toggle Butonu */}
+              <button
+                className={`btn btn-sm btn-link p-0 ${soundEnabled ? "text-success" : "text-muted"}`}
+                onClick={handleSoundToggle}
+                title={soundEnabled ? "Sesi kapat" : "Sesi aç"}
+                style={{ fontSize: "0.85rem" }}
+              >
+                <i
+                  className={`fas ${soundEnabled ? "fa-volume-up" : "fa-volume-mute"}`}
+                ></i>
+              </button>
               {notifications.length > 0 && (
                 <>
                   <button
@@ -486,10 +601,18 @@ export default function NotificationBell() {
                     style={{
                       cursor: "pointer",
                       transition: "background-color 0.2s",
-                      borderLeft: !notification.read ? `3px solid var(--bs-${config.color})` : "none"
+                      borderLeft: !notification.read
+                        ? `3px solid var(--bs-${config.color})`
+                        : "none",
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f8f9fa"}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = notification.read ? "" : "#f8f9fa"}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#f8f9fa")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = notification.read
+                        ? ""
+                        : "#f8f9fa")
+                    }
                   >
                     <div className="d-flex align-items-start gap-2">
                       {/* İkon */}
@@ -498,29 +621,32 @@ export default function NotificationBell() {
                         style={{
                           width: "36px",
                           height: "36px",
-                          backgroundColor: config.bgColor
+                          backgroundColor: config.bgColor,
                         }}
                       >
-                        <i className={`${config.icon} text-${config.color}`} style={{ fontSize: "0.85rem" }}></i>
+                        <i
+                          className={`${config.icon} text-${config.color}`}
+                          style={{ fontSize: "0.85rem" }}
+                        ></i>
                       </div>
 
                       {/* İçerik */}
                       <div className="flex-grow-1 overflow-hidden">
                         <div className="d-flex justify-content-between align-items-start">
-                          <span 
+                          <span
                             className={`fw-semibold ${!notification.read ? "text-dark" : "text-muted"}`}
                             style={{ fontSize: "0.8rem" }}
                           >
                             {notification.title}
                           </span>
-                          <small 
+                          <small
                             className="text-muted flex-shrink-0 ms-2"
                             style={{ fontSize: "0.65rem" }}
                           >
                             {formatTimeAgo(notification.timestamp)}
                           </small>
                         </div>
-                        <p 
+                        <p
                           className="mb-0 text-muted text-truncate"
                           style={{ fontSize: "0.75rem" }}
                         >
@@ -532,7 +658,11 @@ export default function NotificationBell() {
                       {!notification.read && (
                         <span
                           className={`rounded-circle bg-${config.color} flex-shrink-0`}
-                          style={{ width: "8px", height: "8px", marginTop: "6px" }}
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            marginTop: "6px",
+                          }}
                         ></span>
                       )}
                     </div>

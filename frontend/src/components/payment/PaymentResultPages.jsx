@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PaymentService } from "../../services/paymentService";
+import { OrderService } from "../../services/orderService";
 import "./PaymentResult.css";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -17,6 +18,8 @@ export const PaymentSuccessPage = () => {
   const [loading, setLoading] = useState(true);
   const [paymentDetails, setPaymentDetails] = useState(null);
   const [error, setError] = useState(null);
+  const [orderSummary, setOrderSummary] = useState(null);
+  const [orderSummaryError, setOrderSummaryError] = useState("");
 
   useEffect(() => {
     const verifyPayment = async () => {
@@ -58,6 +61,29 @@ export const PaymentSuccessPage = () => {
     };
 
     verifyPayment();
+  }, [searchParams]);
+
+  useEffect(() => {
+    const orderId = searchParams.get("orderId");
+    if (!orderId) return;
+
+    let mounted = true;
+    const fetchSummary = async () => {
+      try {
+        const order = await OrderService.getById(orderId);
+        if (!mounted) return;
+        setOrderSummary(order);
+        setOrderSummaryError("");
+      } catch {
+        if (!mounted) return;
+        setOrderSummaryError("Sipariş özeti yüklenemedi.");
+      }
+    };
+
+    fetchSummary();
+    return () => {
+      mounted = false;
+    };
   }, [searchParams]);
 
   if (loading) {
@@ -124,6 +150,32 @@ export const PaymentSuccessPage = () => {
             <div className="detail-row">
               <span>Tarih:</span>
               <strong>{paymentDetails.date}</strong>
+            </div>
+          </div>
+        )}
+
+        {orderSummaryError && (
+          <div className="info-text">{orderSummaryError}</div>
+        )}
+
+        {orderSummary && (
+          <div className="payment-details">
+            {/* NEDEN: 3D Secure sonucundan sonra özet görünmeli. */}
+            <div className="detail-row">
+              <span>Ara Toplam:</span>
+              <strong>{(Number(orderSummary.totalPrice || 0) - Number(orderSummary.shippingCost || 0)).toFixed(2)} ₺</strong>
+            </div>
+            <div className="detail-row">
+              <span>Kargo:</span>
+              <strong>{Number(orderSummary.shippingCost || 0).toFixed(2)} ₺</strong>
+            </div>
+            <div className="detail-row">
+              <span>İndirim:</span>
+              <strong>-{Number(orderSummary.discountAmount || 0).toFixed(2)} ₺</strong>
+            </div>
+            <div className="detail-row">
+              <span>Toplam:</span>
+              <strong>{Number(orderSummary.finalPrice || orderSummary.totalPrice || 0).toFixed(2)} ₺</strong>
             </div>
           </div>
         )}

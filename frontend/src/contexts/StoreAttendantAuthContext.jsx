@@ -23,7 +23,8 @@ const STORAGE_KEYS = {
 };
 
 // API base URL
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5002/api";
+const API_ROOT = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+const API_BASE = `${API_ROOT}/api`;
 
 // ============================================================================
 // PROVIDER COMPONENT
@@ -83,7 +84,8 @@ export function StoreAttendantAuthProvider({ children }) {
       if (token && user) {
         // Token'ı validate et
         try {
-          const response = await fetch(`${API_BASE}/Auth/validate`, {
+          // NEDEN: Backend'de /validate yok; mevcut oturum için /auth/me güvenilir kontrol.
+          const response = await fetch(`${API_BASE}/auth/me`, {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -118,7 +120,8 @@ export function StoreAttendantAuthProvider({ children }) {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE}/Auth/login`, {
+        // NEDEN: AuthController route'u /api/auth/login şeklinde.
+        const response = await fetch(`${API_BASE}/auth/login`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

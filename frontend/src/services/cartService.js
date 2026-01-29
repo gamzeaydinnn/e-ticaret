@@ -3,32 +3,73 @@
  * Backend API ile iletişim kurar - localStorage KULLANMAZ (sadece token için)
  *
  * Mimari:
- * - Misafir kullanıcılar: CartToken (UUID) ile tanımlanır
+ * - Misafir kullanıcılar: CartToken (UUID) ile tanımlanır - SessionStorage'da saklanır
+ *   (Her tarayıcı penceresi/tab farklı session = farklı sepet)
  * - Kayıtlı kullanıcılar: JWT token ile tanımlanır
- * - Token localStorage'da saklanır AMA sepet verisi BACKEND'de tutulur
+ * - Token sessionStorage'da saklanır AMA sepet verisi BACKEND'de tutulur
+ *
+ * NOT: SessionStorage kullanılması sayesinde:
+ * - Farklı tarayıcılarda farklı misafir sepetleri
+ * - Aynı tarayıcıda farklı tab'larda aynı sepet (aynı origin)
+ * - Tarayıcı kapatıldığında sepet korunmaz (güvenlik için iyi)
  */
 import api from "./api";
 
 const base = "/api/cartitems";
 const CART_TOKEN_KEY = "cart_guest_token";
+const GUEST_SESSION_KEY = "guest_session_id";
 
 // ============================================================
 // TOKEN YÖNETİMİ
 // ============================================================
 
 /**
- * Guest token'ı localStorage'dan alır veya yeni oluşturur
+ * Benzersiz misafir session ID oluşturur veya mevcut olanı döndürür
+ * SessionStorage kullanıldığı için her tarayıcı penceresi farklı session'a sahip olur
+ */
+const getOrCreateGuestSessionId = () => {
+  // Önce sessionStorage kontrol et (mevcut session)
+  let sessionId = sessionStorage.getItem(GUEST_SESSION_KEY);
+  if (!sessionId) {
+    // Yeni session ID oluştur
+    sessionId = crypto.randomUUID?.() || generateUUID();
+    sessionStorage.setItem(GUEST_SESSION_KEY, sessionId);
+    console.log(
+      "🆔 Yeni guest session oluşturuldu:",
+      sessionId.substring(0, 8) + "...",
+    );
+  }
+  return sessionId;
+};
+
+/**
+ * Guest token'ı alır veya yeni oluşturur
+ * Session ID ile birleştirilerek her tarayıcıda benzersiz token oluşur
  * Token: UUID v4 formatında benzersiz kimlik
  */
 const getOrCreateGuestToken = () => {
-  let token = localStorage.getItem(CART_TOKEN_KEY);
+  // Session ID'yi al
+  const sessionId = getOrCreateGuestSessionId();
+
+  // SessionStorage'dan token kontrol et (session bazlı)
+  let token = sessionStorage.getItem(CART_TOKEN_KEY);
+
+  // localStorage'dan da kontrol et (backward compatibility + tab arası paylaşım)
+  if (!token) {
+    token = localStorage.getItem(CART_TOKEN_KEY + "_" + sessionId);
+  }
+
   if (!token) {
     // Crypto API ile güvenli UUID oluştur
     token = crypto.randomUUID?.() || generateUUID();
-    localStorage.setItem(CART_TOKEN_KEY, token);
+    // Her iki storage'a da kaydet
+    sessionStorage.setItem(CART_TOKEN_KEY, token);
+    localStorage.setItem(CART_TOKEN_KEY + "_" + sessionId, token);
     console.log(
       "🆕 Yeni guest token oluşturuldu:",
       token.substring(0, 8) + "...",
+      "session:",
+      sessionId.substring(0, 8) + "...",
     );
   }
   return token;
@@ -47,16 +88,44 @@ const generateUUID = () => {
 
 /**
  * Guest token'ı döner (varsa)
+ * Önce sessionStorage, sonra localStorage kontrol eder
  */
 const getGuestToken = () => {
-  return localStorage.getItem(CART_TOKEN_KEY);
+  // Önce sessionStorage kontrol et
+  let token = sessionStorage.getItem(CART_TOKEN_KEY);
+  if (token) return token;
+
+  // Session ID ile localStorage'dan kontrol et
+  const sessionId = sessionStorage.getItem(GUEST_SESSION_KEY);
+  if (sessionId) {
+    token = localStorage.getItem(CART_TOKEN_KEY + "_" + sessionId);
+  }
+
+  return token || localStorage.getItem(CART_TOKEN_KEY);
+};
+
+/**
+ * Guest session ID'yi döner
+ */
+const getGuestSessionId = () => {
+  return sessionStorage.getItem(GUEST_SESSION_KEY);
 };
 
 /**
  * Guest token'ı temizler (login sonrası veya logout)
  */
 const clearGuestToken = () => {
+  const sessionId = sessionStorage.getItem(GUEST_SESSION_KEY);
+
+  // SessionStorage'dan temizle
+  sessionStorage.removeItem(CART_TOKEN_KEY);
+
+  // localStorage'dan da temizle
+  if (sessionId) {
+    localStorage.removeItem(CART_TOKEN_KEY + "_" + sessionId);
+  }
   localStorage.removeItem(CART_TOKEN_KEY);
+
   console.log("🗑️ Guest token temizlendi");
 };
 
@@ -64,6 +133,8 @@ export const CartService = {
   // Token metodlarını dışa aktar
   getOrCreateGuestToken,
   getGuestToken,
+  getGuestSessionId,
+  getOrCreateGuestSessionId,
   clearGuestToken,
 
   // ============================================================

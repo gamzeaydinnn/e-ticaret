@@ -419,6 +419,16 @@ namespace ECommerce.API.Services
         {
             try
             {
+                // ============================================================================
+                // YENİ SİPARİŞ BİLDİRİMİ
+                // Admin grubundaki tüm bağlı istemcilere gönderilir
+                // Debug: Bağlantı durumunu ve gönderilen veriyi logla
+                // ============================================================================
+                
+                _logger.LogInformation(
+                    "🔔 [NotifyNewOrderAsync] Başladı. OrderId={OrderId}, OrderNumber={OrderNumber}, CustomerName={CustomerName}, Amount={Amount}, Items={ItemCount}",
+                    orderId, orderNumber, customerName, totalAmount, itemCount);
+
                 var notification = new
                 {
                     id = Guid.NewGuid().ToString(),
@@ -432,7 +442,14 @@ namespace ECommerce.API.Services
                     read = false
                 };
                 
+                _logger.LogDebug(
+                    "📤 [NotifyNewOrderAsync] Admin grubuna 'NewOrder' eventi gönderiliyor. AdminGroupName={GroupName}",
+                    AdminGroupName);
+                
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("NewOrder", notification);
+                
+                _logger.LogDebug(
+                    "📤 [NotifyNewOrderAsync] Admin grubuna 'PlaySound' eventi gönderiliyor.");
                 
                 // Ses bildirimi
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("PlaySound", new
@@ -442,12 +459,12 @@ namespace ECommerce.API.Services
                 });
                 
                 _logger.LogInformation(
-                    "📢 Yeni sipariş bildirimi gönderildi. OrderId={OrderId}, Amount={Amount}", 
+                    "✅ [NotifyNewOrderAsync] Yeni sipariş bildirimi başarıyla gönderildi. OrderId={OrderId}, Amount={Amount}", 
                     orderId, totalAmount);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Yeni sipariş bildirimi gönderilemedi. OrderId={OrderId}", orderId);
+                _logger.LogError(ex, "❌ [NotifyNewOrderAsync] Yeni sipariş bildirimi gönderilemedi. OrderId={OrderId}", orderId);
             }
         }
 

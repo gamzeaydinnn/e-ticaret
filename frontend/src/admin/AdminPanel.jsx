@@ -5,6 +5,7 @@ import AdminCategories from "../pages/Admin/AdminCategories";
 import AdminOrders from "../pages/Admin/AdminOrders";
 import AdminUsers from "../pages/Admin/AdminUsers";
 import CouponManagement from "../pages/Admin/CouponManagement";
+import PosterManagement from "../pages/Admin/PosterManagement";
 import WeightReportsPanel from "./WeightReportsPanel";
 
 function AdminPanel() {
@@ -107,6 +108,7 @@ function AdminPanel() {
     { id: "categories", icon: "fas fa-tags", label: "Kategoriler" },
     { id: "orders", icon: "fas fa-shopping-bag", label: "Siparişler" },
     { id: "users", icon: "fas fa-users", label: "Kullanıcılar" },
+    { id: "posters", icon: "fas fa-image", label: "Poster Yönetimi", color: "orange" },
     { id: "coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
     { id: "weights", icon: "fas fa-balance-scale", label: "Ağırlık Raporları", color: "purple" },
   ];
@@ -386,6 +388,7 @@ function AdminPanel() {
           {activeTab === "categories" && <AdminCategories />}
           {activeTab === "orders" && <AdminOrders />}
           {activeTab === "users" && <AdminUsers />}
+          {activeTab === "posters" && <PosterManagement />}
           {activeTab === "coupons" && <CouponManagement />}
           {activeTab === "weights" && <WeightReportsPanel />}
         </div>

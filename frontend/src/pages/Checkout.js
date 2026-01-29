@@ -15,6 +15,7 @@ import { CampaignService } from "../services/campaignService";
 import LoginModal from "../components/LoginModal";
 import PosnetCreditCardForm from "../components/payment/PosnetCreditCardForm";
 import { WeightBasedProductAlert } from "../components/weight";
+import shippingService from "../services/shippingService";
 
 export default function Checkout() {
   const [form, setForm] = useState({
@@ -26,7 +27,12 @@ export default function Checkout() {
   });
   const [paymentMethod, setPaymentMethod] = useState("cash"); // Varsayılan: Kapıda ödeme (banka API sonra gelecek)
   const [shippingMethod, setShippingMethod] = useState("car");
-  const [shippingCost, setShippingCost] = useState(30);
+  // Kargo fiyatları: API'den çekilecek, varsayılan değerler fallback olarak kullanılır
+  const [shippingPrices, setShippingPrices] = useState({
+    motorcycle: 40, // API'den gelene kadar varsayılan (eski 15 TL hatalıydı)
+    car: 60, // API'den gelene kadar varsayılan (eski 30 TL hatalıydı)
+  });
+  const [shippingCost, setShippingCost] = useState(60); // Varsayılan: car fiyatı
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showCardForm, setShowCardForm] = useState(false);
@@ -60,10 +66,68 @@ export default function Checkout() {
   const { user } = useAuth();
   const { cartItems, getCartTotal, clearCart } = useCart();
 
+  // ===========================================================================
+  // KARGO FİYATLARINI API'DEN ÇEK (Component mount olduğunda)
+  // Neden: Varsayılan hardcoded değerler yerine veritabanındaki güncel fiyatları kullan
+  // ===========================================================================
   useEffect(() => {
-    // Kargo ücretini hesapla
-    setShippingCost(shippingMethod === "motorcycle" ? 20 : 30);
-  }, [shippingMethod]);
+    let mounted = true;
+
+    const loadShippingPrices = async () => {
+      try {
+        const settings = await shippingService.getActiveSettings();
+        if (!mounted || !settings || settings.length === 0) return;
+
+        // API'den gelen fiyatları state'e yaz
+        const motoSetting = settings.find(
+          (s) => s.vehicleType?.toLowerCase() === "motorcycle",
+        );
+        const carSetting = settings.find(
+          (s) => s.vehicleType?.toLowerCase() === "car",
+        );
+
+        const newPrices = {
+          motorcycle: motoSetting?.price ?? 40, // API'den gelmezse fallback
+          car: carSetting?.price ?? 60, // API'den gelmezse fallback
+        };
+
+        setShippingPrices(newPrices);
+
+        // Mevcut seçime göre kargo ücretini güncelle
+        setShippingCost(
+          shippingMethod === "motorcycle"
+            ? newPrices.motorcycle
+            : newPrices.car,
+        );
+
+        console.log("[Checkout] ✅ Kargo fiyatları yüklendi:", newPrices);
+      } catch (error) {
+        console.warn(
+          "[Checkout] ⚠️ Kargo fiyatları yüklenemedi, varsayılan kullanılıyor:",
+          error,
+        );
+        // Hata durumunda varsayılan değerler zaten state'te mevcut
+      }
+    };
+
+    loadShippingPrices();
+
+    return () => {
+      mounted = false;
+    };
+  }, []); // Sadece mount'ta çalış
+
+  // ===========================================================================
+  // KARGO YÖNTEMİ DEĞİŞTİĞİNDE FİYATI GÜNCELLE
+  // ===========================================================================
+  useEffect(() => {
+    // Seçilen kargo yöntemine göre ücreti güncelle (API'den çekilen fiyatlardan)
+    setShippingCost(
+      shippingMethod === "motorcycle"
+        ? shippingPrices.motorcycle
+        : shippingPrices.car,
+    );
+  }, [shippingMethod, shippingPrices]);
 
   // Kampanya/kupon özetini çek (checkout görünümü için)
   useEffect(() => {
@@ -236,17 +300,44 @@ export default function Checkout() {
         // Diğer ödeme yöntemleri için standart akış
         clearCart(); // Sepeti temizle
 
+        // ================================================================
+        // MİSAFİR KULLANICI İÇİN SİPARİŞ BİLGİSİNİ KAYDET
+        // Sipariş geçmişinde görüntülenebilmesi için localStorage'a kaydet
+        // NEDEN: Misafir kullanıcının token'ı yok, siparişlerini takip edebilmesi için
+        // ================================================================
+        if (!user) {
+          try {
+            const guestOrders = JSON.parse(
+              localStorage.getItem("guestOrders") || "[]",
+            );
+            guestOrders.push({
+              orderNumber: res.orderNumber || res.orderId,
+              orderId: res.orderId,
+              email: form.email?.trim(),
+              totalPrice: res.finalPrice || payload.totalPrice,
+              createdAt: new Date().toISOString(),
+              status: "pending",
+            });
+            // Son 20 siparişi tut (eski siparişleri temizle)
+            localStorage.setItem(
+              "guestOrders",
+              JSON.stringify(guestOrders.slice(-20)),
+            );
+            console.log(
+              "[Checkout] ✅ Misafir siparişi localStorage'a kaydedildi",
+            );
+          } catch (e) {
+            console.warn("[Checkout] ⚠️ Misafir siparişi kaydedilemedi:", e);
+          }
+        }
+
         // Başarı mesajı
         alert(
           `✅ Siparişiniz alındı!\n\nSipariş No: ${res.orderNumber || res.orderId}\nToplam: ₺${res.finalPrice?.toFixed(2) || payload.totalPrice.toFixed(2)}`,
         );
 
-        // Siparişler sayfasına yönlendir
-        if (user) {
-          navigate("/orders");
-        } else {
-          navigate("/"); // Misafir kullanıcı ana sayfaya
-        }
+        // Siparişler sayfasına yönlendir - misafir de siparişlerini görebilir
+        navigate("/orders");
       } else {
         throw new Error(res.message || "Sipariş oluşturulamadı");
       }
@@ -327,7 +418,7 @@ export default function Checkout() {
               <div className="text-center">
                 <div style={{ fontSize: "2rem" }}>🚗</div>
                 <div className="fw-bold mt-2">Araç</div>
-                <div className="text-muted small">30 ₺</div>
+                <div className="text-muted small">{shippingPrices.car} ₺</div>
               </div>
             </div>
             <div
@@ -347,7 +438,9 @@ export default function Checkout() {
               <div className="text-center">
                 <div style={{ fontSize: "2rem" }}>🏍️</div>
                 <div className="fw-bold mt-2">Motosiklet</div>
-                <div className="text-muted small">20 ₺</div>
+                <div className="text-muted small">
+                  {shippingPrices.motorcycle} ₺
+                </div>
               </div>
             </div>
           </div>
@@ -553,6 +646,41 @@ export default function Checkout() {
               onSuccess={(result) => {
                 // Başarılı ödeme
                 clearCart();
+
+                // ================================================================
+                // MİSAFİR KULLANICI İÇİN SİPARİŞ BİLGİSİNİ KAYDET (Kredi Kartı)
+                // Ödeme başarılı olduğunda localStorage'a kaydet
+                // NEDEN: 3D Secure sonrası sipariş görünmeme sorunu için
+                // ================================================================
+                if (!user) {
+                  try {
+                    const guestOrders = JSON.parse(
+                      localStorage.getItem("guestOrders") || "[]",
+                    );
+                    guestOrders.push({
+                      orderNumber: result.orderNumber || pendingOrderId,
+                      orderId: result.orderId || pendingOrderId,
+                      email: form.email?.trim(),
+                      totalPrice: getCartTotal() + shippingCost,
+                      createdAt: new Date().toISOString(),
+                      status: "paid",
+                      transactionId: result.transactionId,
+                    });
+                    localStorage.setItem(
+                      "guestOrders",
+                      JSON.stringify(guestOrders.slice(-20)),
+                    );
+                    console.log(
+                      "[Checkout] ✅ Misafir kredi kartı siparişi localStorage'a kaydedildi",
+                    );
+                  } catch (e) {
+                    console.warn(
+                      "[Checkout] ⚠️ Misafir siparişi kaydedilemedi:",
+                      e,
+                    );
+                  }
+                }
+
                 navigate(
                   `/checkout/success?orderId=${pendingOrderId}&transactionId=${result.transactionId || ""}`,
                 );

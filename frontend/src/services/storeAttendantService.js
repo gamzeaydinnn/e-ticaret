@@ -6,7 +6,10 @@
 // ==========================================================================
 
 // API base URL
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5002/api";
+const API_ROOT = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+const API_BASE = `${API_ROOT}/api`;
+// NEDEN: Backend route'ları /api/StoreAttendantOrder/... ile başlar.
+const STORE_BASE = "/StoreAttendantOrder";
 
 // ============================================================================
 // TOKEN YARDIMCI
@@ -82,10 +85,11 @@ const storeAttendantService = {
   // Status: Confirmed, Preparing, Ready
   // =========================================================================
   getOrders: async (status = null) => {
-    let endpoint = "/StoreAttendantOrder";
+    // NEDEN: Backend sadece /orders endpoint'ini expose ediyor.
+    let endpoint = `${STORE_BASE}/orders`;
 
     if (status) {
-      endpoint += `?status=${status}`;
+      endpoint += `?status=${encodeURIComponent(status)}`;
     }
 
     return fetchWithAuth(endpoint);
@@ -94,8 +98,12 @@ const storeAttendantService = {
   // =========================================================================
   // TEK SİPARİŞ DETAYI
   // =========================================================================
-  getOrderById: async (orderId) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}`);
+  getOrderById: async () => {
+    // NEDEN: StoreAttendantOrder için tekil GET endpoint'i backend'de yok.
+    return {
+      success: false,
+      error: "Tekil sipariş detayı bu panel için desteklenmiyor.",
+    };
   },
 
   // =========================================================================
@@ -103,17 +111,50 @@ const storeAttendantService = {
   // Confirmed, Preparing, Ready sayıları
   // =========================================================================
   getSummary: async () => {
-    return fetchWithAuth("/StoreAttendantOrder/summary");
+    return fetchWithAuth(`${STORE_BASE}/summary`);
   },
 
   // =========================================================================
   // SİPARİŞ DURUMU GÜNCELLE
-  // Confirmed → Preparing → Ready
+  // New/Pending → Confirmed → Preparing → Ready
   // =========================================================================
-  updateOrderStatus: async (orderId, newStatus) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status: newStatus }),
+  updateOrderStatus: async (orderId, newStatus, weightInGrams = null) => {
+    // NEDEN: Backend'de genel status endpoint'i yok; durum geçişleri ayrı aksiyonlar.
+    const normalized = (newStatus || "").toLowerCase();
+    const hasWeight = weightInGrams !== null && weightInGrams !== undefined;
+
+    // Yeni/Beklemede → Onaylandı
+    if (normalized === "confirmed") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/confirm`, {
+        method: "POST",
+      });
+    }
+
+    if (normalized === "preparing") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/start-preparing`, {
+        method: "POST",
+      });
+    }
+
+    if (normalized === "ready") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/mark-ready`, {
+        method: "POST",
+        body: JSON.stringify(hasWeight ? { weightInGrams } : {}),
+      });
+    }
+
+    return {
+      success: false,
+      error: "Bu durum geçişi Store Attendant panelinde desteklenmiyor.",
+    };
+  },
+
+  // =========================================================================
+  // SİPARİŞ ONAYLA (New/Pending → Confirmed)
+  // =========================================================================
+  confirmOrder: async (orderId) => {
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/confirm`, {
+      method: "POST",
     });
   },
 
@@ -121,17 +162,19 @@ const storeAttendantService = {
   // HAZIRLAMA BAŞLAT (Confirmed → Preparing)
   // =========================================================================
   startPreparing: async (orderId) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}/start-preparing`, {
-      method: "PUT",
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/start-preparing`, {
+      method: "POST",
     });
   },
 
   // =========================================================================
   // HAZIR İŞARETLE (Preparing → Ready)
   // =========================================================================
-  markAsReady: async (orderId) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}/mark-ready`, {
-      method: "PUT",
+  markAsReady: async (orderId, weightInGrams = null) => {
+    const hasWeight = weightInGrams !== null && weightInGrams !== undefined;
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/mark-ready`, {
+      method: "POST",
+      body: JSON.stringify(hasWeight ? { weightInGrams } : {}),
     });
   },
 
@@ -139,9 +182,10 @@ const storeAttendantService = {
   // TARTI GİRİŞİ
   // =========================================================================
   submitWeight: async (orderId, weight) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}/weight`, {
-      method: "PUT",
-      body: JSON.stringify({ weight }),
+    // NEDEN: Backend'de ayrı weight endpoint'i yok; ağırlık "mark-ready" ile gönderilir.
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/mark-ready`, {
+      method: "POST",
+      body: JSON.stringify({ weightInGrams: Number(weight) }),
     });
   },
 
@@ -149,9 +193,10 @@ const storeAttendantService = {
   // TARTI VE HAZIR İŞARETLE (Birleşik işlem)
   // =========================================================================
   submitWeightAndMarkReady: async (orderId, weight) => {
-    return fetchWithAuth(`/StoreAttendantOrder/${orderId}/weight-and-ready`, {
-      method: "PUT",
-      body: JSON.stringify({ weight }),
+    // NEDEN: Tek çağrı ile ağırlık + hazır işaretleme sağlanır.
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/mark-ready`, {
+      method: "POST",
+      body: JSON.stringify({ weightInGrams: Number(weight) }),
     });
   },
 };

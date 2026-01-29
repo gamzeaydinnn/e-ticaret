@@ -13,20 +13,57 @@ import "./OrderDetailModal.css";
  */
 const StatusBadge = ({ status }) => {
   const statusConfig = {
+    // Standart Akış Durumları
+    new: { label: "Yeni Sipariş", color: "#6c757d", icon: "circle" },
+    New: { label: "Yeni Sipariş", color: "#6c757d", icon: "circle" },
+    pending: { label: "Beklemede", color: "#ffc107", icon: "clock" },
     Pending: { label: "Beklemede", color: "#ffc107", icon: "clock" },
-    Processing: { label: "Hazırlanıyor", color: "#17a2b8", icon: "cog" },
-    Shipped: { label: "Kargoda", color: "#6f42c1", icon: "truck" },
-    OutForDelivery: {
-      label: "Dağıtımda",
-      color: "#fd7e14",
-      icon: "motorcycle",
+    confirmed: { label: "Onaylandı", color: "#17a2b8", icon: "check-circle" },
+    Confirmed: { label: "Onaylandı", color: "#17a2b8", icon: "check-circle" },
+    preparing: { label: "Hazırlanıyor", color: "#fd7e14", icon: "utensils" },
+    Preparing: { label: "Hazırlanıyor", color: "#fd7e14", icon: "utensils" },
+    Processing: { label: "Hazırlanıyor", color: "#fd7e14", icon: "cog" },
+    ready: { label: "Hazır", color: "#28a745", icon: "box" },
+    Ready: { label: "Hazır", color: "#28a745", icon: "box" },
+    assigned: { label: "Kuryeye Atandı", color: "#0d6efd", icon: "user-check" },
+    Assigned: { label: "Kuryeye Atandı", color: "#0d6efd", icon: "user-check" },
+    picked_up: {
+      label: "Kurye Teslim Aldı",
+      color: "#20c997",
+      icon: "hand-holding-box",
+    },
+    PickedUp: {
+      label: "Kurye Teslim Aldı",
+      color: "#20c997",
+      icon: "hand-holding-box",
+    },
+    out_for_delivery: { label: "Yolda", color: "#6f42c1", icon: "motorcycle" },
+    OutForDelivery: { label: "Yolda", color: "#6f42c1", icon: "motorcycle" },
+    delivered: {
+      label: "Teslim Edildi",
+      color: "#28a745",
+      icon: "check-double",
     },
     Delivered: {
       label: "Teslim Edildi",
       color: "#28a745",
-      icon: "check-circle",
+      icon: "check-double",
     },
+    cancelled: { label: "İptal", color: "#dc3545", icon: "times-circle" },
     Cancelled: { label: "İptal", color: "#dc3545", icon: "times-circle" },
+    delivery_failed: {
+      label: "Teslimat Başarısız",
+      color: "#dc3545",
+      icon: "exclamation-triangle",
+    },
+    DeliveryFailed: {
+      label: "Teslimat Başarısız",
+      color: "#dc3545",
+      icon: "exclamation-triangle",
+    },
+
+    // Eski Durumlar (Geriye Uyumluluk)
+    Shipped: { label: "Kargoda", color: "#6f42c1", icon: "truck" },
     Refunded: { label: "İade Edildi", color: "#6c757d", icon: "undo" },
     WeightPending: {
       label: "Tartım Bekleniyor",
@@ -285,7 +322,14 @@ export default function OrderDetailModal({ show, onHide, order }) {
               )}
               <div className="info-row">
                 <span className="label">Adres</span>
-                <span className="value address">{order.shippingAddress}</span>
+                <span className="value address">
+                  {order.deliveryAddress ||
+                    order.shippingAddress ||
+                    order.address ||
+                    order.fullAddress ||
+                    order.addressSummary ||
+                    "-"}
+                </span>
               </div>
             </div>
           </div>

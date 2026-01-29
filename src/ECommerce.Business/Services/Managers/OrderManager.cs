@@ -204,6 +204,9 @@ namespace ECommerce.Business.Services.Managers
                 CouponCode = order.AppliedCouponCode,
                 TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
+                // NEDEN: Admin paneli "ödendi" filtresini bu alanlar üzerinden uygular.
+                PaymentStatus = order.PaymentStatus.ToString(),
+                IsPaid = order.PaymentStatus == PaymentStatus.Paid,
                 OrderDate = order.OrderDate,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
                     ProductId = oi.ProductId,
@@ -214,12 +217,21 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
+        /// <summary>
+        /// Tüm siparişleri veya belirli bir kullanıcının siparişlerini getirir.
+        /// SIRALAMA: En yeni siparişler en üstte görünür (OrderDate DESC).
+        /// NEDEN: Admin ve mağaza görevlisi yeni siparişleri önce görmeli.
+        /// </summary>
         public async Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null)
         {
             var query = _context.Orders.Include(o => o.OrderItems).AsQueryable();
             if (userId.HasValue)
                 query = query.Where(o => o.UserId == userId.Value);
-            var orders = await query.ToListAsync();
+            
+            // DÜZELTME: Yeni siparişler en üstte görünsün
+            var orders = await query
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
             return orders.Select(o => MapToDto(o));
         }
 
@@ -238,6 +250,30 @@ namespace ECommerce.Business.Services.Managers
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
                 .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
+
+            return order != null ? MapToDto(order) : null;
+        }
+
+        // ============================================================================
+        // MİSAFİR SİPARİŞ SORGULAMA
+        // Sipariş numarasına göre sipariş bulma (guest-lookup endpoint'i için)
+        // Neden: Misafir kullanıcılar giriş yapmadan sipariş durumunu takip edebilmeli
+        // ============================================================================
+        /// <summary>
+        /// Sipariş numarasına göre sipariş getirir.
+        /// Misafir kullanıcıların sipariş sorgulaması için kullanılır.
+        /// </summary>
+        /// <param name="orderNumber">Sipariş numarası (ör: ORD-12345)</param>
+        /// <returns>Sipariş DTO'su veya null</returns>
+        public async Task<OrderListDto?> GetByOrderNumberAsync(string orderNumber)
+        {
+            if (string.IsNullOrWhiteSpace(orderNumber))
+                return null;
+
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber.Trim());
 
             return order != null ? MapToDto(order) : null;
         }
@@ -312,12 +348,69 @@ namespace ECommerce.Business.Services.Managers
             await _context.SaveChangesAsync();
         }
 
+        // ============================================================================
+        // SİPARİŞ SİLME
+        // İlişkili kayıtlar (OrderItems, Payments, StatusHistory) ile birlikte silme
+        // Neden: Foreign key kısıtlamaları nedeniyle önce ilişkili kayıtları temizle
+        // Dikkat: Bu operasyon geri alınamaz, audit log tutuluyor
+        // ============================================================================
         public async Task DeleteAsync(int id)
         {
-            var order = await _context.Orders.FindAsync(id);
-            if (order == null) return;
-            _context.Orders.Remove(order);
-            await _context.SaveChangesAsync();
+            // Transaction başlat - atomik operasyon için
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            
+            try
+            {
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.Id == id);
+                    
+                if (order == null) return;
+
+                // 1. OrderStatusHistory kayıtlarını sil (Cascade değil, manuel)
+                var statusHistories = await _context.OrderStatusHistories
+                    .Where(h => h.OrderId == id)
+                    .ToListAsync();
+                if (statusHistories.Any())
+                {
+                    _context.OrderStatusHistories.RemoveRange(statusHistories);
+                }
+
+                // 2. Payment kayıtlarını sil (Restrict ilişki - manuel silme gerekli)
+                var payments = await _context.Payments
+                    .Where(p => p.OrderId == id)
+                    .ToListAsync();
+                if (payments.Any())
+                {
+                    _context.Payments.RemoveRange(payments);
+                }
+
+                // 3. CouponUsage kayıtlarını sil (OrderId non-nullable, silmek zorundayız)
+                var couponUsages = await _context.CouponUsages
+                    .Where(cu => cu.OrderId == id)
+                    .ToListAsync();
+                if (couponUsages.Any())
+                {
+                    _context.CouponUsages.RemoveRange(couponUsages);
+                }
+
+                // 4. OrderItems CASCADE ile silinecek ama explicit olarak temizle
+                if (order.OrderItems?.Any() == true)
+                {
+                    _context.OrderItems.RemoveRange(order.OrderItems);
+                }
+
+                // 6. Siparişi sil
+                _context.Orders.Remove(order);
+                
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw; // Hatayı yukarı fırlat, controller yakalasın
+            }
         }
 
         public async Task<bool> ChangeOrderStatusAsync(int id, string newStatus)
@@ -747,6 +840,11 @@ namespace ECommerce.Business.Services.Managers
             return await GetByIdAsync(orderId);
         }
 
+        /// <summary>
+        /// Order entity'sini OrderListDto'ya dönüştürür.
+        /// NEDEN: Admin paneli, mağaza görevlisi ve frontend tüm sipariş alanlarına ihtiyaç duyar.
+        /// ÖNEMLİ: PaymentStatus ve IsPaid alanları ödeme filtreleri için kritiktir.
+        /// </summary>
         private OrderListDto MapToDto(Order order)
         {
             return new OrderListDto
@@ -764,6 +862,10 @@ namespace ECommerce.Business.Services.Managers
                 CouponCode = order.AppliedCouponCode,
                 TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
+                // DÜZELTME: PaymentStatus ve IsPaid alanları eklendi
+                // Admin panelindeki "Ödendi/Ödeme Bekliyor" filtreleri bu alanlara bağlı
+                PaymentStatus = order.PaymentStatus.ToString(),
+                IsPaid = order.PaymentStatus == ECommerce.Entities.Enums.PaymentStatus.Paid,
                 OrderDate = order.OrderDate,
                 TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
                 ShippingMethod = order.ShippingMethod,
@@ -771,6 +873,8 @@ namespace ECommerce.Business.Services.Managers
                 ShippingAddress = order.ShippingAddress,
                 CustomerName = order.CustomerName ?? string.Empty,
                 CustomerPhone = order.CustomerPhone ?? string.Empty,
+                // Misafir sipariş sorgulaması için CustomerEmail maplendi
+                CustomerEmail = order.CustomerEmail,
                 DeliveryNotes = order.DeliveryNotes ?? string.Empty,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
                     ProductId = oi.ProductId,
@@ -834,10 +938,11 @@ namespace ECommerce.Business.Services.Managers
         }
 
         // Fixed shipping cost mapping for allowed shipping methods
+        // GÜNCELLEME: Kargo fiyatları 40/60 TL olarak belirlendi (eski 15/30 TL hatalıydı)
         private static decimal ComputeShippingCost(string method)
         {
             var m = method?.Trim().ToLowerInvariant() ?? "car";
-            return m == "motorcycle" ? 15m : 30m;
+            return m == "motorcycle" ? 40m : 60m;
         }
 
         private static string GenerateOrderNumber()
@@ -880,11 +985,17 @@ namespace ECommerce.Business.Services.Managers
             // Önceki durumu kaydet (audit için)
             var previousStatus = order.Status;
 
-            // Dokümana göre kurye ataması sadece Ready durumundaki siparişlere yapılabilir
-            // Akış: Ready → Assigned
-            if (order.Status != OrderStatus.Ready)
+            // Kurye ataması için izin verilen durumlar
+            // Confirmed, Preparing, Ready durumlarında kurye atanabilir
+            var allowedStatuses = new[] { 
+                OrderStatus.Confirmed, 
+                OrderStatus.Preparing, 
+                OrderStatus.Ready 
+            };
+            
+            if (!allowedStatuses.Contains(order.Status))
             {
-                throw new InvalidOperationException($"Kurye ataması sadece 'Ready' durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
+                throw new InvalidOperationException($"Kurye ataması sadece Onaylanmış, Hazırlanıyor veya Hazır durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
             }
 
             // Kurye ataması yap
@@ -1028,12 +1139,16 @@ namespace ECommerce.Business.Services.Managers
             if (filter.Page < 1) filter.Page = 1;
 
             // Market görevlisi için gösterilecek durumlar
+            // DÜZELTME: Pending durumu eklendi - yeni siparişler Pending ile başlar
+            // NEDEN: Sipariş oluşturulduğunda Status=Pending olarak set ediliyor,
+            // bu yüzden mağaza görevlisi bu siparişleri göremiyordu
             var allowedStatuses = new List<OrderStatus> 
             { 
+                OrderStatus.Pending,    // Yeni oluşturulan siparişler (varsayılan durum)
                 OrderStatus.Confirmed, 
                 OrderStatus.Preparing, 
                 OrderStatus.Ready,
-                OrderStatus.New, // Admin panelinden yeni siparişler de görünsün
+                OrderStatus.New,        // Admin panelinden yeni siparişler de görünsün
                 OrderStatus.Paid
             };
 
@@ -1052,8 +1167,10 @@ namespace ECommerce.Business.Services.Managers
                 }
                 else if (filter.Status.ToLower() == "pending")
                 {
-                    // "pending" = Confirmed + Paid + New
-                    query = query.Where(o => o.Status == OrderStatus.Confirmed || 
+                    // "pending" = Pending + Confirmed + Paid + New (TÜM BEKLEYEN SİPARİŞLER)
+                    // DÜZELTME: OrderStatus.Pending eklendi - yeni siparişler bu durumla başlar
+                    query = query.Where(o => o.Status == OrderStatus.Pending ||
+                                             o.Status == OrderStatus.Confirmed || 
                                              o.Status == OrderStatus.Paid || 
                                              o.Status == OrderStatus.New);
                 }
@@ -1095,8 +1212,10 @@ namespace ECommerce.Business.Services.Managers
             var today = DateTime.UtcNow.Date;
 
             // İstatistikleri hesapla
+            // DÜZELTME: OrderStatus.Pending eklendi - yeni siparişler bu durumla başlar
             var pendingCount = await _context.Orders
-                .CountAsync(o => o.Status == OrderStatus.Confirmed || 
+                .CountAsync(o => o.Status == OrderStatus.Pending ||
+                                 o.Status == OrderStatus.Confirmed || 
                                  o.Status == OrderStatus.New || 
                                  o.Status == OrderStatus.Paid);
 

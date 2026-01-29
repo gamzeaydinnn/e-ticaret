@@ -1,15 +1,87 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { OrderService } from "../services/orderService";
+import { useAuth } from "../contexts/AuthContext";
+import { CartService } from "../services/cartService";
 
 const OrderSuccess = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const params = new URLSearchParams(location.search);
   const [orderNumber, setOrderNumber] = useState(params.get("orderNumber"));
   const [orderSummary, setOrderSummary] = useState(null);
-  const [loadingOrder, setLoadingOrder] = useState(Boolean(params.get("orderId")));
+  const [loadingOrder, setLoadingOrder] = useState(
+    Boolean(params.get("orderId")),
+  );
   const [loadError, setLoadError] = useState("");
   const orderId = params.get("orderId");
+  const transactionId = params.get("transactionId");
+
+  // ================================================================
+  // MİSAFİR SİPARİŞİNİ HEMEN KAYDET (API çağrısından önce)
+  // URL'den gelen orderId bilgisiyle hemen kaydet,
+  // API başarısız olsa bile kayıt var olacak
+  // Session ID ile kaydedilir, böylece her tarayıcıda farklı misafir
+  // ================================================================
+  useEffect(() => {
+    if (!user && orderId) {
+      try {
+        // Session ID'yi al (her tarayıcı için benzersiz)
+        const sessionId = CartService.getGuestSessionId?.() || "default";
+
+        // Hem localStorage hem sessionStorage'a kaydet
+        // localStorage: Tarayıcı kapatılsa bile kalıcı
+        // sessionStorage: Bu oturum için hızlı erişim
+        const guestOrders = JSON.parse(
+          localStorage.getItem("guestOrders") || "[]",
+        );
+
+        // Bu orderId zaten kayıtlı mı kontrol et
+        const existingIndex = guestOrders.findIndex(
+          (o) => String(o.orderId) === String(orderId),
+        );
+
+        if (existingIndex === -1) {
+          // Yeni sipariş ekle - temel bilgilerle + session ID
+          const newOrder = {
+            orderNumber: orderNumber || `ORD-${orderId}`,
+            orderId: orderId,
+            email: "",
+            totalPrice: 0,
+            createdAt: new Date().toISOString(),
+            status: "paid",
+            transactionId: transactionId || null,
+            sessionId: sessionId, // Hangi session'dan geldiğini kaydet
+          };
+
+          guestOrders.push(newOrder);
+          localStorage.setItem(
+            "guestOrders",
+            JSON.stringify(guestOrders.slice(-20)),
+          );
+
+          // SessionStorage'a da kaydet (bu oturum için)
+          const sessionOrders = JSON.parse(
+            sessionStorage.getItem("guestOrders") || "[]",
+          );
+          sessionOrders.push(newOrder);
+          sessionStorage.setItem(
+            "guestOrders",
+            JSON.stringify(sessionOrders.slice(-20)),
+          );
+
+          console.log(
+            "[OrderSuccess] ✅ Misafir siparişi hemen kaydedildi, orderId:",
+            orderId,
+            "sessionId:",
+            sessionId.substring(0, 8) + "...",
+          );
+        }
+      } catch (e) {
+        console.warn("[OrderSuccess] ⚠️ Hızlı kayıt başarısız:", e);
+      }
+    }
+  }, [orderId, user, orderNumber, transactionId]);
 
   useEffect(() => {
     let mounted = true;
@@ -26,9 +98,120 @@ const OrderSuccess = () => {
         if (order?.orderNumber) setOrderNumber(order.orderNumber);
         setOrderSummary(order);
         setLoadError("");
-      } catch {
+
+        // ================================================================
+        // MİSAFİR SİPARİŞİNİ GÜNCELLE (detay bilgilerle)
+        // API başarılı olursa sipariş detaylarını güncelle
+        // ================================================================
+        if (!user && order) {
+          try {
+            const guestOrders = JSON.parse(
+              localStorage.getItem("guestOrders") || "[]",
+            );
+            // Bu orderId ile kayıtlı siparişi bul
+            const existingIndex = guestOrders.findIndex(
+              (o) =>
+                String(o.orderId) === String(orderId) ||
+                o.orderNumber === order.orderNumber,
+            );
+
+            if (existingIndex !== -1) {
+              // Mevcut kaydı güncelle
+              guestOrders[existingIndex] = {
+                ...guestOrders[existingIndex],
+                orderNumber: order.orderNumber,
+                orderId: order.id || orderId,
+                email: order.customerEmail || guestOrders[existingIndex].email,
+                totalPrice:
+                  order.finalPrice ||
+                  order.totalPrice ||
+                  guestOrders[existingIndex].totalPrice,
+                status: order.status || "paid",
+              };
+              localStorage.setItem("guestOrders", JSON.stringify(guestOrders));
+              console.log(
+                "[OrderSuccess] ✅ Misafir siparişi güncellendi:",
+                order.orderNumber,
+              );
+
+              // SessionStorage'ı da güncelle
+              const sessionOrders = JSON.parse(
+                sessionStorage.getItem("guestOrders") || "[]",
+              );
+              const sessionIndex = sessionOrders.findIndex(
+                (o) =>
+                  String(o.orderId) === String(orderId) ||
+                  o.orderNumber === order.orderNumber,
+              );
+              if (sessionIndex !== -1) {
+                sessionOrders[sessionIndex] = {
+                  ...sessionOrders[sessionIndex],
+                  orderNumber: order.orderNumber,
+                  orderId: order.id || orderId,
+                  email:
+                    order.customerEmail || sessionOrders[sessionIndex].email,
+                  totalPrice:
+                    order.finalPrice ||
+                    order.totalPrice ||
+                    sessionOrders[sessionIndex].totalPrice,
+                  status: order.status || "paid",
+                };
+                sessionStorage.setItem(
+                  "guestOrders",
+                  JSON.stringify(sessionOrders),
+                );
+              }
+            } else {
+              // Session ID'yi al
+              const sessionId = CartService.getGuestSessionId?.() || "default";
+
+              // Yeni kayıt ekle
+              const newOrder = {
+                orderNumber: order.orderNumber,
+                orderId: order.id,
+                email: order.customerEmail,
+                totalPrice: order.finalPrice || order.totalPrice,
+                createdAt: order.createdAt || new Date().toISOString(),
+                status: order.status || "paid",
+                transactionId: transactionId || null,
+                sessionId: sessionId,
+              };
+
+              guestOrders.push(newOrder);
+              localStorage.setItem(
+                "guestOrders",
+                JSON.stringify(guestOrders.slice(-20)),
+              );
+
+              // SessionStorage'a da ekle
+              const sessionOrders = JSON.parse(
+                sessionStorage.getItem("guestOrders") || "[]",
+              );
+              sessionOrders.push(newOrder);
+              sessionStorage.setItem(
+                "guestOrders",
+                JSON.stringify(sessionOrders.slice(-20)),
+              );
+
+              console.log(
+                "[OrderSuccess] ✅ Misafir siparişi kaydedildi:",
+                order.orderNumber,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[OrderSuccess] ⚠️ Misafir siparişi güncellenemedi:",
+              e,
+            );
+          }
+        }
+      } catch (err) {
         if (!mounted) return;
+        console.error("[OrderSuccess] Sipariş yükleme hatası:", err);
         setLoadError("Sipariş özeti yüklenemedi.");
+
+        // API başarısız olsa bile misafir siparişi zaten kaydedildi
+        // (ilk useEffect'te)
       } finally {
         if (mounted) setLoadingOrder(false);
       }
@@ -37,7 +220,7 @@ const OrderSuccess = () => {
     return () => {
       mounted = false;
     };
-  }, [orderId]);
+  }, [orderId, user, transactionId]);
 
   const toCurrency = (value) => `₺${Number(value || 0).toFixed(2)}`;
   const summaryData = orderSummary
@@ -51,10 +234,10 @@ const OrderSuccess = () => {
         discount: Number(
           orderSummary.discountAmount ??
             Number(orderSummary.couponDiscountAmount || 0) +
-              Number(orderSummary.campaignDiscountAmount || 0)
+              Number(orderSummary.campaignDiscountAmount || 0),
         ),
         finalTotal: Number(
-          orderSummary.finalPrice || orderSummary.totalPrice || 0
+          orderSummary.finalPrice || orderSummary.totalPrice || 0,
         ),
       }
     : null;
@@ -72,7 +255,10 @@ const OrderSuccess = () => {
       <div className="container">
         <div className="row justify-content-center">
           <div className="col-lg-8">
-            <div className="card shadow-lg border-0" style={{ borderRadius: 20 }}>
+            <div
+              className="card shadow-lg border-0"
+              style={{ borderRadius: 20 }}
+            >
               <div
                 className="card-body text-center p-5"
                 style={{ backgroundColor: "#ffffff", borderRadius: 20 }}
@@ -113,9 +299,7 @@ const OrderSuccess = () => {
 
                 <div className="row justify-content-center mt-4">
                   <div className="col-md-8">
-                    <div
-                      className="d-flex flex-column flex-sm-row gap-3 justify-content-center"
-                    >
+                    <div className="d-flex flex-column flex-sm-row gap-3 justify-content-center">
                       <Link
                         to="/orders"
                         className="btn btn-success btn-lg fw-bold border-0"
