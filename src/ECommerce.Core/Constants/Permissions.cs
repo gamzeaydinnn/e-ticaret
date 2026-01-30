@@ -226,6 +226,8 @@ namespace ECommerce.Core.Constants
         /// - Hazırlamaya başla aksiyonu
         /// - Tartı girişi yapma
         /// - Hazır olarak işaretleme
+        /// - Kurye atama (Admin ile aynı yetki)
+        /// - Sipariş durumu güncelleme (Admin ile aynı yetki)
         /// </summary>
         public static class StoreOperations
         {
@@ -265,6 +267,34 @@ namespace ECommerce.Core.Constants
             /// </summary>
             public const string ViewSummary = "store.summary";
             
+            /// <summary>
+            /// Kurye atama izni.
+            /// Market görevlisinin hazır siparişlere kurye ataması için.
+            /// Admin ile aynı yetkiyi sağlar.
+            /// </summary>
+            public const string AssignCourier = "store.orders.assign_courier";
+            
+            /// <summary>
+            /// Sipariş durumu güncelleme izni.
+            /// Market görevlisinin sipariş durumunu değiştirmesi için.
+            /// Admin ile aynı yetkiyi sağlar.
+            /// </summary>
+            public const string UpdateStatus = "store.orders.updatestatus";
+            
+            /// <summary>
+            /// Sipariş iptal izni.
+            /// Market görevlisinin siparişi iptal edebilmesi için.
+            /// Admin ile aynı yetkiyi sağlar.
+            /// </summary>
+            public const string CancelOrder = "store.orders.cancel";
+            
+            /// <summary>
+            /// Sipariş iade izni.
+            /// Market görevlisinin iade işlemi yapabilmesi için.
+            /// Admin ile aynı yetkiyi sağlar.
+            /// </summary>
+            public const string ProcessRefund = "store.orders.refund";
+            
             /// <summary>StoreOperations modülündeki tüm izinler</summary>
             public static string[] All => new[] 
             { 
@@ -273,7 +303,11 @@ namespace ECommerce.Core.Constants
                 MarkAsReady, 
                 EnterWeight, 
                 ViewOrderDetails, 
-                ViewSummary 
+                ViewSummary,
+                AssignCourier,
+                UpdateStatus,
+                CancelOrder,
+                ProcessRefund
             };
         }
 

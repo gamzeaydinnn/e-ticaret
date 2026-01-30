@@ -60,22 +60,19 @@ export default function AdminOrders() {
         const ordersData = await AdminService.getOrders();
         let filteredOrders = Array.isArray(ordersData) ? ordersData : [];
 
-        // StoreAttendant: Sadece hazırlık aşamasındaki siparişleri göster
-        // Confirmed, Preparing, Ready, Assigned durumları
-        if (isStoreAttendant) {
-          const allowedStatuses = [
-            "new",
-            "pending",
-            "paid",
-            "confirmed",
-            "preparing",
-            "ready",
-            "assigned",
-          ];
-          filteredOrders = filteredOrders.filter((o) =>
-            allowedStatuses.includes((o.status || "").toLowerCase()),
-          );
-        }
+        // ============================================================================
+        // STORE ATTENDANT SİPARİŞ FİLTRELEME
+        // StoreAttendant artık Admin ile aynı yetkilere sahip olduğundan
+        // tüm sipariş statülerini görebilir. Sadece tamamlanmış siparişler
+        // (delivered, refunded) isteğe bağlı olarak filtrelenebilir.
+        // ============================================================================
+        // NOT: Artık StoreAttendant için filtreleme yapılmıyor
+        // Admin ile aynı listeyi görüntüler
+        // Eski kod referans için aşağıda tutulmuştur:
+        // if (isStoreAttendant) {
+        //   const allowedStatuses = ["new", "pending", "paid", "confirmed", "preparing", "ready", "assigned"];
+        //   filteredOrders = filteredOrders.filter((o) => allowedStatuses.includes((o.status || "").toLowerCase()));
+        // }
 
         setOrders(filteredOrders);
 
@@ -324,12 +321,70 @@ export default function AdminOrders() {
   // ============================================================
   const [statusFilter, setStatusFilter] = useState("all"); // Durum filtresi
   const [paymentFilter, setPaymentFilter] = useState("all"); // Ödeme filtresi
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  const normalizeStatus = (status) => {
+    const raw = (status || "").toString().trim().toLowerCase();
+    switch (raw) {
+      case "outfordelivery":
+      case "out_for_delivery":
+      case "out-for-delivery":
+      case "in_transit":
+      case "intransit":
+        return "out_for_delivery";
+      case "pickedup":
+      case "picked_up":
+      case "picked-up":
+        return "picked_up";
+      case "deliverypaymentpending":
+      case "delivery_payment_pending":
+      case "delivery-payment-pending":
+        return "delivery_payment_pending";
+      case "deliveryfailed":
+      case "delivery_failed":
+      case "delivery-failed":
+        return "delivery_failed";
+      default:
+        return raw.replace(/\s+/g, "_");
+    }
+  };
+
+  const getOrderAmount = (order) => {
+    const candidates = [
+      order?.finalAmount,
+      order?.finalPrice,
+      order?.totalPrice,
+      order?.totalAmount,
+      order?.amount,
+      order?.total,
+    ];
+    for (const value of candidates) {
+      if (value === null || value === undefined) continue;
+      const num = Number(value);
+      if (!Number.isNaN(num) && num > 0) return num;
+    }
+    const fallback =
+      order?.finalAmount ??
+      order?.finalPrice ??
+      order?.totalPrice ??
+      order?.totalAmount ??
+      order?.amount ??
+      order?.total ??
+      0;
+    return Number(fallback) || 0;
+  };
 
   // Filtrelenmiş siparişler
   const filteredOrders = orders.filter((order) => {
+    const normalizedStatus = normalizeStatus(order.status);
     // Durum filtresi
-    if (statusFilter !== "all" && order.status !== statusFilter) {
-      return false;
+    if (statusFilter !== "all") {
+      if (statusFilter === "pending") {
+        if (!["pending", "new"].includes(normalizedStatus)) return false;
+      } else if (normalizedStatus !== statusFilter) {
+        return false;
+      }
     }
     // Ödeme durumu filtresi
     if (paymentFilter !== "all") {
@@ -339,6 +394,17 @@ export default function AdminOrders() {
     }
     return true;
   });
+
+  const totalFiltered = filteredOrders.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const pagedOrders = filteredOrders.slice(
+    (page - 1) * pageSize,
+    page * pageSize,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, paymentFilter, pageSize]);
 
   // ============================================================
   // SİPARİŞ İŞLEMLERİ
@@ -427,9 +493,16 @@ export default function AdminOrders() {
       console.log("🔍 [AdminOrders] Mevcut kuryeler:", couriers);
 
       // Backend'e kurye atama isteği gönder
-      const updatedOrder = isStoreAttendant
-        ? await dispatcherAssignCourier(orderId, courierId)
-        : await AdminService.assignCourier(orderId, courierId);
+      // StoreAttendant kendi endpoint'ini kullanır (yeni eklenen yetki)
+      let updatedOrder;
+      if (isStoreAttendant) {
+        updatedOrder = await storeAttendantService.assignCourier(
+          orderId,
+          courierId,
+        );
+      } else {
+        updatedOrder = await AdminService.assignCourier(orderId, courierId);
+      }
 
       console.log("✅ [AdminOrders] API yanıtı:", updatedOrder);
 
@@ -656,8 +729,9 @@ export default function AdminOrders() {
       </div>
 
       {/* Yeni Sipariş Bildirimi - Onay bekleyen sipariş varsa göster */}
-      {orders.filter((o) => o.status === "pending" || o.status === "new")
-        .length > 0 && (
+      {orders.filter((o) =>
+        ["pending", "new"].includes(normalizeStatus(o.status)),
+      ).length > 0 && (
         <div
           className="alert alert-warning d-flex align-items-center mb-3 py-2"
           style={{ fontSize: "0.85rem" }}
@@ -669,8 +743,8 @@ export default function AdminOrders() {
           <span>
             <strong>
               {
-                orders.filter(
-                  (o) => o.status === "pending" || o.status === "new",
+                orders.filter((o) =>
+                  ["pending", "new"].includes(normalizeStatus(o.status)),
                 ).length
               }
             </strong>{" "}
@@ -697,8 +771,8 @@ export default function AdminOrders() {
               ></i>
               <h6 className="fw-bold mb-0">
                 {
-                  orders.filter(
-                    (o) => o.status === "pending" || o.status === "new",
+                  orders.filter((o) =>
+                    ["pending", "new"].includes(normalizeStatus(o.status)),
                   ).length
                 }
               </h6>
@@ -719,7 +793,11 @@ export default function AdminOrders() {
                 style={{ fontSize: "0.7rem" }}
               ></i>
               <h6 className="fw-bold mb-0">
-                {orders.filter((o) => o.status === "confirmed").length}
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "confirmed",
+                  ).length
+                }
               </h6>
               <small style={{ fontSize: "0.55rem" }}>Onaylı</small>
             </div>
@@ -738,7 +816,11 @@ export default function AdminOrders() {
                 style={{ fontSize: "0.7rem" }}
               ></i>
               <h6 className="fw-bold mb-0">
-                {orders.filter((o) => o.status === "preparing").length}
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "preparing",
+                  ).length
+                }
               </h6>
               <small style={{ fontSize: "0.55rem" }}>Hazırlanan</small>
             </div>
@@ -754,7 +836,10 @@ export default function AdminOrders() {
             <div className="card-body text-center px-1 py-2">
               <i className="fas fa-box mb-1" style={{ fontSize: "0.7rem" }}></i>
               <h6 className="fw-bold mb-0">
-                {orders.filter((o) => o.status === "ready").length}
+                {
+                  orders.filter((o) => normalizeStatus(o.status) === "ready")
+                    .length
+                }
               </h6>
               <small style={{ fontSize: "0.55rem" }}>Hazır</small>
             </div>
@@ -778,11 +863,9 @@ export default function AdminOrders() {
                     [
                       "assigned",
                       "picked_up",
-                      "pickedup",
                       "out_for_delivery",
-                      "outfordelivery",
                       "in_transit",
-                    ].includes(o.status),
+                    ].includes(normalizeStatus(o.status)),
                   ).length
                 }
               </h6>
@@ -803,7 +886,11 @@ export default function AdminOrders() {
                 style={{ fontSize: "0.7rem" }}
               ></i>
               <h6 className="fw-bold mb-0">
-                {orders.filter((o) => o.status === "delivered").length}
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "delivered",
+                  ).length
+                }
               </h6>
               <small style={{ fontSize: "0.55rem" }}>Teslim</small>
             </div>
@@ -812,9 +899,11 @@ export default function AdminOrders() {
       </div>
 
       {/* Sorunlu Siparişler Satırı */}
-      {(orders.filter((o) => o.status === "delivery_failed").length > 0 ||
-        orders.filter((o) => o.status === "delivery_payment_pending").length >
-          0) && (
+      {(orders.filter((o) => normalizeStatus(o.status) === "delivery_failed")
+        .length > 0 ||
+        orders.filter(
+          (o) => normalizeStatus(o.status) === "delivery_payment_pending",
+        ).length > 0) && (
         <div className="row g-2 mb-3 px-1">
           {/* Teslimat Başarısız */}
           <div className="col-6 col-md-3">
@@ -828,7 +917,11 @@ export default function AdminOrders() {
                   style={{ fontSize: "0.7rem" }}
                 ></i>
                 <h6 className="fw-bold mb-0">
-                  {orders.filter((o) => o.status === "delivery_failed").length}
+                  {
+                    orders.filter(
+                      (o) => normalizeStatus(o.status) === "delivery_failed",
+                    ).length
+                  }
                 </h6>
                 <small style={{ fontSize: "0.55rem" }}>Başarısız</small>
               </div>
@@ -849,7 +942,9 @@ export default function AdminOrders() {
                 <h6 className="fw-bold mb-0">
                   {
                     orders.filter(
-                      (o) => o.status === "delivery_payment_pending",
+                      (o) =>
+                        normalizeStatus(o.status) ===
+                        "delivery_payment_pending",
                     ).length
                   }
                 </h6>
@@ -1019,8 +1114,9 @@ export default function AdminOrders() {
                     </td>
                   </tr>
                 ) : (
-                  filteredOrders.map((order) => {
-                    const normalizedStatus = (order.status || "").toLowerCase();
+                  pagedOrders.map((order) => {
+                    const normalizedStatus = normalizeStatus(order.status);
+                    const amount = getOrderAmount(order);
                     return (
                       <tr key={order.id}>
                         <td className="px-1 py-2">
@@ -1048,7 +1144,7 @@ export default function AdminOrders() {
                             className="fw-bold text-success"
                             style={{ fontSize: "0.7rem" }}
                           >
-                            {(order.totalAmount ?? 0).toFixed(0)}₺
+                            {amount.toFixed(0)}₺
                           </span>
                         </td>
                         <td className="px-1 py-2">
@@ -1191,7 +1287,7 @@ export default function AdminOrders() {
                             {!isStoreAttendant &&
                               (normalizedStatus === "assigned" ||
                                 normalizedStatus === "picked_up" ||
-                                normalizedStatus === "pickedup") && (
+                                normalizedStatus === "picked_up") && (
                                 <button
                                   onClick={() =>
                                     updateOrderStatus(
@@ -1216,7 +1312,7 @@ export default function AdminOrders() {
                             {/* ✅ TESLİM EDİLDİ - Dağıtımdaki sipariş için */}
                             {!isStoreAttendant &&
                               (normalizedStatus === "out_for_delivery" ||
-                                normalizedStatus === "outfordelivery") && (
+                                normalizedStatus === "out_for_delivery") && (
                                 <button
                                   onClick={() =>
                                     updateOrderStatus(order.id, "delivered")
@@ -1271,6 +1367,43 @@ export default function AdminOrders() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="d-flex flex-wrap align-items-center justify-content-between px-3 py-2 border-top">
+              <div className="text-muted" style={{ fontSize: "0.7rem" }}>
+                Toplam {totalFiltered} sipariş • Sayfa {page}/{totalPages}
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <select
+                  className="form-select form-select-sm"
+                  style={{ width: "90px" }}
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                >
+                  {[10, 20, 30, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size} / sayfa
+                    </option>
+                  ))}
+                </select>
+                <div className="btn-group btn-group-sm">
+                  <button
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1278,7 +1411,7 @@ export default function AdminOrders() {
       {selectedOrder &&
         (() => {
           // Status'u normalize et (backend büyük harfle gönderebilir)
-          const normalizedStatus = (selectedOrder.status || "").toLowerCase();
+          const normalizedStatus = normalizeStatus(selectedOrder.status);
 
           return (
             <div

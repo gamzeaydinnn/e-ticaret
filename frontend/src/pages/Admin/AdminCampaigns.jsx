@@ -1290,6 +1290,26 @@ export default function AdminCampaigns() {
                                   </div>
                                 </div>
                               )}
+
+                              {/* Ücretsiz Kargo + Kategori/Ürün bazlı UYARI */}
+                              {parseInt(form.type) === 3 &&
+                                parseInt(form.targetType) !== 0 && (
+                                  <div className="col-12">
+                                    <div
+                                      className="alert alert-warning py-2 mb-0"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
+                                      <i className="fas fa-exclamation-triangle me-2"></i>
+                                      <strong>Önemli:</strong> Kategori/ürün
+                                      bazlı ücretsiz kargo kampanyasında,
+                                      müşterinin sepetindeki{" "}
+                                      <strong>TÜM ürünler</strong> seçili
+                                      kategori/üründen olmalıdır. Farklı
+                                      kategoriden ürün eklendiğinde ücretsiz
+                                      kargo geçersiz olur.
+                                    </div>
+                                  </div>
+                                )}
                             </div>
                           </div>
                         </div>

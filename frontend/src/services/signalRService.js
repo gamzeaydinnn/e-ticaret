@@ -403,6 +403,14 @@ class SignalRService {
    * Admin için hub bağlantısı kurar
    */
   async connectAdmin() {
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("adminToken");
+    if (!token) {
+      console.warn("[SignalR] Admin token bulunamadı, bağlantı atlandı.");
+      return false;
+    }
     // Delivery hub'ına bağlan
     const deliveryHub = this.getOrCreateConnection(HUB_URLS.delivery);
     const adminHub = this.getOrCreateConnection(HUB_URLS.adminNotification);
@@ -429,14 +437,21 @@ class SignalRService {
     if (!courierId) {
       throw new Error("[SignalR] Kurye ID gerekli");
     }
+    const courierToken =
+      localStorage.getItem("courierToken") ||
+      sessionStorage.getItem("courierToken");
+    if (!courierToken) {
+      console.warn("[SignalR] Kurye token bulunamadı, bağlantı atlandı.");
+      return false;
+    }
 
     const deliveryHub = this.getOrCreateConnection(HUB_URLS.delivery, {
-      tokenProvider: () => localStorage.getItem("courierToken"),
+      tokenProvider: () => courierToken,
     });
     const courierHub = this.getOrCreateConnection(
       HUB_URLS.courierNotification,
       {
-        tokenProvider: () => localStorage.getItem("courierToken"),
+        tokenProvider: () => courierToken,
       },
     );
 
@@ -460,9 +475,14 @@ class SignalRService {
    * @param {string|number} orderId - Takip edilecek sipariş ID'si (opsiyonel)
    */
   async connectCustomer(orderId = null) {
+    const token =
+      localStorage.getItem("token") || localStorage.getItem("authToken");
+    if (!token) {
+      console.warn("[SignalR] Müşteri token bulunamadı, bağlantı atlandı.");
+      return false;
+    }
     const deliveryHub = this.getOrCreateConnection(HUB_URLS.delivery, {
-      tokenProvider: () =>
-        localStorage.getItem("token") || localStorage.getItem("authToken"),
+      tokenProvider: () => token,
     });
 
     const result = await deliveryHub.start();
@@ -561,10 +581,19 @@ class SignalRService {
    * NEDEN: Market görevlisi panelinde real-time bildirimler almak için
    */
   async connectStoreAttendant() {
+    const token =
+      localStorage.getItem("storeAttendantToken") ||
+      sessionStorage.getItem("storeAttendantToken") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken");
+    if (!token) {
+      console.warn(
+        "[SignalR] StoreAttendant token bulunamadı, bağlantı atlandı.",
+      );
+      return false;
+    }
     const storeHub = this.getOrCreateConnection(HUB_URLS.storeAttendant, {
-      tokenProvider: () =>
-        localStorage.getItem("storeAttendantToken") ||
-        sessionStorage.getItem("storeAttendantToken"),
+      tokenProvider: () => token,
     });
 
     const result = await storeHub.start();
@@ -604,10 +633,18 @@ class SignalRService {
    * NEDEN: Sevkiyat panelinde real-time bildirimler almak için
    */
   async connectDispatcher() {
+    const token =
+      localStorage.getItem("dispatcherToken") ||
+      sessionStorage.getItem("dispatcherToken") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("adminToken");
+    if (!token) {
+      console.warn("[SignalR] Dispatcher token bulunamadı, bağlantı atlandı.");
+      return false;
+    }
     const dispatchHub = this.getOrCreateConnection(HUB_URLS.dispatcher, {
-      tokenProvider: () =>
-        localStorage.getItem("dispatcherToken") ||
-        sessionStorage.getItem("dispatcherToken"),
+      tokenProvider: () => token,
     });
 
     const result = await dispatchHub.start();

@@ -986,16 +986,18 @@ namespace ECommerce.Business.Services.Managers
             var previousStatus = order.Status;
 
             // Kurye ataması için izin verilen durumlar
-            // Confirmed, Preparing, Ready durumlarında kurye atanabilir
+            // Confirmed, Preparing, Ready, Assigned durumlarında kurye atanabilir
+            // NEDEN: Assigned durumunda kurye değişikliği yapılabilmeli (yeniden atama senaryosu)
             var allowedStatuses = new[] { 
                 OrderStatus.Confirmed, 
                 OrderStatus.Preparing, 
-                OrderStatus.Ready 
+                OrderStatus.Ready,
+                OrderStatus.Assigned  // Kurye değiştirme için eklendi
             };
             
             if (!allowedStatuses.Contains(order.Status))
             {
-                throw new InvalidOperationException($"Kurye ataması sadece Onaylanmış, Hazırlanıyor veya Hazır durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
+                throw new InvalidOperationException($"Kurye ataması sadece Onaylanmış, Hazırlanıyor, Hazır veya Atanmış durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
             }
 
             // Kurye ataması yap
@@ -1148,8 +1150,24 @@ namespace ECommerce.Business.Services.Managers
                 OrderStatus.Confirmed, 
                 OrderStatus.Preparing, 
                 OrderStatus.Ready,
+                OrderStatus.Assigned,
+                OrderStatus.PickedUp,
+                OrderStatus.InTransit,
+                OrderStatus.OutForDelivery,
+                OrderStatus.Delivered,
+                OrderStatus.DeliveryFailed,
+                OrderStatus.DeliveryPaymentPending,
                 OrderStatus.New,        // Admin panelinden yeni siparişler de görünsün
-                OrderStatus.Paid
+                OrderStatus.Paid,
+                OrderStatus.Cancelled,
+                OrderStatus.Processing,
+                OrderStatus.Shipped,
+                OrderStatus.Completed,
+                OrderStatus.PaymentFailed,
+                OrderStatus.ChargebackPending,
+                OrderStatus.Refunded,
+                OrderStatus.ReadyForPickup,
+                OrderStatus.PartialRefund
             };
 
             var query = _context.Orders
@@ -1651,7 +1669,7 @@ namespace ECommerce.Business.Services.Managers
                 CustomerPhone = order.CustomerPhone,
                 Status = order.Status.ToString(),
                 StatusText = GetStatusText(order.Status),
-                TotalAmount = order.FinalPrice,
+                TotalAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice,
                 ItemCount = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
                 CreatedAt = order.OrderDate,
                 ConfirmedAt = order.ConfirmedAt,

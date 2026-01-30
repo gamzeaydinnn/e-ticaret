@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStoreAttendantAuth } from "../../contexts/StoreAttendantAuthContext";
 import storeAttendantService from "../../services/storeAttendantService";
+import { AdminService } from "../../services/adminService";
 import { getCouriers, assignCourier } from "../../services/dispatcherService";
 import { signalRService, SignalREvents } from "../../services/signalRService";
 
@@ -42,6 +43,10 @@ export default function StoreAttendantDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Tab ve filtre
   // DÜZELTME: Default tab "all" olarak değiştirildi - tüm siparişleri göster
@@ -112,12 +117,21 @@ export default function StoreAttendantDashboard() {
       try {
         // Paralel API çağrıları
         const [ordersRes, summaryRes] = await Promise.all([
-          storeAttendantService.getOrders(getStatusFromTab(activeTab)),
+          storeAttendantService.getOrders(
+            getStatusFromTab(activeTab),
+            page,
+            pageSize,
+          ),
           storeAttendantService.getSummary(),
         ]);
 
         if (ordersRes.success) {
-          setOrders(ordersRes.data?.orders || []);
+          const payload = ordersRes.data || {};
+          const list = payload.orders || payload.Orders || [];
+          setOrders(list);
+          setTotalPages(payload.totalPages || payload.TotalPages || 1);
+          setTotalCount(payload.totalCount || payload.TotalCount || 0);
+          setPage(payload.currentPage || payload.CurrentPage || page);
         }
 
         if (summaryRes.success) {
@@ -141,7 +155,7 @@ export default function StoreAttendantDashboard() {
         setRefreshing(false);
       }
     },
-    [activeTab],
+    [activeTab, page, pageSize],
   );
 
   // =========================================================================
@@ -188,7 +202,11 @@ export default function StoreAttendantDashboard() {
     if (!loading && isAuthenticated) {
       fetchData(true);
     }
-  }, [activeTab]);
+  }, [activeTab, page, pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, searchQuery, pageSize]);
 
   // =========================================================================
   // BROWSER NOTIFICATION
@@ -287,12 +305,20 @@ export default function StoreAttendantDashboard() {
   // =========================================================================
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
-      const result = await storeAttendantService.updateOrderStatus(
-        orderId,
-        newStatus,
+      const normalized = normalizeStatus(newStatus);
+      const usesStoreAttendantFlow = ["confirmed", "preparing", "ready"].includes(
+        normalized,
       );
 
-      if (result.success) {
+      const result = usesStoreAttendantFlow
+        ? await storeAttendantService.updateOrderStatus(orderId, newStatus)
+        : await AdminService.updateOrderStatus(orderId, newStatus);
+
+      if (result?.success === false) {
+        return { success: false, error: result.error || result.message };
+      }
+
+      if (result || usesStoreAttendantFlow) {
         // Ses çal
         if (newStatus === "Ready") {
           playSound("orderReady");
@@ -308,6 +334,19 @@ export default function StoreAttendantDashboard() {
     } catch (err) {
       console.error("[StoreAttendant] Durum güncelleme hatası:", err);
       return { success: false, error: "Durum güncellenemedi" };
+    }
+  };
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm("Bu siparişi kalıcı olarak silmek istiyor musunuz?")) {
+      return;
+    }
+    try {
+      await AdminService.deleteOrder(orderId);
+      fetchData(true);
+    } catch (err) {
+      console.error("[StoreAttendant] Sipariş silme hatası:", err);
+      alert("Sipariş silinemedi");
     }
   };
 
@@ -450,7 +489,51 @@ export default function StoreAttendantDashboard() {
   // =========================================================================
   // DURUM YARDIMCI FONKSİYONLARI
   // =========================================================================
+  const normalizeStatus = (status) => {
+    const raw = (status || "").toString().trim().toLowerCase();
+    switch (raw) {
+      case "outfordelivery":
+      case "out_for_delivery":
+      case "out-for-delivery":
+      case "in_transit":
+      case "intransit":
+        return "out_for_delivery";
+      case "pickedup":
+      case "picked_up":
+      case "picked-up":
+        return "picked_up";
+      default:
+        return raw.replace(/\s+/g, "_");
+    }
+  };
+
+  const getOrderAmount = (order) => {
+    const candidates = [
+      order?.finalAmount,
+      order?.finalPrice,
+      order?.totalPrice,
+      order?.totalAmount,
+      order?.amount,
+      order?.total,
+    ];
+    for (const value of candidates) {
+      if (value === null || value === undefined) continue;
+      const num = Number(value);
+      if (!Number.isNaN(num) && num > 0) return num;
+    }
+    const fallback =
+      order?.finalAmount ??
+      order?.finalPrice ??
+      order?.totalPrice ??
+      order?.totalAmount ??
+      order?.amount ??
+      order?.total ??
+      0;
+    return Number(fallback) || 0;
+  };
+
   const getStatusText = (status) => {
+    const normalized = normalizeStatus(status);
     const statusMap = {
       new: "Yeni",
       pending: "Beklemede",
@@ -462,10 +545,11 @@ export default function StoreAttendantDashboard() {
       out_for_delivery: "Yolda",
       delivered: "Teslim Edildi",
     };
-    return statusMap[(status || "").toLowerCase()] || status || "-";
+    return statusMap[normalized] || status || "-";
   };
 
   const getStatusColor = (status) => {
+    const normalized = normalizeStatus(status);
     const colorMap = {
       new: "secondary",
       pending: "secondary",
@@ -477,10 +561,11 @@ export default function StoreAttendantDashboard() {
       out_for_delivery: "primary",
       delivered: "success",
     };
-    return colorMap[(status || "").toLowerCase()] || "secondary";
+    return colorMap[normalized] || "secondary";
   };
 
   const getStatusIcon = (status) => {
+    const normalized = normalizeStatus(status);
     const iconMap = {
       new: "fa-circle",
       pending: "fa-clock",
@@ -492,7 +577,7 @@ export default function StoreAttendantDashboard() {
       out_for_delivery: "fa-motorcycle",
       delivered: "fa-check-circle",
     };
-    return iconMap[(status || "").toLowerCase()] || "fa-circle";
+    return iconMap[normalized] || "fa-circle";
   };
 
   // =========================================================================
@@ -875,14 +960,18 @@ export default function StoreAttendantDashboard() {
                         <span>
                           {order.itemCount || order.items?.length || 0} ürün
                         </span>
-                        {order.totalAmount && (
-                          <>
-                            <span className="mx-2">•</span>
-                            <span className="fw-semibold text-dark">
-                              {order.totalAmount.toFixed(2)} ₺
-                            </span>
-                          </>
-                        )}
+                        {(() => {
+                          const amount = getOrderAmount(order);
+                          if (!Number.isFinite(amount)) return null;
+                          return (
+                            <>
+                              <span className="mx-2">•</span>
+                              <span className="fw-semibold text-dark">
+                                {amount.toFixed(2)} ₺
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {/* Zaman Bilgisi */}
@@ -904,8 +993,10 @@ export default function StoreAttendantDashboard() {
                       {/* Aksiyon Butonları */}
                       <div className="d-grid gap-2">
                         {/* New/Pending → Confirmed (Onayla) */}
-                        {((order.status || "").toLowerCase() === "new" ||
-                          (order.status || "").toLowerCase() === "pending") && (
+                        {(() => {
+                          const status = normalizeStatus(order.status);
+                          return status === "new" || status === "pending";
+                        })() && (
                           <button
                             className="btn btn-info mobile-action-btn fw-semibold"
                             onClick={() =>
@@ -918,7 +1009,7 @@ export default function StoreAttendantDashboard() {
                         )}
 
                         {/* Confirmed → Preparing */}
-                        {(order.status || "").toLowerCase() === "confirmed" && (
+                        {normalizeStatus(order.status) === "confirmed" && (
                           <button
                             className="btn btn-warning mobile-action-btn fw-semibold"
                             onClick={() => handleStartPreparing(order)}
@@ -929,7 +1020,7 @@ export default function StoreAttendantDashboard() {
                         )}
 
                         {/* Preparing → Ready */}
-                        {(order.status || "").toLowerCase() === "preparing" && (
+                        {normalizeStatus(order.status) === "preparing" && (
                           <button
                             className="btn btn-success mobile-action-btn fw-semibold"
                             onClick={() => handleMarkReady(order)}
@@ -946,7 +1037,7 @@ export default function StoreAttendantDashboard() {
                         )}
 
                         {/* Ready - Kurye Ata Butonu */}
-                        {(order.status || "").toLowerCase() === "ready" && (
+                        {normalizeStatus(order.status) === "ready" && (
                           <button
                             className="btn btn-primary mobile-action-btn fw-semibold"
                             onClick={() => handleOpenCourierModal(order.id)}
@@ -955,11 +1046,103 @@ export default function StoreAttendantDashboard() {
                             Kurye Ata
                           </button>
                         )}
+
+                        {/* Assigned/PickedUp → Yolda */}
+                        {["assigned", "picked_up"].includes(
+                          normalizeStatus(order.status),
+                        ) && (
+                          <button
+                            className="btn btn-primary mobile-action-btn fw-semibold"
+                            onClick={() =>
+                              updateOrderStatus(order.id, "out_for_delivery")
+                            }
+                          >
+                            <i className="fas fa-motorcycle me-2"></i>
+                            Yola Çıktı
+                          </button>
+                        )}
+
+                        {/* Yolda → Teslim */}
+                        {normalizeStatus(order.status) ===
+                          "out_for_delivery" && (
+                          <button
+                            className="btn btn-dark mobile-action-btn fw-semibold"
+                            onClick={() =>
+                              updateOrderStatus(order.id, "delivered")
+                            }
+                          >
+                            <i className="fas fa-check-double me-2"></i>
+                            Teslim Edildi
+                          </button>
+                        )}
+
+                        {/* İptal */}
+                        {!["delivered", "cancelled"].includes(
+                          normalizeStatus(order.status),
+                        ) && (
+                          <button
+                            className="btn btn-outline-danger mobile-action-btn fw-semibold"
+                            onClick={() => updateOrderStatus(order.id, "cancelled")}
+                          >
+                            <i className="fas fa-times me-2"></i>
+                            İptal
+                          </button>
+                        )}
+
+                        {/* Sil */}
+                        <button
+                          className="btn btn-outline-dark mobile-action-btn fw-semibold"
+                          onClick={() => deleteOrder(order.id)}
+                        >
+                          <i className="fas fa-trash me-2"></i>
+                          Sil
+                        </button>
                       </div>
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Sayfalama */}
+          {totalPages > 1 && (
+            <div className="d-flex flex-wrap align-items-center justify-content-between mt-4">
+              <div className="text-muted small">
+                Toplam {totalCount} sipariş • Sayfa {page}/{totalPages}
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <select
+                  className="form-select form-select-sm"
+                  style={{ width: "90px" }}
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                >
+                  {[10, 20, 30, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size} / sayfa
+                    </option>
+                  ))}
+                </select>
+                <div className="btn-group btn-group-sm">
+                  <button
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    className="btn btn-outline-secondary"
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={page >= totalPages}
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

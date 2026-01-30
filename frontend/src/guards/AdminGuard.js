@@ -182,14 +182,24 @@ export const AdminGuard = ({
       // ============================================================================
       // ROL BAZLI BYPASS - StoreAttendant ve Dispatcher için temel sayfalar
       // Bu roller için dashboard ve orders sayfalarına erişim otomatik verilir
+      // StoreAttendant artık Admin ile aynı sipariş yetkilerine sahip
       // ============================================================================
       const storeAttendantAllowedPerms = [
         "dashboard.view",
         "orders.view",
         "orders.viewdetails",
         "orders.updatestatus",
+        "orders.assigncourier", // Yeni: Kurye atama yetkisi
+        "orders.assign_courier", // Alternatif format
+        "orders.cancel", // Yeni: Sipariş iptal yetkisi
+        "orders.refund", // Yeni: İade işlemi yetkisi
+        "orders.processrefund", // Alternatif format
+        "orders.customer_info", // Müşteri bilgisi görüntüleme
+        "orders.export", // Sipariş dışa aktarma
         "products.view",
         "categories.view",
+        "couriers.view", // Yeni: Kurye listesi görüntüleme
+        "couriers.assign", // Yeni: Kurye atama
       ];
       const dispatcherAllowedPerms = [
         "dashboard.view",
@@ -197,6 +207,7 @@ export const AdminGuard = ({
         "orders.viewdetails",
         "orders.updatestatus",
         "orders.assigncourier",
+        "orders.assign_courier",
         "couriers.view",
       ];
 

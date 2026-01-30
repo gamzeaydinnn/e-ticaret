@@ -84,15 +84,16 @@ const storeAttendantService = {
   // SİPARİŞLERİ GETİR
   // Status: Confirmed, Preparing, Ready
   // =========================================================================
-  getOrders: async (status = null) => {
+  getOrders: async (status = null, page = 1, pageSize = 20) => {
     // NEDEN: Backend sadece /orders endpoint'ini expose ediyor.
-    let endpoint = `${STORE_BASE}/orders`;
-
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
     if (status) {
-      endpoint += `?status=${encodeURIComponent(status)}`;
+      params.set("status", status);
     }
 
-    return fetchWithAuth(endpoint);
+    return fetchWithAuth(`${STORE_BASE}/orders?${params.toString()}`);
   },
 
   // =========================================================================
@@ -116,10 +117,10 @@ const storeAttendantService = {
 
   // =========================================================================
   // SİPARİŞ DURUMU GÜNCELLE
-  // New/Pending → Confirmed → Preparing → Ready
+  // Tüm statü geçişleri için merkezi fonksiyon (Admin ile aynı yetkiler)
   // =========================================================================
   updateOrderStatus: async (orderId, newStatus, weightInGrams = null) => {
-    // NEDEN: Backend'de genel status endpoint'i yok; durum geçişleri ayrı aksiyonlar.
+    // NEDEN: Her durum geçişi için ayrı endpoint kullanılıyor (state machine)
     const normalized = (newStatus || "").toLowerCase();
     const hasWeight = weightInGrams !== null && weightInGrams !== undefined;
 
@@ -130,12 +131,14 @@ const storeAttendantService = {
       });
     }
 
+    // Onaylandı → Hazırlanıyor
     if (normalized === "preparing") {
       return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/start-preparing`, {
         method: "POST",
       });
     }
 
+    // Hazırlanıyor → Hazır
     if (normalized === "ready") {
       return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/mark-ready`, {
         method: "POST",
@@ -143,10 +146,57 @@ const storeAttendantService = {
       });
     }
 
-    return {
-      success: false,
-      error: "Bu durum geçişi Store Attendant panelinde desteklenmiyor.",
-    };
+    // Atandı/Hazır → Dağıtımda (YENİ: Admin ile aynı yetki)
+    if (normalized === "out_for_delivery" || normalized === "outfordelivery") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/out-for-delivery`, {
+        method: "POST",
+      });
+    }
+
+    // Dağıtımda → Teslim Edildi (YENİ: Admin ile aynı yetki)
+    if (normalized === "delivered") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/deliver`, {
+        method: "POST",
+      });
+    }
+
+    // Herhangi → İptal Edildi (YENİ: Admin ile aynı yetki)
+    if (normalized === "cancelled" || normalized === "canceled") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/cancel`, {
+        method: "POST",
+      });
+    }
+
+    // İade işlemi (YENİ: Admin ile aynı yetki)
+    if (normalized === "refunded") {
+      return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/refund`, {
+        method: "POST",
+      });
+    }
+
+    // Genel durum güncelleme (fallback - PUT endpoint)
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/status`, {
+      method: "PUT",
+      body: JSON.stringify({ status: newStatus }),
+    });
+  },
+
+  // =========================================================================
+  // KURYE ATA (YENİ: Admin ile aynı yetki)
+  // Ready/Assigned durumundaki siparişlere kurye atama
+  // =========================================================================
+  assignCourier: async (orderId, courierId) => {
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}/assign-courier`, {
+      method: "POST",
+      body: JSON.stringify({ courierId }),
+    });
+  },
+
+  // =========================================================================
+  // SİPARİŞ DETAYI (YENİ: Admin ile aynı yetki)
+  // =========================================================================
+  getOrderDetail: async (orderId) => {
+    return fetchWithAuth(`${STORE_BASE}/orders/${orderId}`);
   },
 
   // =========================================================================

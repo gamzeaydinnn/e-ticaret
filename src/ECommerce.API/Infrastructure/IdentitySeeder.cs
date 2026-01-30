@@ -631,9 +631,9 @@ namespace ECommerce.API.Infrastructure
                 [Core.Constants.Roles.Customer] = Array.Empty<string>(),
 
                 // ============================================================================
-                // STORE ATTENDANT (Market Görevlisi): Sipariş hazırlama işlemleri
+                // STORE ATTENDANT (Market Görevlisi): Sipariş hazırlama ve yönetim işlemleri
                 // Siparişi fiziksel olarak hazırlayan, tartan personel.
-                // En az yetki prensibi: Sadece hazırlama süreciyle ilgili izinler.
+                // Admin ile aynı sipariş yönetim yetkilerine sahiptir.
                 // ============================================================================
                 [Core.Constants.Roles.StoreAttendant] = new[]
                 {
@@ -647,6 +647,10 @@ namespace ECommerce.API.Infrastructure
                     Permissions.StoreOperations.EnterWeight,
                     Permissions.StoreOperations.ViewOrderDetails,
                     Permissions.StoreOperations.ViewSummary,
+                    Permissions.StoreOperations.AssignCourier,    // Yeni: Kurye atama
+                    Permissions.StoreOperations.UpdateStatus,     // Yeni: Durum güncelleme
+                    Permissions.StoreOperations.CancelOrder,      // Yeni: Sipariş iptal
+                    Permissions.StoreOperations.ProcessRefund,    // Yeni: İade işlemi
                     
                     // Ürünler - Sadece görüntüleme (stok kontrolü için)
                     Permissions.Products.View,
@@ -654,10 +658,19 @@ namespace ECommerce.API.Infrastructure
                     // Kategoriler - Sadece görüntüleme
                     Permissions.Categories.View,
                     
-                    // Siparişler - Durum güncellemesi dahil
+                    // Siparişler - Admin ile aynı yetkiler (tam yetki)
                     Permissions.Orders.View,
                     Permissions.Orders.ViewDetails,
-                    Permissions.Orders.UpdateStatus  // MVP için sipariş durumu değiştirme yetkisi
+                    Permissions.Orders.UpdateStatus,
+                    Permissions.Orders.Cancel,
+                    Permissions.Orders.ProcessRefund,
+                    Permissions.Orders.AssignCourier,
+                    Permissions.Orders.ViewCustomerInfo,
+                    Permissions.Orders.Export,
+                    
+                    // Kuryeler - Görüntüleme ve atama (kurye atama için gerekli)
+                    Permissions.Couriers.View,
+                    Permissions.Couriers.AssignOrders
                 },
 
                 // ============================================================================

@@ -230,11 +230,12 @@ namespace ECommerce.API.Controllers
         /// <summary>
         /// Siparişi onaylar (Admin ve Confirmed durumuna geçirir).
         /// Sadece New veya Paid durumundaki siparişler için kullanılabilir.
+        /// Admin ve StoreAttendant yetkisine sahiptir.
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
         /// <returns>Güncellenmiş sipariş bilgisi</returns>
         [HttpPost("orders/{orderId}/confirm")]
-        [Authorize(Roles = "Admin")] // Sadece admin onaylayabilir
+        [Authorize(Roles = "Admin,StoreAttendant")] // Admin ve StoreAttendant onaylayabilir
         [ProducesResponseType(typeof(OrderListDto), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
@@ -284,8 +285,321 @@ namespace ECommerce.API.Controllers
         }
 
         // ============================================================
+        // GENİŞLETİLMİŞ SİPARİŞ YÖNETİM ENDPOINT'LERİ
+        // Market görevlisi artık admin ile aynı yetkilere sahip
+        // ============================================================
+
+        /// <summary>
+        /// Sipariş durumunu günceller (Admin ile aynı yetki).
+        /// Tüm statü geçişleri için kullanılabilir.
+        /// SignalR ile tüm taraflara (Admin, Store, Dispatcher, Müşteri) bildirim gönderir.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="dto">Yeni durum bilgisi</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPut("orders/{orderId}/status")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> UpdateOrderStatus(int orderId, [FromBody] OrderStatusUpdateDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
+                return BadRequest(new { error = "Status alanı zorunludur." });
+
+            try
+            {
+                var userName = GetUserName();
+                var oldOrder = await _orderService.GetByIdAsync(orderId);
+                
+                if (oldOrder == null)
+                    return NotFound(new { error = "Sipariş bulunamadı." });
+
+                // Durum güncelleme işlemi
+                await _orderService.UpdateOrderStatusAsync(orderId, dto.Status);
+                var updatedOrder = await _orderService.GetByIdAsync(orderId);
+
+                if (updatedOrder != null)
+                {
+                    // Tüm taraflara bildirim gönder
+                    await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        oldOrder.Status,
+                        updatedOrder.Status,
+                        userName
+                    );
+                }
+
+                _logger.LogInformation(
+                    "Sipariş #{OrderId} durumu güncellendi: {OldStatus} -> {NewStatus}. Görevli: {UserName}", 
+                    orderId, oldOrder.Status, dto.Status, userName);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Sipariş durumu güncellendi.",
+                    order = updatedOrder
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} durumu güncellenirken hata oluştu", orderId);
+                return StatusCode(500, new { error = "İşlem sırasında bir hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Siparişe kurye atar (Admin ile aynı yetki).
+        /// Kurye ataması sonrası tüm taraflara ve kuryeye bildirim gönderir.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="dto">Kurye bilgisi</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPost("orders/{orderId}/assign-courier")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> AssignCourier(int orderId, [FromBody] AssignCourierDto dto)
+        {
+            // Validation: DTO null veya courierId eksik mi?
+            if (dto == null || dto.CourierId <= 0)
+            {
+                return BadRequest(new { error = "Geçerli bir kurye ID'si gereklidir." });
+            }
+
+            try
+            {
+                var userName = GetUserName();
+                var userId = GetUserId();
+
+                // Önceki durumu al (audit ve bildirim için)
+                var oldOrder = await _orderService.GetByIdAsync(orderId);
+                if (oldOrder == null)
+                {
+                    return NotFound(new { error = "Sipariş bulunamadı." });
+                }
+
+                // Kurye atamasını gerçekleştir
+                var updatedOrder = await _orderService.AssignCourierAsync(orderId, dto.CourierId);
+                
+                if (updatedOrder == null)
+                {
+                    return NotFound(new { error = "Sipariş güncellenemedi." });
+                }
+
+                // =====================================================================
+                // KURYE BİLDİRİMİ GÖNDER
+                // NEDEN: Kurye siparişin kendisine atandığını anlık olarak bilmeli
+                // Bu sayede sipariş hazır olduğunda hemen harekete geçebilir
+                // =====================================================================
+                try
+                {
+                    await _notificationService.NotifyOrderAssignedToCourierAsync(
+                        dto.CourierId,
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        updatedOrder.ShippingAddress,
+                        updatedOrder.CustomerPhone,
+                        updatedOrder.FinalPrice,
+                        "online" // Ödeme yöntemi
+                    );
+
+                    // Durum değişikliği bildirimi (tüm taraflara: Admin, Store, Dispatcher, Müşteri)
+                    await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                        updatedOrder.Id,
+                        updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                        oldOrder.Status,
+                        updatedOrder.Status,
+                        userName
+                    );
+                }
+                catch (Exception notifyEx)
+                {
+                    // Bildirim hatası kurye atamasını engellemez, sadece log tutulur
+                    _logger.LogWarning(notifyEx, 
+                        "Kurye bildirimi gönderilemedi. OrderId={OrderId}, CourierId={CourierId}", 
+                        orderId, dto.CourierId);
+                }
+
+                _logger.LogInformation(
+                    "Sipariş #{OrderId} için kurye atandı. CourierId={CourierId}, Görevli: {UserName}", 
+                    orderId, dto.CourierId, userName);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Kurye başarıyla atandı.",
+                    order = updatedOrder
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Kurye bulunamadı gibi iş mantığı hataları
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} için kurye atanırken hata oluştu", orderId);
+                return StatusCode(500, new { error = "Kurye atama sırasında bir hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Siparişi "Dağıtımda" durumuna geçirir (Admin ile aynı yetki).
+        /// Kurye atandıktan sonra teslimat sürecini başlatır.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPost("orders/{orderId}/out-for-delivery")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> MarkOutForDelivery(int orderId)
+        {
+            return await HandleStatusChange(orderId, 
+                () => _orderService.MarkOrderOutForDeliveryAsync(orderId), 
+                "OutForDelivery");
+        }
+
+        /// <summary>
+        /// Siparişi "Teslim Edildi" durumuna geçirir (Admin ile aynı yetki).
+        /// Teslimat tamamlandığında kullanılır.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPost("orders/{orderId}/deliver")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> DeliverOrder(int orderId)
+        {
+            return await HandleStatusChange(orderId, 
+                () => _orderService.MarkOrderAsDeliveredAsync(orderId), 
+                "Delivered");
+        }
+
+        /// <summary>
+        /// Siparişi iptal eder (Admin ile aynı yetki).
+        /// İptal edilebilir durumdaki siparişler için kullanılır.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPost("orders/{orderId}/cancel")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> CancelOrder(int orderId)
+        {
+            return await HandleStatusChange(orderId, 
+                () => _orderService.CancelOrderByAdminAsync(orderId), 
+                "Cancelled");
+        }
+
+        /// <summary>
+        /// Sipariş iade işlemi yapar (Admin ile aynı yetki).
+        /// Teslim edilmiş siparişler için iade süreci başlatır.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <returns>Güncellenmiş sipariş bilgisi</returns>
+        [HttpPost("orders/{orderId}/refund")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> RefundOrder(int orderId)
+        {
+            return await HandleStatusChange(orderId, 
+                () => _orderService.RefundOrderAsync(orderId), 
+                "Refunded");
+        }
+
+        /// <summary>
+        /// Sipariş detayını getirir (Admin ile aynı yetki).
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <returns>Sipariş detay bilgisi</returns>
+        [HttpGet("orders/{orderId}")]
+        [ProducesResponseType(typeof(OrderListDto), 200)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> GetOrderDetail(int orderId)
+        {
+            try
+            {
+                var order = await _orderService.GetByIdAsync(orderId);
+                if (order == null)
+                    return NotFound(new { error = "Sipariş bulunamadı." });
+
+                return Ok(order);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} detayı alınırken hata oluştu", orderId);
+                return StatusCode(500, new { error = "Sipariş detayı yüklenirken bir hata oluştu." });
+            }
+        }
+
+        // ============================================================
         // YARDIMCI METODLAR
         // ============================================================
+
+        /// <summary>
+        /// Durum değişikliği işlemlerini ortak olarak yöneten yardımcı metod.
+        /// DRY prensibi: Tekrar eden kodları merkezileştirir.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="action">Çalıştırılacak servis metodu</param>
+        /// <param name="statusName">Log için durum adı</param>
+        /// <returns>API yanıtı</returns>
+        private async Task<IActionResult> HandleStatusChange(
+            int orderId, 
+            Func<Task<OrderListDto?>> action, 
+            string statusName)
+        {
+            try
+            {
+                var userName = GetUserName();
+                var oldOrder = await _orderService.GetByIdAsync(orderId);
+                
+                if (oldOrder == null)
+                    return NotFound(new { error = "Sipariş bulunamadı." });
+
+                var order = await action();
+                if (order == null)
+                    return NotFound(new { error = "Sipariş güncellenemedi." });
+
+                // Tüm taraflara bildirim gönder
+                await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                    order.Id,
+                    order.OrderNumber ?? $"#{order.Id}",
+                    oldOrder.Status,
+                    order.Status,
+                    userName
+                );
+
+                _logger.LogInformation(
+                    "Sipariş #{OrderId} durumu '{Status}' olarak güncellendi. Görevli: {UserName}", 
+                    orderId, statusName, userName);
+
+                return Ok(new
+                {
+                    success = true,
+                    message = $"Sipariş durumu '{statusName}' olarak güncellendi.",
+                    order = order
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} '{Status}' durumuna güncellenirken hata oluştu", orderId, statusName);
+                return StatusCode(500, new { error = "İşlem sırasında bir hata oluştu." });
+            }
+        }
 
         /// <summary>
         /// Mevcut kullanıcının adını döner.
@@ -297,6 +611,16 @@ namespace ECommerce.API.Controllers
                 ?? User.FindFirstValue(ClaimTypes.Email)
                 ?? "Bilinmeyen Görevli";
             return userName;
+        }
+
+        /// <summary>
+        /// Mevcut kullanıcının ID'sini döner.
+        /// </summary>
+        private int GetUserId()
+        {
+            var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+            return int.TryParse(userIdValue, out var userId) ? userId : 0;
         }
     }
 }

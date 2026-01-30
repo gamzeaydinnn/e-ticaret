@@ -96,10 +96,12 @@ namespace ECommerce.Core.Constants
         /// - "Hazırlanıyor" durumuna geçirme
         /// - Ağırlık bazlı ürünleri tartma
         /// - "Hazır" durumuna geçirme
+        /// - Sipariş durumunu güncelleme (Admin ile aynı yetkiler)
+        /// - Kurye atama yetkisi (Admin ile aynı yetkiler)
+        /// - Sipariş iptal ve iade işlemleri
         /// Kısıtlamalar:
-        /// - Sipariş onaylama yetkisi YOK
-        /// - Kurye atama yetkisi YOK
         /// - Ürün/fiyat değiştirme yetkisi YOK
+        /// - Kullanıcı yönetimi yetkisi YOK
         /// </summary>
         public const string StoreAttendant = "StoreAttendant";
 

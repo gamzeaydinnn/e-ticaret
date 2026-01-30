@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Promotions;
+using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -166,51 +167,148 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
-        /// Ücretsiz kargo kampanyasını kontrol eder.
-        /// Sepet sayfasında kullanılır.
+        /// [KULLANIMI ÖNERİLMİYOR] Eski ücretsiz kargo kontrolü endpoint'i.
+        /// Kategori bazlı kampanyalarda doğru çalışmaz.
+        /// Yeni endpoint: POST /api/promotions/free-shipping
         /// </summary>
         /// <param name="cartTotal">Sepet tutarı</param>
+        [Obsolete("Bu endpoint kategori bazlı kampanyaları desteklemez. POST /free-shipping endpoint'ini kullanın.")]
         [HttpGet("free-shipping")]
-        public async Task<ActionResult<FreeShippingStatusDto>> CheckFreeShipping([FromQuery] decimal cartTotal)
+        public async Task<ActionResult<FreeShippingStatusDto>> CheckFreeShippingLegacy([FromQuery] decimal cartTotal)
+        {
+            _logger.LogWarning("Deprecated GET /free-shipping endpoint kullanıldı. POST endpoint'ine geçilmeli.");
+            
+            // Eski davranışı koru ama uyarı logla
+            return await CheckFreeShippingInternal(cartTotal, null);
+        }
+
+        /// <summary>
+        /// Ücretsiz kargo kampanyasını kontrol eder.
+        /// Kategori ve ürün bazlı kampanyalar için sepet ürünlerini doğrular.
+        /// 
+        /// KRİTİK: Kategori bazlı kampanyalarda TÜM sepet ürünleri hedef kategoride olmalıdır.
+        /// Farklı kategoriden ürün varsa ücretsiz kargo uygulanmaz.
+        /// </summary>
+        /// <param name="request">Sepet tutarı ve ürün bilgileri</param>
+        [HttpPost("free-shipping")]
+        public async Task<ActionResult<FreeShippingStatusDto>> CheckFreeShipping([FromBody] FreeShippingCheckRequest request)
         {
             try
             {
-                var campaign = await _campaignService.GetFreeShippingCampaignAsync(cartTotal);
-                
-                if (campaign != null)
+                if (request == null)
                 {
+                    return BadRequest(new { message = "İstek gövdesi boş olamaz." });
+                }
+
+                return await CheckFreeShippingInternal(request.CartTotal, request.Items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ücretsiz kargo kontrolü hatası. CartTotal: {CartTotal}, ItemCount: {ItemCount}", 
+                    request?.CartTotal, request?.Items?.Count);
+                return StatusCode(500, new { message = "Kargo kontrolü yapılırken hata oluştu." });
+            }
+        }
+
+        /// <summary>
+        /// Ücretsiz kargo kontrolü iç metodu.
+        /// Hem eski (GET) hem yeni (POST) endpoint'ler tarafından kullanılır.
+        /// </summary>
+        private async Task<ActionResult<FreeShippingStatusDto>> CheckFreeShippingInternal(
+            decimal cartTotal, 
+            List<FreeShippingCartItemDto>? items)
+        {
+            try
+            {
+                // Aktif ücretsiz kargo kampanyalarını getir
+                var activeCampaigns = await _campaignService.GetActiveCampaignsAsync();
+                var freeShippingCampaigns = activeCampaigns
+                    .Where(c => c.Type == CampaignType.FreeShipping)
+                    .OrderBy(c => c.Priority)
+                    .ToList();
+
+                if (!freeShippingCampaigns.Any())
+                {
+                    return Ok(new FreeShippingStatusDto
+                    { 
+                        IsFreeShipping = false,
+                        Message = "Ücretsiz kargo kampanyası bulunmuyor."
+                    });
+                }
+
+                // Her kampanyayı kontrol et
+                foreach (var campaign in freeShippingCampaigns)
+                {
+                    // 1. Minimum sepet tutarı kontrolü
+                    if (campaign.MinCartTotal.HasValue && cartTotal < campaign.MinCartTotal.Value)
+                    {
+                        continue;
+                    }
+
+                    // 2. Hedef türüne göre validasyon
+                    var isValid = await ValidateCampaignTargets(campaign, items);
+                    if (!isValid)
+                    {
+                        continue;
+                    }
+
+                    // Kampanya geçerli - ücretsiz kargo uygulanabilir
                     return Ok(new FreeShippingStatusDto
                     { 
                         IsFreeShipping = true,
                         CampaignId = campaign.Id,
                         CampaignName = campaign.Name,
+                        TargetType = campaign.TargetType,
+                        TargetIds = campaign.Targets?.Select(t => t.TargetId).ToList(),
                         Message = "Ücretsiz kargo kazandınız!"
                     });
                 }
 
-                // Ücretsiz kargo için en yakın kampanyayı bul
-                var allFreeShippingCampaigns = await _campaignService.GetActiveCampaignsAsync();
-                var nearestFreeShippingCampaign = allFreeShippingCampaigns
-                    .Where(c => c.Type == CampaignType.FreeShipping && c.MinCartTotal.HasValue)
+                // Hiçbir kampanya uygun değil - en yakın kampanyayı bul
+                var nearestCampaign = freeShippingCampaigns
+                    .Where(c => c.MinCartTotal.HasValue && c.MinCartTotal > cartTotal)
                     .OrderBy(c => c.MinCartTotal)
-                    .FirstOrDefault(c => c.MinCartTotal > cartTotal);
+                    .FirstOrDefault();
 
-                if (nearestFreeShippingCampaign != null)
+                if (nearestCampaign != null)
                 {
-                    var remaining = nearestFreeShippingCampaign.MinCartTotal!.Value - cartTotal;
+                    var remaining = nearestCampaign.MinCartTotal!.Value - cartTotal;
+                    var targetMessage = GetTargetMessage(nearestCampaign, items);
+                    
                     return Ok(new FreeShippingStatusDto
                     { 
                         IsFreeShipping = false,
+                        CampaignId = nearestCampaign.Id,
+                        CampaignName = nearestCampaign.Name,
                         RemainingAmount = remaining,
-                        MinCartTotal = nearestFreeShippingCampaign.MinCartTotal,
-                        Message = $"Ücretsiz kargo için ₺{remaining:N2} daha eklemeniz gerekiyor."
+                        MinCartTotal = nearestCampaign.MinCartTotal,
+                        TargetType = nearestCampaign.TargetType,
+                        TargetIds = nearestCampaign.Targets?.Select(t => t.TargetId).ToList(),
+                        Message = $"Ücretsiz kargo için ₺{remaining:N2} daha eklemeniz gerekiyor.{targetMessage}"
+                    });
+                }
+
+                // Kategori uyumsuzluğu mesajı
+                var categoryMismatchCampaign = freeShippingCampaigns.FirstOrDefault(c => 
+                    c.TargetType != CampaignTargetType.All);
+                
+                if (categoryMismatchCampaign != null && items?.Any() == true)
+                {
+                    return Ok(new FreeShippingStatusDto
+                    { 
+                        IsFreeShipping = false,
+                        CampaignId = categoryMismatchCampaign.Id,
+                        CampaignName = categoryMismatchCampaign.Name,
+                        TargetType = categoryMismatchCampaign.TargetType,
+                        TargetIds = categoryMismatchCampaign.Targets?.Select(t => t.TargetId).ToList(),
+                        Message = "Sepetinizdeki tüm ürünler kampanya kapsamında değil. Ücretsiz kargo için sadece kampanya kapsamındaki ürünleri ekleyin."
                     });
                 }
 
                 return Ok(new FreeShippingStatusDto
                 { 
                     IsFreeShipping = false,
-                    Message = "Ücretsiz kargo kampanyası bulunmuyor."
+                    Message = "Ücretsiz kargo koşulları sağlanmıyor."
                 });
             }
             catch (Exception ex)
@@ -218,6 +316,108 @@ namespace ECommerce.API.Controllers
                 _logger.LogError(ex, "Ücretsiz kargo kontrolü hatası. CartTotal: {CartTotal}", cartTotal);
                 return StatusCode(500, new { message = "Kargo kontrolü yapılırken hata oluştu." });
             }
+        }
+
+        /// <summary>
+        /// Kampanya hedeflerini sepet ürünleriyle doğrular.
+        /// Kategori bazlı kampanyalarda TÜM ürünler hedef kategoride olmalı.
+        /// </summary>
+        private Task<bool> ValidateCampaignTargets(Campaign campaign, List<FreeShippingCartItemDto>? items)
+        {
+            // TargetType = All ise herkes için geçerli
+            if (campaign.TargetType == CampaignTargetType.All)
+            {
+                return Task.FromResult(true);
+            }
+
+            // Sepet boşsa veya ürün bilgisi yoksa (eski endpoint) - uyarı ver ama geçir
+            if (items == null || !items.Any())
+            {
+                _logger.LogWarning(
+                    "Kategori/ürün bazlı kampanya ({CampaignId}) için sepet ürün bilgisi eksik. " +
+                    "Doğrulama atlanıyor - POST endpoint kullanılmalı.", 
+                    campaign.Id);
+                return Task.FromResult(false); // Güvenlik için false döndür
+            }
+
+            var targetIds = campaign.Targets?.Select(t => t.TargetId).ToHashSet() ?? new HashSet<int>();
+            
+            if (!targetIds.Any())
+            {
+                _logger.LogWarning("Kampanya ({CampaignId}) hedefleri tanımlı değil.", campaign.Id);
+                return Task.FromResult(false);
+            }
+
+            switch (campaign.TargetType)
+            {
+                case CampaignTargetType.Category:
+                    // TÜM ürünler hedef kategorilerden birinde olmalı
+                    var allInCategory = items.All(item => targetIds.Contains(item.CategoryId));
+                    if (!allInCategory)
+                    {
+                        _logger.LogDebug(
+                            "Kampanya ({CampaignId}): Sepetteki bazı ürünler hedef kategorilerde değil. " +
+                            "Hedef kategoriler: [{TargetIds}], Sepet kategorileri: [{CartCategories}]",
+                            campaign.Id,
+                            string.Join(", ", targetIds),
+                            string.Join(", ", items.Select(i => i.CategoryId).Distinct()));
+                    }
+                    return Task.FromResult(allInCategory);
+
+                case CampaignTargetType.Product:
+                    // TÜM ürünler hedef ürünlerden biri olmalı
+                    var allInProducts = items.All(item => targetIds.Contains(item.ProductId));
+                    if (!allInProducts)
+                    {
+                        _logger.LogDebug(
+                            "Kampanya ({CampaignId}): Sepetteki bazı ürünler hedef ürünlerde değil. " +
+                            "Hedef ürünler: [{TargetIds}], Sepet ürünleri: [{CartProducts}]",
+                            campaign.Id,
+                            string.Join(", ", targetIds),
+                            string.Join(", ", items.Select(i => i.ProductId).Distinct()));
+                    }
+                    return Task.FromResult(allInProducts);
+
+                default:
+                    return Task.FromResult(false);
+            }
+        }
+
+        /// <summary>
+        /// Kategori/ürün bazlı kampanyalar için ek mesaj oluşturur.
+        /// </summary>
+        private string GetTargetMessage(Campaign campaign, List<FreeShippingCartItemDto>? items)
+        {
+            if (campaign.TargetType == CampaignTargetType.All)
+            {
+                return string.Empty;
+            }
+
+            if (items == null || !items.Any())
+            {
+                return string.Empty;
+            }
+
+            var targetIds = campaign.Targets?.Select(t => t.TargetId).ToHashSet() ?? new HashSet<int>();
+            
+            if (campaign.TargetType == CampaignTargetType.Category)
+            {
+                var outOfScopeCount = items.Count(item => !targetIds.Contains(item.CategoryId));
+                if (outOfScopeCount > 0)
+                {
+                    return $" (Sepetinizde {outOfScopeCount} ürün kampanya kategorisi dışında)";
+                }
+            }
+            else if (campaign.TargetType == CampaignTargetType.Product)
+            {
+                var outOfScopeCount = items.Count(item => !targetIds.Contains(item.ProductId));
+                if (outOfScopeCount > 0)
+                {
+                    return $" (Sepetinizde {outOfScopeCount} ürün kampanya kapsamı dışında)";
+                }
+            }
+
+            return string.Empty;
         }
 
         /// <summary>
@@ -361,6 +561,60 @@ namespace ECommerce.API.Controllers
         public decimal? RemainingAmount { get; set; }
         public decimal? MinCartTotal { get; set; }
         public string Message { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// Kampanya hedef türü (bilgilendirme amaçlı).
+        /// All: Tüm ürünler, Category: Belirli kategoriler, Product: Belirli ürünler
+        /// </summary>
+        public CampaignTargetType? TargetType { get; set; }
+        
+        /// <summary>
+        /// Kampanya hedef ID'leri (kategori veya ürün ID'leri)
+        /// </summary>
+        public List<int>? TargetIds { get; set; }
+    }
+
+    /// <summary>
+    /// Ücretsiz kargo kontrolü için istek DTO'su.
+    /// Kategori bazlı kampanyalarda sepet ürünlerinin doğrulanması için gerekli.
+    /// </summary>
+    public class FreeShippingCheckRequest
+    {
+        /// <summary>
+        /// Sepet toplam tutarı
+        /// </summary>
+        public decimal CartTotal { get; set; }
+        
+        /// <summary>
+        /// Sepet ürünleri (kategori validasyonu için zorunlu)
+        /// </summary>
+        public List<FreeShippingCartItemDto> Items { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Ücretsiz kargo kontrolü için sepet ürünü DTO'su
+    /// </summary>
+    public class FreeShippingCartItemDto
+    {
+        /// <summary>
+        /// Ürün ID
+        /// </summary>
+        public int ProductId { get; set; }
+        
+        /// <summary>
+        /// Kategori ID (kampanya hedef kontrolü için)
+        /// </summary>
+        public int CategoryId { get; set; }
+        
+        /// <summary>
+        /// Miktar
+        /// </summary>
+        public int Quantity { get; set; }
+        
+        /// <summary>
+        /// Birim fiyat
+        /// </summary>
+        public decimal UnitPrice { get; set; }
     }
 
     /// <summary>
