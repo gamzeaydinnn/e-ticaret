@@ -203,6 +203,12 @@ export default function AdminLayout({ children }) {
         permission: PERMISSIONS.BANNERS_VIEW,
       },
       {
+        path: "/admin/home-blocks",
+        icon: "fas fa-th-large",
+        label: "Ana Sayfa Blokları",
+        permission: PERMISSIONS.BANNERS_VIEW,
+      },
+      {
         path: "/admin/weight-management",
         icon: "fas fa-weight",
         label: "Ağırlık Raporları",

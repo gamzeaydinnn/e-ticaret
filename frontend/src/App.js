@@ -40,6 +40,7 @@ import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
 import AdminWeightManagement from "./pages/Admin/AdminWeightManagement";
 import PosterManagement from "./pages/Admin/PosterManagement";
+import AdminHomeBlocks from "./pages/Admin/AdminHomeBlocks"; // Ana sayfa blok yönetimi
 import Dashboard from "./pages/Admin/Dashboard";
 // Kupon Yönetimi
 import CouponManagement from "./pages/Admin/CouponManagement";
@@ -111,6 +112,8 @@ import VisionMission from "./pages/VisionMission.jsx";
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
+import homeBlockService from "./services/homeBlockService";
+import ProductBlockSection from "./pages/components/ProductBlockSection";
 import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
 // 3D Secure Ödeme Callback Sayfaları
 import {
@@ -885,6 +888,17 @@ function App() {
             </AdminGuard>
           }
         />
+        {/* Ana Sayfa Blok Yönetimi: Admin banner izni gerekli */}
+        <Route
+          path="/admin/home-blocks"
+          element={
+            <AdminGuard requiredPermission="banners.view">
+              <AdminLayout>
+                <AdminHomeBlocks />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
         {/* Weight Reports: reports.weight VEYA orders.view izni gerekli (OR logic) */}
         <Route
           path="/admin/weight-reports"
@@ -1169,11 +1183,39 @@ function HomePage() {
   const [isNewsletterSubscribed, setIsNewsletterSubscribed] =
     React.useState(false);
 
+  // Ana Sayfa Blokları State'leri (Admin panelden yönetilen poster + ürün blokları)
+  const [homeBlocks, setHomeBlocks] = React.useState([]);
+  const [blocksLoading, setBlocksLoading] = React.useState(true);
+
   React.useEffect(() => {
     const cachedSubscription = localStorage.getItem("newsletter_subscribed");
     if (cachedSubscription) {
       setIsNewsletterSubscribed(true);
     }
+  }, []);
+
+  // Ana Sayfa Bloklarını API'den çek - homeBlockService kullanarak
+  React.useEffect(() => {
+    const fetchHomeBlocks = async () => {
+      console.log("[HomePage] 🚀 Home blocks yükleme başlatılıyor...");
+      setBlocksLoading(true);
+      try {
+        const blocks = await homeBlockService.getActiveBlocks();
+        console.log(
+          "[HomePage] 📦 Home blocks loaded:",
+          blocks?.length || 0,
+          blocks,
+        );
+        setHomeBlocks(blocks || []);
+      } catch (err) {
+        console.error("[HomePage] ❌ Home blocks error:", err?.message || err);
+        setHomeBlocks([]);
+      } finally {
+        setBlocksLoading(false);
+        console.log("[HomePage] ✅ Home blocks yükleme tamamlandı");
+      }
+    };
+    fetchHomeBlocks();
   }, []);
 
   // Posterleri API'den çek - bannerService kullanarak
@@ -1536,7 +1578,46 @@ function HomePage() {
         </div>
       </section>
 
-      {/* İlgini Çekebilecek Ürünler Section */}
+      {/* ========== PROMOSYON BANNER'LARI (2x2 Grid) ========== */}
+      <section className="promo-section py-3" style={{ background: "#f8f9fa" }}>
+        <div className="container-fluid px-4">
+          <div className="promo-grid">
+            {promoImages.map((promo) => (
+              <div
+                key={promo.id}
+                className="promo-grid-item"
+                style={{
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+                  cursor: "pointer",
+                  transition: "transform 0.3s ease",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.transform = "translateY(-5px)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.transform = "translateY(0)")
+                }
+                onClick={() =>
+                  promo.link && (window.location.href = promo.link)
+                }
+              >
+                <img
+                  src={promo.image}
+                  alt={promo.title}
+                  className="promo-grid-image"
+                  onError={(e) => {
+                    e.target.src = "/images/placeholder.png";
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ========== İLGİNİ ÇEKEBİLECEK ÜRÜNLER ========== */}
       <section
         className="featured-products-section py-5"
         style={{
@@ -1553,53 +1634,6 @@ function HomePage() {
         ></div>
 
         <div className="container-fluid px-4 position-relative">
-          {/* Dinamik Promosyon Resimleri */}
-          <div className="special-images-container mb-5 pt-3">
-            <div className="d-flex flex-wrap justify-content-center special-images-row">
-              {promoImages.map((promo) => (
-                <div key={promo.id} className="special-image-col">
-                  <div
-                    className="special-image-card h-100"
-                    style={{
-                      borderRadius: "15px",
-                      overflow: "hidden",
-                      boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
-                      transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                      cursor: "pointer",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-10px)";
-                      e.currentTarget.style.boxShadow =
-                        "0 8px 25px rgba(0,0,0,0.15)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow =
-                        "0 4px 15px rgba(0,0,0,0.1)";
-                    }}
-                    onClick={() =>
-                      promo.link && (window.location.href = promo.link)
-                    }
-                  >
-                    <img
-                      src={promo.image}
-                      alt={promo.title}
-                      className="img-fluid w-100"
-                      style={{
-                        display: "block",
-                        objectFit: "cover",
-                        height: "100%",
-                      }}
-                      onError={(e) => {
-                        e.target.src = "/images/placeholder.png";
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Modern Section Header */}
           <div className="text-center mb-5">
             <div
@@ -1662,14 +1696,56 @@ function HomePage() {
             </div>
           </div>
 
-          {/* Products Grid */}
+          {/* Products Grid - Eski ProductGrid componenti */}
           <ProductGrid />
         </div>
       </section>
 
+      {/* ========== ANA SAYFA ÜRÜN BLOKLARI SECTION (Poster + Ürünler) ========== */}
+      {/* 
+        Bu bölüm Admin Panel > Ana Sayfa Blokları'ndan kontrol edilir.
+        Her blok: Sol tarafta poster, sağ tarafta ürün grid'i
+        Blok Tipleri: manual, category, discounted, newest, bestseller
+      */}
+      {blocksLoading ? (
+        <section className="py-4">
+          <div className="container-fluid px-4">
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                color: "#6b7280",
+              }}
+            >
+              <i
+                className="fas fa-spinner fa-spin me-2"
+                style={{ fontSize: "24px" }}
+              ></i>
+              <p className="mt-2">Ürün blokları yükleniyor...</p>
+            </div>
+          </div>
+        </section>
+      ) : homeBlocks.length > 0 ? (
+        <section
+          className="product-blocks-section py-4"
+          style={{ background: "#f8f9fa" }}
+        >
+          <div className="container-fluid px-4">
+            {console.log(
+              "🏠 [HomePage] Rendering homeBlocks:",
+              homeBlocks.length,
+              homeBlocks,
+            )}
+            {homeBlocks.map((block) => (
+              <ProductBlockSection key={block.id || block.Id} block={block} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {/* ========== ŞEF ÖNERİSİ SECTION ========== */}
       {recipeBanners.length > 0 && (
-        <section 
+        <section
           className="recipe-section py-4"
           style={{
             background: "#f8f9fa",
@@ -1703,16 +1779,19 @@ function HomePage() {
                 </span>
               </h3>
             </div>
-            
+
             <div
               className="recipe-grid"
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, 1fr)",
+                display: "flex",
+                flexWrap: "wrap",
+                justifyContent: "center",
                 gap: "16px",
+                maxWidth: "1100px",
+                margin: "0 auto",
               }}
             >
-              {recipeBanners.slice(0, 2).map((recipe) => (
+              {recipeBanners.slice(0, 4).map((recipe) => (
                 <div
                   key={recipe.id}
                   className="recipe-card"
@@ -1723,23 +1802,30 @@ function HomePage() {
                     transition: "transform 0.3s ease, box-shadow 0.3s ease",
                     cursor: "pointer",
                     backgroundColor: "#fff",
+                    position: "relative",
+                    flex: "1 1 280px",
+                    maxWidth: "500px",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+                    e.currentTarget.style.boxShadow =
+                      "0 8px 24px rgba(0,0,0,0.12)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                    e.currentTarget.style.boxShadow =
+                      "0 4px 12px rgba(0,0,0,0.08)";
                   }}
-                  onClick={() => recipe.link && (window.location.href = recipe.link)}
+                  onClick={() =>
+                    recipe.link && (window.location.href = recipe.link)
+                  }
                 >
                   <img
                     src={recipe.image}
                     alt={recipe.title || "Şef Önerisi"}
                     style={{
                       width: "100%",
-                      height: "160px",
+                      height: "140px",
                       objectFit: "cover",
                       display: "block",
                     }}
@@ -1747,6 +1833,33 @@ function HomePage() {
                       e.target.src = "/images/placeholder.png";
                     }}
                   />
+                  {/* Başlık Overlay */}
+                  {recipe.title && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        background:
+                          "linear-gradient(transparent, rgba(0,0,0,0.7))",
+                        padding: "20px 10px 10px",
+                        color: "white",
+                      }}
+                    >
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: "0.75rem",
+                          fontWeight: "600",
+                          textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {recipe.title}
+                      </p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1755,10 +1868,14 @@ function HomePage() {
             <style>{`
               @media (max-width: 576px) {
                 .recipe-grid {
-                  grid-template-columns: 1fr !important;
+                  gap: 10px !important;
+                  max-width: 100% !important;
                 }
                 .recipe-card img {
-                  height: 140px !important;
+                  height: 120px !important;
+                }
+                .recipe-card {
+                  border-radius: 10px !important;
                 }
               }
             `}</style>

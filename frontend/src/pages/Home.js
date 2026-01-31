@@ -19,9 +19,11 @@ import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
 import bannerService from "../services/bannerService";
 import categoryServiceReal from "../services/categoryServiceReal";
+import homeBlockService from "../services/homeBlockService";
 import { Helmet } from "react-helmet-async";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
+import ProductBlockSection from "./components/ProductBlockSection";
 import HeroSlider from "../components/HeroSlider";
 import PromoCards from "../components/PromoCards";
 import { useCart } from "../contexts/CartContext";
@@ -45,6 +47,10 @@ export default function Home() {
   const [productLoading, setProductLoading] = useState(true);
   const [productError, setProductError] = useState(null);
   const [activeCampaigns, setActiveCampaigns] = useState([]);
+
+  // Home Block state'leri (Poster + Ürün blokları)
+  const [homeBlocks, setHomeBlocks] = useState([]);
+  const [blocksLoading, setBlocksLoading] = useState(true);
 
   // Banner state'leri
   const [sliderBanners, setSliderBanners] = useState([]);
@@ -143,6 +149,22 @@ export default function Home() {
       setRecipeBanners([]);
     } finally {
       setBannersLoading(false);
+    }
+
+    // Ana sayfa ürün bloklarını yükle (Poster + Ürünler)
+    console.log("[Home] 🚀 Home blocks yükleme başlatılıyor...");
+    setBlocksLoading(true);
+    try {
+      console.log("[Home] 📡 API çağrısı yapılıyor: homeBlockService.getActiveBlocks()");
+      const blocks = await homeBlockService.getActiveBlocks();
+      console.log("[Home] 📦 Home blocks loaded:", blocks?.length || 0, blocks);
+      setHomeBlocks(blocks || []);
+    } catch (err) {
+      console.error("[Home] ❌ Home blocks error:", err?.message || err);
+      setHomeBlocks([]);
+    } finally {
+      setBlocksLoading(false);
+      console.log("[Home] ✅ Home blocks yükleme tamamlandı");
     }
   }, []);
 
@@ -245,17 +267,29 @@ export default function Home() {
 
   /** Sepete ürün ekle */
   const handleAddToCart = useCallback(
-    async (productId) => {
-      const product = featured.find((p) => p.id === productId);
-      if (product) {
-        try {
-          await addToCart(product, 1);
-          setAddedProduct(product);
-          setCartModalOpen(true);
-        } catch (error) {
-          console.error("Sepete ekleme hatası:", error);
-          alert("Ürün sepete eklenirken bir hata oluştu.");
-        }
+    async (productOrId, fallbackId) => {
+      let product = null;
+
+      if (productOrId && typeof productOrId === "object") {
+        product = productOrId;
+      } else {
+        const productId =
+          typeof productOrId === "number" ? productOrId : fallbackId;
+        product = featured.find((p) => p.id === productId) || null;
+      }
+
+      if (!product) {
+        console.warn("[Home] Sepete ekleme için ürün bulunamadı:", productOrId);
+        return;
+      }
+
+      try {
+        await addToCart(product, 1);
+        setAddedProduct(product);
+        setCartModalOpen(true);
+      } catch (error) {
+        console.error("Sepete ekleme hatası:", error);
+        alert("Ürün sepete eklenirken bir hata oluştu.");
       }
     },
     [featured, addToCart],
@@ -577,100 +611,147 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ========== ÖNE ÇIKANLAR SECTION ========== */}
-      <section>
-        <h2
-          style={{
-            fontSize: "1.25rem",
-            fontWeight: "600",
-            marginBottom: "12px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <i className="fas fa-star" style={{ color: "#eab308" }}></i>
-          Öne Çıkanlar
-        </h2>
-
-        {productLoading ? (
-          // Loading State
-          <div
-            style={{ textAlign: "center", padding: "20px", color: "#6b7280" }}
-          >
-            <i className="fas fa-spinner fa-spin me-2"></i>
-            Ürünler yükleniyor…
-          </div>
-        ) : productError ? (
-          // Error State
-          <div
-            style={{
-              color: "#dc2626",
-              padding: "16px",
-              background: "#fef2f2",
-              borderRadius: "12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-            }}
-          >
-            <i className="fas fa-exclamation-circle fa-lg"></i>
-            <div>
-              <strong>Hata:</strong> {productError}
-              <button
-                onClick={loadData}
-                style={{
-                  marginLeft: "12px",
-                  padding: "4px 12px",
-                  backgroundColor: "#dc2626",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Tekrar Dene
-              </button>
-            </div>
-          </div>
-        ) : featured.length === 0 ? (
-          // Empty State
+      {/* ========== ÜRÜN BLOKLARI SECTION (Poster + Ürünler) ========== */}
+      {/* 
+        Bu bölüm Admin Panel > Ana Sayfa Blokları'ndan kontrol edilir.
+        Her blok: Sol tarafta poster, sağ tarafta ürün grid'i
+        Blok Tipleri: manual, category, discounted, newest, bestseller
+      */}
+      {blocksLoading ? (
+        <section className="mb-6">
           <div
             style={{
               textAlign: "center",
-              padding: "30px 20px",
-              color: "#9ca3af",
-              backgroundColor: "#f9fafb",
-              borderRadius: "12px",
+              padding: "40px 20px",
+              color: "#6b7280",
             }}
           >
-            <i className="fas fa-box-open fa-2x mb-2 d-block opacity-50"></i>
-            Henüz ürün eklenmemiş
+            <i
+              className="fas fa-spinner fa-spin me-2"
+              style={{ fontSize: "24px" }}
+            ></i>
+            <p className="mt-2">Ürün blokları yükleniyor...</p>
           </div>
-        ) : (
-          // Ürün Grid
-          <div
+        </section>
+      ) : homeBlocks.length > 0 ? (
+        <section
+          className="product-blocks-section"
+          style={{ marginTop: "32px" }}
+        >
+          {console.log(
+            "🏠 Rendering homeBlocks:",
+            homeBlocks.length,
+            homeBlocks,
+          )}
+          {homeBlocks.map((block) => (
+            <ProductBlockSection
+              key={block.id}
+              block={block}
+              onAddToCart={handleAddToCart}
+              onToggleFavorite={handleToggleFavorite}
+              favorites={favorites}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      {/* ========== ÖNE ÇIKANLAR SECTION (Fallback - Bloklar boşsa gösterilir) ========== */}
+      {/* Eğer hiç blok tanımlı değilse veya bloklar yükleniyorsa eski sistemi göster */}
+      {!blocksLoading && homeBlocks.length === 0 && (
+        <section>
+          <h2
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 280px))",
-              gap: "20px",
-              justifyContent: "center",
+              fontSize: "1.25rem",
+              fontWeight: "600",
+              marginBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
             }}
           >
-            {featured.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                campaign={getCampaignForProduct(p)}
-                onToggleFavorite={handleToggleFavorite}
-                isFavorite={favorites.includes(p.id)}
-                onAddToCart={handleAddToCart}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+            <i className="fas fa-star" style={{ color: "#eab308" }}></i>
+            Öne Çıkanlar
+          </h2>
+
+          {productLoading ? (
+            // Loading State
+            <div
+              style={{ textAlign: "center", padding: "20px", color: "#6b7280" }}
+            >
+              <i className="fas fa-spinner fa-spin me-2"></i>
+              Ürünler yükleniyor…
+            </div>
+          ) : productError ? (
+            // Error State
+            <div
+              style={{
+                color: "#dc2626",
+                padding: "16px",
+                background: "#fef2f2",
+                borderRadius: "12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <i className="fas fa-exclamation-circle fa-lg"></i>
+              <div>
+                <strong>Hata:</strong> {productError}
+                <button
+                  onClick={loadData}
+                  style={{
+                    marginLeft: "12px",
+                    padding: "4px 12px",
+                    backgroundColor: "#dc2626",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Tekrar Dene
+                </button>
+              </div>
+            </div>
+          ) : featured.length === 0 ? (
+            // Empty State
+            <div
+              style={{
+                textAlign: "center",
+                padding: "30px 20px",
+                color: "#9ca3af",
+                backgroundColor: "#f9fafb",
+                borderRadius: "12px",
+              }}
+            >
+              <i className="fas fa-box-open fa-2x mb-2 d-block opacity-50"></i>
+              Henüz ürün eklenmemiş
+            </div>
+          ) : (
+            // Ürün Grid
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 280px))",
+                gap: "20px",
+                justifyContent: "center",
+              }}
+            >
+              {featured.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  campaign={getCampaignForProduct(p)}
+                  onToggleFavorite={handleToggleFavorite}
+                  isFavorite={favorites.includes(p.id)}
+                  onAddToCart={handleAddToCart}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ========== NE PİŞİRSEM? - ŞEF TAVSİYESİ SECTION ========== */}
       {/* 
@@ -679,69 +760,79 @@ export default function Home() {
         Posterler tıklanabilir, /tarif/:id sayfasına yönlendirir.
       */}
       {/* DEBUG: Bu bölüm her zaman görünür olmalı */}
-      {console.log("[Home] 🍳 Ne Pişirsem Bölümü Render - recipeBanners:", recipeBanners?.length || 0)}
+      {console.log(
+        "[Home] 🍳 Ne Pişirsem Bölümü Render - recipeBanners:",
+        recipeBanners?.length || 0,
+      )}
       <section
         className="chef-recommendation-section"
-        style={{ 
-          marginTop: "40px", 
+        style={{
+          marginTop: "40px",
           marginBottom: "40px",
           padding: "24px",
           backgroundColor: "#fff8f5",
           borderRadius: "16px",
-          border: "2px solid #ff6b35"
+          border: "2px solid #ff6b35",
         }}
       >
-          <h2
+        <h2
+          style={{
+            fontSize: "1.35rem",
+            fontWeight: "700",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            color: "#ff6b35",
+          }}
+        >
+          <i className="fas fa-utensils" style={{ color: "#ff6b35" }}></i>
+          Ne Pişirsem?
+          <span
             style={{
-              fontSize: "1.35rem",
-              fontWeight: "700",
-              marginBottom: "20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              color: "#ff6b35",
+              backgroundColor: "#10b981",
+              color: "white",
+              fontSize: "0.65rem",
+              fontWeight: "600",
+              padding: "2px 8px",
+              borderRadius: "12px",
+              marginLeft: "8px",
             }}
           >
-            <i className="fas fa-utensils" style={{ color: "#ff6b35" }}></i>
-            Ne Pişirsem?
-            <span
-              style={{
-                backgroundColor: "#10b981",
-                color: "white",
-                fontSize: "0.65rem",
-                fontWeight: "600",
-                padding: "2px 8px",
-                borderRadius: "12px",
-                marginLeft: "8px",
-              }}
-            >
-              YENİ
-            </span>
-          </h2>
+            YENİ
+          </span>
+        </h2>
 
-          <div
-            className="chef-posters-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: "20px",
-            }}
-          >
-            {/* API'den gelen posterler varsa onları göster, yoksa demo posterler */}
-            {(recipeBanners.length > 0 ? recipeBanners : [
-              {
-                id: 'demo1',
-                title: 'Gurme Lezzetler',
-                imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=300&fit=crop&q=80',
-                linkUrl: '/tarif/1'
-              },
-              {
-                id: 'demo2', 
-                title: 'Şef Tavsiyesi',
-                imageUrl: 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&h=300&fit=crop&q=80',
-                linkUrl: '/tarif/2'
-              }
-            ]).slice(0, 2).map((banner) => (
+        <div
+          className="chef-posters-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: "20px",
+          }}
+        >
+          {/* API'den gelen posterler varsa onları göster, yoksa demo posterler */}
+          {(recipeBanners.length > 0
+            ? recipeBanners
+            : [
+                {
+                  id: "demo1",
+                  title: "Gurme Lezzetler",
+                  imageUrl:
+                    "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&h=300&fit=crop&q=80",
+                  linkUrl: "/tarif/1",
+                },
+                {
+                  id: "demo2",
+                  title: "Şef Tavsiyesi",
+                  imageUrl:
+                    "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&h=300&fit=crop&q=80",
+                  linkUrl: "/tarif/2",
+                },
+              ]
+          )
+            .slice(0, 2)
+            .map((banner) => (
               <Link
                 key={banner.id}
                 to={banner.linkUrl || `/tarif/${banner.id}`}
@@ -781,10 +872,10 @@ export default function Home() {
                 />
               </Link>
             ))}
-          </div>
+        </div>
 
-          {/* Responsive CSS - Mobilde tek sütun */}
-          <style>{`
+        {/* Responsive CSS - Mobilde tek sütun */}
+        <style>{`
             @media (max-width: 768px) {
               .chef-posters-grid {
                 grid-template-columns: 1fr !important;
@@ -795,7 +886,7 @@ export default function Home() {
               }
             }
           `}</style>
-        </section>
+      </section>
 
       {/* Sepete Ekleme Modal */}
       <AddToCartModal

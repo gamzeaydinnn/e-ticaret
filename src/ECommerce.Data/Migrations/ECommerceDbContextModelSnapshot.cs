@@ -925,6 +925,132 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("Favorites");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.HomeBlockProduct", b =>
+                {
+                    b.Property<int>("BlockId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.HasKey("BlockId", "ProductId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("BlockId", "DisplayOrder")
+                        .HasDatabaseName("IX_HomeBlockProducts_Block_Order");
+
+                    b.ToTable("HomeBlockProducts", (string)null);
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.HomeProductBlock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BackgroundColor")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("BannerId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BlockType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("manual");
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("MaxProductCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(6);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PosterImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ViewAllText")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasDefaultValue("Tümünü Gör");
+
+                    b.Property<string>("ViewAllUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BannerId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("IX_HomeProductBlocks_Slug");
+
+                    b.HasIndex("IsActive", "DisplayOrder")
+                        .HasDatabaseName("IX_HomeProductBlocks_Active_Order");
+
+                    b.ToTable("HomeProductBlocks", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.InventoryLog", b =>
                 {
                     b.Property<int>("Id")
@@ -3652,6 +3778,42 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.HomeBlockProduct", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.HomeProductBlock", "Block")
+                        .WithMany("BlockProducts")
+                        .HasForeignKey("BlockId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
+                        .WithMany("HomeBlockProducts")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Block");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.HomeProductBlock", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Banner", "Banner")
+                        .WithMany()
+                        .HasForeignKey("BannerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ECommerce.Entities.Concrete.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Banner");
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.InventoryLog", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.Product", "Product")
@@ -4115,6 +4277,11 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("Orders");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.HomeProductBlock", b =>
+                {
+                    b.Navigation("BlockProducts");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.Order", b =>
                 {
                     b.Navigation("CouponUsages");
@@ -4154,6 +4321,8 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("CouponProducts");
 
                     b.Navigation("Favorites");
+
+                    b.Navigation("HomeBlockProducts");
 
                     b.Navigation("OrderItems");
 

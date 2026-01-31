@@ -3261,36 +3261,178 @@ html {
 }
 
 /* Promo Cards - Kampanya Kartları */
-@media (max-width: 1200px) {
-  .promo-cards-grid [style*="gridTemplateColumns"] {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 170px)) !important;
+/* Web için 5 kolon sabit */
+@media (min-width: 993px) {
+  .promo-cards-grid {
+    grid-template-columns: repeat(5, 1fr) !important;
+    gap: 16px !important;
+  }
+}
+
+/* Promo banner grid (HomePage) - Web ve Mobil: tek sıra yan yana */
+.promo-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+  --promo-gap: 20px;
+  --promo-columns: 4;
+}
+
+.promo-grid-item {
+  flex: 0 0
+    calc(
+      (100% - ((var(--promo-columns) - 1) * var(--promo-gap))) /
+        var(--promo-columns)
+    );
+  max-width: calc(
+    (100% - ((var(--promo-columns) - 1) * var(--promo-gap))) /
+      var(--promo-columns)
+  );
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.promo-grid-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+/* PromoCards (grid) - Web için 5'li tek sıra ve okunurluk */
+@media (min-width: 1200px) {
+  .promo-cards-grid {
+    max-width: 1400px !important;
+    gap: 12px !important;
+    --promo-card-ratio: 56%;
+  }
+
+  .promo-cards-grid .promo-card-image-container {
+    padding-top: var(--promo-card-ratio) !important; /* 16:9 oranına yakın */
+  }
+
+  .promo-cards-grid .promo-card-image {
+    object-fit: cover !important;
+    object-position: center top !important;
+  }
+}
+
+@media (min-width: 1200px) {
+  .promo-grid {
+    --promo-columns: 5;
+    --promo-gap: 12px;
+  }
+
+  .promo-grid-item {
+    padding: 0;
+    aspect-ratio: 4 / 3;
+  }
+
+  .promo-grid-image {
+    object-fit: cover;
+    object-position: center top;
   }
 }
 
 @media (max-width: 992px) {
-  .promo-cards-grid [style*="gridTemplateColumns"] {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 160px)) !important;
+  .promo-cards-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
     gap: 12px !important;
+  }
+
+  .promo-grid {
+    gap: 14px;
+    padding: 0 15px;
+    --promo-gap: 14px;
+  }
+
+  .promo-grid-item {
+    max-width: none;
+    min-width: 0;
   }
 }
 
 @media (max-width: 768px) {
-  .promo-cards-grid [style*="gridTemplateColumns"] {
-    grid-template-columns: repeat(auto-fill, minmax(110px, 150px)) !important;
+  .promo-cards-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
     gap: 10px !important;
+  }
+
+  .promo-grid {
+    gap: 10px;
+    padding: 0 10px;
+    --promo-gap: 10px;
+  }
+
+  .promo-grid-item {
+    max-width: none;
+    min-width: 0;
   }
 }
 
 @media (max-width: 576px) {
-  .promo-cards-grid [style*="gridTemplateColumns"] {
-    grid-template-columns: repeat(auto-fill, minmax(100px, 140px)) !important;
+  .promo-cards-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
     gap: 8px !important;
+  }
+
+  /* Mobil - yan yana tek sıra, ekrana sığacak şekilde */
+  .promo-grid {
+    gap: 4px;
+    padding: 0 4px;
+    justify-content: space-between;
+    --promo-gap: 4px;
+  }
+
+  .promo-grid-item {
+    flex: 1 1 0;
+    max-width: none;
+    min-width: 0;
+    border-radius: 10px !important;
   }
 }
 
 /* ===================================== */
 /* ŞEF TAVSİYESİ RESPONSIVE STYLES      */
 /* ===================================== */
+
+/* Web: yan yana, Mobil: alt alta */
+.recipe-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 16px;
+}
+
+.recipe-card {
+  flex: 1 1 280px;
+  max-width: 500px;
+}
+
+@media (max-width: 576px) {
+  .recipe-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .recipe-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: none !important;
+  }
+}
 
 .chef-recommendations {
   max-width: 900px;

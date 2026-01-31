@@ -248,9 +248,7 @@ export default function ProductGrid({
   }, [data, categoryId]);
 
   const handleAddToCart = (productId) => {
-    const product = data.find(
-      (p) => String(p.id) === String(productId),
-    );
+    const product = data.find((p) => String(p.id) === String(productId));
     if (!product) return;
 
     // Context üzerinden sepete ekle (hem misafir hem kullanıcı için çalışır)
@@ -580,12 +578,12 @@ export default function ProductGrid({
             const campaignName = p.campaignName;
 
             return (
-              <div key={p.id} className="col-6 col-md-4 col-lg-3 mb-3">
+              <div key={p.id} className="col-6 col-md-4 col-lg-2 mb-3">
                 <div
                   className="modern-product-card h-100"
                   style={{
                     background: "#ffffff",
-                    borderRadius: "20px",
+                    borderRadius: "16px",
                     border: hasCampaign
                       ? "2px solid rgba(239, 68, 68, 0.3)"
                       : "1px solid rgba(255, 107, 53, 0.1)",
@@ -593,7 +591,8 @@ export default function ProductGrid({
                     position: "relative",
                     animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
                     cursor: "pointer",
-                    minHeight: "380px",
+                    minHeight: "320px",
+                    maxWidth: "220px",
                     display: "flex",
                     flexDirection: "column",
                     boxShadow: hasCampaign
@@ -602,17 +601,16 @@ export default function ProductGrid({
                   }}
                   onClick={(e) => handleProductClick(p, e)}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.transform =
-                      "translateY(-8px) scale(1.02)";
+                    e.currentTarget.style.transform = "translateY(-5px)";
                     e.currentTarget.style.boxShadow = hasCampaign
-                      ? "0 20px 40px rgba(239, 68, 68, 0.25)"
-                      : "0 20px 40px rgba(255, 107, 53, 0.15)";
+                      ? "0 15px 30px rgba(239, 68, 68, 0.25)"
+                      : "0 15px 30px rgba(255, 107, 53, 0.15)";
                     e.currentTarget.style.borderColor = hasCampaign
                       ? "rgba(239, 68, 68, 0.5)"
-                      : "rgba(255, 107, 53, 0.3)";
+                      : "#ff6b35";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0) scale(1)";
+                    e.currentTarget.style.transform = "translateY(0)";
                     e.currentTarget.style.boxShadow = hasCampaign
                       ? "0 5px 20px rgba(239, 68, 68, 0.15)"
                       : "0 5px 15px rgba(0, 0, 0, 0.08)";
@@ -733,7 +731,7 @@ export default function ProductGrid({
                   <div
                     className="product-image-container"
                     style={{
-                      height: 160,
+                      height: 120,
                       background: "#ffffff",
                       position: "relative",
                       overflow: "hidden",
@@ -746,7 +744,7 @@ export default function ProductGrid({
                         position: "relative",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "scale(1.1)";
+                        e.currentTarget.style.transform = "scale(1.05)";
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.transform = "scale(1)";
@@ -758,8 +756,8 @@ export default function ProductGrid({
                           alt={p.name}
                           className="product-image"
                           style={{
-                            maxHeight: "130px",
-                            maxWidth: "130px",
+                            maxHeight: "100px",
+                            maxWidth: "100px",
                             objectFit: "contain",
                             filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
                             transition: "all 0.3s ease",
@@ -769,11 +767,11 @@ export default function ProductGrid({
                         <div
                           className="d-flex align-items-center justify-content-center"
                           style={{
-                            width: "100px",
-                            height: "100px",
+                            width: "80px",
+                            height: "80px",
                             background: "#ffffff",
-                            borderRadius: "15px",
-                            fontSize: "2.5rem",
+                            borderRadius: "12px",
+                            fontSize: "2rem",
                             border: "1px solid #e9ecef",
                           }}
                         >
@@ -784,16 +782,16 @@ export default function ProductGrid({
                   </div>
 
                   <div
-                    className="card-body p-3 d-flex flex-column"
+                    className="card-body p-2 d-flex flex-column"
                     style={{
                       background: "#ffffff",
-                      minHeight: "180px",
+                      minHeight: "160px",
                     }}
                   >
                     {/* Rating */}
                     {p.rating && (
-                      <div className="d-flex align-items-center mb-2">
-                        <div className="star-rating me-2">
+                      <div className="d-flex align-items-center mb-1">
+                        <div className="star-rating me-1">
                           {[...Array(5)].map((_, i) => (
                             <i
                               key={i}
@@ -802,21 +800,26 @@ export default function ProductGrid({
                                   ? "text-warning"
                                   : "text-muted"
                               }`}
-                              style={{ fontSize: "0.7rem" }}
+                              style={{ fontSize: "0.6rem" }}
                             ></i>
                           ))}
                         </div>
-                        <small className="text-muted">({p.reviewCount})</small>
+                        <small
+                          className="text-muted"
+                          style={{ fontSize: "0.65rem" }}
+                        >
+                          ({p.reviewCount})
+                        </small>
                       </div>
                     )}
 
                     <h6
-                      className="product-title mb-2"
+                      className="product-title mb-1"
                       style={{
-                        height: "44px",
-                        fontSize: "0.88rem",
+                        height: "36px",
+                        fontSize: "0.8rem",
                         fontWeight: "600",
-                        lineHeight: "1.4",
+                        lineHeight: "1.3",
                         color: "#2c3e50",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -858,17 +861,17 @@ export default function ProductGrid({
 
                       {/* Modern Fiyat Bilgileri */}
                       <div
-                        className="price-section mb-3"
-                        style={{ minHeight: "72px" }}
+                        className="price-section mb-2"
+                        style={{ minHeight: "50px" }}
                       >
                         {hasDiscount && originalPrice ? (
                           <div className="price-container">
                             {/* Eski Fiyat - Üzeri Çizili */}
-                            <div className="d-flex align-items-center mb-2">
+                            <div className="d-flex align-items-center mb-1">
                               <span
                                 className="old-price me-2"
                                 style={{
-                                  fontSize: "0.85rem",
+                                  fontSize: "0.75rem",
                                   textDecoration: "line-through",
                                   textDecorationColor: "#ef4444",
                                   textDecorationThickness: "2px",
@@ -878,71 +881,30 @@ export default function ProductGrid({
                                 {originalPrice.toFixed(2)} TL
                               </span>
                             </div>
-                            {/* Yeni Fiyat - Kırmızı, Bold, Büyük */}
+                            {/* Yeni Fiyat - Turuncu, Bold */}
                             <div
                               className="current-price"
                               style={{
-                                fontSize: "1.3rem",
-                                fontWeight: "800",
-                                background:
-                                  "linear-gradient(135deg, #dc2626, #ef4444)",
-                                backgroundClip: "text",
-                                WebkitBackgroundClip: "text",
-                                WebkitTextFillColor: "transparent",
+                                fontSize: "1.1rem",
+                                fontWeight: "700",
+                                color: "#ff6b35",
                                 display: "inline-block",
-                                animation: hasCampaign
-                                  ? "price-pulse 2s ease-in-out infinite"
-                                  : "none",
                               }}
                             >
                               {currentPrice.toFixed(2)} TL
-                            </div>
-                            {/* Tasarruf Bilgisi */}
-                            <div
-                              className="savings-info mt-1"
-                              style={{
-                                fontSize: "0.7rem",
-                                color: "#059669",
-                                fontWeight: "600",
-                              }}
-                            >
-                              💰 {(originalPrice - currentPrice).toFixed(2)} TL
-                              tasarruf
                             </div>
                           </div>
                         ) : (
                           <div
                             className="current-price"
                             style={{
-                              fontSize: "1.4rem",
-                              fontWeight: "800",
-                              background:
-                                "linear-gradient(135deg, #28a745, #20c997)",
-                              backgroundClip: "text",
-                              WebkitBackgroundClip: "text",
-                              WebkitTextFillColor: "transparent",
+                              fontSize: "1.1rem",
+                              fontWeight: "700",
+                              color: "#ff6b35",
                               display: "inline-block",
                             }}
                           >
                             {currentPrice.toFixed(2)} TL
-                          </div>
-                        )}
-
-                        {isLowStock && (
-                          <div className="mt-2">
-                            <span
-                              className="badge bg-warning text-dark"
-                              style={{
-                                fontSize: "0.6rem",
-                                padding: "2px 6px",
-                                borderRadius: "10px",
-                              }}
-                            >
-                              Az Stok
-                            </span>
-                            <small className="ms-2 text-muted">
-                              {stock} adet kaldı
-                            </small>
                           </div>
                         )}
                       </div>
@@ -956,18 +918,14 @@ export default function ProductGrid({
                             background:
                               "linear-gradient(135deg, #ff6b35, #ff8c00)",
                             border: "none",
-                            borderRadius: "16px",
-                            padding: "6px 12px",
-                            fontSize: "0.78rem",
-                            fontWeight: "700",
+                            borderRadius: "10px",
+                            padding: "10px 12px",
+                            fontSize: "0.8rem",
+                            fontWeight: "600",
                             color: "white",
-                            transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                            boxShadow: "0 2px 8px rgba(255, 107, 53, 0.18)",
-                            position: "relative",
-                            overflow: "hidden",
+                            transition: "all 0.3s ease",
+                            boxShadow: "0 2px 8px rgba(255, 107, 53, 0.2)",
                             width: "100%",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
                           }}
                           disabled={isOutOfStock}
                           onClick={(e) => {
@@ -977,21 +935,19 @@ export default function ProductGrid({
                           }}
                           onMouseEnter={(e) => {
                             e.target.style.background =
-                              "linear-gradient(135deg, #ff8c00, #ffa500)";
-                            e.target.style.transform =
-                              "translateY(-2px) scale(1.02)";
+                              "linear-gradient(135deg, #e55a25, #e07800)";
+                            e.target.style.transform = "scale(1.02)";
                             e.target.style.boxShadow =
-                              "0 8px 25px rgba(255, 107, 53, 0.4)";
+                              "0 4px 15px rgba(255, 107, 53, 0.4)";
                           }}
                           onMouseLeave={(e) => {
                             e.target.style.background =
                               "linear-gradient(135deg, #ff6b35, #ff8c00)";
-                            e.target.style.transform = "translateY(0) scale(1)";
+                            e.target.style.transform = "scale(1)";
                             e.target.style.boxShadow =
-                              "0 4px 15px rgba(255, 107, 53, 0.3)";
+                              "0 2px 8px rgba(255, 107, 53, 0.2)";
                           }}
                         >
-                          <i className="fas fa-shopping-cart me-2"></i>
                           {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
                         </button>
                       </div>

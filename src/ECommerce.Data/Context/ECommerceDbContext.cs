@@ -166,6 +166,26 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<ShippingSetting> ShippingSettings { get; set; }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // ANA SAYFA ÜRÜN BLOK SİSTEMİ
+        // Admin panelinden yönetilebilir ürün blokları (İndirimli, Süt Ürünleri vb.)
+        // Her blok poster/banner + ürün listesi şeklinde görüntülenir
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Ana sayfa ürün bloklarını tutar.
+        /// Her blok bir poster ve ürün listesi içerir.
+        /// Blok tipleri: manual, category, discounted, newest, bestseller
+        /// </summary>
+        public virtual DbSet<HomeProductBlock> HomeProductBlocks { get; set; }
+
+        /// <summary>
+        /// Blok-Ürün many-to-many ilişkisini yönetir.
+        /// Sadece BlockType = "manual" olan bloklar için kullanılır.
+        /// Admin'in elle seçtiği ürünleri ve sıralamasını saklar.
+        /// </summary>
+        public virtual DbSet<HomeBlockProduct> HomeBlockProducts { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -1331,6 +1351,112 @@ namespace ECommerce.Data.Context
                 // Aktif kayıtları hızlı sorgulamak için index
                 entity.HasIndex(e => new { e.IsActive, e.SortOrder })
                     .HasDatabaseName("IX_ShippingSettings_Active_SortOrder");
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // ANA SAYFA ÜRÜN BLOK SİSTEMİ
+            // HomeProductBlock ve HomeBlockProduct entity konfigürasyonları
+            // ═══════════════════════════════════════════════════════════════════════════════
+
+            // -------------------
+            // HomeProductBlock Configuration
+            // Ana sayfa ürün bloklarını tutar (İndirimli Ürünler, Süt Ürünleri vb.)
+            // -------------------
+            modelBuilder.Entity<HomeProductBlock>(entity =>
+            {
+                entity.ToTable("HomeProductBlocks");
+                
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Name)
+                    .HasMaxLength(100)
+                    .IsRequired();
+
+                entity.Property(e => e.Slug)
+                    .HasMaxLength(150)
+                    .IsRequired();
+
+                entity.Property(e => e.Description)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.BlockType)
+                    .HasMaxLength(50)
+                    .IsRequired()
+                    .HasDefaultValue("manual");
+
+                entity.Property(e => e.PosterImageUrl)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.BackgroundColor)
+                    .HasMaxLength(20);
+
+                entity.Property(e => e.ViewAllUrl)
+                    .HasMaxLength(300);
+
+                entity.Property(e => e.ViewAllText)
+                    .HasMaxLength(50)
+                    .HasDefaultValue("Tümünü Gör");
+
+                entity.Property(e => e.MaxProductCount)
+                    .HasDefaultValue(6);
+
+                entity.Property(e => e.IsActive)
+                    .HasDefaultValue(true);
+
+                // Slug benzersiz olmalı
+                entity.HasIndex(e => e.Slug)
+                    .IsUnique()
+                    .HasDatabaseName("IX_HomeProductBlocks_Slug");
+
+                // Aktif blokları sıralı getirmek için index
+                entity.HasIndex(e => new { e.IsActive, e.DisplayOrder })
+                    .HasDatabaseName("IX_HomeProductBlocks_Active_Order");
+
+                // Banner ilişkisi (1 : 0..1)
+                entity.HasOne(e => e.Banner)
+                    .WithMany()
+                    .HasForeignKey(e => e.BannerId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                // Category ilişkisi (1 : 0..1)
+                entity.HasOne(e => e.Category)
+                    .WithMany()
+                    .HasForeignKey(e => e.CategoryId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            // -------------------
+            // HomeBlockProduct Configuration
+            // Blok-Ürün many-to-many ilişkisi (manuel seçim için)
+            // -------------------
+            modelBuilder.Entity<HomeBlockProduct>(entity =>
+            {
+                entity.ToTable("HomeBlockProducts");
+
+                // Composite Primary Key (BlockId + ProductId)
+                entity.HasKey(e => new { e.BlockId, e.ProductId });
+
+                entity.Property(e => e.DisplayOrder)
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.IsActive)
+                    .HasDefaultValue(true);
+
+                // HomeProductBlock ilişkisi
+                entity.HasOne(e => e.Block)
+                    .WithMany(b => b.BlockProducts)
+                    .HasForeignKey(e => e.BlockId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Product ilişkisi
+                entity.HasOne(e => e.Product)
+                    .WithMany(p => p.HomeBlockProducts)
+                    .HasForeignKey(e => e.ProductId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                // Sıralama için index
+                entity.HasIndex(e => new { e.BlockId, e.DisplayOrder })
+                    .HasDatabaseName("IX_HomeBlockProducts_Block_Order");
             });
 
             // -------------------

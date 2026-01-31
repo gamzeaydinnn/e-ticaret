@@ -1,0 +1,256 @@
+/* =====================================================
+   PRODUCT BLOCK SECTION - POSTER + ÜRÜNLER
+   ProductGrid ile AYNI kart tasarımı kullanılıyor
+   ===================================================== */
+
+.product-block-section {
+  padding: 20px 0;
+  background-color: #fff;
+  overflow: hidden;
+  --block-card-width: 220px;
+  --block-card-height: 320px;
+  --block-image-height: 120px;
+  --block-body-min-height: 160px;
+}
+
+.product-block-container {
+  display: flex;
+  gap: 15px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+  align-items: stretch; /* Poster ve kartlar aynı yükseklikte */
+}
+
+/* =====================================================
+   POSTER - ÜRÜN KARTIYLA AYNI BOYUT (220x320)
+   ===================================================== */
+.product-block-poster {
+  flex-shrink: 0;
+  width: var(--block-card-width);
+  min-height: var(--block-card-height);
+  height: var(--block-card-height);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: stretch;
+}
+
+.poster-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.product-block-poster:hover .poster-image {
+  transform: scale(1.02);
+}
+
+/* =====================================================
+   ÜRÜN İÇERİK ALANI
+   ===================================================== */
+.product-block-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.products-slider-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+/* Scroll Container */
+.products-scroll-container {
+  display: flex;
+  gap: 15px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 10px 5px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  align-items: stretch;
+}
+
+.products-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobil Kart Stilleri */
+.product-block-section .product-block-card {
+  width: var(--block-card-width);
+  min-width: var(--block-card-width);
+  height: var(--block-card-height);
+  min-height: var(--block-card-height) !important;
+  flex-shrink: 0;
+}
+
+.product-block-section .product-block-card .product-image-container {
+  height: var(--block-image-height);
+}
+
+.product-block-section .product-block-card .card-body {
+  min-height: var(--block-body-min-height) !important;
+}
+
+/* Slider Arrows */
+.slider-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s;
+  color: #333;
+  font-size: 16px;
+}
+
+.slider-arrow:hover {
+  background: #ff6b35;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.slider-arrow-left {
+  left: -20px;
+}
+
+.slider-arrow-right {
+  right: -20px;
+}
+
+/* Tümünü Gör */
+.view-all-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding: 15px 5px 0;
+}
+
+.view-all-btn {
+  color: #ff6b35;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: rgba(255, 107, 53, 0.1);
+  transition: all 0.2s;
+}
+
+.view-all-btn:hover {
+  background: rgba(255, 107, 53, 0.2);
+  color: #e55a25;
+}
+
+/* =====================================================
+   RESPONSIVE - MOBİL
+   ===================================================== */
+@media (max-width: 992px) {
+  .product-block-container {
+    flex-direction: row;
+    padding: 0 15px;
+    align-items: flex-start;
+  }
+
+  .product-block-section {
+    --block-card-width: 140px;
+    --block-card-height: 260px;
+    --block-image-height: 96px;
+    --block-body-min-height: 140px;
+  }
+
+  .slider-arrow {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .product-block-section {
+    padding: 10px 0;
+    --block-card-width: 120px;
+    --block-card-height: 240px;
+    --block-image-height: 88px;
+    --block-body-min-height: 130px;
+  }
+
+  .product-block-container {
+    padding: 0 10px;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .product-block-poster {
+    border-radius: 12px;
+    background: #fff;
+    width: var(--block-card-width);
+    height: var(--block-card-height);
+    min-height: var(--block-card-height);
+    align-items: stretch;
+  }
+
+  .product-block-poster .poster-image {
+    object-fit: cover;
+    object-position: center;
+    border-radius: inherit;
+  }
+
+  .products-scroll-container {
+    gap: 8px;
+    padding: 5px 0;
+  }
+
+  .product-block-section .product-block-card {
+    border-radius: 12px;
+  }
+
+  .product-block-section .product-block-card .card-body {
+    padding: 6px !important;
+  }
+
+  .view-all-wrapper {
+    padding: 10px 0 0;
+  }
+
+  .view-all-btn {
+    font-size: 0.8rem;
+    padding: 8px 15px;
+  }
+
+  .product-block-section .modern-add-btn {
+    padding: 6px 6px;
+    font-size: 0.68rem;
+    line-height: 1.1;
+    border-radius: 8px;
+  }
+}
+
+/* =====================================================
+   TOAST ANİMASYONU
+   ===================================================== */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

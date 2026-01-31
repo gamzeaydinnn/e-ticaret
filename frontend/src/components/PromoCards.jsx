@@ -56,32 +56,31 @@ const styles = {
   },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 180px))",
-    gap: "14px",
+    gridTemplateColumns: "repeat(5, minmax(0, 1fr))", // Web için 5 kolon sabit
+    gap: "10px",
     justifyContent: "center",
-    maxWidth: "1200px",
+    maxWidth: "1400px",
     margin: "0 auto",
   },
   card: {
     position: "relative",
     display: "block",
-    borderRadius: "14px",
+    borderRadius: "16px",
     overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
     transition: "transform 0.3s ease, box-shadow 0.3s ease",
     backgroundColor: "#fff",
     textDecoration: "none",
-    maxWidth: "180px",
-    margin: "0 auto",
+    width: "100%",
   },
   cardHover: {
     transform: "translateY(-4px)",
-    boxShadow: "0 8px 20px rgba(0,0,0,0.12)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
   },
   imageContainer: {
     position: "relative",
     width: "100%",
-    paddingTop: "75%", // 4:3 aspect ratio - daha kompakt
+    paddingTop: "56%", // 16:9 oranına yakın, yazılar daha rahat sığar
     overflow: "hidden",
     backgroundColor: "#f3f4f6",
   },
@@ -91,7 +90,8 @@ const styles = {
     left: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover",
+    objectFit: "cover", // Kutuyu tamamen kaplasın
+    objectPosition: "center top", // Üstten göster - yazılar görünsün
     transition: "transform 0.3s ease",
   },
   imageHover: {
@@ -136,7 +136,7 @@ const styles = {
   },
   skeletonImage: {
     width: "100%",
-    paddingTop: "75%",
+    paddingTop: "56%",
     backgroundColor: "#d1d5db",
     animation: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
   },
@@ -185,6 +185,7 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
   return (
     <CardWrapper
       {...linkProps}
+      className="promo-card-item"
       style={cardStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -192,10 +193,11 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
       aria-label={promo.title || "Promosyon"}
     >
       {/* Görsel Container */}
-      <div style={styles.imageContainer}>
+      <div className="promo-card-image-container" style={styles.imageContainer}>
         <img
           src={imageSrc}
           alt={promo.title || "Promosyon görseli"}
+          className="promo-card-image"
           style={imageStyle}
           loading={index < 4 ? "eager" : "lazy"} // İlk 4 görsel hemen yükle
           onError={handleImageError}
@@ -298,12 +300,10 @@ function PromoCards({
   // ANA RENDER
   // ============================================
 
-  // Grid template columns hesapla
+  // Grid template columns hesapla - Web için 5 kolon
   const gridStyle = {
     ...styles.grid,
-    gridTemplateColumns: `repeat(auto-fill, minmax(${Math.floor(
-      280 / columns
-    )}px, 1fr))`,
+    gridTemplateColumns: "repeat(5, 1fr)",
   };
 
   return (
@@ -319,7 +319,12 @@ function PromoCards({
       )}
 
       {/* Promo Grid */}
-      <div style={gridStyle} role="list" aria-label={title}>
+      <div
+        className="promo-cards-grid"
+        style={gridStyle}
+        role="list"
+        aria-label={title}
+      >
         {promos.map((promo, index) => (
           <PromoCard key={promo.id} promo={promo} index={index} />
         ))}
@@ -340,7 +345,7 @@ PromoCards.propTypes = {
       title: PropTypes.string,
       linkUrl: PropTypes.string,
       badge: PropTypes.string,
-    })
+    }),
   ),
   loading: PropTypes.bool,
   title: PropTypes.string,

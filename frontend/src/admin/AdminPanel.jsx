@@ -6,6 +6,7 @@ import AdminOrders from "../pages/Admin/AdminOrders";
 import AdminUsers from "../pages/Admin/AdminUsers";
 import CouponManagement from "../pages/Admin/CouponManagement";
 import PosterManagement from "../pages/Admin/PosterManagement";
+import AdminHomeBlocks from "../pages/Admin/AdminHomeBlocks";
 import WeightReportsPanel from "./WeightReportsPanel";
 
 function AdminPanel() {
@@ -108,9 +109,25 @@ function AdminPanel() {
     { id: "categories", icon: "fas fa-tags", label: "Kategoriler" },
     { id: "orders", icon: "fas fa-shopping-bag", label: "Siparişler" },
     { id: "users", icon: "fas fa-users", label: "Kullanıcılar" },
-    { id: "posters", icon: "fas fa-image", label: "Poster Yönetimi", color: "orange" },
+    {
+      id: "posters",
+      icon: "fas fa-image",
+      label: "Poster Yönetimi",
+      color: "orange",
+    },
+    {
+      id: "homeblocks",
+      icon: "fas fa-th-large",
+      label: "Ana Sayfa Blokları",
+      color: "cyan",
+    },
     { id: "coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
-    { id: "weights", icon: "fas fa-balance-scale", label: "Ağırlık Raporları", color: "purple" },
+    {
+      id: "weights",
+      icon: "fas fa-balance-scale",
+      label: "Ağırlık Raporları",
+      color: "purple",
+    },
   ];
 
   return (
@@ -328,18 +345,20 @@ function AdminPanel() {
           }
         }
       `}</style>
-      
+
       {/* Sidebar */}
       <div className="admin-sidebar">
         {/* Logo */}
         <div className="admin-logo">
-          <div className="admin-logo-icon"><i className="fas fa-shield-alt"></i></div>
+          <div className="admin-logo-icon">
+            <i className="fas fa-shield-alt"></i>
+          </div>
           <div>
             <div className="admin-logo-text">Admin Panel</div>
             <div className="admin-logo-sub">Yönetim Merkezi</div>
           </div>
         </div>
-        
+
         {/* User Info */}
         <div className="admin-user-info">
           <div className="admin-user-avatar">A</div>
@@ -348,13 +367,13 @@ function AdminPanel() {
             <div className="admin-user-role">Yönetici</div>
           </div>
         </div>
-        
+
         {/* Navigation */}
         <nav className="admin-nav">
           {sidebarItems.map((item) => (
             <button
               key={item.id}
-              className={`admin-nav-item ${activeTab === item.id ? 'active' : ''} ${item.color === 'purple' ? 'purple' : ''}`}
+              className={`admin-nav-item ${activeTab === item.id ? "active" : ""} ${item.color === "purple" ? "purple" : ""}`}
               onClick={() => setActiveTab(item.id)}
             >
               <i className={`admin-nav-icon ${item.icon}`}></i>
@@ -362,7 +381,7 @@ function AdminPanel() {
             </button>
           ))}
         </nav>
-        
+
         {/* Logout */}
         <div className="admin-logout-section">
           <button className="admin-logout-btn" onClick={handleLogout}>
@@ -371,15 +390,20 @@ function AdminPanel() {
           </button>
         </div>
       </div>
-      
+
       {/* Content */}
       <div className="admin-content">
         <div className="admin-header">
           <div className="admin-header-title">
-            {sidebarItems.find(i => i.id === activeTab)?.label || 'Dashboard'}
+            {sidebarItems.find((i) => i.id === activeTab)?.label || "Dashboard"}
           </div>
           <div className="admin-header-time">
-            {new Date().toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {new Date().toLocaleDateString("tr-TR", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
           </div>
         </div>
         <div className="admin-main">
@@ -389,6 +413,7 @@ function AdminPanel() {
           {activeTab === "orders" && <AdminOrders />}
           {activeTab === "users" && <AdminUsers />}
           {activeTab === "posters" && <PosterManagement />}
+          {activeTab === "homeblocks" && <AdminHomeBlocks />}
           {activeTab === "coupons" && <CouponManagement />}
           {activeTab === "weights" && <WeightReportsPanel />}
         </div>

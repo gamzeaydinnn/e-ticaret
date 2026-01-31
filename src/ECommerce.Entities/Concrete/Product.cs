@@ -90,6 +90,13 @@ namespace ECommerce.Entities.Concrete
         /// Bu ürünün geçerli olduğu kuponları listeler
         /// </summary>
         public virtual ICollection<CouponProduct> CouponProducts { get; set; } = new HashSet<CouponProduct>();
+
+        /// <summary>
+        /// Ana sayfa blok ilişkileri - Many-to-many ilişki
+        /// Bu ürünün hangi ana sayfa bloklarında gösterildiğini belirtir
+        /// Sadece manuel seçimli bloklar (BlockType = "manual") için kullanılır
+        /// </summary>
+        public virtual ICollection<HomeBlockProduct> HomeBlockProducts { get; set; } = new HashSet<HomeBlockProduct>();
     }
 
 }

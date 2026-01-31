@@ -433,6 +433,13 @@ builder.Services.AddScoped<IPricingEngine, PricingEngine>();
 
 builder.Services.AddScoped<IBannerRepository, ECommerce.Infrastructure.Services.BannerRepository>();
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANA SAYFA ÜRÜN BLOK SİSTEMİ
+// Admin panelinden yönetilebilir ürün blokları (İndirimli Ürünler, Süt Ürünleri vb.)
+// ═══════════════════════════════════════════════════════════════════════════════
+builder.Services.AddScoped<IHomeBlockRepository, HomeBlockRepository>();
+builder.Services.AddScoped<IHomeBlockService, HomeBlockManager>();
+
 
 // services / managers
 builder.Services.AddScoped<IBrandService, BrandManager>();
@@ -626,7 +633,15 @@ var prerenderBypassToken = builder.Configuration["Prerender:BypassToken"];
 // NOT: SanitizeInputFilter kaldırıldı - HTML encoding Türkçe karakterleri bozuyordu (ş→&#x15F;)
 // XSS koruması output'ta yapılmalı, React zaten bunu otomatik yapıyor (JSX output escaping)
 // Input validation için FluentValidation kullanılıyor
-builder.Services.AddControllers();
+// JSON Serialization: camelCase kullanılıyor (frontend uyumluluğu için)
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // camelCase property isimleri (örn: ProductName → productName)
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        // Büyük/küçük harf duyarsız okuma
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 
 // FluentValidation registration
 builder.Services.AddValidatorsFromAssemblyContaining<OrderCreateDtoValidator>();
