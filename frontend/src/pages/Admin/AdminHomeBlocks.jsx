@@ -10,16 +10,23 @@
  * - Blok düzenleme
  * - Blok silme
  * - Aktif/Pasif toggle
- * - Manuel ürün seçimi
+ * - Manuel ürün seçimi (ID veya isim ile arama)
  * - Kategori bazlı otomatik ürün
  * - İndirimli ürünler otomatik
  * - Sıralama değiştirme
+ * - Başlık özelleştirme
  *
  * @author Senior Developer
- * @version 2.0.0
+ * @version 2.1.0 - Gelişmiş ürün arama ve ID ile seçim eklendi
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import homeBlockService, { BLOCK_TYPES } from "../../services/homeBlockService";
 import bannerService, { validateFile } from "../../services/bannerService";
 
@@ -27,10 +34,208 @@ import bannerService, { validateFile } from "../../services/bannerService";
 // SABİTLER
 // ============================================
 
+// Hazır Başlık Şablonları - Font Awesome İkonlarla (Profesyonel)
+const TITLE_TEMPLATES = [
+  {
+    icon: "fas fa-bullseye",
+    color: "#ef4444",
+    title: "Bu Fırsatları Kaçırmayın",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-bolt",
+    color: "#f59e0b",
+    title: "Şok İndirimler",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-tags",
+    color: "#ef4444",
+    title: "Süper Fırsatlar",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-percentage",
+    color: "#10b981",
+    title: "Haftalık Kampanyalar",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-star",
+    color: "#8b5cf6",
+    title: "Özel Seçimler",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-gift",
+    color: "#ec4899",
+    title: "Hediye Fırsatlar",
+    category: "indirim",
+  },
+  {
+    icon: "fas fa-gem",
+    color: "#6366f1",
+    title: "Premium Koleksiyon",
+    category: "premium",
+  },
+  {
+    icon: "fas fa-crown",
+    color: "#f59e0b",
+    title: "Elit Ürünler",
+    category: "premium",
+  },
+  {
+    icon: "fas fa-fire",
+    color: "#ef4444",
+    title: "En Çok Satanlar",
+    category: "populer",
+  },
+  {
+    icon: "fas fa-trophy",
+    color: "#f59e0b",
+    title: "Haftanın Yıldızları",
+    category: "populer",
+  },
+  {
+    icon: "fas fa-heart",
+    color: "#ef4444",
+    title: "Müşteri Favorileri",
+    category: "populer",
+  },
+  {
+    icon: "fas fa-thumbs-up",
+    color: "#3b82f6",
+    title: "Sizin İçin Seçtiklerimiz",
+    category: "oneri",
+  },
+  {
+    icon: "fas fa-magic",
+    color: "#8b5cf6",
+    title: "Özel Öneriler",
+    category: "oneri",
+  },
+  {
+    icon: "fas fa-lightbulb",
+    color: "#f59e0b",
+    title: "İlgini Çekebilecek Ürünler",
+    category: "oneri",
+  },
+  {
+    icon: "fas fa-sparkles",
+    color: "#10b981",
+    title: "Yeni Gelenler",
+    category: "yeni",
+  },
+  {
+    icon: "fas fa-rocket",
+    color: "#3b82f6",
+    title: "Az Önce Eklendi",
+    category: "yeni",
+  },
+  {
+    icon: "fas fa-leaf",
+    color: "#10b981",
+    title: "Taze Ürünler",
+    category: "yeni",
+  },
+  {
+    icon: "fas fa-cheese",
+    color: "#f59e0b",
+    title: "Süt & Süt Ürünleri",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-drumstick-bite",
+    color: "#ef4444",
+    title: "Et & Et Ürünleri",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-carrot",
+    color: "#f97316",
+    title: "Meyve & Sebze",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-cheese",
+    color: "#fbbf24",
+    title: "Peynir Dünyası",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-bread-slice",
+    color: "#d97706",
+    title: "Fırından Taze",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-pump-soap",
+    color: "#06b6d4",
+    title: "Temizlik & Bakım",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-cookie",
+    color: "#a855f7",
+    title: "Atıştırmalıklar",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-mug-hot",
+    color: "#78350f",
+    title: "Kahve & İçecekler",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-wheat-awn",
+    color: "#ca8a04",
+    title: "Bakliyat & Tahıllar",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-jar",
+    color: "#65a30d",
+    title: "Konserveler",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-egg",
+    color: "#fbbf24",
+    title: "Kahvaltılık Lezzetler",
+    category: "kategori",
+  },
+  {
+    icon: "fas fa-cart-plus",
+    color: "#ff6b35",
+    title: "Hemen Sepete",
+    category: "genel",
+  },
+  {
+    icon: "fas fa-percent",
+    color: "#ef4444",
+    title: "Kampanyalı Ürünler",
+    category: "kampanya",
+  },
+  {
+    icon: "fas fa-bell",
+    color: "#f59e0b",
+    title: "Son Fırsat",
+    category: "acil",
+  },
+  {
+    icon: "fas fa-clock",
+    color: "#ef4444",
+    title: "Sınırlı Süre",
+    category: "acil",
+  },
+  { emoji: "🔥", title: "Bugünün Fırsatları", category: "acil" },
+];
+
 const INITIAL_FORM = {
   id: 0,
   name: "",
   slug: "",
+  title: "", // Yeni: Ana sayfada görünecek başlık (örn: "Süt Ürünleri", "İndirimli Ürünler")
   blockType: "manual",
   categoryId: null,
   posterImageUrl: "",
@@ -61,6 +266,11 @@ export default function AdminHomeBlocks() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [currentBlockId, setCurrentBlockId] = useState(null);
   const [productSearch, setProductSearch] = useState("");
+
+  // Yeni: ID ile ürün arama
+  const [productIdInput, setProductIdInput] = useState("");
+  const [searchMode, setSearchMode] = useState("name"); // "name" veya "id"
+  const [searchDebounceTimer, setSearchDebounceTimer] = useState(null);
 
   // Dosya yükleme state'leri
   const [imagePreview, setImagePreview] = useState("");
@@ -142,6 +352,7 @@ export default function AdminHomeBlocks() {
       id: block.id,
       name: block.name || "",
       slug: block.slug || "",
+      title: block.title || "", // Yeni: Başlık alanı
       blockType: block.blockType || "manual",
       categoryId: block.categoryId || null,
       posterImageUrl: block.posterImageUrl || "",
@@ -342,6 +553,9 @@ export default function AdminHomeBlocks() {
       await homeBlockService.setBlockProducts(currentBlockId, selectedProducts);
       showFeedback("Ürünler başarıyla kaydedildi", "success");
       setShowProductModal(false);
+      setProductSearch("");
+      setProductIdInput("");
+      setSearchMode("name");
       await fetchBlocks();
     } catch (err) {
       showFeedback(
@@ -351,9 +565,73 @@ export default function AdminHomeBlocks() {
     }
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.name?.toLowerCase().includes(productSearch.toLowerCase()),
+  // =====================================================
+  // GELİŞMİŞ ÜRÜN FİLTRELEME - ID VEYA İSİM İLE ARAMA
+  // Debounce ile performanslı arama sağlanır
+  // =====================================================
+  const filteredProducts = useMemo(() => {
+    if (searchMode === "id" && productIdInput.trim()) {
+      // ID ile arama - tam eşleşme veya ID içerme
+      const searchId = productIdInput.trim();
+      return products.filter(
+        (p) => String(p.id) === searchId || String(p.id).includes(searchId),
+      );
+    } else if (searchMode === "name" && productSearch.trim()) {
+      // İsim ile arama - case-insensitive
+      const searchTerm = productSearch.toLowerCase().trim();
+      return products.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(searchTerm) ||
+          p.description?.toLowerCase().includes(searchTerm) ||
+          String(p.id).includes(searchTerm), // ID'de de ara
+      );
+    }
+    return products;
+  }, [products, productSearch, productIdInput, searchMode]);
+
+  // Debounce fonksiyonu - arama performansı için
+  const handleSearchChange = useCallback(
+    (value, mode) => {
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+      }
+
+      const timer = setTimeout(() => {
+        if (mode === "id") {
+          setProductIdInput(value);
+        } else {
+          setProductSearch(value);
+        }
+      }, 300); // 300ms debounce
+
+      setSearchDebounceTimer(timer);
+    },
+    [searchDebounceTimer],
   );
+
+  // ID ile doğrudan ürün ekleme
+  const handleAddProductById = useCallback(() => {
+    const id = parseInt(productIdInput.trim());
+    if (isNaN(id)) {
+      showFeedback("Geçerli bir ürün ID'si girin", "warning");
+      return;
+    }
+
+    const product = products.find((p) => p.id === id);
+    if (!product) {
+      showFeedback(`ID: ${id} ile ürün bulunamadı`, "danger");
+      return;
+    }
+
+    if (selectedProducts.includes(id)) {
+      showFeedback("Bu ürün zaten seçili", "warning");
+      return;
+    }
+
+    setSelectedProducts((prev) => [...prev, id]);
+    setProductIdInput("");
+    showFeedback(`"${product.name}" eklendi`, "success");
+  }, [productIdInput, products, selectedProducts, showFeedback]);
 
   // ============================================
   // HELPER FONKSİYONLAR
@@ -610,11 +888,12 @@ export default function AdminHomeBlocks() {
                             </button>
                             {block.blockType === "manual" && (
                               <button
-                                className="btn btn-outline-info"
+                                className="btn btn-info text-white fw-bold"
                                 onClick={() => openProductModal(block.id)}
-                                title="Ürün Seç"
+                                title="Ürünleri Seç/Düzenle - Manuel seçim için gerekli"
                               >
-                                <i className="fas fa-boxes"></i>
+                                <i className="fas fa-boxes me-1"></i>
+                                Ürün Seç
                               </button>
                             )}
                             <button
@@ -715,9 +994,294 @@ export default function AdminHomeBlocks() {
                         onChange={(e) =>
                           setForm({ ...form, name: e.target.value })
                         }
-                        placeholder="Örn: İndirimli Ürünler"
+                        placeholder="Örn: İndirimli Ürünler (Admin için)"
                         required
                       />
+                      <small className="text-muted">
+                        Admin panelde görünen isim
+                      </small>
+                    </div>
+
+                    {/* Başlık - Ana sayfada görünecek */}
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Başlık (Ana Sayfa){" "}
+                        <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={form.title}
+                          onChange={(e) =>
+                            setForm({ ...form, title: e.target.value })
+                          }
+                          placeholder="Başlık yazın veya şablon seçin →"
+                          required
+                        />
+                        <button
+                          className="btn btn-outline-primary dropdown-toggle"
+                          type="button"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
+                          style={{ minWidth: "140px" }}
+                        >
+                          🎨 Şablonlar
+                        </button>
+                        <ul
+                          className="dropdown-menu dropdown-menu-end"
+                          style={{
+                            maxHeight: "400px",
+                            overflowY: "auto",
+                            minWidth: "320px",
+                          }}
+                        >
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-tags text-danger me-1"></i>{" "}
+                              İndirim & Fırsat
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "indirim",
+                          ).map((template, idx) => (
+                            <li key={`indirim-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-fire text-warning me-1"></i>{" "}
+                              Popüler & Favori
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "populer",
+                          ).map((template, idx) => (
+                            <li key={`populer-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i
+                                className="fas fa-gem text-purple me-1"
+                                style={{ color: "#8b5cf6" }}
+                              ></i>{" "}
+                              Premium
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "premium",
+                          ).map((template, idx) => (
+                            <li key={`premium-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-thumbs-up text-primary me-1"></i>{" "}
+                              Öneri & Seçim
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "oneri",
+                          ).map((template, idx) => (
+                            <li key={`oneri-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-sparkles text-success me-1"></i>{" "}
+                              Yeni Ürünler
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "yeni",
+                          ).map((template, idx) => (
+                            <li key={`yeni-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-th-large text-info me-1"></i>{" "}
+                              Kategoriler
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) => t.category === "kategori",
+                          ).map((template, idx) => (
+                            <li key={`kategori-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                          <li>
+                            <hr className="dropdown-divider" />
+                          </li>
+                          <li>
+                            <h6 className="dropdown-header">
+                              <i className="fas fa-clock text-danger me-1"></i>{" "}
+                              Acil & Kampanya
+                            </h6>
+                          </li>
+                          {TITLE_TEMPLATES.filter(
+                            (t) =>
+                              t.category === "acil" ||
+                              t.category === "kampanya",
+                          ).map((template, idx) => (
+                            <li key={`acil-${idx}`}>
+                              <button
+                                className="dropdown-item d-flex align-items-center gap-2"
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    ...form,
+                                    title: template.title,
+                                  })
+                                }
+                              >
+                                <i
+                                  className={template.icon}
+                                  style={{
+                                    color: template.color,
+                                    width: "16px",
+                                  }}
+                                ></i>
+                                {template.title}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <small className="text-muted">
+                        Müşterilerin göreceği başlık • Hazır şablondan seçebilir
+                        veya özel yazabilirsiniz
+                      </small>
                     </div>
 
                     {/* Slug */}
@@ -757,6 +1321,27 @@ export default function AdminHomeBlocks() {
                           </option>
                         ))}
                       </select>
+
+                      {/* Manuel Seçim İçin Bilgilendirme */}
+                      {form.blockType === "manual" && (
+                        <div className="alert alert-info mt-2 py-2 px-3 mb-0">
+                          <i className="fas fa-info-circle me-2"></i>
+                          <strong>Manuel Seçim:</strong> Blok kaydedildikten
+                          sonra listede{" "}
+                          <i className="fas fa-boxes text-info"></i> "Ürün Seç"
+                          butonuna tıklayarak ürünleri ekleyebilirsiniz.
+                        </div>
+                      )}
+
+                      {/* Otomatik Blok Tipleri İçin Bilgilendirme */}
+                      {form.blockType !== "manual" &&
+                        form.blockType !== "category" && (
+                          <div className="alert alert-success mt-2 py-2 px-3 mb-0">
+                            <i className="fas fa-check-circle me-2"></i>
+                            <strong>Otomatik:</strong> Ürünler blok tipine göre
+                            otomatik seçilir.
+                          </div>
+                        )}
                     </div>
 
                     {/* Kategori (sadece category tipinde) */}
@@ -950,20 +1535,34 @@ export default function AdminHomeBlocks() {
                       </div>
                     </div>
 
-                    {/* Tümünü Gör Linki */}
+                    {/* Tümünü Gör Linki - OTOMATİK OLUŞTURULUR */}
                     <div className="col-md-6">
                       <label className="form-label fw-semibold">
                         Tümünü Gör Linki
+                        <span className="badge bg-success ms-2">Otomatik</span>
                       </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={form.viewAllUrl}
-                        onChange={(e) =>
-                          setForm({ ...form, viewAllUrl: e.target.value })
-                        }
-                        placeholder="/kategori/indirimli"
-                      />
+                      <div className="input-group">
+                        <span className="input-group-text bg-light">
+                          <i className="fas fa-link text-muted"></i>
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control bg-light"
+                          value={
+                            form.slug
+                              ? `/collection/${form.slug}`
+                              : "(Slug oluşturulunca otomatik belirlenir)"
+                          }
+                          disabled
+                          title="Bu link blok slug'ından otomatik oluşturulur"
+                        />
+                      </div>
+                      <small className="text-muted">
+                        <i className="fas fa-info-circle me-1"></i>
+                        Tümünü Gör butonu otomatik olarak{" "}
+                        <code>/collection/{form.slug || "slug"}</code> adresine
+                        yönlendirir
+                      </small>
                     </div>
 
                     {/* Tümünü Gör Metni */}
@@ -981,6 +1580,45 @@ export default function AdminHomeBlocks() {
                         placeholder="Tümünü Gör"
                       />
                     </div>
+
+                    {/* MANUEL SEÇİM İÇİN ÜRÜN ARAMA - MODAL İÇİNDE */}
+                    {form.blockType === "manual" && (
+                      <div className="col-12 mt-4">
+                        <div className="card border-info">
+                          <div className="card-header bg-info text-white">
+                            <h5 className="mb-0">
+                              <i className="fas fa-boxes me-2"></i>
+                              Ürün Seçimi
+                            </h5>
+                          </div>
+                          <div className="card-body">
+                            <div className="alert alert-info">
+                              <i className="fas fa-info-circle me-2"></i>
+                              <strong>Önce bloğu kaydedin!</strong> Kaydetme
+                              sonrası bu alan aktif olacak ve ürün
+                              arayabileceksiniz.
+                            </div>
+
+                            {form.id && (
+                              <button
+                                type="button"
+                                className="btn btn-info btn-lg w-100"
+                                onClick={() => {
+                                  closeModal();
+                                  setTimeout(
+                                    () => openProductModal(form.id),
+                                    300,
+                                  );
+                                }}
+                              >
+                                <i className="fas fa-search me-2"></i>
+                                Ürün Ara ve Seç
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -1015,7 +1653,7 @@ export default function AdminHomeBlocks() {
         </div>
       )}
 
-      {/* Ürün Seçimi Modal */}
+      {/* Ürün Seçimi Modal - GELİŞMİŞ ARAMA */}
       {showProductModal && (
         <div
           className="modal fade show d-block"
@@ -1031,75 +1669,271 @@ export default function AdminHomeBlocks() {
                 <button
                   type="button"
                   className="btn-close btn-close-white"
-                  onClick={() => setShowProductModal(false)}
+                  onClick={() => {
+                    setShowProductModal(false);
+                    setProductSearch("");
+                    setProductIdInput("");
+                    setSearchMode("name");
+                  }}
                 ></button>
               </div>
               <div className="modal-body">
-                {/* Arama */}
-                <div className="mb-3">
-                  <div className="input-group">
-                    <span className="input-group-text">
-                      <i className="fas fa-search"></i>
-                    </span>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="Ürün ara..."
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                    />
+                {/* =====================================================
+                    GELİŞMİŞ ARAMA ALANI - ID veya İsim ile
+                    ===================================================== */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    {/* Arama Modu Seçimi */}
+                    <div className="btn-group mb-3 w-100" role="group">
+                      <button
+                        type="button"
+                        className={`btn ${searchMode === "name" ? "btn-primary" : "btn-outline-primary"}`}
+                        onClick={() => {
+                          setSearchMode("name");
+                          setProductIdInput("");
+                        }}
+                      >
+                        <i className="fas fa-font me-2"></i>
+                        İsim ile Ara
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${searchMode === "id" ? "btn-primary" : "btn-outline-primary"}`}
+                        onClick={() => {
+                          setSearchMode("id");
+                          setProductSearch("");
+                        }}
+                      >
+                        <i className="fas fa-hashtag me-2"></i>
+                        ID ile Ara
+                      </button>
+                    </div>
+
+                    {/* İsim ile Arama - Görünür arama butonu ile UX iyileştirmesi */}
+                    {searchMode === "name" && (
+                      <div className="row g-2">
+                        <div className="col">
+                          <div className="input-group">
+                            <span className="input-group-text bg-white">
+                              <i className="fas fa-search text-muted"></i>
+                            </span>
+                            <input
+                              type="text"
+                              className="form-control form-control-lg"
+                              placeholder="Ürün adı yazın (otomatik aranır)..."
+                              value={productSearch}
+                              onChange={(e) => setProductSearch(e.target.value)}
+                              autoFocus
+                            />
+                            {productSearch && (
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                onClick={() => setProductSearch("")}
+                                title="Aramayı Temizle"
+                              >
+                                <i className="fas fa-times"></i>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {/* Görünür Ara Butonu - Kullanıcı feedback için */}
+                        <div className="col-auto">
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-lg"
+                            title="Ürünleri Ara"
+                            disabled={!productSearch.trim()}
+                          >
+                            <i className="fas fa-search me-1"></i>
+                            Ara
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ID ile Arama ve Ekleme */}
+                    {searchMode === "id" && (
+                      <div className="row g-2">
+                        <div className="col">
+                          <div className="input-group">
+                            <span className="input-group-text bg-white">
+                              <i className="fas fa-hashtag text-muted"></i>
+                            </span>
+                            <input
+                              type="number"
+                              className="form-control form-control-lg"
+                              placeholder="Ürün ID'si girin (örn: 123)"
+                              value={productIdInput}
+                              onChange={(e) =>
+                                setProductIdInput(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddProductById();
+                                }
+                              }}
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        <div className="col-auto">
+                          <button
+                            type="button"
+                            className="btn btn-success btn-lg"
+                            onClick={handleAddProductById}
+                            title="ID ile Ekle"
+                          >
+                            <i className="fas fa-plus me-1"></i>
+                            Ekle
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Arama Sonuç Bilgisi */}
+                    <div className="mt-2 d-flex justify-content-between align-items-center">
+                      <small className="text-muted">
+                        {filteredProducts.length} ürün bulundu
+                        {(productSearch || productIdInput) && (
+                          <span className="ms-2">
+                            (Toplam: {products.length})
+                          </span>
+                        )}
+                      </small>
+                      {selectedProducts.length > 0 && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => setSelectedProducts([])}
+                        >
+                          <i className="fas fa-trash me-1"></i>
+                          Tümünü Kaldır
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* Seçili Ürünler Önizlemesi */}
+                {selectedProducts.length > 0 && (
+                  <div className="alert alert-info py-2 mb-3">
+                    <div className="d-flex align-items-center flex-wrap gap-2">
+                      <strong className="me-2">
+                        <i className="fas fa-check-circle me-1"></i>
+                        Seçili ({selectedProducts.length}):
+                      </strong>
+                      {selectedProducts.slice(0, 5).map((id) => {
+                        const product = products.find((p) => p.id === id);
+                        return product ? (
+                          <span
+                            key={id}
+                            className="badge bg-primary d-flex align-items-center gap-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            #{id} - {product.name?.substring(0, 20)}...
+                            <button
+                              type="button"
+                              className="btn-close btn-close-white"
+                              style={{ fontSize: "0.5rem" }}
+                              onClick={() => toggleProductSelection(id)}
+                            ></button>
+                          </span>
+                        ) : null;
+                      })}
+                      {selectedProducts.length > 5 && (
+                        <span className="badge bg-secondary">
+                          +{selectedProducts.length - 5} daha
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Ürün Grid */}
                 <div
                   className="row g-2"
                   style={{ maxHeight: "400px", overflowY: "auto" }}
                 >
-                  {filteredProducts.map((product) => (
-                    <div key={product.id} className="col-6 col-md-4 col-lg-3">
-                      <div
-                        className={`card h-100 cursor-pointer ${selectedProducts.includes(product.id) ? "border-primary border-2" : ""}`}
-                        style={{ cursor: "pointer" }}
-                        onClick={() => toggleProductSelection(product.id)}
-                      >
-                        <div className="position-relative">
-                          <img
-                            src={product.imageUrl || "/placeholder.png"}
-                            alt={product.name}
-                            className="card-img-top"
-                            style={{
-                              height: "100px",
-                              objectFit: "contain",
-                              padding: "8px",
-                            }}
-                          />
-                          {selectedProducts.includes(product.id) && (
-                            <div className="position-absolute top-0 end-0 m-1">
-                              <span className="badge bg-primary">
-                                <i className="fas fa-check"></i>
+                  {filteredProducts.length === 0 ? (
+                    <div className="col-12 text-center py-5">
+                      <i className="fas fa-search fa-3x text-muted mb-3"></i>
+                      <h5 className="text-muted">Ürün bulunamadı</h5>
+                      <p className="text-muted small">
+                        {searchMode === "id"
+                          ? "Girdiğiniz ID ile eşleşen ürün yok"
+                          : "Arama kriterlerinizi değiştirmeyi deneyin"}
+                      </p>
+                    </div>
+                  ) : (
+                    filteredProducts.map((product) => (
+                      <div key={product.id} className="col-6 col-md-4 col-lg-3">
+                        <div
+                          className={`card h-100 ${selectedProducts.includes(product.id) ? "border-primary border-2 bg-light" : "border"}`}
+                          style={{ cursor: "pointer", transition: "all 0.2s" }}
+                          onClick={() => toggleProductSelection(product.id)}
+                        >
+                          <div className="position-relative">
+                            <img
+                              src={product.imageUrl || "/placeholder.png"}
+                              alt={product.name}
+                              className="card-img-top"
+                              style={{
+                                height: "100px",
+                                objectFit: "contain",
+                                padding: "8px",
+                              }}
+                            />
+                            {selectedProducts.includes(product.id) && (
+                              <div className="position-absolute top-0 end-0 m-1">
+                                <span className="badge bg-primary rounded-circle p-2">
+                                  <i className="fas fa-check"></i>
+                                </span>
+                              </div>
+                            )}
+                            {/* Ürün ID Badge */}
+                            <div className="position-absolute top-0 start-0 m-1">
+                              <span className="badge bg-dark opacity-75">
+                                #{product.id}
                               </span>
                             </div>
-                          )}
-                        </div>
-                        <div className="card-body p-2">
-                          <p className="card-text small mb-1 text-truncate">
-                            {product.name}
-                          </p>
-                          <small className="text-primary fw-bold">
-                            {product.specialPrice || product.price}₺
-                          </small>
+                          </div>
+                          <div className="card-body p-2">
+                            <p className="card-text small mb-1 text-truncate fw-semibold">
+                              {product.name}
+                            </p>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <small className="text-primary fw-bold">
+                                {(
+                                  product.specialPrice || product.price
+                                )?.toFixed(2)}
+                                ₺
+                              </small>
+                              {product.specialPrice &&
+                                product.price > product.specialPrice && (
+                                  <small className="text-muted text-decoration-line-through">
+                                    {product.price?.toFixed(2)}₺
+                                  </small>
+                                )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
               <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowProductModal(false)}
+                  onClick={() => {
+                    setShowProductModal(false);
+                    setProductSearch("");
+                    setProductIdInput("");
+                    setSearchMode("name");
+                  }}
                 >
                   İptal
                 </button>
@@ -1107,6 +1941,7 @@ export default function AdminHomeBlocks() {
                   type="button"
                   className="btn btn-primary"
                   onClick={saveProducts}
+                  disabled={selectedProducts.length === 0}
                 >
                   <i className="fas fa-save me-2"></i>
                   Kaydet ({selectedProducts.length} ürün)

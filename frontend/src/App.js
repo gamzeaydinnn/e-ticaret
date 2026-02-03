@@ -1,6 +1,7 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import React, { useState } from "react";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import {
   Link,
   Route,
@@ -90,6 +91,7 @@ import Career from "./pages/Career.jsx";
 import Cart from "./pages/Cart";
 import Category from "./pages/Category";
 import Checkout from "./pages/Checkout";
+import CollectionPage from "./pages/CollectionPage"; // Koleksiyon/Blok Ürün Sayfası
 import ComparePage from "./pages/ComparePage";
 import Contact from "./pages/Contact.jsx";
 import Faq from "./pages/Faq.jsx";
@@ -744,6 +746,8 @@ function App() {
         <Route path="/pages/home" element={<Home />} />
         <Route path="/pages/cart" element={<Cart />} />
         <Route path="/category/:slug" element={<Category />} />
+        <Route path="/kategori/:slug" element={<Category />} />
+        <Route path="/collection/:slug" element={<CollectionPage />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:slug" element={<CampaignDetail />} />
         <Route path="/product/:id" element={<Product />} />
@@ -1093,31 +1097,37 @@ function App() {
   );
 }
 
+// Google OAuth Client ID
+const GOOGLE_CLIENT_ID =
+  "305859967035-hbb2ef3s1e5nb3j2gv4ucbl0om56oaf0.apps.googleusercontent.com";
+
 function AppWithProviders() {
   return (
-    <AuthProvider>
-      <CourierAuthProvider>
-        <CourierSignalRProvider>
-          <DispatcherAuthProvider>
-            <StoreAttendantAuthProvider>
-              <ProductProvider>
-                <CartProvider>
-                  <FavoriteProvider>
-                    <CompareProvider>
-                      <Router>
-                        <ScrollToTop />
-                        <App />
-                        <CompareFloatingButton />
-                      </Router>
-                    </CompareProvider>
-                  </FavoriteProvider>
-                </CartProvider>
-              </ProductProvider>
-            </StoreAttendantAuthProvider>
-          </DispatcherAuthProvider>
-        </CourierSignalRProvider>
-      </CourierAuthProvider>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AuthProvider>
+        <CourierAuthProvider>
+          <CourierSignalRProvider>
+            <DispatcherAuthProvider>
+              <StoreAttendantAuthProvider>
+                <ProductProvider>
+                  <CartProvider>
+                    <FavoriteProvider>
+                      <CompareProvider>
+                        <Router>
+                          <ScrollToTop />
+                          <App />
+                          <CompareFloatingButton />
+                        </Router>
+                      </CompareProvider>
+                    </FavoriteProvider>
+                  </CartProvider>
+                </ProductProvider>
+              </StoreAttendantAuthProvider>
+            </DispatcherAuthProvider>
+          </CourierSignalRProvider>
+        </CourierAuthProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 
@@ -1617,91 +1627,19 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ========== İLGİNİ ÇEKEBİLECEK ÜRÜNLER ========== */}
-      <section
-        className="featured-products-section py-5"
-        style={{
-          background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
-          position: "relative",
-        }}
-      >
-        <div
-          className="section-bg-pattern position-absolute w-100 h-100"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ff6b35' fill-opacity='0.03'%3E%3Cpath d='m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            opacity: 0.5,
-          }}
-        ></div>
-
-        <div className="container-fluid px-4 position-relative">
-          {/* Modern Section Header */}
-          <div className="text-center mb-5">
-            <div
-              className="section-header-animation"
-              style={{ animation: "fadeInUp 1s ease" }}
-            >
-              <div className="section-badge mb-3">
-                <span
-                  className="modern-badge px-4 py-2 rounded-pill fw-bold"
-                  style={{
-                    background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                    color: "white",
-                    fontSize: "0.85rem",
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                    boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
-                  }}
-                >
-                  <i className="fas fa-fire me-2 animate__animated animate__pulse animate__infinite"></i>
-                  Özel Seçimler
-                </span>
-              </div>
-
-              <h2
-                className="section-title mb-3"
-                style={{
-                  fontSize: "2.5rem",
-                  fontWeight: "800",
-                  background: "linear-gradient(135deg, #2c3e50, #34495e)",
-                  backgroundClip: "text",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  letterSpacing: "-0.5px",
-                }}
-              >
-                İlgini Çekebilecek Ürünler
-              </h2>
-
-              <p
-                className="section-description text-muted mb-4"
-                style={{
-                  fontSize: "1.1rem",
-                  maxWidth: "600px",
-                  margin: "0 auto",
-                }}
-              >
-                Gölköy Gourmet Market'in özenle seçilmiş, doğal ve taze
-                ürünleriyle tanışın
-              </p>
-
-              <div
-                className="section-decorative-line mx-auto"
-                style={{
-                  width: "80px",
-                  height: "3px",
-                  background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                  borderRadius: "2px",
-                }}
-              ></div>
-            </div>
-          </div>
-
-          {/* Products Grid - Eski ProductGrid componenti */}
-          <ProductGrid />
-        </div>
-      </section>
-
       {/* ========== ANA SAYFA ÜRÜN BLOKLARI SECTION (Poster + Ürünler) ========== */}
+      {/* 
+        ÖNEMLİ: "İlgini Çekebilecek Ürünler" dahil TÜM ürün blokları
+        Admin Panel > Ana Sayfa Blokları'ndan yönetilir.
+        
+        Admin panelden yeni blok eklemek için:
+        1. Admin Panel > Ana Sayfa Blokları
+        2. "Yeni Blok Ekle"
+        3. Başlık: "İlgini Çekebilecek Ürünler" / "Süt Ürünleri" / "İndirimli Ürünler" vb.
+        4. Blok Tipi: Manuel Seçim (ID ile ürün ekleme) / Kategori Bazlı / İndirimli vb.
+        5. Poster görseli yükle
+        6. Ürünleri seç (ID veya isim ile arama)
+      */}
       {/* 
         Bu bölüm Admin Panel > Ana Sayfa Blokları'ndan kontrol edilir.
         Her blok: Sol tarafta poster, sağ tarafta ürün grid'i

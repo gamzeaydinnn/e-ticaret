@@ -8,6 +8,7 @@ import CouponManagement from "../pages/Admin/CouponManagement";
 import PosterManagement from "../pages/Admin/PosterManagement";
 import AdminHomeBlocks from "../pages/Admin/AdminHomeBlocks";
 import WeightReportsPanel from "./WeightReportsPanel";
+import AdminMicro from "../pages/Admin/AdminMicro";
 
 function AdminPanel() {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -127,6 +128,12 @@ function AdminPanel() {
       icon: "fas fa-balance-scale",
       label: "Ağırlık Raporları",
       color: "purple",
+    },
+    {
+      id: "erp",
+      icon: "fas fa-plug",
+      label: "ERP / Mikro",
+      color: "blue",
     },
   ];
 
@@ -416,6 +423,7 @@ function AdminPanel() {
           {activeTab === "homeblocks" && <AdminHomeBlocks />}
           {activeTab === "coupons" && <CouponManagement />}
           {activeTab === "weights" && <WeightReportsPanel />}
+          {activeTab === "erp" && <AdminMicro />}
         </div>
       </div>
     </div>

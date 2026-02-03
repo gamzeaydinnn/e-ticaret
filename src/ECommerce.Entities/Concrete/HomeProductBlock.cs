@@ -31,10 +31,16 @@ namespace ECommerce.Entities.Concrete
         public int Id { get; set; }
 
         /// <summary>
-        /// Blok adı - Admin panelinde ve frontend'de gösterilir
+        /// Blok adı - Admin panelinde gösterilir (internal name)
         /// Örnek: "İndirimli Ürünler", "Süt Ürünleri", "Atıştırmalıklar"
         /// </summary>
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Müşterilere gösterilen başlık - Ana sayfada görünür
+        /// Örnek: "Bu Fırsatları Kaçırmayın", "Haftalık İndirimler"
+        /// </summary>
+        public string? Title { get; set; }
 
         /// <summary>
         /// URL dostu benzersiz tanımlayıcı

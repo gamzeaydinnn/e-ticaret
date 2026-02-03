@@ -22,7 +22,7 @@ ELSE:
     ➡️ Varsayılan verileri ekle (ilk kurulum için)
 ```
 
-### 🔧 Güncellenmiş Dosyalar
+### 🔧 Güncellenmiş Dosyalar 
 
 #### 1️⃣ ProductSeeder.cs
 

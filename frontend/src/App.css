@@ -3261,38 +3261,68 @@ html {
 }
 
 /* Promo Cards - Kampanya Kartları */
-/* Web için 5 kolon sabit */
+/* WEB: 5 poster görünür, fazlası kaydırmayla */
 @media (min-width: 993px) {
   .promo-cards-grid {
-    grid-template-columns: repeat(5, 1fr) !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
     gap: 16px !important;
+    padding: 0 20px !important;
+    scroll-behavior: smooth;
+  }
+
+  .promo-cards-grid > * {
+    flex: 0 0 calc((100% - 64px) / 5) !important;
+    min-width: calc((100% - 64px) / 5) !important;
+    max-width: calc((100% - 64px) / 5) !important;
+  }
+
+  .promo-cards-grid::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .promo-cards-grid::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+  }
+
+  .promo-cards-grid::-webkit-scrollbar-thumb {
+    background: #ff6b35;
+    border-radius: 3px;
   }
 }
 
-/* Promo banner grid (HomePage) - Web ve Mobil: tek sıra yan yana */
+/* Promo banner grid (HomePage) - WEB: 5 poster görünür, fazlası kaydırma */
 .promo-grid {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: center;
-  gap: 20px;
+  overflow-x: auto;
+  gap: 16px;
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
-  --promo-gap: 20px;
-  --promo-columns: 4;
+  scroll-behavior: smooth;
+}
+
+.promo-grid::-webkit-scrollbar {
+  height: 6px;
+}
+
+.promo-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.promo-grid::-webkit-scrollbar-thumb {
+  background: #ff6b35;
+  border-radius: 3px;
 }
 
 .promo-grid-item {
-  flex: 0 0
-    calc(
-      (100% - ((var(--promo-columns) - 1) * var(--promo-gap))) /
-        var(--promo-columns)
-    );
-  max-width: calc(
-    (100% - ((var(--promo-columns) - 1) * var(--promo-gap))) /
-      var(--promo-columns)
-  );
-  min-width: 0;
+  flex: 0 0 calc((100% - 64px) / 5);
+  min-width: 180px;
+  max-width: calc((100% - 64px) / 5);
   height: auto;
   aspect-ratio: 4 / 3;
   border-radius: 14px;
@@ -3316,11 +3346,15 @@ html {
   .promo-cards-grid {
     max-width: 1400px !important;
     gap: 12px !important;
-    --promo-card-ratio: 56%;
+  }
+
+  .promo-cards-grid > * {
+    flex: 0 0 calc((100% - 48px) / 5) !important;
+    min-width: calc((100% - 48px) / 5) !important;
   }
 
   .promo-cards-grid .promo-card-image-container {
-    padding-top: var(--promo-card-ratio) !important; /* 16:9 oranına yakın */
+    padding-top: 56% !important;
   }
 
   .promo-cards-grid .promo-card-image {
@@ -3331,12 +3365,12 @@ html {
 
 @media (min-width: 1200px) {
   .promo-grid {
-    --promo-columns: 5;
-    --promo-gap: 12px;
+    gap: 12px;
   }
 
   .promo-grid-item {
-    padding: 0;
+    flex: 0 0 calc((100% - 48px) / 5);
+    min-width: 200px;
     aspect-ratio: 4 / 3;
   }
 
@@ -3348,58 +3382,103 @@ html {
 
 @media (max-width: 992px) {
   .promo-cards-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
     gap: 12px !important;
+    padding: 0 15px !important;
+  }
+
+  .promo-cards-grid > * {
+    flex: 0 0 calc(25% - 9px) !important;
+    min-width: 160px !important;
   }
 
   .promo-grid {
     gap: 14px;
     padding: 0 15px;
-    --promo-gap: 14px;
   }
 
   .promo-grid-item {
-    max-width: none;
-    min-width: 0;
+    flex: 0 0 calc(25% - 10px);
+    min-width: 160px;
   }
 }
 
 @media (max-width: 768px) {
   .promo-cards-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
     gap: 10px !important;
+    padding: 0 10px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .promo-cards-grid > * {
+    flex: 0 0 calc(50% - 5px) !important;
+    min-width: calc(50% - 5px) !important;
+    scroll-snap-align: start;
+  }
+
+  .promo-cards-grid::-webkit-scrollbar {
+    display: none;
   }
 
   .promo-grid {
-    gap: 10px;
-    padding: 0 10px;
-    --promo-gap: 10px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 10px !important;
+    padding: 0 10px !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .promo-grid-item {
-    max-width: none;
-    min-width: 0;
+    flex: 0 0 calc(50% - 5px) !important;
+    min-width: calc(50% - 5px) !important;
+    max-width: calc(50% - 5px) !important;
+    scroll-snap-align: start;
+  }
+
+  .promo-grid::-webkit-scrollbar {
+    display: none;
   }
 }
 
 @media (max-width: 576px) {
   .promo-cards-grid {
-    grid-template-columns: repeat(4, 1fr) !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
     gap: 8px !important;
+    padding: 0 8px !important;
   }
 
-  /* Mobil - yan yana tek sıra, ekrana sığacak şekilde */
+  .promo-cards-grid > * {
+    flex: 0 0 calc(50% - 4px) !important;
+    min-width: calc(50% - 4px) !important;
+    scroll-snap-align: start;
+  }
+
+  /* Mobil - 2'li yan yana + kaydırma */
   .promo-grid {
-    gap: 4px;
-    padding: 0 4px;
-    justify-content: space-between;
-    --promo-gap: 4px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 8px !important;
+    padding: 0 8px !important;
   }
 
   .promo-grid-item {
-    flex: 1 1 0;
-    max-width: none;
-    min-width: 0;
+    flex: 0 0 calc(50% - 4px) !important;
+    min-width: calc(50% - 4px) !important;
+    max-width: calc(50% - 4px) !important;
+    scroll-snap-align: start;
     border-radius: 10px !important;
   }
 }

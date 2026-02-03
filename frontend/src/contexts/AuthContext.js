@@ -464,8 +464,16 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("permissionsCacheRole");
     setPermissions([]);
 
-    // Sepet verileri
+    // Sepet verileri - localStorage ve sessionStorage
     localStorage.removeItem("guestCart");
+    sessionStorage.removeItem("cart_guest_token");
+    sessionStorage.removeItem("guest_session_id");
+    // Session-bazlı tüm cart token'larını temizle
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("cart_guest_token_")) {
+        localStorage.removeItem(key);
+      }
+    });
 
     // Favori verileri
     localStorage.removeItem("guestFavorites");
@@ -475,6 +483,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("tempFavoriteProductId");
 
     setUser(null);
+
+    console.log("🧹 Kullanıcı verileri temizlendi (auth + sepet + favoriler)");
   };
 
   const register = async (

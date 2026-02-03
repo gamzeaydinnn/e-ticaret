@@ -11,7 +11,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Services.BackgroundJobs;
-// using Hangfire;
+using Hangfire;
+using Hangfire.SqlServer;
 using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -37,11 +38,7 @@ using ECommerce.Entities.Enums;
 using ECommerce.API.Data;
 using ECommerce.API.Authorization;
 using ECommerce.API.Hubs; // SignalR Hub'ları için
-
-
-// using ECommerce.Infrastructure.Services.BackgroundJobs;
-// using Hangfire;
-// using Hangfire.SqlServer;
+using ECommerce.Core.Interfaces.Jobs; // Mikro Job interfaces
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -147,30 +144,36 @@ builder.Services
 
 builder.Services.AddHttpContextAccessor();
 
-// Hangfire - SQL Server kullan (Geçici olarak devre dışı - Azure bağlantı sorunu)
-// builder.Services.AddHangfire(config => 
-//     config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-//           .UseSimpleAssemblyNameTypeSerializer()
-//           .UseRecommendedSerializerSettings()
-//           .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection")));
-// builder.Services.AddHangfireServer();
+// ═══════════════════════════════════════════════════════════════════════════════
+// HANGFIRE - ZAMANLANMIŞ GÖREVLER
+// Mikro ERP senkronizasyonu için recurring job'lar
+// ═══════════════════════════════════════════════════════════════════════════════
+var hangfireEnabled = builder.Configuration.GetValue<bool>("MikroApi:Jobs:HangfireEnabled", true);
 
-// Hangfire (tek seferde)
-var connectionString = sqlConnectionString;
-/*builder.Services.AddHangfire(config => config.UseSqlServerStorage(connectionString));
-builder.Services.AddHangfireServer();
+if (hangfireEnabled)
+{
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(sqlConnectionString, new SqlServerStorageOptions
+        {
+            CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            QueuePollInterval = TimeSpan.FromSeconds(15),
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true,
+            PrepareSchemaIfNecessary = true, // Tabloları otomatik oluştur
+            SchemaName = "Hangfire" // Ayrı schema
+        }));
 
-
-var app = builder.Build();
-app.UseHangfireDashboard();*/
-
-// Recurring job (yeni API kullanımı)
-// RecurringJob.AddOrUpdate<StockSyncJob>(
-//     "stock-sync-job",
-//     job => job.RunOnce(),
-    // Cron.Hourly,
-//     new RecurringJobOptions { TimeZone = TimeZoneInfo.Local }
-// );
+    builder.Services.AddHangfireServer(options =>
+    {
+        options.WorkerCount = Environment.ProcessorCount * 2;
+        options.Queues = new[] { "mikro-orders", "mikro-sync", "default" };
+        options.ServerName = $"ECommerce-{Environment.MachineName}";
+    });
+}
 
 // JWT Auth
 builder.Services.AddAuthentication(options =>
@@ -262,6 +265,12 @@ builder.Services.AddAuthentication(options =>
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+
+// ==================== MİKRO ERP AYARLARI ====================
+// MikroAPI V2 entegrasyonu için gerekli konfigürasyon
+builder.Services.Configure<ECommerce.Infrastructure.Config.MikroSettings>(
+    builder.Configuration.GetSection("MikroSettings"));
+
 // Environment-based sandbox switch: in Development mode prefer sandbox endpoints
 builder.Services.PostConfigure<PaymentSettings>(settings =>
 {
@@ -495,7 +504,83 @@ builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
 }).SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
+// MicroService'i concrete type olarak da kaydet (AdminMicroController için)
+builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
+{
+    var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
+}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
+
 builder.Services.AddScoped<MicroSyncManager>();
+
+// ================================================================================
+// MikroAPI V2 Çift Yönlü Senkronizasyon Servisleri
+// ================================================================================
+// NEDEN: Mağaza + online siparişlerin ERP ile tam entegrasyonu için
+// Delta sync desteği, retry mekanizması, detaylı loglama
+
+// Repository - sync state ve log yönetimi
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IMikroSyncRepository, 
+    ECommerce.Data.Repositories.MikroSyncRepository>();
+
+// Sync Servisleri - her biri tek sorumluluk (SRP)
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IStokSyncService, 
+    ECommerce.Business.Services.Sync.StokSyncService>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.ISiparisSyncService, 
+    ECommerce.Business.Services.Sync.SiparisSyncService>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.ICariSyncService, 
+    ECommerce.Business.Services.Sync.CariSyncService>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IFiyatSyncService, 
+    ECommerce.Business.Services.Sync.FiyatSyncService>();
+// Fatura Sync - sipariş sonrası fatura kesimi
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IFaturaSyncService, 
+    ECommerce.Business.Services.Sync.FaturaSyncService>();
+
+// Orchestrator - tüm sync'leri koordine eder
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IMikroSyncService, 
+    ECommerce.Business.Services.Sync.MikroSyncOrchestrator>();
+
+// Mikro ERP Mapper Servisleri - entity dönüşümleri
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroStokMapper, 
+    ECommerce.Business.Services.Mapping.MikroStokMapper>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroSiparisMapper, 
+    ECommerce.Business.Services.Mapping.MikroSiparisMapper>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroCariMapper, 
+    ECommerce.Business.Services.Mapping.MikroCariMapper>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroCategoryMappingService, 
+    ECommerce.Business.Services.Mapping.CategoryMappingService>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ÇAKIŞMA YÖNETİMİ VE LOGLAMA SERVİSLERİ - ADIM 6
+// ═══════════════════════════════════════════════════════════════════════════════
+// Sync Logger - Tüm sync işlemlerini loglar
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.ISyncLogger, 
+    ECommerce.Business.Services.Sync.SyncLogger>();
+
+// Conflict Resolvers - Çakışma çözümleyiciler
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IConflictResolver, 
+    ECommerce.Business.Services.Sync.StockConflictResolver>();
+builder.Services.AddScoped<ECommerce.Business.Services.Sync.PriceConflictResolver>();
+
+// Retry Service - Başarısız işlemleri yeniden dener
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IRetryService, 
+    ECommerce.Business.Services.Sync.RetryService>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HANGFIRE JOB SERVİSLERİ - Zamanlanmış Mikro Senkronizasyon Görevleri
+// ═══════════════════════════════════════════════════════════════════════════════
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IStokSyncJob, 
+    ECommerce.Business.Services.Jobs.MikroStokSyncJob>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IFiyatSyncJob, 
+    ECommerce.Business.Services.Jobs.MikroFiyatSyncJob>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IFullSyncJob, 
+    ECommerce.Business.Services.Jobs.MikroFullSyncJob>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.ISiparisPushJob, 
+    ECommerce.Business.Services.Jobs.SiparisPushJob>();
+builder.Services.AddScoped<ECommerce.Business.Services.Jobs.RetryJob>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler, 
+    ECommerce.Business.Services.Jobs.MikroJobScheduler>();
 
 // SMS Verification Service - Factory pattern ile tüm bağımlılıkları manuel çözümle
 builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.ISmsVerificationService>(serviceProvider =>
@@ -797,6 +882,34 @@ app.UseWhen(context =>
 });
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HANGFIRE DASHBOARD - Zamanlanmış Görev Yönetimi
+// /hangfire endpoint'inde admin paneli
+// ═══════════════════════════════════════════════════════════════════════════════
+app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+{
+    DashboardTitle = "Mikro ERP Sync Jobs",
+    // Sadece Admin rolündeki kullanıcılar erişebilir
+    Authorization = new[] { new HangfireAuthorizationFilter() },
+    // Read-only modunda çalıştır (default - dashboard'dan kontrol edilir)
+    IsReadOnlyFunc = _ => false // HangfireAuthorizationFilter role kontrolü yapıyor
+});
+
+// Hangfire Job'larını Kaydet (uygulama başlangıcında)
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var jobScheduler = scope.ServiceProvider.GetRequiredService<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler>();
+        jobScheduler.RegisterAllJobs();
+        app.Logger.LogInformation("✅ Hangfire Mikro sync job'ları başarıyla kaydedildi");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "⚠️ Hangfire job kayıt sırasında hata oluştu - Job'lar manuel olarak kaydedilmeli");
+    }
+}
 
 // CSRF token endpoint (double-submit pattern for SPA)
 app.MapGet("/api/csrf/token", (IAntiforgery antiforgery, HttpContext http) =>

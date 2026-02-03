@@ -1,6 +1,8 @@
 // src/components/LoginModal.js
 // Giriş ve Kayıt Modalı - SMS OTP doğrulama ile kullanıcı kayıt akışı
-import React, { useState } from "react";
+// Google OAuth entegrasyonu
+import React, { useState, useCallback } from "react";
+import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../contexts/AuthContext";
 import otpService, { SmsVerificationPurpose } from "../services/otpService";
 
@@ -355,6 +357,50 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
       setLoading(false);
     }
   };
+
+  // Google OAuth Login Hook
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      setLoading(true);
+      setError("");
+      try {
+        // Google'dan kullanıcı bilgilerini al
+        const userInfoResponse = await fetch(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          {
+            headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+          },
+        );
+        const userInfo = await userInfoResponse.json();
+
+        // Backend'e gönder
+        const result = await loginWithSocial("google", {
+          email: userInfo.email,
+          name: userInfo.name,
+          googleId: userInfo.sub,
+          picture: userInfo.picture,
+          accessToken: tokenResponse.access_token,
+        });
+
+        if (result.success) {
+          onLoginSuccess && onLoginSuccess();
+          onHide();
+        } else {
+          setError(result.error || "Google ile giriş başarısız");
+        }
+      } catch (e) {
+        console.error("Google login error:", e);
+        setError("Google ile giriş sırasında bir hata oluştu");
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: (error) => {
+      console.error("Google login error:", error);
+      setError("Google ile giriş iptal edildi");
+      setLoading(false);
+    },
+  });
 
   const handleModalClick = (e) => {
     e.stopPropagation();
@@ -759,39 +805,291 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                 )}
 
                 <form onSubmit={handleSubmit}>
-                  {/* Sosyal Giriş - Sadece giriş için */}
+                  {/* Google ile Giriş - Sadece giriş için */}
                   {isLogin && (
-                    <div className="d-grid gap-2 mb-3">
+                    <div className="d-grid gap-2 mb-4">
                       <button
                         type="button"
-                        className="btn btn-light border d-flex align-items-center justify-content-center"
-                        onClick={() => handleSocialLogin("google")}
+                        className="btn d-flex align-items-center justify-content-center"
+                        onClick={() => googleLogin()}
                         disabled={loading}
-                        style={{ borderRadius: "12px", padding: "10px" }}
+                        style={{
+                          borderRadius: "12px",
+                          padding: "12px 16px",
+                          background: "#fff",
+                          border: "2px solid #e0e0e0",
+                          transition: "all 0.3s ease",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.borderColor = "#4285F4";
+                          e.target.style.boxShadow =
+                            "0 4px 12px rgba(66, 133, 244, 0.2)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.borderColor = "#e0e0e0";
+                          e.target.style.boxShadow =
+                            "0 2px 8px rgba(0,0,0,0.05)";
+                        }}
                       >
-                        <i
-                          className="fab fa-google me-2"
-                          style={{ color: "#DB4437" }}
-                        ></i>
-                        Google ile devam et
+                        <svg
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          style={{ marginRight: "12px" }}
+                        >
+                          <path
+                            fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                          />
+                          <path
+                            fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                          />
+                          <path
+                            fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                          />
+                          <path
+                            fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                          />
+                        </svg>
+                        <span style={{ fontWeight: "500", color: "#444" }}>
+                          Google ile devam et
+                        </span>
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-light border d-flex align-items-center justify-content-center"
-                        onClick={() => handleSocialLogin("facebook")}
-                        disabled={loading}
-                        style={{ borderRadius: "12px", padding: "10px" }}
-                      >
-                        <i
-                          className="fab fa-facebook me-2"
-                          style={{ color: "#4267B2" }}
-                        ></i>
-                        Facebook ile devam et
-                      </button>
+
+                      {/* Ayırıcı çizgi */}
+                      <div className="d-flex align-items-center my-2">
+                        <hr
+                          className="flex-grow-1"
+                          style={{ borderColor: "#e0e0e0" }}
+                        />
+                        <span
+                          className="px-3 text-muted"
+                          style={{ fontSize: "13px" }}
+                        >
+                          veya
+                        </span>
+                        <hr
+                          className="flex-grow-1"
+                          style={{ borderColor: "#e0e0e0" }}
+                        />
+                      </div>
                     </div>
                   )}
                   {!isLogin && (
                     <>
+                      {/* Google ile Kayıt Butonu */}
+                      <div className="d-grid mb-3">
+                        <button
+                          type="button"
+                          className="btn d-flex align-items-center justify-content-center"
+                          onClick={() => googleLogin()}
+                          disabled={loading}
+                          style={{
+                            borderRadius: "12px",
+                            padding: "12px 16px",
+                            background: "#fff",
+                            border: "2px solid #e0e0e0",
+                            transition: "all 0.3s ease",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.borderColor = "#4285F4";
+                            e.target.style.boxShadow =
+                              "0 4px 12px rgba(66, 133, 244, 0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.borderColor = "#e0e0e0";
+                            e.target.style.boxShadow =
+                              "0 2px 8px rgba(0,0,0,0.05)";
+                          }}
+                        >
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            style={{ marginRight: "12px" }}
+                          >
+                            <path
+                              fill="#4285F4"
+                              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                            />
+                            <path
+                              fill="#34A853"
+                              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                            />
+                            <path
+                              fill="#FBBC05"
+                              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                            />
+                            <path
+                              fill="#EA4335"
+                              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                            />
+                          </svg>
+                          <span style={{ fontWeight: "500", color: "#444" }}>
+                            Google ile hızlı kayıt
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Ayırıcı çizgi */}
+                      <div className="d-flex align-items-center mb-3">
+                        <hr
+                          className="flex-grow-1"
+                          style={{ borderColor: "#e0e0e0" }}
+                        />
+                        <span
+                          className="px-3 text-muted"
+                          style={{ fontSize: "13px" }}
+                        >
+                          veya e-posta ile
+                        </span>
+                        <hr
+                          className="flex-grow-1"
+                          style={{ borderColor: "#e0e0e0" }}
+                        />
+                      </div>
+
+                      {/* Kayıt Adımları Göstergesi (Stepper) */}
+                      <div className="d-flex justify-content-center mb-4">
+                        <div className="d-flex align-items-center">
+                          {/* Adım 1: Kişisel Bilgiler */}
+                          <div className="d-flex flex-column align-items-center">
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                background:
+                                  firstName && lastName
+                                    ? "#28a745"
+                                    : "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                                color: "#fff",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "14px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {firstName && lastName ? (
+                                <i className="fas fa-check"></i>
+                              ) : (
+                                "1"
+                              )}
+                            </div>
+                            <small
+                              className="text-muted mt-1"
+                              style={{ fontSize: "10px" }}
+                            >
+                              Bilgiler
+                            </small>
+                          </div>
+                          <div
+                            style={{
+                              width: "40px",
+                              height: "2px",
+                              background:
+                                phoneNumber && otpVerified
+                                  ? "#28a745"
+                                  : "#e0e0e0",
+                            }}
+                          ></div>
+
+                          {/* Adım 2: Telefon Doğrulama */}
+                          <div className="d-flex flex-column align-items-center">
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                background: otpVerified
+                                  ? "#28a745"
+                                  : phoneNumber.length >= 10
+                                    ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                                    : "#e0e0e0",
+                                color:
+                                  otpVerified || phoneNumber.length >= 10
+                                    ? "#fff"
+                                    : "#999",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "14px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {otpVerified ? (
+                                <i className="fas fa-check"></i>
+                              ) : (
+                                "2"
+                              )}
+                            </div>
+                            <small
+                              className="text-muted mt-1"
+                              style={{ fontSize: "10px" }}
+                            >
+                              Doğrulama
+                            </small>
+                          </div>
+                          <div
+                            style={{
+                              width: "40px",
+                              height: "2px",
+                              background:
+                                password &&
+                                confirmPasswordRegister &&
+                                password === confirmPasswordRegister
+                                  ? "#28a745"
+                                  : "#e0e0e0",
+                            }}
+                          ></div>
+
+                          {/* Adım 3: Şifre */}
+                          <div className="d-flex flex-column align-items-center">
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                background:
+                                  password &&
+                                  confirmPasswordRegister &&
+                                  password === confirmPasswordRegister
+                                    ? "#28a745"
+                                    : password
+                                      ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                                      : "#e0e0e0",
+                                color: password ? "#fff" : "#999",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "14px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {password &&
+                              confirmPasswordRegister &&
+                              password === confirmPasswordRegister ? (
+                                <i className="fas fa-check"></i>
+                              ) : (
+                                "3"
+                              )}
+                            </div>
+                            <small
+                              className="text-muted mt-1"
+                              style={{ fontSize: "10px" }}
+                            >
+                              Şifre
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="row mb-3">
                         <div className="col-6">
                           <label htmlFor="firstName" className="form-label">
@@ -1011,6 +1309,103 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       onFocus={(e) => (e.target.style.borderColor = "#ff6b35")}
                       onBlur={(e) => (e.target.style.borderColor = "#e0e0e0")}
                     />
+                    {/* Şifre Güçlük Metre - Sadece kayıt için */}
+                    {!isLogin && password && (
+                      <div className="mt-2">
+                        <div className="d-flex align-items-center mb-1">
+                          <small className="text-muted me-2">
+                            Şifre Güçlüğü:
+                          </small>
+                          <small
+                            style={{
+                              color:
+                                password.length < 6
+                                  ? "#dc3545"
+                                  : password.length < 8
+                                    ? "#ffc107"
+                                    : password.length >= 8 &&
+                                        /[A-Z]/.test(password) &&
+                                        /[0-9]/.test(password)
+                                      ? "#28a745"
+                                      : "#17a2b8",
+                              fontWeight: "600",
+                            }}
+                          >
+                            {password.length < 6
+                              ? "Zayıf"
+                              : password.length < 8
+                                ? "Orta"
+                                : password.length >= 8 &&
+                                    /[A-Z]/.test(password) &&
+                                    /[0-9]/.test(password)
+                                  ? "Güçlü"
+                                  : "İyi"}
+                          </small>
+                        </div>
+                        <div
+                          style={{
+                            height: "4px",
+                            borderRadius: "2px",
+                            background: "#e0e0e0",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              width:
+                                password.length < 6
+                                  ? "25%"
+                                  : password.length < 8
+                                    ? "50%"
+                                    : password.length >= 8 &&
+                                        /[A-Z]/.test(password) &&
+                                        /[0-9]/.test(password)
+                                      ? "100%"
+                                      : "75%",
+                              background:
+                                password.length < 6
+                                  ? "#dc3545"
+                                  : password.length < 8
+                                    ? "#ffc107"
+                                    : password.length >= 8 &&
+                                        /[A-Z]/.test(password) &&
+                                        /[0-9]/.test(password)
+                                      ? "#28a745"
+                                      : "#17a2b8",
+                              transition: "all 0.3s ease",
+                              borderRadius: "2px",
+                            }}
+                          ></div>
+                        </div>
+                        <div className="d-flex justify-content-between mt-1">
+                          <small
+                            className={`${password.length >= 6 ? "text-success" : "text-muted"}`}
+                          >
+                            <i
+                              className={`fas fa-${password.length >= 6 ? "check" : "times"} me-1`}
+                            ></i>
+                            6+ karakter
+                          </small>
+                          <small
+                            className={`${/[A-Z]/.test(password) ? "text-success" : "text-muted"}`}
+                          >
+                            <i
+                              className={`fas fa-${/[A-Z]/.test(password) ? "check" : "times"} me-1`}
+                            ></i>
+                            Büyük harf
+                          </small>
+                          <small
+                            className={`${/[0-9]/.test(password) ? "text-success" : "text-muted"}`}
+                          >
+                            <i
+                              className={`fas fa-${/[0-9]/.test(password) ? "check" : "times"} me-1`}
+                            ></i>
+                            Rakam
+                          </small>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Şifre Onayı - Sadece kayıt için */}
@@ -1093,14 +1488,37 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                     disabled={loading || (!isLogin && !otpVerified)}
                   >
                     {loading ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin me-2"></i>Lütfen
-                        bekleyin...
-                      </>
+                      <div className="d-flex align-items-center justify-content-center">
+                        <div
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                        >
+                          <span className="visually-hidden">Yükleniyor...</span>
+                        </div>
+                        Lütfen bekleyin...
+                      </div>
                     ) : (
                       <>{isLogin ? "Giriş Yap" : "Hesap Oluştur"}</>
                     )}
                   </button>
+
+                  {/* Güvenlik Bilgisi - Kayıt için */}
+                  {!isLogin && (
+                    <div
+                      className="text-center mb-3 p-2"
+                      style={{
+                        background: "rgba(40, 167, 69, 0.08)",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(40, 167, 69, 0.2)",
+                      }}
+                    >
+                      <small className="text-success">
+                        <i className="fas fa-shield-alt me-2"></i>
+                        Bilgileriniz 256-bit SSL ile şifrelenir ve güvenle
+                        saklanır
+                      </small>
+                    </div>
+                  )}
                 </form>
 
                 {isLogin && (

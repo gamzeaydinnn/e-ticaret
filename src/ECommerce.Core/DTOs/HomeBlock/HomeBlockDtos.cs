@@ -14,9 +14,15 @@ namespace ECommerce.Core.DTOs.HomeBlock
         public int Id { get; set; }
 
         /// <summary>
-        /// Blok adı - "İndirimli Ürünler", "Süt Ürünleri" vb.
+        /// Blok adı - Admin panelde görünür (internal name)
         /// </summary>
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Müşterilere gösterilen başlık - Ana sayfada görünür
+        /// Örnek: "Bu Fırsatları Kaçırmayın", "Haftalık İndirimler"
+        /// </summary>
+        public string? Title { get; set; }
 
         /// <summary>
         /// URL dostu slug - "indirimli-urunler"
@@ -42,6 +48,11 @@ namespace ECommerce.Core.DTOs.HomeBlock
         /// Kategori bazlı bloklar için kategori adı (read-only)
         /// </summary>
         public string? CategoryName { get; set; }
+
+        /// <summary>
+        /// Kategori bazlı bloklar için kategori slug'ı (read-only)
+        /// </summary>
+        public string? CategorySlug { get; set; }
 
         /// <summary>
         /// İlişkili banner ID
@@ -142,6 +153,7 @@ namespace ECommerce.Core.DTOs.HomeBlock
     public class CreateHomeBlockDto
     {
         public string Name { get; set; } = string.Empty;
+        public string? Title { get; set; }
         public string? Description { get; set; }
         public string BlockType { get; set; } = "manual";
         public int? CategoryId { get; set; }

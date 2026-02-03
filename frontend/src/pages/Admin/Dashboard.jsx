@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AdminService } from "../../services/adminService";
+import { MicroService } from "../../services/microService";
 import { useAuth } from "../../contexts/AuthContext";
 import { PERMISSIONS } from "../../services/permissionService";
 
@@ -36,12 +37,41 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // ERP Mikro bağlantı durumu
+  const [erpStatus, setErpStatus] = useState({
+    isConnected: null,
+    message: "",
+    lastSync: null,
+    loading: false,
+  });
+
   // İzin kontrolleri - SuperAdmin her şeyi görebilir
   const isSuperAdmin = user?.role === "SuperAdmin";
   const canViewStatistics =
     isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_STATISTICS);
   const canViewRevenue =
     isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_REVENUE);
+
+  // ERP Bağlantı kontrolü
+  const checkErpConnection = async () => {
+    setErpStatus((prev) => ({ ...prev, loading: true }));
+    try {
+      const result = await MicroService.testConnection();
+      setErpStatus({
+        isConnected: result?.isConnected || false,
+        message: result?.message || "",
+        lastSync: new Date().toISOString(),
+        loading: false,
+      });
+    } catch (err) {
+      setErpStatus({
+        isConnected: false,
+        message: err.message || "Bağlantı hatası",
+        lastSync: new Date().toISOString(),
+        loading: false,
+      });
+    }
+  };
 
   const loadDashboardStats = async () => {
     try {
@@ -59,10 +89,16 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboardStats();
+    checkErpConnection(); // ERP bağlantısını kontrol et
 
     // Her 30 saniyede bir otomatik güncelleme
     const interval = setInterval(loadDashboardStats, 30000);
-    return () => clearInterval(interval);
+    // Her 60 saniyede ERP kontrolü
+    const erpInterval = setInterval(checkErpConnection, 60000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(erpInterval);
+    };
   }, []);
 
   if (loading) {
@@ -355,6 +391,108 @@ export default function Dashboard() {
             değilsiniz.
           </div>
         )}
+
+        {/* ERP / Mikro Bağlantı Durumu Widget */}
+        <div className="row g-2 g-md-3 mb-3">
+          <div className="col-12">
+            <div
+              className={`card border-0 shadow-sm ${erpStatus.isConnected === true ? "border-start border-success" : erpStatus.isConnected === false ? "border-start border-danger" : ""}`}
+              style={{
+                borderRadius: "10px",
+                borderLeftWidth: erpStatus.isConnected !== null ? "4px" : "0",
+              }}
+            >
+              <div className="card-body p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div className="d-flex align-items-center">
+                  <div
+                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
+                    style={{
+                      width: 50,
+                      height: 50,
+                      background:
+                        erpStatus.isConnected === null
+                          ? "linear-gradient(135deg, #6b7280, #9ca3af)"
+                          : erpStatus.isConnected
+                            ? "linear-gradient(135deg, #10b981, #059669)"
+                            : "linear-gradient(135deg, #ef4444, #dc2626)",
+                    }}
+                  >
+                    {erpStatus.loading ? (
+                      <i className="fas fa-spinner fa-spin text-white"></i>
+                    ) : (
+                      <i
+                        className={`fas ${erpStatus.isConnected ? "fa-plug" : "fa-plug"} text-white`}
+                      ></i>
+                    )}
+                  </div>
+                  <div>
+                    <h6
+                      className="mb-0 fw-bold"
+                      style={{ fontSize: "0.95rem" }}
+                    >
+                      ERP / Mikro Entegrasyonu
+                    </h6>
+                    <small
+                      className={
+                        erpStatus.isConnected === null
+                          ? "text-muted"
+                          : erpStatus.isConnected
+                            ? "text-success"
+                            : "text-danger"
+                      }
+                    >
+                      {erpStatus.loading
+                        ? "Kontrol ediliyor..."
+                        : erpStatus.isConnected === null
+                          ? "Durum bilinmiyor"
+                          : erpStatus.isConnected
+                            ? "● Bağlı"
+                            : "● Bağlantı Yok"}
+                      {erpStatus.lastSync && !erpStatus.loading && (
+                        <span className="ms-2 text-muted">
+                          (Son kontrol:{" "}
+                          {new Date(erpStatus.lastSync).toLocaleTimeString(
+                            "tr-TR",
+                          )}
+                          )
+                        </span>
+                      )}
+                    </small>
+                  </div>
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={checkErpConnection}
+                    disabled={erpStatus.loading}
+                  >
+                    <i
+                      className={`fas ${erpStatus.loading ? "fa-spinner fa-spin" : "fa-sync-alt"} me-1`}
+                    ></i>
+                    Test
+                  </button>
+                  <a
+                    href="#erp"
+                    className="btn btn-sm text-white"
+                    style={{
+                      background: "linear-gradient(135deg, #f97316, #fb923c)",
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      // AdminPanel'deki erp tab'ına yönlendir
+                      window.dispatchEvent(
+                        new CustomEvent("adminNavigate", { detail: "erp" }),
+                      );
+                    }}
+                  >
+                    <i className="fas fa-external-link-alt me-1"></i>
+                    ERP Paneli
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Son Siparişler ve En Çok Satan Ürünler */}
         <div className="row g-2 g-md-3">

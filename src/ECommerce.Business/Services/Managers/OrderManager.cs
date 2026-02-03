@@ -593,14 +593,54 @@ namespace ECommerce.Business.Services.Managers
             return await GetByIdAsync(createdOrderId) ?? throw new Exception("Sipariş oluşturulamadı.");
         }
 
-        public async Task<bool> CancelOrderAsync(int orderId, int userId)
+        /// <summary>
+        /// Müşteri sipariş iptali - MARKET KURALLARI:
+        /// 1. Sadece kendi siparişini iptal edebilir
+        /// 2. Sadece aynı gün içinde iptal edilebilir
+        /// 3. Sadece hazırlanmadan önce (New, Pending, Confirmed) iptal edilebilir
+        /// Aksi halde müşteri hizmetleriyle iletişime geçilmeli
+        /// </summary>
+        public async Task<(bool Success, string? ErrorMessage)> CancelOrderAsync(int orderId, int userId)
         {
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
+            
+            // Sipariş bulunamadı veya başka kullanıcıya ait
             if (order == null || order.UserId != userId)
-                return false;
-            return await CancelOrderInternalAsync(order);
+                return (false, "Sipariş bulunamadı veya bu siparişi iptal etme yetkiniz yok.");
+            
+            // MARKET KURALI: Sadece aynı gün içinde iptal edilebilir
+            // Gün kontrolü - sipariş tarihi ile bugünün tarihi karşılaştırılır
+            var orderDate = order.CreatedAt.Date;
+            var today = DateTime.Today;
+            if (orderDate != today)
+            {
+                return (false, "Sipariş sadece aynı gün içinde iptal edilebilir. İptal için müşteri hizmetleriyle iletişime geçiniz.");
+            }
+            
+            // Durum kontrolü - sadece hazırlanmadan önceki durumlar iptal edilebilir
+            var cancellableStatuses = new[] { OrderStatus.New, OrderStatus.Pending, OrderStatus.Confirmed };
+            if (!cancellableStatuses.Contains(order.Status))
+            {
+                var statusMessage = order.Status switch
+                {
+                    OrderStatus.Preparing => "Siparişiniz hazırlanmaya başladı",
+                    OrderStatus.Ready or OrderStatus.ReadyForPickup => "Siparişiniz teslimata hazır",
+                    OrderStatus.Assigned or OrderStatus.PickedUp => "Siparişiniz kuryeye teslim edildi",
+                    OrderStatus.InTransit or OrderStatus.OutForDelivery => "Siparişiniz yolda",
+                    OrderStatus.Delivered => "Siparişiniz teslim edildi",
+                    OrderStatus.Cancelled => "Siparişiniz zaten iptal edilmiş",
+                    _ => "Siparişiniz bu aşamada"
+                };
+                return (false, $"{statusMessage}. Bu aşamada iptal için müşteri hizmetleriyle iletişime geçiniz.");
+            }
+            
+            // İptal işlemini gerçekleştir
+            var result = await CancelOrderInternalAsync(order);
+            return result 
+                ? (true, null) 
+                : (false, "Sipariş iptal edilemedi. Lütfen müşteri hizmetleriyle iletişime geçiniz.");
         }
 
         public async Task<bool> MarkPaymentFailedAsync(int orderId)

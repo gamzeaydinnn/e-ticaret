@@ -259,7 +259,10 @@ const getOrderItems = (order) => {
   if (Array.isArray(order?.orderItems) && order.orderItems.length > 0) {
     return order.orderItems;
   }
-  if (Array.isArray(order?.raw?.orderItems) && order.raw.orderItems.length > 0) {
+  if (
+    Array.isArray(order?.raw?.orderItems) &&
+    order.raw.orderItems.length > 0
+  ) {
     return order.raw.orderItems;
   }
   if (Array.isArray(order?.raw?.items) && order.raw.items.length > 0) {
@@ -272,6 +275,19 @@ const getOrderItems = (order) => {
 // ANA COMPONENT
 // ==========================================================================
 
+// ===========================================================================
+// WHATSAPP VE MÜŞTERİ HİZMETLERİ SABİTLERİ
+// Market sipariş iptal politikası için iletişim bilgileri
+// ===========================================================================
+const CUSTOMER_SUPPORT = {
+  whatsappNumber: "905334783072", // WhatsApp için (başında + yok, ülke kodu ile)
+  phoneDisplay: "+90 533 478 30 72", // Görüntüleme için
+  email: "golturkbuku@golkoygurme.com.tr",
+  // WhatsApp mesaj şablonu - sipariş numarası dinamik olarak eklenir
+  getWhatsAppMessage: (orderNumber) =>
+    `Merhaba, ${orderNumber} numaralı siparişim hakkında destek almak istiyorum.`,
+};
+
 const OrderTracking = () => {
   // State
   const [orders, setOrders] = useState([]);
@@ -283,6 +299,7 @@ const OrderTracking = () => {
     ConnectionState.DISCONNECTED,
   );
   const [notification, setNotification] = useState(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null); // İptal işlemi yapılan sipariş ID'si
 
   // =========================================================================
   // VERİ YÜKLEME
@@ -415,6 +432,117 @@ const OrderTracking = () => {
     } finally {
       setLoadingDetail(false);
     }
+  }, []);
+
+  // =========================================================================
+  // SİPARİŞ İPTAL FONKSİYONU - MARKET KURALLARI
+  // 1. Sadece aynı gün içinde iptal edilebilir
+  // 2. Sadece hazırlanmadan önce (new, pending, confirmed) iptal edilebilir
+  // 3. Diğer durumlarda müşteri hizmetleriyle iletişime yönlendirilir
+  // =========================================================================
+  const handleCancelOrder = useCallback(
+    async (order) => {
+      const orderId = order.id || order.orderId;
+      const orderNumber = getDisplayOrderNumber(order);
+
+      // Frontend tarafında da kontrol yap (backend zaten yapıyor ama UX için)
+      const orderDate = new Date(order.orderDate || order.createdAt);
+      const today = new Date();
+      const isSameDay = orderDate.toDateString() === today.toDateString();
+      const cancellableStatuses = ["new", "pending", "confirmed"];
+      const status = (order.status || "").toLowerCase();
+      const isCancellableStatus = cancellableStatuses.includes(status);
+
+      // Aynı gün değilse veya iptal edilemez durumdaysa uyarı göster
+      if (!isSameDay || !isCancellableStatus) {
+        const reason = !isSameDay
+          ? "Sipariş sadece aynı gün içinde iptal edilebilir."
+          : "Siparişiniz hazırlanmaya başladı.";
+
+        setNotification({
+          type: "warning",
+          title: "İptal Edilemiyor",
+          message: `${reason} İptal için müşteri hizmetleriyle iletişime geçiniz.`,
+          color: "#dc3545",
+          bgColor: "#f8d7da",
+          showWhatsApp: true,
+          orderNumber,
+        });
+        return;
+      }
+
+      // Kullanıcıdan onay al
+      const confirmCancel = window.confirm(
+        `${orderNumber} numaralı siparişinizi iptal etmek istediğinize emin misiniz?\n\n` +
+          `Bu işlem geri alınamaz.`,
+      );
+
+      if (!confirmCancel) return;
+
+      setCancellingOrderId(orderId);
+
+      try {
+        const response = await OrderService.cancel(orderId);
+
+        if (response.success) {
+          // Başarılı iptal
+          setNotification({
+            type: "success",
+            title: "Sipariş İptal Edildi",
+            message: `${orderNumber} numaralı siparişiniz başarıyla iptal edildi.`,
+            color: "#28a745",
+            bgColor: "#d4edda",
+          });
+
+          // Sipariş listesini güncelle
+          await loadOrders();
+          setSelectedOrder(null);
+        } else {
+          // Backend hatası - müşteri hizmetlerine yönlendir
+          setNotification({
+            type: "error",
+            title: "İptal Edilemedi",
+            message:
+              response.message ||
+              "Sipariş iptal edilemedi. Müşteri hizmetleriyle iletişime geçiniz.",
+            color: "#dc3545",
+            bgColor: "#f8d7da",
+            showWhatsApp: true,
+            orderNumber,
+            contactInfo: response.contactInfo,
+          });
+        }
+      } catch (error) {
+        console.error("[OrderTracking] Sipariş iptal hatası:", error);
+        const errorMessage =
+          error.response?.data?.message || "Bir hata oluştu.";
+
+        setNotification({
+          type: "error",
+          title: "İptal Edilemedi",
+          message: `${errorMessage} Müşteri hizmetleriyle iletişime geçiniz.`,
+          color: "#dc3545",
+          bgColor: "#f8d7da",
+          showWhatsApp: true,
+          orderNumber,
+        });
+      } finally {
+        setCancellingOrderId(null);
+      }
+    },
+    [loadOrders],
+  );
+
+  // =========================================================================
+  // WHATSAPP İLETİŞİM FONKSİYONU
+  // Müşteri hizmetlerine hızlı erişim için
+  // =========================================================================
+  const openWhatsAppSupport = useCallback((orderNumber) => {
+    const message = CUSTOMER_SUPPORT.getWhatsAppMessage(
+      orderNumber || "Sipariş",
+    );
+    const whatsappUrl = `https://wa.me/${CUSTOMER_SUPPORT.whatsappNumber}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank");
   }, []);
 
   // =========================================================================
@@ -840,9 +968,25 @@ const OrderTracking = () => {
               className={`fas ${notification.icon} me-3`}
               style={{ fontSize: "24px", color: notification.color }}
             ></i>
-            <div>
+            <div className="flex-grow-1">
               <strong>{notification.title}</strong>
               <p className="mb-0 small text-muted">{notification.message}</p>
+              {/* WhatsApp ile İletişim Butonu - İptal edilemezse göster */}
+              {notification.showWhatsApp && (
+                <button
+                  className="btn btn-success btn-sm mt-2"
+                  onClick={() => openWhatsAppSupport(notification.orderNumber)}
+                  style={{
+                    background: "#25D366",
+                    border: "none",
+                    borderRadius: "20px",
+                    padding: "6px 16px",
+                  }}
+                >
+                  <i className="fab fa-whatsapp me-2"></i>
+                  WhatsApp ile İletişime Geç
+                </button>
+              )}
             </div>
             {/* Bildirim kapat butonu */}
             <button
@@ -871,6 +1015,11 @@ const OrderTracking = () => {
           <OrderDetailCard
             order={selectedOrder}
             onClose={() => setSelectedOrder(null)}
+            onCancel={handleCancelOrder}
+            onWhatsAppSupport={openWhatsAppSupport}
+            isCancelling={
+              cancellingOrderId === (selectedOrder.id || selectedOrder.orderId)
+            }
           />
         )}
         {loadingDetail && (
@@ -1094,14 +1243,57 @@ const MiniStepper = ({ status }) => {
 
 /**
  * Sipariş Detay Kartı (Modal gibi)
+ * MARKET SİPARİŞ İPTAL KURALLARI:
+ * - Sadece aynı gün içinde iptal edilebilir
+ * - Sadece hazırlanmadan önce (new, pending, confirmed) iptal edilebilir
+ * - Diğer durumlarda WhatsApp ile müşteri hizmetlerine yönlendirilir
  */
-const OrderDetailCard = ({ order, onClose }) => {
+const OrderDetailCard = ({
+  order,
+  onClose,
+  onCancel,
+  onWhatsAppSupport,
+  isCancelling,
+}) => {
   const statusInfo = getStatusInfo(order.status);
   const isCancelled = statusInfo.step === -1;
   const orderNumber = getDisplayOrderNumber(order);
-  const orderDateText = getOrderDateTimeText(order.orderDate);
+  const orderDateText = getOrderDateTimeText(
+    order.orderDate || order.createdAt,
+  );
   const address = getOrderAddress(order);
   const items = getOrderItems(order);
+
+  // İptal edilebilirlik kontrolü
+  const orderDate = new Date(order.orderDate || order.createdAt);
+  const today = new Date();
+  const isSameDay = orderDate.toDateString() === today.toDateString();
+  const cancellableStatuses = ["new", "pending", "confirmed"];
+  const status = (order.status || "").toLowerCase();
+  const isCancellableStatus = cancellableStatuses.includes(status);
+  const canCancel = isSameDay && isCancellableStatus && !isCancelled;
+
+  // İptal edilememe sebebi mesajı
+  const getCancelDisabledReason = () => {
+    if (isCancelled) return null;
+    if (!isSameDay) return "Sipariş sadece aynı gün içinde iptal edilebilir";
+    if (!isCancellableStatus) {
+      const statusMessages = {
+        preparing: "Siparişiniz hazırlanmaya başladı",
+        processing: "Siparişiniz işleniyor",
+        ready: "Siparişiniz teslimata hazır",
+        assigned: "Kuryeniz atandı",
+        pickedup: "Kurye siparişinizi aldı",
+        intransit: "Siparişiniz yolda",
+        outfordelivery: "Siparişiniz dağıtımda",
+        delivered: "Siparişiniz teslim edildi",
+      };
+      return statusMessages[status] || "Bu aşamada iptal edilemiyor";
+    }
+    return null;
+  };
+
+  const cancelDisabledReason = getCancelDisabledReason();
 
   return (
     <div
@@ -1175,8 +1367,7 @@ const OrderDetailCard = ({ order, onClose }) => {
               </span>
             </p>
             <p className="mb-2">
-              <strong>Sipariş Tarihi:</strong>{" "}
-              {orderDateText}
+              <strong>Sipariş Tarihi:</strong> {orderDateText}
             </p>
           </div>
           <div className="col-md-6">
@@ -1256,8 +1447,85 @@ const OrderDetailCard = ({ order, onClose }) => {
               ))}
             </div>
           ) : (
-            <div className="text-muted small">
-              Ürün detayları bulunamadı.
+            <div className="text-muted small">Ürün detayları bulunamadı.</div>
+          )}
+        </div>
+
+        {/* ================================================================
+            SİPARİŞ İPTAL VE DESTEK BUTONLARI
+            Market kurallarına göre iptal butonu veya WhatsApp desteği gösterilir
+            ================================================================ */}
+        <div className="mt-4 pt-4 border-top">
+          <div className="d-flex flex-wrap gap-2 justify-content-center">
+            {/* İptal Butonu - Sadece iptal edilebilir siparişlerde göster */}
+            {canCancel && onCancel && (
+              <button
+                className="btn btn-outline-danger"
+                onClick={() => onCancel(order)}
+                disabled={isCancelling}
+                style={{
+                  borderRadius: "25px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                }}
+              >
+                {isCancelling ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2"></span>
+                    İptal Ediliyor...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-times-circle me-2"></i>
+                    Siparişi İptal Et
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* İptal edilemezse sebep ve WhatsApp butonu göster */}
+            {!canCancel && !isCancelled && cancelDisabledReason && (
+              <div className="w-100 text-center">
+                <div
+                  className="alert alert-warning d-inline-flex align-items-center mb-3"
+                  style={{ borderRadius: "12px", padding: "12px 20px" }}
+                >
+                  <i className="fas fa-info-circle me-2"></i>
+                  <span>
+                    {cancelDisabledReason}. İptal için müşteri hizmetleriyle
+                    iletişime geçiniz.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* WhatsApp Destek Butonu - Her zaman göster (iptal edilemezse öne çıkar) */}
+            {onWhatsAppSupport && !isCancelled && (
+              <button
+                className="btn"
+                onClick={() => onWhatsAppSupport(orderNumber)}
+                style={{
+                  background: canCancel ? "#f8f9fa" : "#25D366",
+                  color: canCancel ? "#25D366" : "white",
+                  border: canCancel ? "2px solid #25D366" : "none",
+                  borderRadius: "25px",
+                  padding: "10px 24px",
+                  fontWeight: "600",
+                }}
+              >
+                <i className="fab fa-whatsapp me-2"></i>
+                {canCancel ? "Destek Al" : "WhatsApp ile İletişime Geç"}
+              </button>
+            )}
+          </div>
+
+          {/* İletişim bilgileri */}
+          {!canCancel && !isCancelled && (
+            <div className="text-center mt-3">
+              <small className="text-muted">
+                <i className="fas fa-phone me-1"></i>
+                Telefon: +90 533 478 30 72
+              </small>
             </div>
           )}
         </div>

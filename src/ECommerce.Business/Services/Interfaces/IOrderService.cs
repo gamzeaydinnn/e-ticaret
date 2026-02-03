@@ -28,7 +28,16 @@ namespace ECommerce.Business.Services.Interfaces
         Task DeleteAsync(int id);
         Task<bool> ChangeOrderStatusAsync(int id, string newStatus);
         Task<OrderListDto> CheckoutAsync(OrderCreateDto dto);
-        Task<bool> CancelOrderAsync(int orderId, int userId);
+        
+        /// <summary>
+        /// Müşteri sipariş iptali - MARKET KURALLARI:
+        /// 1. Sadece kendi siparişini iptal edebilir
+        /// 2. Sadece aynı gün içinde iptal edilebilir
+        /// 3. Sadece hazırlanmadan önce (New, Pending, Confirmed) iptal edilebilir
+        /// </summary>
+        /// <returns>Tuple: (Başarılı mı?, Hata mesajı)</returns>
+        Task<(bool Success, string? ErrorMessage)> CancelOrderAsync(int orderId, int userId);
+        
         Task<bool> MarkPaymentFailedAsync(int orderId);
         Task<OrderListDto?> MarkOrderAsPreparingAsync(int orderId);
         Task<OrderListDto?> MarkOrderOutForDeliveryAsync(int orderId);

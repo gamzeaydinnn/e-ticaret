@@ -1,25 +1,184 @@
 /* =====================================================
-   PRODUCT BLOCK SECTION - POSTER + ÜRÜNLER
-   ProductGrid ile AYNI kart tasarımı kullanılıyor
+   PRODUCT BLOCK SECTION - BAŞLIK + POSTER + ÜRÜNLER
+   Referans: "Bu Fırsatları Kaçırmayın" tasarımı
    ===================================================== */
 
 .product-block-section {
-  padding: 20px 0;
+  padding: 30px 0;
   background-color: #fff;
   overflow: hidden;
+  margin-bottom: 20px;
   --block-card-width: 220px;
   --block-card-height: 320px;
   --block-image-height: 120px;
   --block-body-min-height: 160px;
 }
 
+/* =====================================================
+   SEPETE EKLE BUTONU - WEB STİLİ (inline style kaldırıldı)
+   ===================================================== */
+.product-block-section .modern-add-btn {
+  background: linear-gradient(135deg, #ff6b35, #ff8c00);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.2);
+  width: 100%;
+  cursor: pointer;
+}
+
+.product-block-section .modern-add-btn:hover {
+  background: linear-gradient(135deg, #ff8c00, #ff6b35);
+  box-shadow: 0 4px 12px rgba(255, 107, 53, 0.35);
+  transform: translateY(-1px);
+}
+
+.product-block-section .modern-add-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* =====================================================
+   ÜRÜN KARTI STİLLERİ - WEB
+   ===================================================== */
+.product-block-section .product-title {
+  height: 36px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #2c3e50;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.product-block-section .price-section {
+  min-height: 50px;
+  margin-bottom: 8px;
+}
+
+.product-block-section .savings-badge {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.product-block-section .savings-badge i {
+  font-size: 0.6rem;
+}
+
+.product-block-section .original-price {
+  font-size: 0.8rem;
+  text-decoration: line-through;
+  text-decoration-color: #ef4444;
+  text-decoration-thickness: 2px;
+  color: #9ca3af;
+}
+
+.product-block-section .current-price,
+.product-block-section .product-price {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ff6b35;
+}
+
+.product-block-section .price-container .current-price {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #ef4444;
+  text-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+/* =====================================================
+   BAŞLIK BÖLÜMÜ - Referans Tasarım
+   ===================================================== */
+.product-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.block-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.header-right {
+  flex-shrink: 0;
+}
+
+.view-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #ff6b35;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 10px 20px;
+  border: 2px solid #ff6b35;
+  border-radius: 25px;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
+.view-all-btn:hover {
+  background: #ff6b35;
+  color: #fff;
+  transform: translateX(3px);
+}
+
+.view-all-btn i {
+  transition: transform 0.3s ease;
+}
+
+.view-all-btn:hover i {
+  transform: translateX(3px);
+}
+
+/* =====================================================
+   İÇERİK BÖLÜMÜ - POSTER + ÜRÜNLER
+   ===================================================== */
 .product-block-container {
   display: flex;
   gap: 15px;
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
-  align-items: stretch; /* Poster ve kartlar aynı yükseklikte */
+  align-items: stretch;
+}
+
+/* Poster olmadığında tam genişlik */
+.product-block-container.no-poster {
+  padding: 0 20px;
+}
+
+.product-block-container.no-poster .product-block-content {
+  width: 100%;
 }
 
 /* =====================================================
@@ -103,8 +262,8 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #fff;
   border: none;
@@ -126,43 +285,25 @@
 }
 
 .slider-arrow-left {
-  left: -20px;
+  left: -22px;
 }
 
 .slider-arrow-right {
-  right: -20px;
-}
-
-/* Tümünü Gör */
-.view-all-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  padding: 15px 5px 0;
-}
-
-.view-all-btn {
-  color: #ff6b35;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: 10px;
-  background: rgba(255, 107, 53, 0.1);
-  transition: all 0.2s;
-}
-
-.view-all-btn:hover {
-  background: rgba(255, 107, 53, 0.2);
-  color: #e55a25;
+  right: -22px;
 }
 
 /* =====================================================
-   RESPONSIVE - MOBİL
+   RESPONSIVE - TABLET
    ===================================================== */
 @media (max-width: 992px) {
+  .product-block-header {
+    padding: 0 15px 15px;
+  }
+
+  .block-title {
+    font-size: 1.4rem;
+  }
+
   .product-block-container {
     flex-direction: row;
     padding: 0 15px;
@@ -170,24 +311,119 @@
   }
 
   .product-block-section {
+    --block-card-width: 160px;
+    --block-card-height: 280px;
+    --block-image-height: 100px;
+    --block-body-min-height: 150px;
+  }
+
+  .slider-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .slider-arrow-left {
+    left: -18px;
+  }
+
+  .slider-arrow-right {
+    right: -18px;
+  }
+}
+
+/* =====================================================
+   RESPONSIVE - MOBİL
+   ===================================================== */
+@media (max-width: 768px) {
+  .product-block-section {
+    padding: 20px 0;
+    margin-bottom: 15px;
     --block-card-width: 140px;
     --block-card-height: 260px;
     --block-image-height: 96px;
     --block-body-min-height: 140px;
   }
 
+  .product-block-header {
+    padding: 0 12px 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .block-title {
+    font-size: 1.25rem;
+  }
+
+  .view-all-btn {
+    font-size: 0.85rem;
+    padding: 8px 16px;
+  }
+
+  .product-block-container {
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  /* Mobilde ok butonları gizle */
   .slider-arrow {
     display: none;
+  }
+
+  /* Swipe için scroll-snap */
+  .products-scroll-container {
+    scroll-snap-type: x mandatory;
+    gap: 10px;
+    padding: 5px 0;
+  }
+
+  .product-block-section .product-block-card {
+    scroll-snap-align: start;
+  }
+
+  /* 768px için buton küçültme */
+  .product-block-section .modern-add-btn {
+    padding: 6px 8px;
+    font-size: 0.7rem;
+    border-radius: 8px;
+  }
+
+  .product-block-section .btn-favorite {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+  }
+
+  .product-block-section .product-title {
+    font-size: 0.75rem;
+  }
+
+  .product-block-section .product-price {
+    font-size: 0.8rem;
   }
 }
 
 @media (max-width: 576px) {
   .product-block-section {
-    padding: 10px 0;
+    padding: 15px 0;
     --block-card-width: 120px;
     --block-card-height: 240px;
     --block-image-height: 88px;
     --block-body-min-height: 130px;
+  }
+
+  .product-block-header {
+    padding: 0 10px 12px;
+  }
+
+  .block-title {
+    font-size: 1.1rem;
+  }
+
+  .view-all-btn {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+    border-width: 1.5px;
   }
 
   .product-block-container {
@@ -213,31 +449,112 @@
 
   .products-scroll-container {
     gap: 8px;
-    padding: 5px 0;
   }
 
   .product-block-section .product-block-card {
     border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    height: 100% !important;
   }
 
   .product-block-section .product-block-card .card-body {
-    padding: 6px !important;
+    padding: 4px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
   }
 
-  .view-all-wrapper {
-    padding: 10px 0 0;
+  /* Ürün bilgi alanı - flex-grow ile üst kısım */
+  .product-block-section .product-info,
+  .product-block-section .price-container,
+  .product-block-section .price-section {
+    flex: 0 0 auto;
   }
 
-  .view-all-btn {
-    font-size: 0.8rem;
-    padding: 8px 15px;
-  }
-
+  /* Mobilde sepete ekle butonları - KOMPAKT */
   .product-block-section .modern-add-btn {
-    padding: 6px 6px;
-    font-size: 0.68rem;
-    line-height: 1.1;
-    border-radius: 8px;
+    padding: 4px 6px !important;
+    font-size: 0.5rem !important;
+    line-height: 1.1 !important;
+    border-radius: 6px !important;
+    min-height: 24px !important;
+    height: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    white-space: nowrap !important;
+    margin-top: auto !important;
+  }
+
+  .product-block-section .modern-add-btn i {
+    display: none !important;
+  }
+
+  .product-block-section .btn-favorite {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    padding: 0 !important;
+    font-size: 0.55rem !important;
+  }
+
+  /* Fiyat alanı - sabit yükseklik */
+  .product-block-section .price-section {
+    min-height: 35px !important;
+    max-height: 35px !important;
+    overflow: hidden !important;
+    margin-bottom: 4px !important;
+  }
+
+  .product-block-section .product-price,
+  .product-block-section .current-price {
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0 !important;
+    display: block !important;
+    line-height: 1.2 !important;
+  }
+
+  .product-block-section .price-container .current-price {
+    font-size: 0.75rem !important;
+    color: #ef4444 !important;
+  }
+
+  .product-block-section .original-price {
+    font-size: 0.5rem !important;
+    display: block !important;
+    line-height: 1.1 !important;
+  }
+
+  /* Ürün adını küçült - sabit yükseklik */
+  .product-block-section .product-title {
+    font-size: 0.58rem !important;
+    line-height: 1.2 !important;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 3px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    height: 28px !important;
+  }
+
+  /* İndirim badge */
+  .product-block-section .discount-badge {
+    padding: 2px 4px !important;
+    font-size: 0.45rem !important;
+  }
+
+  /* Tasarruf badge - gizle mobilde */
+  .product-block-section .savings-badge {
+    display: none !important;
+  }
+
+  /* Action buttons - en altta sabit */
+  .product-block-section .action-buttons {
+    margin-top: auto !important;
   }
 }
 
@@ -252,5 +569,31 @@
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+/* =====================================================
+   İNDİRİM BADGE STİLLERİ (Animasyonsuz - Profesyonel)
+   ===================================================== */
+
+/* İndirimli ürün kartları için özel stil - sadece hafif gölge */
+.product-block-card.has-discount {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* İndirim badge responsive */
+@media (max-width: 576px) {
+  .discount-badge {
+    padding: 3px 6px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .discount-badge i {
+    display: none;
+  }
+
+  .savings-badge {
+    font-size: 0.55rem !important;
+    padding: 2px 5px !important;
   }
 }

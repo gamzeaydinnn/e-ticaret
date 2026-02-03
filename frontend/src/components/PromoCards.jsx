@@ -1,10 +1,12 @@
 /**
  * PromoCards.jsx - Ana Sayfa Promosyon Kartları Bileşeni
  *
- * Bu bileşen, ana sayfadaki promosyon/kampanya kartlarını grid layout ile render eder.
+ * Bu bileşen, ana sayfadaki promosyon/kampanya kartlarını
+ * yatay kaydırmalı carousel olarak render eder.
  *
  * Özellikler:
- * - Responsive grid layout (2-4 kolon)
+ * - Yatay kaydırmalı carousel (web: ok butonları, mobil: swipe)
+ * - Responsive tasarım (mobilde 3 poster görünür)
  * - Hover efektleri
  * - Link desteği
  * - Lazy loading (performans için)
@@ -13,11 +15,12 @@
  * - Erişilebilirlik (ARIA etiketleri)
  *
  * @author Senior Developer
- * @version 1.0.0
+ * @version 2.0.0 - Carousel yapısına dönüştürüldü
  */
 
-import React, { useState, useCallback, memo } from "react";
+import React, { useState, useCallback, memo, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
+import "./PromoCards.css";
 
 // ============================================
 // SABİTLER
@@ -27,21 +30,25 @@ import PropTypes from "prop-types";
 const PLACEHOLDER_IMAGE = "/images/placeholder.png";
 
 /** Skeleton sayısı (yükleme durumunda gösterilecek) */
-const SKELETON_COUNT = 4;
+const SKELETON_COUNT = 5;
 
 // ============================================
-// STIL SABİTLERİ
+// STIL SABİTLERİ - CAROUSEL YAPISI
 // ============================================
 
 const styles = {
   section: {
     marginBottom: "24px",
+    overflow: "hidden",
   },
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: "16px",
+    padding: "0 20px",
+    maxWidth: "1400px",
+    margin: "0 auto 16px",
   },
   title: {
     fontSize: "1.25rem",
@@ -54,13 +61,23 @@ const styles = {
   icon: {
     color: "#f97316",
   },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, minmax(0, 1fr))", // Web için 5 kolon sabit
-    gap: "10px",
-    justifyContent: "center",
+  // Carousel wrapper - oklar dahil
+  carouselWrapper: {
+    position: "relative",
     maxWidth: "1400px",
     margin: "0 auto",
+    padding: "0 60px", // Ok butonları için yer
+  },
+  // Scroll container - yatay kaydırma
+  scrollContainer: {
+    display: "flex",
+    gap: "12px",
+    overflowX: "auto",
+    scrollBehavior: "smooth",
+    padding: "10px 5px",
+    scrollbarWidth: "none", // Firefox
+    msOverflowStyle: "none", // IE/Edge
+    scrollSnapType: "x proximity",
   },
   card: {
     position: "relative",
@@ -71,7 +88,8 @@ const styles = {
     transition: "transform 0.3s ease, box-shadow 0.3s ease",
     backgroundColor: "#fff",
     textDecoration: "none",
-    width: "100%",
+    flexShrink: 0,
+    scrollSnapAlign: "start",
   },
   cardHover: {
     transform: "translateY(-4px)",
@@ -80,7 +98,7 @@ const styles = {
   imageContainer: {
     position: "relative",
     width: "100%",
-    paddingTop: "56%", // 16:9 oranına yakın, yazılar daha rahat sığar
+    paddingTop: "56%", // 16:9 oranına yakın
     overflow: "hidden",
     backgroundColor: "#f3f4f6",
   },
@@ -90,8 +108,8 @@ const styles = {
     left: 0,
     width: "100%",
     height: "100%",
-    objectFit: "cover", // Kutuyu tamamen kaplasın
-    objectPosition: "center top", // Üstten göster - yazılar görünsün
+    objectFit: "cover",
+    objectPosition: "center top",
     transition: "transform 0.3s ease",
   },
   imageHover: {
@@ -127,12 +145,37 @@ const styles = {
     fontWeight: "bold",
     zIndex: 5,
   },
+  // Ok butonları
+  arrow: {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "44px",
+    height: "44px",
+    borderRadius: "50%",
+    background: "#ffffff",
+    border: "none",
+    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 10,
+    transition: "all 0.3s ease",
+    color: "#333",
+    fontSize: "16px",
+  },
+  arrowLeft: {
+    left: "10px",
+  },
+  arrowRight: {
+    right: "10px",
+  },
   skeleton: {
     borderRadius: "14px",
     overflow: "hidden",
     backgroundColor: "#e5e7eb",
-    maxWidth: "180px",
-    margin: "0 auto",
+    flexShrink: 0,
   },
   skeletonImage: {
     width: "100%",
@@ -243,17 +286,17 @@ const SkeletonCard = memo(function SkeletonCard() {
 });
 
 // ============================================
-// ANA BİLEŞEN
+// ANA BİLEŞEN - CAROUSEL YAPISINA DÖNÜŞTÜRÜLDÜ
 // ============================================
 
 /**
- * PromoCards - Promosyon kartları grid bileşeni
+ * PromoCards - Promosyon kartları carousel bileşeni
  *
  * @param {Array} promos - Promosyon listesi
  * @param {boolean} loading - Yükleme durumu
  * @param {string} title - Bölüm başlığı
  * @param {string} icon - Font Awesome ikon sınıfı
- * @param {number} columns - Minimum kolon sayısı
+ * @param {number} columns - Minimum kolon sayısı (kullanılmıyor - carousel)
  * @param {boolean} showTitle - Başlığı göster
  */
 function PromoCards({
@@ -264,6 +307,49 @@ function PromoCards({
   columns = 4,
   showTitle = true,
 }) {
+  // =====================================================
+  // CAROUSEL SCROLL KONTROL
+  // =====================================================
+  const scrollContainerRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  // Scroll durumunu kontrol et
+  const checkScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      setCanScrollLeft(container.scrollLeft > 10);
+      setCanScrollRight(
+        container.scrollLeft <
+          container.scrollWidth - container.clientWidth - 10,
+      );
+    }
+  }, []);
+
+  // Kaydırma fonksiyonu
+  const scroll = useCallback(
+    (direction) => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        // Her kaydırmada bir kart genişliği kadar kaydır
+        const scrollAmount = 280;
+        container.scrollBy({
+          left: direction === "left" ? -scrollAmount : scrollAmount,
+          behavior: "smooth",
+        });
+        setTimeout(checkScroll, 350);
+      }
+    },
+    [checkScroll],
+  );
+
+  // Component mount ve data değişiminde scroll durumunu kontrol et
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
+  }, [checkScroll, promos]);
+
   // ============================================
   // LOADING STATE
   // ============================================
@@ -279,10 +365,19 @@ function PromoCards({
             </h2>
           </div>
         )}
-        <div style={styles.grid} aria-label="Kampanyalar yükleniyor">
-          {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-            <SkeletonCard key={`skeleton-${index}`} />
-          ))}
+        <div
+          className="promo-cards-carousel-wrapper"
+          style={styles.carouselWrapper}
+        >
+          <div
+            className="promo-cards-scroll-container"
+            style={styles.scrollContainer}
+            aria-label="Kampanyalar yükleniyor"
+          >
+            {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
+              <SkeletonCard key={`skeleton-${index}`} />
+            ))}
+          </div>
         </div>
       </section>
     );
@@ -297,17 +392,11 @@ function PromoCards({
   }
 
   // ============================================
-  // ANA RENDER
+  // ANA RENDER - CAROUSEL
   // ============================================
 
-  // Grid template columns hesapla - Web için 5 kolon
-  const gridStyle = {
-    ...styles.grid,
-    gridTemplateColumns: "repeat(5, 1fr)",
-  };
-
   return (
-    <section style={styles.section}>
+    <section style={styles.section} className="promo-cards-section">
       {/* Başlık */}
       {showTitle && (
         <div style={styles.header}>
@@ -318,16 +407,60 @@ function PromoCards({
         </div>
       )}
 
-      {/* Promo Grid */}
+      {/* Carousel Wrapper - Ok butonları dahil */}
       <div
-        className="promo-cards-grid"
-        style={gridStyle}
-        role="list"
-        aria-label={title}
+        className="promo-cards-carousel-wrapper"
+        style={styles.carouselWrapper}
       >
-        {promos.map((promo, index) => (
-          <PromoCard key={promo.id} promo={promo} index={index} />
-        ))}
+        {/* Sol Ok - Her zaman görünür, scroll yoksa soluk */}
+        {promos.length > 4 && (
+          <button
+            className={`promo-cards-arrow promo-cards-arrow-left ${!canScrollLeft ? "disabled-arrow" : ""}`}
+            style={{
+              ...styles.arrow,
+              ...styles.arrowLeft,
+              opacity: canScrollLeft ? 1 : 0.3,
+              cursor: canScrollLeft ? "pointer" : "default",
+            }}
+            onClick={() => canScrollLeft && scroll("left")}
+            aria-label="Sola kaydır"
+            disabled={!canScrollLeft}
+          >
+            <i className="fas fa-chevron-left"></i>
+          </button>
+        )}
+
+        {/* Scroll Container */}
+        <div
+          className="promo-cards-scroll-container"
+          style={styles.scrollContainer}
+          ref={scrollContainerRef}
+          onScroll={checkScroll}
+          role="list"
+          aria-label={title}
+        >
+          {promos.map((promo, index) => (
+            <PromoCard key={promo.id} promo={promo} index={index} />
+          ))}
+        </div>
+
+        {/* Sağ Ok - Her zaman görünür, scroll yoksa soluk */}
+        {promos.length > 4 && (
+          <button
+            className={`promo-cards-arrow promo-cards-arrow-right ${!canScrollRight ? "disabled-arrow" : ""}`}
+            style={{
+              ...styles.arrow,
+              ...styles.arrowRight,
+              opacity: canScrollRight ? 1 : 0.3,
+              cursor: canScrollRight ? "pointer" : "default",
+            }}
+            onClick={() => canScrollRight && scroll("right")}
+            aria-label="Sağa kaydır"
+            disabled={!canScrollRight}
+          >
+            <i className="fas fa-chevron-right"></i>
+          </button>
+        )}
       </div>
     </section>
   );

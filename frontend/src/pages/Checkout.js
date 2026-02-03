@@ -4,10 +4,17 @@
 // Varyant bilgileri dahil sipariş oluşturma
 // POSNET Kredi Kartı Entegrasyonu Dahil
 // Ağırlık Bazlı Ürün Bilgilendirmesi Dahil
+// SAYFA YENİLEME / GERİ BUTONU KORUMASI DAHİL
 // ============================================================================
-import React, { useEffect, useState, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import api from "../services/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { CartService } from "../services/cartService";
@@ -62,9 +69,149 @@ export default function Checkout() {
     }
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   });
+
+  // ============================================================================
+  // SESSION TIMEOUT UYARISI STATE'LERİ
+  // Kullanıcı checkout sayfasında uzun süre beklerse uyarı göster
+  // ============================================================================
+  const SESSION_TIMEOUT_MINUTES = 15; // 15 dakika session timeout
+  const WARNING_BEFORE_MINUTES = 2; // Son 2 dakikada uyarı göster
+  const [sessionTimeRemaining, setSessionTimeRemaining] = useState(
+    SESSION_TIMEOUT_MINUTES * 60,
+  );
+  const [showSessionWarning, setShowSessionWarning] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const sessionTimerRef = useRef(null);
+
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { cartItems, getCartTotal, clearCart } = useCart();
+
+  // ============================================================================
+  // SAYFA TERK ETME KORUMASI (beforeunload + popstate)
+  // Kullanıcının ödeme sırasında yanlışlıkla sayfadan çıkmasını engelle
+  // ============================================================================
+
+  // Ödeme işlemi devam ediyor mu? (koruma aktif olmalı mı?)
+  const isPaymentInProgress = useRef(false);
+
+  // isPaymentInProgress güncelle
+  useEffect(() => {
+    isPaymentInProgress.current = submitting || showCardForm;
+  }, [submitting, showCardForm]);
+
+  // ============================================================================
+  // 1. BEFOREUNLOAD - F5, sekme kapatma, sayfa yenileme koruması
+  // ============================================================================
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      // Sadece ödeme sırasında veya kart formu açıkken uyarı göster
+      if (isPaymentInProgress.current) {
+        const message =
+          "Ödeme işlemi devam ediyor! Sayfadan ayrılırsanız işlem iptal edilebilir. Devam etmek istiyor musunuz?";
+        e.preventDefault();
+        e.returnValue = message; // Chrome için gerekli
+        return message; // Diğer tarayıcılar için
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
+
+  // ============================================================================
+  // 2. POPSTATE - Geri butonu koruması (Browser back button)
+  // Kullanıcı geri tuşuna basarsa uyarı göster
+  // ============================================================================
+  useEffect(() => {
+    // Sayfa yüklendiğinde history state'e bir entry ekle
+    // Bu sayede geri tuşuna basıldığında popstate event'i tetiklenir
+    window.history.pushState({ checkout: true }, "", location.pathname);
+
+    const handlePopState = (e) => {
+      if (isPaymentInProgress.current) {
+        // Ödeme devam ediyorsa uyarı göster
+        const confirmLeave = window.confirm(
+          "⚠️ Ödeme işlemi devam ediyor!\n\n" +
+            "Geri dönerseniz ödeme işlemi iptal edilebilir ve sepetiniz kaybolabilir.\n\n" +
+            "Devam etmek istiyor musunuz?",
+        );
+
+        if (!confirmLeave) {
+          // Kullanıcı vazgeçti, sayfada kal
+          window.history.pushState({ checkout: true }, "", location.pathname);
+          return;
+        }
+
+        // Kullanıcı onayladı, ödeme formunu kapat ve geri git
+        setShowCardForm(false);
+        setPendingOrderId(null);
+        setSubmitting(false);
+      }
+
+      // Geri gitmeye izin ver
+      navigate(-1);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [location.pathname, navigate]);
+
+  // ============================================================================
+  // 3. SESSION TIMEOUT UYARISI
+  // Kullanıcı checkout sayfasında 15 dakikadan fazla beklerse oturum sona erer
+  // ============================================================================
+  useEffect(() => {
+    // Session timer başlat
+    sessionTimerRef.current = setInterval(() => {
+      setSessionTimeRemaining((prev) => {
+        const newTime = prev - 1;
+
+        // Son 2 dakikada uyarı göster
+        if (newTime <= WARNING_BEFORE_MINUTES * 60 && newTime > 0) {
+          setShowSessionWarning(true);
+        }
+
+        // Süre doldu
+        if (newTime <= 0) {
+          setSessionExpired(true);
+          setShowSessionWarning(false);
+          clearInterval(sessionTimerRef.current);
+          return 0;
+        }
+
+        return newTime;
+      });
+    }, 1000);
+
+    return () => {
+      if (sessionTimerRef.current) {
+        clearInterval(sessionTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Session'ı yenile (kullanıcı aktif olduğunda)
+  const refreshSession = useCallback(() => {
+    setSessionTimeRemaining(SESSION_TIMEOUT_MINUTES * 60);
+    setShowSessionWarning(false);
+    setSessionExpired(false);
+    console.log("[Checkout] ✅ Session yenilendi");
+  }, []);
+
+  // Formatlanmış kalan süre
+  const formatTimeRemaining = useCallback((seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, []);
 
   // ===========================================================================
   // KARGO FİYATLARINI API'DEN ÇEK (Component mount olduğunda)
@@ -356,41 +503,109 @@ export default function Checkout() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* ================================================================
+          SESSION EXPIRED - Oturum sona erdi
+          ================================================================ */}
+      {sessionExpired && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⏰</div>
+              <h2 className="text-xl font-bold mb-2 text-red-600">
+                Oturum Süresi Doldu
+              </h2>
+              <p className="text-gray-600 mb-4">
+                Güvenliğiniz için checkout oturumunuz sona erdi. Lütfen sayfayı
+                yenileyerek tekrar başlayın.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-orange-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                🔄 Sayfayı Yenile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================
+          SESSION WARNING - Oturum süresi dolmak üzere
+          ================================================================ */}
+      {showSessionWarning && !sessionExpired && (
+        <div className="fixed top-4 right-4 bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded shadow-lg z-40 max-w-sm animate-pulse">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <span className="text-2xl">⚠️</span>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700 font-semibold">
+                Oturum süresi dolmak üzere!
+              </p>
+              <p className="text-xs text-yellow-600 mt-1">
+                Kalan süre: {formatTimeRemaining(sessionTimeRemaining)}
+              </p>
+              <button
+                onClick={refreshSession}
+                className="mt-2 text-xs bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600 transition-colors"
+              >
+                ⏱️ Süreyi Uzat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-bold mb-4">Ödeme ve Adres</h1>
       <form onSubmit={submit} className="max-w-xl">
         <input
           required
           placeholder="Ad Soyad"
           value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, name: e.target.value });
+            refreshSession();
+          }}
           className="w-full mb-2 border p-2"
         />
         <input
           required
           placeholder="Telefon"
           value={form.phone}
-          onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, phone: e.target.value });
+            refreshSession();
+          }}
           className="w-full mb-2 border p-2"
         />
         <input
           required
           placeholder="E-posta"
           value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, email: e.target.value });
+            refreshSession();
+          }}
           className="w-full mb-2 border p-2"
         />
         <input
           required
           placeholder="İl"
           value={form.city || ""}
-          onChange={(e) => setForm({ ...form, city: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, city: e.target.value });
+            refreshSession();
+          }}
           className="w-full mb-2 border p-2"
         />
         <textarea
           required
           placeholder="Adres"
           value={form.address}
-          onChange={(e) => setForm({ ...form, address: e.target.value })}
+          onChange={(e) => {
+            setForm({ ...form, address: e.target.value });
+            refreshSession();
+          }}
           className="w-full mb-2 border p-2"
         />
 

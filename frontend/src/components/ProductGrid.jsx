@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { debugLog } from "../config/apiConfig";
 import getProductCategoryRules from "../config/productCategoryRules";
@@ -10,6 +10,7 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
+import "./ProductGrid.css";
 
 const DEMO_PRODUCTS = [
   // Et ve Et Ürünleri (categoryId: 1)
@@ -210,8 +211,25 @@ const DEMO_PRODUCTS = [
 export default function ProductGrid({
   products: initialProducts,
   categoryId,
+  title = "İlgini Çekebilecek Ürünler", // Blok başlığı - admin panelden ayarlanabilir
+  showTitle = true, // Başlık gösterilsin mi
+  showViewAll = true, // "Tümünü Gör" butonu gösterilsin mi
+  viewAllLink = "/products", // Tümünü gör linki
+  // =====================================================
+  // BLOK FORMAT DESTEĞİ (poster + ürünler yan yana)
+  // posterUrl verilirse blok layout kullanılır
+  // =====================================================
+  posterUrl = null, // Sol tarafta gösterilecek poster görseli
+  posterAlt = "", // Poster için alternatif metin
+  layout = "default", // 'default' (sadece ürünler) veya 'block' (poster + ürünler)
 } = {}) {
   const navigate = useNavigate();
+
+  // Carousel scroll referansı ve state'leri
+  const scrollContainerRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -239,6 +257,49 @@ export default function ProductGrid({
     favorites,
   } = useFavorites();
   const { toggleCompare, isInCompare } = useCompare();
+
+  // =====================================================
+  // CAROUSEL SCROLL KONTROL FONKSİYONLARI
+  // Yatay kaydırma için scroll durumunu takip eder
+  // =====================================================
+  const checkScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      // Sol ok gösterilsin mi (başta değilse göster)
+      setCanScrollLeft(container.scrollLeft > 10);
+      // Sağ ok gösterilsin mi (sonda değilse göster)
+      setCanScrollRight(
+        container.scrollLeft <
+          container.scrollWidth - container.clientWidth - 10,
+      );
+    }
+  }, []);
+
+  // Kaydırma fonksiyonu - ok butonları için
+  const scroll = useCallback(
+    (direction) => {
+      const container = scrollContainerRef.current;
+      if (container) {
+        // Her kaydırmada bir kart genişliği kadar (240px) kaydır
+        const scrollAmount = 260;
+        container.scrollBy({
+          left: direction === "left" ? -scrollAmount : scrollAmount,
+          behavior: "smooth",
+        });
+        // Scroll sonrası durumu güncelle
+        setTimeout(checkScroll, 350);
+      }
+    },
+    [checkScroll],
+  );
+
+  // Component mount olduğunda ve data değiştiğinde scroll durumunu kontrol et
+  useEffect(() => {
+    checkScroll();
+    // Resize event'inde de kontrol et
+    window.addEventListener("resize", checkScroll);
+    return () => window.removeEventListener("resize", checkScroll);
+  }, [checkScroll, data]);
 
   // Kategori filtresi (varsa)
   const filteredProducts = useMemo(() => {
@@ -500,13 +561,29 @@ export default function ProductGrid({
   }
 
   return (
-    <div>
-      {/* Sonuç Bilgisi */}
-      <div className="text-center mb-4">
-        <p className="text-muted mb-0">
-          <strong>{filteredProducts.length}</strong> ürün listeleniyor
-        </p>
-      </div>
+    <section
+      className={`product-grid-section ${layout === "block" && posterUrl ? "product-grid-block-layout" : ""}`}
+    >
+      {/* =====================================================
+          BAŞLIK VE TÜMÜNÜ GÖR BUTONU
+          Admin panelden başlık ayarlanabilir (title prop'u)
+          ===================================================== */}
+      {showTitle && (
+        <div className="product-grid-header">
+          <div className="product-grid-title-wrapper">
+            <h2 className="product-grid-title">{title}</h2>
+            <span className="product-grid-badge">
+              <i className="fas fa-fire"></i>
+            </span>
+          </div>
+          {showViewAll && (
+            <a href={viewAllLink} className="product-grid-view-all">
+              Tümünü Gör
+              <i className="fas fa-chevron-right"></i>
+            </a>
+          )}
+        </div>
+      )}
 
       {usingMockData && (
         <div
@@ -523,442 +600,503 @@ export default function ProductGrid({
         </div>
       )}
 
-      {/* Ürün Grid */}
-      {filteredProducts.length === 0 ? (
-        <div className="text-center py-5">
-          <div
-            className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
-            style={{
-              backgroundColor: "#fff8f0",
-              width: "120px",
-              height: "120px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <i
-              className="fas fa-search text-warning"
-              style={{ fontSize: "3rem" }}
-            ></i>
+      {/* =====================================================
+          BLOK LAYOUT: POSTER + ÜRÜNLER YAN YANA
+          posterUrl ve layout="block" verildiğinde aktif olur
+          ===================================================== */}
+      <div
+        className={`product-grid-content-wrapper ${layout === "block" && posterUrl ? "has-poster" : ""}`}
+      >
+        {/* Sol Taraf - Poster (sadece blok layout'ta) */}
+        {layout === "block" && posterUrl && (
+          <div className="product-grid-poster">
+            <img
+              src={posterUrl}
+              alt={posterAlt || title || "Poster"}
+              className="product-grid-poster-image"
+            />
           </div>
-          <h4 className="text-warning fw-bold mb-3">
-            Aradığınız Kriterlerde Ürün Bulunamadı
-          </h4>
-          <p className="text-muted fs-5">
-            Lütfen filtreleri değiştirerek tekrar deneyin
-          </p>
-        </div>
-      ) : (
-        <div className="row">
-          {filteredProducts.map((p, index) => {
-            const stock = p.stock ?? p.stockQuantity ?? 0;
-            const isOutOfStock = stock <= 0;
-            const isLowStock = !isOutOfStock && stock <= 5;
+        )}
 
-            // Kampanya/indirim bilgisi hesaplama
-            // Backend'den gelen specialPrice veya originalPrice'ı kontrol et
-            const basePrice = p.originalPrice || p.price || 0;
-            const specialPrice = p.specialPrice;
-            const hasDiscount = specialPrice && specialPrice < basePrice;
-
-            const currentPrice = hasDiscount
-              ? specialPrice
-              : typeof p.price === "number"
-                ? p.price
-                : 0;
-            const originalPrice = hasDiscount ? basePrice : null;
-
-            // İndirim yüzdesi: Sadece specialPrice ve price varsa hesapla, eski discountPercentage kullanma
-            const discountPercentage = 0; // Yüzde badge'i devre dışı - yanlış veri gösteriyordu
-
-            // Kampanya bilgileri
-            const hasCampaign =
-              p.hasActiveCampaign || (p.campaignId && hasDiscount);
-            const campaignName = p.campaignName;
-
-            return (
-              <div key={p.id} className="col-6 col-md-4 col-lg-2 mb-3">
-                <div
-                  className="modern-product-card h-100"
-                  style={{
-                    background: "#ffffff",
-                    borderRadius: "16px",
-                    border: hasCampaign
-                      ? "2px solid rgba(239, 68, 68, 0.3)"
-                      : "1px solid rgba(255, 107, 53, 0.1)",
-                    overflow: "hidden",
-                    position: "relative",
-                    animation: `fadeInUp 0.6s ease ${index * 0.1}s both`,
-                    cursor: "pointer",
-                    minHeight: "320px",
-                    maxWidth: "220px",
-                    display: "flex",
-                    flexDirection: "column",
-                    boxShadow: hasCampaign
-                      ? "0 5px 20px rgba(239, 68, 68, 0.15)"
-                      : "0 5px 15px rgba(0, 0, 0, 0.08)",
-                  }}
-                  onClick={(e) => handleProductClick(p, e)}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-5px)";
-                    e.currentTarget.style.boxShadow = hasCampaign
-                      ? "0 15px 30px rgba(239, 68, 68, 0.25)"
-                      : "0 15px 30px rgba(255, 107, 53, 0.15)";
-                    e.currentTarget.style.borderColor = hasCampaign
-                      ? "rgba(239, 68, 68, 0.5)"
-                      : "#ff6b35";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow = hasCampaign
-                      ? "0 5px 20px rgba(239, 68, 68, 0.15)"
-                      : "0 5px 15px rgba(0, 0, 0, 0.08)";
-                    e.currentTarget.style.borderColor = hasCampaign
-                      ? "rgba(239, 68, 68, 0.3)"
-                      : "rgba(255, 107, 53, 0.1)";
-                  }}
+        {/* Sağ Taraf - Ürün Grid/Carousel */}
+        <div className="product-grid-products-area">
+          {/* Ürün Grid */}
+          {filteredProducts.length === 0 ? (
+            <div className="text-center py-5">
+              <div
+                className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
+                style={{
+                  backgroundColor: "#fff8f0",
+                  width: "120px",
+                  height: "120px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <i
+                  className="fas fa-search text-warning"
+                  style={{ fontSize: "3rem" }}
+                ></i>
+              </div>
+              <h4 className="text-warning fw-bold mb-3">
+                Aradığınız Kriterlerde Ürün Bulunamadı
+              </h4>
+              <p className="text-muted fs-5">
+                Lütfen filtreleri değiştirerek tekrar deneyin
+              </p>
+            </div>
+          ) : (
+            /* =====================================================
+               CAROUSEL YAPISINA DÖNÜŞTÜRÜLDÜ
+               - Yatay kaydırmalı (overflow-x: auto)
+               - Web'de ok butonlarıyla kaydırma
+               - Mobilde swipe ile kaydırma
+               ===================================================== */
+            <div className="product-grid-carousel-wrapper">
+              {/* Sol Ok - Web için */}
+              {canScrollLeft && (
+                <button
+                  className="product-grid-arrow product-grid-arrow-left"
+                  onClick={() => scroll("left")}
+                  aria-label="Sola kaydır"
                 >
-                  {/* Kampanya İndirim Rozeti - Kaldırıldı (yanlış veri gösteriyordu) */}
+                  <i className="fas fa-chevron-left"></i>
+                </button>
+              )}
 
-                  {/* Stok Rozetleri */}
-                  {isLowStock && !isOutOfStock && (
-                    <div
-                      className="position-absolute top-0 end-0 p-2"
-                      style={{ zIndex: 3 }}
-                    >
-                      <span
-                        className="badge bg-warning text-dark"
+              {/* Ürün Carousel Container */}
+              <div
+                className="product-grid-scroll-container"
+                ref={scrollContainerRef}
+                onScroll={checkScroll}
+              >
+                {filteredProducts.map((p, index) => {
+                  const stock = p.stock ?? p.stockQuantity ?? 0;
+                  const isOutOfStock = stock <= 0;
+                  const isLowStock = !isOutOfStock && stock <= 5;
+
+                  // Kampanya/indirim bilgisi hesaplama
+                  // Backend'den gelen specialPrice veya originalPrice'ı kontrol et
+                  const basePrice = p.originalPrice || p.price || 0;
+                  const specialPrice = p.specialPrice;
+                  const hasDiscount = specialPrice && specialPrice < basePrice;
+
+                  const currentPrice = hasDiscount
+                    ? specialPrice
+                    : typeof p.price === "number"
+                      ? p.price
+                      : 0;
+                  const originalPrice = hasDiscount ? basePrice : null;
+
+                  // İndirim yüzdesi: Sadece specialPrice ve price varsa hesapla, eski discountPercentage kullanma
+                  const discountPercentage = 0; // Yüzde badge'i devre dışı - yanlış veri gösteriyordu
+
+                  // Kampanya bilgileri
+                  const hasCampaign =
+                    p.hasActiveCampaign || (p.campaignId && hasDiscount);
+                  const campaignName = p.campaignName;
+
+                  return (
+                    <div key={p.id} className="product-grid-card-wrapper">
+                      <div
+                        className="modern-product-card h-100"
                         style={{
-                          fontSize: "0.65rem",
-                          padding: "3px 8px",
-                          borderRadius: "12px",
+                          background: "#ffffff",
+                          borderRadius: "16px",
+                          border: hasCampaign
+                            ? "2px solid rgba(239, 68, 68, 0.3)"
+                            : "1px solid rgba(255, 107, 53, 0.1)",
+                          overflow: "hidden",
+                          position: "relative",
+                          cursor: "pointer",
+                          minHeight: "320px",
+                          width: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          boxShadow: hasCampaign
+                            ? "0 5px 20px rgba(239, 68, 68, 0.15)"
+                            : "0 5px 15px rgba(0, 0, 0, 0.08)",
+                          transition: "all 0.3s ease",
+                        }}
+                        onClick={(e) => handleProductClick(p, e)}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-5px)";
+                          e.currentTarget.style.boxShadow = hasCampaign
+                            ? "0 15px 30px rgba(239, 68, 68, 0.25)"
+                            : "0 15px 30px rgba(255, 107, 53, 0.15)";
+                          e.currentTarget.style.borderColor = hasCampaign
+                            ? "rgba(239, 68, 68, 0.5)"
+                            : "#ff6b35";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = hasCampaign
+                            ? "0 5px 20px rgba(239, 68, 68, 0.15)"
+                            : "0 5px 15px rgba(0, 0, 0, 0.08)";
+                          e.currentTarget.style.borderColor = hasCampaign
+                            ? "rgba(239, 68, 68, 0.3)"
+                            : "rgba(255, 107, 53, 0.1)";
                         }}
                       >
-                        Az Stok
-                      </span>
-                    </div>
-                  )}
+                        {/* Kampanya İndirim Rozeti - Kaldırıldı (yanlış veri gösteriyordu) */}
 
-                  {/* Favori ve Karşılaştırma Butonları - Sağ Üst */}
-                  <div
-                    className="position-absolute top-0 end-0 p-2 d-flex flex-column gap-1"
-                    style={{ zIndex: 3 }}
-                  >
-                    <button
-                      className="btn-favorite"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation(); // Ürün detay modalının açılmasını engelle
-                        handleAddToFavorites(p.id);
-                      }}
-                      style={{
-                        background: isFavorite(p.id)
-                          ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
-                          : "rgba(255, 255, 255, 0.9)",
-                        border: "none",
-                        borderRadius: "50%",
-                        width: "30px",
-                        height: "30px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: isFavorite(p.id) ? "white" : "#ff6b35",
-                        transition: "all 0.3s ease",
-                        backdropFilter: "blur(10px)",
-                        boxShadow: isFavorite(p.id)
-                          ? "0 4px 15px rgba(255, 107, 53, 0.4)"
-                          : "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isFavorite(p.id)) {
-                          e.target.style.transform = "scale(1.1)";
-                          e.target.style.background = "#ff6b35";
-                          e.target.style.color = "white";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isFavorite(p.id)) {
-                          e.target.style.transform = "scale(1)";
-                          e.target.style.background =
-                            "rgba(255, 255, 255, 0.9)";
-                          e.target.style.color = "#ff6b35";
-                        }
-                      }}
-                    >
-                      <i
-                        className={
-                          isFavorite(p.id) ? "fas fa-heart" : "far fa-heart"
-                        }
-                      ></i>
-                    </button>
-                    {/* Karşılaştırma Butonu */}
-                    <button
-                      className="btn-compare"
-                      type="button"
-                      title="Karşılaştır"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const result = toggleCompare(p);
-                        if (result.action === "limit") {
-                          alert(result.message);
-                        }
-                      }}
-                      style={{
-                        background: isInCompare(p.id)
-                          ? "linear-gradient(135deg, #17a2b8, #20c997)"
-                          : "rgba(255, 255, 255, 0.9)",
-                        border: "none",
-                        borderRadius: "50%",
-                        width: "30px",
-                        height: "30px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: isInCompare(p.id) ? "white" : "#17a2b8",
-                        transition: "all 0.3s ease",
-                        backdropFilter: "blur(10px)",
-                        boxShadow: isInCompare(p.id)
-                          ? "0 4px 15px rgba(23, 162, 184, 0.4)"
-                          : "none",
-                        fontSize: "0.75rem",
-                      }}
-                    >
-                      <i className="fas fa-balance-scale"></i>
-                    </button>
-                  </div>
-
-                  <div
-                    className="product-image-container"
-                    style={{
-                      height: 120,
-                      background: "#ffffff",
-                      position: "relative",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      className="image-wrapper d-flex align-items-center justify-content-center h-100"
-                      style={{
-                        transition: "all 0.4s ease",
-                        position: "relative",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "scale(1.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "scale(1)";
-                      }}
-                    >
-                      {p.imageUrl ? (
-                        <img
-                          src={p.imageUrl}
-                          alt={p.name}
-                          className="product-image"
-                          style={{
-                            maxHeight: "100px",
-                            maxWidth: "100px",
-                            objectFit: "contain",
-                            filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
-                            transition: "all 0.3s ease",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          className="d-flex align-items-center justify-content-center"
-                          style={{
-                            width: "80px",
-                            height: "80px",
-                            background: "#ffffff",
-                            borderRadius: "12px",
-                            fontSize: "2rem",
-                            border: "1px solid #e9ecef",
-                          }}
-                        >
-                          🛒
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    className="card-body p-2 d-flex flex-column"
-                    style={{
-                      background: "#ffffff",
-                      minHeight: "160px",
-                    }}
-                  >
-                    {/* Rating */}
-                    {p.rating && (
-                      <div className="d-flex align-items-center mb-1">
-                        <div className="star-rating me-1">
-                          {[...Array(5)].map((_, i) => (
-                            <i
-                              key={i}
-                              className={`fas fa-star ${
-                                i < Math.floor(p.rating)
-                                  ? "text-warning"
-                                  : "text-muted"
-                              }`}
-                              style={{ fontSize: "0.6rem" }}
-                            ></i>
-                          ))}
-                        </div>
-                        <small
-                          className="text-muted"
-                          style={{ fontSize: "0.65rem" }}
-                        >
-                          ({p.reviewCount})
-                        </small>
-                      </div>
-                    )}
-
-                    <h6
-                      className="product-title mb-1"
-                      style={{
-                        height: "36px",
-                        fontSize: "0.8rem",
-                        fontWeight: "600",
-                        lineHeight: "1.3",
-                        color: "#2c3e50",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                    >
-                      {p.name}
-                    </h6>
-
-                    {/* Content Area - Flexible */}
-                    <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
-                      {/* Kampanya Adı (varsa) */}
-                      {campaignName && (
-                        <div
-                          className="campaign-name-badge mb-2"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, #dbeafe, #bfdbfe)",
-                            color: "#1d4ed8",
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            fontSize: "0.65rem",
-                            fontWeight: "600",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            width: "fit-content",
-                          }}
-                        >
-                          <i
-                            className="fas fa-tag"
-                            style={{ fontSize: "0.55rem" }}
-                          ></i>
-                          {campaignName}
-                        </div>
-                      )}
-
-                      {/* Modern Fiyat Bilgileri */}
-                      <div
-                        className="price-section mb-2"
-                        style={{ minHeight: "50px" }}
-                      >
-                        {hasDiscount && originalPrice ? (
-                          <div className="price-container">
-                            {/* Eski Fiyat - Üzeri Çizili */}
-                            <div className="d-flex align-items-center mb-1">
-                              <span
-                                className="old-price me-2"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  textDecoration: "line-through",
-                                  textDecorationColor: "#ef4444",
-                                  textDecorationThickness: "2px",
-                                  color: "#9ca3af",
-                                }}
-                              >
-                                {originalPrice.toFixed(2)} TL
-                              </span>
-                            </div>
-                            {/* Yeni Fiyat - Turuncu, Bold */}
-                            <div
-                              className="current-price"
+                        {/* Stok Rozetleri */}
+                        {isLowStock && !isOutOfStock && (
+                          <div
+                            className="position-absolute top-0 end-0 p-2"
+                            style={{ zIndex: 3 }}
+                          >
+                            <span
+                              className="badge bg-warning text-dark"
                               style={{
-                                fontSize: "1.1rem",
-                                fontWeight: "700",
-                                color: "#ff6b35",
-                                display: "inline-block",
+                                fontSize: "0.65rem",
+                                padding: "3px 8px",
+                                borderRadius: "12px",
                               }}
                             >
-                              {currentPrice.toFixed(2)} TL
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            className="current-price"
-                            style={{
-                              fontSize: "1.1rem",
-                              fontWeight: "700",
-                              color: "#ff6b35",
-                              display: "inline-block",
-                            }}
-                          >
-                            {currentPrice.toFixed(2)} TL
+                              Az Stok
+                            </span>
                           </div>
                         )}
-                      </div>
 
-                      {/* Modern Action Buttons - Always at Bottom */}
-                      <div className="action-buttons mt-auto">
-                        <button
-                          className="modern-add-btn"
-                          data-product-id={p.id}
+                        {/* Favori ve Karşılaştırma Butonları - Sağ Üst */}
+                        <div
+                          className="position-absolute top-0 end-0 p-2 d-flex flex-column gap-1"
+                          style={{ zIndex: 3 }}
+                        >
+                          <button
+                            className="btn-favorite"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Ürün detay modalının açılmasını engelle
+                              handleAddToFavorites(p.id);
+                            }}
+                            style={{
+                              background: isFavorite(p.id)
+                                ? "linear-gradient(135deg, #ff6b35, #ff8c00)"
+                                : "rgba(255, 255, 255, 0.9)",
+                              border: "none",
+                              borderRadius: "50%",
+                              width: "30px",
+                              height: "30px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: isFavorite(p.id) ? "white" : "#ff6b35",
+                              transition: "all 0.3s ease",
+                              backdropFilter: "blur(10px)",
+                              boxShadow: isFavorite(p.id)
+                                ? "0 4px 15px rgba(255, 107, 53, 0.4)"
+                                : "none",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isFavorite(p.id)) {
+                                e.target.style.transform = "scale(1.1)";
+                                e.target.style.background = "#ff6b35";
+                                e.target.style.color = "white";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isFavorite(p.id)) {
+                                e.target.style.transform = "scale(1)";
+                                e.target.style.background =
+                                  "rgba(255, 255, 255, 0.9)";
+                                e.target.style.color = "#ff6b35";
+                              }
+                            }}
+                          >
+                            <i
+                              className={
+                                isFavorite(p.id)
+                                  ? "fas fa-heart"
+                                  : "far fa-heart"
+                              }
+                            ></i>
+                          </button>
+                          {/* Karşılaştırma Butonu */}
+                          <button
+                            className="btn-compare"
+                            type="button"
+                            title="Karşılaştır"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const result = toggleCompare(p);
+                              if (result.action === "limit") {
+                                alert(result.message);
+                              }
+                            }}
+                            style={{
+                              background: isInCompare(p.id)
+                                ? "linear-gradient(135deg, #17a2b8, #20c997)"
+                                : "rgba(255, 255, 255, 0.9)",
+                              border: "none",
+                              borderRadius: "50%",
+                              width: "30px",
+                              height: "30px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: isInCompare(p.id) ? "white" : "#17a2b8",
+                              transition: "all 0.3s ease",
+                              backdropFilter: "blur(10px)",
+                              boxShadow: isInCompare(p.id)
+                                ? "0 4px 15px rgba(23, 162, 184, 0.4)"
+                                : "none",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            <i className="fas fa-balance-scale"></i>
+                          </button>
+                        </div>
+
+                        <div
+                          className="product-image-container"
                           style={{
-                            background:
-                              "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                            border: "none",
-                            borderRadius: "10px",
-                            padding: "10px 12px",
-                            fontSize: "0.8rem",
-                            fontWeight: "600",
-                            color: "white",
-                            transition: "all 0.3s ease",
-                            boxShadow: "0 2px 8px rgba(255, 107, 53, 0.2)",
-                            width: "100%",
-                          }}
-                          disabled={isOutOfStock}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isOutOfStock) return;
-                            handleAddToCart(p.id);
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background =
-                              "linear-gradient(135deg, #e55a25, #e07800)";
-                            e.target.style.transform = "scale(1.02)";
-                            e.target.style.boxShadow =
-                              "0 4px 15px rgba(255, 107, 53, 0.4)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background =
-                              "linear-gradient(135deg, #ff6b35, #ff8c00)";
-                            e.target.style.transform = "scale(1)";
-                            e.target.style.boxShadow =
-                              "0 2px 8px rgba(255, 107, 53, 0.2)";
+                            height: 120,
+                            background: "#ffffff",
+                            position: "relative",
+                            overflow: "hidden",
                           }}
                         >
-                          {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
-                        </button>
+                          <div
+                            className="image-wrapper d-flex align-items-center justify-content-center h-100"
+                            style={{
+                              transition: "all 0.4s ease",
+                              position: "relative",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = "scale(1.05)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = "scale(1)";
+                            }}
+                          >
+                            {p.imageUrl ? (
+                              <img
+                                src={p.imageUrl}
+                                alt={p.name}
+                                className="product-image"
+                                style={{
+                                  maxHeight: "100px",
+                                  maxWidth: "100px",
+                                  objectFit: "contain",
+                                  filter:
+                                    "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
+                                  transition: "all 0.3s ease",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className="d-flex align-items-center justify-content-center"
+                                style={{
+                                  width: "80px",
+                                  height: "80px",
+                                  background: "#ffffff",
+                                  borderRadius: "12px",
+                                  fontSize: "2rem",
+                                  border: "1px solid #e9ecef",
+                                }}
+                              >
+                                🛒
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div
+                          className="card-body p-2 d-flex flex-column"
+                          style={{
+                            background: "#ffffff",
+                            minHeight: "160px",
+                          }}
+                        >
+                          {/* Rating */}
+                          {p.rating && (
+                            <div className="d-flex align-items-center mb-1">
+                              <div className="star-rating me-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <i
+                                    key={i}
+                                    className={`fas fa-star ${
+                                      i < Math.floor(p.rating)
+                                        ? "text-warning"
+                                        : "text-muted"
+                                    }`}
+                                    style={{ fontSize: "0.6rem" }}
+                                  ></i>
+                                ))}
+                              </div>
+                              <small
+                                className="text-muted"
+                                style={{ fontSize: "0.65rem" }}
+                              >
+                                ({p.reviewCount})
+                              </small>
+                            </div>
+                          )}
+
+                          <h6
+                            className="product-title mb-1"
+                            style={{
+                              height: "36px",
+                              fontSize: "0.8rem",
+                              fontWeight: "600",
+                              lineHeight: "1.3",
+                              color: "#2c3e50",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                            }}
+                          >
+                            {p.name}
+                          </h6>
+
+                          {/* Content Area - Flexible */}
+                          <div className="content-area flex-grow-1 d-flex flex-column justify-content-between">
+                            {/* Kampanya Adı (varsa) */}
+                            {campaignName && (
+                              <div
+                                className="campaign-name-badge mb-2"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #dbeafe, #bfdbfe)",
+                                  color: "#1d4ed8",
+                                  padding: "4px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.65rem",
+                                  fontWeight: "600",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  width: "fit-content",
+                                }}
+                              >
+                                <i
+                                  className="fas fa-tag"
+                                  style={{ fontSize: "0.55rem" }}
+                                ></i>
+                                {campaignName}
+                              </div>
+                            )}
+
+                            {/* Modern Fiyat Bilgileri */}
+                            <div
+                              className="price-section mb-2"
+                              style={{ minHeight: "50px" }}
+                            >
+                              {hasDiscount && originalPrice ? (
+                                <div className="price-container">
+                                  {/* Eski Fiyat - Üzeri Çizili */}
+                                  <div className="d-flex align-items-center mb-1">
+                                    <span
+                                      className="old-price me-2"
+                                      style={{
+                                        fontSize: "0.75rem",
+                                        textDecoration: "line-through",
+                                        textDecorationColor: "#ef4444",
+                                        textDecorationThickness: "2px",
+                                        color: "#9ca3af",
+                                      }}
+                                    >
+                                      {originalPrice.toFixed(2)} TL
+                                    </span>
+                                  </div>
+                                  {/* Yeni Fiyat - Turuncu, Bold */}
+                                  <div
+                                    className="current-price"
+                                    style={{
+                                      fontSize: "1.1rem",
+                                      fontWeight: "700",
+                                      color: "#ff6b35",
+                                      display: "inline-block",
+                                    }}
+                                  >
+                                    {currentPrice.toFixed(2)} TL
+                                  </div>
+                                </div>
+                              ) : (
+                                <div
+                                  className="current-price"
+                                  style={{
+                                    fontSize: "1.1rem",
+                                    fontWeight: "700",
+                                    color: "#ff6b35",
+                                    display: "inline-block",
+                                  }}
+                                >
+                                  {currentPrice.toFixed(2)} TL
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Modern Action Buttons - Always at Bottom */}
+                            <div className="action-buttons mt-auto">
+                              <button
+                                className="modern-add-btn"
+                                data-product-id={p.id}
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                                  border: "none",
+                                  borderRadius: "10px",
+                                  padding: "10px 12px",
+                                  fontSize: "0.8rem",
+                                  fontWeight: "600",
+                                  color: "white",
+                                  transition: "all 0.3s ease",
+                                  boxShadow:
+                                    "0 2px 8px rgba(255, 107, 53, 0.2)",
+                                  width: "100%",
+                                }}
+                                disabled={isOutOfStock}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isOutOfStock) return;
+                                  handleAddToCart(p.id);
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.background =
+                                    "linear-gradient(135deg, #e55a25, #e07800)";
+                                  e.target.style.transform = "scale(1.02)";
+                                  e.target.style.boxShadow =
+                                    "0 4px 15px rgba(255, 107, 53, 0.4)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.background =
+                                    "linear-gradient(135deg, #ff6b35, #ff8c00)";
+                                  e.target.style.transform = "scale(1)";
+                                  e.target.style.boxShadow =
+                                    "0 2px 8px rgba(255, 107, 53, 0.2)";
+                                }}
+                              >
+                                {isOutOfStock ? "Stokta Yok" : "Sepete Ekle"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-            );
-          })}
+
+              {/* Sağ Ok - Web için */}
+              {canScrollRight && (
+                <button
+                  className="product-grid-arrow product-grid-arrow-right"
+                  onClick={() => scroll("right")}
+                  aria-label="Sağa kaydır"
+                >
+                  <i className="fas fa-chevron-right"></i>
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Login Alert Modal */}
       {showLoginAlert && (
@@ -1535,6 +1673,6 @@ export default function ProductGrid({
           setLoginAction(null);
         }}
       />
-    </div>
+    </section>
   );
 }

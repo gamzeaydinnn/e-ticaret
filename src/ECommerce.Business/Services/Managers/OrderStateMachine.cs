@@ -242,16 +242,15 @@ namespace ECommerce.Business.Services.Managers
         };
 
         // İptal edilebilir durumlar
+        // MARKET KURALI: Sadece sipariş hazırlanmaya başlamadan önce iptal edilebilir
+        // Hazırlanıyor, Hazır, Yolda, Teslim Edildi durumlarında müşteri hizmetleriyle iletişime geçilmeli
         private static readonly HashSet<OrderStatus> CancellableStates = new()
         {
-            OrderStatus.New,
-            OrderStatus.Pending,
-            OrderStatus.Confirmed,
-            OrderStatus.Preparing,
-            OrderStatus.Processing,
-            OrderStatus.Ready,
-            OrderStatus.ReadyForPickup,
-            OrderStatus.DeliveryFailed
+            OrderStatus.New,       // Yeni sipariş - henüz işleme alınmadı
+            OrderStatus.Pending,   // Ödeme bekleniyor
+            OrderStatus.Confirmed  // Onaylandı ama henüz hazırlanmaya başlamadı
+            // NOT: Preparing, Processing, Ready, ReadyForPickup, DeliveryFailed çıkarıldı
+            // Bu durumlarda müşteri hizmetleriyle iletişime geçilmeli
         };
 
         // İade edilebilir durumlar

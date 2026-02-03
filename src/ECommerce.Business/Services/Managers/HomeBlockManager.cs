@@ -152,6 +152,7 @@ namespace ECommerce.Business.Services.Managers
                 var block = new HomeProductBlock
                 {
                     Name = dto.Name,
+                    Title = dto.Title,
                     Slug = await GenerateUniqueSlugAsync(dto.Name),
                     Description = dto.Description,
                     BlockType = dto.BlockType,
@@ -209,6 +210,7 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 block.Name = dto.Name;
+                block.Title = dto.Title;
                 block.Description = dto.Description;
                 block.BlockType = dto.BlockType;
                 block.CategoryId = dto.CategoryId;
@@ -622,11 +624,13 @@ namespace ECommerce.Business.Services.Managers
             {
                 Id = entity.Id,
                 Name = entity.Name,
+                Title = entity.Title,
                 Slug = entity.Slug,
                 Description = entity.Description,
                 BlockType = entity.BlockType,
                 CategoryId = entity.CategoryId,
                 CategoryName = entity.Category?.Name,
+                CategorySlug = entity.Category?.Slug,
                 BannerId = entity.BannerId,
                 PosterImageUrl = entity.PosterImageUrl ?? entity.Banner?.ImageUrl,
                 BackgroundColor = entity.BackgroundColor,

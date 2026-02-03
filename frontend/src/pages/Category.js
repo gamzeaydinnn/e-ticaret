@@ -43,6 +43,19 @@ export default function Category() {
 
       // Slug bulunamazsa tüm kategorilerden ara
       const allCategories = await categoryServiceReal.getActive();
+
+      // Önce ID ile eşleşme dene (slug sayısal ise)
+      const numericSlug = parseInt(slug, 10);
+      if (!isNaN(numericSlug)) {
+        const foundById = allCategories.find((c) => c.id === numericSlug);
+        if (foundById) {
+          setCategory(foundById);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Sonra slug ile eşleşme dene
       const foundCat = allCategories.find((c) => {
         const catSlug = c.slug || createSlug(c.name);
         return catSlug === slug;
@@ -138,7 +151,7 @@ export default function Category() {
       )}
 
       {/* Ürün listesi */}
-      {category && <ProductGrid categoryId={category.id} />}
+      {category && <ProductGrid categoryId={category.id} showTitle={false} />}
 
       {!category && !loading && !error && (
         <div className="text-muted">Kategori bulunamadı.</div>

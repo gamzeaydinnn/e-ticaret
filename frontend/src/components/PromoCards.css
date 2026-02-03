@@ -1,0 +1,247 @@
+/* =====================================================
+   PROMO CARDS CAROUSEL STYLES
+   Kampanya/Promosyon Posterleri için
+   - Web'de ok butonlarıyla kaydırma (4-5 kart görünür)
+   - Mobilde swipe ile kaydırma (2 poster görünür)
+   - Tüm promolar tek satırda, alt satıra geçmez
+   ===================================================== */
+
+/* Scrollbar gizle - Tüm tarayıcılar */
+.promo-cards-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.promo-cards-scroll-container {
+  -ms-overflow-style: none; /* IE ve Edge için */
+  scrollbar-width: none; /* Firefox için */
+}
+
+/* =====================================================
+   DESKTOP - PROMO CARD GENİŞLİKLERİ
+   4-5 kart ekrana sığar, kalanlar ok ile görülür
+   ===================================================== */
+.promo-cards-scroll-container {
+  flex-wrap: nowrap !important; /* Alt satıra ASLA geçme */
+  overflow-x: auto !important;
+}
+
+.promo-cards-scroll-container .promo-card-item {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  flex-shrink: 0; /* Kartlar küçülmesin */
+}
+
+/* =====================================================
+   OK BUTONLARI - HER ZAMAN GÖRÜNÜR, ÖNE ÇIKARILMIŞ
+   ===================================================== */
+.promo-cards-arrow {
+  opacity: 1 !important;
+  visibility: visible !important;
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #ff6b35, #ff8c00) !important;
+  color: #fff !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.35) !important;
+  font-size: 18px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 10 !important;
+  transition: all 0.3s ease !important;
+}
+
+/* Disabled ok butonları için stil */
+.promo-cards-arrow.disabled-arrow {
+  opacity: 0.25 !important;
+  cursor: default !important;
+  background: #ccc !important;
+  box-shadow: none !important;
+}
+
+.promo-cards-arrow:not(.disabled-arrow):hover {
+  background: linear-gradient(135deg, #ff8c00, #ff6b35) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.5) !important;
+  transform: translateY(-50%) scale(1.1) !important;
+}
+
+.promo-cards-arrow:not(.disabled-arrow):active {
+  transform: translateY(-50%) scale(0.95) !important;
+}
+
+/* =====================================================
+   RESPONSIVE - TABLET (992px ve altı)
+   ===================================================== */
+@media (max-width: 992px) {
+  .promo-cards-carousel-wrapper {
+    padding: 0 50px !important;
+  }
+
+  .promo-cards-scroll-container .promo-card-item {
+    width: 220px;
+    min-width: 220px;
+  }
+
+  .promo-cards-arrow {
+    width: 38px !important;
+    height: 38px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* =====================================================
+   RESPONSIVE - MOBİL (768px ve altı)
+   2 poster yan yana + küçültülmüş ok butonları
+   ===================================================== */
+@media (max-width: 768px) {
+  .promo-cards-section {
+    margin-bottom: 16px !important;
+  }
+
+  .promo-cards-carousel-wrapper {
+    padding: 0 12px !important;
+    position: relative !important;
+  }
+
+  /* Mobilde her iki ok da görünür ama küçültülmüş */
+  .promo-cards-arrow {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 14px !important;
+    box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3) !important;
+  }
+
+  .promo-cards-arrow-left {
+    display: flex !important;
+    left: 4px !important;
+  }
+
+  .promo-cards-arrow-right {
+    display: flex !important;
+    right: 4px !important;
+  }
+
+  .promo-cards-scroll-container {
+    gap: 10px !important;
+    padding: 8px 2px !important;
+    /* Mobilde snap */
+    scroll-snap-type: x mandatory !important;
+  }
+
+  /* MOBİLDE 2 POSTER YAN YANA - calc((100vw - padding - gap) / 2) */
+  .promo-cards-scroll-container .promo-card-item {
+    width: calc((100vw - 44px) / 2) !important;
+    min-width: calc((100vw - 44px) / 2) !important;
+    scroll-snap-align: start;
+  }
+
+  /* Poster aspect ratio mobil için ayarla */
+  .promo-cards-scroll-container .promo-card-image-container {
+    padding-top: 85% !important; /* Daha uzun görünüm */
+  }
+
+  /* Başlık mobil stili */
+  .promo-cards-section .promo-cards-header {
+    padding: 0 12px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .promo-cards-section h2 {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* =====================================================
+   RESPONSIVE - KÜÇÜK MOBİL (576px ve altı)
+   2 poster yan yana + küçültülmüş ok butonları
+   ===================================================== */
+@media (max-width: 576px) {
+  .promo-cards-carousel-wrapper {
+    padding: 0 8px !important;
+  }
+
+  .promo-cards-scroll-container {
+    gap: 8px !important;
+  }
+
+  /* Küçük mobilde 2 poster yan yana */
+  .promo-cards-scroll-container .promo-card-item {
+    width: calc((100vw - 32px) / 2) !important;
+    min-width: calc((100vw - 32px) / 2) !important;
+    border-radius: 10px !important;
+  }
+
+  .promo-cards-scroll-container .promo-card-image-container {
+    padding-top: 90% !important;
+  }
+
+  /* Küçük mobilde ok butonları daha küçük */
+  .promo-cards-arrow {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px !important;
+  }
+
+  .promo-cards-arrow-left {
+    left: 2px !important;
+  }
+
+  .promo-cards-arrow-right {
+    right: 2px !important;
+  }
+
+  /* Overlay yazısı küçült */
+  .promo-cards-scroll-container .promo-card-item h3 {
+    font-size: 0.65rem !important;
+    padding: 6px !important;
+  }
+
+  /* Badge küçült */
+  .promo-cards-scroll-container .promo-card-item span[style*="badge"] {
+    font-size: 0.55rem !important;
+    padding: 2px 5px !important;
+  }
+}
+
+/* =====================================================
+   TOUCH/SWIPE İYİLEŞTİRMELERİ
+   ===================================================== */
+@media (hover: none) and (pointer: coarse) {
+  .promo-cards-scroll-container {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Touch cihazlarda hover efektlerini kaldır */
+  .promo-cards-scroll-container .promo-card-item:hover {
+    transform: none !important;
+  }
+}
+
+/* =====================================================
+   SKELETON ANİMASYONU
+   ===================================================== */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Skeleton kart genişliği */
+.promo-cards-scroll-container > div[style*="skeleton"] {
+  width: 260px;
+  min-width: 260px;
+}
+
+@media (max-width: 768px) {
+  .promo-cards-scroll-container > div[style*="skeleton"] {
+    width: calc((100vw - 44px) / 2);
+    min-width: calc((100vw - 44px) / 2);
+  }
+}

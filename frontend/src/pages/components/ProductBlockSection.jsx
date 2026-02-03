@@ -5,6 +5,62 @@ import { useFavorites } from "../../contexts/FavoriteContext";
 import { useAuth } from "../../contexts/AuthContext";
 import "./ProductBlockSection.css";
 
+// Başlık şablonları - başlığa göre ikon eşleştirmesi için
+const TITLE_TEMPLATES = [
+  {
+    icon: "fas fa-bullseye",
+    color: "#ef4444",
+    title: "Bu Fırsatları Kaçırmayın",
+  },
+  { icon: "fas fa-bolt", color: "#f59e0b", title: "Şok İndirimler" },
+  { icon: "fas fa-tags", color: "#ef4444", title: "Süper Fırsatlar" },
+  {
+    icon: "fas fa-percentage",
+    color: "#10b981",
+    title: "Haftalık Kampanyalar",
+  },
+  { icon: "fas fa-star", color: "#8b5cf6", title: "Özel Seçimler" },
+  { icon: "fas fa-gift", color: "#ec4899", title: "Hediye Fırsatlar" },
+  { icon: "fas fa-gem", color: "#6366f1", title: "Premium Koleksiyon" },
+  { icon: "fas fa-crown", color: "#f59e0b", title: "Elit Ürünler" },
+  { icon: "fas fa-fire", color: "#ef4444", title: "En Çok Satanlar" },
+  { icon: "fas fa-trophy", color: "#f59e0b", title: "Haftanın Yıldızları" },
+  { icon: "fas fa-heart", color: "#ef4444", title: "Müşteri Favorileri" },
+  {
+    icon: "fas fa-thumbs-up",
+    color: "#3b82f6",
+    title: "Sizin İçin Seçtiklerimiz",
+  },
+  { icon: "fas fa-magic", color: "#8b5cf6", title: "Özel Öneriler" },
+  {
+    icon: "fas fa-lightbulb",
+    color: "#f59e0b",
+    title: "İlgini Çekebilecek Ürünler",
+  },
+  { icon: "fas fa-sparkles", color: "#10b981", title: "Yeni Gelenler" },
+  { icon: "fas fa-rocket", color: "#3b82f6", title: "Az Önce Eklendi" },
+  { icon: "fas fa-leaf", color: "#10b981", title: "Taze Ürünler" },
+  { icon: "fas fa-cheese", color: "#f59e0b", title: "Süt & Süt Ürünleri" },
+  {
+    icon: "fas fa-drumstick-bite",
+    color: "#ef4444",
+    title: "Et & Et Ürünleri",
+  },
+  { icon: "fas fa-carrot", color: "#f97316", title: "Meyve & Sebze" },
+  { icon: "fas fa-cheese", color: "#fbbf24", title: "Peynir Dünyası" },
+  { icon: "fas fa-bread-slice", color: "#d97706", title: "Fırından Taze" },
+  { icon: "fas fa-pump-soap", color: "#06b6d4", title: "Temizlik & Bakım" },
+  { icon: "fas fa-cookie", color: "#a855f7", title: "Atıştırmalıklar" },
+  { icon: "fas fa-mug-hot", color: "#78350f", title: "Kahve & İçecekler" },
+  { icon: "fas fa-wheat-awn", color: "#ca8a04", title: "Bakliyat & Tahıllar" },
+  { icon: "fas fa-jar", color: "#65a30d", title: "Konserveler" },
+  { icon: "fas fa-egg", color: "#fbbf24", title: "Kahvaltılık Lezzetler" },
+  { icon: "fas fa-cart-plus", color: "#ff6b35", title: "Hemen Sepete" },
+  { icon: "fas fa-percent", color: "#ef4444", title: "Kampanyalı Ürünler" },
+  { icon: "fas fa-bell", color: "#f59e0b", title: "Son Fırsat" },
+  { icon: "fas fa-clock", color: "#ef4444", title: "Sınırlı Süre" },
+];
+
 const ProductBlockSection = ({
   block,
   onAddToCart,
@@ -57,8 +113,20 @@ const ProductBlockSection = ({
 
   // Ürünleri al (camelCase veya PascalCase)
   const products = block.products || block.Products || [];
+  // BAŞLIK: title öncelikli, yoksa name kullan (eski bloklar için fallback)
   const title = block.title || block.Title || block.name || block.Name || "";
   const posterUrl = block.posterImageUrl || block.PosterImageUrl || "";
+
+  // Debug log - konsol kontrolü için
+  console.log("📦 [ProductBlockSection] Block:", {
+    id: block.id,
+    name: block.name,
+    title: block.title,
+    displayTitle: title,
+    posterUrl: posterUrl,
+    productsCount: products.length,
+    rawBlock: block,
+  });
 
   // Scroll kontrolü
   const checkScroll = () => {
@@ -199,21 +267,105 @@ const ProductBlockSection = ({
     }
   };
 
+  // ========== AKILLI TÜMÜNÜ GÖR URL OLUŞTURMA ==========
+  // TÜM blok tipleri /collection/:slug route'una yönlendirilir
+  // Backend, blok tipine göre (manual, discounted, category, vb.) doğru ürünleri döndürür
+  const getSmartViewAllUrl = () => {
+    const slug = block.slug || block.Slug;
+
+    // DEBUG: Hangi URL üretildiğini logla
+    console.log("🔗 [ProductBlockSection] URL hesaplanıyor:", {
+      blockId: block.id,
+      blockName: block.name || block.Name,
+      slug: slug,
+      eskiViewAllUrl: block.viewAllUrl, // Backend'den gelen eski değer (ignore edilecek)
+      yeniUrl: slug ? `/collection/${slug}` : "/products",
+    });
+
+    // ============================================
+    // ZORUNLU: TÜM BLOKLAR /collection/:slug KULLANIMALI
+    // Admin panelden girilen özel URL'ler artık görmezden geliniyor
+    // Çünkü her bloğun slug'ı var ve backend bu slug ile çalışıyor
+    // ============================================
+
+    // Blok slug'ı varsa HER ZAMAN collection sayfasına yönlendir
+    if (slug) {
+      return `/collection/${slug}`;
+    }
+
+    // Slug yoksa (çok nadir durum) - fallback olarak blok ID kullan
+    const blockId = block.id || block.Id;
+    if (blockId) {
+      console.warn(`⚠️ Blok slug'ı yok, ID kullanılıyor: ${blockId}`);
+      // Backend slug veya ID ile çalışabilir mi kontrol et
+      // Şimdilik products sayfasına yönlendir
+      return "/products";
+    }
+
+    // Son çare - ana sayfa
+    console.error("❌ Blok için yönlendirme yapılamadı:", block);
+    return "/";
+  };
+
+  const viewAllUrl = getSmartViewAllUrl();
+  const viewAllText = block.viewAllText || block.ViewAllText || "Tümünü Gör";
+
+  // Başlık için ikon/emoji analizi
+  const renderTitle = () => {
+    if (!title) return null;
+
+    // Başlık metnine göre şablondan uygun ikonu bul
+    const template = TITLE_TEMPLATES.find((t) => t.title === title);
+
+    if (template) {
+      // Şablonda bulunan başlık - ikon ile göster
+      return (
+        <h2 className="block-title">
+          <i
+            className={template.icon}
+            style={{ color: template.color, marginRight: "10px" }}
+          ></i>
+          {title}
+        </h2>
+      );
+    }
+
+    // Özel başlık veya eski emoji'li başlık - olduğu gibi göster
+    return <h2 className="block-title">{title}</h2>;
+  };
+
   return (
     <section className="product-block-section">
-      <div className="product-block-container">
-        {/* Sol Taraf - Poster */}
+      {/* ========== BAŞLIK BÖLÜMÜ (Referans: "Bu Fırsatları Kaçırmayın" gibi) ========== */}
+      <div className="product-block-header">
+        <div className="header-left">
+          {/* Başlık */}
+          {renderTitle()}
+        </div>
+        <div className="header-right">
+          {/* Tümünü Gör butonu */}
+          <Link to={viewAllUrl} className="view-all-btn">
+            {viewAllText}
+            <i className="fas fa-arrow-right ms-2"></i>
+          </Link>
+        </div>
+      </div>
+
+      {/* ========== İÇERİK BÖLÜMÜ (Poster + Ürünler) ========== */}
+      <div
+        className={`product-block-container ${posterUrl ? "with-poster" : "no-poster"}`}
+      >
+        {/* Sol Taraf - Poster (Opsiyonel) */}
         {posterUrl && (
           <div className="product-block-poster">
             <img src={posterUrl} alt={title} className="poster-image" />
           </div>
         )}
 
-        {/* Sağ Taraf - Ürünler */}
+        {/* Sağ Taraf - Ürünler Carousel */}
         <div className="product-block-content">
-          {/* Ürün Slider */}
           <div className="products-slider-wrapper">
-            {/* Sol Ok */}
+            {/* Sol Ok - Web için */}
             {canScrollLeft && (
               <button
                 className="slider-arrow slider-arrow-left"
@@ -268,21 +420,33 @@ const ProductBlockSection = ({
                     ? isFavorite(productId)
                     : false;
 
+                // İndirim yüzdesi hesapla
+                const discountPercent =
+                  hasDiscount && productPrice > 0
+                    ? Math.round(
+                        ((productPrice - specialPrice) / productPrice) * 100,
+                      )
+                    : 0;
+
                 return (
                   <div
                     key={productIdRaw || productId || index}
-                    className="modern-product-card product-block-card"
+                    className={`modern-product-card product-block-card ${hasDiscount ? "has-discount" : ""}`}
                     style={{
                       background: "#ffffff",
                       borderRadius: "16px",
-                      border: "1px solid rgba(255, 107, 53, 0.1)",
+                      border: hasDiscount
+                        ? "2px solid #ef4444"
+                        : "1px solid rgba(255, 107, 53, 0.1)",
                       overflow: "hidden",
                       position: "relative",
                       cursor: "pointer",
                       flexShrink: 0,
                       display: "flex",
                       flexDirection: "column",
-                      boxShadow: "0 5px 15px rgba(0, 0, 0, 0.08)",
+                      boxShadow: hasDiscount
+                        ? "0 8px 25px rgba(239, 68, 68, 0.2)"
+                        : "0 5px 15px rgba(0, 0, 0, 0.08)",
                       transition: "all 0.3s ease",
                     }}
                     onClick={(e) =>
@@ -290,19 +454,53 @@ const ProductBlockSection = ({
                     }
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-5px)";
-                      e.currentTarget.style.boxShadow =
-                        "0 15px 30px rgba(255, 107, 53, 0.15)";
-                      e.currentTarget.style.borderColor = "#ff6b35";
+                      e.currentTarget.style.boxShadow = hasDiscount
+                        ? "0 20px 40px rgba(239, 68, 68, 0.25)"
+                        : "0 15px 30px rgba(255, 107, 53, 0.15)";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow =
-                        "0 5px 15px rgba(0, 0, 0, 0.08)";
-                      e.currentTarget.style.borderColor =
-                        "rgba(255, 107, 53, 0.1)";
+                      e.currentTarget.style.boxShadow = hasDiscount
+                        ? "0 8px 25px rgba(239, 68, 68, 0.2)"
+                        : "0 5px 15px rgba(0, 0, 0, 0.08)";
                     }}
                   >
-                    {/* Favori Butonu - ProductGrid ile AYNI */}
+                    {/* ========== İNDİRİM BADGE - SOL ÜST ========== */}
+                    {hasDiscount && discountPercent > 0 && (
+                      <div
+                        className="discount-badge-wrapper position-absolute"
+                        style={{
+                          top: "8px",
+                          left: "8px",
+                          zIndex: 5,
+                        }}
+                      >
+                        <div
+                          className="discount-badge"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #ef4444, #dc2626)",
+                            color: "white",
+                            padding: "4px 10px",
+                            borderRadius: "20px",
+                            fontSize: "0.75rem",
+                            fontWeight: "700",
+                            boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <i
+                            className="fas fa-tag"
+                            style={{ fontSize: "0.65rem" }}
+                          ></i>
+                          %{discountPercent} İNDİRİM
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Favori Butonu - SAĞ ÜST */}
                     <div
                       className="position-absolute top-0 end-0 p-2 d-flex flex-column gap-1"
                       style={{ zIndex: 3 }}
@@ -413,65 +611,27 @@ const ProductBlockSection = ({
                       )}
 
                       {/* Ürün Adı */}
-                      <h6
-                        className="product-title mb-1"
-                        style={{
-                          height: "36px",
-                          fontSize: "0.8rem",
-                          fontWeight: "600",
-                          lineHeight: "1.3",
-                          color: "#2c3e50",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                        }}
-                      >
-                        {productName}
-                      </h6>
+                      <h6 className="product-title mb-1">{productName}</h6>
 
-                      {/* Fiyat - ProductGrid ile AYNI */}
-                      <div
-                        className="price-section mb-2"
-                        style={{ minHeight: "50px" }}
-                      >
+                      {/* Fiyat - İNDİRİMLİ ÜRÜNLER İÇİN DİKKAT ÇEKİCİ */}
+                      <div className="price-section">
                         {hasDiscount && originalPrice ? (
                           <div className="price-container">
-                            <div className="d-flex align-items-center mb-1">
-                              <span
-                                className="old-price me-2"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  textDecoration: "line-through",
-                                  textDecorationColor: "#ef4444",
-                                  textDecorationThickness: "2px",
-                                  color: "#9ca3af",
-                                }}
-                              >
-                                {originalPrice.toFixed(2)} TL
-                              </span>
+                            {/* Tasarruf Badge */}
+                            <div className="savings-badge">
+                              <i className="fas fa-piggy-bank me-1"></i>
+                              {(originalPrice - currentPrice).toFixed(2)} TL
+                              Tasarruf
                             </div>
-                            <div
-                              className="current-price"
-                              style={{
-                                fontSize: "1.1rem",
-                                fontWeight: "700",
-                                color: "#ff6b35",
-                              }}
-                            >
+                            <div className="original-price">
+                              {originalPrice.toFixed(2)} TL
+                            </div>
+                            <div className="current-price product-price">
                               {currentPrice.toFixed(2)} TL
                             </div>
                           </div>
                         ) : (
-                          <div
-                            className="current-price"
-                            style={{
-                              fontSize: "1.1rem",
-                              fontWeight: "700",
-                              color: "#ff6b35",
-                            }}
-                          >
+                          <div className="current-price product-price">
                             {currentPrice.toFixed(2)} TL
                           </div>
                         )}
@@ -482,23 +642,6 @@ const ProductBlockSection = ({
                         <button
                           className="modern-add-btn"
                           type="button"
-                          style={{
-                            background: isOutOfStock
-                              ? "#ccc"
-                              : "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                            border: "none",
-                            borderRadius: "10px",
-                            padding: "10px 12px",
-                            fontSize: "0.8rem",
-                            fontWeight: "600",
-                            color: "white",
-                            transition: "all 0.3s ease",
-                            boxShadow: isOutOfStock
-                              ? "none"
-                              : "0 2px 8px rgba(255, 107, 53, 0.2)",
-                            width: "100%",
-                            cursor: isOutOfStock ? "not-allowed" : "pointer",
-                          }}
                           disabled={isOutOfStock}
                           onClick={(e) =>
                             handleAddToCart(
@@ -528,18 +671,6 @@ const ProductBlockSection = ({
               </button>
             )}
           </div>
-
-          {/* Tümünü Gör */}
-          {posterUrl && (
-            <div className="view-all-wrapper">
-              <Link
-                to={`/category/${block.categoryId || block.CategoryId}`}
-                className="view-all-btn"
-              >
-                Tümünü Gör <i className="fas fa-arrow-right"></i>
-              </Link>
-            </div>
-          )}
         </div>
       </div>
 

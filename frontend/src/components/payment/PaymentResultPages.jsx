@@ -1,13 +1,24 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 // 3D SECURE CALLBACK SAYFALARI
 // POSNET 3D Secure işlemleri için başarı ve başarısız callback sayfaları
+// 3D Secure Dönüşünde Polling Mekanizması Dahil
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PaymentService } from "../../services/paymentService";
 import { OrderService } from "../../services/orderService";
 import "./PaymentResult.css";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// POLLING KONFİGÜRASYONU
+// ═══════════════════════════════════════════════════════════════════════════
+const POLLING_CONFIG = {
+  maxAttempts: 10, // Maksimum deneme sayısı
+  initialInterval: 1000, // İlk bekleme süresi (1 saniye)
+  maxInterval: 5000, // Maksimum bekleme süresi (5 saniye)
+  backoffMultiplier: 1.5, // Exponential backoff çarpanı
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 // BAŞARILI ÖDEME SAYFASI
@@ -21,7 +32,120 @@ export const PaymentSuccessPage = () => {
   const [orderSummary, setOrderSummary] = useState(null);
   const [orderSummaryError, setOrderSummaryError] = useState("");
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // POLLING STATE
+  // 3D Secure dönüşünde ödeme durumu belirsizse polling ile kontrol et
+  // ─────────────────────────────────────────────────────────────────────────
+  const [pollingStatus, setPollingStatus] = useState({
+    isPolling: false,
+    attempts: 0,
+    lastStatus: null,
+  });
+  const pollingTimeoutRef = useRef(null);
+  const isMountedRef = useRef(true);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POLLING FONKSİYONU
+  // Exponential backoff ile ödeme durumunu kontrol et
+  // ─────────────────────────────────────────────────────────────────────────
+  const pollPaymentStatus = useCallback(
+    async (orderId, paymentId, attempt = 0) => {
+      if (!isMountedRef.current || attempt >= POLLING_CONFIG.maxAttempts) {
+        if (attempt >= POLLING_CONFIG.maxAttempts) {
+          console.warn("[PaymentResult] Polling max deneme sayısına ulaştı");
+          setError(
+            "Ödeme durumu doğrulanamadı. Lütfen siparişlerinizi kontrol edin.",
+          );
+          setLoading(false);
+        }
+        return;
+      }
+
+      setPollingStatus((prev) => ({
+        ...prev,
+        isPolling: true,
+        attempts: attempt + 1,
+      }));
+
+      try {
+        console.log(
+          `[PaymentResult] Polling attempt ${attempt + 1}/${POLLING_CONFIG.maxAttempts}`,
+        );
+
+        // Ödeme durumunu kontrol et
+        let status;
+        if (paymentId) {
+          status = await PaymentService.checkPaymentStatus(paymentId);
+        } else if (orderId) {
+          // paymentId yoksa order üzerinden kontrol et
+          const order = await OrderService.getById(orderId);
+          status = {
+            success:
+              order?.paymentStatus === "Paid" ||
+              order?.paymentStatus === "Completed",
+            orderId: order?.id,
+            amount: order?.finalPrice || order?.totalPrice,
+            transactionId: order?.transactionId,
+          };
+        }
+
+        setPollingStatus((prev) => ({
+          ...prev,
+          lastStatus: status?.status || status?.paymentStatus,
+        }));
+
+        if (status?.success) {
+          // Ödeme başarılı
+          setPaymentDetails({
+            orderId: orderId || status.orderId,
+            paymentId,
+            transactionId: status.transactionId,
+            amount: status.amount,
+            date: new Date().toLocaleString("tr-TR"),
+          });
+          setPollingStatus((prev) => ({ ...prev, isPolling: false }));
+          setLoading(false);
+          return;
+        }
+
+        // Ödeme henüz tamamlanmadı, tekrar dene
+        const interval = Math.min(
+          POLLING_CONFIG.initialInterval *
+            Math.pow(POLLING_CONFIG.backoffMultiplier, attempt),
+          POLLING_CONFIG.maxInterval,
+        );
+
+        console.log(
+          `[PaymentResult] Ödeme durumu belirsiz, ${interval}ms sonra tekrar denenecek`,
+        );
+
+        pollingTimeoutRef.current = setTimeout(() => {
+          pollPaymentStatus(orderId, paymentId, attempt + 1);
+        }, interval);
+      } catch (err) {
+        console.error("[PaymentResult] Polling hatası:", err);
+
+        // Hata durumunda da retry yap (network hatası olabilir)
+        const interval = Math.min(
+          POLLING_CONFIG.initialInterval *
+            Math.pow(POLLING_CONFIG.backoffMultiplier, attempt),
+          POLLING_CONFIG.maxInterval,
+        );
+
+        pollingTimeoutRef.current = setTimeout(() => {
+          pollPaymentStatus(orderId, paymentId, attempt + 1);
+        }, interval);
+      }
+    },
+    [],
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ÖDEME DOĞRULAMA
+  // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    isMountedRef.current = true;
+
     const verifyPayment = async () => {
       try {
         // URL parametrelerinden ödeme bilgilerini al
@@ -41,27 +165,83 @@ export const PaymentSuccessPage = () => {
               amount: status.amount,
               date: new Date().toLocaleString("tr-TR"),
             });
+            setLoading(false);
+          } else if (
+            status.status === "Pending" ||
+            status.status === "Processing"
+          ) {
+            // Ödeme hala işleniyor, polling başlat
+            console.log(
+              "[PaymentResult] Ödeme işleniyor, polling başlatılıyor...",
+            );
+            pollPaymentStatus(orderId, paymentId, 0);
           } else {
             setError("Ödeme doğrulanamadı");
+            setLoading(false);
+          }
+        } else if (orderId) {
+          // PaymentId yok ama orderId var - order üzerinden kontrol et
+          try {
+            const order = await OrderService.getById(orderId);
+            if (
+              order?.paymentStatus === "Paid" ||
+              order?.paymentStatus === "Completed"
+            ) {
+              setPaymentDetails({
+                orderId,
+                transactionId: transactionId || order?.transactionId,
+                amount: order?.finalPrice || order?.totalPrice,
+                date: new Date().toLocaleString("tr-TR"),
+              });
+              setLoading(false);
+            } else if (
+              order?.paymentStatus === "Pending" ||
+              order?.paymentStatus === "Processing"
+            ) {
+              // Polling başlat
+              pollPaymentStatus(orderId, null, 0);
+            } else {
+              // Sadece başarı mesajı göster (3D Secure callback'ten gelmiş olabilir)
+              setPaymentDetails({
+                orderId,
+                transactionId,
+                date: new Date().toLocaleString("tr-TR"),
+              });
+              setLoading(false);
+            }
+          } catch {
+            // Order çekilemedi, yine de başarı göster
+            setPaymentDetails({
+              orderId,
+              transactionId,
+              date: new Date().toLocaleString("tr-TR"),
+            });
+            setLoading(false);
           }
         } else {
-          // Sadece başarı mesajı göster
+          // Hiç parametre yok
           setPaymentDetails({
-            orderId,
-            transactionId,
             date: new Date().toLocaleString("tr-TR"),
           });
+          setLoading(false);
         }
       } catch (err) {
         console.error("Ödeme doğrulama hatası:", err);
         setError("Ödeme durumu kontrol edilirken bir hata oluştu");
-      } finally {
         setLoading(false);
       }
     };
 
     verifyPayment();
-  }, [searchParams]);
+
+    // Cleanup
+    return () => {
+      isMountedRef.current = false;
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, [searchParams, pollPaymentStatus]);
 
   useEffect(() => {
     const orderId = searchParams.get("orderId");
@@ -92,6 +272,15 @@ export const PaymentSuccessPage = () => {
         <div className="result-container loading">
           <div className="spinner-large"></div>
           <p>Ödeme doğrulanıyor...</p>
+          {pollingStatus.isPolling && (
+            <div className="polling-info">
+              <p className="polling-text">
+                ⏳ İşleminiz kontrol ediliyor... ({pollingStatus.attempts}/
+                {POLLING_CONFIG.maxAttempts})
+              </p>
+              <p className="polling-hint">Lütfen sayfayı kapatmayın.</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -163,19 +352,34 @@ export const PaymentSuccessPage = () => {
             {/* NEDEN: 3D Secure sonucundan sonra özet görünmeli. */}
             <div className="detail-row">
               <span>Ara Toplam:</span>
-              <strong>{(Number(orderSummary.totalPrice || 0) - Number(orderSummary.shippingCost || 0)).toFixed(2)} ₺</strong>
+              <strong>
+                {(
+                  Number(orderSummary.totalPrice || 0) -
+                  Number(orderSummary.shippingCost || 0)
+                ).toFixed(2)}{" "}
+                ₺
+              </strong>
             </div>
             <div className="detail-row">
               <span>Kargo:</span>
-              <strong>{Number(orderSummary.shippingCost || 0).toFixed(2)} ₺</strong>
+              <strong>
+                {Number(orderSummary.shippingCost || 0).toFixed(2)} ₺
+              </strong>
             </div>
             <div className="detail-row">
               <span>İndirim:</span>
-              <strong>-{Number(orderSummary.discountAmount || 0).toFixed(2)} ₺</strong>
+              <strong>
+                -{Number(orderSummary.discountAmount || 0).toFixed(2)} ₺
+              </strong>
             </div>
             <div className="detail-row">
               <span>Toplam:</span>
-              <strong>{Number(orderSummary.finalPrice || orderSummary.totalPrice || 0).toFixed(2)} ₺</strong>
+              <strong>
+                {Number(
+                  orderSummary.finalPrice || orderSummary.totalPrice || 0,
+                ).toFixed(2)}{" "}
+                ₺
+              </strong>
             </div>
           </div>
         )}

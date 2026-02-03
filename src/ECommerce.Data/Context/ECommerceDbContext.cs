@@ -24,6 +24,8 @@ namespace ECommerce.Data.Context
         public virtual DbSet<Courier> Couriers { get; set; }
         public virtual DbSet<Favorite> Favorites { get; set; }
         public virtual DbSet<MicroSyncLog> MicroSyncLogs { get; set; }
+        public virtual DbSet<MikroSyncState> MikroSyncStates { get; set; }
+        public virtual DbSet<MikroCategoryMapping> MikroCategoryMappings { get; set; }
         public virtual DbSet<Payments> Payments { get; set; }
         public virtual DbSet<ReconciliationLog> ReconciliationLogs { get; set; }
         public virtual DbSet<ProductImage> ProductImages { get; set; }
@@ -951,6 +953,67 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<Discount>(entity =>
             {
                 entity.Property(d => d.Value).HasPrecision(18, 2);
+            });
+
+            // -------------------
+            // MikroSyncState Configuration
+            // Mikro ERP senkronizasyon durumlarını takip eder
+            // -------------------
+            modelBuilder.Entity<MikroSyncState>(entity =>
+            {
+                entity.ToTable("MikroSyncStates");
+                
+                entity.Property(e => e.SyncType).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Direction).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.LastError).HasMaxLength(1000);
+                
+                // Unique index: Her sync tipi + yön kombinasyonu için tek kayıt
+                entity.HasIndex(e => new { e.SyncType, e.Direction }).IsUnique();
+            });
+
+            // -------------------
+            // MikroCategoryMapping Configuration
+            // Mikro ERP kategorileri ile e-ticaret kategorileri arasındaki eşleme
+            // -------------------
+            modelBuilder.Entity<MikroCategoryMapping>(entity =>
+            {
+                entity.ToTable("MikroCategoryMappings");
+                
+                entity.Property(e => e.MikroAnagrupKod)
+                    .HasMaxLength(50)
+                    .IsRequired();
+                    
+                entity.Property(e => e.MikroAltgrupKod)
+                    .HasMaxLength(50);
+                    
+                entity.Property(e => e.MikroMarkaKod)
+                    .HasMaxLength(50);
+                    
+                entity.Property(e => e.MikroGrupAciklama)
+                    .HasMaxLength(200);
+                    
+                entity.Property(e => e.Notes)
+                    .HasMaxLength(500);
+                
+                // Kategori ilişkisi
+                entity.HasOne(e => e.Category)
+                    .WithMany()
+                    .HasForeignKey(e => e.CategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                    
+                // Marka ilişkisi (opsiyonel)
+                entity.HasOne(e => e.Brand)
+                    .WithMany()
+                    .HasForeignKey(e => e.BrandId)
+                    .OnDelete(DeleteBehavior.SetNull);
+                
+                // Composite unique index: Aynı Mikro grup+altgrup+marka kombinasyonu tekrar edemez
+                entity.HasIndex(e => new { e.MikroAnagrupKod, e.MikroAltgrupKod, e.MikroMarkaKod })
+                    .IsUnique()
+                    .HasDatabaseName("IX_MikroCategoryMappings_Unique");
+                    
+                // Performans için index
+                entity.HasIndex(e => e.CategoryId);
             });
 
             // -------------------

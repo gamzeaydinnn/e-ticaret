@@ -223,15 +223,32 @@ namespace ECommerce.API.Controllers
         }
         /// <summary>
         /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
+        /// MARKET KURALLARI:
+        /// - Sadece aynı gün içinde iptal edilebilir
+        /// - Sadece hazırlanmadan önce (New, Pending, Confirmed) iptal edilebilir
+        /// - Aksi halde müşteri hizmetleriyle iletişime geçilmeli
         /// </summary>
         [HttpPost("{orderId}/cancel")]
         [Authorize]
         public async Task<IActionResult> CancelOrder(int orderId)
         {
             var userId = User.GetUserId(); // extension ile alınıyor
-            var result = await _orderService.CancelOrderAsync(orderId, userId);
-            if (!result)
-                return BadRequest(new { message = "Sipariş iptal edilemedi veya yetkiniz yok." });
+            var (success, errorMessage) = await _orderService.CancelOrderAsync(orderId, userId);
+            
+            if (!success)
+            {
+                return BadRequest(new { 
+                    success = false, 
+                    message = errorMessage ?? "Sipariş iptal edilemedi.",
+                    // Müşteri hizmetleri iletişim bilgileri
+                    contactInfo = new {
+                        whatsapp = "+905334783072",
+                        phone = "+90 533 478 30 72",
+                        email = "golturkbuku@golkoygurme.com.tr"
+                    }
+                });
+            }
+            
             return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
         }
 

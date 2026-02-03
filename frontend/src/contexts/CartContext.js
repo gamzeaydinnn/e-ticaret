@@ -86,11 +86,19 @@ export const CartProvider = ({ children }) => {
 
   // Kullanıcı değiştiğinde sepeti yükle
   // Login sonrası misafir sepetini merge et
+  // ÖNEMLI: Farklı kullanıcıya geçişte sepeti sıfırla
   const [prevUserId, setPrevUserId] = useState(null);
 
   useEffect(() => {
     const handleUserChange = async () => {
       const currentUserId = user?.id || null;
+
+      // Kullanıcı değiştiyse (farklı hesaba geçiş veya logout)
+      if (prevUserId !== null && currentUserId !== prevUserId) {
+        console.log("🔄 Kullanıcı değişti:", prevUserId, "→", currentUserId);
+        // Önceki sepeti temizle (UI'da)
+        setCartItems([]);
+      }
 
       // Kullanıcı login olduysa (misafir → kayıtlı)
       if (currentUserId && !prevUserId) {
@@ -109,7 +117,7 @@ export const CartProvider = ({ children }) => {
         }
       }
 
-      // Sepeti yükle
+      // Sepeti yükle (kullanıcıya özel)
       await loadCart();
       setPrevUserId(currentUserId);
     };

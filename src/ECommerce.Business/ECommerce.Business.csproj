@@ -11,8 +11,10 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.14.0" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.10" />
-  <!-- Web Push library for sending notifications (VAPID) -->
-  <PackageReference Include="WebPush" Version="1.0.12" />
+    <!-- Web Push library for sending notifications (VAPID) -->
+    <PackageReference Include="WebPush" Version="1.0.12" />
+    <!-- Hangfire for scheduled jobs (Mikro sync) -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.17" />
   </ItemGroup>
 
   <ItemGroup>
