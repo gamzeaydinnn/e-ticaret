@@ -499,18 +499,31 @@ builder.Services.AddHostedService<StockReservationCleanupJob>();
 builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
+// SSL sertifika doğrulamasını atla (self-signed sertifikalar için)
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
-}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    // Self-signed SSL sertifikaları için doğrulamayı atla
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+})
+.SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 // MicroService'i concrete type olarak da kaydet (AdminMicroController için)
 builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
-}).SetHandlerLifetime(TimeSpan.FromMinutes(5));
+})
+.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    // Self-signed SSL sertifikaları için doğrulamayı atla
+    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+})
+.SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
 builder.Services.AddScoped<MicroSyncManager>();
 

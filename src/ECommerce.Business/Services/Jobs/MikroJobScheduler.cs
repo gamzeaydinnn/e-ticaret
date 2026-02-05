@@ -45,6 +45,21 @@ namespace ECommerce.Business.Services.Jobs
         /// <inheritdoc />
         public void RegisterAllJobs()
         {
+            // MikroSync.JobsEnabled kontrolü - API erişilebilir değilse job'ları atlayabiliriz
+            var jobsEnabled = _configuration.GetValue("MikroSync:JobsEnabled", true);
+            if (!jobsEnabled)
+            {
+                _logger.LogWarning(
+                    "[MikroJobScheduler] ═══════════════════════════════════════════════════════");
+                _logger.LogWarning(
+                    "[MikroJobScheduler] MİKRO SYNC JOB'LARI DEVRE DIŞI (JobsEnabled=false)");
+                _logger.LogWarning(
+                    "[MikroJobScheduler] Mikro API erişilebilir olduğunda MikroSync:JobsEnabled=true yapın");
+                _logger.LogWarning(
+                    "[MikroJobScheduler] ═══════════════════════════════════════════════════════");
+                return;
+            }
+
             _logger.LogInformation(
                 "[MikroJobScheduler] ═══════════════════════════════════════════════════════");
             _logger.LogInformation(

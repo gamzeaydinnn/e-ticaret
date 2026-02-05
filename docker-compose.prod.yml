@@ -30,8 +30,12 @@ services:
       context: ./src
       dockerfile: ECommerce.API/Dockerfile
     container_name: ecommerce-api-prod
+    restart: always
     ports:
       - "5000:5000"
+    extra_hosts:
+      # Docker container içinden sunucu host'a erişim için (Mikro API)
+      - "host.docker.internal:host-gateway"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
@@ -39,7 +43,33 @@ services:
       - Jwt__Key=YourVeryStrongSecretKeyMinimum32CharactersLong!!!
       - Jwt__Issuer=ECommerceAPI
       - Jwt__Audience=ECommerceClient
-      # NetGSM SMS Configuration
+      # ====== MİKRO ERP ENTEGRASYON AYARLARI ======
+      # Docker container içinden sunucu host'a erişim: host.docker.internal:8094
+      - MikroSettings__ApiUrl=https://host.docker.internal:8094
+      - MikroSettings__ApiKey=PZDEzh44zNcY2WKpOaoPHV5+mlVG1420SPXn3QBuVqcO6MvOk1j6NlSSFONwtTJV0ovN+6CjB6IKfPYN4TLXmjs6ESUxcwa2Yp+abW9+lac=
+      - MikroSettings__FirmaKodu=MIKROFLY
+      - MikroSettings__KullaniciKodu=SRV
+      - MikroSettings__Sifre=TeknikPc**48*bs!348**
+      - MikroSettings__CalismaYili=2026
+      - MikroSettings__DefaultDepoNo=1
+      - MikroSettings__DefaultSubeNo=0
+      - MikroSettings__DefaultFirmaNo=0
+      - MikroSettings__DefaultEvrakSeri=E
+      - MikroSettings__StokSyncIntervalMinutes=15
+      - MikroSettings__FiyatSyncIntervalMinutes=60
+      - MikroSettings__MaxRetryAttempts=3
+      - MikroSettings__RequestTimeoutSeconds=30
+      - MikroSettings__OnlineMusteriPrefix=WEB-
+      # ====== MİKRO SYNC JOB AYARLARI (HANGFIRE) ======
+      - MikroSync__JobsEnabled=true
+      - MikroSync__StockSyncCron=*/15 * * * *
+      - MikroSync__PriceSyncCron=0 * * * *
+      - MikroSync__FullSyncCron=0 6 * * *
+      - MikroSync__OrderPushCron=*/5 * * * *
+      - MikroSync__MaxRetryAttempts=3
+      - MikroSync__BatchSize=100
+      - MikroSync__DashboardPath=/hangfire
+      # ====== NetGSM SMS Configuration ======
       - NetGsm__UserCode=8503078774
       - NetGsm__Password=123456Z-M
       - NetGsm__MsgHeader=GOLKYGURMEM

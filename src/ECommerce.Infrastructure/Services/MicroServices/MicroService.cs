@@ -383,11 +383,70 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             return Task.FromResult(false);
         }
 
-        public Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)
+        public async Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)
         {
-            // TODO: CariKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] UpsertCustomersAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult(false);
+            _logger.LogInformation("[MicroService] UpsertCustomersAsync çağrılıyor (CariKaydetV2 üzerinden)");
+
+            try
+            {
+                // MikroAPI V2 CariKaydetV2 formatına dönüştür
+                var cariler = customers.Select(c => new
+                {
+                    cari_kod = c.ExternalId,
+                    cari_unvan1 = c.FullName,
+                    cari_unvan2 = "",
+                    cari_EMail = c.Email ?? "",
+                    cari_CepTel = c.Phone ?? "",
+                    cari_KurHesapSekli = 1,
+                    cari_doviz_cinsi1 = 0,
+                    cari_doviz_cinsi2 = 255,
+                    cari_doviz_cinsi3 = 255,
+                    cari_efatura_fl = 0,
+                    cari_def_efatura_cinsi = 0,
+                    cari_fatura_adres_no = 0,
+                    cari_sevk_adres_no = 0,
+                    cari_vade_fark_yuz = 0,
+                    // Adres bilgisi varsa ekle
+                    adres = !string.IsNullOrEmpty(c.Address) ? new[]
+                    {
+                        new
+                        {
+                            adr_cadde = c.Address ?? "",
+                            adr_il = "",
+                            adr_ilce = "",
+                            adr_ulke = "TÜRKİYE"
+                        }
+                    } : Array.Empty<object>()
+                }).ToList();
+
+                var requestBody = CreateMikroRequest(new { cariler });
+
+                var response = await SendMikroRequestAsync(
+                    "/API/APIMethods/CariKaydetV2",
+                    requestBody);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogInformation(
+                        "[MicroService] CariKaydetV2 başarılı. Kayıt sayısı: {Count}, Response: {Response}",
+                        cariler.Count, responseContent.Length > 200 ? responseContent[..200] + "..." : responseContent);
+                    return true;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError(
+                        "[MicroService] CariKaydetV2 başarısız. Status: {Status}, Error: {Error}",
+                        response.StatusCode, errorContent);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] UpsertCustomersAsync hatası.");
+                return false;
+            }
         }
 
         // ==================== MIKRO API V2 - YENİ METODLAR ====================

@@ -106,6 +106,13 @@ namespace ECommerce.Infrastructure.Config
         /// </summary>
         public int RequestTimeoutSeconds { get; set; } = 30;
         
+        /// <summary>
+        /// SSL sertifika doğrulamasını atla.
+        /// Self-signed sertifika kullanan sunucularda true yapın.
+        /// ⚠️ Production'da dikkatli kullanın!
+        /// </summary>
+        public bool IgnoreSslErrors { get; set; } = true;
+        
         // ==================== MÜŞTERİ KODU AYARLARI ====================
         
         /// <summary>
