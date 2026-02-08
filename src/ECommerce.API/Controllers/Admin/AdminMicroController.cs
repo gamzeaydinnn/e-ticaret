@@ -159,13 +159,13 @@ namespace ECommerce.API.Controllers.Admin
                 if (!result.Success)
                 {
                     _logger.LogWarning(
-                        "[AdminMicroController] StokListesiV2 başarısız. Mesaj: {Message}",
-                        result.Message);
+                        "[AdminMicroController] StokListesiV2 başarısız. Success: {Success}, Message: {Message}, TotalCount: {Total}",
+                        result.Success, result.Message ?? "(boş)", result.TotalCount);
 
                     return BadRequest(new
                     {
                         success = false,
-                        message = result.Message ?? "Mikro API hatası"
+                        message = result.Message ?? "Mikro API hatası - Success=false"
                     });
                 }
 

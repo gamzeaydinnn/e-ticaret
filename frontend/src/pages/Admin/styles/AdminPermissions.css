@@ -1,0 +1,62 @@
+.permissions-matrix-table {
+  table-layout: auto;
+  min-width: max-content;
+}
+
+.permissions-col-permission {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f8f9fa !important;
+}
+
+.permissions-matrix-table tbody td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  min-width: 220px;
+  max-width: 300px;
+}
+
+.permissions-col-role {
+  min-width: 120px !important;
+}
+
+.permissions-checkbox {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .permissions-matrix-table {
+    font-size: 0.72rem;
+  }
+
+  .permissions-col-permission {
+    min-width: 160px !important;
+  }
+
+  .permissions-matrix-table tbody td:first-child {
+    min-width: 170px;
+    max-width: 210px;
+  }
+
+  .permissions-col-role {
+    min-width: 84px !important;
+    padding: 0.35rem 0.2rem !important;
+  }
+
+  .permissions-col-role .badge {
+    font-size: 0.52rem !important;
+    padding: 0.2rem 0.32rem !important;
+    max-width: 82px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .permissions-checkbox {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+}

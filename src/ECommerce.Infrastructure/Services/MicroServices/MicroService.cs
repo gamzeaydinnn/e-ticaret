@@ -529,6 +529,10 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 // Request body oluştur
                 var requestBody = CreateMikroRequest(request);
                 
+                _logger.LogInformation(
+                    "[MicroService] StokListesiV2 Request: {Request}",
+                    JsonSerializer.Serialize(requestBody, new JsonSerializerOptions { WriteIndented = false }));
+                
                 // API'ye gönder
                 var response = await SendMikroRequestAsync(endpoint, requestBody, cancellationToken);
                 
@@ -547,12 +551,17 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 // Response'u parse et
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                
+                _logger.LogInformation(
+                    "[MicroService] StokListesiV2 RAW Response (ilk 500 karakter): {Content}",
+                    content.Length > 500 ? content.Substring(0, 500) + "..." : content);
+                
                 var result = JsonSerializer.Deserialize<MikroResponseWrapper<MikroStokResponseDto>>(
                     content, _jsonOptions);
 
                 _logger.LogInformation(
-                    "[MicroService] StokListesiV2 tamamlandı. Kayıt: {Count}, Toplam: {Total}",
-                    result?.Data?.Count ?? 0, result?.TotalCount ?? 0);
+                    "[MicroService] StokListesiV2 tamamlandı. Success: {Success}, Kayıt: {Count}, Toplam: {Total}, Message: {Message}",
+                    result?.Success ?? false, result?.Data?.Count ?? 0, result?.TotalCount ?? 0, result?.Message ?? "null");
 
                 return result ?? new MikroResponseWrapper<MikroStokResponseDto> { Success = false, Message = "Parse hatası" };
             }

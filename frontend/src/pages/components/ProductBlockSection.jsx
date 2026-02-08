@@ -32,11 +32,6 @@ const TITLE_TEMPLATES = [
     title: "Sizin İçin Seçtiklerimiz",
   },
   { icon: "fas fa-magic", color: "#8b5cf6", title: "Özel Öneriler" },
-  {
-    icon: "fas fa-lightbulb",
-    color: "#f59e0b",
-    title: "İlgini Çekebilecek Ürünler",
-  },
   { icon: "fas fa-sparkles", color: "#10b981", title: "Yeni Gelenler" },
   { icon: "fas fa-rocket", color: "#3b82f6", title: "Az Önce Eklendi" },
   { icon: "fas fa-leaf", color: "#10b981", title: "Taze Ürünler" },
@@ -617,17 +612,68 @@ const ProductBlockSection = ({
                       <div className="price-section">
                         {hasDiscount && originalPrice ? (
                           <div className="price-container">
-                            {/* Tasarruf Badge */}
-                            <div className="savings-badge">
-                              <i className="fas fa-piggy-bank me-1"></i>
-                              {(originalPrice - currentPrice).toFixed(2)} TL
-                              Tasarruf
+                            {/* İndirim Yüzdesi Badge */}
+                            <div
+                              className="discount-badge-large"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, #ef4444, #dc2626)",
+                                color: "white",
+                                padding: "3px 8px",
+                                borderRadius: "12px",
+                                fontSize: "0.7rem",
+                                fontWeight: "700",
+                                display: "inline-block",
+                                marginBottom: "3px",
+                                boxShadow: "0 2px 8px rgba(239, 68, 68, 0.3)",
+                              }}
+                            >
+                              <i
+                                className="fas fa-bolt me-1"
+                                style={{ fontSize: "0.6rem" }}
+                              ></i>
+                              %{discountPercent} İNDİRİM
                             </div>
-                            <div className="original-price">
+                            {/* Eski Fiyat */}
+                            <div
+                              className="original-price-large"
+                              style={{
+                                fontSize: "0.8rem",
+                                fontWeight: "600",
+                                textDecoration: "line-through",
+                                textDecorationColor: "#ef4444",
+                                textDecorationThickness: "2px",
+                                color: "#6b7280",
+                                marginBottom: "1px",
+                              }}
+                            >
                               {originalPrice.toFixed(2)} TL
                             </div>
-                            <div className="current-price product-price">
+                            {/* Yeni Fiyat */}
+                            <div
+                              className="new-price-large"
+                              style={{
+                                fontSize: "1.1rem",
+                                fontWeight: "800",
+                                color: "#ef4444",
+                                lineHeight: "1.2",
+                              }}
+                            >
                               {currentPrice.toFixed(2)} TL
+                            </div>
+                            {/* Tasarruf Bilgisi */}
+                            <div
+                              className="savings-info"
+                              style={{
+                                fontSize: "0.6rem",
+                                color: "#10b981",
+                                fontWeight: "600",
+                                marginTop: "1px",
+                              }}
+                            >
+                              <i className="fas fa-gift me-1"></i>
+                              {(originalPrice - currentPrice).toFixed(2)} TL
+                              tasarruf
                             </div>
                           </div>
                         ) : (

@@ -27,6 +27,7 @@
 .admin-users-page .table-responsive {
   max-width: 100% !important;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ============================================================================
@@ -87,25 +88,53 @@
 }
 
 /* ============================================================================
-   İzin Matrisi Tablosu
+   İzin Matrisi Tablosu — 9 sütun (1 modül + 8 rol)
+   Mobilde yatay scroll + sticky ilk sütun ile okunabilirlik sağlanır
    ============================================================================ */
 .permission-matrix {
-  font-size: 0.85rem;
-  min-width: 720px;
+  font-size: 0.8rem;
+  min-width: 900px;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .permission-matrix th,
 .permission-matrix td {
-  padding: 0.5rem;
+  padding: 0.4rem 0.5rem;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .permission-matrix .badge {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
+  padding: 0.2rem 0.4rem;
 }
 
 .permission-matrix-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* Sticky ilk sütun — mobilde kaydırırken modül adı sabit kalır */
+.permission-matrix .pm-sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  min-width: 160px;
+  max-width: 200px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.permission-matrix thead .pm-sticky-col {
+  background: #212529;
+  z-index: 3;
+}
+
+.permission-matrix .table-light .pm-sticky-col {
+  background: #f8f9fa;
 }
 
 /* ============================================================================
@@ -133,12 +162,25 @@
     width: 100% !important;
   }
 
-  /* table-responsive override */
-  .admin-users-page .table-responsive {
+  /* table-responsive override — SADECE kullanıcı tablosu için
+     permission-matrix-wrapper ayrı ele alınır (altta) */
+  .admin-users-page .table-responsive:not(.permission-matrix-wrapper) {
     margin: 0 !important;
     padding: 0 !important;
     overflow-x: visible !important;
     width: 100% !important;
+  }
+
+  /* ======================================================================
+     İzin Matrisi wrapper — mobilde yatay scroll MUTLAKA aktif olmalı
+     Kullanıcı tablosundan bağımsız çalışır
+     ====================================================================== */
+  .permission-matrix-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-bottom: 0.5rem;
   }
 
   /* Tablo kart görünümüne geçiş */
@@ -215,9 +257,15 @@
     display: none;
   }
 
-  /* Kayıt tarihi ve son giriş mobilde gizle */
+  /* ======================================================================
+     Mobilde kritik olmayan sütunları gizle — yer kazanmak için
+     Görünen: Checkbox, Ad Soyad, Email, Rol, Durum, İşlemler
+     Gizlenen: ID, Telefon, Şehir, Kayıt Tarihi, Son Giriş
+     ====================================================================== */
   .admin-users-table td[data-label="Kayıt Tarihi"],
-  .admin-users-table td[data-label="Son Giriş"] {
+  .admin-users-table td[data-label="Son Giriş"],
+  .admin-users-table td[data-label="Telefon"],
+  .admin-users-table td[data-label="Şehir"] {
     display: none;
   }
 
@@ -232,19 +280,44 @@
     content: "Seç";
   }
 
-  /* İşlemler hücresi için özel stil */
+  /* ======================================================================
+     Kart başlık bölümü: Ad Soyad satırını vurgula
+     Kullanıcı kartında en önemli bilgi olarak öne çıkar
+     ====================================================================== */
+  .admin-users-table td[data-label="Ad Soyad"] {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-bottom: 2px solid #e2e8f0;
+  }
+
+  .admin-users-table td[data-label="Ad Soyad"]::before {
+    color: #334155;
+  }
+
+  /* Durum badge'ını vurgula */
+  .admin-users-table td[data-label="Durum"] .badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  /* İşlemler hücresi için özel stil — butonlar alt alta, tam genişlik */
   .admin-users-table td[data-label="İşlemler"] {
     flex-direction: column;
     align-items: stretch;
     gap: 0.5rem;
+    background: #f8fafc;
+    border-top: 2px solid #e2e8f0;
+    padding: 0.6rem 0.75rem !important;
   }
 
   .admin-users-table td[data-label="İşlemler"]::before {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
   }
 
   .admin-users-table td[data-label="İşlemler"] .d-flex {
     justify-content: center;
+    flex-wrap: wrap;
   }
 
   /* Aksiyon butonları mobilde tam genişlik */
@@ -253,21 +326,53 @@
     text-align: center;
   }
 
-  /* İzin Matrisi mobil görünümü */
+  /* İzin Matrisi mobil — sticky sütun + kompakt görünüm */
   .permission-matrix {
-    font-size: 0.75rem;
-    min-width: 680px;
+    font-size: 0.7rem;
+    min-width: 750px;
+    display: table !important;
+    table-layout: auto !important;
+  }
+
+  .permission-matrix thead {
+    display: table-header-group !important;
+  }
+
+  .permission-matrix tbody {
+    display: table-row-group !important;
+  }
+
+  .permission-matrix tr {
+    display: table-row !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
   }
 
   .permission-matrix th,
   .permission-matrix td {
-    padding: 0.25rem;
+    display: table-cell !important;
+    padding: 0.25rem 0.3rem;
     white-space: nowrap;
+    border-bottom: 1px solid #dee2e6 !important;
+  }
+
+  /* Mobilde kart dönüşümünü engelle — ::before etiketlerini kaldır */
+  .permission-matrix td::before {
+    content: none !important;
   }
 
   .permission-matrix .badge {
-    font-size: 0.6rem;
-    padding: 0.2rem 0.3rem;
+    font-size: 0.55rem;
+    padding: 0.15rem 0.25rem;
+  }
+
+  .permission-matrix .pm-sticky-col {
+    min-width: 120px;
+    max-width: 150px;
+    font-size: 0.7rem;
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
   }
 
   /* Rol kartları mobilde tam genişlik */

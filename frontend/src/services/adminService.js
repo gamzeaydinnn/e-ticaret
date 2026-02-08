@@ -249,15 +249,58 @@ export const AdminService = {
           },
         ],
         topProducts: [
-          { name: "Cif Krem Temizleyici", sales: 45 },
-          { name: "Pınar Süt 1L", sales: 38 },
-          { name: "Domates Kg", sales: 32 },
+          {
+            productId: 1,
+            name: "Cif Krem Temizleyici",
+            sales: 45,
+            revenue: 4250,
+          },
+          { productId: 2, name: "Pınar Süt 1L", sales: 38, revenue: 3190 },
+          { productId: 3, name: "Domates Kg", sales: 32, revenue: 2510 },
+        ],
+        todayOrders: 14,
+        activeCouriers: 5,
+        pendingOrders: 22,
+        deliveredOrders: 167,
+        dailyMetrics: [
+          { date: "2026-02-02", orders: 14, revenue: 8450 },
+          { date: "2026-02-03", orders: 18, revenue: 10220 },
+          { date: "2026-02-04", orders: 12, revenue: 7310 },
+          { date: "2026-02-05", orders: 20, revenue: 12430 },
+          { date: "2026-02-06", orders: 23, revenue: 14210 },
+          { date: "2026-02-07", orders: 16, revenue: 10180 },
+          { date: "2026-02-08", orders: 19, revenue: 11690 },
+        ],
+        orderStatusDistribution: [
+          { label: "Delivered", count: 167 },
+          { label: "Preparing", count: 22 },
+          { label: "OutForDelivery", count: 14 },
+          { label: "Cancelled", count: 8 },
+        ],
+        paymentStatusDistribution: [
+          { label: "Paid", count: 201 },
+          { label: "Pending", count: 25 },
+          { label: "Failed", count: 8 },
+        ],
+        userRoleDistribution: [
+          { label: "User", count: 130 },
+          { label: "Admin", count: 4 },
+          { label: "StoreAttendant", count: 8 },
+          { label: "Dispatcher", count: 6 },
+          { label: "Courier", count: 8 },
         ],
       };
     }
     ensureBackend();
-    // Backend route: /api/admin/dashboard/stats (küçük harfli)
-    return api.get("/api/admin/dashboard/stats");
+    // Önce yeni endpoint'i dene, backend eski sürümdeyse stats'e düş.
+    try {
+      return await api.get("/api/admin/dashboard/overview", { timeout: 10000 });
+    } catch (error) {
+      if (error?.status === 404 || error?.response?.status === 404) {
+        return api.get("/api/admin/dashboard/stats", { timeout: 10000 });
+      }
+      throw error;
+    }
   },
   // Users
   getUsers: async () => {

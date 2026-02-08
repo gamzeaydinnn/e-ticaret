@@ -1,17 +1,104 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdminService } from "../../services/adminService";
 import { MicroService } from "../../services/microService";
 import { useAuth } from "../../contexts/AuthContext";
 import { PERMISSIONS } from "../../services/permissionService";
+import "./styles/AdminDashboard.css";
 
-// ============================================================================
-// Dashboard - İzin Bazlı Widget Görünürlüğü
-// ============================================================================
-// Her widget, ilgili izne göre gösterilir/gizlenir:
-// - dashboard.view: Temel dashboard erişimi (route seviyesinde kontrol edilir)
-// - dashboard.statistics: İstatistik kartları (Kullanıcılar, Ürünler, Siparişler)
-// - dashboard.revenue: Gelir bilgileri ve finansal veriler
-// ============================================================================
+const formatCurrency = (value) =>
+  `₺${Number(value || 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+
+const readField = (obj, ...keys) => {
+  for (const key of keys) {
+    if (obj && obj[key] !== undefined && obj[key] !== null) {
+      return obj[key];
+    }
+  }
+  return undefined;
+};
+
+const statusLabelMap = {
+  Delivered: "Teslim Edildi",
+  Completed: "Tamamlandı",
+  OutForDelivery: "Yolda",
+  Preparing: "Hazırlanıyor",
+  Confirmed: "Onaylandı",
+  Pending: "Beklemede",
+  Cancelled: "İptal",
+  Assigned: "Atandı",
+  Ready: "Hazır",
+  Paid: "Ödendi",
+  PaymentFailed: "Ödeme Hatası",
+};
+
+const DashboardBarChart = ({ data, valueKey, colorClass }) => {
+  const maxValue = Math.max(1, ...data.map((x) => Number(x[valueKey] || 0)));
+
+  return (
+    <div className="dashboard-chart">
+      {data.map((point) => {
+        const value = Number(point[valueKey] || 0);
+        const height = Math.max(6, Math.round((value / maxValue) * 96));
+        const shortDate = point.date?.slice(5) || "-";
+
+        return (
+          <div key={`${valueKey}-${point.date}`} className="dashboard-bar-wrap">
+            <div
+              className={`dashboard-bar ${colorClass}`}
+              style={{ height: `${height}px` }}
+              title={`${shortDate}: ${value.toLocaleString("tr-TR")}`}
+            />
+            <span className="dashboard-bar-label">{shortDate}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const DistributionList = ({ title, items, theme }) => {
+  const total = items.reduce((sum, x) => sum + Number(x.count || 0), 0);
+
+  return (
+    <div className="dashboard-panel h-100">
+      <div className="dashboard-panel-header">
+        <h6>{title}</h6>
+        <span>{total.toLocaleString("tr-TR")}</span>
+      </div>
+      <div className="dashboard-distribution-list">
+        {items.length === 0 && (
+          <p className="text-muted small mb-0">Veri bulunamadı.</p>
+        )}
+        {items.map((item) => {
+          const count = Number(item.count || 0);
+          const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+          const label = statusLabelMap[item.label] || item.label;
+
+          return (
+            <div
+              key={`${title}-${item.label}`}
+              className="dashboard-distribution-item"
+            >
+              <div className="dashboard-distribution-top">
+                <span>{label}</span>
+                <strong>{count.toLocaleString("tr-TR")}</strong>
+              </div>
+              <div className="dashboard-progress-track">
+                <div
+                  className={`dashboard-progress-fill ${theme}`}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 export default function Dashboard() {
   const { hasPermission, user } = useAuth();
@@ -21,23 +108,22 @@ export default function Dashboard() {
     totalOrders: 0,
     totalRevenue: 0,
     totalProducts: 0,
+    todayOrders: 0,
+    activeCouriers: 0,
+    pendingOrders: 0,
+    deliveredOrders: 0,
     recentOrders: [],
     topProducts: [],
-    // Yeni: Sipariş akış istatistikleri
-    orderFlow: {
-      pending: 0,
-      confirmed: 0,
-      preparing: 0,
-      ready: 0,
-      inDelivery: 0,
-      delivered: 0,
-    },
-    activeCouriers: 0,
+    dailyMetrics: [],
+    orderStatusDistribution: [],
+    paymentStatusDistribution: [],
+    userRoleDistribution: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
-  // ERP Mikro bağlantı durumu
   const [erpStatus, setErpStatus] = useState({
     isConnected: null,
     message: "",
@@ -45,14 +131,19 @@ export default function Dashboard() {
     loading: false,
   });
 
-  // İzin kontrolleri - SuperAdmin her şeyi görebilir
   const isSuperAdmin = user?.role === "SuperAdmin";
   const canViewStatistics =
     isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_STATISTICS);
   const canViewRevenue =
     isSuperAdmin || hasPermission?.(PERMISSIONS.DASHBOARD_REVENUE);
 
-  // ERP Bağlantı kontrolü
+  const chartData = useMemo(() => {
+    if (!Array.isArray(stats.dailyMetrics) || stats.dailyMetrics.length === 0) {
+      return [];
+    }
+    return stats.dailyMetrics.slice(-7);
+  }, [stats.dailyMetrics]);
+
   const checkErpConnection = async () => {
     setErpStatus((prev) => ({ ...prev, loading: true }));
     try {
@@ -73,63 +164,115 @@ export default function Dashboard() {
     }
   };
 
-  const loadDashboardStats = async () => {
+  const loadDashboardStats = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) setLoading(true);
       setError(null);
-      const dashboardData = await AdminService.getDashboardStats();
-      setStats(dashboardData);
+      const data = await AdminService.getDashboardStats();
+
+      const totalUsers = readField(data, "totalUsers", "TotalUsers") || 0;
+      const totalOrders = readField(data, "totalOrders", "TotalOrders") || 0;
+      const totalRevenue =
+        readField(data, "totalRevenue", "TotalRevenue", "revenue", "Revenue") ||
+        0;
+      const totalProducts =
+        readField(data, "totalProducts", "TotalProducts") || 0;
+      const todayOrders = readField(data, "todayOrders", "TodayOrders") || 0;
+      const activeCouriers =
+        readField(
+          data,
+          "activeCouriers",
+          "ActiveCouriers",
+          "totalCouriers",
+          "TotalCouriers",
+        ) || 0;
+      const pendingOrders =
+        readField(data, "pendingOrders", "PendingOrders") || 0;
+      const deliveredOrders =
+        readField(data, "deliveredOrders", "DeliveredOrders") || 0;
+      const recentOrders =
+        readField(data, "recentOrders", "RecentOrders") || [];
+      const topProducts = readField(data, "topProducts", "TopProducts") || [];
+      const dailyMetrics =
+        readField(data, "dailyMetrics", "DailyMetrics") || [];
+      const orderStatusDistribution =
+        readField(data, "orderStatusDistribution", "OrderStatusDistribution") ||
+        [];
+      const paymentStatusDistribution =
+        readField(
+          data,
+          "paymentStatusDistribution",
+          "PaymentStatusDistribution",
+        ) || [];
+      const userRoleDistribution =
+        readField(data, "userRoleDistribution", "UserRoleDistribution") || [];
+
+      setStats({
+        totalUsers,
+        totalOrders,
+        totalRevenue,
+        totalProducts,
+        todayOrders,
+        activeCouriers,
+        pendingOrders,
+        deliveredOrders,
+        recentOrders,
+        topProducts,
+        dailyMetrics,
+        orderStatusDistribution,
+        paymentStatusDistribution,
+        userRoleDistribution,
+      });
+      setLastUpdated(new Date());
     } catch (err) {
       console.error("Dashboard stats yüklenirken hata:", err);
-      setError("Veriler yüklenirken bir hata oluştu.");
+      setError(
+        "Dashboard verileri yüklenemedi. Sunucu bağlantısını kontrol edin.",
+      );
     } finally {
       setLoading(false);
+      setInitialLoadDone(true);
     }
   };
 
   useEffect(() => {
     loadDashboardStats();
-    checkErpConnection(); // ERP bağlantısını kontrol et
+    checkErpConnection();
 
-    // Her 30 saniyede bir otomatik güncelleme
-    const interval = setInterval(loadDashboardStats, 30000);
-    // Her 60 saniyede ERP kontrolü
+    const dashboardInterval = setInterval(
+      () => loadDashboardStats(true),
+      30000,
+    );
     const erpInterval = setInterval(checkErpConnection, 60000);
+
     return () => {
-      clearInterval(interval);
+      clearInterval(dashboardInterval);
       clearInterval(erpInterval);
     };
   }, []);
 
-  if (loading) {
+  if (loading && !initialLoadDone) {
     return (
-      <div
-        className="d-flex justify-content-center align-items-center"
-        style={{ height: "60vh" }}
-      >
-        <div className="text-center">
-          <div
-            className="spinner-border mb-3"
-            style={{ color: "#f57c00" }}
-            role="status"
-          ></div>
-          <p className="text-muted">Dashboard yükleniyor...</p>
-        </div>
+      <div className="dashboard-loading">
+        <div className="spinner-border" role="status"></div>
+        <p>Dashboard yükleniyor...</p>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !initialLoadDone) {
     return (
-      <div className="container mt-5">
-        <div className="alert alert-danger border-0 rounded-4" role="alert">
-          <i className="fas fa-exclamation-triangle me-2"></i>
-          {error}
+      <div className="container-fluid mt-4">
+        <div className="alert alert-danger d-flex justify-content-between align-items-center">
+          <span>
+            <i className="fas fa-circle-exclamation me-2"></i>
+            {error}
+          </span>
           <button
-            className="btn btn-outline-danger ms-3"
+            className="btn btn-outline-danger btn-sm"
             onClick={loadDashboardStats}
           >
-            <i className="fas fa-redo me-1"></i>Tekrar Dene
+            Tekrar Dene
           </button>
         </div>
       </div>
@@ -137,528 +280,302 @@ export default function Dashboard() {
   }
 
   return (
-    <div style={{ overflow: "hidden", maxWidth: "100%" }}>
-      <div className="container-fluid px-2 px-md-3">
-        {/* ================================================================
-            SİPARİŞ AKIŞ DURUMU - Canlı takip kartları
-            Hazırlanıyor, Kurye Bekleyen, Yolda, Aktif Kurye sayıları
-            ================================================================ */}
+    <div className="admin-dashboard-pro container-fluid py-3 py-md-4">
+      <div className="dashboard-hero">
+        <div>
+          <h1>Yönetim Dashboard</h1>
+          <p>Gerçek zamanlı iş metrikleri, sipariş akışı ve operasyon durumu</p>
+        </div>
+        <div className="dashboard-hero-actions">
+          <button
+            className="btn btn-dark"
+            onClick={() => loadDashboardStats(false)}
+            disabled={loading}
+          >
+            <i
+              className={`fas ${loading ? "fa-spinner fa-spin" : "fa-rotate"} me-2`}
+            ></i>
+            {loading ? "Yükleniyor..." : "Yenile"}
+          </button>
+          {lastUpdated && (
+            <span className="dashboard-last-update">
+              Son güncelleme: {lastUpdated.toLocaleTimeString("tr-TR")}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {error && initialLoadDone && (
+        <div className="alert alert-warning d-flex justify-content-between align-items-center mt-3">
+          <span>
+            <i className="fas fa-triangle-exclamation me-2"></i>
+            {error}
+          </span>
+          <button
+            className="btn btn-outline-warning btn-sm"
+            onClick={() => loadDashboardStats(false)}
+          >
+            Tekrar Dene
+          </button>
+        </div>
+      )}
+
+      {!canViewStatistics && !canViewRevenue && (
+        <div className="alert alert-info mt-3">
+          Dashboard verilerini görmek için gerekli izinler bulunamadı.
+        </div>
+      )}
+
+      <div className="row g-3 mt-1">
         {canViewStatistics && (
-          <div className="row g-2 mb-3">
-            {/* Hazırlanıyor */}
-            <div className="col-6 col-md-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #fd7e14 0%, #fb8c00 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(253, 126, 20, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3 d-flex align-items-center">
-                  <div className="flex-shrink-0 me-2">
-                    <i className="fas fa-utensils fa-2x opacity-75"></i>
-                  </div>
-                  <div>
-                    <p
-                      className="mb-0 opacity-75 text-uppercase"
-                      style={{ fontSize: "0.6rem" }}
-                    >
-                      Hazırlanıyor
-                    </p>
-                    <h4 className="mb-0 fw-bold">
-                      {stats.orderFlow?.preparing || 0}
-                    </h4>
-                  </div>
-                </div>
+          <>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-indigo">
+                <span>Toplam Kullanıcı</span>
+                <strong>{stats.totalUsers.toLocaleString("tr-TR")}</strong>
               </div>
             </div>
-
-            {/* Kurye Bekleyen */}
-            <div className="col-6 col-md-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(40, 167, 69, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3 d-flex align-items-center">
-                  <div className="flex-shrink-0 me-2">
-                    <i className="fas fa-box fa-2x opacity-75"></i>
-                  </div>
-                  <div>
-                    <p
-                      className="mb-0 opacity-75 text-uppercase"
-                      style={{ fontSize: "0.6rem" }}
-                    >
-                      Kurye Bekleyen
-                    </p>
-                    <h4 className="mb-0 fw-bold">
-                      {stats.orderFlow?.ready || 0}
-                    </h4>
-                  </div>
-                </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-green">
+                <span>Toplam Ürün</span>
+                <strong>{stats.totalProducts.toLocaleString("tr-TR")}</strong>
               </div>
             </div>
-
-            {/* Yolda */}
-            <div className="col-6 col-md-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #6f42c1 0%, #9c27b0 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(111, 66, 193, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3 d-flex align-items-center">
-                  <div className="flex-shrink-0 me-2">
-                    <i className="fas fa-motorcycle fa-2x opacity-75"></i>
-                  </div>
-                  <div>
-                    <p
-                      className="mb-0 opacity-75 text-uppercase"
-                      style={{ fontSize: "0.6rem" }}
-                    >
-                      Yolda
-                    </p>
-                    <h4 className="mb-0 fw-bold">
-                      {stats.orderFlow?.inDelivery || 0}
-                    </h4>
-                  </div>
-                </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-pink">
+                <span>Toplam Sipariş</span>
+                <strong>{stats.totalOrders.toLocaleString("tr-TR")}</strong>
               </div>
             </div>
-
-            {/* Aktif Kuryeler */}
-            <div className="col-6 col-md-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #17a2b8 0%, #00bcd4 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(23, 162, 184, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3 d-flex align-items-center">
-                  <div className="flex-shrink-0 me-2">
-                    <i className="fas fa-user-check fa-2x opacity-75"></i>
-                  </div>
-                  <div>
-                    <p
-                      className="mb-0 opacity-75 text-uppercase"
-                      style={{ fontSize: "0.6rem" }}
-                    >
-                      Aktif Kurye
-                    </p>
-                    <h4 className="mb-0 fw-bold">
-                      {stats.activeCouriers || 0}
-                    </h4>
-                  </div>
-                </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-cyan">
+                <span>Aktif Kurye</span>
+                <strong>{stats.activeCouriers.toLocaleString("tr-TR")}</strong>
               </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-amber">
+                <span>Bugünkü Sipariş</span>
+                <strong>{stats.todayOrders.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-violet">
+                <span>Bekleyen Sipariş</span>
+                <strong>{stats.pendingOrders.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-slate">
+                <span>Teslim Edilen</span>
+                <strong>{stats.deliveredOrders.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+          </>
+        )}
+
+        {canViewRevenue && (
+          <div className="col-6 col-lg-3">
+            <div className="dashboard-kpi kpi-orange">
+              <span>Toplam Gelir</span>
+              <strong>{formatCurrency(stats.totalRevenue)}</strong>
             </div>
           </div>
         )}
+      </div>
 
-        {/* Modern Stats Cards - İzin kontrolü ile */}
-        <div className="row g-2 g-md-3 mb-3 mb-md-4">
-          {/* Kullanıcılar - dashboard.statistics izni gerekli */}
-          {canViewStatistics && (
-            <div className="col-6 col-xl-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3">
-                  <p
-                    className="mb-0 opacity-75 text-uppercase"
-                    style={{ fontSize: "0.65rem" }}
-                  >
-                    Kullanıcılar
-                  </p>
-                  <h5 className="mb-0 fw-bold">{stats.totalUsers}</h5>
-                </div>
-              </div>
+      <div className="row g-3 mt-1">
+        <div className="col-12 col-xl-8">
+          <div className="dashboard-panel h-100">
+            <div className="dashboard-panel-header">
+              <h6>Son 7 Gün Sipariş Trendi</h6>
+              <span>
+                {chartData.reduce((s, p) => s + Number(p.orders || 0), 0)}{" "}
+                sipariş
+              </span>
             </div>
-          )}
-
-          {/* Ürünler - dashboard.statistics izni gerekli */}
-          {canViewStatistics && (
-            <div className="col-6 col-xl-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(17, 153, 142, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3">
-                  <p
-                    className="mb-0 opacity-75 text-uppercase"
-                    style={{ fontSize: "0.65rem" }}
-                  >
-                    Ürünler
-                  </p>
-                  <h5 className="mb-0 fw-bold">{stats.totalProducts}</h5>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Siparişler - dashboard.statistics izni gerekli */}
-          {canViewStatistics && (
-            <div className="col-6 col-xl-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(240, 147, 251, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3">
-                  <p
-                    className="mb-0 opacity-75 text-uppercase"
-                    style={{ fontSize: "0.65rem" }}
-                  >
-                    Siparişler
-                  </p>
-                  <h5 className="mb-0 fw-bold">{stats.totalOrders}</h5>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Toplam Gelir - dashboard.revenue izni gerekli */}
-          {canViewRevenue && (
-            <div className="col-6 col-xl-3">
-              <div
-                className="card border-0 h-100"
-                style={{
-                  borderRadius: "10px",
-                  background:
-                    "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
-                  color: "white",
-                  boxShadow: "0 4px 15px rgba(249, 115, 22, 0.25)",
-                }}
-              >
-                <div className="card-body p-2 p-md-3">
-                  <p
-                    className="mb-0 opacity-75 text-uppercase"
-                    style={{ fontSize: "0.65rem" }}
-                  >
-                    Toplam Gelir
-                  </p>
-                  <h5 className="mb-0 fw-bold" style={{ fontSize: "1rem" }}>
-                    ₺
-                    {stats.totalRevenue?.toLocaleString("tr-TR", {
-                      minimumFractionDigits: 0,
-                    })}
-                  </h5>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* İzin yoksa bilgi mesajı göster */}
-        {!canViewStatistics && !canViewRevenue && (
-          <div className="alert alert-info border-0 rounded-3 mb-4">
-            <i className="fas fa-info-circle me-2"></i>
-            Dashboard istatistiklerini görüntülemek için gerekli izinlere sahip
-            değilsiniz.
-          </div>
-        )}
-
-        {/* ERP / Mikro Bağlantı Durumu Widget */}
-        <div className="row g-2 g-md-3 mb-3">
-          <div className="col-12">
-            <div
-              className={`card border-0 shadow-sm ${erpStatus.isConnected === true ? "border-start border-success" : erpStatus.isConnected === false ? "border-start border-danger" : ""}`}
-              style={{
-                borderRadius: "10px",
-                borderLeftWidth: erpStatus.isConnected !== null ? "4px" : "0",
-              }}
-            >
-              <div className="card-body p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: 50,
-                      height: 50,
-                      background:
-                        erpStatus.isConnected === null
-                          ? "linear-gradient(135deg, #6b7280, #9ca3af)"
-                          : erpStatus.isConnected
-                            ? "linear-gradient(135deg, #10b981, #059669)"
-                            : "linear-gradient(135deg, #ef4444, #dc2626)",
-                    }}
-                  >
-                    {erpStatus.loading ? (
-                      <i className="fas fa-spinner fa-spin text-white"></i>
-                    ) : (
-                      <i
-                        className={`fas ${erpStatus.isConnected ? "fa-plug" : "fa-plug"} text-white`}
-                      ></i>
-                    )}
-                  </div>
-                  <div>
-                    <h6
-                      className="mb-0 fw-bold"
-                      style={{ fontSize: "0.95rem" }}
-                    >
-                      ERP / Mikro Entegrasyonu
-                    </h6>
-                    <small
-                      className={
-                        erpStatus.isConnected === null
-                          ? "text-muted"
-                          : erpStatus.isConnected
-                            ? "text-success"
-                            : "text-danger"
-                      }
-                    >
-                      {erpStatus.loading
-                        ? "Kontrol ediliyor..."
-                        : erpStatus.isConnected === null
-                          ? "Durum bilinmiyor"
-                          : erpStatus.isConnected
-                            ? "● Bağlı"
-                            : "● Bağlantı Yok"}
-                      {erpStatus.lastSync && !erpStatus.loading && (
-                        <span className="ms-2 text-muted">
-                          (Son kontrol:{" "}
-                          {new Date(erpStatus.lastSync).toLocaleTimeString(
-                            "tr-TR",
-                          )}
-                          )
-                        </span>
-                      )}
-                    </small>
-                  </div>
-                </div>
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={checkErpConnection}
-                    disabled={erpStatus.loading}
-                  >
-                    <i
-                      className={`fas ${erpStatus.loading ? "fa-spinner fa-spin" : "fa-sync-alt"} me-1`}
-                    ></i>
-                    Test
-                  </button>
-                  <a
-                    href="#erp"
-                    className="btn btn-sm text-white"
-                    style={{
-                      background: "linear-gradient(135deg, #f97316, #fb923c)",
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      // AdminPanel'deki erp tab'ına yönlendir
-                      window.dispatchEvent(
-                        new CustomEvent("adminNavigate", { detail: "erp" }),
-                      );
-                    }}
-                  >
-                    <i className="fas fa-external-link-alt me-1"></i>
-                    ERP Paneli
-                  </a>
-                </div>
-              </div>
-            </div>
+            <DashboardBarChart
+              data={chartData}
+              valueKey="orders"
+              colorClass="bar-orders"
+            />
           </div>
         </div>
-
-        {/* Son Siparişler ve En Çok Satan Ürünler */}
-        <div className="row g-2 g-md-3">
-          {/* Son Siparişler */}
-          <div className="col-12 col-lg-8">
-            <div
-              className="card border-0 shadow-sm"
-              style={{ borderRadius: "10px" }}
-            >
-              <div className="card-header bg-transparent border-0 p-2 p-md-3 pb-0">
-                <h6
-                  className="card-title mb-0 fw-bold"
-                  style={{ color: "#1e293b", fontSize: "0.9rem" }}
-                >
-                  <i
-                    className="fas fa-clock me-2"
-                    style={{ color: "#f97316" }}
-                  ></i>
-                  Son Siparişler
-                </h6>
-              </div>
-              <div className="card-body p-2 p-md-3">
-                {stats.recentOrders?.length > 0 ? (
-                  <div
-                    className="table-responsive"
-                    style={{ margin: "0 -0.25rem" }}
-                  >
-                    <table
-                      className="table table-sm mb-0"
-                      style={{ fontSize: "0.75rem" }}
-                    >
-                      <thead>
-                        <tr style={{ borderBottom: "2px solid #f1f5f9" }}>
-                          <th className="fw-semibold text-muted border-0 px-1">
-                            Müşteri
-                          </th>
-                          <th className="fw-semibold text-muted border-0 px-1">
-                            Tutar
-                          </th>
-                          <th className="fw-semibold text-muted border-0 px-1">
-                            Durum
-                          </th>
-                          <th className="fw-semibold text-muted border-0 px-1 d-none d-sm-table-cell">
-                            Tarih
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stats.recentOrders.map((order) => (
-                          <tr key={order.id}>
-                            <td
-                              className="fw-medium border-0 px-1 text-truncate"
-                              style={{ maxWidth: "80px" }}
-                            >
-                              {order.customerName}
-                            </td>
-                            <td className="border-0 px-1">
-                              <span
-                                className="fw-bold"
-                                style={{ color: "#f97316" }}
-                              >
-                                ₺
-                                {order.amount?.toLocaleString("tr-TR", {
-                                  minimumFractionDigits: 0,
-                                })}
-                              </span>
-                            </td>
-                            <td className="border-0 px-1">
-                              <span
-                                className={`badge rounded-pill ${
-                                  order.status === "Completed"
-                                    ? "bg-success"
-                                    : order.status === "Processing"
-                                      ? "bg-warning"
-                                      : "bg-info"
-                                }`}
-                                style={{
-                                  fontSize: "0.6rem",
-                                  padding: "0.2em 0.5em",
-                                }}
-                              >
-                                {order.status === "Completed"
-                                  ? "Tamam"
-                                  : order.status === "Processing"
-                                    ? "İşlem"
-                                    : "Kargo"}
-                              </span>
-                            </td>
-                            <td className="text-muted border-0 px-1 d-none d-sm-table-cell">
-                              {order.date}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-center py-3">
-                    <i className="fas fa-inbox fa-2x text-muted mb-2"></i>
-                    <p className="text-muted small mb-0">
-                      Henüz sipariş bulunmuyor.
-                    </p>
-                  </div>
+        <div className="col-12 col-xl-4">
+          <div className="dashboard-panel h-100">
+            <div className="dashboard-panel-header">
+              <h6>Son 7 Gün Gelir Trendi</h6>
+              <span>
+                {formatCurrency(
+                  chartData.reduce((s, p) => s + Number(p.revenue || 0), 0),
                 )}
-              </div>
+              </span>
+            </div>
+            <DashboardBarChart
+              data={chartData}
+              valueKey="revenue"
+              colorClass="bar-revenue"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 mt-1">
+        <div className="col-12 col-lg-4">
+          <DistributionList
+            title="Sipariş Durumları"
+            items={stats.orderStatusDistribution}
+            theme="theme-orange"
+          />
+        </div>
+        <div className="col-12 col-lg-4">
+          <DistributionList
+            title="Ödeme Durumları"
+            items={stats.paymentStatusDistribution}
+            theme="theme-teal"
+          />
+        </div>
+        <div className="col-12 col-lg-4">
+          <DistributionList
+            title="Kullanıcı Rolleri"
+            items={stats.userRoleDistribution}
+            theme="theme-indigo"
+          />
+        </div>
+      </div>
+
+      <div className="row g-3 mt-1">
+        <div className="col-12 col-xl-8">
+          <div className="dashboard-panel h-100">
+            <div className="dashboard-panel-header">
+              <h6>Son Siparişler</h6>
+              <span>{stats.recentOrders.length} kayıt</span>
+            </div>
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-0 dashboard-table">
+                <thead>
+                  <tr>
+                    <th>Sipariş</th>
+                    <th>Müşteri</th>
+                    <th>Tutar</th>
+                    <th>Durum</th>
+                    <th>Tarih</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="text-center text-muted py-4">
+                        Sipariş verisi yok.
+                      </td>
+                    </tr>
+                  ) : (
+                    stats.recentOrders.map((order) => (
+                      <tr key={order.id}>
+                        <td className="fw-semibold">
+                          {order.orderNumber || `#${order.id}`}
+                        </td>
+                        <td>{order.customerName}</td>
+                        <td className="fw-semibold">
+                          {formatCurrency(order.amount)}
+                        </td>
+                        <td>
+                          <span className="dashboard-pill">
+                            {statusLabelMap[order.status] || order.status}
+                          </span>
+                        </td>
+                        <td>{order.date}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
+        </div>
 
-          {/* En Çok Satan Ürünler */}
-          <div className="col-12 col-lg-4">
-            <div
-              className="card border-0 shadow-sm"
-              style={{ borderRadius: "10px" }}
-            >
-              <div className="card-header bg-transparent border-0 p-2 p-md-3 pb-0">
-                <h6
-                  className="card-title mb-0 fw-bold"
-                  style={{ color: "#1e293b", fontSize: "0.9rem" }}
-                >
-                  <i
-                    className="fas fa-trophy me-2"
-                    style={{ color: "#f97316" }}
-                  ></i>
-                  En Çok Satan
-                </h6>
-              </div>
-              <div className="card-body p-2 p-md-3">
-                {stats.topProducts?.length > 0 ? (
-                  <div>
-                    {stats.topProducts.map((product, index) => (
+        <div className="col-12 col-xl-4">
+          <div className="dashboard-panel h-100">
+            <div className="dashboard-panel-header">
+              <h6>En Çok Satan Ürünler</h6>
+              <span>{stats.topProducts.length} ürün</span>
+            </div>
+            <div className="dashboard-top-products">
+              {stats.topProducts.length === 0 && (
+                <p className="text-muted small mb-0">Veri bulunamadı.</p>
+              )}
+              {stats.topProducts.map((product, index) => {
+                const maxSales = Math.max(
+                  1,
+                  ...(stats.topProducts || []).map((x) => Number(x.sales || 0)),
+                );
+                const width = Math.round(
+                  (Number(product.sales || 0) / maxSales) * 100,
+                );
+
+                return (
+                  <div
+                    key={`${product.productId}-${index}`}
+                    className="dashboard-top-item"
+                  >
+                    <div className="dashboard-top-row">
+                      <span className="dashboard-rank">#{index + 1}</span>
+                      <strong className="text-truncate">{product.name}</strong>
+                      <small>
+                        {Number(product.sales || 0).toLocaleString("tr-TR")}{" "}
+                        satış
+                      </small>
+                    </div>
+                    <div className="dashboard-progress-track">
                       <div
-                        key={index}
-                        className="d-flex align-items-center py-1"
-                        style={{
-                          borderBottom:
-                            index !== stats.topProducts.length - 1
-                              ? "1px solid #f1f5f9"
-                              : "none",
-                        }}
-                      >
-                        <div className="flex-grow-1 overflow-hidden">
-                          <p
-                            className="mb-0 fw-medium text-truncate"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {product.name}
-                          </p>
-                          <small
-                            className="text-muted"
-                            style={{ fontSize: "0.7rem" }}
-                          >
-                            {product.sales} satış
-                          </small>
-                        </div>
-                      </div>
-                    ))}
+                        className="dashboard-progress-fill theme-orange"
+                        style={{ width: `${width}%` }}
+                      />
+                    </div>
+                    <div className="dashboard-top-revenue">
+                      {formatCurrency(product.revenue)}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-3">
-                    <i className="fas fa-chart-pie fa-2x text-muted mb-2"></i>
-                    <p className="text-muted small mb-0">Veri bulunmuyor.</p>
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="dashboard-panel mt-3">
+        <div className="dashboard-panel-header">
+          <h6>ERP / Mikro Bağlantısı</h6>
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={checkErpConnection}
+          >
+            <i
+              className={`fas ${erpStatus.loading ? "fa-spinner fa-spin" : "fa-plug"} me-1`}
+            ></i>
+            Kontrol Et
+          </button>
+        </div>
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span
+            className={`dashboard-erp-dot ${erpStatus.isConnected ? "ok" : erpStatus.isConnected === false ? "fail" : "unknown"}`}
+          ></span>
+          <strong>
+            {erpStatus.loading
+              ? "Bağlantı kontrol ediliyor..."
+              : erpStatus.isConnected
+                ? "ERP bağlantısı aktif"
+                : "ERP bağlantısı pasif"}
+          </strong>
+          {erpStatus.message && (
+            <span className="text-muted">- {erpStatus.message}</span>
+          )}
+          {erpStatus.lastSync && (
+            <small className="text-muted">
+              Son kontrol:{" "}
+              {new Date(erpStatus.lastSync).toLocaleTimeString("tr-TR")}
+            </small>
+          )}
         </div>
       </div>
     </div>

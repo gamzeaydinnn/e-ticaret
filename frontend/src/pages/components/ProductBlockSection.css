@@ -3,6 +3,19 @@
    Referans: "Bu Fırsatları Kaçırmayın" tasarımı
    ===================================================== */
 
+/* İndirim Badge Animasyonu */
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6);
+  }
+}
+
 .product-block-section {
   padding: 30px 0;
   background-color: #fff;
@@ -340,7 +353,7 @@
     padding: 20px 0;
     margin-bottom: 15px;
     --block-card-width: 140px;
-    --block-card-height: 260px;
+    --block-card-height: 280px;
     --block-image-height: 96px;
     --block-body-min-height: 140px;
   }
@@ -407,7 +420,7 @@
   .product-block-section {
     padding: 15px 0;
     --block-card-width: 120px;
-    --block-card-height: 240px;
+    --block-card-height: 260px;
     --block-image-height: 88px;
     --block-body-min-height: 130px;
   }
@@ -438,6 +451,8 @@
     width: var(--block-card-width);
     height: var(--block-card-height);
     min-height: var(--block-card-height);
+    max-height: var(--block-card-height);
+    align-self: stretch;
     align-items: stretch;
   }
 
@@ -445,6 +460,8 @@
     object-fit: cover;
     object-position: center;
     border-radius: inherit;
+    width: 100%;
+    height: 100%;
   }
 
   .products-scroll-container {
@@ -455,7 +472,8 @@
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    height: 100% !important;
+    height: var(--block-card-height) !important;
+    min-height: var(--block-card-height) !important;
   }
 
   .product-block-section .product-block-card .card-body {
@@ -499,10 +517,10 @@
     font-size: 0.55rem !important;
   }
 
-  /* Fiyat alanı - sabit yükseklik */
+  /* Fiyat alanı - kompakt mobil */
   .product-block-section .price-section {
-    min-height: 35px !important;
-    max-height: 35px !important;
+    min-height: auto !important;
+    max-height: none !important;
     overflow: hidden !important;
     margin-bottom: 4px !important;
   }
@@ -521,10 +539,40 @@
     color: #ef4444 !important;
   }
 
-  .product-block-section .original-price {
+  .product-block-section .original-price,
+  .product-block-section .original-price-large {
     font-size: 0.5rem !important;
     display: block !important;
     line-height: 1.1 !important;
+    text-decoration-thickness: 1.5px !important;
+    margin-bottom: 1px !important;
+  }
+
+  /* İndirim badge - mobilde küçült */
+  .product-block-section .discount-badge-large {
+    padding: 2px 6px !important;
+    font-size: 0.5rem !important;
+    border-radius: 10px !important;
+    margin-bottom: 2px !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+
+  .product-block-section .discount-badge-large i {
+    display: none !important;
+  }
+
+  /* Yeni fiyat - mobilde küçült */
+  .product-block-section .new-price-large {
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    line-height: 1.1 !important;
+    text-shadow: none !important;
+  }
+
+  /* Tasarruf bilgisi - mobilde gizle */
+  .product-block-section .savings-info {
+    display: none !important;
   }
 
   /* Ürün adını küçült - sabit yükseklik */

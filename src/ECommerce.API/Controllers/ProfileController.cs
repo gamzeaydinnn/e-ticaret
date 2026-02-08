@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Auth;
+using System;
 using System.Security.Claims;
 
 namespace ECommerce.API.Controllers
@@ -53,13 +54,23 @@ namespace ECommerce.API.Controllers
         {
             var userId = GetUserId();
             if (userId == 0) return Unauthorized();
+            if (dto == null) return BadRequest(new { success = false, message = "Geçersiz istek" });
+
+            var firstName = dto.FirstName?.Trim();
+            var lastName = dto.LastName?.Trim();
+            var phoneNumber = dto.PhoneNumber?.Trim();
+
+            if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
+                return BadRequest(new { success = false, message = "Ad ve soyad zorunludur" });
 
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null) return NotFound(new { success = false, message = "Kullanıcı bulunamadı" });
 
-            user.FirstName = dto.FirstName;
-            user.LastName = dto.LastName;
-            user.PhoneNumber = dto.PhoneNumber;
+            user.FirstName = firstName;
+            user.LastName = lastName;
+            user.FullName = $"{firstName} {lastName}".Trim();
+            user.PhoneNumber = string.IsNullOrWhiteSpace(phoneNumber) ? null : phoneNumber;
+            user.UpdatedAt = DateTime.UtcNow;
 
             var result = await _userManager.UpdateAsync(user);
             if (!result.Succeeded)
@@ -73,6 +84,13 @@ namespace ECommerce.API.Controllers
         {
             var userId = GetUserId();
             if (userId == 0) return Unauthorized();
+            if (dto == null) return BadRequest(new { success = false, message = "Geçersiz istek" });
+
+            if (string.IsNullOrWhiteSpace(dto.OldPassword) || string.IsNullOrWhiteSpace(dto.NewPassword))
+                return BadRequest(new { success = false, message = "Mevcut şifre ve yeni şifre zorunludur" });
+
+            if (dto.NewPassword.Length < 6)
+                return BadRequest(new { success = false, message = "Yeni şifre en az 6 karakter olmalıdır" });
 
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null) return NotFound(new { success = false, message = "Kullanıcı bulunamadı" });

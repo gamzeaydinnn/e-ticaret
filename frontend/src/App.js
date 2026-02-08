@@ -1197,13 +1197,6 @@ function HomePage() {
   const [homeBlocks, setHomeBlocks] = React.useState([]);
   const [blocksLoading, setBlocksLoading] = React.useState(true);
 
-  React.useEffect(() => {
-    const cachedSubscription = localStorage.getItem("newsletter_subscribed");
-    if (cachedSubscription) {
-      setIsNewsletterSubscribed(true);
-    }
-  }, []);
-
   // Ana Sayfa Bloklarını API'den çek - homeBlockService kullanarak
   React.useEffect(() => {
     const fetchHomeBlocks = async () => {
@@ -1977,7 +1970,19 @@ function HomePage() {
                 )}
 
                 {isNewsletterSubscribed && !newsletterMessage && (
-                  <div className="mt-3 alert alert-info py-2" role="status">
+                  <div
+                    className="mt-3 alert alert-info py-2"
+                    role="status"
+                    style={{
+                      borderRadius: "12px",
+                      background: "rgba(255, 255, 255, 0.25)",
+                      border: "2px solid rgba(255, 255, 255, 0.4)",
+                      color: "white",
+                      fontWeight: "600",
+                      fontSize: "0.9rem",
+                      backdropFilter: "blur(10px)",
+                    }}
+                  >
                     Zaten bültene kayıtlısınız.
                   </div>
                 )}

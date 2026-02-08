@@ -11,6 +11,56 @@ import permissionService, {
   PERMISSIONS,
   PERMISSION_MODULES,
 } from "../../services/permissionService";
+import "./styles/AdminPermissions.css";
+
+const getValue = (obj, ...keys) => {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) {
+      return obj[key];
+    }
+  }
+  return undefined;
+};
+
+const normalizeRole = (role) => {
+  const id = getValue(role, "id", "Id", "roleId", "RoleId");
+  const name = getValue(role, "name", "Name", "roleName", "RoleName");
+  return {
+    id,
+    name: name || "",
+    displayName:
+      getValue(role, "displayName", "DisplayName", "roleDisplayName", "RoleDisplayName") ||
+      name ||
+      "",
+    description: getValue(role, "description", "Description") || "",
+    canEdit: getValue(role, "canEdit", "CanEdit") !== false,
+  };
+};
+
+const normalizePermission = (permission) => {
+  const code =
+    getValue(
+      permission,
+      "code",
+      "Code",
+      "name",
+      "Name",
+      "permissionName",
+      "PermissionName"
+    ) || "";
+
+  return {
+    id: getValue(permission, "id", "Id", "permissionId", "PermissionId"),
+    code,
+    name: getValue(permission, "name", "Name") || code,
+    displayName:
+      getValue(permission, "displayName", "DisplayName") ||
+      code.split(".").slice(1).join(".") ||
+      code,
+    description: getValue(permission, "description", "Description") || "",
+    isActive: getValue(permission, "isActive", "IsActive") !== false,
+  };
+};
 
 const AdminPermissions = () => {
   const { user, hasPermission } = useAuth();
@@ -43,41 +93,129 @@ const AdminPermissions = () => {
     setError(null);
 
     try {
-      const [permissionsResponse, rolesResponse] = await Promise.all([
+      const [permissionsResponse, rolesResponse, matrixResponse] = await Promise.all([
         permissionService.getAllPermissions(),
         permissionService.getAllRoles(),
+        permissionService.getRolePermissionMatrix().catch(() => null),
       ]);
 
-      // İzinleri işle
-      if (permissionsResponse?.success !== false) {
-        const permList = Array.isArray(permissionsResponse)
-          ? permissionsResponse
-          : permissionsResponse.permissions || [];
-        setPermissions(permList);
-      }
+      const roleListRaw = Array.isArray(rolesResponse)
+        ? rolesResponse
+        : rolesResponse?.roles || rolesResponse?.Roles || [];
 
-      // Rolleri ve izinlerini işle
-      if (rolesResponse?.success !== false) {
-        const roleList = Array.isArray(rolesResponse)
-          ? rolesResponse
-          : rolesResponse.roles || [];
-        setRoles(roleList);
+      const permissionListRaw = Array.isArray(permissionsResponse)
+        ? permissionsResponse
+        : permissionsResponse?.permissions ||
+          permissionsResponse?.Permissions ||
+          [];
 
-        // Role-permission matrix oluştur
-        const matrix = {};
-        for (const role of roleList) {
+      const matrixData = matrixResponse || {};
+      const matrixRolesRaw =
+        matrixData?.roleMatrix ||
+        matrixData?.RoleMatrix ||
+        matrixData?.matrix ||
+        [];
+      const permissionHeaders =
+        matrixData?.permissionHeaders ||
+        matrixData?.PermissionHeaders ||
+        [];
+
+      const headerPermissionsRaw = permissionHeaders.flatMap(
+        (h) =>
+          getValue(h, "permissions", "Permissions") || []
+      );
+
+      const normalizedRoles = roleListRaw
+        .map(normalizeRole)
+        .filter((r) => r.name);
+      const normalizedMatrixRoles = matrixRolesRaw
+        .map(normalizeRole)
+        .filter((r) => r.name);
+
+      const mergedRolesMap = new Map();
+      [...normalizedRoles, ...normalizedMatrixRoles].forEach((role) => {
+        const key = (role.name || "").toLowerCase();
+        if (!key) return;
+        if (!mergedRolesMap.has(key)) {
+          mergedRolesMap.set(key, role);
+        } else {
+          mergedRolesMap.set(key, { ...mergedRolesMap.get(key), ...role });
+        }
+      });
+      const mergedRoles = Array.from(mergedRolesMap.values()).sort((a, b) =>
+        a.displayName.localeCompare(b.displayName)
+      );
+      setRoles(mergedRoles);
+
+      const mergedPermissionsMap = new Map();
+      [...permissionListRaw, ...headerPermissionsRaw]
+        .map(normalizePermission)
+        .filter((p) => p.code)
+        .forEach((permission) => {
+          const key = permission.code;
+          if (!mergedPermissionsMap.has(key)) {
+            mergedPermissionsMap.set(key, permission);
+          } else {
+            mergedPermissionsMap.set(key, {
+              ...mergedPermissionsMap.get(key),
+              ...permission,
+            });
+          }
+        });
+
+      const mergedPermissions = Array.from(mergedPermissionsMap.values());
+      setPermissions(mergedPermissions);
+
+      const matrix = {};
+
+      if (Array.isArray(matrixRolesRaw) && matrixRolesRaw.length > 0) {
+        matrixRolesRaw.forEach((roleRowRaw) => {
+          const roleRow = normalizeRole(roleRowRaw);
+          const roleName = roleRow.name;
+          if (!roleName) return;
+
+          const permsRaw = getValue(roleRowRaw, "permissions", "Permissions") || [];
+          const activeCodes = permsRaw
+            .filter((p) => getValue(p, "hasPermission", "HasPermission") === true)
+            .map(
+              (p) =>
+                getValue(
+                  p,
+                  "permissionName",
+                  "PermissionName",
+                  "code",
+                  "Code",
+                  "name",
+                  "Name"
+                ) || ""
+            )
+            .filter(Boolean);
+
+          matrix[roleName] = activeCodes;
+        });
+      } else {
+        for (const role of mergedRoles) {
           try {
-            const roleData = await permissionService.getRoleById(
-              role.id || role.name
-            );
-            const perms = roleData?.permissions || [];
-            matrix[role.name] = perms.map((p) => p.code || p.name || p);
+            if (!role.id) {
+              matrix[role.name] = [];
+              continue;
+            }
+            const roleData = await permissionService.getRoleById(role.id);
+            const perms =
+              roleData?.permissions ||
+              roleData?.Permissions ||
+              roleData?.permissionsByModule?.flatMap((m) => m.permissions || []) ||
+              [];
+            matrix[role.name] = perms
+              .map((p) => getValue(p, "code", "Code", "name", "Name"))
+              .filter(Boolean);
           } catch (e) {
             matrix[role.name] = [];
           }
         }
-        setRolePermissionMatrix(matrix);
       }
+
+      setRolePermissionMatrix(matrix);
     } catch (err) {
       console.error("Data loading error:", err);
       setError("Veriler yüklenirken bir hata oluştu.");
@@ -171,11 +309,23 @@ const AdminPermissions = () => {
     setError(null);
 
     try {
+      const permissionCodeToId = {};
+      permissions.forEach((perm) => {
+        if (perm.code && perm.id !== undefined && perm.id !== null) {
+          permissionCodeToId[perm.code] = perm.id;
+        }
+      });
+
       // Her rol için izinleri güncelle
       for (const role of roles) {
-        const newPermissions = rolePermissionMatrix[role.name] || [];
+        if (!role.canEdit || !role.id) continue;
+
+        const newPermissions = (rolePermissionMatrix[role.name] || [])
+          .map((code) => permissionCodeToId[code])
+          .filter((id) => id !== undefined);
+
         await permissionService.updateRolePermissions(
-          role.id || role.name,
+          role.id,
           newPermissions
         );
       }
@@ -385,16 +535,16 @@ const AdminPermissions = () => {
           </div>
           <div className="card-body p-0">
             <div className="table-responsive" style={{ maxHeight: "600px" }}>
-              <table className="table table-bordered table-hover mb-0">
+              <table className="table table-bordered table-hover mb-0 permissions-matrix-table">
                 <thead className="table-light sticky-top">
                   <tr>
-                    <th className="text-nowrap" style={{ minWidth: "200px" }}>
+                    <th className="text-nowrap permissions-col-permission" style={{ minWidth: "200px" }}>
                       İzin
                     </th>
                     {roles.map((role) => (
                       <th
-                        key={role.name}
-                        className="text-center text-nowrap"
+                        key={role.id || role.name}
+                        className="text-center text-nowrap permissions-col-role"
                         style={{ minWidth: "100px" }}
                       >
                         <div className="small">
@@ -450,15 +600,11 @@ const AdminPermissions = () => {
                                   <div className="form-check d-flex justify-content-center mb-0">
                                     <input
                                       type="checkbox"
-                                      className="form-check-input"
+                                      className="form-check-input permissions-checkbox"
                                       checked={hasPermission}
                                       onChange={() =>
                                         handleMatrixToggle(role.name, perm.code)
                                       }
-                                      style={{
-                                        width: "1.25rem",
-                                        height: "1.25rem",
-                                      }}
                                     />
                                   </div>
                                 )}

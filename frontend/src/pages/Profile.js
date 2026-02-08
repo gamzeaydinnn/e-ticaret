@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../services/api";
 
 export default function Profile() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -19,6 +21,7 @@ export default function Profile() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -51,7 +54,10 @@ export default function Profile() {
 
     if (user) {
       loadProfile();
+      return;
     }
+
+    setLoading(false);
   }, [user]);
 
   const handleProfileUpdate = async (e) => {
@@ -102,6 +108,21 @@ export default function Profile() {
     }
   };
 
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    setMessage("");
+    setError("");
+
+    try {
+      await logout();
+      navigate("/account");
+    } catch (err) {
+      setError("Çıkış yapılırken bir hata oluştu");
+    } finally {
+      setLogoutLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl text-center">
@@ -112,12 +133,19 @@ export default function Profile() {
     );
   }
 
-  if (loading) {
+  if (!user) {
     return (
-      <div className="container my-5 text-center">
-        <div className="spinner-border text-warning" role="status">
-          <span className="visually-hidden">Yükleniyor...</span>
+      <div className="container my-5" style={{ maxWidth: "640px" }}>
+        <div className="alert alert-warning">
+          Profil bilgilerini görüntülemek için giriş yapmanız gerekiyor.
         </div>
+        <button
+          type="button"
+          className="btn btn-warning"
+          onClick={() => navigate("/account")}
+        >
+          Hesabıma Git
+        </button>
       </div>
     );
   }
@@ -125,11 +153,21 @@ export default function Profile() {
   return (
     <div className="container my-5">
       <div className="row">
-        <div className="col-12 mb-4">
+        <div className="col-12 mb-4 d-flex align-items-center justify-content-between gap-3">
           <h2 className="fw-bold">
             <i className="bi bi-person-circle me-2"></i>
             Profilim
           </h2>
+          <button
+            type="button"
+            className="btn btn-outline-danger"
+            onClick={handleLogout}
+            disabled={logoutLoading}
+            style={{ borderRadius: "12px", fontWeight: "600" }}
+          >
+            <i className="bi bi-box-arrow-right me-2"></i>
+            {logoutLoading ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+          </button>
         </div>
       </div>
 

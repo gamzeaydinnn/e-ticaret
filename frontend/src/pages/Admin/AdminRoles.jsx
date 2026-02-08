@@ -13,6 +13,56 @@ import permissionService, {
   PERMISSION_MODULES,
 } from "../../services/permissionService";
 
+const getValue = (obj, ...keys) => {
+  for (const key of keys) {
+    if (obj?.[key] !== undefined && obj?.[key] !== null) {
+      return obj[key];
+    }
+  }
+  return undefined;
+};
+
+const normalizeRole = (role) => {
+  const id = getValue(role, "id", "Id", "roleId", "RoleId");
+  const name = getValue(role, "name", "Name", "roleName", "RoleName") || "";
+  return {
+    id,
+    name,
+    displayName:
+      getValue(role, "displayName", "DisplayName", "roleDisplayName", "RoleDisplayName") ||
+      name,
+    description: getValue(role, "description", "Description") || "",
+    isSystemRole: getValue(role, "isSystemRole", "IsSystemRole") === true,
+    canEdit: getValue(role, "canEdit", "CanEdit") !== false,
+    permissionCount:
+      getValue(role, "permissionCount", "PermissionCount") || 0,
+    userCount: getValue(role, "userCount", "UserCount") || 0,
+  };
+};
+
+const normalizePermission = (permission) => {
+  const code =
+    getValue(
+      permission,
+      "code",
+      "Code",
+      "name",
+      "Name",
+      "permissionName",
+      "PermissionName"
+    ) || "";
+  return {
+    id: getValue(permission, "id", "Id", "permissionId", "PermissionId"),
+    code,
+    name: getValue(permission, "name", "Name") || code,
+    displayName:
+      getValue(permission, "displayName", "DisplayName") ||
+      code.split(".").pop() ||
+      code,
+    description: getValue(permission, "description", "Description") || "",
+  };
+};
+
 const AdminRoles = () => {
   const navigate = useNavigate();
   const { user, hasPermission } = useAuth();
@@ -63,21 +113,46 @@ const AdminRoles = () => {
         permissionService.getAllPermissions(),
       ]);
 
-      if (rolesResponse?.success !== false) {
-        setRoles(
-          Array.isArray(rolesResponse)
-            ? rolesResponse
-            : rolesResponse.roles || []
-        );
+      const roleListRaw = Array.isArray(rolesResponse)
+        ? rolesResponse
+        : rolesResponse?.roles || rolesResponse?.Roles || [];
+
+      const permissionListRaw = Array.isArray(permissionsResponse)
+        ? permissionsResponse
+        : permissionsResponse?.permissions ||
+          permissionsResponse?.Permissions ||
+          [];
+
+      // Tüm rollerin görünmesi için matrix rol listesini de birleştir.
+      let matrixRolesRaw = [];
+      try {
+        const matrix = await permissionService.getRolePermissionMatrix();
+        matrixRolesRaw =
+          matrix?.roleMatrix || matrix?.RoleMatrix || [];
+      } catch {
+        matrixRolesRaw = [];
       }
 
-      if (permissionsResponse?.success !== false) {
-        setAllPermissions(
-          Array.isArray(permissionsResponse)
-            ? permissionsResponse
-            : permissionsResponse.permissions || []
-        );
-      }
+      const mergedRoleMap = new Map();
+      [...roleListRaw, ...matrixRolesRaw]
+        .map(normalizeRole)
+        .filter((r) => r.name)
+        .forEach((role) => {
+          const key = (role.name || "").toLowerCase();
+          if (!key) return;
+          if (!mergedRoleMap.has(key)) {
+            mergedRoleMap.set(key, role);
+          } else {
+            mergedRoleMap.set(key, { ...mergedRoleMap.get(key), ...role });
+          }
+        });
+
+      setRoles(
+        Array.from(mergedRoleMap.values()).sort((a, b) =>
+          (a.displayName || a.name).localeCompare(b.displayName || b.name)
+        )
+      );
+      setAllPermissions(permissionListRaw.map(normalizePermission).filter((p) => p.code));
     } catch (err) {
       console.error("Data loading error:", err);
       setError("Veriler yüklenirken bir hata oluştu.");
@@ -122,16 +197,25 @@ const AdminRoles = () => {
     setShowModal(true);
 
     try {
-      const response = await permissionService.getRoleById(
-        role.id || role.name
-      );
-      if (response?.permissions) {
-        setRolePermissions(
-          response.permissions.map((p) => p.code || p.name || p)
-        );
-      } else if (Array.isArray(response)) {
-        setRolePermissions(response.map((p) => p.code || p.name || p));
+      const roleId = role.id;
+      if (!roleId) {
+        setRolePermissions([]);
+        return;
       }
+
+      const response = await permissionService.getRoleById(roleId);
+
+      const directPermissions = getValue(response, "permissions", "Permissions") || [];
+      const permissionsByModule = getValue(response, "permissionsByModule", "PermissionsByModule") || [];
+      const groupedPermissions = permissionsByModule.flatMap(
+        (m) => getValue(m, "permissions", "Permissions") || []
+      );
+
+      const permissionCodes = [...directPermissions, ...groupedPermissions]
+        .map((p) => getValue(p, "code", "Code", "name", "Name"))
+        .filter(Boolean);
+
+      setRolePermissions(Array.from(new Set(permissionCodes)));
     } catch (err) {
       console.error("Role permissions loading error:", err);
       setRolePermissions([]);
@@ -210,9 +294,24 @@ const AdminRoles = () => {
     setError(null);
 
     try {
+      if (!selectedRole.id) {
+        throw new Error("Rol ID bulunamadı.");
+      }
+
+      const permissionCodeToId = {};
+      allPermissions.forEach((perm) => {
+        if (perm.code && perm.id !== undefined && perm.id !== null) {
+          permissionCodeToId[perm.code] = perm.id;
+        }
+      });
+
+      const permissionIds = rolePermissions
+        .map((code) => permissionCodeToId[code])
+        .filter((id) => id !== undefined);
+
       await permissionService.updateRolePermissions(
-        selectedRole.id || selectedRole.name,
-        rolePermissions
+        selectedRole.id,
+        permissionIds
       );
 
       setSuccessMessage(

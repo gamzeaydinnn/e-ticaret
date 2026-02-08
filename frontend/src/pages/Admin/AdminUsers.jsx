@@ -162,11 +162,14 @@ const AdminUsers = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  // Kullanıcı oluşturma formu başlangıç değerleri
+  // phoneNumber opsiyonel — boş bırakılabilir
   const initialCreateForm = {
     firstName: "",
     lastName: "",
     email: "",
     password: "",
+    phoneNumber: "",
     address: "",
     city: "",
     role: "User",
@@ -256,7 +259,17 @@ const AdminUsers = () => {
         : Array.isArray(payload)
           ? payload
           : [];
-      setUsers(list);
+
+      // ============================================================================
+      // Sıralama: CreatedAt DESC — en yeni kullanıcı listenin başında
+      // Backend sıralama garantisi olmadığı için frontend tarafında yapılır
+      // ============================================================================
+      const sorted = [...list].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+      setUsers(sorted);
     } catch (err) {
       console.error("Kullanıcılar yükleme hatası:", err);
       const status = err?.status || err?.response?.status;
@@ -364,12 +377,18 @@ const AdminUsers = () => {
         lastName: createForm.lastName.trim(),
         email: createForm.email.trim(),
         password: createForm.password,
+        phoneNumber: createForm.phoneNumber?.trim() || null,
         address: createForm.address?.trim() || null,
         city: createForm.city?.trim() || null,
         role: desiredRole,
       };
       await AdminService.createUser(payload);
+      // ============================================================================
+      // Kullanıcı başarıyla oluşturuldu — listeyi yenile ve ilk sayfaya dön
+      // Yeni kullanıcı CreatedAt DESC sıralaması sayesinde listenin başında görünür
+      // ============================================================================
       await loadUsers();
+      setCurrentPage(1);
       closeCreateModal();
     } catch (err) {
       console.error("Kullanıcı oluşturma hatası:", err);
@@ -978,14 +997,16 @@ const AdminUsers = () => {
                       title="Tümünü seç/kaldır"
                     />
                   </th>
-                  <th style={{ width: "60px" }}>ID</th>
-                  <th style={{ width: "180px" }}>Ad Soyad</th>
-                  <th style={{ width: "200px" }}>Email</th>
-                  <th style={{ width: "140px" }}>Rol</th>
-                  <th style={{ width: "80px" }}>Durum</th>
-                  <th style={{ width: "130px" }}>Kayıt Tarihi</th>
-                  <th style={{ width: "130px" }}>Son Giriş</th>
-                  <th style={{ width: "200px" }}>İşlemler</th>
+                  <th style={{ width: "50px" }}>ID</th>
+                  <th style={{ width: "150px" }}>Ad Soyad</th>
+                  <th style={{ width: "170px" }}>Email</th>
+                  <th style={{ width: "120px" }}>Telefon</th>
+                  <th style={{ width: "90px" }}>Şehir</th>
+                  <th style={{ width: "130px" }}>Rol</th>
+                  <th style={{ width: "70px" }}>Durum</th>
+                  <th style={{ width: "120px" }}>Kayıt Tarihi</th>
+                  <th style={{ width: "120px" }}>Son Giriş</th>
+                  <th style={{ width: "180px" }}>İşlemler</th>
                 </tr>
               </thead>
               <tbody>
@@ -1033,6 +1054,14 @@ const AdminUsers = () => {
                         title={u.email}
                       >
                         {u.email}
+                      </td>
+                      {/* Telefon numarası — opsiyonel alan */}
+                      <td data-label="Telefon">
+                        <small>{u.phoneNumber || "-"}</small>
+                      </td>
+                      {/* Şehir */}
+                      <td data-label="Şehir">
+                        <small>{u.city || "-"}</small>
                       </td>
                       <td data-label="Rol">
                         <span
@@ -1136,7 +1165,11 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* Rol Açıklamaları - 5 Temel Rol */}
+      {/* ====================================================================
+          Rol Açıklamaları — Tüm Sistemdeki Roller
+          8 rol: SuperAdmin, StoreManager, CustomerSupport, Logistics,
+                 StoreAttendant, Dispatcher, Courier, User
+          ==================================================================== */}
       <div className="card mb-4 mt-4">
         <div className="card-header bg-dark text-white">
           <h5 className="card-title mb-0">
@@ -1206,6 +1239,54 @@ const AdminUsers = () => {
               </div>
             </div>
 
+            {/* Market Görevlisi — Sipariş hazırlama */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-primary">
+                <div className="card-header bg-primary text-white">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.StoreAttendant.icon}{" "}
+                    {ROLE_DESCRIPTIONS.StoreAttendant.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.StoreAttendant.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Sevkiyat Görevlisi — Kurye atama */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100 border-success">
+                <div className="card-header bg-success text-white">
+                  <strong>
+                    {ROLE_DESCRIPTIONS.Dispatcher.icon}{" "}
+                    {ROLE_DESCRIPTIONS.Dispatcher.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.Dispatcher.description}</small>
+                </div>
+              </div>
+            </div>
+
+            {/* Kurye — Teslimat */}
+            <div className="col-md-6 col-lg-4 mb-3">
+              <div className="card h-100" style={{ borderColor: "#9333ea" }}>
+                <div
+                  className="card-header text-white"
+                  style={{ backgroundColor: "#9333ea" }}
+                >
+                  <strong>
+                    {ROLE_DESCRIPTIONS.Courier.icon}{" "}
+                    {ROLE_DESCRIPTIONS.Courier.name}
+                  </strong>
+                </div>
+                <div className="card-body">
+                  <small>{ROLE_DESCRIPTIONS.Courier.description}</small>
+                </div>
+              </div>
+            </div>
+
             {/* Müşteri */}
             <div className="col-md-6 col-lg-4 mb-3">
               <div className="card h-100 border-light">
@@ -1223,7 +1304,12 @@ const AdminUsers = () => {
         </div>
       </div>
 
-      {/* İzin Matrisi Tablosu - 5 Rol */}
+      {/* ====================================================================
+          RBAC İzin Matrisi — 8 Rol
+          Tüm roller dahil: SuperAdmin, StoreManager, CustomerSupport,
+          Logistics, StoreAttendant, Dispatcher, Courier, User
+          Mobil uyumlu: yatay scroll + sticky ilk sütun
+          ==================================================================== */}
       <div className="card mb-4">
         <div className="card-header bg-primary text-white">
           <h5 className="card-title mb-0">
@@ -1240,20 +1326,34 @@ const AdminUsers = () => {
             <table className="table table-bordered table-hover permission-matrix">
               <thead className="table-dark">
                 <tr>
-                  <th>Modül / İşlem</th>
+                  <th className="pm-sticky-col">Modül / İşlem</th>
                   <th className="text-center">
-                    <span className="badge bg-danger">👑 Süper Yönetici</span>
+                    <span className="badge bg-danger">👑 Süper Yön.</span>
                   </th>
                   <th className="text-center">
                     <span className="badge bg-warning text-dark">
-                      🏪 Mağaza Yön.
+                      🏪 Mağaza
                     </span>
                   </th>
                   <th className="text-center">
-                    <span className="badge bg-info">🎧 Müşt. Hizm.</span>
+                    <span className="badge bg-info">🎧 Müşt.H.</span>
                   </th>
                   <th className="text-center">
                     <span className="badge bg-secondary">🚚 Lojistik</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-primary">📦 Market G.</span>
+                  </th>
+                  <th className="text-center">
+                    <span className="badge bg-success">🗂️ Sevkiyat</span>
+                  </th>
+                  <th className="text-center">
+                    <span
+                      className="badge text-white"
+                      style={{ backgroundColor: "#9333ea" }}
+                    >
+                      🏍️ Kurye
+                    </span>
                   </th>
                   <th className="text-center">
                     <span className="badge bg-light text-dark">👤 Müşteri</span>
@@ -1261,253 +1361,404 @@ const AdminUsers = () => {
                 </tr>
               </thead>
               <tbody>
-                {/* Kullanıcı Yönetimi */}
+                {/* ── Kullanıcı Yönetimi ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>👥 Kullanıcı Yönetimi</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Kullanıcıları görüntüleme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Kullanıcıları görüntüleme
+                  </td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Kullanıcı rolü değiştirme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Kullanıcı rolü değiştirme
+                  </td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Ödeme Ayarları */}
+                {/* ── Ödeme Ayarları ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>💳 Ödeme Ayarları</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Ödeme yöntemlerini yapılandırma</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Ödeme yöntemlerini yapılandırma
+                  </td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Ürün/Fiyat Yönetimi */}
+                {/* ── Ürün/Fiyat Yönetimi ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>📦 Ürün/Fiyat Düzenleme</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Ürünleri görüntüleme</td>
+                  <td className="ps-4 pm-sticky-col">Ürünleri görüntüleme</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Ürün ekleme/düzenleme</td>
+                  <td className="ps-4 pm-sticky-col">Ürün ekleme/düzenleme</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Fiyat değiştirme</td>
+                  <td className="ps-4 pm-sticky-col">Fiyat değiştirme</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Stok yönetimi</td>
+                  <td className="ps-4 pm-sticky-col">Stok yönetimi</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Sipariş Yönetimi */}
+                {/* ── Sipariş Yönetimi ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>🛒 Sipariş Durumu Güncelleme</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Siparişleri görüntüleme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Siparişleri görüntüleme
+                  </td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">
+                    Sipariş durumu güncelleme
+                  </td>
+                  <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-warning">⚠️</td>
                   <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Sipariş durumu güncelleme</td>
+                  <td className="ps-4 pm-sticky-col">Kargo takip no girme</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4">Kargo takip no girme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* İade/İptal Yönetimi */}
+                {/* ── Sipariş Hazırlama (Store Attendant özel) ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
+                    <strong>🏪 Sipariş Hazırlama</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">
+                    Siparişi hazırlamaya başla
+                  </td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">
+                    Tartı girişi / Hazır işaretle
+                  </td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* ── Kurye & Sevkiyat ── */}
+                <tr className="table-light">
+                  <td colSpan="9" className="pm-sticky-col">
+                    <strong>🏍️ Kurye & Sevkiyat</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">Kurye atama/değiştirme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">
+                    Teslimat durumu güncelleme
+                  </td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-warning">⚠️</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">Kurye listesini görme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                </tr>
+
+                {/* ── İade/İptal Yönetimi ── */}
+                <tr className="table-light">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>↩️ İade/İptal Onayı</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">İade talebi görüntüleme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    İade talebi görüntüleme
+                  </td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">İade/İptal onaylama</td>
+                  <td className="ps-4 pm-sticky-col">İade/İptal onaylama</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Satış Raporları */}
+                {/* ── Satış Raporları ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>📈 Satış Raporları</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Satış istatistikleri</td>
+                  <td className="ps-4 pm-sticky-col">Satış istatistikleri</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Finansal raporlar</td>
+                  <td className="ps-4 pm-sticky-col">Finansal raporlar</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-warning">⚠️</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Kampanya/Kupon */}
+                {/* ── Kampanya/Kupon ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>🏷️ Kampanya ve Kupon</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Kampanya oluşturma</td>
+                  <td className="ps-4 pm-sticky-col">Kampanya oluşturma</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Kupon yönetimi</td>
+                  <td className="ps-4 pm-sticky-col">Kupon yönetimi</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Müşteri İletişimi */}
+                {/* ── Müşteri İletişimi ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>💬 Müşteri İletişimi</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Müşteri yorumlarını görme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Müşteri yorumlarını görme
+                  </td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Yorumları onaylama/silme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Yorumları onaylama/silme
+                  </td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Sistem Ayarları */}
+                {/* ── Sistem Ayarları ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>⚙️ Sistem Ayarları</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Site ayarlarını değiştirme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Site ayarlarını değiştirme
+                  </td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">ERP/Mikro entegrasyonu</td>
+                  <td className="ps-4 pm-sticky-col">ERP/Mikro entegrasyonu</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Veri dışa aktarma</td>
+                  <td className="ps-4 pm-sticky-col">Veri dışa aktarma</td>
                   <td className="text-center text-success">✅</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
+                  <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                   <td className="text-center text-danger">❌</td>
                 </tr>
 
-                {/* Müşteri Yetkileri */}
+                {/* ── Müşteri İşlemleri ── */}
                 <tr className="table-light">
-                  <td colSpan="6">
+                  <td colSpan="9" className="pm-sticky-col">
                     <strong>🛍️ Müşteri İşlemleri</strong>
                   </td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Alışveriş yapma</td>
+                  <td className="ps-4 pm-sticky-col">Alışveriş yapma</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                </tr>
-                <tr>
-                  <td className="ps-4">Kendi siparişlerini görme</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
@@ -1515,7 +1766,23 @@ const AdminUsers = () => {
                   <td className="text-center text-success">✅</td>
                 </tr>
                 <tr>
-                  <td className="ps-4">Profil düzenleme</td>
+                  <td className="ps-4 pm-sticky-col">
+                    Kendi siparişlerini görme
+                  </td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                </tr>
+                <tr>
+                  <td className="ps-4 pm-sticky-col">Profil düzenleme</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
+                  <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
                   <td className="text-center text-success">✅</td>
@@ -1527,7 +1794,7 @@ const AdminUsers = () => {
           </div>
           <div className="mt-3">
             <small className="text-muted">
-              <strong>Açıklama:</strong>✅ Tam erişim | ⚠️ Kısıtlı erişim
+              <strong>Açıklama:</strong> ✅ Tam erişim | ⚠️ Kısıtlı erişim
               (sadece belirli koşullarda) | ❌ Erişim yok
             </small>
           </div>
@@ -1685,6 +1952,21 @@ const AdminUsers = () => {
                       <small className="form-text text-muted">
                         Şifre en az 6 karakter olmalıdır
                       </small>
+                    </div>
+                    {/* Telefon numarası — opsiyonel, zorunlu değil */}
+                    <div className="col-12">
+                      <label className="form-label">
+                        Telefon Numarası{" "}
+                        <small className="text-muted">(opsiyonel)</small>
+                      </label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        name="phoneNumber"
+                        value={createForm.phoneNumber}
+                        onChange={handleCreateInputChange}
+                        placeholder="05XX XXX XX XX"
+                      />
                     </div>
                     <div className="col-md-6">
                       <label className="form-label">Adres</label>

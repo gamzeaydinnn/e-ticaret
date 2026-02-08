@@ -8,6 +8,12 @@
 
 import api from "./api";
 
+const unwrapPayload = (response) => response?.data ?? response;
+const unwrapData = (response) => {
+  const payload = unwrapPayload(response);
+  return payload?.data ?? payload?.Data ?? payload;
+};
+
 /**
  * Permission API Servisi
  * Tüm izin ve rol yönetimi işlemlerini merkezi olarak yönetir.
@@ -82,7 +88,7 @@ export const permissionService = {
       const response = await api.get("/api/admin/permissions", {
         params: { groupByModule },
       });
-      return response.data?.data || [];
+      return unwrapData(response) || [];
     } catch (error) {
       console.error("[PermissionService] getAllPermissions error:", error);
       throw error;
@@ -181,7 +187,7 @@ export const permissionService = {
   getAllRoles: async () => {
     try {
       const response = await api.get("/api/admin/roles");
-      return response.data?.data || [];
+      return unwrapData(response) || [];
     } catch (error) {
       console.error("[PermissionService] getAllRoles error:", error);
       throw error;
@@ -197,7 +203,7 @@ export const permissionService = {
   getRoleById: async (roleId) => {
     try {
       const response = await api.get(`/api/admin/roles/${roleId}`);
-      return response.data?.data || null;
+      return unwrapData(response) || null;
     } catch (error) {
       console.error("[PermissionService] getRoleById error:", error);
       throw error;
@@ -294,7 +300,9 @@ export const permissionService = {
   getRolePermissionMatrix: async () => {
     try {
       const response = await api.get("/api/admin/roles/matrix");
-      return response.data?.data || { PermissionHeaders: [], RoleMatrix: [] };
+      return (
+        unwrapData(response) || { PermissionHeaders: [], RoleMatrix: [] }
+      );
     } catch (error) {
       console.error(
         "[PermissionService] getRolePermissionMatrix error:",

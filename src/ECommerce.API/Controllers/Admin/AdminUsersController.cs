@@ -62,6 +62,11 @@ namespace ECommerce.API.Controllers.Admin
                 // - IsActive: Aktif/Pasif durumu
                 // - LastLoginAt: Son giriş tarihi
                 // ============================================================================
+                // ============================================================================
+                // Tüm entity alanları frontend'e projection ile aktarılır.
+                // Address, City, PhoneNumber, UpdatedAt gibi alanlar da dahil edildi.
+                // Frontend tabloda hangi sütunların gösterileceğine kendisi karar verir.
+                // ============================================================================
                 var userList = users.Select(u => new
                 {
                     u.Id,
@@ -69,9 +74,13 @@ namespace ECommerce.API.Controllers.Admin
                     u.FirstName,
                     u.LastName,
                     FullName = $"{u.FirstName} {u.LastName}",
+                    u.PhoneNumber,
+                    u.Address,
+                    u.City,
                     u.IsActive,
                     u.CreatedAt,
-                    u.LastLoginAt,  // Son giriş tarihi
+                    u.UpdatedAt,
+                    u.LastLoginAt,
                     u.Role
                 }).ToList();
 
@@ -126,6 +135,7 @@ namespace ECommerce.API.Controllers.Admin
                 LastName = dto.LastName,
                 FullName = $"{dto.FirstName} {dto.LastName}",
                 UserName = dto.Email,
+                PhoneNumber = dto.PhoneNumber,  // Opsiyonel telefon numarası
                 Address = dto.Address,
                 City = dto.City,
                 Role = targetRole,
@@ -229,7 +239,23 @@ namespace ECommerce.API.Controllers.Admin
 
             user.FirstName = dto.FirstName;
             user.LastName = dto.LastName;
+            user.FullName = $"{dto.FirstName} {dto.LastName}";
             user.Email = dto.Email;
+            user.Address = dto.Address;
+            user.City = dto.City;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            // IsActive alanı gönderildiyse güncelle (null ise mevcut değer korunur)
+            if (dto.IsActive.HasValue)
+            {
+                user.IsActive = dto.IsActive.Value;
+            }
+
+            // PhoneNumber alanı gönderildiyse güncelle
+            if (dto.PhoneNumber != null)
+            {
+                user.PhoneNumber = dto.PhoneNumber;
+            }
 
             if (!string.IsNullOrWhiteSpace(dto.Role))
             {
