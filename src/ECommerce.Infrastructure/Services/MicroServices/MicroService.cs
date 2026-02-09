@@ -21,7 +21,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
     /// 
     /// ÖNEMLİ NOTLAR:
     /// - MikroAPI V2 endpoint'leri { "Mikro": { ... } } wrapper formatı bekler
-    /// - Şifre her gün "YYYY-MM-DD + PlainPassword" formatında MD5 hash'lenir
+    /// - Şifre her gün "YYYY-MM-DD" + BOŞLUK + "PlainPassword" formatında MD5 hash'lenir
     /// - Her istekte ApiKey, FirmaKodu, KullaniciKodu, CalismaYili ve hash'lenmiş Sifre gönderilir
     /// 
     /// Endpoint'ler:
@@ -67,13 +67,13 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         
         /// <summary>
         /// MikroAPI için günlük şifre hash'i oluşturur.
-        /// Format: "YYYY-MM-DD" + PlainPassword → MD5 (lowercase hex)
+        /// Format: "YYYY-MM-DD" + BOŞLUK + PlainPassword → MD5 (lowercase hex)
         /// 
         /// ÖRNEK:
         /// - Tarih: 2026-02-03
         /// - Şifre: 123asd
-        /// - Birleşik: "2026-02-03123asd"
-        /// - MD5 Hash: "5c3f2964996a220cdcfa48f8798622ff"
+        /// - Birleşik: "2026-02-03 123asd" (boşluk ile!)
+        /// - MD5 Hash: hesaplanmış hash
         /// </summary>
         /// <param name="plainPassword">Şifre (plain text)</param>
         /// <returns>MD5 hash (32 karakter, lowercase hex)</returns>
@@ -85,9 +85,9 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 return string.Empty;
             }
 
-            // MikroAPI formatı: YYYY-MM-DD + şifre
+            // MikroAPI formatı: YYYY-MM-DD + boşluk + şifre
             var today = DateTime.Now.ToString("yyyy-MM-dd");
-            var dataToHash = today + plainPassword;
+            var dataToHash = today + " " + plainPassword;  // ✅ Boşluk karakteri eklendi
             
             // MD5 hash hesapla
             using var md5 = MD5.Create();
@@ -116,15 +116,16 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 CalismaYili = _settings.CalismaYili,
                 FirmaKodu = _settings.FirmaKodu,
                 KullaniciKodu = _settings.KullaniciKodu,
-                Sifre = GenerateDailyPasswordHash(_settings.Sifre),
-                FirmaNo = _settings.DefaultFirmaNo,
-                SubeNo = _settings.DefaultSubeNo
+                Sifre = GenerateDailyPasswordHash(_settings.Sifre)
+                // NOT: FirmaNo ve SubeNo Mikro objesinin içinde değil, 
+                // request root seviyesinde veya hiç gönderilmez
             };
         }
 
         /// <summary>
         /// MikroAPI V2 formatında request body oluşturur.
-        /// { "Mikro": { auth bilgileri + ek veriler } }
+        /// DOĞRU FORMAT: { "Mikro": { auth }, "Index": 0, "Size": "100", ... }
+        /// Auth bilgileri Mikro içinde, diğer parametreler ROOT seviyede olmalı!
         /// </summary>
         private object CreateMikroRequest(object? additionalData = null)
         {
@@ -136,20 +137,14 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 return new { Mikro = auth };
             }
             
-            // Ek veriyi auth wrapper'a merge et
-            // Not: Bu basit bir yaklaşım, karmaşık merge için reflection gerekebilir
-            var merged = new Dictionary<string, object?>
+            // MikroAPI V2 formatı: Auth bilgileri Mikro içinde, diğer parametreler ROOT seviyede
+            // { "Mikro": { auth }, "Index": 0, "Size": "100", "Sort": "sto_kod", ... }
+            var rootLevel = new Dictionary<string, object?>
             {
-                ["ApiKey"] = auth.ApiKey,
-                ["CalismaYili"] = auth.CalismaYili,
-                ["FirmaKodu"] = auth.FirmaKodu,
-                ["KullaniciKodu"] = auth.KullaniciKodu,
-                ["Sifre"] = auth.Sifre,
-                ["FirmaNo"] = auth.FirmaNo,
-                ["SubeNo"] = auth.SubeNo
+                ["Mikro"] = auth
             };
 
-            // Ek veriyi dictionary'ye dönüştür ve ekle
+            // Ek veriyi dictionary'ye dönüştür ve ROOT seviyeye ekle
             var additionalDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
                 JsonSerializer.Serialize(additionalData, _jsonOptions), _jsonOptions);
             
@@ -157,11 +152,15 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             {
                 foreach (var kvp in additionalDict)
                 {
-                    merged[kvp.Key] = kvp.Value;
+                    // Null değerleri atlama
+                    if (kvp.Value != null)
+                    {
+                        rootLevel[kvp.Key] = kvp.Value;
+                    }
                 }
             }
 
-            return new { Mikro = merged };
+            return rootLevel;
         }
 
         // ==================== HTTP İSTEK GÖNDERİM ====================
@@ -1152,6 +1151,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
     /// <summary>
     /// MikroAPI V2 için authentication wrapper sınıfı.
     /// Tüm V2 endpoint'leri request body'de bu yapıyı bekler.
+    /// Sadece 5 alan içermelidir: ApiKey, CalismaYili, FirmaKodu, KullaniciKodu, Sifre
     /// </summary>
     internal class MikroAuthWrapper
     {
@@ -1169,11 +1169,5 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         
         /// <summary>Günlük MD5 hash'lenmiş şifre</summary>
         public string Sifre { get; set; } = string.Empty;
-        
-        /// <summary>Firma numarası (varsayılan: 0)</summary>
-        public int FirmaNo { get; set; } = 0;
-        
-        /// <summary>Şube numarası (varsayılan: 0)</summary>
-        public int SubeNo { get; set; } = 0;
     }
 }

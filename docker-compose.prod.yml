@@ -45,11 +45,12 @@ services:
       - Jwt__Audience=ECommerceClient
       # ====== MİKRO ERP ENTEGRASYON AYARLARI ======
       # Docker container içinden sunucu host'a erişim: host.docker.internal:8094
+      # Hash Formatı: MD5(YYYY-MM-DD şifre) - Kod her gün otomatik hash üretir
       - MikroSettings__ApiUrl=https://host.docker.internal:8094
       - MikroSettings__ApiKey=PZDEzh44zNcY2WKpOaoPHV5+mlVG1420SPXn3QBuVqcO6MvOk1j6NlSSFONwtTJV0ovN+6CjB6IKfPYN4TLXmjs6ESUxcwa2Yp+abW9+lac=
-      - MikroSettings__FirmaKodu=MIKROFLY
-      - MikroSettings__KullaniciKodu=SRV
-      - MikroSettings__Sifre=TeknikPc**48*bs!348**
+      - MikroSettings__FirmaKodu=Ze-Me 2023
+      - MikroSettings__KullaniciKodu=Golkoy2
+      - MikroSettings__Sifre=ZeMe@48.golkoy2
       - MikroSettings__CalismaYili=2026
       - MikroSettings__DefaultDepoNo=1
       - MikroSettings__DefaultSubeNo=0
