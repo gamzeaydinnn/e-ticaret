@@ -19,10 +19,10 @@ namespace ECommerce.API.Controllers.Admin
 {
     /// <summary>
     /// Sistemdeki izinlerin yönetimi için API endpoint'leri.
-    /// Bu controller sadece SuperAdmin tarafından kullanılabilir.
+    /// AllStaff erişebilir, ince taneli kontrol [HasPermission] ile yapılır.
     /// </summary>
     [ApiController]
-    [Authorize(Roles = Roles.SuperAdmin)]
+    [Authorize(Roles = Roles.AllStaff)]
     [Route("api/admin/permissions")]
     public class AdminPermissionsController : ControllerBase
     {
@@ -47,6 +47,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="groupByModule">True ise izinleri modüle göre gruplar</param>
         /// <returns>İzin listesi</returns>
         [HttpGet]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetAllPermissions([FromQuery] bool groupByModule = false)
         {
             try
@@ -119,6 +120,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="id">İzin ID'si</param>
         /// <returns>İzin detayları</returns>
         [HttpGet("{id:int}")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetPermissionById(int id)
         {
             try
@@ -160,6 +162,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="name">İzin adı (örn: "products.create")</param>
         /// <returns>İzin detayları</returns>
         [HttpGet("by-name/{name}")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetPermissionByName(string name)
         {
             try
@@ -200,6 +203,7 @@ namespace ECommerce.API.Controllers.Admin
         /// </summary>
         /// <returns>Modül listesi</returns>
         [HttpGet("modules")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetModules()
         {
             try
@@ -239,6 +243,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="module">Modül adı (örn: "Products")</param>
         /// <returns>Modüldeki izinler</returns>
         [HttpGet("by-module/{module}")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetPermissionsByModule(string module)
         {
             try
@@ -279,6 +284,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="id">İzin ID'si</param>
         /// <returns>Güncellenmiş izin durumu</returns>
         [HttpPut("{id:int}/toggle-status")]
+        [HasPermission(Permissions.Roles.ManagePermissions)]
         public async Task<IActionResult> TogglePermissionStatus(int id)
         {
             try
@@ -333,6 +339,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="userId">Kullanıcı ID'si</param>
         /// <returns>Kullanıcının izinleri</returns>
         [HttpGet("user/{userId:int}")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetUserPermissions(int userId)
         {
             try
@@ -392,6 +399,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="permission">Kontrol edilecek izin adı</param>
         /// <returns>İzin durumu</returns>
         [HttpGet("check/{userId:int}")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> CheckUserPermission(int userId, [FromQuery] string permission)
         {
             try
@@ -426,6 +434,7 @@ namespace ECommerce.API.Controllers.Admin
         /// </summary>
         /// <returns>İstatistikler</returns>
         [HttpGet("statistics")]
+        [HasPermission(Permissions.Roles.View)]
         public async Task<IActionResult> GetStatistics()
         {
             try

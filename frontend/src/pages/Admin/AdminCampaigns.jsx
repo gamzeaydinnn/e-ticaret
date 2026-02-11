@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { AdminService } from "../../services/adminService";
+import api from "../../services/api";
+import { sanitizeInput, sanitizeNumber } from "../../utils/inputSanitizer";
 
 // =============================================================================
 // Kampanya Yönetimi - Admin Panel
@@ -72,6 +75,8 @@ const initialForm = {
   priority: "100",
   isStackable: true,
   targetIds: [],
+  // Kampanya görseli (opsiyonel)
+  imageUrl: null,
   // Geriye dönük uyumluluk
   conditionJson: "",
   rewardType: "Percent",
@@ -137,11 +142,17 @@ export default function AdminCampaigns() {
   const [modalLoading, setModalLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(initialForm);
+  const [submitted, setSubmitted] = useState(false);
 
   // Ürün ve kategori listeleri (hedef seçimi için)
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
+
+  // Kampanya görseli state'leri (opsiyonel görsel yükleme)
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // =========================================================================
   // KAMPANYA ÖNİZLEME STATE'LERİ
@@ -341,10 +352,84 @@ export default function AdminCampaigns() {
     return products.filter((p) => form.targetIds?.includes(p.id));
   }, [products, form.targetIds]);
 
+  // =========================================================================
+  // KAMPANYA GÖRSELİ FONKSİYONLARI (Opsiyonel)
+  // =========================================================================
+
+  /**
+   * Görsel dosya seçimi handler - dosya tipi ve boyut validasyonu yapar
+   */
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Dosya tipi validasyonu
+    const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      alert("Desteklenen dosya türleri: JPG, PNG, GIF, WebP");
+      return;
+    }
+
+    // Dosya boyutu validasyonu (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Dosya boyutu maksimum 10MB olabilir.");
+      return;
+    }
+
+    setImageFile(file);
+
+    // Yerel önizleme oluştur
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  /**
+   * Seçilen görseli API'ye yükler ve imageUrl döndürür
+   * @returns {string|null} Yüklenen görselin URL'si veya null
+   */
+  const uploadImage = async () => {
+    if (!imageFile) return null;
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", imageFile);
+
+      const response = await api.post(
+        "/api/admin/campaigns/upload-image",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      return response?.imageUrl || response?.data?.imageUrl || null;
+    } catch (err) {
+      console.error("Görsel yükleme hatası:", err);
+      alert("Görsel yüklenirken hata oluştu.");
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  /**
+   * Seçilen veya mevcut görseli kaldırır
+   */
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    // Form'daki mevcut imageUrl'yi de temizle (düzenleme durumunda)
+    setForm((prev) => ({ ...prev, imageUrl: null }));
+  };
+
   // Modal açma - Yeni kampanya
   function openCreateModal() {
     setEditingId(null);
     setForm(initialForm);
+    setImageFile(null);
+    setImagePreview(null);
     setProductSearchQuery(""); // Arama sıfırla
     setProductPage(1); // Sayfalama sıfırla
     setShowModal(true);
@@ -356,6 +441,8 @@ export default function AdminCampaigns() {
     setEditingId(campaign.id);
     setShowModal(true);
     setModalLoading(true);
+    setImageFile(null);
+    setImagePreview(null);
     setProductSearchQuery(""); // Arama sıfırla
     setProductPage(1); // Sayfalama sıfırla
 
@@ -380,6 +467,8 @@ export default function AdminCampaigns() {
         priority: detail.priority?.toString() || "100",
         isStackable: detail.isStackable ?? true,
         targetIds: detail.targets?.map((t) => t.targetId) || [],
+        // Kampanya görseli (opsiyonel)
+        imageUrl: detail.imageUrl || null,
         // Geriye dönük uyumluluk
         conditionJson: detail.conditionJson || "",
         rewardType: detail.rewardType || "Percent",
@@ -400,8 +489,11 @@ export default function AdminCampaigns() {
     setModalLoading(false);
     setEditingId(null);
     setForm(initialForm);
+    setImageFile(null);
+    setImagePreview(null);
     setProductSearchQuery(""); // Arama sıfırla
     setProductPage(1); // Sayfalama sıfırla
+    setSubmitted(false); // Validation state'ini sıfırla
   }
 
   // =========================================================================
@@ -533,40 +625,103 @@ export default function AdminCampaigns() {
     }
 
     return {
-      name: (form.name || "").trim(),
-      description: form.description?.trim() || null,
+      // String alanlar - XSS korumalı sanitization
+      name: sanitizeInput(form.name || "", {
+        preventXSS: true,
+        normalizeWhitespace: true,
+        maxLength: 200,
+      }),
+      description: form.description
+        ? sanitizeInput(form.description, {
+            preventXSS: true,
+            maxLength: 1000,
+          })
+        : null,
+
+      // Tarihler
       startDate: new Date(`${form.startDate}T00:00:00`),
       endDate: new Date(`${form.endDate}T23:59:59`),
       isActive: !!form.isActive,
-      // Yeni alanlar
+
+      // Yeni alanlar - Sayısal değerler sanitize edilmiş
       type: typeNum,
       targetType: targetTypeNum,
-      discountValue: discountValue,
+      discountValue: sanitizeNumber(discountValue, {
+        min: 0,
+        max: typeNum === 0 ? 100 : 1000000,
+        decimals: 2,
+      }),
       maxDiscountAmount: form.maxDiscountAmount
-        ? parseFloat(form.maxDiscountAmount)
+        ? sanitizeNumber(form.maxDiscountAmount, {
+            min: 0,
+            max: 1000000,
+            decimals: 2,
+          })
         : null,
-      minCartTotal: form.minCartTotal ? parseFloat(form.minCartTotal) : null,
-      minQuantity: form.minQuantity ? parseInt(form.minQuantity) : null,
-      buyQty: typeNum === 2 ? parseInt(form.buyQty) : null,
-      payQty: typeNum === 2 ? parseInt(form.payQty) : null,
-      priority: parseInt(form.priority) || 100,
+      minCartTotal: form.minCartTotal
+        ? sanitizeNumber(form.minCartTotal, {
+            min: 0,
+            max: 1000000,
+            decimals: 2,
+          })
+        : null,
+      minQuantity: form.minQuantity
+        ? sanitizeNumber(form.minQuantity, {
+            min: 1,
+            max: 10000,
+            decimals: 0,
+          })
+        : null,
+      buyQty:
+        typeNum === 2
+          ? sanitizeNumber(form.buyQty, { min: 2, max: 100, decimals: 0 })
+          : null,
+      payQty:
+        typeNum === 2
+          ? sanitizeNumber(form.payQty, { min: 1, max: 99, decimals: 0 })
+          : null,
+      priority: sanitizeNumber(form.priority, {
+        min: 1,
+        max: 1000,
+        decimals: 0,
+        default: 100,
+      }),
       isStackable: !!form.isStackable,
       targetIds: targetTypeNum !== 0 ? form.targetIds : null,
+
       // Geriye dönük uyumluluk
-      conditionJson: form.conditionJson?.trim() || null,
+      conditionJson: form.conditionJson
+        ? sanitizeInput(form.conditionJson, {
+            preventXSS: true,
+            maxLength: 5000,
+          })
+        : null,
       rewardType: form.rewardType || "Percent",
       rewardValue: discountValue,
+
+      // Kampanya görseli (opsiyonel) - URL sanitization
+      imageUrl: form.imageUrl || null,
     };
   }
 
   // Form gönderimi
   async function handleSubmit(event) {
     event.preventDefault();
+    setSubmitted(true);
     try {
       if (!form.name.trim()) {
         throw new Error("Kampanya adı zorunludur.");
       }
       const payload = buildPayload();
+
+      // Opsiyonel görsel yükleme - dosya seçildiyse yükle
+      if (imageFile) {
+        const uploadedUrl = await uploadImage();
+        if (uploadedUrl) {
+          payload.imageUrl = uploadedUrl;
+        }
+        // Yükleme başarısız olsa bile kampanya kaydedilsin (görsel opsiyonel)
+      }
 
       if (editingId) {
         await AdminService.updateCampaign(editingId, payload);
@@ -870,17 +1025,44 @@ export default function AdminCampaigns() {
                           className="px-2 fw-semibold"
                           style={{ maxWidth: "200px" }}
                         >
-                          <div className="text-truncate" title={c.name}>
-                            {c.name}
+                          <div className="d-flex align-items-center gap-2">
+                            {c.imageUrl && (
+                              <img
+                                src={c.imageUrl}
+                                alt=""
+                                style={{
+                                  width: "36px",
+                                  height: "36px",
+                                  objectFit: "cover",
+                                  borderRadius: "6px",
+                                  border: "1px solid #e5e7eb",
+                                  flexShrink: 0,
+                                }}
+                                onError={(e) => {
+                                  e.target.style.display = "none";
+                                }}
+                              />
+                            )}
+                            <div>
+                              <div className="text-truncate" title={c.name}>
+                                {DOMPurify.sanitize(c.name, {
+                                  ALLOWED_TAGS: [],
+                                  KEEP_CONTENT: true,
+                                })}
+                              </div>
+                              {c.description && (
+                                <small
+                                  className="text-muted d-block text-truncate"
+                                  style={{ fontSize: "0.7rem" }}
+                                >
+                                  {DOMPurify.sanitize(c.description, {
+                                    ALLOWED_TAGS: [],
+                                    KEEP_CONTENT: true,
+                                  })}
+                                </small>
+                              )}
+                            </div>
                           </div>
-                          {c.description && (
-                            <small
-                              className="text-muted d-block text-truncate"
-                              style={{ fontSize: "0.7rem" }}
-                            >
-                              {c.description}
-                            </small>
-                          )}
                         </td>
                         <td data-label="Tür" className="px-2">
                           <span
@@ -918,14 +1100,23 @@ export default function AdminCampaigns() {
                           </div>
                         </td>
                         <td data-label="Durum" className="px-2">
-                          <span
-                            className={`badge ${c.isActive ? "bg-success" : "bg-secondary"}`}
+                          <button
+                            type="button"
+                            className={`btn btn-sm badge border-0 ${c.isActive ? "bg-success" : "bg-secondary"}`}
                             style={{ fontSize: "0.7rem", cursor: "pointer" }}
                             onClick={() => handleToggleStatus(c.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleToggleStatus(c.id);
+                              }
+                            }}
+                            aria-label={`Kampanya durumunu ${c.isActive ? "pasif" : "aktif"} yap`}
+                            aria-pressed={c.isActive}
                             title="Durumu değiştirmek için tıklayın"
                           >
                             {c.isActive ? "Aktif" : "Pasif"}
-                          </span>
+                          </button>
                         </td>
                         <td data-label="İşlem" className="px-2">
                           <div className="d-flex gap-1 justify-content-end">
@@ -1038,6 +1229,7 @@ export default function AdminCampaigns() {
                             <div className="row g-2">
                               <div className="col-12">
                                 <label
+                                  htmlFor="campaign-name"
                                   className="form-label fw-semibold mb-1"
                                   style={{ fontSize: "0.85rem" }}
                                 >
@@ -1045,6 +1237,7 @@ export default function AdminCampaigns() {
                                   <span className="text-danger">*</span>
                                 </label>
                                 <input
+                                  id="campaign-name"
                                   className="form-control"
                                   style={{ minHeight: "44px" }}
                                   name="name"
@@ -1052,24 +1245,183 @@ export default function AdminCampaigns() {
                                   onChange={onFormChange}
                                   required
                                   placeholder="Örn: Yaz İndirimi"
+                                  aria-required="true"
+                                  aria-invalid={!form.name && submitted}
+                                  aria-describedby={
+                                    !form.name && submitted
+                                      ? "name-error"
+                                      : undefined
+                                  }
                                 />
+                                {!form.name && submitted && (
+                                  <div
+                                    id="name-error"
+                                    className="text-danger small mt-1"
+                                    role="alert"
+                                  >
+                                    Kampanya adı zorunludur
+                                  </div>
+                                )}
                               </div>
                               <div className="col-12">
                                 <label
+                                  htmlFor="campaign-description"
                                   className="form-label fw-semibold mb-1"
                                   style={{ fontSize: "0.85rem" }}
                                 >
                                   Açıklama
                                 </label>
                                 <textarea
+                                  id="campaign-description"
                                   className="form-control"
                                   rows="2"
                                   name="description"
                                   value={form.description}
                                   onChange={onFormChange}
                                   placeholder="Kampanya açıklaması (opsiyonel)"
+                                  aria-label="Kampanya açıklaması"
                                 />
                               </div>
+
+                              {/* Kampanya Görseli (Opsiyonel) */}
+                              <div className="col-12">
+                                <label
+                                  className="form-label fw-semibold mb-1"
+                                  style={{ fontSize: "0.85rem" }}
+                                >
+                                  <i className="fas fa-image me-1"></i> Kampanya
+                                  Görseli
+                                  <span
+                                    className="text-muted fw-normal ms-1"
+                                    style={{ fontSize: "0.8rem" }}
+                                  >
+                                    (Opsiyonel)
+                                  </span>
+                                </label>
+
+                                {imagePreview || form.imageUrl ? (
+                                  <div
+                                    style={{
+                                      position: "relative",
+                                      marginBottom: "10px",
+                                    }}
+                                  >
+                                    <img
+                                      src={imagePreview || form.imageUrl}
+                                      alt="Kampanya görseli"
+                                      style={{
+                                        width: "100%",
+                                        maxHeight: "200px",
+                                        objectFit: "cover",
+                                        borderRadius: "12px",
+                                        border: "2px solid #e5e7eb",
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-danger"
+                                      style={{
+                                        position: "absolute",
+                                        top: "8px",
+                                        right: "8px",
+                                        borderRadius: "50%",
+                                        width: "32px",
+                                        height: "32px",
+                                        padding: 0,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                      }}
+                                      onClick={removeImage}
+                                    >
+                                      <i className="fas fa-times"></i>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      border: "2px dashed #d1d5db",
+                                      borderRadius: "12px",
+                                      padding: "24px",
+                                      textAlign: "center",
+                                      cursor: "pointer",
+                                      backgroundColor: "#f9fafb",
+                                      transition: "all 0.2s ease",
+                                    }}
+                                    onClick={() =>
+                                      document
+                                        .getElementById("campaign-image-input")
+                                        .click()
+                                    }
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.currentTarget.style.borderColor =
+                                        "#f97316";
+                                    }}
+                                    onDragLeave={(e) => {
+                                      e.currentTarget.style.borderColor =
+                                        "#d1d5db";
+                                    }}
+                                    onDrop={(e) => {
+                                      e.preventDefault();
+                                      e.currentTarget.style.borderColor =
+                                        "#d1d5db";
+                                      const file = e.dataTransfer.files[0];
+                                      if (file) {
+                                        const fakeEvent = {
+                                          target: { files: [file] },
+                                        };
+                                        handleImageChange(fakeEvent);
+                                      }
+                                    }}
+                                  >
+                                    <i
+                                      className="fas fa-cloud-upload-alt fa-2x mb-2"
+                                      style={{ color: "#9ca3af" }}
+                                    ></i>
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        color: "#6b7280",
+                                        fontSize: "0.9rem",
+                                      }}
+                                    >
+                                      Görsel yüklemek için tıklayın veya
+                                      sürükleyin
+                                    </p>
+                                    <p
+                                      style={{
+                                        margin: 0,
+                                        color: "#9ca3af",
+                                        fontSize: "0.75rem",
+                                      }}
+                                    >
+                                      JPG, PNG, WebP - Maks 10MB
+                                    </p>
+                                  </div>
+                                )}
+
+                                <input
+                                  id="campaign-image-input"
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/gif,image/webp"
+                                  style={{ display: "none" }}
+                                  onChange={handleImageChange}
+                                />
+
+                                {uploadingImage && (
+                                  <div className="text-center mt-2">
+                                    <div
+                                      className="spinner-border spinner-border-sm text-primary me-2"
+                                      role="status"
+                                    ></div>
+                                    <small className="text-muted">
+                                      Görsel yükleniyor...
+                                    </small>
+                                  </div>
+                                )}
+                              </div>
+
                               <div className="col-6">
                                 <label
                                   className="form-label fw-semibold mb-1"
@@ -1801,12 +2153,21 @@ export default function AdminCampaigns() {
                       minHeight: "44px",
                       minWidth: "120px",
                     }}
-                    disabled={modalLoading}
+                    disabled={modalLoading || uploadingImage}
                   >
-                    <i
-                      className={`fas ${editingId ? "fa-save" : "fa-plus"} me-1`}
-                    ></i>
-                    {editingId ? "Güncelle" : "Oluştur"}
+                    {uploadingImage ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1"></span>
+                        Yükleniyor...
+                      </>
+                    ) : (
+                      <>
+                        <i
+                          className={`fas ${editingId ? "fa-save" : "fa-plus"} me-1`}
+                        ></i>
+                        {editingId ? "Güncelle" : "Oluştur"}
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

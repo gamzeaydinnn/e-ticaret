@@ -30,6 +30,7 @@ namespace ECommerce.API.Controllers
         private readonly ECommerce.Core.Interfaces.ITokenDenyList _denyList;
         private readonly ECommerce.Business.Services.Interfaces.ILoginRateLimitService _loginRateLimitService;
         private readonly IPermissionService _permissionService;
+        private readonly IWebHostEnvironment _env;
 
         public AuthController(
             IAuthService authService, 
@@ -37,7 +38,8 @@ namespace ECommerce.API.Controllers
             UserManager<User> userManager, 
             ECommerce.Core.Interfaces.ITokenDenyList denyList, 
             ECommerce.Business.Services.Interfaces.ILoginRateLimitService loginRateLimitService,
-            IPermissionService permissionService)
+            IPermissionService permissionService,
+            IWebHostEnvironment env)
         {
             _authService = authService;
             _config = config;
@@ -45,6 +47,69 @@ namespace ECommerce.API.Controllers
             _denyList = denyList;
             _loginRateLimitService = loginRateLimitService;
             _permissionService = permissionService;
+            _env = env;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GÜVENLİK: httpOnly Cookie Yönetimi
+        // XSS saldırılarına karşı koruma - JavaScript token'a erişemez
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        /// <summary>
+        /// JWT token'ları güvenli httpOnly cookie olarak ayarlar
+        /// </summary>
+        private void SetAuthCookies(string accessToken, string refreshToken, int accessTokenMinutes = 60, int refreshTokenDays = 7)
+        {
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true, // JavaScript erişemez - XSS koruması
+                Secure = !_env.IsDevelopment(), // Production'da sadece HTTPS
+                SameSite = SameSiteMode.Lax, // CSRF koruması (Strict bazı redirect durumlarında sorun yaratabilir)
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddMinutes(accessTokenMinutes)
+            };
+
+            Response.Cookies.Append("access_token", accessToken, cookieOptions);
+
+            // Refresh token için ayrı cookie (daha uzun ömürlü)
+            var refreshCookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = !_env.IsDevelopment(),
+                SameSite = SameSiteMode.Lax,
+                Path = "/api/auth", // Sadece auth endpointlerinde gönderilsin
+                Expires = DateTimeOffset.UtcNow.AddDays(refreshTokenDays)
+            };
+
+            Response.Cookies.Append("refresh_token", refreshToken, refreshCookieOptions);
+        }
+
+        /// <summary>
+        /// Auth cookie'lerini temizler (logout için)
+        /// </summary>
+        private void ClearAuthCookies()
+        {
+            var expiredOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = !_env.IsDevelopment(),
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddDays(-1) // Geçmiş tarih = cookie silinir
+            };
+
+            Response.Cookies.Append("access_token", "", expiredOptions);
+            
+            var refreshExpiredOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = !_env.IsDevelopment(),
+                SameSite = SameSiteMode.Lax,
+                Path = "/api/auth",
+                Expires = DateTimeOffset.UtcNow.AddDays(-1)
+            };
+            
+            Response.Cookies.Append("refresh_token", "", refreshExpiredOptions);
         }
 
         [HttpPost("register")]
@@ -167,8 +232,13 @@ namespace ECommerce.API.Controllers
                 // JWT üret
                 var (token, refreshToken) = await _authService.IssueTokensForUserAsync(user, HttpContext.Connection.RemoteIpAddress?.ToString());
 
+                // GÜVENLİK: Token'ları httpOnly cookie olarak ayarla
+                SetAuthCookies(token, refreshToken);
+
                 var respUser = new { id = user.Id, email = user.Email, firstName = user.FirstName, lastName = user.LastName, name = user.FullName, role = user.Role };
 
+                // NOT: Token'lar artık response body'de değil, cookie'de
+                // Frontend geriye uyumluluk için token'ları da alıyor olabilir
                 return Ok(new { token, refreshToken, user = respUser, success = true });
             }
             catch (Exception ex)
@@ -192,6 +262,9 @@ namespace ECommerce.API.Controllers
                 }
 
                 var (token, refreshToken) = await _authService.LoginAsync(dto);
+
+                // GÜVENLİK: Token'ları httpOnly cookie olarak ayarla
+                SetAuthCookies(token, refreshToken);
 
                 try
                 {
@@ -259,15 +332,31 @@ namespace ECommerce.API.Controllers
         }
         [HttpPost("refresh")]
         [AllowAnonymous]
-        public async Task<IActionResult> Refresh(TokenRefreshDto dto)
+        public async Task<IActionResult> Refresh(TokenRefreshDto? dto)
         {
             try
             {
-                var (newToken, newRefreshToken) = await _authService.RefreshTokenAsync(dto.Token, dto.RefreshToken);
+                // GÜVENLİK: Önce cookie'lerden token almayı dene, yoksa body'den al
+                var accessToken = Request.Cookies["access_token"] ?? dto?.Token;
+                var refreshToken = Request.Cookies["refresh_token"] ?? dto?.RefreshToken;
+
+                if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+                {
+                    return BadRequest(new { Message = "Token bilgileri eksik" });
+                }
+
+                var (newToken, newRefreshToken) = await _authService.RefreshTokenAsync(accessToken, refreshToken);
+                
+                // GÜVENLİK: Yeni token'ları httpOnly cookie olarak ayarla
+                SetAuthCookies(newToken, newRefreshToken);
+                
+                // Geriye uyumluluk için body'de de dön
                 return Ok(new { Token = newToken, RefreshToken = newRefreshToken });
             }
             catch (UnauthorizedAccessException ex)
             {
+                // Geçersiz refresh token - cookie'leri temizle
+                ClearAuthCookies();
                 return Unauthorized(new { Message = ex.Message });
             }
             catch (Exception ex)
@@ -356,10 +445,15 @@ namespace ECommerce.API.Controllers
                     // ignore deny-list errors during logout to avoid blocking sign-out
                 }
 
+                // GÜVENLİK: httpOnly cookie'leri temizle
+                ClearAuthCookies();
+
                 return Ok(new { success = true, message = "Başarıyla çıkış yapıldı!" });
             }
             catch (Exception ex)
             {
+                // Hata olsa bile cookie'leri temizle
+                ClearAuthCookies();
                 return StatusCode(500, new { success = false, message = "Çıkış sırasında bir hata oluştu!", error = ex.Message });
             }
         }

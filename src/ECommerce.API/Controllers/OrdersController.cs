@@ -16,15 +16,18 @@ namespace ECommerce.API.Controllers
     public class OrdersController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IRefundService _refundService;
         private readonly IRealTimeNotificationService _notificationService;
         private readonly ILogger<OrdersController> _logger;
 
         public OrdersController(
             IOrderService orderService,
+            IRefundService refundService,
             IRealTimeNotificationService notificationService,
             ILogger<OrdersController> logger)
         {
             _orderService = orderService;
+            _refundService = refundService;
             _notificationService = notificationService;
             _logger = logger;
         }
@@ -186,7 +189,13 @@ namespace ECommerce.API.Controllers
             }
             catch (System.Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                _logger.LogError(ex, "[CHECKOUT] Sipariş oluşturma hatası");
+                // Sadece business/validation exception mesajlarını kullanıcıya göster
+                var userMessage = (ex is ECommerce.Core.Exceptions.BusinessException
+                                || ex is ECommerce.Core.Exceptions.ValidationException)
+                    ? ex.Message
+                    : "Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.";
+                return BadRequest(new { message = userMessage });
             }
         }
 
@@ -250,6 +259,93 @@ namespace ECommerce.API.Controllers
             }
             
             return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
+        }
+
+        // ============================================================================
+        // İADE TALEBİ ENDPOINTLERİ
+        // Müşteri sipariş durumuna göre iade talebi oluşturabilir.
+        // Kargo çıkmadan → Otomatik iptal + para iadesi
+        // Kargo çıktıktan sonra → Admin onayı bekleyen iade talebi
+        // ============================================================================
+
+        /// <summary>
+        /// Müşteri iade talebi oluşturur.
+        /// Sipariş durumuna göre otomatik iptal veya admin onaylı iade akışı başlatır.
+        /// </summary>
+        [HttpPost("{orderId}/refund-request")]
+        [Authorize]
+        public async Task<IActionResult> CreateRefundRequest(
+            int orderId, [FromBody] CreateRefundRequestDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Reason))
+                return BadRequest(new { success = false, message = "İade sebebi zorunludur." });
+
+            var userId = User.GetUserId();
+            if (userId <= 0)
+                return Unauthorized(new { success = false, message = "Giriş yapmanız gerekiyor." });
+
+            var result = await _refundService.CreateRefundRequestAsync(orderId, userId, dto);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = result.Message,
+                    errorCode = result.ErrorCode,
+                    contactInfo = new
+                    {
+                        whatsapp = "+905334783072",
+                        phone = "+90 533 478 30 72",
+                        email = "golturkbuku@golkoygurme.com.tr"
+                    }
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                autoCancelled = result.AutoCancelled,
+                refundRequest = result.RefundRequest,
+                contactInfo = result.ContactInfo
+            });
+        }
+
+        /// <summary>
+        /// Kullanıcının iade taleplerini listeler.
+        /// </summary>
+        [HttpGet("refund-requests")]
+        [Authorize]
+        public async Task<IActionResult> GetMyRefundRequests()
+        {
+            var userId = User.GetUserId();
+            if (userId <= 0)
+                return Unauthorized(new { success = false, message = "Giriş yapmanız gerekiyor." });
+
+            var requests = await _refundService.GetUserRefundRequestsAsync(userId);
+            return Ok(new { success = true, data = requests });
+        }
+
+        /// <summary>
+        /// Belirli bir siparişin iade taleplerini getirir.
+        /// </summary>
+        [HttpGet("{orderId}/refund-requests")]
+        [Authorize]
+        public async Task<IActionResult> GetOrderRefundRequests(int orderId)
+        {
+            // Sipariş sahiplik kontrolü
+            var order = await _orderService.GetByIdAsync(orderId);
+            if (order == null)
+                return NotFound(new { success = false, message = "Sipariş bulunamadı." });
+
+            var userId = User.GetUserId();
+            var isAdminLike = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SuperAdmin);
+            if (!isAdminLike && order.UserId != userId)
+                return Forbid();
+
+            var requests = await _refundService.GetRefundRequestsByOrderAsync(orderId);
+            return Ok(new { success = true, data = requests });
         }
 
         // ============================================================================

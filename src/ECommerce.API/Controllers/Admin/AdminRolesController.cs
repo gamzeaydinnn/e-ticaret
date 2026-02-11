@@ -21,7 +21,7 @@ namespace ECommerce.API.Controllers.Admin
     /// Rol ve rol-izin ilişkilerinin yönetimi için API endpoint'leri.
     /// </summary>
     [ApiController]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     [Route("api/admin/roles")]
     public class AdminRolesController : ControllerBase
     {

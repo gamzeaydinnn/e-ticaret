@@ -1,9 +1,10 @@
 // Kategoriye göre ürün listeleme (mevcut mimariye uygun)
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
 import categoryServiceReal from "../services/categoryServiceReal";
+import { sanitizeUrlParam } from "../utils/securityHelpers";
 
 // Slug oluşturma fonksiyonu
 const createSlug = (name) => {
@@ -22,12 +23,22 @@ const createSlug = (name) => {
 };
 
 export default function Category() {
-  const { slug } = useParams();
+  const { slug: rawSlug } = useParams();
+  // GÜVENLİK: URL parametresini sanitize et
+  const slug = useMemo(() => sanitizeUrlParam(rawSlug), [rawSlug]);
+
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const loadCategory = useCallback(async () => {
+    // GÜVENLİK: Boş veya geçersiz slug kontrolü
+    if (!slug) {
+      setError("Geçersiz kategori.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -87,7 +98,7 @@ export default function Category() {
   }, [loadCategory]);
 
   return (
-    <div className="container-fluid px-4 py-4">
+    <div className="py-4">
       <Helmet>
         {(() => {
           const siteUrl =
@@ -104,8 +115,8 @@ export default function Category() {
             <>
               <title>
                 {category?.name
-                  ? `${category.name} — Doğadan Sofranza`
-                  : "Kategori — Doğadan Sofranza"}
+                  ? `${category.name} — Gölköy Gurme`
+                  : "Kategori — Gölköy Gurme"}
               </title>
               <meta
                 name="description"
@@ -127,28 +138,32 @@ export default function Category() {
           );
         })()}
       </Helmet>
-      <div className="d-flex align-items-center justify-content-between mb-4">
-        <div>
-          <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
-            <i
-              className="fas fa-layer-group me-2"
-              style={{ color: "#f57c00" }}
-            ></i>
-            {category?.name || "Kategori"}
-          </h1>
-          {category?.description ? (
-            <div className="text-muted" style={{ maxWidth: 720 }}>
-              {category.description}
-            </div>
-          ) : null}
-        </div>
-      </div>
 
-      {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
+      {/* Başlık - ProductGrid ile aynı hizada */}
+      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 60px" }}>
+        <div className="d-flex align-items-center justify-content-between mb-4">
+          <div>
+            <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
+              <i
+                className="fas fa-layer-group me-2"
+                style={{ color: "#f57c00" }}
+              ></i>
+              {category?.name || "Kategori"}
+            </h1>
+            {category?.description ? (
+              <div className="text-muted" style={{ maxWidth: 720 }}>
+                {category.description}
+              </div>
+            ) : null}
+          </div>
         </div>
-      )}
+
+        {error && (
+          <div className="alert alert-danger" role="alert">
+            {error}
+          </div>
+        )}
+      </div>
 
       {/* Ürün listesi */}
       {category && <ProductGrid categoryId={category.id} showTitle={false} />}

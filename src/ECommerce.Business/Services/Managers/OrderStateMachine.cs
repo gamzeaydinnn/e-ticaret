@@ -248,6 +248,7 @@ namespace ECommerce.Business.Services.Managers
         {
             OrderStatus.New,       // Yeni sipariş - henüz işleme alınmadı
             OrderStatus.Pending,   // Ödeme bekleniyor
+            OrderStatus.Paid,      // Ödendi ama henüz onaylanmadı (POSNET reverse ile iade)
             OrderStatus.Confirmed  // Onaylandı ama henüz hazırlanmaya başlamadı
             // NOT: Preparing, Processing, Ready, ReadyForPickup, DeliveryFailed çıkarıldı
             // Bu durumlarda müşteri hizmetleriyle iletişime geçilmeli
@@ -256,6 +257,7 @@ namespace ECommerce.Business.Services.Managers
         // İade edilebilir durumlar
         private static readonly HashSet<OrderStatus> RefundableStates = new()
         {
+            OrderStatus.Paid,
             OrderStatus.Confirmed,
             OrderStatus.Preparing,
             OrderStatus.Processing,
@@ -285,17 +287,26 @@ namespace ECommerce.Business.Services.Managers
         {
             [OrderStatus.New] = "Yeni Sipariş",
             [OrderStatus.Pending] = "Ödeme Bekleniyor",
+            [OrderStatus.Paid] = "Ödendi",
             [OrderStatus.Confirmed] = "Onaylandı",
-            [OrderStatus.Processing] = "Hazırlanıyor",
+            [OrderStatus.Preparing] = "Hazırlanıyor",
+            [OrderStatus.Processing] = "İşleniyor",
+            [OrderStatus.Ready] = "Hazır",
             [OrderStatus.ReadyForPickup] = "Teslime Hazır",
+            [OrderStatus.Assigned] = "Kuryeye Atandı",
+            [OrderStatus.PickedUp] = "Kurye Teslim Aldı",
+            [OrderStatus.InTransit] = "Yolda",
             [OrderStatus.Shipped] = "Kargoya Verildi",
             [OrderStatus.OutForDelivery] = "Teslimat Yolunda",
             [OrderStatus.Delivered] = "Teslim Edildi",
+            [OrderStatus.Completed] = "Tamamlandı",
             [OrderStatus.DeliveryFailed] = "Teslimat Başarısız",
             [OrderStatus.DeliveryPaymentPending] = "Kapıda Ödeme Bekleniyor",
             [OrderStatus.Refunded] = "İade Edildi",
             [OrderStatus.PartialRefund] = "Kısmi İade Yapıldı",
-            [OrderStatus.Cancelled] = "İptal Edildi"
+            [OrderStatus.Cancelled] = "İptal Edildi",
+            [OrderStatus.PaymentFailed] = "Ödeme Başarısız",
+            [OrderStatus.ChargebackPending] = "Chargeback Bekleniyor"
         };
 
         public OrderStateMachine(
@@ -552,11 +563,20 @@ namespace ECommerce.Business.Services.Managers
                     {
                         order.CaptureStatus = CaptureStatus.Voided;
                     }
+
+                    // Kupon geri yükleme: İptal edilen siparişte kupon kullanılmışsa geri al
+                    await RestoreCouponIfUsedAsync(order,
+                        metadata?.ContainsKey("cancel_reason") == true
+                            ? $"Order Cancelled: {metadata["cancel_reason"]}"
+                            : "Order Cancelled");
                     break;
 
                 case OrderStatus.Refunded:
                     order.RefundedAt = DateTime.UtcNow;
                     order.CaptureStatus = CaptureStatus.Voided;
+
+                    // Kupon geri yükleme: İade edilen siparişte kupon kullanılmışsa geri al
+                    await RestoreCouponIfUsedAsync(order, "Order Refunded");
                     break;
             }
 
@@ -632,6 +652,111 @@ namespace ECommerce.Business.Services.Managers
             {
                 // Bildirim hatası ana işlemi etkilememeli
                 _logger.LogWarning(ex, "Durum değişikliği bildirimi gönderilemedi. OrderId={OrderId}", order.Id);
+            }
+        }
+
+        /// <summary>
+        /// Sipariş iptal veya iade edildiğinde kullanılan kuponu geri yükler.
+        ///
+        /// Yapılan işlemler:
+        /// 1. CouponUsage kaydını devre dışı bırak (IsActive = false)
+        /// 2. Coupon.UsageCount'u azalt
+        /// 3. İlgili bilgileri loglama (audit trail)
+        ///
+        /// NOT: Transaction içinde çalışır - ApplyStatusSpecificUpdatesAsync zaten transaction içindedir.
+        /// </summary>
+        /// <param name="order">İptal/iade edilen sipariş</param>
+        /// <param name="statusReason">İptal/iade nedeni (logların için)</param>
+        private async Task RestoreCouponIfUsedAsync(
+            ECommerce.Entities.Concrete.Order order,
+            string statusReason)
+        {
+            // Siparişte kupon kullanılmadıysa işlem yapma
+            if (string.IsNullOrWhiteSpace(order.AppliedCouponCode))
+            {
+                return;
+            }
+
+            try
+            {
+                // Kupon kodunu normalize et
+                var normalizedCode = order.AppliedCouponCode.Trim().ToUpperInvariant();
+
+                // Kuponu bul
+                var coupon = await _context.Set<ECommerce.Entities.Concrete.Coupon>()
+                    .FirstOrDefaultAsync(c => c.Code.ToUpper() == normalizedCode);
+
+                if (coupon == null)
+                {
+                    _logger.LogWarning(
+                        "Kupon geri yüklenemedi - kupon bulunamadı. " +
+                        "OrderId: {OrderId}, CouponCode: {CouponCode}",
+                        order.Id, order.AppliedCouponCode);
+                    return;
+                }
+
+                // CouponUsage kaydını bul ve devre dışı bırak
+                var couponUsage = await _context.Set<ECommerce.Entities.Concrete.CouponUsage>()
+                    .FirstOrDefaultAsync(cu =>
+                        cu.OrderId == order.Id &&
+                        cu.CouponId == coupon.Id &&
+                        cu.IsActive);
+
+                if (couponUsage != null)
+                {
+                    // Kupon kullanımını devre dışı bırak (soft delete)
+                    couponUsage.IsActive = false;
+                    couponUsage.UpdatedAt = DateTime.UtcNow;
+
+                    _logger.LogInformation(
+                        "CouponUsage kaydı devre dışı bırakıldı. " +
+                        "OrderId: {OrderId}, CouponCode: {CouponCode}, " +
+                        "UsageId: {UsageId}, Reason: {Reason}",
+                        order.Id, coupon.Code, couponUsage.Id, statusReason);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "CouponUsage kaydı bulunamadı ama kupon kodu siparişte kayıtlı. " +
+                        "OrderId: {OrderId}, CouponCode: {CouponCode}",
+                        order.Id, order.AppliedCouponCode);
+                }
+
+                // Kupon UsageCount'u azalt (en az 0 olmalı)
+                if (coupon.UsageCount > 0)
+                {
+                    coupon.UsageCount--;
+
+                    _logger.LogInformation(
+                        "Kupon UsageCount azaltıldı. " +
+                        "CouponId: {CouponId}, Code: {Code}, " +
+                        "OldCount: {OldCount}, NewCount: {NewCount}, " +
+                        "OrderId: {OrderId}, Reason: {Reason}",
+                        coupon.Id, coupon.Code,
+                        coupon.UsageCount + 1, coupon.UsageCount,
+                        order.Id, statusReason);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Kupon UsageCount zaten 0, azaltılamadı. " +
+                        "CouponId: {CouponId}, Code: {Code}, OrderId: {OrderId}",
+                        coupon.Id, coupon.Code, order.Id);
+                }
+
+                // SaveChanges YOK - transaction dışarıda handle ediyor (ApplyStatusSpecificUpdatesAsync caller'ı)
+            }
+            catch (Exception ex)
+            {
+                // Kupon geri yükleme hatası sipariş durumunu etkilememeli
+                // Ancak loglanmalı ve takip edilmeli
+                _logger.LogError(ex,
+                    "Kupon geri yükleme işlemi başarısız. " +
+                    "OrderId: {OrderId}, CouponCode: {CouponCode}, Reason: {Reason}",
+                    order.Id, order.AppliedCouponCode, statusReason);
+
+                // Exception fırlatmıyoruz - main transaction abort olmasın
+                // Manual müdahale gerekebilir, bu yüzden ERROR seviyesinde log
             }
         }
 

@@ -24,6 +24,12 @@ namespace ECommerce.Entities.Concrete
         public string? Description { get; set; }
 
         /// <summary>
+        /// Kampanya görseli URL'i (Opsiyonel)
+        /// Admin panelinden yüklenebilir, ana sayfada slider'da gösterilir
+        /// </summary>
+        public string? ImageUrl { get; set; }
+
+        /// <summary>
         /// Kampanya başlangıç tarihi (Bu tarihten önce uygulanmaz)
         /// </summary>
         public DateTime StartDate { get; set; }

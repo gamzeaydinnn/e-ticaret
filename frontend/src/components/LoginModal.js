@@ -243,10 +243,15 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setLoading(true);
 
     try {
+      // GÜVENLİK: Production'da REACT_APP_API_URL zorunlu olmalı
+      const apiUrl = process.env.REACT_APP_API_URL;
+      if (!apiUrl && process.env.NODE_ENV === "production") {
+        throw new Error(
+          "API URL yapılandırması eksik. Lütfen sistem yöneticisiyle iletişime geçin.",
+        );
+      }
       const response = await fetch(
-        `${
-          process.env.REACT_APP_API_URL || "http://localhost:5153"
-        }/api/auth/forgot-password`,
+        `${apiUrl || "https://localhost:5153"}/api/auth/forgot-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -766,29 +771,6 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
             ) : (
               <>
                 {/* ==================== GİRİŞ VE KAYIT FORMU ==================== */}
-                {/* Demo Bilgilendirme */}
-                <div
-                  className="alert d-flex align-items-center mb-3"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)",
-                    border: "none",
-                    borderRadius: "16px",
-                    padding: "16px",
-                  }}
-                >
-                  <i className="fas fa-info-circle me-2"></i>
-                  <div>
-                    <strong>Demo Hesap:</strong> demo@example.com / 123456
-                    <button
-                      className="btn btn-sm btn-outline-primary ms-2"
-                      type="button"
-                      onClick={fillDemoCredentials}
-                    >
-                      Otomatik Doldur
-                    </button>
-                  </div>
-                </div>
 
                 {error && (
                   <div className="alert alert-danger">

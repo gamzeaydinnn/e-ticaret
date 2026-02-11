@@ -121,15 +121,9 @@ export const AdminGuard = ({
     return <Navigate to="/" replace />;
   }
 
-  // İzin yüklemesi uzarsa StoreAttendant/Dispatcher için takılmayı engelle
-  if (
-    permissionsLoading &&
-    permissionWaitTimeout &&
-    (user.role === "StoreAttendant" || user.role === "Dispatcher")
-  ) {
-    return children;
-  }
-
+  // ========================================================================
+  // İzin yüklemesi bitmeden hiçbir rol için bypass yapılmaz (fail-closed).
+  // Timeout aşılırsa bile spinner gösterilmeye devam eder.
   // ========================================================================
   // KRİTİK: İlk yüklemede izinler henüz gelmemişse 403'e düşme.
   // Permissions boşsa yüklemeyi tetikle ve spinner göster.
@@ -180,65 +174,10 @@ export const AdminGuard = ({
       let hasAccess = false;
 
       // ============================================================================
-      // ROL BAZLI BYPASS - StoreAttendant ve Dispatcher için temel sayfalar
-      // Bu roller için dashboard ve orders sayfalarına erişim otomatik verilir
-      // StoreAttendant artık Admin ile aynı sipariş yetkilerine sahip
-      // ============================================================================
-      const storeAttendantAllowedPerms = [
-        "dashboard.view",
-        "orders.view",
-        "orders.viewdetails",
-        "orders.updatestatus",
-        "orders.assigncourier", // Yeni: Kurye atama yetkisi
-        "orders.assign_courier", // Alternatif format
-        "orders.cancel", // Yeni: Sipariş iptal yetkisi
-        "orders.refund", // Yeni: İade işlemi yetkisi
-        "orders.processrefund", // Alternatif format
-        "orders.customer_info", // Müşteri bilgisi görüntüleme
-        "orders.export", // Sipariş dışa aktarma
-        "products.view",
-        "categories.view",
-        "couriers.view", // Yeni: Kurye listesi görüntüleme
-        "couriers.assign", // Yeni: Kurye atama
-      ];
-      const dispatcherAllowedPerms = [
-        "dashboard.view",
-        "orders.view",
-        "orders.viewdetails",
-        "orders.updatestatus",
-        "orders.assigncourier",
-        "orders.assign_courier",
-        "couriers.view",
-      ];
-
-      if (user.role === "StoreAttendant") {
-        const normalizedReqPerms = reqPerms.map((p) => p.toLowerCase());
-        hasAccess = normalizedReqPerms.some((p) =>
-          storeAttendantAllowedPerms.includes(p),
-        );
-        if (hasAccess) {
-          console.log(
-            "[AdminGuard] StoreAttendant bypass izin verildi:",
-            reqPerms,
-          );
-          return children;
-        }
-      }
-
-      if (user.role === "Dispatcher") {
-        const normalizedReqPerms = reqPerms.map((p) => p.toLowerCase());
-        hasAccess = normalizedReqPerms.some((p) =>
-          dispatcherAllowedPerms.includes(p),
-        );
-        if (hasAccess) {
-          console.log("[AdminGuard] Dispatcher bypass izin verildi:", reqPerms);
-          return children;
-        }
-      }
-
-      // ============================================================================
       // İZİN KONTROLÜ - Önce context, sonra localStorage fallback
       // Context permissions güncelse onu kullan, yoksa cache'den kontrol et
+      // NOT: StoreAttendant/Dispatcher dahil tüm roller için backend'den
+      // gelen gerçek izinler kullanılır, hardcoded bypass yapılmaz.
       // ============================================================================
 
       // Context'teki izinler var mı kontrol et

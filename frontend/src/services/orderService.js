@@ -177,10 +177,13 @@ export const OrderService = {
     }
 
     try {
-      console.log("[OrderService] Misafir siparişi aranıyor:", {
-        email,
-        orderNumber,
-      });
+      // GÜVENLİK: Production'da email gibi hassas bilgileri loglama
+      if (process.env.NODE_ENV === "development") {
+        console.log("[OrderService] Misafir siparişi aranıyor:", {
+          email,
+          orderNumber,
+        });
+      }
 
       const response = await api.get(`${base}/guest-lookup`, {
         params: {
@@ -223,6 +226,66 @@ export const OrderService = {
       return normalizeOrder(response);
     } catch (error) {
       console.error("[OrderService] Sipariş takip hatası:", error);
+      throw error;
+    }
+  },
+
+  // ============================================================================
+  // İADE TALEBİ İŞLEMLERİ
+  // Müşteri sipariş durumuna göre iade talebi oluşturabilir
+  // Kargo çıkmadan → Otomatik iptal + para iadesi
+  // Kargo çıktıktan sonra → Admin onayı bekleyen iade talebi
+  // ============================================================================
+
+  /**
+   * Müşteri iade talebi oluşturur
+   * @param {number} orderId - Sipariş ID
+   * @param {Object} data - { reason: string, refundType: "full"|"partial", refundAmount?: number }
+   * @returns {Object} İade talebi sonucu
+   */
+  createRefundRequest: async (orderId, data) => {
+    if (!orderId || !data?.reason) {
+      throw new Error("Sipariş ID ve iade sebebi zorunludur");
+    }
+
+    try {
+      const response = await api.post(`${base}/${orderId}/refund-request`, {
+        reason: data.reason,
+        refundType: data.refundType || "full",
+        refundAmount: data.refundAmount || null,
+      });
+      return response;
+    } catch (error) {
+      console.error("[OrderService] İade talebi hatası:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Kullanıcının tüm iade taleplerini listeler
+   * @returns {Array} İade talepleri listesi
+   */
+  getMyRefundRequests: async () => {
+    try {
+      const response = await api.get(`${base}/refund-requests`);
+      return response?.data || response || [];
+    } catch (error) {
+      console.error("[OrderService] İade talepleri listesi hatası:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Belirli bir siparişin iade taleplerini getirir
+   * @param {number} orderId - Sipariş ID
+   * @returns {Array} Siparişe ait iade talepleri
+   */
+  getOrderRefundRequests: async (orderId) => {
+    try {
+      const response = await api.get(`${base}/${orderId}/refund-requests`);
+      return response?.data || response || [];
+    } catch (error) {
+      console.error("[OrderService] Sipariş iade talepleri hatası:", error);
       throw error;
     }
   },

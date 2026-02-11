@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using ECommerce.Core.Exceptions;
 
 namespace ECommerce.API.Infrastructure
 {
@@ -30,9 +31,20 @@ namespace ECommerce.API.Infrastructure
                 var traceId = context.TraceIdentifier;
                 var path = context.Request.Path.ToString();
 
-                // Önce standart logger'a yaz
-                _logger.LogError(ex, "Unhandled exception for {Method} {Path} TraceId={TraceId}",
-                    context.Request.Method, path, traceId);
+                // Exception tipine göre status code ve mesaj belirle
+                var (statusCode, userMessage) = MapException(ex);
+
+                // Sadece 500 hataları ERROR seviyesinde logla, diğerleri WARNING
+                if (statusCode >= 500)
+                {
+                    _logger.LogError(ex, "Unhandled exception for {Method} {Path} TraceId={TraceId}",
+                        context.Request.Method, path, traceId);
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "Handled exception ({StatusCode}) for {Method} {Path} TraceId={TraceId}",
+                        statusCode, context.Request.Method, path, traceId);
+                }
 
                 // Varsa ILogService üzerinden de audit/log yaz
                 try
@@ -42,7 +54,8 @@ namespace ECommerce.API.Infrastructure
                     {
                         ["Path"] = path,
                         ["TraceId"] = traceId,
-                        ["Method"] = context.Request.Method
+                        ["Method"] = context.Request.Method,
+                        ["StatusCode"] = statusCode
                     });
                 }
                 catch
@@ -53,17 +66,48 @@ namespace ECommerce.API.Infrastructure
                 if (!context.Response.HasStarted)
                 {
                     context.Response.Clear();
-                    context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    context.Response.StatusCode = statusCode;
                     context.Response.ContentType = "application/json";
                     var payload = new
                     {
-                        status = context.Response.StatusCode,
-                        message = "Beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar deneyin.",
+                        status = statusCode,
+                        message = userMessage,
                         traceId
                     };
                     await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
                 }
             }
+        }
+
+        /// <summary>
+        /// Exception tipine göre HTTP status code ve kullanıcıya gösterilecek mesajı belirler.
+        /// Bilinmeyen exception'larda detay sızdırmaz, generic mesaj döner.
+        /// </summary>
+        private static (int StatusCode, string Message) MapException(Exception ex)
+        {
+            return ex switch
+            {
+                ValidationException ve =>
+                    (StatusCodes.Status400BadRequest, ve.Message),
+
+                NotFoundException nfe =>
+                    (StatusCodes.Status404NotFound, nfe.Message),
+
+                BusinessException be =>
+                    (StatusCodes.Status422UnprocessableEntity, be.Message),
+
+                UnauthorizedAccessException =>
+                    (StatusCodes.Status401Unauthorized, "Bu işlem için yetkiniz bulunmamaktadır."),
+
+                ArgumentException ae =>
+                    (StatusCodes.Status400BadRequest, ae.Message),
+
+                OperationCanceledException =>
+                    (StatusCodes.Status400BadRequest, "İstek iptal edildi."),
+
+                _ =>
+                    (StatusCodes.Status500InternalServerError, "Beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar deneyin.")
+            };
         }
     }
 }

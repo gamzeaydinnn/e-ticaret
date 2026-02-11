@@ -10,7 +10,38 @@ const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "",
   headers: { "Content-Type": "application/json" },
   timeout: 15000, // 15 saniye global timeout
+  // GÜVENLİK: httpOnly cookie'lerin her istekle gönderilmesi için
+  // Bu sayede JWT token'lar cookie üzerinden güvenli şekilde iletilir
+  withCredentials: true,
 });
+
+// ─── CSRF Token Yönetimi ───────────────────────────────────────
+// Backend'den alınan CSRF token'ı sakla ve mutating request'lere ekle
+let csrfToken = null;
+
+function getCookieValue(name) {
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
+async function ensureCsrfToken() {
+  if (csrfToken) return csrfToken;
+  try {
+    const response = await axios.get(
+      `${process.env.REACT_APP_API_URL || ""}/api/csrf/token`,
+      { withCredentials: true },
+    );
+    csrfToken = response.data?.token || getCookieValue("XSRF-TOKEN");
+    return csrfToken;
+  } catch {
+    // CSRF token alınamazsa cookie'den dene
+    csrfToken = getCookieValue("XSRF-TOKEN");
+    return csrfToken;
+  }
+}
+
+// Uygulama başladığında CSRF token'ı al
+ensureCsrfToken();
 
 // Request interceptor: Token varsa ekle
 api.interceptors.request.use(
@@ -60,6 +91,16 @@ api.interceptors.request.use(
       // Token yoksa Authorization header'ını sil (başka bir yerde set edilmiş olabilir)
       delete config.headers.Authorization;
     }
+
+    // CSRF token'ı mutating request'lere ekle (POST, PUT, DELETE, PATCH)
+    const method = (config.method || "").toLowerCase();
+    if (["post", "put", "delete", "patch"].includes(method)) {
+      const token = csrfToken || getCookieValue("XSRF-TOKEN");
+      if (token) {
+        config.headers["X-CSRF-TOKEN"] = token;
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error),
@@ -82,6 +123,32 @@ api.interceptors.response.use(
       data?.error ||
       error?.message ||
       "Beklenmeyen bir hata oluştu.";
+
+    // 429 Too Many Requests - Rate limit aşımı, exponential backoff ile retry
+    if (status === 429) {
+      const originalConfig = error.config;
+      const retryCount = originalConfig._retryCount || 0;
+      const maxRetries = 3;
+
+      if (retryCount < maxRetries) {
+        originalConfig._retryCount = retryCount + 1;
+
+        // Retry-After header'ından bekleme süresini al veya exponential backoff uygula
+        const retryAfter = error.response?.headers?.["retry-after"];
+        const waitTime = retryAfter
+          ? parseInt(retryAfter, 10) * 1000
+          : Math.min(1000 * Math.pow(2, retryCount), 10000); // 1s, 2s, 4s... max 10s
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            `[API] ⏳ Rate limit - ${waitTime}ms bekleyip tekrar deneniyor (${retryCount + 1}/${maxRetries})`,
+          );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        return api(originalConfig);
+      }
+    }
 
     // 401 Unauthorized - Token süresi dolmuş olabilir
     if (status === 401) {

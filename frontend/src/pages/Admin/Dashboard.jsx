@@ -32,6 +32,13 @@ const statusLabelMap = {
   Ready: "Hazır",
   Paid: "Ödendi",
   PaymentFailed: "Ödeme Hatası",
+  New: "Yeni",
+  Refunded: "İade Edildi",
+  PartialRefund: "Kısmi İade",
+  InTransit: "Kargoda",
+  PickedUp: "Alındı",
+  Shipped: "Gönderildi",
+  DeliveryFailed: "Teslimat Başarısız",
 };
 
 const DashboardBarChart = ({ data, valueKey, colorClass }) => {
@@ -112,6 +119,11 @@ export default function Dashboard() {
     activeCouriers: 0,
     pendingOrders: 0,
     deliveredOrders: 0,
+    cancelledOrders: 0,
+    refundedOrders: 0,
+    pendingRefundRequests: 0,
+    failedRefunds: 0,
+    totalRefundedAmount: 0,
     recentOrders: [],
     topProducts: [],
     dailyMetrics: [],
@@ -207,6 +219,17 @@ export default function Dashboard() {
       const userRoleDistribution =
         readField(data, "userRoleDistribution", "UserRoleDistribution") || [];
 
+      const cancelledOrders =
+        readField(data, "cancelledOrders", "CancelledOrders") || 0;
+      const refundedOrders =
+        readField(data, "refundedOrders", "RefundedOrders") || 0;
+      const pendingRefundRequests =
+        readField(data, "pendingRefundRequests", "PendingRefundRequests") || 0;
+      const failedRefunds =
+        readField(data, "failedRefunds", "FailedRefunds") || 0;
+      const totalRefundedAmount =
+        readField(data, "totalRefundedAmount", "TotalRefundedAmount") || 0;
+
       setStats({
         totalUsers,
         totalOrders,
@@ -216,6 +239,11 @@ export default function Dashboard() {
         activeCouriers,
         pendingOrders,
         deliveredOrders,
+        cancelledOrders,
+        refundedOrders,
+        pendingRefundRequests,
+        failedRefunds,
+        totalRefundedAmount,
         recentOrders,
         topProducts,
         dailyMetrics,
@@ -371,16 +399,54 @@ export default function Dashboard() {
                 <strong>{stats.deliveredOrders.toLocaleString("tr-TR")}</strong>
               </div>
             </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-pink">
+                <span>İptal Edilen</span>
+                <strong>{stats.cancelledOrders.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-cyan">
+                <span>İade Edilen</span>
+                <strong>{stats.refundedOrders.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            {stats.pendingRefundRequests > 0 && (
+              <div className="col-6 col-lg-3">
+                <div className="dashboard-kpi kpi-amber" style={{borderLeft: '4px solid #f59e0b'}}>
+                  <span>Bekleyen İade Talebi</span>
+                  <strong>{stats.pendingRefundRequests.toLocaleString("tr-TR")}</strong>
+                </div>
+              </div>
+            )}
+            {stats.failedRefunds > 0 && (
+              <div className="col-6 col-lg-3">
+                <div className="dashboard-kpi kpi-pink" style={{borderLeft: '4px solid #ef4444'}}>
+                  <span>Başarısız İade</span>
+                  <strong>{stats.failedRefunds.toLocaleString("tr-TR")}</strong>
+                </div>
+              </div>
+            )}
           </>
         )}
 
         {canViewRevenue && (
-          <div className="col-6 col-lg-3">
-            <div className="dashboard-kpi kpi-orange">
-              <span>Toplam Gelir</span>
-              <strong>{formatCurrency(stats.totalRevenue)}</strong>
+          <>
+            <div className="col-6 col-lg-3">
+              <div className="dashboard-kpi kpi-orange">
+                <span>Toplam Gelir</span>
+                <strong>{formatCurrency(stats.totalRevenue)}</strong>
+              </div>
             </div>
-          </div>
+            {stats.totalRefundedAmount > 0 && (
+              <div className="col-6 col-lg-3">
+                <div className="dashboard-kpi kpi-violet">
+                  <span>Toplam İade Tutarı</span>
+                  <strong>{formatCurrency(stats.totalRefundedAmount)}</strong>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

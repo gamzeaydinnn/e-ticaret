@@ -29,7 +29,20 @@ export default function AdminLayout({ children }) {
   const [showSessionWarning, setShowSessionWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasPermission, hasAnyPermission } = useAuth();
+  const { user, logout, hasPermission, hasAnyPermission, loadUserPermissions } = useAuth();
+
+  // ============================================================================
+  // SAYFA DEĞİŞİKLİĞİNDE İZİN YENİLEME
+  // Kullanıcı admin panelinde sayfa değiştirdiğinde izinler cache süresi
+  // dolmuşsa otomatik yenilenir. Böylece admin izin değiştirince
+  // kullanıcı en geç bir sonraki sayfa geçişinde güncel izinleri alır.
+  // ============================================================================
+  useEffect(() => {
+    if (user && loadUserPermissions) {
+      // forceRefresh=false → cache süresi dolmadıysa API çağrısı yapmaz
+      loadUserPermissions(user, false);
+    }
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ============================================================================
   // OTURUM ZAMAN AŞIMI (SESSION TIMEOUT) - 30 dakika
@@ -152,7 +165,8 @@ export default function AdminLayout({ children }) {
         path: "/admin/dashboard",
         icon: "fas fa-tachometer-alt",
         label: "Dashboard",
-        permission: PERMISSIONS.DASHBOARD_VIEW,
+        // Dashboard tüm admin kullanıcılar için her zaman görünür (landing page)
+        alwaysVisible: true,
       },
       {
         path: "/admin/products",
@@ -278,22 +292,13 @@ export default function AdminLayout({ children }) {
     [],
   );
 
-  // StoreAttendant rolü kontrolü
-  const isStoreAttendant = user?.role === "StoreAttendant";
-
-  // Filtrelenmiş menü öğeleri
+  // Filtrelenmiş menü öğeleri - tamamen izin bazlı
   const filteredMenuItems = useMemo(() => {
     return menuItems.filter((item) => {
-      // StoreAttendant için sadece Dashboard ve Siparişler göster
-      if (isStoreAttendant) {
-        const allowedPaths = ["/admin/dashboard", "/admin/orders"];
-        if (!allowedPaths.includes(item.path)) return false;
-      }
+      // alwaysVisible öğeler her zaman gösterilir (ör. Dashboard)
+      if (item.alwaysVisible) return true;
 
-      // SuperAdmin kontrolü
-      if (item.superAdminOnly && !isSuperAdmin) return false;
-
-      // İzin kontrolü
+      // İzin kontrolü - izin yoksa gizle
       if (item.permission && !checkPermission(item.permission)) return false;
 
       // Alt menüleri filtrele
@@ -313,7 +318,7 @@ export default function AdminLayout({ children }) {
 
       return true;
     });
-  }, [menuItems, isSuperAdmin, isStoreAttendant, checkPermission]);
+  }, [menuItems, checkPermission]);
 
   // Mobilde menü öğesine tıklandığında sidebar'ı kapat
   const handleMenuClick = useCallback(() => {
@@ -714,7 +719,11 @@ export default function AdminLayout({ children }) {
                 </button>
                 <ul className="dropdown-menu dropdown-menu-end shadow">
                   <li>
-                    <button className="dropdown-item" type="button">
+                    <button
+                      className="dropdown-item"
+                      type="button"
+                      onClick={() => navigate("/admin/profile")}
+                    >
                       <i
                         className="fas fa-user me-2"
                         style={{ color: "#f57c00" }}
@@ -723,7 +732,11 @@ export default function AdminLayout({ children }) {
                     </button>
                   </li>
                   <li>
-                    <button className="dropdown-item" type="button">
+                    <button
+                      className="dropdown-item"
+                      type="button"
+                      onClick={() => navigate("/admin/settings")}
+                    >
                       <i
                         className="fas fa-cog me-2"
                         style={{ color: "#f57c00" }}

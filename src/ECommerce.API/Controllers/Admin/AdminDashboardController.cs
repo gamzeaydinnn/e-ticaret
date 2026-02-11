@@ -7,6 +7,7 @@ using ECommerce.API.Authorization;
 using ECommerce.Core.DTOs.Admin;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
+using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -97,6 +98,24 @@ namespace ECommerce.API.Controllers.Admin
 
             var deliveredOrders = await _dbContext.Orders.CountAsync(o =>
                 o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed);
+
+            // İade istatistikleri
+            var cancelledOrders = await _dbContext.Orders.CountAsync(o =>
+                o.Status == OrderStatus.Cancelled);
+
+            var refundedOrders = await _dbContext.Orders.CountAsync(o =>
+                o.Status == OrderStatus.Refunded || o.Status == OrderStatus.PartialRefund);
+
+            var pendingRefundRequests = await _dbContext.RefundRequests.CountAsync(r =>
+                r.Status == RefundRequestStatus.Pending);
+
+            var failedRefunds = await _dbContext.RefundRequests.CountAsync(r =>
+                r.Status == RefundRequestStatus.RefundFailed);
+
+            var totalRefundedAmount = await _dbContext.RefundRequests
+                .Where(r => r.Status == RefundRequestStatus.Refunded ||
+                             r.Status == RefundRequestStatus.AutoCancelled)
+                .SumAsync(r => (decimal?)r.RefundAmount) ?? 0;
 
             var dailyRaw = await _dbContext.Orders
                 .Where(o => o.OrderDate >= last14DaysStart)
@@ -250,6 +269,11 @@ namespace ECommerce.API.Controllers.Admin
                 ActiveCouriers = activeCouriers,
                 PendingOrders = pendingOrders,
                 DeliveredOrders = deliveredOrders,
+                CancelledOrders = cancelledOrders,
+                RefundedOrders = refundedOrders,
+                PendingRefundRequests = pendingRefundRequests,
+                FailedRefunds = failedRefunds,
+                TotalRefundedAmount = totalRefundedAmount,
                 DailyMetrics = dailyMetrics,
                 OrderStatusDistribution = orderStatusDistribution,
                 PaymentStatusDistribution = paymentStatusDistribution,

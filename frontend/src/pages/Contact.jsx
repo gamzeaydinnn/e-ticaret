@@ -30,7 +30,7 @@ export default function Contact() {
         İletişim
       </h1>
       <p className="text-muted mb-4">
-        Gölköy Gourmet Market ve Doğadan Sofranza ile ilgili her türlü soru,
+        Gölköy Gurme Market ile ilgili her türlü soru,
         öneri ve talepleriniz için bize aşağıdaki iletişim kanallarından
         ulaşabilirsiniz.
       </p>

@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { AdminService } from "../../services/adminService";
 import { useAuth } from "../../contexts/AuthContext";
+import { permissionService } from "../../services/permissionService";
 // ============================================================================
 // Yeni Bileşen İmportları - RBAC Security Complete Fix
 // Arama, filtreleme, sayfalama ve hata mesajları için
@@ -140,10 +141,17 @@ const ASSIGNABLE_ROLES = [
   },
   {
     value: "Dispatcher",
-    label: "🗂️ Sevkiyat Görevlisi",
+    label: "Sevkiyat Görevlisi",
     requiresSuperAdmin: false,
   },
-  // NOT: Kurye rolü burada yok - Kurye ekleme "Kurye Paneli" bölümünden yapılır
+  // =========================================================================
+  // Kurye Rolü - Admin panelinden de atanabilir
+  // =========================================================================
+  {
+    value: "Courier",
+    label: "Kurye",
+    requiresSuperAdmin: false,
+  },
   { value: "User", label: "Müşteri", requiresSuperAdmin: false },
 ];
 
@@ -152,6 +160,7 @@ const AdminUsers = () => {
     user: currentUser,
     refreshPermissions,
     clearPermissionsCache,
+    hasPermission,
   } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -202,6 +211,15 @@ const AdminUsers = () => {
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   // ============================================================================
+  // Kullanıcı Düzenleme State'leri
+  // Admin panelinden kullanıcı bilgilerini (ad, soyad, email, telefon, adres, şehir) güncelleme
+  // ============================================================================
+  const [editModalUser, setEditModalUser] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [editError, setEditError] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  // ============================================================================
   // Madde 8: Şifre Güncelleme State'leri
   // Admin panelinden kullanıcı şifresi güncelleme için
   // ============================================================================
@@ -217,11 +235,33 @@ const AdminUsers = () => {
   // ============================================================================
   const [roleChangeWarning, setRoleChangeWarning] = useState(null);
 
-  // Admin yetkisi kontrolü - tüm admin rolleri dahil
+  // ============================================================================
+  // Dinamik RBAC İzin Matrisi State'leri
+  // Backend'den çekilen rol-izin matrisi ile çalışır
+  // ============================================================================
+  const [matrixData, setMatrixData] = useState(null);
+  const [matrixLoading, setMatrixLoading] = useState(false);
+  const [matrixError, setMatrixError] = useState(null);
+  const [matrixSaving, setMatrixSaving] = useState({});
+  const [matrixExpandedModules, setMatrixExpandedModules] = useState({});
+  const [matrixSaveSuccess, setMatrixSaveSuccess] = useState(null);
+
+  // Admin yetkisi kontrolü - backend ile tutarlı olması için
+  // SuperAdmin/Admin her zaman yetkiliyken, diğer roller permission tabanlı kontrol edilir
   const isAdminLike =
-    currentUser?.role === "Admin" ||
     currentUser?.role === "SuperAdmin" ||
-    ADMIN_PANEL_ROLES.includes(currentUser?.role);
+    currentUser?.role === "Admin" ||
+    currentUser?.role === "StoreManager";
+
+  // İzin bazlı kontroller - frontend butonlarını backend ile senkron tutar
+  const canCreateUser =
+    currentUser?.role === "SuperAdmin" || hasPermission?.("users.create");
+  const canUpdateUser =
+    currentUser?.role === "SuperAdmin" || hasPermission?.("users.update");
+  const canDeleteUser_perm =
+    currentUser?.role === "SuperAdmin" || hasPermission?.("users.delete");
+  const canManageRoles =
+    currentUser?.role === "SuperAdmin" || hasPermission?.("users.roles");
 
   // ============================================================================
   // Filtrelenmiş ve Sayfalanmış Kullanıcı Listesi
@@ -283,12 +323,130 @@ const AdminUsers = () => {
     }
   }, []);
 
+  // ============================================================================
+  // Dinamik RBAC Matrisi - Backend'den Yükleme
+  // permissionService.getRolePermissionMatrix() ile çalışır
+  // ============================================================================
+  const loadMatrixData = useCallback(async () => {
+    try {
+      setMatrixLoading(true);
+      setMatrixError(null);
+      const data = await permissionService.getRolePermissionMatrix();
+
+      // API yanıtını normalize et
+      const headers = data?.PermissionHeaders || data?.permissionHeaders || [];
+      const matrix = data?.RoleMatrix || data?.roleMatrix || [];
+
+      setMatrixData({ permissionHeaders: headers, roleMatrix: matrix });
+
+      // İlk yüklemede tüm modülleri aç
+      if (headers.length > 0) {
+        const expanded = {};
+        headers.forEach((h) => {
+          const mod = h.Module || h.module;
+          if (mod) expanded[mod] = true;
+        });
+        setMatrixExpandedModules(expanded);
+      }
+    } catch (err) {
+      console.error("[AdminUsers] Matris yükleme hatası:", err);
+      setMatrixError("İzin matrisi yüklenirken hata oluştu. Lütfen tekrar deneyin.");
+    } finally {
+      setMatrixLoading(false);
+    }
+  }, []);
+
+  // ============================================================================
+  // İzin Toggle Handler - Tek checkbox tıklaması ile izin ekle/kaldır
+  // Backend'e addPermissionToRole veya removePermissionFromRole çağrısı yapar
+  // ============================================================================
+  const handlePermissionToggle = useCallback(
+    async (roleId, permissionId, currentHasPermission) => {
+      // Kaydetme durumunu takip etmek için benzersiz anahtar
+      const savingKey = `${roleId}_${permissionId}`;
+      setMatrixSaving((prev) => ({ ...prev, [savingKey]: true }));
+      setMatrixSaveSuccess(null);
+
+      try {
+        if (currentHasPermission) {
+          await permissionService.removePermissionFromRole(roleId, permissionId);
+        } else {
+          await permissionService.addPermissionToRole(roleId, permissionId);
+        }
+
+        // Başarılı - local state'i güncelle (tekrar API çağırmadan)
+        setMatrixData((prev) => {
+          if (!prev) return prev;
+          const updatedMatrix = prev.roleMatrix.map((role) => {
+            const rId = role.RoleId || role.roleId;
+            if (rId !== roleId) return role;
+            return {
+              ...role,
+              Permissions: (role.Permissions || role.permissions || []).map((p) => {
+                const pId = p.PermissionId || p.permissionId;
+                if (pId !== permissionId) return p;
+                return {
+                  ...p,
+                  HasPermission: !currentHasPermission,
+                  hasPermission: !currentHasPermission,
+                };
+              }),
+              permissions: (role.permissions || role.Permissions || []).map((p) => {
+                const pId = p.permissionId || p.PermissionId;
+                if (pId !== permissionId) return p;
+                return {
+                  ...p,
+                  hasPermission: !currentHasPermission,
+                  HasPermission: !currentHasPermission,
+                };
+              }),
+            };
+          });
+          return { ...prev, roleMatrix: updatedMatrix };
+        });
+
+        setMatrixSaveSuccess("İzin başarıyla güncellendi.");
+        setTimeout(() => setMatrixSaveSuccess(null), 2000);
+      } catch (err) {
+        console.error("[AdminUsers] İzin toggle hatası:", err);
+        const msg =
+          err?.response?.data?.message ||
+          err?.message ||
+          "İzin güncellenirken hata oluştu.";
+        setMatrixError(msg);
+        setTimeout(() => setMatrixError(null), 3000);
+      } finally {
+        setMatrixSaving((prev) => {
+          const next = { ...prev };
+          delete next[savingKey];
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  // Modül aç/kapa toggle
+  const toggleMatrixModule = useCallback((moduleName) => {
+    setMatrixExpandedModules((prev) => ({
+      ...prev,
+      [moduleName]: !prev[moduleName],
+    }));
+  }, []);
+
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
 
+  // Dinamik matris verilerini yükle
+  useEffect(() => {
+    if (currentUser?.role === "SuperAdmin" || hasPermission?.("roles.view")) {
+      loadMatrixData();
+    }
+  }, [loadMatrixData, currentUser, hasPermission]);
+
   const canEditUserRole = (u) => {
-    if (!isAdminLike) return false;
+    if (!canManageRoles) return false;
     if (u?.role === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
       return false;
     }
@@ -306,7 +464,7 @@ const AdminUsers = () => {
   };
 
   const openCreateModal = () => {
-    if (!isAdminLike) return;
+    if (!canCreateUser) return;
     setCreateForm({
       ...initialCreateForm,
       role: "User",
@@ -334,7 +492,7 @@ const AdminUsers = () => {
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
-    if (!isAdminLike) return;
+    if (!canCreateUser) return;
 
     // Zorunlu alan kontrolü
     if (
@@ -476,8 +634,8 @@ const AdminUsers = () => {
    * @returns {boolean} - Silinebilir ise true
    */
   const canDeleteUser = (u) => {
-    // Admin yetkisi yoksa silme yapamaz
-    if (!isAdminLike) return false;
+    // Silme izni yoksa silme yapamaz
+    if (!canDeleteUser_perm) return false;
 
     // Kendi hesabını silemez
     if (u?.id === currentUser?.id) return false;
@@ -674,6 +832,98 @@ const AdminUsers = () => {
   };
 
   // ============================================================================
+  // Kullanıcı Bilgi Düzenleme İşlemleri
+  // Ad, Soyad, Email, Telefon, Adres, Şehir güncelleme
+  // Backend: AdminUsersController.UpdateUser endpoint'i (PUT /api/admin/users/{id})
+  // ============================================================================
+
+  /**
+   * Düzenleme modalını açar ve formu mevcut verilerle doldurur
+   */
+  const openEditModal = (u) => {
+    setEditModalUser(u);
+    setEditForm({
+      firstName: u.firstName || "",
+      lastName: u.lastName || "",
+      email: u.email || "",
+      phoneNumber: u.phoneNumber || "",
+      address: u.address || "",
+      city: u.city || "",
+    });
+    setEditError("");
+  };
+
+  const closeEditModal = () => {
+    setEditModalUser(null);
+    setEditForm({});
+    setEditError("");
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  /**
+   * Kullanıcı bilgilerini günceller
+   */
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editModalUser) return;
+
+    // Zorunlu alan kontrolü
+    if (!editForm.firstName?.trim() || !editForm.lastName?.trim() || !editForm.email?.trim()) {
+      setEditError("Ad, Soyad ve Email alanları zorunludur.");
+      return;
+    }
+
+    // Email format validasyonu
+    if (!isValidEmail(editForm.email.trim())) {
+      setEditError("Geçerli bir email adresi giriniz.");
+      return;
+    }
+
+    try {
+      setEditing(true);
+      setEditError("");
+
+      const payload = {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim(),
+        phoneNumber: editForm.phoneNumber?.trim() || null,
+        address: editForm.address?.trim() || null,
+        city: editForm.city?.trim() || null,
+      };
+
+      await AdminService.updateUser(editModalUser.id, payload);
+
+      // UI'ı güncelle
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === editModalUser.id
+            ? {
+                ...u,
+                ...payload,
+                fullName: `${payload.firstName} ${payload.lastName}`,
+              }
+            : u,
+        ),
+      );
+
+      closeEditModal();
+    } catch (err) {
+      console.error("Kullanıcı güncelleme hatası:", err);
+      const errorMessage = translateError(
+        err?.response?.data || err?.message || err,
+      );
+      setEditError(errorMessage);
+    } finally {
+      setEditing(false);
+    }
+  };
+
+  // ============================================================================
   // Madde 8: Şifre Güncelleme İşlemleri
   // Admin panelinden kullanıcı şifresi güncelleme
   // ============================================================================
@@ -684,8 +934,8 @@ const AdminUsers = () => {
    * @returns {boolean} - Güncellenebilir ise true
    */
   const canUpdatePassword = (u) => {
-    // Admin yetkisi yoksa şifre güncelleyemez
-    if (!isAdminLike) return false;
+    // Güncelleme izni yoksa şifre güncelleyemez
+    if (!canUpdateUser) return false;
 
     // SuperAdmin şifresini sadece SuperAdmin güncelleyebilir
     if (u?.role === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
@@ -806,16 +1056,14 @@ const AdminUsers = () => {
 
   return (
     <div className="admin-users-page">
-      {/* ====================================================================
-          Rol Değişikliği Uyarı Bildirimi (Madde 5 düzeltmesi)
-          Kullanıcının rolü değiştirildiğinde cache durumu hakkında bilgi verir
-          ==================================================================== */}
+      {/* Rol Değişikliği Uyarı Bildirimi */}
       {roleChangeWarning && (
         <div
           className={`alert ${
             roleChangeWarning.type === "self" ? "alert-success" : "alert-info"
-          } alert-dismissible fade show mb-4`}
+          } alert-dismissible fade show mb-3`}
           role="alert"
+          style={{ borderRadius: "12px", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
         >
           <div className="d-flex align-items-start">
             <i
@@ -851,16 +1099,48 @@ const AdminUsers = () => {
         </div>
       )}
 
-      <div className="admin-users-header d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2 mb-4">
-        <h2>Kullanıcı Yönetimi</h2>
-        {isAdminLike && (
-          <div className="admin-users-actions">
-            <button className="btn btn-primary" onClick={openCreateModal}>
-              <i className="fas fa-user-plus me-1"></i>
-              Yeni Kullanıcı Ekle
-            </button>
+      {/* Page Header */}
+      <div className="admin-users-hero mb-4">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+          <div>
+            <h2 className="mb-1" style={{ fontWeight: 700, color: "#1e293b" }}>
+              <i className="fas fa-users-cog me-2" style={{ color: "#6366f1" }}></i>
+              Kullanıcı Yönetimi
+            </h2>
+            <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
+              Sistemdeki tüm kullanıcıları yönetin, roller atayın ve erişimleri düzenleyin
+            </p>
           </div>
-        )}
+          <div className="d-flex gap-2 align-items-center">
+            <div className="d-flex gap-2">
+              <span className="badge bg-light text-dark border" style={{ fontSize: "0.8rem", padding: "8px 12px" }}>
+                <i className="fas fa-users me-1" style={{ color: "#6366f1" }}></i>
+                {users.length} Kullanıcı
+              </span>
+              <span className="badge bg-light text-dark border" style={{ fontSize: "0.8rem", padding: "8px 12px" }}>
+                <i className="fas fa-user-check me-1" style={{ color: "#22c55e" }}></i>
+                {users.filter(u => u.isActive !== false).length} Aktif
+              </span>
+            </div>
+            {canCreateUser && (
+              <button
+                className="btn btn-primary d-flex align-items-center gap-2"
+                onClick={openCreateModal}
+                style={{
+                  borderRadius: "10px",
+                  padding: "10px 20px",
+                  fontWeight: 600,
+                  background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                  border: "none",
+                  boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+                }}
+              >
+                <i className="fas fa-user-plus"></i>
+                <span className="d-none d-sm-inline">Yeni Kullanıcı</span>
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ====================================================================
@@ -1065,12 +1345,21 @@ const AdminUsers = () => {
                       </td>
                       <td data-label="Rol">
                         <span
-                          className={`badge bg-${roleInfo.color} ${
+                          className={`badge ${
+                            roleInfo.color === "purple"
+                              ? "text-white"
+                              : `bg-${roleInfo.color}`
+                          } ${
                             roleInfo.color === "warning" ||
                             roleInfo.color === "light"
                               ? "text-dark"
                               : ""
                           }`}
+                          style={
+                            roleInfo.color === "purple"
+                              ? { backgroundColor: "#9333ea" }
+                              : undefined
+                          }
                           title={roleInfo.description}
                         >
                           {roleInfo.icon} {roleInfo.name}
@@ -1102,6 +1391,17 @@ const AdminUsers = () => {
                       </td>
                       <td data-label="İşlemler">
                         <div className="d-flex gap-2 flex-wrap">
+                          {/* Kullanıcı Bilgi Düzenleme Butonu */}
+                          {canUpdateUser && (
+                            <button
+                              className="btn btn-sm btn-outline-info admin-users-action-btn"
+                              onClick={() => openEditModal(u)}
+                              title="Kullanıcı bilgilerini düzenle"
+                            >
+                              <i className="fas fa-edit me-1"></i>
+                              Düzenle
+                            </button>
+                          )}
                           {canEditUserRole(u) && (
                             <button
                               className="btn btn-sm btn-outline-primary admin-users-action-btn"
@@ -1305,499 +1605,203 @@ const AdminUsers = () => {
       </div>
 
       {/* ====================================================================
-          RBAC İzin Matrisi — 8 Rol
-          Tüm roller dahil: SuperAdmin, StoreManager, CustomerSupport,
-          Logistics, StoreAttendant, Dispatcher, Courier, User
+          DİNAMİK RBAC İzin Matrisi
+          Backend'den çekilen rol-izin verileriyle çalışır.
+          Admin checkbox ile izin ekleyip çıkarabilir.
           Mobil uyumlu: yatay scroll + sticky ilk sütun
           ==================================================================== */}
       <div className="card mb-4">
-        <div className="card-header bg-primary text-white">
+        <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
           <h5 className="card-title mb-0">
             <i className="fas fa-shield-alt me-2"></i>
-            Rol Bazlı Erişim Kontrol (RBAC) Matrisi
+            Rol Bazli Erisim Kontrol (RBAC) Matrisi
           </h5>
+          <button
+            className="btn btn-sm btn-outline-light"
+            onClick={loadMatrixData}
+            disabled={matrixLoading}
+          >
+            <i className={`fas fa-sync-alt ${matrixLoading ? "fa-spin" : ""}`}></i>
+            {" "}Yenile
+          </button>
         </div>
         <div className="card-body">
-          <p className="text-muted mb-3">
-            Her rol için hangi modüllere erişim izni olduğunu gösteren tablo
-            ("En Az Yetki" prensibi uygulanmıştır):
-          </p>
-          <div className="table-responsive permission-matrix-wrapper">
-            <table className="table table-bordered table-hover permission-matrix">
-              <thead className="table-dark">
-                <tr>
-                  <th className="pm-sticky-col">Modül / İşlem</th>
-                  <th className="text-center">
-                    <span className="badge bg-danger">👑 Süper Yön.</span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-warning text-dark">
-                      🏪 Mağaza
-                    </span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-info">🎧 Müşt.H.</span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-secondary">🚚 Lojistik</span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-primary">📦 Market G.</span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-success">🗂️ Sevkiyat</span>
-                  </th>
-                  <th className="text-center">
-                    <span
-                      className="badge text-white"
-                      style={{ backgroundColor: "#9333ea" }}
-                    >
-                      🏍️ Kurye
-                    </span>
-                  </th>
-                  <th className="text-center">
-                    <span className="badge bg-light text-dark">👤 Müşteri</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* ── Kullanıcı Yönetimi ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>👥 Kullanıcı Yönetimi</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Kullanıcıları görüntüleme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Kullanıcı rolü değiştirme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+          {/* Durum mesajlari */}
+          {matrixSaveSuccess && (
+            <div className="alert alert-success alert-dismissible fade show py-2" role="alert">
+              <i className="fas fa-check-circle me-1"></i> {matrixSaveSuccess}
+              <button type="button" className="btn-close btn-sm" onClick={() => setMatrixSaveSuccess(null)}></button>
+            </div>
+          )}
+          {matrixError && (
+            <div className="alert alert-danger alert-dismissible fade show py-2" role="alert">
+              <i className="fas fa-exclamation-triangle me-1"></i> {matrixError}
+              <button type="button" className="btn-close btn-sm" onClick={() => setMatrixError(null)}></button>
+            </div>
+          )}
 
-                {/* ── Ödeme Ayarları ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>💳 Ödeme Ayarları</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Ödeme yöntemlerini yapılandırma
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+          {/* Yukleniyor */}
+          {matrixLoading && !matrixData && (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Yukleniyor...</span>
+              </div>
+              <p className="mt-2 text-muted">Izin matrisi yukleniyor...</p>
+            </div>
+          )}
 
-                {/* ── Ürün/Fiyat Yönetimi ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>📦 Ürün/Fiyat Düzenleme</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Ürünleri görüntüleme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Ürün ekleme/düzenleme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Fiyat değiştirme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Stok yönetimi</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+          {/* Matris verisi yoksa */}
+          {!matrixLoading && !matrixData && !matrixError && (
+            <div className="text-center py-4 text-muted">
+              <i className="fas fa-info-circle fa-2x mb-2 d-block"></i>
+              Izin matrisi yuklenemedi. Lutfen <strong>Yenile</strong> butonuna tiklayin.
+            </div>
+          )}
 
-                {/* ── Sipariş Yönetimi ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>🛒 Sipariş Durumu Güncelleme</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Siparişleri görüntüleme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Sipariş durumu güncelleme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Kargo takip no girme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+          {/* Dinamik Matris Tablosu */}
+          {matrixData && matrixData.permissionHeaders?.length > 0 && (
+            <>
+              <p className="text-muted mb-3">
+                Her rol icin hangi modullere erisim izni oldugunu gosteren tablo.
+                {currentUser?.role === "SuperAdmin"
+                  ? " Checkbox'lara tiklayarak izinleri duzenleyebilirsiniz."
+                  : " (Salt okunur gorunum)"}
+              </p>
+              <div className="table-responsive permission-matrix-wrapper">
+                <table className="table table-bordered table-hover permission-matrix mb-0">
+                  <thead className="table-dark">
+                    <tr>
+                      <th className="pm-sticky-col" style={{ minWidth: "220px" }}>
+                        Modul / Islem
+                      </th>
+                      {matrixData.roleMatrix.map((role) => {
+                        const rName = role.RoleName || role.roleName;
+                        const rDisplay = role.RoleDisplayName || role.roleDisplayName || rName;
+                        const desc = ROLE_DESCRIPTIONS[rName];
+                        return (
+                          <th key={rName} className="text-center" style={{ minWidth: "90px" }}>
+                            <span
+                              className={`badge ${
+                                rName === "SuperAdmin" ? "bg-danger" :
+                                rName === "Admin" ? "bg-dark" :
+                                rName === "StoreManager" ? "bg-warning text-dark" :
+                                rName === "CustomerSupport" ? "bg-info" :
+                                rName === "Logistics" ? "bg-secondary" :
+                                rName === "StoreAttendant" ? "bg-primary" :
+                                rName === "Dispatcher" ? "bg-success" :
+                                rName === "Courier" ? "text-white" :
+                                "bg-light text-dark"
+                              }`}
+                              style={rName === "Courier" ? { backgroundColor: "#9333ea" } : undefined}
+                            >
+                              {desc?.icon || ""} {rDisplay}
+                            </span>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrixData.permissionHeaders.map((moduleGroup) => {
+                      const moduleName = moduleGroup.Module || moduleGroup.module;
+                      const moduleDisplay = moduleGroup.ModuleDisplayName || moduleGroup.moduleDisplayName || moduleName;
+                      const perms = moduleGroup.Permissions || moduleGroup.permissions || [];
+                      const isExpanded = matrixExpandedModules[moduleName] !== false;
 
-                {/* ── Sipariş Hazırlama (Store Attendant özel) ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>🏪 Sipariş Hazırlama</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Siparişi hazırlamaya başla
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Tartı girişi / Hazır işaretle
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+                      return (
+                        <React.Fragment key={moduleName}>
+                          {/* Modul baslik satiri - tiklayinca ac/kapa */}
+                          <tr
+                            className="table-light"
+                            style={{ cursor: "pointer", userSelect: "none" }}
+                            onClick={() => toggleMatrixModule(moduleName)}
+                          >
+                            <td
+                              colSpan={1 + (matrixData.roleMatrix?.length || 0)}
+                              className="pm-sticky-col"
+                            >
+                              <strong>
+                                <i className={`fas fa-chevron-${isExpanded ? "down" : "right"} me-2`}></i>
+                                {moduleDisplay}
+                                <span className="badge bg-secondary ms-2">{perms.length}</span>
+                              </strong>
+                            </td>
+                          </tr>
 
-                {/* ── Kurye & Sevkiyat ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>🏍️ Kurye & Sevkiyat</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Kurye atama/değiştirme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Teslimat durumu güncelleme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Kurye listesini görme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+                          {/* Modul izinleri - sadece aciksa goster */}
+                          {isExpanded && perms.map((perm) => {
+                            const permId = perm.Id || perm.id;
+                            const permDisplay = perm.DisplayName || perm.displayName || perm.Name || perm.name;
 
-                {/* ── İade/İptal Yönetimi ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>↩️ İade/İptal Onayı</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    İade talebi görüntüleme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">İade/İptal onaylama</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
+                            return (
+                              <tr key={permId}>
+                                <td className="ps-4 pm-sticky-col" style={{ fontSize: "0.9rem" }}>
+                                  {permDisplay}
+                                </td>
+                                {matrixData.roleMatrix.map((role) => {
+                                  const roleId = role.RoleId || role.roleId;
+                                  const rName = role.RoleName || role.roleName;
+                                  const canEdit = role.CanEdit !== undefined ? role.CanEdit : role.canEdit;
+                                  const rolePerms = role.Permissions || role.permissions || [];
+                                  const permEntry = rolePerms.find(
+                                    (rp) => (rp.PermissionId || rp.permissionId) === permId,
+                                  );
+                                  const hasPerm = permEntry?.HasPermission ?? permEntry?.hasPermission ?? false;
+                                  const savingKey = `${roleId}_${permId}`;
+                                  const isSaving = !!matrixSaving[savingKey];
+                                  const isSuperAdmin = rName === "SuperAdmin";
+                                  const isEditable = canEdit !== false && !isSuperAdmin && currentUser?.role === "SuperAdmin";
 
-                {/* ── Satış Raporları ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>📈 Satış Raporları</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Satış istatistikleri</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Finansal raporlar</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-warning">⚠️</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-
-                {/* ── Kampanya/Kupon ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>🏷️ Kampanya ve Kupon</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Kampanya oluşturma</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Kupon yönetimi</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-
-                {/* ── Müşteri İletişimi ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>💬 Müşteri İletişimi</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Müşteri yorumlarını görme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Yorumları onaylama/silme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-
-                {/* ── Sistem Ayarları ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>⚙️ Sistem Ayarları</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Site ayarlarını değiştirme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">ERP/Mikro entegrasyonu</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Veri dışa aktarma</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                  <td className="text-center text-danger">❌</td>
-                </tr>
-
-                {/* ── Müşteri İşlemleri ── */}
-                <tr className="table-light">
-                  <td colSpan="9" className="pm-sticky-col">
-                    <strong>🛍️ Müşteri İşlemleri</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Alışveriş yapma</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">
-                    Kendi siparişlerini görme
-                  </td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                </tr>
-                <tr>
-                  <td className="ps-4 pm-sticky-col">Profil düzenleme</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                  <td className="text-center text-success">✅</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-3">
-            <small className="text-muted">
-              <strong>Açıklama:</strong> ✅ Tam erişim | ⚠️ Kısıtlı erişim
-              (sadece belirli koşullarda) | ❌ Erişim yok
-            </small>
-          </div>
+                                  return (
+                                    <td key={`${roleId}_${permId}`} className="text-center align-middle">
+                                      {isSaving ? (
+                                        <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                          <span className="visually-hidden">...</span>
+                                        </div>
+                                      ) : isEditable ? (
+                                        <div className="form-check d-flex justify-content-center m-0">
+                                          <input
+                                            className="form-check-input"
+                                            type="checkbox"
+                                            checked={hasPerm}
+                                            onChange={() => handlePermissionToggle(roleId, permId, hasPerm)}
+                                            style={{ width: "1.2em", height: "1.2em", cursor: "pointer" }}
+                                          />
+                                        </div>
+                                      ) : (
+                                        <span className={hasPerm ? "text-success" : "text-danger"}>
+                                          {hasPerm ? (
+                                            <i className="fas fa-check-circle"></i>
+                                          ) : (
+                                            <i className="fas fa-times-circle"></i>
+                                          )}
+                                        </span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 d-flex flex-wrap gap-3">
+                <small className="text-muted">
+                  <i className="fas fa-check-circle text-success me-1"></i> Izin var |
+                  <i className="fas fa-times-circle text-danger mx-1"></i> Izin yok |
+                  <input type="checkbox" className="form-check-input mx-1" disabled readOnly style={{ width: "1em", height: "1em" }} /> Duzenlenebilir
+                </small>
+                <small className="text-muted">
+                  <i className="fas fa-info-circle me-1"></i>
+                  SuperAdmin rolunun izinleri degistirilemez (tum izinlere otomatik sahiptir).
+                </small>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -2035,6 +2039,132 @@ const AdminUsers = () => {
                     disabled={creating}
                   >
                     {creating ? "Kaydediliyor..." : "Kullanıcı Ekle"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          Kullanıcı Bilgi Düzenleme Modalı
+          Ad, Soyad, Email, Telefon, Adres, Şehir güncelleme
+          ==================================================================== */}
+      {editModalUser && (
+        <div
+          className="modal d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <form onSubmit={handleEditSubmit}>
+                <div className="modal-header bg-info text-white">
+                  <h5 className="modal-title">
+                    <i className="fas fa-edit me-2"></i>
+                    Kullanıcı Düzenle
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={closeEditModal}
+                    disabled={editing}
+                  ></button>
+                </div>
+                <div className="modal-body">
+                  {editError && (
+                    <div className="alert alert-danger">{editError}</div>
+                  )}
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label">Ad</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="firstName"
+                        value={editForm.firstName}
+                        onChange={handleEditInputChange}
+                        required
+                        disabled={editing}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Soyad</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="lastName"
+                        value={editForm.lastName}
+                        onChange={handleEditInputChange}
+                        required
+                        disabled={editing}
+                      />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label">Email</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        name="email"
+                        value={editForm.email}
+                        onChange={handleEditInputChange}
+                        required
+                        disabled={editing}
+                      />
+                    </div>
+                    <div className="col-12">
+                      <label className="form-label">
+                        Telefon <small className="text-muted">(opsiyonel)</small>
+                      </label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        name="phoneNumber"
+                        value={editForm.phoneNumber}
+                        onChange={handleEditInputChange}
+                        placeholder="05XX XXX XX XX"
+                        disabled={editing}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Adres</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="address"
+                        value={editForm.address}
+                        onChange={handleEditInputChange}
+                        disabled={editing}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label">Şehir</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        name="city"
+                        value={editForm.city}
+                        onChange={handleEditInputChange}
+                        disabled={editing}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={closeEditModal}
+                    disabled={editing}
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-info text-white"
+                    disabled={editing}
+                  >
+                    {editing ? "Kaydediliyor..." : "Kaydet"}
                   </button>
                 </div>
               </form>

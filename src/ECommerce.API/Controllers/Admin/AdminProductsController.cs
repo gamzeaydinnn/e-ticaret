@@ -15,7 +15,7 @@ namespace ECommerce.API.Controllers.Admin;
 
 [ApiController]
 [Route("api/admin/products")]
-[Authorize(Roles = Roles.AdminLike)]
+[Authorize(Roles = Roles.AllStaff)]
 public class AdminProductsController : ControllerBase
 {
     private readonly IProductService _productService;

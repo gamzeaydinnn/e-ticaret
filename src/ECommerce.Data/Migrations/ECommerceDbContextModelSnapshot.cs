@@ -275,6 +275,10 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -2743,6 +2747,103 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("RefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.RefundRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OrderStatusAtRequest")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PosnetHostLogKey")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ProcessedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("RefundFailureReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("RefundType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("full");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TransactionType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrderId")
+                        .HasDatabaseName("IX_RefundRequests_OrderId");
+
+                    b.HasIndex("ProcessedByUserId");
+
+                    b.HasIndex("RequestedAt")
+                        .HasDatabaseName("IX_RefundRequests_RequestedAt");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_RefundRequests_Status");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("IX_RefundRequests_UserId");
+
+                    b.HasIndex("Status", "RequestedAt")
+                        .HasDatabaseName("IX_RefundRequests_Status_RequestedAt");
+
+                    b.ToTable("RefundRequests", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.RolePermission", b =>
                 {
                     b.Property<int>("Id")
@@ -4178,6 +4279,31 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.RefundRequest", b =>
+                {
+                    b.HasOne("ECommerce.Entities.Concrete.Order", "Order")
+                        .WithMany("RefundRequests")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ECommerce.Entities.Concrete.User", "ProcessedByUser")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ECommerce.Entities.Concrete.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Order");
+
+                    b.Navigation("ProcessedByUser");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.RolePermission", b =>
                 {
                     b.HasOne("ECommerce.Entities.Concrete.User", "CreatedByUser")
@@ -4425,6 +4551,8 @@ namespace ECommerce.Data.Migrations
                     b.Navigation("OrderItems");
 
                     b.Navigation("OrderStatusHistories");
+
+                    b.Navigation("RefundRequests");
 
                     b.Navigation("StockReservations");
 

@@ -5,6 +5,7 @@ using ECommerce.Core.DTOs;
 using ECommerce.Core.Constants;
 using ECommerce.Core.Interfaces;
 using ECommerce.API.Data;
+using ECommerce.API.Authorization;
 using System.Security.Claims;
 
 namespace ECommerce.API.Controllers.Admin
@@ -16,7 +17,7 @@ namespace ECommerce.API.Controllers.Admin
     /// </summary>
     [ApiController]
     [Route("api/admin/banners")]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     public class AdminBannersController : ControllerBase
     {
         private readonly IBannerService _bannerService;
@@ -51,6 +52,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Aktif/pasif tümünü döndürür, DisplayOrder'a göre sıralı
         /// </summary>
         [HttpGet]
+        [HasPermission(Permissions.Banners.View)]
         public async Task<IActionResult> GetAll()
         {
             _logger.LogInformation("📋 Admin banner listesi isteniyor - UserId: {UserId}", GetAdminUserId());
@@ -72,6 +74,7 @@ namespace ECommerce.API.Controllers.Admin
         /// ID'ye göre tek bir banner getirir
         /// </summary>
         [HttpGet("{id:int}")]
+        [HasPermission(Permissions.Banners.View)]
         public async Task<IActionResult> GetById(int id)
         {
             _logger.LogInformation("🔍 Banner #{Id} detayı isteniyor", id);
@@ -90,6 +93,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Yeni banner oluşturur (JSON body ile, resim URL'i dışarıdan verilir)
         /// </summary>
         [HttpPost]
+        [HasPermission(Permissions.Banners.Create)]
         public async Task<IActionResult> Create([FromBody] BannerDto dto)
         {
             _logger.LogInformation("➕ Yeni banner oluşturuluyor: {Title}", dto.Title);
@@ -134,6 +138,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Ana sayfa poster yönetimi için tercih edilen yöntem
         /// </summary>
         [HttpPost("upload")]
+        [HasPermission(Permissions.Banners.Create)]
         [RequestSizeLimit(MaxFileSize)]
         public async Task<IActionResult> CreateWithImage(
             [FromForm] string title,
@@ -234,6 +239,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="image">Yüklenecek resim dosyası (jpg, jpeg, png, gif, webp)</param>
         /// <returns>Yüklenen dosyanın URL'ini döner</returns>
         [HttpPost("upload-image")]
+        [HasPermission(Permissions.Banners.Create)]
         [RequestSizeLimit(MaxFileSize)]
         public async Task<IActionResult> UploadImageOnly(IFormFile image)
         {
@@ -310,6 +316,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Mevcut banner'ı günceller (JSON body ile)
         /// </summary>
         [HttpPut("{id:int}")]
+        [HasPermission(Permissions.Banners.Update)]
         public async Task<IActionResult> Update(int id, [FromBody] BannerDto dto)
         {
             _logger.LogInformation("✏️ Banner #{Id} güncelleniyor", id);
@@ -353,6 +360,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Eski resim silinir, yeni resim yüklenir
         /// </summary>
         [HttpPut("{id:int}/upload")]
+        [HasPermission(Permissions.Banners.Update)]
         [RequestSizeLimit(MaxFileSize)]
         public async Task<IActionResult> UpdateWithImage(
             int id,
@@ -471,6 +479,7 @@ namespace ECommerce.API.Controllers.Admin
         /// İlişkili resim dosyası da silinir
         /// </summary>
         [HttpDelete("{id:int}")]
+        [HasPermission(Permissions.Banners.Delete)]
         public async Task<IActionResult> Delete(int id)
         {
             _logger.LogInformation("🗑️ Banner #{Id} siliniyor", id);
@@ -525,6 +534,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Banner sıralamasını toplu günceller (drag & drop desteği)
         /// </summary>
         [HttpPatch("reorder")]
+        [HasPermission(Permissions.Banners.Update)]
         public async Task<IActionResult> Reorder([FromBody] List<BannerOrderDto> orders)
         {
             _logger.LogInformation("🔄 Banner sıralaması güncelleniyor - {Count} öğe", orders.Count);
@@ -556,6 +566,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Banner aktif/pasif durumunu değiştirir (toggle)
         /// </summary>
         [HttpPatch("{id:int}/toggle")]
+        [HasPermission(Permissions.Banners.Update)]
         public async Task<IActionResult> ToggleActive(int id)
         {
             _logger.LogInformation("🔀 Banner #{Id} aktiflik durumu değiştiriliyor", id);
@@ -593,6 +604,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Örn: slider, promo, banner
         /// </summary>
         [HttpGet("type/{type}")]
+        [HasPermission(Permissions.Banners.View)]
         public async Task<IActionResult> GetByType(string type)
         {
             _logger.LogInformation("📋 {Type} tipindeki banner'lar listeleniyor", type);
@@ -618,6 +630,7 @@ namespace ECommerce.API.Controllers.Admin
         /// DİKKAT: Bu işlem geri alınamaz, tüm özel banner'lar silinir
         /// </summary>
         [HttpPost("reset-to-default")]
+        [HasPermission(Permissions.Banners.Delete)]
         public async Task<IActionResult> ResetToDefault()
         {
             _logger.LogWarning("🔄 Banner'lar varsayılana sıfırlanıyor - UserId: {UserId}", GetAdminUserId());

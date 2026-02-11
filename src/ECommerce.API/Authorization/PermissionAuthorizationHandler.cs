@@ -49,7 +49,8 @@ namespace ECommerce.API.Authorization
             if (context.User?.Identity?.IsAuthenticated != true)
             {
                 _logger.LogDebug("Kullanıcı authenticate değil, izin reddedildi");
-                return; // Fail - context.Fail() çağırmıyoruz, diğer handler'lara şans ver
+                context.Fail();
+                return;
             }
 
             // 2. Kullanıcı ID'sini al
@@ -60,14 +61,17 @@ namespace ECommerce.API.Authorization
             if (string.IsNullOrWhiteSpace(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
             {
                 _logger.LogWarning("Kullanıcı ID claim'i bulunamadı veya geçersiz");
+                context.Fail();
                 return;
             }
 
-            // 3. SuperAdmin/Admin kontrolü - hızlı yol
-            // Bu roller tüm izinlere sahip, DB sorgusu yapmaya gerek yok
-            if (context.User.IsInRole(Roles.SuperAdmin) || context.User.IsInRole(Roles.Admin))
+            // 3. SuperAdmin kontrolü - hızlı yol
+            // Sadece SuperAdmin tüm izinlere sahip, DB sorgusu yapmaya gerek yok
+            // NOT: Admin rolü deprecated (eski). Normal izin kontrolünden geçer,
+            // böylece role atanmış izinlerle sınırlı kalır.
+            if (context.User.IsInRole(Roles.SuperAdmin))
             {
-                _logger.LogDebug("SuperAdmin/Admin kullanıcısı, izin verildi: {Permission}", requirement.Permission);
+                _logger.LogDebug("SuperAdmin kullanıcısı, izin verildi: {Permission}", requirement.Permission);
                 context.Succeed(requirement);
                 return;
             }
@@ -85,15 +89,15 @@ namespace ECommerce.API.Authorization
                 else
                 {
                     _logger.LogDebug("İzin reddedildi: UserId={UserId}, Permission={Permission}", userId, requirement.Permission);
-                    // context.Fail() çağırmıyoruz - sadece Succeed çağırmamak yeterli
+                    context.Fail();
                 }
             }
             catch (Exception ex)
             {
                 // Hata durumunda güvenlik için izin verme
-                _logger.LogError(ex, "İzin kontrolü sırasında hata: UserId={UserId}, Permission={Permission}", 
+                _logger.LogError(ex, "İzin kontrolü sırasında hata: UserId={UserId}, Permission={Permission}",
                     userId, requirement.Permission);
-                // Fail - sessizce devam et
+                context.Fail();
             }
         }
     }

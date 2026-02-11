@@ -324,6 +324,79 @@ export default function AdminOrders() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
+  // ============================================================
+  // İADE TALEBİ YÖNETİM STATELERİ
+  // ============================================================
+  const [refundRequests, setRefundRequests] = useState([]);
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [showRefundPanel, setShowRefundPanel] = useState(false);
+  const [refundProcessing, setRefundProcessing] = useState(null);  // İşlenen iade talebi ID
+  const [refundAdminNote, setRefundAdminNote] = useState("");
+
+  // ============================================================
+  // İADE TALEPLERİNİ YÜKLEME
+  // ============================================================
+  const loadRefundRequests = useCallback(async () => {
+    try {
+      setRefundLoading(true);
+      const result = await AdminService.getRefundRequests();
+      const data = result?.data || result || [];
+      setRefundRequests(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("[AdminOrders] İade talepleri yükleme hatası:", err);
+    } finally {
+      setRefundLoading(false);
+    }
+  }, []);
+
+  // İade paneli açılınca verileri yükle
+  useEffect(() => {
+    if (showRefundPanel) {
+      loadRefundRequests();
+    }
+  }, [showRefundPanel, loadRefundRequests]);
+
+  // İade talebi onay/ret işlemi
+  const handleProcessRefund = async (refundRequestId, approve) => {
+    const actionText = approve ? "onaylamak" : "reddetmek";
+    if (!window.confirm(`Bu iade talebini ${actionText} istediğinize emin misiniz?`)) return;
+
+    setRefundProcessing(refundRequestId);
+    try {
+      await AdminService.processRefundRequest(refundRequestId, {
+        approve,
+        adminNote: refundAdminNote || null,
+      });
+      alert(approve ? "İade onaylandı ve para iadesi başlatıldı." : "İade talebi reddedildi.");
+      setRefundAdminNote("");
+      await loadRefundRequests();
+      await loadData(false);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "İşlem başarısız.";
+      alert("Hata: " + msg);
+    } finally {
+      setRefundProcessing(null);
+    }
+  };
+
+  // Başarısız iadeyi yeniden dene
+  const handleRetryRefund = async (refundRequestId) => {
+    if (!window.confirm("Para iadesini yeniden denemek istiyor musunuz?")) return;
+
+    setRefundProcessing(refundRequestId);
+    try {
+      await AdminService.retryRefund(refundRequestId);
+      alert("Para iadesi yeniden denendi.");
+      await loadRefundRequests();
+      await loadData(false);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "İşlem başarısız.";
+      alert("Hata: " + msg);
+    } finally {
+      setRefundProcessing(null);
+    }
+  };
+
   const normalizeStatus = (status) => {
     const raw = (status || "").toString().trim().toLowerCase();
     switch (raw) {
@@ -345,6 +418,28 @@ export default function AdminOrders() {
       case "delivery_failed":
       case "delivery-failed":
         return "delivery_failed";
+      case "paymentfailed":
+      case "payment_failed":
+      case "payment-failed":
+        return "payment_failed";
+      case "chargebackpending":
+      case "chargeback_pending":
+      case "chargeback-pending":
+        return "chargeback_pending";
+      case "readyforpickup":
+      case "ready_for_pickup":
+      case "ready-for-pickup":
+        return "ready_for_pickup";
+      case "partialrefund":
+      case "partial_refund":
+      case "partial-refund":
+        return "partial_refund";
+      case "processing":
+        return "preparing";
+      case "shipped":
+        return "out_for_delivery";
+      case "completed":
+        return "delivered";
       default:
         return raw.replace(/\s+/g, "_");
     }
@@ -388,7 +483,8 @@ export default function AdminOrders() {
     }
     // Ödeme durumu filtresi
     if (paymentFilter !== "all") {
-      const isPaid = order.paymentStatus === "paid" || order.isPaid;
+      const paymentStr = (order.paymentStatus || "").toString().toLowerCase();
+      const isPaid = paymentStr === "paid" || order.isPaid === true;
       if (paymentFilter === "paid" && !isPaid) return false;
       if (paymentFilter === "pending" && isPaid) return false;
     }
@@ -552,6 +648,8 @@ export default function AdminOrders() {
       in_transit: "purple", // 🟣 Mor - Yolda (alternatif)
       delivered: "dark", // ⬛ Koyu - Teslim Edildi
       cancelled: "danger", // 🔴 Kırmızı - İptal
+      refunded: "secondary", // ⬜ Gri - İade Edildi
+      partialrefund: "info", // 🔵 Mavi - Kısmi İade
 
       // Özel Durumlar
       delivery_failed: "danger",
@@ -579,6 +677,8 @@ export default function AdminOrders() {
       in_transit: "#6f42c1",
       delivered: "#343a40",
       cancelled: "#dc3545",
+      refunded: "#6c757d",
+      partialrefund: "#17a2b8",
       delivery_failed: "#dc3545",
     };
     const normalized = (status || "").toLowerCase();
@@ -604,6 +704,8 @@ export default function AdminOrders() {
       in_transit: "Yolda",
       delivered: "Teslim Edildi ✓",
       cancelled: "İptal Edildi",
+      refunded: "İade Edildi",
+      partialrefund: "Kısmi İade",
 
       // Özel Durumlar
       delivery_failed: "Teslimat Başarısız",
@@ -634,6 +736,8 @@ export default function AdminOrders() {
       in_transit: "fa-truck",
       delivered: "fa-check-double",
       cancelled: "fa-times-circle",
+      refunded: "fa-undo",
+      partialrefund: "fa-undo",
       delivery_failed: "fa-exclamation-triangle",
     };
     const normalized = (status || "").toLowerCase();
@@ -725,8 +829,187 @@ export default function AdminOrders() {
             ></i>
             Yenile
           </button>
+
+          {/* İade Talepleri Toggle Butonu */}
+          <button
+            onClick={() => setShowRefundPanel(!showRefundPanel)}
+            className={`btn btn-sm px-2 py-1 ${showRefundPanel ? "btn-warning" : "btn-outline-warning"}`}
+            style={{ fontSize: "0.75rem" }}
+          >
+            <i className="fas fa-undo me-1"></i>
+            İade Talepleri
+            {refundRequests.filter(r => r.status === 0 || r.statusText === "Beklemede").length > 0 && (
+              <span className="badge bg-danger ms-1" style={{ fontSize: "0.6rem" }}>
+                {refundRequests.filter(r => r.status === 0 || r.statusText === "Beklemede").length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          İADE TALEBİ YÖNETİM PANELİ
+          Admin / Müşteri hizmetleri iade taleplerini buradan yönetir
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {showRefundPanel && (
+        <div className="card border-warning mb-3">
+          <div className="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+            <h6 className="mb-0">
+              <i className="fas fa-undo me-2"></i>
+              İade Talepleri Yönetimi
+            </h6>
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-sm btn-outline-dark"
+                onClick={loadRefundRequests}
+                disabled={refundLoading}
+              >
+                <i className={`fas fa-sync-alt ${refundLoading ? "fa-spin" : ""}`}></i>
+              </button>
+              <button
+                className="btn btn-sm btn-outline-dark"
+                onClick={() => setShowRefundPanel(false)}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+          <div className="card-body p-0">
+            {refundLoading ? (
+              <div className="text-center py-4">
+                <div className="spinner-border text-warning"></div>
+                <p className="mt-2 text-muted">Yükleniyor...</p>
+              </div>
+            ) : refundRequests.length === 0 ? (
+              <div className="text-center py-4 text-muted">
+                <i className="fas fa-inbox fa-2x mb-2 d-block"></i>
+                İade talebi bulunmuyor
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover table-sm mb-0" style={{ fontSize: "0.8rem" }}>
+                  <thead className="table-light">
+                    <tr>
+                      <th>#</th>
+                      <th>Sipariş</th>
+                      <th>Müşteri</th>
+                      <th>Tutar</th>
+                      <th>Sebep</th>
+                      <th>Durum</th>
+                      <th>Tarih</th>
+                      <th>İşlem</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundRequests.map((req) => (
+                      <tr key={req.id} className={
+                        (req.status === 0 || req.statusText === "Beklemede")
+                          ? "table-warning"
+                          : (req.status === 5 || req.statusText === "İade Başarısız")
+                            ? "table-danger"
+                            : ""
+                      }>
+                        <td>{req.id}</td>
+                        <td>
+                          <strong>{req.orderNumber || `#${req.orderId}`}</strong>
+                          <br />
+                          <small className="text-muted">{req.orderStatusAtRequest}</small>
+                        </td>
+                        <td>
+                          {req.customerName || "-"}
+                          {req.customerPhone && (
+                            <><br /><small>{req.customerPhone}</small></>
+                          )}
+                        </td>
+                        <td className="fw-bold text-danger">
+                          {req.refundAmount?.toFixed(2)} TL
+                          <br />
+                          <small className="text-muted">
+                            Sipariş: {req.orderTotalPrice?.toFixed(2)} TL
+                          </small>
+                        </td>
+                        <td style={{ maxWidth: "200px" }}>
+                          <small>{req.reason}</small>
+                        </td>
+                        <td>
+                          <span className={`badge ${
+                            req.statusText === "Beklemede" ? "bg-warning text-dark" :
+                            req.statusText === "Onaylandı" ? "bg-info" :
+                            req.statusText === "Reddedildi" ? "bg-secondary" :
+                            req.statusText === "İade Edildi" ? "bg-success" :
+                            req.statusText === "Otomatik İptal Edildi" ? "bg-primary" :
+                            req.statusText === "İade Başarısız" ? "bg-danger" :
+                            "bg-secondary"
+                          }`}>
+                            {req.statusText}
+                          </span>
+                        </td>
+                        <td>
+                          <small>{new Date(req.requestedAt).toLocaleDateString("tr-TR")}</small>
+                          <br />
+                          <small className="text-muted">
+                            {new Date(req.requestedAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                          </small>
+                        </td>
+                        <td>
+                          {(req.status === 0 || req.statusText === "Beklemede") && (
+                            <div className="d-flex flex-column gap-1">
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                placeholder="Admin notu..."
+                                style={{ fontSize: "0.7rem", minWidth: "120px" }}
+                                value={refundProcessing === req.id ? refundAdminNote : ""}
+                                onChange={(e) => {
+                                  setRefundProcessing(req.id);
+                                  setRefundAdminNote(e.target.value);
+                                }}
+                              />
+                              <div className="btn-group btn-group-sm">
+                                <button
+                                  className="btn btn-success btn-sm"
+                                  onClick={() => handleProcessRefund(req.id, true)}
+                                  disabled={refundProcessing === req.id && refundLoading}
+                                  title="İade Onayla"
+                                >
+                                  <i className="fas fa-check"></i> Onayla
+                                </button>
+                                <button
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => handleProcessRefund(req.id, false)}
+                                  disabled={refundProcessing === req.id && refundLoading}
+                                  title="İade Reddet"
+                                >
+                                  <i className="fas fa-times"></i> Reddet
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {(req.status === 5 || req.statusText === "İade Başarısız") && (
+                            <button
+                              className="btn btn-outline-warning btn-sm"
+                              onClick={() => handleRetryRefund(req.id)}
+                              disabled={refundProcessing === req.id}
+                            >
+                              <i className="fas fa-redo me-1"></i>
+                              Tekrar Dene
+                            </button>
+                          )}
+                          {req.processedAt && (
+                            <small className="text-muted d-block mt-1">
+                              {req.processedByName || "Admin"} - {new Date(req.processedAt).toLocaleDateString("tr-TR")}
+                            </small>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Yeni Sipariş Bildirimi - Onay bekleyen sipariş varsa göster */}
       {orders.filter((o) =>
@@ -1166,7 +1449,7 @@ export default function AdminOrders() {
                         </td>
                         {/* Ödeme Durumu Sütunu */}
                         <td className="px-1 py-2 d-none d-sm-table-cell">
-                          {order.paymentStatus === "paid" || order.isPaid ? (
+                          {(order.paymentStatus || "").toString().toLowerCase() === "paid" || order.isPaid === true ? (
                             <span
                               className="badge bg-success"
                               style={{ fontSize: "0.55rem" }}
@@ -1284,10 +1567,9 @@ export default function AdminOrders() {
                             )}
 
                             {/* 🛵 DAĞITIMA ÇIKTI - Kuryeye atanan sipariş için */}
-                            {!isStoreAttendant &&
-                              (normalizedStatus === "assigned" ||
+                            {(normalizedStatus === "assigned" ||
                                 normalizedStatus === "picked_up" ||
-                                normalizedStatus === "picked_up") && (
+                                normalizedStatus === "pickedup") && (
                                 <button
                                   onClick={() =>
                                     updateOrderStatus(
@@ -1310,9 +1592,8 @@ export default function AdminOrders() {
                               )}
 
                             {/* ✅ TESLİM EDİLDİ - Dağıtımdaki sipariş için */}
-                            {!isStoreAttendant &&
-                              (normalizedStatus === "out_for_delivery" ||
-                                normalizedStatus === "out_for_delivery") && (
+                            {(normalizedStatus === "out_for_delivery" ||
+                                normalizedStatus === "outfordelivery") && (
                                 <button
                                   onClick={() =>
                                     updateOrderStatus(order.id, "delivered")
@@ -1325,23 +1606,32 @@ export default function AdminOrders() {
                                 </button>
                               )}
 
-                            {/* 🚫 İPTAL - Sadece Admin için (StoreAttendant iptal edemez) */}
-                            {!isStoreAttendant &&
-                              normalizedStatus !== "delivered" &&
-                              normalizedStatus !== "cancelled" && (
+                            {/* 🚫 İPTAL + PARA İADESİ - Admin ve StoreAttendant için
+                                İptal edilince POSNET üzerinden para iadesi de tetiklenir */}
+                            {normalizedStatus !== "delivered" &&
+                              normalizedStatus !== "cancelled" &&
+                              normalizedStatus !== "refunded" && (
                                 <button
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (
-                                      window.confirm(
-                                        "Siparişi iptal etmek istediğinize emin misiniz?",
+                                      !window.confirm(
+                                        "Siparişi iptal etmek istediğinize emin misiniz?\nÖdeme yapılmışsa otomatik para iadesi yapılacaktır.",
                                       )
-                                    ) {
-                                      updateOrderStatus(order.id, "cancelled");
+                                    ) return;
+                                    try {
+                                      await AdminService.cancelOrderWithRefund(
+                                        order.id,
+                                        "Admin/Görevli tarafından iptal edildi"
+                                      );
+                                      await loadData(false);
+                                      loadRefundRequests();
+                                    } catch (err) {
+                                      alert("İptal hatası: " + (err?.response?.data?.message || err?.message || "Bilinmeyen hata"));
                                     }
                                   }}
                                   className="btn btn-outline-danger p-1"
                                   style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                                  title="🚫 İptal Et"
+                                  title="🚫 İptal Et + Para İadesi"
                                 >
                                   <i className="fas fa-times"></i>
                                 </button>
@@ -2442,10 +2732,10 @@ export default function AdminOrders() {
                     </div>
 
                     {/* ================================================================
-                    ADMİN MANUEL DURUM DEĞİŞTİRME
-                    Acil durumlar için admin tüm durumları değiştirebilir
+                    ADMİN / MARKET GÖREVLİSİ MANUEL DURUM DEĞİŞTİRME
+                    Acil durumlar için tüm durumları değiştirebilir
                     ================================================================ */}
-                    {!isStoreAttendant && (
+                    {(
                       <div className="mt-3 p-2 border rounded bg-light">
                         <h6
                           className="fw-bold mb-2"
@@ -2460,7 +2750,8 @@ export default function AdminOrders() {
                         >
                           Acil durumlarda siparişin durumunu manuel olarak
                           değiştirebilirsiniz. Bu işlem tüm taraflara (müşteri,
-                          kurye, mağaza) bildirim gönderir.
+                          kurye, mağaza) bildirim gönderir. Para iadesi
+                          gerekiyorsa İptal Et butonunu kullanın.
                         </p>
 
                         <div className="row g-2 align-items-end">

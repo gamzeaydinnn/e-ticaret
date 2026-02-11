@@ -169,7 +169,7 @@ export const AuthProvider = ({ children }) => {
         const cachedPermissions = localStorage.getItem("userPermissions");
         const cacheTimestamp = localStorage.getItem("permissionsCacheTime");
         const cachedRole = localStorage.getItem("permissionsCacheRole");
-        const cacheMaxAge = 5 * 60 * 1000; // 5 dakika
+        const cacheMaxAge = 1 * 60 * 1000; // 1 dakika — izin değişiklikleri hızlı yansısın
 
         // Cache geçerlilik kontrolü:
         // 1. forceRefresh true ise cache'i atla
@@ -409,32 +409,42 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Login error:", error);
 
-      // Backend bağlantısı yoksa demo login'e geç
-      const demoUser = demoUsers.find(
-        (u) => u.email === email && u.password === password,
-      );
+      // Backend bağlantısı yoksa demo login'e geç (SADECE DEVELOPMENT)
+      if (process.env.NODE_ENV === "development") {
+        const demoUser = demoUsers.find(
+          (u) => u.email === email && u.password === password,
+        );
 
-      if (demoUser) {
-        const token = "demo_token_" + Date.now();
-        const userData = {
-          id: demoUser.id,
-          email: demoUser.email,
-          firstName: demoUser.firstName,
-          lastName: demoUser.lastName,
-          name: demoUser.name || `${demoUser.firstName} ${demoUser.lastName}`,
-        };
+        if (demoUser) {
+          const token = "demo_token_" + Date.now();
+          const userData = {
+            id: demoUser.id,
+            email: demoUser.email,
+            firstName: demoUser.firstName,
+            lastName: demoUser.lastName,
+            name: demoUser.name || `${demoUser.firstName} ${demoUser.lastName}`,
+          };
 
-        // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(token);
-        localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", demoUser.id.toString());
+          // Token ve kullanıcı bilgilerini kaydet
+          AuthService.saveToken(token);
+          localStorage.setItem("user", JSON.stringify(userData));
+          localStorage.setItem("userId", demoUser.id.toString());
 
-        setUser(userData);
+          setUser(userData);
 
-        return { success: true, user: userData };
-      } else {
-        return { success: false, error: "Geçersiz email veya şifre!" };
+          return { success: true, user: userData };
+        } else {
+          return { success: false, error: "Geçersiz email veya şifre!" };
+        }
       }
+
+      // Production'da demo login yok, backend hatası döndür
+      return {
+        success: false,
+        error:
+          error?.response?.data?.message ||
+          "Giriş yapılamadı. Lütfen tekrar deneyin.",
+      };
     }
   };
 
@@ -484,7 +494,12 @@ export const AuthProvider = ({ children }) => {
 
     setUser(null);
 
-    console.log("🧹 Kullanıcı verileri temizlendi (auth + sepet + favoriler)");
+    // GÜVENLİK: Production'da debug log'ları kapalı
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "🧹 Kullanıcı verileri temizlendi (auth + sepet + favoriler)",
+      );
+    }
   };
 
   const register = async (
@@ -533,44 +548,54 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error("Register error:", error);
 
-      // Backend bağlantısı yoksa demo register'a geç
-      const existingUser = demoUsers.find((u) => u.email === email);
+      // Backend bağlantısı yoksa demo register'a geç (SADECE DEVELOPMENT)
+      if (process.env.NODE_ENV === "development") {
+        const existingUser = demoUsers.find((u) => u.email === email);
 
-      if (existingUser) {
-        return { success: false, error: "Bu email adresi zaten kullanımda!" };
+        if (existingUser) {
+          return { success: false, error: "Bu email adresi zaten kullanımda!" };
+        }
+
+        // Şifre kontrolü
+        if (!password || password.length < 6) {
+          return { success: false, error: "Şifre en az 6 karakter olmalıdır!" };
+        }
+
+        // Yeni kullanıcı oluştur (demo için)
+        const newUser = {
+          id: Date.now(),
+          email,
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`,
+          password, // Demo için şifreyi de saklayalım
+        };
+
+        // Demo kullanıcılar listesine ekle
+        const updatedDemoUsers = [...demoUsers, newUser];
+        setDemoUsers(updatedDemoUsers);
+
+        const token = "demo_token_" + Date.now();
+
+        AuthService.saveToken(token);
+        localStorage.setItem("user", JSON.stringify(newUser));
+        localStorage.setItem("userId", newUser.id.toString());
+
+        // Demo kullanıcıları localStorage'a kaydet
+        localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
+
+        setUser(newUser);
+
+        return { success: true, user: newUser };
       }
 
-      // Şifre kontrolü
-      if (!password || password.length < 6) {
-        return { success: false, error: "Şifre en az 6 karakter olmalıdır!" };
-      }
-
-      // Yeni kullanıcı oluştur (demo için)
-      const newUser = {
-        id: Date.now(),
-        email,
-        firstName,
-        lastName,
-        name: `${firstName} ${lastName}`,
-        password, // Demo için şifreyi de saklayalım
+      // Production'da demo register yok, backend hatası döndür
+      return {
+        success: false,
+        error:
+          error?.response?.data?.message ||
+          "Kayıt yapılamadı. Lütfen tekrar deneyin.",
       };
-
-      // Demo kullanıcılar listesine ekle
-      const updatedDemoUsers = [...demoUsers, newUser];
-      setDemoUsers(updatedDemoUsers);
-
-      const token = "demo_token_" + Date.now();
-
-      AuthService.saveToken(token);
-      localStorage.setItem("user", JSON.stringify(newUser));
-      localStorage.setItem("userId", newUser.id.toString());
-
-      // Demo kullanıcıları localStorage'a kaydet
-      localStorage.setItem("demoUsers", JSON.stringify(updatedDemoUsers));
-
-      setUser(newUser);
-
-      return { success: true, user: newUser };
     }
   };
 
@@ -756,21 +781,31 @@ export const AuthProvider = ({ children }) => {
           error: data?.message || "Sosyal giriş başarısız",
         };
       } catch (e) {
-        // Backend yoksa demo sosyal login
-        const fallbackUser = {
-          id: Date.now(),
-          email: profile.email || `${provider}_demo@local`,
-          firstName: profile.firstName || provider,
-          lastName: profile.lastName || "User",
-          name: profile.name || `${provider} User`,
-          role: "User",
+        // Backend yoksa demo sosyal login (SADECE DEVELOPMENT)
+        if (process.env.NODE_ENV === "development") {
+          const fallbackUser = {
+            id: Date.now(),
+            email: profile.email || `${provider}_demo@local`,
+            firstName: profile.firstName || provider,
+            lastName: profile.lastName || "User",
+            name: profile.name || `${provider} User`,
+            role: "User",
+          };
+          const token = `${provider}_demo_token_${Date.now()}`;
+          AuthService.saveToken(token);
+          localStorage.setItem("user", JSON.stringify(fallbackUser));
+          localStorage.setItem("userId", String(fallbackUser.id));
+          setUser(fallbackUser);
+          return { success: true, user: fallbackUser, demo: true };
+        }
+
+        // Production'da demo social login yok, backend hatası döndür
+        return {
+          success: false,
+          error:
+            e?.response?.data?.message ||
+            "Sosyal giriş başarısız. Lütfen tekrar deneyin.",
         };
-        const token = `${provider}_demo_token_${Date.now()}`;
-        AuthService.saveToken(token);
-        localStorage.setItem("user", JSON.stringify(fallbackUser));
-        localStorage.setItem("userId", String(fallbackUser.id));
-        setUser(fallbackUser);
-        return { success: true, user: fallbackUser, demo: true };
       }
     },
     logout,
@@ -790,6 +825,7 @@ export const AuthProvider = ({ children }) => {
     hasAnyPermission,
     hasAllPermissions,
     canAccessAdminPanel,
+    loadUserPermissions,
     refreshPermissions,
     clearPermissionsCache,
   };

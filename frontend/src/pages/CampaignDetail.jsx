@@ -45,7 +45,7 @@ export default function CampaignDetail() {
   return (
     <>
       <Helmet>
-        <title>{campaign.title} — Doğadan Sofranza</title>
+        <title>{campaign.title} — Gölköy Gurme</title>
         <meta
           name="description"
           content={

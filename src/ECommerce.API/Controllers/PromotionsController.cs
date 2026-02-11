@@ -51,6 +51,7 @@ namespace ECommerce.API.Controllers
                     Id = c.Id,
                     Name = c.Name,
                     Description = c.Description,
+                    ImageUrl = c.ImageUrl,
                     Type = c.Type,
                     TargetType = c.TargetType,
                     TargetIds = c.Targets?.Select(t => t.TargetId).ToList() ?? new List<int>(),
@@ -100,6 +101,7 @@ namespace ECommerce.API.Controllers
                     Id = c.Id,
                     Name = c.Name,
                     Description = c.Description,
+                    ImageUrl = c.ImageUrl,
                     Type = c.Type,
                     TargetType = c.TargetType,
                     TargetIds = c.Targets?.Select(t => t.TargetId).ToList() ?? new List<int>(),
@@ -142,6 +144,7 @@ namespace ECommerce.API.Controllers
                     Id = c.Id,
                     Name = c.Name,
                     Description = c.Description,
+                    ImageUrl = c.ImageUrl,
                     Type = c.Type,
                     TargetType = c.TargetType,
                     TargetIds = c.Targets?.Select(t => t.TargetId).ToList() ?? new List<int>(),
@@ -523,6 +526,7 @@ namespace ECommerce.API.Controllers
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? ImageUrl { get; set; }
         public CampaignType Type { get; set; }
         public CampaignTargetType TargetType { get; set; }
         public List<int> TargetIds { get; set; } = new();

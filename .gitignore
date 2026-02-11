@@ -305,3 +305,19 @@ yarn-error.log*
 
 # Dev email pickup folder
 maildrop/
+
+# ═══════════════════════════════════════════════════════════════
+# Geçici ve Debug dosyaları
+# ═══════════════════════════════════════════════════════════════
+
+# Debug dosyaları
+netgsm_debug.txt
+**/netgsm_debug.txt
+
+# Claude temp dosyaları
+tmpclaude-*
+**/tmpclaude-*
+nul
+
+# Publish çıktıları (iç içe publish klasörleri)
+**/publish/publish/

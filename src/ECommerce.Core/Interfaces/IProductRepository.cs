@@ -12,6 +12,11 @@ namespace ECommerce.Core.Interfaces
         Task<IEnumerable<Product>> SearchAsync(string searchTerm);
         Task<Product?> GetBySkuAsync(string sku);
 
+        /// <summary>
+        /// Toplu ID sorgulama - N+1 query problemini önler
+        /// </summary>
+        Task<List<Product>> GetByIdsAsync(IEnumerable<int> ids);
+
         // 🔹 CRUD işlemleri (senkron + asenkron)
         new Task<Product?> GetByIdAsync(int id);
         Product GetById(int id);

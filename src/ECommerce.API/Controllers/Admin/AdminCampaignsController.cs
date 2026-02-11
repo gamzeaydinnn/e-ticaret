@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
@@ -10,8 +11,10 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using ECommerce.API.Authorization;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -25,7 +28,7 @@ namespace ECommerce.API.Controllers.Admin
     /// - BuyXPayY: X al Y öde (örn: 3 al 2 öde)
     /// - FreeShipping: Ücretsiz kargo
     /// </summary>
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     [ApiController]
     [Route("api/admin/campaigns")]
     public class AdminCampaignsController : ControllerBase
@@ -34,19 +37,26 @@ namespace ECommerce.API.Controllers.Admin
         private readonly ICampaignApplicationService _campaignApplicationService;
         private readonly IProductRepository _productRepository;
         private readonly ICategoryRepository _categoryRepository;
+        private readonly IFileStorage _fileStorage;
         private readonly ILogger<AdminCampaignsController> _logger;
+
+        private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        private static readonly string[] AllowedMimeTypes = { "image/jpeg", "image/png", "image/gif", "image/webp" };
+        private const long MaxFileSize = 10 * 1024 * 1024;
 
         public AdminCampaignsController(
             ICampaignService campaignService,
             ICampaignApplicationService campaignApplicationService,
             IProductRepository productRepository,
             ICategoryRepository categoryRepository,
+            IFileStorage fileStorage,
             ILogger<AdminCampaignsController> logger)
         {
             _campaignService = campaignService ?? throw new ArgumentNullException(nameof(campaignService));
             _campaignApplicationService = campaignApplicationService ?? throw new ArgumentNullException(nameof(campaignApplicationService));
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _categoryRepository = categoryRepository ?? throw new ArgumentNullException(nameof(categoryRepository));
+            _fileStorage = fileStorage ?? throw new ArgumentNullException(nameof(fileStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -56,6 +66,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Tüm kampanyaları listeler.
         /// </summary>
         [HttpGet]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<IEnumerable<CampaignListDto>>> GetCampaigns()
         {
             try
@@ -78,6 +89,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Belirli bir kampanyanın detaylarını getirir.
         /// </summary>
         [HttpGet("{id:int}")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<CampaignDetailDto>> GetCampaignById(int id)
         {
             try
@@ -102,12 +114,13 @@ namespace ECommerce.API.Controllers.Admin
         /// Yeni kampanya oluşturur.
         /// </summary>
         [HttpPost]
+        [HasPermission(Permissions.Campaigns.Create)]
         public async Task<ActionResult<CampaignDetailDto>> CreateCampaign([FromBody] CampaignSaveDto dto)
         {
             try
             {
                 // Validasyon
-                var validationResult = ValidateCampaignDto(dto);
+                var validationResult = await ValidateCampaignDto(dto);
                 if (validationResult != null)
                 {
                     return validationResult;
@@ -145,12 +158,13 @@ namespace ECommerce.API.Controllers.Admin
         /// Mevcut kampanyayı günceller.
         /// </summary>
         [HttpPut("{id:int}")]
+        [HasPermission(Permissions.Campaigns.Update)]
         public async Task<ActionResult<CampaignDetailDto>> UpdateCampaign(int id, [FromBody] CampaignSaveDto dto)
         {
             try
             {
                 // Validasyon
-                var validationResult = ValidateCampaignDto(dto);
+                var validationResult = await ValidateCampaignDto(dto);
                 if (validationResult != null)
                 {
                     return validationResult;
@@ -198,6 +212,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanyayı siler.
         /// </summary>
         [HttpDelete("{id:int}")]
+        [HasPermission(Permissions.Campaigns.Delete)]
         public async Task<IActionResult> DeleteCampaign(int id)
         {
             try
@@ -225,6 +240,83 @@ namespace ECommerce.API.Controllers.Admin
             }
         }
 
+        /// <summary>
+        /// Kampanya görseli yükler. Opsiyonel - kampanya görselsiz de çalışır.
+        /// Güvenlik önlemleri:
+        /// - Path traversal koruması (filename sanitization)
+        /// - Magic number validation (gerçek dosya içeriği kontrolü)
+        /// - MIME type ve extension double check
+        /// - Dosya boyutu limiti
+        /// </summary>
+        [HttpPost("upload-image")]
+        [HasPermission(Permissions.Campaigns.Create)]
+        public async Task<IActionResult> UploadCampaignImage(IFormFile image)
+        {
+            try
+            {
+                // 1. Null ve boş dosya kontrolü
+                if (image == null || image.Length == 0)
+                    return BadRequest(new { message = "Lütfen bir resim dosyası seçin." });
+
+                // 2. Dosya boyutu kontrolü (10MB)
+                if (image.Length > MaxFileSize)
+                    return BadRequest(new { message = $"Dosya boyutu maksimum {MaxFileSize / (1024 * 1024)}MB olabilir." });
+
+                // 3. Extension kontrolü (client-side bypass koruması)
+                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+                if (!AllowedExtensions.Contains(extension))
+                    return BadRequest(new { message = $"Desteklenen dosya türleri: {string.Join(", ", AllowedExtensions)}" });
+
+                // 4. MIME type kontrolü (client-side bypass koruması)
+                var mimeType = image.ContentType.ToLowerInvariant();
+                if (!AllowedMimeTypes.Contains(mimeType))
+                    return BadRequest(new { message = "Geçersiz dosya türü. Sadece resim dosyaları kabul edilir." });
+
+                string imageUrl;
+                using (var stream = image.OpenReadStream())
+                {
+                    // 5. MAGIC NUMBER VALIDATION (en güvenli kontrol)
+                    // Dosya içeriğinin gerçekten image olup olmadığını kontrol eder
+                    // Extension veya MIME type değiştirme saldırılarını engeller
+                    if (!IsValidImageFile(stream))
+                    {
+                        _logger.LogWarning(
+                            "Geçersiz image file upload denemesi. FileName: {FileName}, ContentType: {ContentType}",
+                            image.FileName, image.ContentType);
+
+                        return BadRequest(new
+                        {
+                            message = "Dosya içeriği geçersiz. Sadece gerçek resim dosyaları yüklenebilir."
+                        });
+                    }
+
+                    // 6. Güvenli ve benzersiz filename oluştur
+                    // Path traversal saldırılarını engeller (../../etc/passwd gibi)
+                    // GUID ile collision'ları önler
+                    var safeFileName = SanitizeAndGenerateUniqueFileName(image.FileName);
+
+                    _logger.LogInformation(
+                        "Güvenli filename oluşturuldu. Original: {Original}, Safe: {Safe}",
+                        image.FileName, safeFileName);
+
+                    // 7. Dosyayı güvenli storage'a yükle
+                    imageUrl = await _fileStorage.UploadAsync(stream, safeFileName, image.ContentType);
+                }
+
+                _logger.LogInformation(
+                    "Kampanya görseli başarıyla yüklendi. URL: {ImageUrl}", imageUrl);
+
+                return Ok(new { success = true, imageUrl });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kampanya görseli yüklenirken hata oluştu. FileName: {FileName}",
+                    image?.FileName ?? "unknown");
+
+                return StatusCode(500, new { message = "Görsel yüklenirken hata oluştu." });
+            }
+        }
+
         #endregion
 
         #region Durum Yönetimi
@@ -233,6 +325,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanya aktif/pasif durumunu değiştirir.
         /// </summary>
         [HttpPatch("{id:int}/toggle")]
+        [HasPermission(Permissions.Campaigns.Update)]
         public async Task<ActionResult<object>> ToggleCampaignStatus(int id)
         {
             try
@@ -284,6 +377,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanyayı aktif eder.
         /// </summary>
         [HttpPatch("{id:int}/activate")]
+        [HasPermission(Permissions.Campaigns.Update)]
         public async Task<IActionResult> ActivateCampaign(int id)
         {
             try
@@ -318,6 +412,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanyayı pasif eder.
         /// </summary>
         [HttpPatch("{id:int}/deactivate")]
+        [HasPermission(Permissions.Campaigns.Update)]
         public async Task<IActionResult> DeactivateCampaign(int id)
         {
             try
@@ -353,6 +448,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Bakım veya toplu güncelleme için kullanılır.
         /// </summary>
         [HttpPost("recalculate-all")]
+        [HasPermission(Permissions.Campaigns.Update)]
         public async Task<ActionResult<object>> RecalculateAllCampaigns()
         {
             try
@@ -388,6 +484,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Frontend dropdown için kullanılır.
         /// </summary>
         [HttpGet("types")]
+        [HasPermission(Permissions.Campaigns.View)]
         public ActionResult<IEnumerable<object>> GetCampaignTypes()
         {
             var types = Enum.GetValues<CampaignType>()
@@ -407,6 +504,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Frontend dropdown için kullanılır.
         /// </summary>
         [HttpGet("target-types")]
+        [HasPermission(Permissions.Campaigns.View)]
         public ActionResult<IEnumerable<object>> GetTargetTypes()
         {
             var types = Enum.GetValues<CampaignTargetType>()
@@ -425,6 +523,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanya için seçilebilir ürünleri listeler.
         /// </summary>
         [HttpGet("products")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<IEnumerable<object>>> GetProductsForSelection()
         {
             try
@@ -455,6 +554,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Kampanya için seçilebilir kategorileri listeler.
         /// </summary>
         [HttpGet("categories")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<IEnumerable<object>>> GetCategoriesForSelection()
         {
             try
@@ -484,6 +584,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Aktif kampanya sayısını döndürür (dashboard için).
         /// </summary>
         [HttpGet("stats")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<object>> GetCampaignStats()
         {
             try
@@ -520,6 +621,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <param name="dto">Kampanya bilgileri (henüz kaydedilmemiş olabilir)</param>
         /// <returns>Etkilenecek ürünler, eski/yeni fiyatlar ve toplam indirim tutarı</returns>
         [HttpPost("preview")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<CampaignPreviewResult>> PreviewCampaign([FromBody] CampaignSaveDto dto)
         {
             try
@@ -611,6 +713,7 @@ namespace ECommerce.API.Controllers.Admin
         /// Mevcut bir kampanyanın önizlemesini getirir.
         /// </summary>
         [HttpGet("{id:int}/preview")]
+        [HasPermission(Permissions.Campaigns.View)]
         public async Task<ActionResult<CampaignPreviewResult>> PreviewExistingCampaign(int id)
         {
             try
@@ -626,6 +729,7 @@ namespace ECommerce.API.Controllers.Admin
                 {
                     Name = campaign.Name,
                     Description = campaign.Description,
+                    ImageUrl = campaign.ImageUrl,
                     StartDate = campaign.StartDate,
                     EndDate = campaign.EndDate,
                     IsActive = campaign.IsActive,
@@ -662,17 +766,11 @@ namespace ECommerce.API.Controllers.Admin
                     break;
 
                 case CampaignTargetType.Product:
-                    // Belirli ürünler
+                    // Belirli ürünler - Toplu sorgulama ile N+1 query problemi önlendi
                     if (dto.TargetIds?.Any() == true)
                     {
-                        foreach (var productId in dto.TargetIds)
-                        {
-                            var product = await _productRepository.GetByIdAsync(productId);
-                            if (product != null && product.IsActive)
-                            {
-                                products.Add(product);
-                            }
-                        }
+                        // Tek seferde tüm ürünleri getir (N sorgu yerine 1 sorgu)
+                        products = await _productRepository.GetByIdsAsync(dto.TargetIds);
                     }
                     break;
 
@@ -714,7 +812,7 @@ namespace ECommerce.API.Controllers.Admin
         /// <summary>
         /// Kampanya DTO validasyonu yapar.
         /// </summary>
-        private ActionResult? ValidateCampaignDto(CampaignSaveDto? dto)
+        private async Task<ActionResult?> ValidateCampaignDto(CampaignSaveDto? dto)
         {
             if (dto == null || !ModelState.IsValid)
             {
@@ -761,6 +859,44 @@ namespace ECommerce.API.Controllers.Admin
                 return BadRequest(new { message = "Kategori veya ürün bazlı kampanyalar için en az bir hedef seçilmelidir." });
             }
 
+            // ====================================================================
+            // HEDEF ID VARLIK KONTROLÜ
+            // Admin tarafından gönderilen ID'lerin gerçekten veritabanında
+            // var olduğunu kontrol eder. Olmayan ID'ler için hata döner.
+            // ====================================================================
+            if (dto.TargetType == CampaignTargetType.Product && dto.TargetIds?.Any() == true)
+            {
+                var validProducts = await _productRepository.GetByIdsAsync(dto.TargetIds);
+                var validProductIds = validProducts.Select(p => p.Id).ToHashSet();
+                var invalidIds = dto.TargetIds.Where(id => !validProductIds.Contains(id)).ToList();
+
+                if (invalidIds.Any())
+                {
+                    return BadRequest(new
+                    {
+                        message = "Geçersiz ürün ID'leri bulundu. Lütfen var olan aktif ürünler seçin.",
+                        invalidIds = invalidIds,
+                        invalidCount = invalidIds.Count
+                    });
+                }
+            }
+            else if (dto.TargetType == CampaignTargetType.Category && dto.TargetIds?.Any() == true)
+            {
+                var validCategories = await _categoryRepository.GetByIdsAsync(dto.TargetIds);
+                var validCategoryIds = validCategories.Select(c => c.Id).ToHashSet();
+                var invalidIds = dto.TargetIds.Where(id => !validCategoryIds.Contains(id)).ToList();
+
+                if (invalidIds.Any())
+                {
+                    return BadRequest(new
+                    {
+                        message = "Geçersiz kategori ID'leri bulundu. Lütfen var olan aktif kategoriler seçin.",
+                        invalidIds = invalidIds,
+                        invalidCount = invalidIds.Count
+                    });
+                }
+            }
+
             return null;
         }
 
@@ -774,6 +910,7 @@ namespace ECommerce.API.Controllers.Admin
                 Id = campaign.Id,
                 Name = campaign.Name,
                 Description = campaign.Description,
+                ImageUrl = campaign.ImageUrl,
                 StartDate = campaign.StartDate,
                 EndDate = campaign.EndDate,
                 IsActive = campaign.IsActive,
@@ -795,6 +932,7 @@ namespace ECommerce.API.Controllers.Admin
                 Id = campaign.Id,
                 Name = campaign.Name,
                 Description = campaign.Description,
+                ImageUrl = campaign.ImageUrl,
                 StartDate = campaign.StartDate,
                 EndDate = campaign.EndDate,
                 IsActive = campaign.IsActive,
@@ -915,6 +1053,142 @@ namespace ECommerce.API.Controllers.Admin
             };
         }
         #pragma warning restore CS0618
+
+        /// <summary>
+        /// Dosya içeriğinin gerçekten image olup olmadığını magic number (file signature) ile kontrol eder.
+        /// XSS ve malicious file upload saldırılarına karşı koruma sağlar.
+        /// </summary>
+        /// <param name="fileStream">Kontrol edilecek dosya stream'i</param>
+        /// <returns>Geçerli image ise true, değilse false</returns>
+        private static bool IsValidImageFile(Stream fileStream)
+        {
+            // Magic number (file signature) kontrol tablosu
+            // Her image formatının benzersiz byte signature'ı vardır
+            var imageSignatures = new Dictionary<string, byte[][]>
+            {
+                // JPEG: FF D8 FF
+                { ".jpg", new[] { new byte[] { 0xFF, 0xD8, 0xFF } } },
+                { ".jpeg", new[] { new byte[] { 0xFF, 0xD8, 0xFF } } },
+
+                // PNG: 89 50 4E 47 0D 0A 1A 0A
+                { ".png", new[] { new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A } } },
+
+                // GIF: 47 49 46 38 (GIF8)
+                { ".gif", new[] {
+                    new byte[] { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 }, // GIF87a
+                    new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 }  // GIF89a
+                }},
+
+                // WebP: 52 49 46 46 ... 57 45 42 50 (RIFF...WEBP)
+                { ".webp", new[] { new byte[] { 0x52, 0x49, 0x46, 0x46 } } }
+            };
+
+            try
+            {
+                // Dosyanın ilk 16 byte'ını oku (en uzun signature için yeterli)
+                var headerBytes = new byte[16];
+                fileStream.Position = 0;
+                var bytesRead = fileStream.Read(headerBytes, 0, headerBytes.Length);
+
+                if (bytesRead < 4)
+                {
+                    return false; // Çok küçük dosya
+                }
+
+                // Her image formatının signature'ını kontrol et
+                foreach (var signatureSet in imageSignatures.Values)
+                {
+                    foreach (var signature in signatureSet)
+                    {
+                        if (headerBytes.Take(signature.Length).SequenceEqual(signature))
+                        {
+                            // Stream pozisyonunu başa al (tekrar kullanılabilir olması için)
+                            fileStream.Position = 0;
+                            return true;
+                        }
+                    }
+                }
+
+                // WebP için özel kontrol (RIFF ve WEBP arasında data var)
+                if (headerBytes.Take(4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 }) && bytesRead >= 12)
+                {
+                    // WEBP string'i 8. byte'tan sonra olmalı
+                    if (headerBytes[8] == 0x57 && headerBytes[9] == 0x45 &&
+                        headerBytes[10] == 0x42 && headerBytes[11] == 0x50)
+                    {
+                        fileStream.Position = 0;
+                        return true;
+                    }
+                }
+
+                fileStream.Position = 0;
+                return false;
+            }
+            catch
+            {
+                fileStream.Position = 0;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Dosya adını güvenli hale getirir (path traversal saldırılarına karşı koruma).
+        /// Tehlikeli karakterleri temizler ve benzersiz GUID ile unique filename oluşturur.
+        /// </summary>
+        /// <param name="originalFileName">Orijinal dosya adı</param>
+        /// <returns>Güvenli, unique filename</returns>
+        private static string SanitizeAndGenerateUniqueFileName(string originalFileName)
+        {
+            if (string.IsNullOrWhiteSpace(originalFileName))
+            {
+                return $"campaign_{Guid.NewGuid()}.jpg";
+            }
+
+            // Extension'ı ayır
+            var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
+
+            // Geçerli extension kontrolü
+            if (!AllowedExtensions.Contains(extension))
+            {
+                extension = ".jpg"; // Default
+            }
+
+            // Dosya adından extension'ı çıkar
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(originalFileName);
+
+            // Path traversal karakterlerini temizle
+            // ../../../etc/passwd gibi saldırıları engeller
+            fileNameWithoutExtension = fileNameWithoutExtension
+                .Replace("..", "")
+                .Replace("/", "")
+                .Replace("\\", "")
+                .Replace(":", "")
+                .Replace("*", "")
+                .Replace("?", "")
+                .Replace("\"", "")
+                .Replace("<", "")
+                .Replace(">", "")
+                .Replace("|", "");
+
+            // Sadece alphanumeric ve - _ . karakterlerini tut (Türkçe karakter desteği)
+            fileNameWithoutExtension = new string(fileNameWithoutExtension
+                .Where(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.')
+                .Take(50) // Maksimum uzunluk
+                .ToArray());
+
+            // Boş kaldıysa default
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+            {
+                fileNameWithoutExtension = "campaign";
+            }
+
+            // Benzersiz dosya adı oluştur (GUID ile)
+            // Format: campaign_originalname_guid_timestamp.ext
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var uniqueId = Guid.NewGuid().ToString("N").Substring(0, 8); // İlk 8 karakter
+
+            return $"campaign_{fileNameWithoutExtension}_{uniqueId}_{timestamp}{extension}";
+        }
 
         #endregion
     }

@@ -93,7 +93,22 @@ namespace ECommerce.Data.Repositories
         {
             return await _dbSet.FirstOrDefaultAsync(p => p.SKU == sku && p.IsActive);
         }
- 
+
+        /// <summary>
+        /// Toplu ID sorgulama - N+1 query problemini önler
+        /// Tek seferde tüm ID'leri sorgular, sadece aktif ürünleri döner
+        /// </summary>
+        public async Task<List<Product>> GetByIdsAsync(IEnumerable<int> ids)
+        {
+            if (ids == null || !ids.Any())
+            {
+                return new List<Product>();
+            }
+
+            return await _dbSet
+                .Where(p => ids.Contains(p.Id) && p.IsActive)
+                .ToListAsync();
+        }
 
         public async Task LogSyncAsync(MicroSyncLog log)
         {

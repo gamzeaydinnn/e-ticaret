@@ -218,81 +218,7 @@ const ensureBackend = () => {
 export const AdminService = {
   // Dashboard
   getDashboardStats: async () => {
-    if (shouldUseMockData()) {
-      debugLog("Admin Dashboard - Mock data kullanılıyor");
-      return {
-        totalUsers: 156,
-        totalProducts: 89,
-        totalOrders: 234,
-        totalRevenue: 45670.5,
-        recentOrders: [
-          {
-            id: 1,
-            customerName: "Ahmet Yılmaz",
-            amount: 299.9,
-            status: "Completed",
-            date: "2024-10-08",
-          },
-          {
-            id: 2,
-            customerName: "Ayşe Kaya",
-            amount: 156.75,
-            status: "Processing",
-            date: "2024-10-08",
-          },
-          {
-            id: 3,
-            customerName: "Mehmet Öz",
-            amount: 489.2,
-            status: "Shipped",
-            date: "2024-10-07",
-          },
-        ],
-        topProducts: [
-          {
-            productId: 1,
-            name: "Cif Krem Temizleyici",
-            sales: 45,
-            revenue: 4250,
-          },
-          { productId: 2, name: "Pınar Süt 1L", sales: 38, revenue: 3190 },
-          { productId: 3, name: "Domates Kg", sales: 32, revenue: 2510 },
-        ],
-        todayOrders: 14,
-        activeCouriers: 5,
-        pendingOrders: 22,
-        deliveredOrders: 167,
-        dailyMetrics: [
-          { date: "2026-02-02", orders: 14, revenue: 8450 },
-          { date: "2026-02-03", orders: 18, revenue: 10220 },
-          { date: "2026-02-04", orders: 12, revenue: 7310 },
-          { date: "2026-02-05", orders: 20, revenue: 12430 },
-          { date: "2026-02-06", orders: 23, revenue: 14210 },
-          { date: "2026-02-07", orders: 16, revenue: 10180 },
-          { date: "2026-02-08", orders: 19, revenue: 11690 },
-        ],
-        orderStatusDistribution: [
-          { label: "Delivered", count: 167 },
-          { label: "Preparing", count: 22 },
-          { label: "OutForDelivery", count: 14 },
-          { label: "Cancelled", count: 8 },
-        ],
-        paymentStatusDistribution: [
-          { label: "Paid", count: 201 },
-          { label: "Pending", count: 25 },
-          { label: "Failed", count: 8 },
-        ],
-        userRoleDistribution: [
-          { label: "User", count: 130 },
-          { label: "Admin", count: 4 },
-          { label: "StoreAttendant", count: 8 },
-          { label: "Dispatcher", count: 6 },
-          { label: "Courier", count: 8 },
-        ],
-      };
-    }
     ensureBackend();
-    // Önce yeni endpoint'i dene, backend eski sürümdeyse stats'e düş.
     try {
       return await api.get("/api/admin/dashboard/overview", { timeout: 10000 });
     } catch (error) {
@@ -304,56 +230,8 @@ export const AdminService = {
   },
   // Users
   getUsers: async () => {
-    if (shouldUseMockData()) {
-      debugLog("Admin Users - Mock data kullanılıyor");
-      return {
-        success: true,
-        data: [
-          {
-            id: 1,
-            firstName: "Ahmet",
-            lastName: "Yılmaz",
-            username: "ahmet123",
-            email: "ahmett@example.com",
-            phoneNumber: "0555 123 4567",
-            role: "Customer",
-            createdAt: "2024-01-15",
-            isActive: true,
-          },
-          {
-            id: 2,
-            firstName: "Ayşe",
-            lastName: "Kaya",
-            username: "ayse456",
-            email: "ayse@example.com",
-            phoneNumber: "0555 234 5678",
-            role: "Customer",
-            createdAt: "2024-02-20",
-            isActive: true,
-          },
-          {
-            id: 3,
-            firstName: "Mehmet",
-            lastName: "Admin",
-            username: "admin",
-            email: "admin@admin.com",
-            phoneNumber: "0555 999 9999",
-            role: "Admin",
-            createdAt: "2024-01-01",
-            isActive: true,
-          },
-        ],
-        count: 3,
-      };
-    }
-
-    try {
-      ensureBackend();
-      return await api.get("/api/admin/users");
-    } catch (error) {
-      console.error("Users fetch error:", error);
-      throw error;
-    }
+    ensureBackend();
+    return api.get("/api/admin/users");
   },
   createUser: async (payload) => {
     ensureBackend();
@@ -383,6 +261,40 @@ export const AdminService = {
   },
 
   // ============================================================================
+  // Admin Profil Yönetimi - Kendi Bilgilerini Güncelleme
+  // Backend: AuthController.GetCurrentUser ve AccountController
+  // ============================================================================
+
+  /**
+   * Giriş yapmış kullanıcının kendi profil bilgilerini getirir
+   * Backend: AccountController.GetProfile endpoint'i (PhoneNumber, Address, City dahil)
+   */
+  getCurrentUser: async () => {
+    ensureBackend();
+    return api.get("/api/account/profile");
+  },
+
+  /**
+   * Giriş yapmış kullanıcının profil bilgilerini günceller (ad, soyad, email, telefon, adres, şehir)
+   */
+  updateProfile: async (profileData) => {
+    ensureBackend();
+    return api.put("/api/account/profile", profileData);
+  },
+
+  /**
+   * Giriş yapmış kullanıcının şifresini değiştirir
+   * Backend: AccountController.ChangePassword endpoint'i
+   */
+  changePassword: async (passwordData) => {
+    ensureBackend();
+    return api.post("/api/account/change-password", {
+      currentPassword: passwordData.oldPassword,
+      newPassword: passwordData.newPassword,
+    });
+  },
+
+  // ============================================================================
   // Roller API - Backend AdminRolesController endpoint'leri
   // Rol listesi ve atanabilir roller için
   // ============================================================================
@@ -398,6 +310,15 @@ export const AdminService = {
   updateUserStatus: async (id, isActive) => {
     ensureBackend();
     return api.put(`/api/admin/users/${id}`, { isActive });
+  },
+
+  // ============================================================================
+  // Kullanıcı Bilgileri Güncelleme (Ad, Soyad, Email, Telefon, Adres, Şehir)
+  // Backend: AdminUsersController.UpdateUser endpoint'i (PUT /api/admin/users/{id})
+  // ============================================================================
+  updateUser: async (id, userData) => {
+    ensureBackend();
+    return api.put(`/api/admin/users/${id}`, userData);
   },
 
   // Logs
@@ -452,38 +373,6 @@ export const AdminService = {
 
   // Orders
   getOrders: async (page = 1, size = 20) => {
-    if (shouldUseMockData()) {
-      debugLog("Admin Orders - Mock data kullanılıyor");
-      return [
-        {
-          id: 1,
-          customerName: "Ahmet Yılmaz",
-          userId: 1,
-          totalPrice: 299.9,
-          status: "Completed",
-          orderDate: "2024-10-08",
-          items: 3,
-        },
-        {
-          id: 2,
-          customerName: "Ayşe Kaya",
-          userId: 2,
-          totalPrice: 156.75,
-          status: "Processing",
-          orderDate: "2024-10-08",
-          items: 2,
-        },
-        {
-          id: 3,
-          customerName: "Mehmet Öz",
-          userId: 3,
-          totalPrice: 489.2,
-          status: "Shipped",
-          orderDate: "2024-10-07",
-          items: 5,
-        },
-      ];
-    }
     ensureBackend();
     return api.get(`/api/admin/orders?page=${page}&size=${size}`);
   },
@@ -493,6 +382,25 @@ export const AdminService = {
   getRecentOrders: () => api.get("/api/admin/orders/recent"),
   // NEDEN: Admin panelinde sipariş silme aksiyonu gerekir.
   deleteOrder: (id) => api.delete(`/api/admin/orders/${id}`),
+
+  // ============================================================
+  // SİPARİŞ İPTAL + PARA İADESİ
+  // Admin/Market görevlisi siparişi iptal eder ve otomatik POSNET reverse/return tetiklenir
+  // ============================================================
+  cancelOrderWithRefund: async (
+    orderId,
+    reason = "Admin tarafından iptal edildi",
+  ) => {
+    ensureBackend();
+    return api.post(`/api/admin/orders/${orderId}/cancel-with-refund`, {
+      reason,
+    });
+  },
+
+  cancelOrder: async (orderId) => {
+    ensureBackend();
+    return api.post(`/api/admin/orders/${orderId}/cancel`);
+  },
 
   // ============================================================
   // KURYE ATAMA - Backend'e POST isteği gönderir
@@ -887,6 +795,67 @@ export const AdminService = {
     }
     ensureBackend();
     return api.get("/api/admin/campaigns/stats");
+  },
+
+  // ============================================================================
+  // İADE TALEBİ YÖNETİM SERVİSLERİ (ADMİN / MÜŞTERİ HİZMETLERİ)
+  // Admin panelinden iade taleplerini listeleme, onaylama ve reddetme
+  // ============================================================================
+
+  /**
+   * Tüm iade taleplerini listeler
+   * @param {string|null} status - Opsiyonel durum filtresi (pending, approved, rejected, refunded, etc.)
+   * @returns {Object} { success, data: RefundRequestListDto[] }
+   */
+  getRefundRequests: async (status = null) => {
+    ensureBackend();
+    const params = status ? { status } : {};
+    return api.get("/api/admin/orders/refund-requests", { params });
+  },
+
+  /**
+   * Bekleyen iade taleplerini listeler (dashboard widget)
+   * @returns {Object} { success, data, count }
+   */
+  getPendingRefundRequests: async () => {
+    ensureBackend();
+    return api.get("/api/admin/orders/refund-requests/pending");
+  },
+
+  /**
+   * İade talebini onaylar veya reddeder
+   * @param {number} refundRequestId - İade talebi ID
+   * @param {Object} data - { approve: boolean, adminNote?: string, refundAmount?: number }
+   * @returns {Object} İşlem sonucu
+   */
+  processRefundRequest: async (refundRequestId, data) => {
+    ensureBackend();
+    return api.post(
+      `/api/admin/orders/refund-requests/${refundRequestId}/process`,
+      data,
+    );
+  },
+
+  /**
+   * Başarısız para iadesini yeniden dener
+   * @param {number} refundRequestId - İade talebi ID
+   * @returns {Object} İşlem sonucu
+   */
+  retryRefund: async (refundRequestId) => {
+    ensureBackend();
+    return api.post(
+      `/api/admin/orders/refund-requests/${refundRequestId}/retry`,
+    );
+  },
+
+  /**
+   * Belirli bir siparişin iade taleplerini getirir
+   * @param {number} orderId - Sipariş ID
+   * @returns {Object} { success, data }
+   */
+  getOrderRefundRequests: async (orderId) => {
+    ensureBackend();
+    return api.get(`/api/admin/orders/${orderId}/refund-requests`);
   },
 };
 

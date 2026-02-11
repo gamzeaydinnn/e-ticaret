@@ -1,0 +1,295 @@
+/* ═══════════════════════════════════════════════════════════
+   404 Not Found Sayfası Stilleri
+   Modern, user-friendly, mobile-first
+   ═══════════════════════════════════════════════════════════ */
+
+.not-found-container {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.not-found-content {
+  max-width: 600px;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+/* 404 İllüstrasyon */
+.not-found-illustration {
+  position: relative;
+  margin-bottom: 2rem;
+}
+
+.not-found-number {
+  font-size: 8rem;
+  font-weight: 900;
+  color: #e0e7ff;
+  line-height: 1;
+  display: block;
+  letter-spacing: -0.05em;
+}
+
+.not-found-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 4rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translateY(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-20px);
+  }
+}
+
+/* Başlık ve Açıklama */
+.not-found-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+.not-found-description {
+  font-size: 1rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+/* Aksiyon Butonları */
+.not-found-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+
+.not-found-btn {
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  display: inline-block;
+  min-width: 150px;
+}
+
+.not-found-btn-primary {
+  background-color: #28a745;
+  color: #ffffff;
+  border: 2px solid #28a745;
+}
+
+.not-found-btn-primary:hover {
+  background-color: #218838;
+  border-color: #218838;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  color: #ffffff;
+}
+
+.not-found-btn-secondary {
+  background-color: transparent;
+  color: #28a745;
+  border: 2px solid #28a745;
+}
+
+.not-found-btn-secondary:hover {
+  background-color: #28a745;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+}
+
+/* Öneriler Bölümü */
+.not-found-suggestions {
+  padding: 1.5rem;
+  background-color: #f9fafb;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.suggestions-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.suggestions-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.suggestion-link {
+  padding: 0.5rem 1rem;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #4b5563;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.suggestion-link:hover {
+  background-color: #28a745;
+  border-color: #28a745;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+}
+
+/* Destek Linki */
+.not-found-support {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.support-link {
+  color: #28a745;
+  text-decoration: underline;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.support-link:hover {
+  color: #218838;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE - Mobile First
+   ═══════════════════════════════════════════════════════════ */
+
+/* Tablet ve üstü (768px+) */
+@media (min-width: 768px) {
+  .not-found-content {
+    padding: 4rem 3rem;
+  }
+
+  .not-found-title {
+    font-size: 2.25rem;
+  }
+
+  .not-found-description {
+    font-size: 1.125rem;
+  }
+}
+
+/* Mobil cihazlar (max 767px) */
+@media (max-width: 767px) {
+  .not-found-number {
+    font-size: 5rem;
+  }
+
+  .not-found-icon {
+    font-size: 2.5rem;
+  }
+
+  .not-found-title {
+    font-size: 1.5rem;
+  }
+
+  .not-found-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .not-found-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .suggestions-links {
+    gap: 0.5rem;
+  }
+
+  .suggestion-link {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.75rem;
+  }
+}
+
+/* Dark mode desteği */
+@media (prefers-color-scheme: dark) {
+  .not-found-container {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+  }
+
+  .not-found-content {
+    background: #2d3748;
+  }
+
+  .not-found-number {
+    color: #4a5568;
+  }
+
+  .not-found-title {
+    color: #f7fafc;
+  }
+
+  .not-found-description {
+    color: #cbd5e0;
+  }
+
+  .not-found-suggestions {
+    background-color: #1a202c;
+  }
+
+  .suggestions-title {
+    color: #e2e8f0;
+  }
+
+  .suggestion-link {
+    background-color: #4a5568;
+    border-color: #4a5568;
+    color: #e2e8f0;
+  }
+
+  .suggestion-link:hover {
+    background-color: #38a169;
+    border-color: #38a169;
+  }
+
+  .not-found-support {
+    color: #a0aec0;
+  }
+}
+
+/* Print - 404 sayfasını yazdırma sırasında basitleştir */
+@media print {
+  .not-found-container {
+    background: #ffffff;
+    min-height: auto;
+  }
+
+  .not-found-illustration {
+    display: none;
+  }
+
+  .not-found-actions,
+  .not-found-suggestions {
+    display: none;
+  }
+}

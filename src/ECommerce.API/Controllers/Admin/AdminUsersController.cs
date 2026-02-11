@@ -5,7 +5,9 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.User;
 using ECommerce.Entities.Concrete;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using ECommerce.API.Authorization;
+using ECommerce.Data.Context;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Security.Claims;
@@ -17,13 +19,17 @@ namespace ECommerce.API.Controllers.Admin
     /// <summary>
     /// Admin kullanıcı yönetim API'si.
     /// RBAC tabanlı yetkilendirme kullanır.
-    /// 
+    ///
     /// KRİTİK: Kullanıcı rolü güncellenirken hem User.Role property'si
     /// hem de AspNetUserRoles tablosu güncellenir. Bu tutarlılık
     /// [Authorize(Roles=...)] ve PermissionService için gereklidir.
+    ///
+    /// GÜVENLİK: Sınıf seviyesinde AllStaff kullanılır, asıl yetki kontrolü
+    /// her endpoint'teki [HasPermission] attribute'ü ile yapılır.
+    /// Bu sayede izin sistemi düzgün çalışır ve rol tabanlı çelişki oluşmaz.
     /// </summary>
     [ApiController]
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     [Route("api/admin/users")]
     public class AdminUsersController : ControllerBase
     {
@@ -32,17 +38,20 @@ namespace ECommerce.API.Controllers.Admin
         private readonly UserManager<User> _userManager;  // Identity UserManager
         private readonly PermissionManager? _permissionManager;  // Cache invalidation için
         private readonly ILogger<AdminUsersController> _logger;
+        private readonly ECommerceDbContext _dbContext;
 
         public AdminUsersController(
-            IUserService userService, 
+            IUserService userService,
             IAuditLogService auditLogService,
             UserManager<User> userManager,
+            ECommerceDbContext dbContext,
             ILogger<AdminUsersController> logger,
             IPermissionService? permissionService = null)  // Opsiyonel - DI'dan gelir
         {
             _userService = userService;
             _auditLogService = auditLogService;
             _userManager = userManager;
+            _dbContext = dbContext;
             _logger = logger;
             // PermissionManager'a cast et (cache invalidation için)
             _permissionManager = permissionService as PermissionManager;
@@ -241,6 +250,9 @@ namespace ECommerce.API.Controllers.Admin
             user.LastName = dto.LastName;
             user.FullName = $"{dto.FirstName} {dto.LastName}";
             user.Email = dto.Email;
+            user.UserName = dto.Email;
+            user.NormalizedEmail = dto.Email.ToUpperInvariant();
+            user.NormalizedUserName = dto.Email.ToUpperInvariant();
             user.Address = dto.Address;
             user.City = dto.City;
             user.UpdatedAt = DateTime.UtcNow;
@@ -322,31 +334,104 @@ namespace ECommerce.API.Controllers.Admin
         [HasPermission(Permissions.Users.Delete)]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = await _userService.GetByIdAsync(id);
-            if (user == null)
-                return NotFound();
-
-            var oldSnapshot = new
+            // GÜVENLİK: Kendi hesabını silme koruması
+            if (id == GetAdminUserId())
             {
+                return BadRequest(new { success = false, message = "Kendi hesabınızı silemezsiniz." });
+            }
+
+            var user = await _userManager.FindByIdAsync(id.ToString());
+            if (user == null)
+                return NotFound(new { success = false, message = "Kullanıcı bulunamadı." });
+
+            // GÜVENLİK: SuperAdmin silme koruması
+            if (user.Role == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
+            {
+                return Forbid();
+            }
+
+            var deletedUserInfo = new
+            {
+                user.Id,
                 user.FirstName,
                 user.LastName,
                 user.Email,
-                user.Role,
-                user.IsActive
+                user.Role
             };
 
-            await _userService.DeleteAsync(user);
-            await _auditLogService.WriteAsync(
-                GetAdminUserId(),
-                "UserDisabled",
-                "User",
-                id.ToString(),
-                oldSnapshot,
-                new
+            try
+            {
+                // 1. Siparişlerdeki UserId referansını null yap (sipariş kaydı korunur)
+                await _dbContext.Orders
+                    .Where(o => o.UserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.UserId, (int?)null));
+
+                // 2. Ürün yorumlarını sil
+                await _dbContext.ProductReviews
+                    .Where(r => r.UserId == id)
+                    .ExecuteDeleteAsync();
+
+                // 3. Kupon kullanım kayıtlarındaki UserId referansını null yap
+                await _dbContext.CouponUsages
+                    .Where(cu => cu.UserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(cu => cu.UserId, (int?)null));
+
+                // 4. İade taleplerindeki UserId ve ProcessedByUserId referanslarını null yap
+                await _dbContext.RefundRequests
+                    .Where(r => r.UserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(r => r.UserId, (int?)null));
+
+                await _dbContext.RefundRequests
+                    .Where(r => r.ProcessedByUserId == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(r => r.ProcessedByUserId, (int?)null));
+
+                // 5. Kurye kaydını sil (eğer bu kullanıcı kurye ise)
+                await _dbContext.Couriers
+                    .Where(c => c.UserId == id)
+                    .ExecuteDeleteAsync();
+
+                // 6. Favorileri sil
+                await _dbContext.Favorites
+                    .Where(f => f.UserId == id)
+                    .ExecuteDeleteAsync();
+
+                // 7. Bildirimleri sil
+                await _dbContext.Notifications
+                    .Where(n => n.UserId == id)
+                    .ExecuteDeleteAsync();
+
+                // 8. Identity UserManager ile kullanıcıyı tamamen sil
+                // Bu işlem AspNetUsers, AspNetUserRoles, AspNetUserClaims,
+                // AspNetUserLogins, AspNetUserTokens tablolarından siler.
+                // Cascade ile: CartItems, Addresses, RefreshTokens da silinir.
+                var result = await _userManager.DeleteAsync(user);
+                if (!result.Succeeded)
                 {
-                    user.IsActive
-                });
-            return NoContent();
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    _logger.LogError("Kullanıcı silinemedi (ID: {UserId}): {Errors}", id, errors);
+                    return BadRequest(new { success = false, message = $"Kullanıcı silinemedi: {errors}" });
+                }
+
+                // Permission cache temizle
+                _permissionManager?.InvalidateUserPermissionsCache(id);
+
+                // Audit log
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    "UserDeleted",
+                    "User",
+                    id.ToString(),
+                    deletedUserInfo,
+                    new { DeletedPermanently = true });
+
+                _logger.LogInformation("Kullanıcı kalıcı olarak silindi: {Email} (ID: {UserId})", deletedUserInfo.Email, id);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kullanıcı silinirken hata (ID: {UserId})", id);
+                return StatusCode(500, new { success = false, message = $"Kullanıcı silinirken hata oluştu: {ex.Message}" });
+            }
         }
 
         // ============================================================================
@@ -513,8 +598,7 @@ namespace ECommerce.API.Controllers.Admin
 
         /// <summary>
         /// Sistemde tanımlı geçerli roller listesi.
-        /// Tüm admin paneli rolleri + müşteri rolleri
-        /// NOT: Courier rolü burada yok çünkü kurye ekleme Kurye Paneli'nden yapılır
+        /// Tüm admin paneli rolleri + müşteri rolleri + kurye
         /// </summary>
         private static readonly HashSet<string> AllowedRoles = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -525,6 +609,7 @@ namespace ECommerce.API.Controllers.Admin
             Roles.Logistics,
             Roles.StoreAttendant,  // Market Görevlisi
             Roles.Dispatcher,      // Sevkiyat Görevlisi
+            Roles.Courier,         // Kurye
             Roles.User,
             Roles.Customer          // User ile aynı, semantik
         };

@@ -9,7 +9,7 @@ const mockCampaigns = [
     title: "İlk Alışverişinize %25 İndirim",
     summary: "Yeni üyeler için sepette ekstra indirim",
     description:
-      "Gölköy Gourmet Market'e hoş geldiniz! İlk alışverişinizde sepet toplamınıza özel %25 indirim fırsatını kaçırmayın.",
+      "Gölköy Gurme'ye hoş geldiniz! İlk alışverişinizde sepet toplamınıza özel %25 indirim fırsatını kaçırmayın.",
     image: "/images/ilk-alisveris-indirim-banner.png",
     badge: "%25 İndirim",
     validUntil: null,
@@ -99,26 +99,14 @@ export const CampaignService = {
    */
   getActiveCampaigns: async () => {
     try {
-      // Doğru endpoint: /api/promotions/active
       const response = await api.get("/api/promotions/active");
-      if (Array.isArray(response) && response.length > 0) return response;
+      if (Array.isArray(response)) return response;
+      if (Array.isArray(response?.data)) return response.data;
+      return [];
     } catch (error) {
       debugLog("Aktif kampanyalar alınamadı:", { error: error?.message });
+      return [];
     }
-
-    // Fallback: alternatif endpoint (eski sistem)
-    try {
-      const altResponse = await api.get("/api/campaigns");
-      if (Array.isArray(altResponse) && altResponse.length > 0)
-        return altResponse;
-    } catch (error) {
-      debugLog("Alternatif kampanya endpoint'i başarısız:", {
-        error: error?.message,
-      });
-    }
-
-    // Son çare: mevcut liste (mock veya genel kampanyalar)
-    return CampaignService.list();
   },
 
   /**
@@ -465,4 +453,131 @@ export const CampaignService = {
       return !categoryId || !targetSet.has(categoryId);
     });
   },
+
+  // ============================================================
+  // KUPON KODU DOĞRULAMA
+  // ============================================================
+
+  /**
+   * Kupon kodunu doğrular ve indirim hesaplar
+   *
+   * GÜVENLİK:
+   * - Kupon kodu trim + uppercase işlenir
+   * - Backend'de kullanıcı bazlı limit kontrolü yapılır
+   * - IP/UserAgent fraud detection için loglanır
+   *
+   * @param {string} couponCode - Kupon kodu
+   * @param {number} cartTotal - Sepet toplam tutarı
+   * @param {Array} cartItems - Sepet ürünleri [{productId, quantity, price, categoryId}]
+   * @returns {Promise<Object>} { success, message, discount, campaign, appliedCouponCode }
+   */
+  validateCouponCode: async (couponCode, cartTotal, cartItems = []) => {
+    try {
+      // Input validasyonu
+      if (!couponCode || typeof couponCode !== "string") {
+        return {
+          success: false,
+          discount: 0,
+          message: "Lütfen geçerli bir kupon kodu girin.",
+        };
+      }
+
+      // Kupon kodunu normalize et (trim + uppercase)
+      const normalizedCode = couponCode.trim().toUpperCase();
+
+      if (normalizedCode.length === 0) {
+        return {
+          success: false,
+          discount: 0,
+          message: "Kupon kodu boş olamaz.",
+        };
+      }
+
+      // Sepet ürünlerini backend formatına dönüştür
+      const items = cartItems.map((item) => ({
+        productId: item.productId || item.id || item.product?.id || 0,
+        categoryId:
+          item.categoryId ||
+          item.product?.categoryId ||
+          item.product?.category?.id ||
+          0,
+        quantity: item.quantity || 1,
+        price:
+          item.unitPrice ||
+          item.price ||
+          item.product?.price ||
+          item.product?.specialPrice ||
+          0,
+      }));
+
+      debugLog("Kupon doğrulama isteği gönderiliyor:", {
+        code: normalizedCode,
+        cartTotal: Number(cartTotal),
+        itemCount: items.length,
+      });
+
+      // Backend'e doğrulama isteği gönder
+      const response = await api.post("/api/promotions/validate-coupon", {
+        code: normalizedCode,
+        cartTotal: Number(cartTotal) || 0,
+        items: items,
+      });
+
+      debugLog("Kupon doğrulama yanıtı:", response);
+
+      // Başarılı yanıt
+      if (response && response.success !== false) {
+        return {
+          success: true,
+          discount: response.discount || 0,
+          campaign: response.campaign || null,
+          appliedCouponCode: normalizedCode,
+          message:
+            response.message ||
+            `${normalizedCode} kupon kodu başarıyla uygulandı!`,
+        };
+      }
+
+      // Başarısız yanıt
+      return {
+        success: false,
+        discount: 0,
+        message: response.message || "Kupon kodu geçersiz veya süresi dolmuş.",
+      };
+    } catch (error) {
+      debugLog("Kupon doğrulama hatası:", { error: error?.message });
+
+      // Hata mesajını kullanıcıya anlamlı şekilde göster
+      let errorMessage = "Kupon kontrol edilemedi. Lütfen tekrar deneyin.";
+
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        // Network hatası gibi
+        errorMessage =
+          "Bağlantı hatası. Lütfen internet bağlantınızı kontrol edin.";
+      }
+
+      return {
+        success: false,
+        discount: 0,
+        message: errorMessage,
+      };
+    }
+  },
+
+  /**
+   * Uygulanmış kuponu kaldırır
+   * @param {string} couponCode - Kaldırılacak kupon kodu
+   * @returns {Object} { success, message }
+   */
+  removeCouponCode: (couponCode) => {
+    debugLog("Kupon kaldırıldı:", { couponCode });
+    return {
+      success: true,
+      message: `${couponCode} kupon kodu kaldırıldı.`,
+    };
+  },
 };
+
+export default CampaignService;

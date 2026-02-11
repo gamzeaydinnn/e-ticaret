@@ -77,5 +77,21 @@ namespace ECommerce.Data.Repositories
             return await query.AnyAsync(c => c.Slug == slug);
         }
 
+        /// <summary>
+        /// Toplu ID sorgulama - N+1 query problemini önler ve ID varlık kontrolü için kullanılır
+        /// Tek seferde tüm ID'leri sorgular, sadece aktif kategorileri döner
+        /// </summary>
+        public async Task<List<Category>> GetByIdsAsync(IEnumerable<int> ids)
+        {
+            if (ids == null || !ids.Any())
+            {
+                return new List<Category>();
+            }
+
+            return await _dbSet
+                .Where(c => ids.Contains(c.Id) && c.IsActive)
+                .ToListAsync();
+        }
+
     }
 }

@@ -188,6 +188,17 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<HomeBlockProduct> HomeBlockProducts { get; set; }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // İADE TALEBİ SİSTEMİ
+        // Müşteri iade taleplerini ve admin onay sürecini yönetir
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Müşteri iade taleplerini tutar.
+        /// Kargo durumuna göre otomatik iptal veya admin onaylı iade akışı yönetir.
+        /// </summary>
+        public virtual DbSet<RefundRequest> RefundRequests { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -612,11 +623,12 @@ namespace ECommerce.Data.Context
             modelBuilder.Entity<Campaign>(entity =>
             {
                 entity.ToTable("Campaigns");
-                
+
                 // Temel alanlar
                 entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(1000);
-                
+                entity.Property(e => e.ImageUrl).HasMaxLength(500);
+
                 // Kampanya türü ve hedef türü (enum olarak saklanır)
                 entity.Property(e => e.Type).HasConversion<int>();
                 entity.Property(e => e.TargetType).HasConversion<int>();
@@ -1520,6 +1532,62 @@ namespace ECommerce.Data.Context
                 // Sıralama için index
                 entity.HasIndex(e => new { e.BlockId, e.DisplayOrder })
                     .HasDatabaseName("IX_HomeBlockProducts_Block_Order");
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // İADE TALEBİ (RefundRequest) KONFİGÜRASYONU
+            // Müşteri iade talepleri ve admin onay süreci
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<RefundRequest>(entity =>
+            {
+                entity.ToTable("RefundRequests");
+
+                // İade tutarı - para birimi hassasiyeti
+                entity.Property(e => e.RefundAmount).HasPrecision(18, 2);
+
+                // String alanları - maksimum uzunluklar
+                entity.Property(e => e.Reason).HasMaxLength(1000).IsRequired();
+                entity.Property(e => e.RefundType).HasMaxLength(20).HasDefaultValue("full");
+                entity.Property(e => e.OrderStatusAtRequest).HasMaxLength(50);
+                entity.Property(e => e.AdminNote).HasMaxLength(2000);
+                entity.Property(e => e.PosnetHostLogKey).HasMaxLength(20);
+                entity.Property(e => e.TransactionType).HasMaxLength(20);
+                entity.Property(e => e.RefundFailureReason).HasMaxLength(1000);
+
+                // Tarih alanları
+                entity.Property(e => e.RequestedAt).HasColumnType("datetime2");
+                entity.Property(e => e.ProcessedAt).HasColumnType("datetime2");
+                entity.Property(e => e.RefundedAt).HasColumnType("datetime2");
+
+                // Order ilişkisi - Restrict: Sipariş silinirse iade talebi korunur
+                entity.HasOne(e => e.Order)
+                      .WithMany(o => o.RefundRequests)
+                      .HasForeignKey(e => e.OrderId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // Talep eden kullanıcı ilişkisi
+                // Restrict: Kullanıcı silinemesin eğer iade talebi varsa
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // İşleyen admin ilişkisi
+                // Restrict: Admin kullanıcı silinemesin eğer işlediği iade talebi varsa
+                entity.HasOne(e => e.ProcessedByUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.ProcessedByUserId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // İndeksler - Performans optimizasyonu
+                entity.HasIndex(e => e.OrderId).HasDatabaseName("IX_RefundRequests_OrderId");
+                entity.HasIndex(e => e.UserId).HasDatabaseName("IX_RefundRequests_UserId");
+                entity.HasIndex(e => e.Status).HasDatabaseName("IX_RefundRequests_Status");
+                entity.HasIndex(e => e.RequestedAt).HasDatabaseName("IX_RefundRequests_RequestedAt");
+
+                // Admin paneli: Bekleyen iade talepleri hızlı sorgusu
+                entity.HasIndex(e => new { e.Status, e.RequestedAt })
+                      .HasDatabaseName("IX_RefundRequests_Status_RequestedAt");
             });
 
             // -------------------

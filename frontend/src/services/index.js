@@ -9,3 +9,4 @@ export { CartService } from "./cartService";
 export { CategoryService } from "./categoryService";
 export { MicroService } from "./microService";
 export { default as newsletterService } from "./newsletterService";
+export { default as siteSettingsService } from "./siteSettingsService";

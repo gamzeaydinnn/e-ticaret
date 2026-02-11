@@ -13,6 +13,12 @@ namespace ECommerce.Core.DTOs.Admin
         public int ActiveCouriers { get; set; }
         public int PendingOrders { get; set; }
         public int DeliveredOrders { get; set; }
+        // İade istatistikleri
+        public int CancelledOrders { get; set; }
+        public int RefundedOrders { get; set; }
+        public int PendingRefundRequests { get; set; }
+        public int FailedRefunds { get; set; }
+        public decimal TotalRefundedAmount { get; set; }
         public List<AdminDashboardMetricPointDto> DailyMetrics { get; set; } = new();
         public List<AdminDashboardStatusCountDto> OrderStatusDistribution { get; set; } = new();
         public List<AdminDashboardStatusCountDto> PaymentStatusDistribution { get; set; } = new();

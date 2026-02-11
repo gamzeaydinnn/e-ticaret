@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using ECommerce.Core.Attributes;
 using ECommerce.Entities.Enums;
 
 namespace ECommerce.Core.DTOs.Promotions
@@ -13,10 +14,11 @@ namespace ECommerce.Core.DTOs.Promotions
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public string? ImageUrl { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public bool IsActive { get; set; }
-        
+
         // Yeni alanlar
         public CampaignType Type { get; set; }
         public CampaignTargetType TargetType { get; set; }
@@ -83,18 +85,24 @@ namespace ECommerce.Core.DTOs.Promotions
     /// Kampanya kaydetme/güncelleme için DTO
     /// Hem eski hem yeni yapıyı destekler
     /// </summary>
+    [DateRange(MinDays = 1, MaxDays = 365)]
     public class CampaignSaveDto
     {
         [Required(ErrorMessage = "Kampanya adı zorunludur")]
         [StringLength(200, ErrorMessage = "Kampanya adı en fazla 200 karakter olabilir")]
+        [NoHtmlContent(ErrorMessage = "Kampanya adında HTML/JavaScript içeriği kullanılamaz")]
         public string Name { get; set; } = string.Empty;
-        
+
         [StringLength(1000, ErrorMessage = "Açıklama en fazla 1000 karakter olabilir")]
+        [NoHtmlContent(ErrorMessage = "Açıklamada HTML/JavaScript içeriği kullanılamaz")]
         public string? Description { get; set; }
-        
+
+        public string? ImageUrl { get; set; }
+
         [Required(ErrorMessage = "Başlangıç tarihi zorunludur")]
+        [FutureDate]
         public DateTime StartDate { get; set; }
-        
+
         [Required(ErrorMessage = "Bitiş tarihi zorunludur")]
         public DateTime EndDate { get; set; }
         

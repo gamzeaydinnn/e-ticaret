@@ -29,6 +29,7 @@ import React, {
 } from "react";
 import homeBlockService, { BLOCK_TYPES } from "../../services/homeBlockService";
 import bannerService, { validateFile } from "../../services/bannerService";
+import api from "../../services/api";
 
 // ============================================
 // SABİTLER
@@ -270,7 +271,8 @@ export default function AdminHomeBlocks() {
   // Yeni: ID ile ürün arama
   const [productIdInput, setProductIdInput] = useState("");
   const [searchMode, setSearchMode] = useState("name"); // "name" veya "id"
-  const [searchDebounceTimer, setSearchDebounceTimer] = useState(null);
+  const searchDebounceRef = useRef(null);
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
 
   // Dosya yükleme state'leri
   const [imagePreview, setImagePreview] = useState("");
@@ -300,25 +302,29 @@ export default function AdminHomeBlocks() {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await fetch("/api/categories");
-      if (response.ok) {
-        const data = await response.json();
-        setCategories(data || []);
-      }
+      const data = await api.get("/api/categories");
+      const items = data?.$values || data || [];
+      setCategories(Array.isArray(items) ? items : []);
     } catch (err) {
       console.error("[AdminHomeBlocks] Kategori çekme hatası:", err);
     }
   }, []);
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (searchQuery = "") => {
     try {
-      const response = await fetch("/api/products/admin/all?size=500");
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data?.items || data || []);
+      let data;
+      if (searchQuery.trim()) {
+        data = await api.get(
+          `/api/products/search?query=${encodeURIComponent(searchQuery.trim())}&page=1&size=50`,
+        );
+      } else {
+        data = await api.get("/api/products/admin/all?page=1&size=500");
       }
+      const items = data?.items || data?.$values || data || [];
+      setProducts(Array.isArray(items) ? items : []);
     } catch (err) {
       console.error("[AdminHomeBlocks] Ürün çekme hatası:", err);
+      setProducts([]);
     }
   }, []);
 
@@ -566,65 +572,73 @@ export default function AdminHomeBlocks() {
   };
 
   // =====================================================
-  // GELİŞMİŞ ÜRÜN FİLTRELEME - ID VEYA İSİM İLE ARAMA
-  // Debounce ile performanslı arama sağlanır
+  // GELİŞMİŞ ÜRÜN ARAMA - BACKEND BAĞLANTILI
+  // Debounce ile performanslı sunucu taraflı arama
   // =====================================================
+
+  // Backend'den ürün ara (debounce ile)
+  useEffect(() => {
+    if (!showProductModal) return;
+
+    if (searchMode === "name" && productSearch.trim().length >= 2) {
+      setProductSearchLoading(true);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = setTimeout(async () => {
+        await fetchProducts(productSearch.trim());
+        setProductSearchLoading(false);
+      }, 400);
+    } else if (searchMode === "name" && productSearch.trim().length === 0) {
+      fetchProducts();
+    }
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [productSearch, searchMode, showProductModal, fetchProducts]);
+
+  // ID ile arama - lokal filtreleme
   const filteredProducts = useMemo(() => {
     if (searchMode === "id" && productIdInput.trim()) {
-      // ID ile arama - tam eşleşme veya ID içerme
       const searchId = productIdInput.trim();
       return products.filter(
         (p) => String(p.id) === searchId || String(p.id).includes(searchId),
       );
-    } else if (searchMode === "name" && productSearch.trim()) {
-      // İsim ile arama - case-insensitive
-      const searchTerm = productSearch.toLowerCase().trim();
-      return products.filter(
-        (p) =>
-          p.name?.toLowerCase().includes(searchTerm) ||
-          p.description?.toLowerCase().includes(searchTerm) ||
-          String(p.id).includes(searchTerm), // ID'de de ara
-      );
     }
     return products;
-  }, [products, productSearch, productIdInput, searchMode]);
-
-  // Debounce fonksiyonu - arama performansı için
-  const handleSearchChange = useCallback(
-    (value, mode) => {
-      if (searchDebounceTimer) {
-        clearTimeout(searchDebounceTimer);
-      }
-
-      const timer = setTimeout(() => {
-        if (mode === "id") {
-          setProductIdInput(value);
-        } else {
-          setProductSearch(value);
-        }
-      }, 300); // 300ms debounce
-
-      setSearchDebounceTimer(timer);
-    },
-    [searchDebounceTimer],
-  );
+  }, [products, productIdInput, searchMode]);
 
   // ID ile doğrudan ürün ekleme
-  const handleAddProductById = useCallback(() => {
+  const handleAddProductById = useCallback(async () => {
     const id = parseInt(productIdInput.trim());
     if (isNaN(id)) {
       showFeedback("Geçerli bir ürün ID'si girin", "warning");
       return;
     }
 
-    const product = products.find((p) => p.id === id);
-    if (!product) {
-      showFeedback(`ID: ${id} ile ürün bulunamadı`, "danger");
+    if (selectedProducts.includes(id)) {
+      showFeedback("Bu ürün zaten seçili", "warning");
       return;
     }
 
-    if (selectedProducts.includes(id)) {
-      showFeedback("Bu ürün zaten seçili", "warning");
+    // Önce yüklü listede ara
+    let product = products.find((p) => p.id === id);
+
+    // Bulunamazsa backend'den getir
+    if (!product) {
+      try {
+        const data = await api.get(`/api/products/${id}`);
+        if (data && data.id) {
+          product = data;
+          setProducts((prev) => [...prev, product]);
+        }
+      } catch {
+        showFeedback(`ID: ${id} ile ürün bulunamadı`, "danger");
+        return;
+      }
+    }
+
+    if (!product) {
+      showFeedback(`ID: ${id} ile ürün bulunamadı`, "danger");
       return;
     }
 
@@ -1709,18 +1723,22 @@ export default function AdminHomeBlocks() {
                       </button>
                     </div>
 
-                    {/* İsim ile Arama - Görünür arama butonu ile UX iyileştirmesi */}
+                    {/* İsim ile Arama - Backend bağlantılı */}
                     {searchMode === "name" && (
                       <div className="row g-2">
                         <div className="col">
                           <div className="input-group">
                             <span className="input-group-text bg-white">
-                              <i className="fas fa-search text-muted"></i>
+                              {productSearchLoading ? (
+                                <span className="spinner-border spinner-border-sm text-primary"></span>
+                              ) : (
+                                <i className="fas fa-search text-muted"></i>
+                              )}
                             </span>
                             <input
                               type="text"
                               className="form-control form-control-lg"
-                              placeholder="Ürün adı yazın (otomatik aranır)..."
+                              placeholder="Ürün adı yazın (min 2 karakter, otomatik aranır)..."
                               value={productSearch}
                               onChange={(e) => setProductSearch(e.target.value)}
                               autoFocus
@@ -1736,18 +1754,12 @@ export default function AdminHomeBlocks() {
                               </button>
                             )}
                           </div>
-                        </div>
-                        {/* Görünür Ara Butonu - Kullanıcı feedback için */}
-                        <div className="col-auto">
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-lg"
-                            title="Ürünleri Ara"
-                            disabled={!productSearch.trim()}
-                          >
-                            <i className="fas fa-search me-1"></i>
-                            Ara
-                          </button>
+                          {productSearch.trim().length === 1 && (
+                            <small className="text-warning mt-1 d-block">
+                              <i className="fas fa-info-circle me-1"></i>
+                              Arama için en az 2 karakter yazın
+                            </small>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1795,11 +1807,20 @@ export default function AdminHomeBlocks() {
                     {/* Arama Sonuç Bilgisi */}
                     <div className="mt-2 d-flex justify-content-between align-items-center">
                       <small className="text-muted">
-                        {filteredProducts.length} ürün bulundu
-                        {(productSearch || productIdInput) && (
-                          <span className="ms-2">
-                            (Toplam: {products.length})
-                          </span>
+                        {productSearchLoading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-1"></span>
+                            Aranıyor...
+                          </>
+                        ) : (
+                          <>
+                            {filteredProducts.length} ürün bulundu
+                            {productSearch && (
+                              <span className="ms-2 text-primary">
+                                ("{productSearch}" araması)
+                              </span>
+                            )}
+                          </>
                         )}
                       </small>
                       {selectedProducts.length > 0 && (
@@ -1856,7 +1877,17 @@ export default function AdminHomeBlocks() {
                   className="row g-2"
                   style={{ maxHeight: "400px", overflowY: "auto" }}
                 >
-                  {filteredProducts.length === 0 ? (
+                  {productSearchLoading ? (
+                    <div className="col-12 text-center py-5">
+                      <div
+                        className="spinner-border text-primary mb-3"
+                        role="status"
+                      >
+                        <span className="visually-hidden">Yükleniyor...</span>
+                      </div>
+                      <h5 className="text-muted">Ürünler aranıyor...</h5>
+                    </div>
+                  ) : filteredProducts.length === 0 ? (
                     <div className="col-12 text-center py-5">
                       <i className="fas fa-search fa-3x text-muted mb-3"></i>
                       <h5 className="text-muted">Ürün bulunamadı</h5>

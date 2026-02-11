@@ -4,7 +4,7 @@ Kullanıcının seçtiği ürünün detaylarını göstermek.
 Ürün adı, açıklama, fiyat, stok durumu, görsel.
 Ürünü sepete ekleme butonu.
 İsteğe bağlı olarak ürün yorumları, benzer ürünler veya kategori bilgisi.*/
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Helmet } from "react-helmet-async";
 import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
@@ -17,9 +17,12 @@ import ReviewList from "../components/ReviewList";
 import ReviewForm from "../components/ReviewForm";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
+import { validateNumericId } from "../utils/securityHelpers";
 
 export default function ProductDetail() {
-  const { id } = useParams();
+  const { id: rawId } = useParams();
+  // GÜVENLİK: ID parametresini validate et
+  const id = useMemo(() => validateNumericId(rawId), [rawId]);
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +33,13 @@ export default function ProductDetail() {
 
   // Ürün detayını getir
   useEffect(() => {
+    // GÜVENLİK: Geçersiz ID kontrolü
+    if (id === null) {
+      setError("Geçersiz ürün ID'si");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     ProductService.get(id)
@@ -69,7 +79,8 @@ export default function ProductDetail() {
             const hasTargetIds = targetIds.length > 0;
             const cProductId = c?.productId ?? c?.targetId;
             const cCategoryId = c?.categoryId;
-            if (targetType === "All" || targetType === 0 || !targetType) return true;
+            if (targetType === "All" || targetType === 0 || !targetType)
+              return true;
             if (targetType === "Product" || targetType === 2)
               return hasTargetIds
                 ? targetIds.some((id) => String(id) === String(product.id))
@@ -323,7 +334,7 @@ export default function ProductDetail() {
           }`;
           return (
             <>
-              <title>{product.name} — Doğadan Sofranza</title>
+              <title>{product.name} — Gölköy Gurme</title>
               <meta
                 name="description"
                 content={

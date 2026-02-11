@@ -53,7 +53,8 @@ import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
 import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
-// Rol ve İzin Yönetimi Sayfaları
+import AdminProfile from "./pages/Admin/AdminProfile";
+import AdminSettings from "./pages/Admin/AdminSettings";
 import AdminAccessDenied from "./pages/Admin/AdminAccessDenied";
 // Kurye sayfaları
 import CourierDashboard from "./pages/Courier/CourierDashboard";
@@ -79,6 +80,7 @@ import {
 } from "./guards/StoreAttendantGuard";
 // Admin guards
 import Footer from "./components/Footer";
+import CookieConsent from "./components/CookieConsent"; // KVKK uyumlu cookie consent banner
 import { GlobalToastContainer } from "./components/ToastProvider";
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
 import AdminLayout from "./components/AdminLayout";
@@ -110,13 +112,20 @@ import SearchPage from "./pages/SearchPage";
 import SecurityInfo from "./pages/SecurityInfo.jsx";
 import ShippingInfo from "./pages/ShippingInfo.jsx";
 import Sustainability from "./pages/Sustainability.jsx";
+import TermsOfUse from "./pages/TermsOfUse.jsx";
+import PrivacyPolicy from "./pages/PrivacyPolicy.jsx";
+import KVKKPolicy from "./pages/KVKKPolicy.jsx";
+import CookiePolicy from "./pages/CookiePolicy.jsx";
 import VisionMission from "./pages/VisionMission.jsx";
+import NotFound from "./pages/NotFound.jsx"; // 404 sayfası
+import ErrorBoundary from "./components/ErrorBoundary.jsx"; // Global error handler
 import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
 import homeBlockService from "./services/homeBlockService";
 import ProductBlockSection from "./pages/components/ProductBlockSection";
 import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
+import { CampaignService } from "./services/campaignService";
 // 3D Secure Ödeme Callback Sayfaları
 import {
   PaymentSuccessPage,
@@ -222,7 +231,7 @@ function Header() {
                   <div className="logo-container">
                     <img
                       src="/images/golkoy-logo.png"
-                      alt="Gölköy Gourmet Market"
+                      alt="Gölköy Gurme"
                       className="main-logo"
                       style={{
                         height: "150px",
@@ -251,7 +260,7 @@ function Header() {
                     <img
                       className="secondary-logo"
                       src="/images/dogadan-sofranza-logo.png"
-                      alt="Doğadan Sofranza"
+                      alt="Gölköy Gurme"
                       style={{
                         height: "180px",
                         width: "auto",
@@ -781,6 +790,10 @@ function App() {
         <Route path="/kariyer" element={<Career />} />
         <Route path="/basin-kiti" element={<PressKit />} />
         <Route path="/surdurulebilirlik" element={<Sustainability />} />
+        <Route path="/gizlilik-politikasi" element={<PrivacyPolicy />} />
+        <Route path="/kullanim-sartlari" element={<TermsOfUse />} />
+        <Route path="/kvkk" element={<KVKKPolicy />} />
+        <Route path="/cerez-politikasi" element={<CookiePolicy />} />
 
         {/* Admin giriş noktası */}
         <Route path="/admin" element={<AdminIndex />} />
@@ -804,7 +817,7 @@ function App() {
         <Route
           path="/admin/dashboard"
           element={
-            <AdminGuard requiredPermission="dashboard.view">
+            <AdminGuard>
               <AdminLayout>
                 <Dashboard />
               </AdminLayout>
@@ -968,6 +981,28 @@ function App() {
             </AdminGuard>
           }
         />
+        {/* Admin Profil Sayfası - Tüm adminler kendi profilini görebilir */}
+        <Route
+          path="/admin/profile"
+          element={
+            <AdminGuard>
+              <AdminLayout>
+                <AdminProfile />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        {/* Admin Ayarlar Sayfası - Sadece SuperAdmin */}
+        <Route
+          path="/admin/settings"
+          element={
+            <AdminGuard>
+              <AdminLayout>
+                <AdminSettings />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
         {/* Log Sayfaları - Her biri için spesifik izin kontrolü */}
         <Route
           path="/admin/logs/audit"
@@ -1086,6 +1121,9 @@ function App() {
             </StoreAttendantGuard>
           }
         />
+
+        {/* Catch-all route - Tanımlanmamış tüm URL'ler için 404 sayfası */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
 
       {/* Footer - Mobilde gizli (desktop-only-footer class'ı ile) */}
@@ -1093,6 +1131,9 @@ function App() {
 
       {/* Mobile Bottom Navigation - Sadece mobilde görünür, admin/kurye sayfalarında gizli */}
       {showHeader && <MobileBottomNav />}
+
+      {/* KVKK/Cookie Consent Banner - Global, tüm sayfalarda gösterilir */}
+      <CookieConsent />
     </div>
   );
 }
@@ -1113,11 +1154,13 @@ function AppWithProviders() {
                   <CartProvider>
                     <FavoriteProvider>
                       <CompareProvider>
-                        <Router>
-                          <ScrollToTop />
-                          <App />
-                          <CompareFloatingButton />
-                        </Router>
+                        <ErrorBoundary>
+                          <Router>
+                            <ScrollToTop />
+                            <App />
+                            <CompareFloatingButton />
+                          </Router>
+                        </ErrorBoundary>
                       </CompareProvider>
                     </FavoriteProvider>
                   </CartProvider>
@@ -2013,7 +2056,7 @@ function HomePage() {
                 <div className="d-flex align-items-center mb-4">
                   <img
                     src="/images/golkoy-logo1.png"
-                    alt="Gölköy Gourmet Market"
+                    alt="Gölköy Gurme"
                     style={{
                       height: "140px",
                       width: "auto",
@@ -2023,7 +2066,7 @@ function HomePage() {
                   />
                   <img
                     src="/images/dogadan-sofranza-logo.png"
-                    alt="Doğadan Sofranza"
+                    alt="Gölköy Gurme"
                     style={{
                       height: "140px",
                       width: "auto",
@@ -2247,30 +2290,21 @@ function HomePage() {
               <div className="col-md-8">
                 <div className="footer-bottom-links">
                   <span>Tüm haklar Gölköy Gurme Markete aittir.</span>
-                  <button
-                    type="button"
-                    className="footer-bottom-link btn btn-link"
+                  <Link
+                    to="/gizlilik-politikasi"
+                    className="footer-bottom-link"
                   >
                     Gizlilik Politikası
-                  </button>
-                  <button
-                    type="button"
-                    className="footer-bottom-link btn btn-link"
-                  >
+                  </Link>
+                  <Link to="/kullanim-sartlari" className="footer-bottom-link">
                     Kullanım Şartları
-                  </button>
-                  <button
-                    type="button"
-                    className="footer-bottom-link btn btn-link"
-                  >
+                  </Link>
+                  <Link to="/kvkk" className="footer-bottom-link">
                     KVKK
-                  </button>
-                  <button
-                    type="button"
-                    className="footer-bottom-link btn btn-link"
-                  >
+                  </Link>
+                  <Link to="/cerez-politikasi" className="footer-bottom-link">
                     Çerez Politikası
-                  </button>
+                  </Link>
                 </div>
               </div>
               <div className="col-md-4 text-end">

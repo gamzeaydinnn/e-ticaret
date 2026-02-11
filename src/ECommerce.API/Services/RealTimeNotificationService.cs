@@ -587,11 +587,20 @@ namespace ECommerce.API.Services
                     timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                     read = false
                 };
-                
+
+                // Admin'e bildirim
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("OrderCancelled", notification);
-                
+
+                // StoreAttendant'a bildirim (market görevlisi de sipariş iptallerini görmeli)
+                try
+                {
+                    await _storeHub.Clients.Group(StoreAttendantHub.GetStoreRoomGroupName())
+                        .SendAsync("OrderCancelled", notification);
+                }
+                catch { /* StoreAttendant bildirimi opsiyonel */ }
+
                 _logger.LogInformation(
-                    "📢 Sipariş iptal bildirimi gönderildi. OrderId={OrderId}, CancelledBy={CancelledBy}", 
+                    "📢 Sipariş iptal bildirimi gönderildi. OrderId={OrderId}, CancelledBy={CancelledBy}",
                     orderId, cancelledBy);
             }
             catch (Exception ex)
@@ -616,11 +625,20 @@ namespace ECommerce.API.Services
                     timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                     read = false
                 };
-                
+
+                // Admin'e bildirim
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("RefundRequested", notification);
-                
+
+                // StoreAttendant'a bildirim (market görevlisi de iade taleplerini görmeli)
+                try
+                {
+                    await _storeHub.Clients.Group(StoreAttendantHub.GetStoreRoomGroupName())
+                        .SendAsync("RefundRequested", notification);
+                }
+                catch { /* StoreAttendant bildirimi opsiyonel */ }
+
                 _logger.LogInformation(
-                    "📢 İade talebi bildirimi gönderildi. OrderId={OrderId}, Amount={Amount}", 
+                    "📢 İade talebi bildirimi gönderildi. OrderId={OrderId}, Amount={Amount}",
                     orderId, refundAmount);
             }
             catch (Exception ex)

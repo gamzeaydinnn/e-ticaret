@@ -213,7 +213,7 @@ export default function RecipePage() {
     <div style={{ backgroundColor: "#faf5f0", minHeight: "100vh" }}>
       {/* SEO Helmet */}
       <Helmet>
-        <title>{recipe.title} Tarifi | Doğadan Sofranza</title>
+        <title>{recipe.title} Tarifi | Gölköy Gurme</title>
         <meta name="description" content={recipe.description} />
       </Helmet>
 

@@ -79,6 +79,21 @@ namespace ECommerce.Business.Services.Managers
                 }
             }
 
+            // ====================================================================
+            // UNIQUE NAME VALİDASYONU
+            // Aynı isimde aktif bir kampanyanın var olup olmadığını kontrol eder.
+            // Database unique index'i daha sonra son koruma katmanı olarak çalışır.
+            // ====================================================================
+            var existingCampaign = (await _campaignRepository.GetAllAsync())
+                .FirstOrDefault(c => c.Name.Trim().Equals(dto.Name.Trim(), StringComparison.OrdinalIgnoreCase)
+                                     && c.IsActive);
+
+            if (existingCampaign != null)
+            {
+                throw new InvalidOperationException(
+                    $"'{dto.Name}' adında aktif bir kampanya zaten mevcut. Lütfen farklı bir isim kullanın.");
+            }
+
             var campaign = new Campaign
             {
                 Name = dto.Name.Trim(),
@@ -97,7 +112,8 @@ namespace ECommerce.Business.Services.Managers
                 BuyQty = dto.BuyQty,
                 PayQty = dto.PayQty,
                 Priority = dto.Priority,
-                IsStackable = dto.IsStackable
+                IsStackable = dto.IsStackable,
+                ImageUrl = dto.ImageUrl
             };
 
             // Geriye dönük uyumluluk için eski alanları da doldur
@@ -119,23 +135,29 @@ namespace ECommerce.Business.Services.Managers
             });
             #pragma warning restore CS0618
 
-            await _campaignRepository.AddAsync(campaign);
-
-            // Hedefleri ekle (ürün veya kategori)
-            if (dto.TargetType != CampaignTargetType.All && dto.TargetIds?.Any() == true)
+            // Hedef türünü belirle
+            CampaignTargetKind targetKind = CampaignTargetKind.Product; // Default
+            if (dto.TargetType == CampaignTargetType.Category)
             {
-                var targetKind = dto.TargetType == CampaignTargetType.Product 
-                    ? CampaignTargetKind.Product 
-                    : CampaignTargetKind.Category;
-                
-                await _campaignRepository.UpdateTargetsAsync(campaign.Id, dto.TargetIds, targetKind);
+                targetKind = CampaignTargetKind.Category;
             }
 
+            // Hedef ID'leri hazırla
+            IEnumerable<int>? targetIds = null;
+            if (dto.TargetType != CampaignTargetType.All && dto.TargetIds?.Any() == true)
+            {
+                targetIds = dto.TargetIds;
+            }
+
+            // Kampanyayı hedefleriyle birlikte atomik olarak oluştur (transaction kullanarak)
+            // Bu sayede kampanya oluşturulup hedefler eklenemezse rollback yapılır
+            campaign = await _campaignRepository.CreateCampaignWithTargetsAsync(campaign, targetIds, targetKind);
+
             _logger?.LogInformation(
-                "Kampanya oluşturuldu: {CampaignName}, Tür: {Type}, Hedef: {TargetType}", 
+                "Kampanya oluşturuldu: {CampaignName}, Tür: {Type}, Hedef: {TargetType}",
                 campaign.Name, campaign.Type, campaign.TargetType);
 
-            return await _campaignRepository.GetByIdAsync(campaign.Id) ?? campaign;
+            return campaign;
         }
 
         public async Task<Campaign> UpdateAsync(int id, CampaignSaveDto dto)
@@ -167,9 +189,26 @@ namespace ECommerce.Business.Services.Managers
                 }
             }
 
+            // ====================================================================
+            // UNIQUE NAME VALİDASYONU
+            // Aynı isimde aktif başka bir kampanyanın var olup olmadığını kontrol eder.
+            // Kendi ID'sini hariç tutar (excludeId).
+            // ====================================================================
+            var existingCampaign = (await _campaignRepository.GetAllAsync())
+                .FirstOrDefault(c => c.Id != id  // Kendi ID'sini hariç tut
+                                     && c.Name.Trim().Equals(dto.Name.Trim(), StringComparison.OrdinalIgnoreCase)
+                                     && c.IsActive);
+
+            if (existingCampaign != null)
+            {
+                throw new InvalidOperationException(
+                    $"'{dto.Name}' adında başka bir aktif kampanya zaten mevcut. Lütfen farklı bir isim kullanın.");
+            }
+
             // Temel alanları güncelle
             campaign.Name = dto.Name.Trim();
             campaign.Description = dto.Description?.Trim();
+            campaign.ImageUrl = dto.ImageUrl;
             campaign.StartDate = dto.StartDate;
             campaign.EndDate = dto.EndDate;
             campaign.IsActive = dto.IsActive;
@@ -464,13 +503,54 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 _logger?.LogDebug(
-                    "Kampanya hesaplama tamamlandı. Toplam indirim: {TotalDiscount}, Uygulanan kampanya sayısı: {Count}", 
+                    "Kampanya hesaplama tamamlandı. Toplam indirim: {TotalDiscount}, Uygulanan kampanya sayısı: {Count}",
                     result.TotalCampaignDiscount, result.AppliedCampaigns.Count);
+            }
+            // ====================================================================
+            // GELİŞMİŞ HATA YÖNETİMİ
+            // Sessizce hata yutma yerine, hataları sınıflandırarak fırlatır.
+            // Controller katmanında uygun HTTP status kodları ile döndürülür.
+            // ====================================================================
+            catch (Microsoft.EntityFrameworkCore.DbUpdateException dbEx)
+            {
+                _logger?.LogError(dbEx, "Kampanya hesaplama - Veritabanı hatası. CartTotal: {CartTotal}, Items: {ItemCount}",
+                    cartTotal, itemsList.Count);
+
+                throw new Exceptions.CampaignCalculationException(
+                    "Kampanya bilgileri veritabanından alınamadı. Lütfen tekrar deneyin.",
+                    $"DbUpdateException: {dbEx.Message}",
+                    dbEx);
+            }
+            catch (TimeoutException timeoutEx)
+            {
+                _logger?.LogError(timeoutEx, "Kampanya hesaplama - Zaman aşımı. CartTotal: {CartTotal}, Items: {ItemCount}",
+                    cartTotal, itemsList.Count);
+
+                throw new Exceptions.CampaignCalculationException(
+                    "Kampanya hesaplama işlemi zaman aşımına uğradı. Lütfen tekrar deneyin.",
+                    $"TimeoutException: {timeoutEx.Message}",
+                    timeoutEx);
+            }
+            catch (NullReferenceException nullEx)
+            {
+                _logger?.LogError(nullEx, "Kampanya hesaplama - Null referans hatası. CartTotal: {CartTotal}, Items: {ItemCount}",
+                    cartTotal, itemsList.Count);
+
+                throw new Exceptions.CampaignCalculationException(
+                    "Kampanya bilgilerinde eksik veri bulundu. Lütfen teknik destek ile iletişime geçin.",
+                    $"NullReferenceException at {nullEx.TargetSite?.Name}: {nullEx.Message}",
+                    nullEx);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Kampanya hesaplama hatası");
-                // Hata durumunda boş sonuç döndür (sepet işlemi aksamamalı)
+                _logger?.LogError(ex,
+                    "Kampanya hesaplama - Beklenmeyen hata. CartTotal: {CartTotal}, Items: {ItemCount}, Exception: {ExceptionType}",
+                    cartTotal, itemsList.Count, ex.GetType().Name);
+
+                throw new Exceptions.CampaignCalculationException(
+                    "Kampanya indirimleri hesaplanamadı. Lütfen tekrar deneyin veya destek ekibi ile iletişime geçin.",
+                    $"Unexpected {ex.GetType().Name}: {ex.Message}",
+                    ex);
             }
 
             return result;

@@ -598,9 +598,15 @@ namespace ECommerce.Business.Services.Managers
                 if (providerKey == "posnet" && _posnet != null)
                 {
                     var hostLogKey = payment.HostLogKey;
+                    // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
-                        _logger?.LogWarning("Cancel failed: HostLogKey is empty for POSNET payment. Id: {PaymentId}", paymentId);
+                        hostLogKey = payment.ProviderPaymentId;
+                        _logger?.LogWarning("Cancel: HostLogKey boş, ProviderPaymentId fallback. Id: {PaymentId}, Key: {Key}", paymentId, hostLogKey);
+                    }
+                    if (string.IsNullOrEmpty(hostLogKey))
+                    {
+                        _logger?.LogWarning("Cancel failed: HostLogKey ve ProviderPaymentId boş. Id: {PaymentId}", paymentId);
                         return false;
                     }
 
@@ -678,9 +684,15 @@ namespace ECommerce.Business.Services.Managers
                 if (providerKey == "posnet" && _posnet != null)
                 {
                     var hostLogKey = payment.HostLogKey;
+                    // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
-                        _logger?.LogWarning("Partial refund failed: HostLogKey is empty for POSNET payment. Id: {PaymentId}", paymentId);
+                        hostLogKey = payment.ProviderPaymentId;
+                        _logger?.LogWarning("Refund: HostLogKey boş, ProviderPaymentId fallback. Id: {PaymentId}, Key: {Key}", paymentId, hostLogKey);
+                    }
+                    if (string.IsNullOrEmpty(hostLogKey))
+                    {
+                        _logger?.LogWarning("Partial refund failed: HostLogKey ve ProviderPaymentId boş. Id: {PaymentId}", paymentId);
                         return false;
                     }
 

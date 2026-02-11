@@ -100,7 +100,10 @@ namespace ECommerce.Data.Repositories
         /// </summary>
         public async Task<List<Campaign>> GetActiveCampaignsAsync(DateTime? now = null)
         {
-            var current = now ?? DateTime.UtcNow;
+            // Admin panelde tarihler yerel saat (Türkiye UTC+3) ile kaydediliyor
+            // Bu yüzden hem UTC hem yerel saat ile kontrol yapıyoruz
+            var currentUtc = now ?? DateTime.UtcNow;
+            var currentLocal = now ?? DateTime.Now;
 
             return await _context.Campaigns
                 .Include(c => c.Targets)
@@ -109,8 +112,16 @@ namespace ECommerce.Data.Repositories
                 .Include(c => c.Rewards)
                 #pragma warning restore CS0618
                 .Where(c => c.IsActive
-                            && c.StartDate <= current
-                            && c.EndDate >= current)
+                            && (
+                                // UTC ile kontrol
+                                (c.StartDate <= currentUtc && c.EndDate >= currentUtc)
+                                ||
+                                // Yerel saat ile kontrol (tarihler yerel saat olarak kaydedilmişse)
+                                (c.StartDate <= currentLocal && c.EndDate >= currentLocal)
+                                ||
+                                // Sadece tarih bazlı kontrol (saat farkı sorunu için)
+                                (c.StartDate.Date <= currentLocal.Date && c.EndDate.Date >= currentLocal.Date)
+                            ))
                 .OrderBy(c => c.Priority) // Düşük öncelik = yüksek sıra
                 .ThenByDescending(c => c.CreatedAt)
                 .ToListAsync();
@@ -125,14 +136,18 @@ namespace ECommerce.Data.Repositories
         /// </summary>
         public async Task<List<Campaign>> GetCampaignsForProductAsync(int productId, int categoryId, DateTime? now = null)
         {
-            var current = now ?? DateTime.UtcNow;
+            var currentUtc = now ?? DateTime.UtcNow;
+            var currentLocal = now ?? DateTime.Now;
 
             // Aktif kampanyaları getir
             var activeCampaigns = await _context.Campaigns
                 .Include(c => c.Targets)
                 .Where(c => c.IsActive
-                            && c.StartDate <= current
-                            && c.EndDate >= current)
+                            && (
+                                (c.StartDate <= currentUtc && c.EndDate >= currentUtc)
+                                || (c.StartDate <= currentLocal && c.EndDate >= currentLocal)
+                                || (c.StartDate.Date <= currentLocal.Date && c.EndDate.Date >= currentLocal.Date)
+                            ))
                 .OrderBy(c => c.Priority)
                 .ToListAsync();
 
@@ -156,43 +171,81 @@ namespace ECommerce.Data.Repositories
         /// </summary>
         public async Task<List<Campaign>> GetActiveCampaignsByTypeAsync(CampaignType type, DateTime? now = null)
         {
-            var current = now ?? DateTime.UtcNow;
+            var currentUtc = now ?? DateTime.UtcNow;
+            var currentLocal = now ?? DateTime.Now;
 
             return await _context.Campaigns
                 .Include(c => c.Targets)
                 .Where(c => c.IsActive
                             && c.Type == type
-                            && c.StartDate <= current
-                            && c.EndDate >= current)
+                            && (
+                                (c.StartDate <= currentUtc && c.EndDate >= currentUtc)
+                                || (c.StartDate <= currentLocal && c.EndDate >= currentLocal)
+                                || (c.StartDate.Date <= currentLocal.Date && c.EndDate.Date >= currentLocal.Date)
+                            ))
                 .OrderBy(c => c.Priority)
                 .ToListAsync();
         }
 
         /// <summary>
-        /// Kampanya hedeflerini günceller.
-        /// Mevcut hedefleri siler ve yenilerini ekler (replace stratejisi).
+        /// Kampanya hedeflerini günceller (TRANSACTIONAL).
+        /// Mevcut hedefleri siler ve yenilerini ekler.
+        /// Atomicity sağlamak için transaction kullanır.
         /// </summary>
         public async Task UpdateTargetsAsync(int campaignId, IEnumerable<int> targetIds, CampaignTargetKind targetKind)
         {
-            // Mevcut hedefleri sil
-            await ClearTargetsAsync(campaignId);
+            // Transaction başlat - atomicity sağla
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            // Yeni hedefleri ekle
-            var targets = targetIds.Select(id => new CampaignTarget
+            try
             {
-                CampaignId = campaignId,
-                TargetId = id,
-                TargetKind = targetKind,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            });
+                // 1. Mevcut hedefleri sil (SaveChanges YOK)
+                await ClearTargetsInternalAsync(campaignId);
 
-            await _context.CampaignTargets.AddRangeAsync(targets);
-            await _context.SaveChangesAsync();
+                // 2. Yeni hedefleri ekle (SaveChanges YOK)
+                var targets = targetIds.Select(id => new CampaignTarget
+                {
+                    CampaignId = campaignId,
+                    TargetId = id,
+                    TargetKind = targetKind,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+
+                await _context.CampaignTargets.AddRangeAsync(targets);
+
+                // 3. Tüm değişiklikleri birlikte commit et
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                // Hata oluşursa rollback yap
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         /// <summary>
-        /// Kampanya hedeflerini temizler
+        /// Internal metod: Hedefleri temizler (SaveChanges yapmaz).
+        /// Transaction içinde kullanılmak üzere tasarlanmıştır.
+        /// </summary>
+        private async Task ClearTargetsInternalAsync(int campaignId)
+        {
+            var existingTargets = await _context.CampaignTargets
+                .Where(t => t.CampaignId == campaignId)
+                .ToListAsync();
+
+            if (existingTargets.Any())
+            {
+                _context.CampaignTargets.RemoveRange(existingTargets);
+                // SaveChangesAsync ÇAĞRILMIYOR - transaction içinde yapılacak
+            }
+        }
+
+        /// <summary>
+        /// Kampanya hedeflerini temizler (PUBLIC - transaction dışında kullanım için).
+        /// Backward compatibility için korunmuştur.
         /// </summary>
         public async Task ClearTargetsAsync(int campaignId)
         {
@@ -204,6 +257,59 @@ namespace ECommerce.Data.Repositories
             {
                 _context.CampaignTargets.RemoveRange(existingTargets);
                 await _context.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Kampanyayı hedefleriyle birlikte oluşturur (TRANSACTIONAL).
+        /// Atomicity garantisi sağlar - ya her şey başarılı olur, ya hiçbir şey olmaz.
+        /// </summary>
+        /// <param name="campaign">Oluşturulacak kampanya</param>
+        /// <param name="targetIds">Hedef ID'leri (ürün veya kategori)</param>
+        /// <param name="targetKind">Hedef türü (Ürün veya Kategori)</param>
+        /// <returns>Oluşturulan kampanya (ID ile birlikte)</returns>
+        public async Task<Campaign> CreateCampaignWithTargetsAsync(
+            Campaign campaign,
+            IEnumerable<int>? targetIds,
+            CampaignTargetKind targetKind)
+        {
+            // Transaction başlat
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                // 1. Kampanyayı oluştur
+                await _context.Campaigns.AddAsync(campaign);
+                await _context.SaveChangesAsync(); // ID generate edilsin
+
+                // 2. Hedefler varsa ekle
+                if (targetIds != null && targetIds.Any())
+                {
+                    var targets = targetIds.Select(id => new CampaignTarget
+                    {
+                        CampaignId = campaign.Id, // Yukarıda generate edilen ID
+                        TargetId = id,
+                        TargetKind = targetKind,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    await _context.CampaignTargets.AddRangeAsync(targets);
+                    await _context.SaveChangesAsync();
+                }
+
+                // 3. Transaction commit et
+                await transaction.CommitAsync();
+
+                // 4. Hedeflerle birlikte döndür
+                return await GetByIdWithTargetsAsync(campaign.Id)
+                    ?? throw new InvalidOperationException("Kampanya oluşturuldu ama tekrar getirilemedi");
+            }
+            catch
+            {
+                // Hata oluşursa rollback yap
+                await transaction.RollbackAsync();
+                throw;
             }
         }
     }

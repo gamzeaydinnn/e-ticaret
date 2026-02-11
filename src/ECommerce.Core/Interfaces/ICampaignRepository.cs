@@ -45,6 +45,19 @@ namespace ECommerce.Core.Interfaces
         Task ClearTargetsAsync(int campaignId);
 
         /// <summary>
+        /// Kampanyayı hedefleriyle birlikte oluşturur (TRANSACTIONAL).
+        /// Atomicity garantisi sağlar - ya her şey başarılı olur, ya hiçbir şey olmaz.
+        /// </summary>
+        /// <param name="campaign">Oluşturulacak kampanya</param>
+        /// <param name="targetIds">Hedef ID'leri (ürün veya kategori)</param>
+        /// <param name="targetKind">Hedef türü (Ürün veya Kategori)</param>
+        /// <returns>Oluşturulan kampanya (ID ile birlikte)</returns>
+        Task<Campaign> CreateCampaignWithTargetsAsync(
+            Campaign campaign,
+            IEnumerable<int>? targetIds,
+            CampaignTargetKind targetKind);
+
+        /// <summary>
         /// Tüm kampanyaları (silinen dahil) hedefleriyle birlikte getirir.
         /// Admin panelde silinenleri de görmek için kullanılır.
         /// </summary>

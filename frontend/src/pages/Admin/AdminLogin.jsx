@@ -165,10 +165,15 @@ export default function AdminLogin() {
       // Backend başarısız yanıt
       setError(data?.message || data?.error || "Giriş başarısız!");
     } catch (err) {
-      console.error("Admin login error:", err);
+      // Sadece development ortamında detaylı log
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Admin login error:", err);
+      }
 
       // ÖNCELİK 2: Backend bağlantısı yoksa fallback demo login
+      // GÜVENLİK: Demo login sadece development ortamında aktif
       const isDemoAdmin =
+        process.env.NODE_ENV !== "production" &&
         credentials.email === "demo@example.com" &&
         credentials.password === "123456";
 

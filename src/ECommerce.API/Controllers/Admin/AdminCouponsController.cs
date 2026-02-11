@@ -5,12 +5,13 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using ECommerce.API.Authorization;
 
 namespace ECommerce.API.Controllers.Admin
 {
-    [Authorize(Roles = Roles.AdminLike)]
+    [Authorize(Roles = Roles.AllStaff)]
     [ApiController]
-    [Route("api/admin/coupons")] // api/admin/coupons
+    [Route("api/admin/coupons")]
     public class AdminCouponsController : ControllerBase
     {
         private readonly ICouponService _couponService;
@@ -21,10 +22,9 @@ namespace ECommerce.API.Controllers.Admin
             _couponService = couponService;
             _auditLogService = auditLogService;
         }
-        
-        // GET, GET(id), POST metodları doğru görünüyor, onları koruyoruz.
-        
+
         [HttpGet]
+        [HasPermission(Permissions.Coupons.View)]
         public async Task<IActionResult> GetAllCoupons()
         {
             var coupons = await _couponService.GetAllAsync();
@@ -32,6 +32,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpGet("{id}")]
+        [HasPermission(Permissions.Coupons.View)]
         public async Task<IActionResult> GetCouponById(int id)
         {
             var coupon = await _couponService.GetByIdAsync(id);
@@ -41,6 +42,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPost]
+        [HasPermission(Permissions.Coupons.Create)]
         public async Task<IActionResult> CreateCoupon([FromBody] Coupon coupon)
         {
             coupon.Id = 0;
@@ -64,8 +66,8 @@ namespace ECommerce.API.Controllers.Admin
             return CreatedAtAction(nameof(GetCouponById), new { id = coupon.Id }, coupon);
         }
 
-        // 🛠️ PUT Metodu Güncellemesi
         [HttpPut("{id}")]
+        [HasPermission(Permissions.Coupons.Update)]
         public async Task<IActionResult> UpdateCoupon(int id, [FromBody] Coupon coupon)
         {
             if (id != coupon.Id)
@@ -123,6 +125,7 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpDelete("{id}")]
+        [HasPermission(Permissions.Coupons.Delete)]
         public async Task<IActionResult> DeleteCoupon(int id)
         {
             var existingCoupon = await _couponService.GetByIdAsync(id);

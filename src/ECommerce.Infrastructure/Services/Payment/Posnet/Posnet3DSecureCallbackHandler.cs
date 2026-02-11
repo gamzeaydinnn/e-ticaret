@@ -579,6 +579,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 {
                     payment.Status = "Success";
                     payment.ProviderPaymentId = hostLogKey ?? transactionId;
+                    // KRİTİK: HostLogKey mutlaka set edilmeli - iade/iptal işlemleri buna bağlı
+                    payment.HostLogKey = hostLogKey;
+                    payment.AuthCode = authCode;
                     payment.PaidAt = DateTime.UtcNow;
                     payment.RawResponse = (payment.RawResponse ?? "") +
                         $"\n[3DS-Success] HostLogKey: {hostLogKey}, AuthCode: {authCode}, MdStatus: {mdStatus}";

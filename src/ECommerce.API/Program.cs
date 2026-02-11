@@ -42,15 +42,30 @@ using ECommerce.Core.Interfaces.Jobs; // Mikro Job interfaces
 
 var builder = WebApplication.CreateBuilder(args);
 
-// TEMPORARY: Disable ALL service validation for debugging DI issues
+// ═══════════════════════════════════════════════════════════════════════════════
+// DI SERVICE VALIDATION
+// Development'ta DI hatalarını erken yakalar, Production'da performans için kapalı
+  // NEDEN: Yanlış scope'lu service bağımlılıkları runtime'da beklenmeyen hatalara yol açar
+// ═══════════════════════════════════════════════════════════════════════════════
 builder.Host.UseDefaultServiceProvider((context, options) =>
 {
-    options.ValidateScopes = false;
-    options.ValidateOnBuild = false;
+    // Development: Strict validation - DI hataları için
+    if (context.HostingEnvironment.IsDevelopment())
+    {
+        options.ValidateScopes = true;
+        options.ValidateOnBuild = true;
+    }
+    // Production: Performans için validation kapalı
+    else
+    {
+        options.ValidateScopes = false;
+        options.ValidateOnBuild = false;
+    }
 });
 
 // CORS (ortama göre sıkılaştırma)
 // SignalR için AllowCredentials gerekli
+// GÜVENLİK: AllowAnyHeader/Method yerine explicit tanımlar
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Default", policy =>
@@ -59,36 +74,63 @@ builder.Services.AddCors(options =>
         if (allowed != null && allowed.Length > 0)
         {
             policy.WithOrigins(allowed)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
+                  .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                  .WithHeaders(
+                      "Content-Type",
+                      "Authorization",
+                      "X-CSRF-TOKEN",
+                      "X-Requested-With",
+                      "Accept",
+                      "Origin"
+                  )
                   .AllowCredentials(); // SignalR için gerekli
         }
         else
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
+                  .WithMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                  .WithHeaders(
+                      "Content-Type",
+                      "Authorization",
+                      "X-CSRF-TOKEN",
+                      "X-Requested-With",
+                      "Accept",
+                      "Origin"
+                  )
                   .AllowCredentials(); // SignalR için gerekli
         }
     });
-    
+
     // SignalR özel CORS policy (WebSocket ve Long Polling desteği için)
+    // NOT: SetIsOriginAllowed(_ => true) kaldırıldı - güvenlik açığı oluşturuyordu
+    // WithOrigins zaten WebSocket bağlantılarını izin verilen origin'lerle kısıtlar
     options.AddPolicy("SignalR", policy =>
     {
         var allowed = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
         if (allowed != null && allowed.Length > 0)
         {
             policy.WithOrigins(allowed)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials()
-                  .SetIsOriginAllowed(_ => true); // WebSocket için gerekebilir
+                  .WithMethods("GET", "POST", "OPTIONS")
+                  .WithHeaders(
+                      "Content-Type",
+                      "Authorization",
+                      "X-Requested-With",
+                      "Accept",
+                      "Origin"
+                  )
+                  .AllowCredentials();
         }
         else
         {
             policy.WithOrigins("http://localhost:3000", "http://localhost:3001")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
+                  .WithMethods("GET", "POST", "OPTIONS")
+                  .WithHeaders(
+                      "Content-Type",
+                      "Authorization",
+                      "X-Requested-With",
+                      "Accept",
+                      "Origin"
+                  )
                   .AllowCredentials();
         }
     });
@@ -123,6 +165,17 @@ builder.Services.AddDbContext<ECommerceDbContext>(options =>
     options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 });
 
+// ═══════════════════════════════════════════════════════════════
+// UNIT OF WORK PATTERN - Repository Coordination
+// UnitOfWork pattern ile tüm repository'lerin merkezi yönetimi ve
+// transaction koordinasyonu sağlanır
+// ═══════════════════════════════════════════════════════════════
+builder.Services.AddScoped<ECommerce.Core.Interfaces.IUnitOfWork, ECommerce.Data.Repositories.UnitOfWork>();
+
+// DbContext'i generic olarak da ekle (bazı service'ler DbContext inject ediyor)
+builder.Services.AddScoped<Microsoft.EntityFrameworkCore.DbContext>(provider =>
+    provider.GetRequiredService<ECommerceDbContext>());
+
 // Global LoggerService (ILogService)
 builder.Services.AddScoped<ILogService, LoggerService>();
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
@@ -131,11 +184,24 @@ builder.Services
     .AddIdentityCore<User>(options =>
     {
         options.User.RequireUniqueEmail = true;
-        options.Password.RequireDigit = false;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequiredLength = 6;
+
+        // ═══════════════════════════════════════════════════════════
+        // ŞİFRE POLİTİKASI - E-ticaret güvenlik standartları
+        // NEDEN bu seviye: Ödeme ve kişisel veri içeren bir platformda
+        // zayıf şifreler hesap ele geçirme riskini artırır
+        // ═══════════════════════════════════════════════════════════
+        options.Password.RequireDigit = true;            // En az 1 rakam (0-9)
+        options.Password.RequireNonAlphanumeric = false;  // Özel karakter zorunlu değil (UX dengesı)
+        options.Password.RequireUppercase = true;         // En az 1 büyük harf (A-Z)
+        options.Password.RequireLowercase = true;         // En az 1 küçük harf (a-z)
+        options.Password.RequiredLength = 8;              // Minimum 8 karakter
+
         options.SignIn.RequireConfirmedEmail = true;
+
+        // Hesap kilitleme - brute force koruması
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.AllowedForNewUsers = true;
     })
     .AddRoles<IdentityRole<int>>()
     .AddEntityFrameworkStores<ECommerceDbContext>()
@@ -202,6 +268,18 @@ builder.Services.AddAuthentication(options =>
                 var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
                 var authHeader = ctx.Request.Headers["Authorization"].ToString();
                 
+                // GÜVENLİK: Önce httpOnly cookie'den token almayı dene
+                // Bu, XSS saldırılarına karşı koruma sağlar
+                if (string.IsNullOrEmpty(ctx.Token))
+                {
+                    var cookieToken = ctx.Request.Cookies["access_token"];
+                    if (!string.IsNullOrEmpty(cookieToken))
+                    {
+                        ctx.Token = cookieToken;
+                        logger.LogDebug("🔐 JWT: Token alındı httpOnly cookie'den");
+                    }
+                }
+                
                 // SignalR WebSocket bağlantıları için query string'den token al
                 // WebSocket'ler HTTP header göndermediğinden token query param olarak gönderilir
                 var path = ctx.Request.Path;
@@ -266,6 +344,10 @@ builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSet
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
 builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
 
+// Site ayarları (Footer, İletişim bilgileri vb.)
+builder.Services.Configure<ECommerce.Infrastructure.Config.SiteSettings>(
+    builder.Configuration.GetSection("SiteSettings"));
+
 // ==================== MİKRO ERP AYARLARI ====================
 // MikroAPI V2 entegrasyonu için gerekli konfigürasyon
 builder.Services.Configure<ECommerce.Infrastructure.Config.MikroSettings>(
@@ -291,31 +373,15 @@ builder.Services.Configure<InventorySettings>(builder.Configuration.GetSection("
 // NetGSM SMS ve OTP servisleri
 builder.Services.Configure<NetGsmSettings>(builder.Configuration.GetSection("NetGsm"));
 
-// DEBUG: Configuration'ı dosyaya yaz
-var netGsmSection = builder.Configuration.GetSection("NetGsm");
-var debugPath = Path.Combine(builder.Environment.ContentRootPath, "netgsm_debug.txt");
-File.WriteAllText(debugPath, $@"
-=== DEBUG NETGSM CONFIGURATION ===
-Section Exists: {netGsmSection.Exists()}
-UserCode: '{netGsmSection["UserCode"]}'
-Password: '{netGsmSection["Password"]}'
-MsgHeader: '{netGsmSection["MsgHeader"]}'
-AppName: '{netGsmSection["AppName"]}'
-All Keys: {string.Join(", ", netGsmSection.GetChildren().Select(c => $"{c.Key}={c.Value}"))}
-Environment: {builder.Environment.EnvironmentName}
-=================================
-");
-
 // NetGSM config kontrolü - boşsa mock SMS kullan
-var useRealNetGsm = !string.IsNullOrWhiteSpace(netGsmSection["UserCode"]) 
+var netGsmSection = builder.Configuration.GetSection("NetGsm");
+var useRealNetGsm = !string.IsNullOrWhiteSpace(netGsmSection["UserCode"])
                     && !string.IsNullOrWhiteSpace(netGsmSection["Password"])
                     && !string.IsNullOrWhiteSpace(netGsmSection["MsgHeader"]);
 
 if (!useRealNetGsm)
 {
-    var msg = $"NetGsm config boş - Mock SMS modu aktif. Debug: {debugPath}";
-    File.AppendAllText(debugPath, $"\nWARNING: {msg}\n");
-    Console.WriteLine($"[WARNING] {msg}");
+    Console.WriteLine("[WARNING] NetGsm config boş - Mock SMS modu aktif.");
 }
 
 builder.Services.Configure<OtpSettings>(builder.Configuration.GetSection("Otp"));
@@ -419,6 +485,9 @@ builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.INotificationS
 // OrderStateMachine - Sipariş durum geçişlerini yönetir
 builder.Services.AddScoped<IOrderStateMachine, OrderStateMachine>();
 
+// RefundManager - İade talebi yönetim servisi
+builder.Services.AddScoped<IRefundService, RefundManager>();
+
 // PaymentCaptureService - Authorize/Capture ödeme akışını yönetir
 builder.Services.AddScoped<IPaymentCaptureService, PaymentCaptureService>();
 
@@ -499,16 +568,30 @@ builder.Services.AddHostedService<StockReservationCleanupJob>();
 builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
-// SSL sertifika doğrulamasını atla (self-signed sertifikalar için)
+// SSL sertifika doğrulaması - sadece Development'ta bypass edilir
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
 })
-.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+.ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // Self-signed SSL sertifikaları için doğrulamayı atla
-    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    var handler = new HttpClientHandler();
+
+    // ═══════════════════════════════════════════════════════════
+    // SSL CERTIFICATE VALIDATION
+    // Development: Self-signed certificate'lar için bypass
+    // Production: Gerçek certificate validation (MITM koruması)
+    // ═══════════════════════════════════════════════════════════
+    if (builder.Environment.IsDevelopment())
+    {
+        // Dev: Self-signed sertifika kabul et
+        handler.ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    // Production: Varsayılan certificate validation kullanılır (güvenli)
+
+    return handler;
 })
 .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
@@ -518,10 +601,15 @@ builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.M
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
     if (!string.IsNullOrWhiteSpace(baseUrl)) client.BaseAddress = new Uri(baseUrl);
 })
-.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+.ConfigurePrimaryHttpMessageHandler(() =>
 {
-    // Self-signed SSL sertifikaları için doğrulamayı atla
-    ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+    var handler = new HttpClientHandler();
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    return handler;
 })
 .SetHandlerLifetime(TimeSpan.FromMinutes(5));
 
@@ -836,9 +924,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
+// ═══════════════════════════════════════════════════════════════
+// HTTPS & GÜVENLİK MIDDLEWARE'LERİ
+// Production'da HTTPS zorunlu, Development'ta opsiyonel
+// NEDEN: Ödeme ve kişisel veri trafiğinin şifrelenmesi yasal zorunluluk
+// ═══════════════════════════════════════════════════════════════
 if (!app.Environment.IsDevelopment())
 {
+    app.UseHttpsRedirection();
     app.UseHsts();
 }
 
@@ -876,15 +969,27 @@ app.UseWhen(context =>
     if (path.StartsWith("/api/health") || path.StartsWith("/metrics")) return false;
     // If a prerender bypass token is configured, only allow it to skip rate limiting for
     // prerender-related endpoints. This limits the blast radius of the secret.
+    // GÜVENLİK: Timing-safe karşılaştırma ve sadece header-based token
     if (!string.IsNullOrWhiteSpace(prerenderBypassToken))
     {
         // Only consider bypass for dedicated prerender routes
         if (path.StartsWith("/api/prerender" ) || path.StartsWith("/api/prerender/list"))
         {
             var headerToken = context.Request.Headers["X-Prerender-Token"].ToString();
-            var queryToken = context.Request.Query["prerender_token"].ToString();
-            if (!string.IsNullOrWhiteSpace(headerToken) && headerToken == prerenderBypassToken) return false;
-            if (!string.IsNullOrWhiteSpace(queryToken) && queryToken == prerenderBypassToken) return false;
+
+            // Timing-safe string karşılaştırma (timing attack'e karşı korumalı)
+            if (!string.IsNullOrWhiteSpace(headerToken) &&
+                headerToken.Length == prerenderBypassToken.Length)
+            {
+                var headerBytes = System.Text.Encoding.UTF8.GetBytes(headerToken);
+                var expectedBytes = System.Text.Encoding.UTF8.GetBytes(prerenderBypassToken);
+
+                if (System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    headerBytes, expectedBytes))
+                {
+                    return false; // Bypass rate limiting
+                }
+            }
         }
     }
 

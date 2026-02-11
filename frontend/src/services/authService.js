@@ -46,19 +46,24 @@ export const AuthService = {
 
   // ============================================================================
   // TOKEN YÖNETİMİ
-  // Tüm olası key'lere yazar - geriye dönük uyumluluk için
-  // api.js interceptor'u bu key'lerden birini okur
+  // GÜVENLİK: Ana token httpOnly cookie'de tutulur (backend tarafından set edilir)
+  // localStorage sadece yedek/geriye uyumluluk için kullanılır
+  // Cookie'ler JavaScript'ten erişilemez = XSS koruması
   // ============================================================================
   saveToken: (token) => {
-    // Tüm olası key'lere yaz (uyumluluk için)
+    // GÜVENLİK NOTU: Ana JWT token artık httpOnly cookie'de
+    // localStorage sadece geriye uyumluluk ve bazı edge case'ler için
+    // Yeni sistemde bu fonksiyon genellikle çağrılmaz (backend cookie set eder)
     localStorage.setItem("token", token);
     localStorage.setItem("authToken", token); // AdminGuard uyumlu
     localStorage.setItem("adminToken", token); // Eski kod uyumlu
 
-    // Token'ı API header'ına da ekle (hemen geçerli olsun)
+    // Yedek olarak header'a da ekle (cookie yoksa kullanılır)
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-    console.log("[AuthService] ✅ Token tüm key'lere kaydedildi");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthService] ✅ Token kaydedildi (yedek localStorage)");
+    }
   },
 
   removeToken: () => {
@@ -72,11 +77,16 @@ export const AuthService = {
     // API header'ından da kaldır
     delete api.defaults.headers.common["Authorization"];
 
-    console.log("[AuthService] ✅ Token tüm key'lerden kaldırıldı");
+    // NOT: httpOnly cookie backend tarafından /api/auth/logout çağrısında silinir
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[AuthService] ✅ Token localStorage'dan kaldırıldı");
+    }
   },
 
   getToken: () => {
-    // Tüm olası key'leri kontrol et (api.js ile senkron)
+    // GÜVENLİK NOTU: Ana token httpOnly cookie'de - JS erişemez
+    // Bu fonksiyon sadece geriye uyumluluk için localStorage'a bakar
+    // Yeni sistemde token cookie üzerinden otomatik gönderilir
     return (
       localStorage.getItem("token") ||
       localStorage.getItem("authToken") ||
@@ -84,7 +94,14 @@ export const AuthService = {
     );
   },
 
-  // Token'ı API'ye otomatik eklemek için
+  // Yardımcı: Kullanıcının giriş yapmış olup olmadığını kontrol et
+  isAuthenticated: () => {
+    // localStorage'ta token varsa veya cookie set edilmişse giriş yapılmıştır
+    // Cookie'yi JS'ten okuyamayız, bu yüzden /api/auth/me endpoint'ini kullanın
+    return !!AuthService.getToken();
+  },
+
+  // Token'ı API'ye otomatik eklemek için (yedek mekanizma)
   setupTokenInterceptor: () => {
     const token = AuthService.getToken();
     if (token) {

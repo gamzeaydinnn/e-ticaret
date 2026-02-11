@@ -301,8 +301,9 @@ namespace ECommerce.Business.Services.Managers
                 _context.RolePermissions.Add(rolePermission);
                 await _context.SaveChangesAsync();
 
-                // Cache'i temizle
+                // Cache'i temizle — hem rol cache'i hem de bu role sahip kullanıcıların cache'i
                 InvalidateRolePermissionsCache(roleId);
+                await InvalidateUserCachesForRoleAsync(roleId);
 
                 _logger.LogInformation("İzin role atandı: RoleId={RoleId}, PermissionId={PermissionId}", roleId, permissionId);
             }
@@ -330,8 +331,9 @@ namespace ECommerce.Business.Services.Managers
                 _context.RolePermissions.Remove(existing);
                 await _context.SaveChangesAsync();
 
-                // Cache'i temizle
+                // Cache'i temizle — hem rol cache'i hem de bu role sahip kullanıcıların cache'i
                 InvalidateRolePermissionsCache(roleId);
+                await InvalidateUserCachesForRoleAsync(roleId);
 
                 _logger.LogInformation("İzin rolden kaldırıldı: RoleId={RoleId}, PermissionId={PermissionId}", roleId, permissionId);
             }
@@ -427,7 +429,7 @@ namespace ECommerce.Business.Services.Managers
 
                 // Cache'i temizle
                 InvalidateRolePermissionsCache(roleId);
-                InvalidateAllUserPermissionsCache();
+                await InvalidateUserCachesForRoleAsync(roleId);
 
                 _logger.LogInformation("Rol izinleri güncellendi: RoleId={RoleId}, Count={Count}", roleId, newAssignments.Count);
             }
@@ -461,7 +463,7 @@ namespace ECommerce.Business.Services.Managers
 
                 // Cache'i temizle
                 InvalidateRolePermissionsCache(roleId);
-                InvalidateAllUserPermissionsCache();
+                await InvalidateUserCachesForRoleAsync(roleId);
 
                 _logger.LogInformation("Tüm izinler rolden kaldırıldı: RoleId={RoleId}", roleId);
             }
@@ -609,12 +611,48 @@ namespace ECommerce.Business.Services.Managers
             _logger.LogDebug("Rol izin cache'i temizlendi: RoleId={RoleId}", roleId);
         }
 
-        private void InvalidateAllUserPermissionsCache()
+        /// <summary>
+        /// Belirli bir role sahip tüm kullanıcıların izin cache'ini temizler.
+        /// Rol izinleri değiştiğinde çağrılmalıdır.
+        /// </summary>
+        private async Task InvalidateUserCachesForRoleAsync(int roleId)
         {
-            // PermissionManager varsa kullanıcı cache'lerini de temizle
-            // Bu basit implementasyonda tüm kullanıcıların cache'ini temizleyemeyiz
-            // Production'da Redis gibi distributed cache kullanılmalı
-            _logger.LogDebug("Kullanıcı izin cache'leri güncellenmeli (rol değişikliği)");
+            try
+            {
+                // Rol adını bul
+                var role = await _roleManager.FindByIdAsync(roleId.ToString());
+                if (role == null) return;
+
+                // Bu role sahip tüm kullanıcıları bul
+                var usersInRole = await _userManager.GetUsersInRoleAsync(role.Name!);
+
+                if (_permissionManager != null)
+                {
+                    foreach (var user in usersInRole)
+                    {
+                        _permissionManager.InvalidateUserPermissionsCache(user.Id);
+                    }
+                    _logger.LogInformation(
+                        "Rol izin değişikliği: {UserCount} kullanıcının cache'i temizlendi. RoleId={RoleId}, RoleName={RoleName}",
+                        usersInRole.Count, roleId, role.Name);
+                }
+                else
+                {
+                    // PermissionManager yoksa en azından IMemoryCache üzerinden dene
+                    foreach (var user in usersInRole)
+                    {
+                        _cache.Remove($"user_permissions_{user.Id}");
+                    }
+                    _logger.LogWarning(
+                        "PermissionManager inject edilemedi, IMemoryCache ile {UserCount} kullanıcı cache'i temizlendi. RoleId={RoleId}",
+                        usersInRole.Count, roleId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kullanıcı cache temizleme hatası: RoleId={RoleId}", roleId);
+                // Cache temizleme hatası akışı durdurmamalı
+            }
         }
 
         #endregion

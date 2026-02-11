@@ -303,5 +303,11 @@ namespace ECommerce.Entities.Concrete
         /// Her ağırlık bazlı ürün için bir kayıt oluşturulur
         /// </summary>
         public virtual ICollection<WeightAdjustment> WeightAdjustments { get; set; } = new HashSet<WeightAdjustment>();
+
+        /// <summary>
+        /// Bu siparişe ait iade talepleri.
+        /// Müşteri birden fazla kısmi iade talebi oluşturabilir.
+        /// </summary>
+        public virtual ICollection<RefundRequest> RefundRequests { get; set; } = new HashSet<RefundRequest>();
     }
 }

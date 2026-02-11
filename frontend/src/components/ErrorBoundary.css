@@ -1,0 +1,245 @@
+/* ═══════════════════════════════════════════════════════════
+   Error Boundary Stilleri
+   Kritik hatalarda kullanıcıya dostça UI gösterme
+   ═══════════════════════════════════════════════════════════ */
+
+.error-boundary-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+}
+
+.error-boundary-content {
+  max-width: 600px;
+  width: 100%;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  box-shadow: 0 10px 40px rgba(239, 68, 68, 0.15);
+  border: 2px solid #fca5a5;
+}
+
+/* Hata İkonu */
+.error-boundary-icon {
+  font-size: 5rem;
+  margin-bottom: 1.5rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+/* Başlık */
+.error-boundary-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 1rem;
+}
+
+/* Açıklama */
+.error-boundary-description {
+  font-size: 1rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+/* Aksiyon Butonları */
+.error-boundary-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.error-boundary-btn {
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 150px;
+}
+
+.error-boundary-btn-primary {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.error-boundary-btn-primary:hover {
+  background-color: #b91c1c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.error-boundary-btn-secondary {
+  background-color: transparent;
+  color: #dc2626;
+  border: 2px solid #dc2626;
+}
+
+.error-boundary-btn-secondary:hover {
+  background-color: #dc2626;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
+}
+
+/* Hata Detayları (Development) */
+.error-boundary-details {
+  margin-top: 2rem;
+  text-align: left;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.error-boundary-summary {
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  user-select: none;
+  padding: 0.5rem;
+}
+
+.error-boundary-summary:hover {
+  color: #dc2626;
+}
+
+.error-boundary-stack {
+  margin-top: 1rem;
+}
+
+.error-message {
+  color: #dc2626;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.error-stack {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  padding: 1rem;
+  border-radius: 6px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Destek Linki */
+.error-boundary-support {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-top: 1rem;
+}
+
+.error-boundary-link {
+  color: #dc2626;
+  text-decoration: underline;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.error-boundary-link:hover {
+  color: #b91c1c;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE - Mobile First
+   ═══════════════════════════════════════════════════════════ */
+
+/* Tablet ve üstü (768px+) */
+@media (min-width: 768px) {
+  .error-boundary-content {
+    padding: 4rem 3rem;
+  }
+
+  .error-boundary-title {
+    font-size: 2.25rem;
+  }
+
+  .error-boundary-description {
+    font-size: 1.125rem;
+  }
+}
+
+/* Mobil cihazlar (max 767px) */
+@media (max-width: 767px) {
+  .error-boundary-icon {
+    font-size: 3.5rem;
+  }
+
+  .error-boundary-title {
+    font-size: 1.5rem;
+  }
+
+  .error-boundary-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .error-boundary-btn {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .error-stack {
+    font-size: 0.7rem;
+  }
+}
+
+/* Dark mode desteği */
+@media (prefers-color-scheme: dark) {
+  .error-boundary-container {
+    background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+  }
+
+  .error-boundary-content {
+    background: #1f2937;
+    border-color: #dc2626;
+  }
+
+  .error-boundary-title {
+    color: #fca5a5;
+  }
+
+  .error-boundary-description {
+    color: #d1d5db;
+  }
+
+  .error-boundary-support {
+    color: #9ca3af;
+  }
+
+  .error-boundary-details {
+    background-color: #111827;
+    border-color: #374151;
+  }
+
+  .error-boundary-summary {
+    color: #d1d5db;
+  }
+
+  .error-boundary-summary:hover {
+    color: #fca5a5;
+  }
+}

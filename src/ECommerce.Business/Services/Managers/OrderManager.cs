@@ -568,6 +568,77 @@ namespace ECommerce.Business.Services.Managers
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
 
+                // ═════════════════════════════════════════════════════════════════════════
+                // KUPON KULLANIM KAYDI OLUŞTUR
+                // ═════════════════════════════════════════════════════════════════════════
+                // Eğer siparişte kupon kullanıldıysa, CouponUsage tablosuna kayıt ekle.
+                // Bu kayıt:
+                // 1. Kullanıcı başına límit kontrolü için gerekli
+                // 2. Raporlama ve analiz için değerli veri sağlar
+                // 3. Fraud detection için IP/UserAgent bilgisi tutar
+                // 4. İptal/iade durumunda kupon restore için kullanılır
+                // ═════════════════════════════════════════════════════════════════════════
+                if (!string.IsNullOrWhiteSpace(order.AppliedCouponCode))
+                {
+                    // Kupon kodunu normalize et (büyük harf, trim)
+                    var normalizedCode = order.AppliedCouponCode.Trim().ToUpperInvariant();
+
+                    // Kuponu veritabanından bul
+                    var coupon = await _context.Set<Coupon>()
+                        .FirstOrDefaultAsync(c => c.Code.ToUpper() == normalizedCode && c.IsActive);
+
+                    if (coupon != null)
+                    {
+                        // HTTP Context'ten güvenlik bilgilerini al
+                        string? ipAddress = null;
+                        string? userAgent = null;
+                        string? sessionId = null;
+
+                        if (_httpContextAccessor?.HttpContext != null)
+                        {
+                            var httpContext = _httpContextAccessor.HttpContext;
+
+                            // IP Address (X-Forwarded-For header'dan veya RemoteIpAddress'den)
+                            ipAddress = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                                       ?? httpContext.Connection.RemoteIpAddress?.ToString()
+                                       ?? "unknown";
+
+                            // User Agent
+                            userAgent = httpContext.Request.Headers["User-Agent"].FirstOrDefault();
+
+                            // Session ID
+                            sessionId = httpContext.Session?.Id ?? httpContext.TraceIdentifier;
+                        }
+
+                        // CouponUsage kaydı oluştur
+                        var couponUsage = new CouponUsage
+                        {
+                            CouponId = coupon.Id,
+                            UserId = effectiveUserId, // Guest siparişlerinde null
+                            OrderId = order.Id,
+                            UsedAt = DateTime.UtcNow,
+                            DiscountApplied = order.CouponDiscountAmount,
+                            OrderTotalBeforeDiscount = itemsTotal,
+                            OrderTotalAfterDiscount = finalPrice,
+                            CouponCode = coupon.Code, // Snapshot - değişse bile geçmişte kalır
+                            CouponType = coupon.Type.ToString(), // Snapshot
+                            IpAddress = ipAddress,
+                            UserAgent = userAgent,
+                            SessionId = sessionId,
+                            IsActive = true, // BaseEntity'den
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        _context.Set<CouponUsage>().Add(couponUsage);
+
+                        // Kupon UsageCount'u artır (istatistik için)
+                        // NOT: Bu alan kullanım limiti için kullanılmaz (CouponUsage tablosu kullanılır)
+                        coupon.UsageCount++;
+
+                        await _context.SaveChangesAsync(); // Transaction içinde
+                    }
+                }
+
                 await _inventoryService.CommitReservationAsync(clientOrderId);
                 await transaction.CommitAsync();
 

@@ -15,6 +15,10 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import { PaymentService } from "../../services/paymentService";
 import CreditCardPreview from "./CreditCardPreview";
+import {
+  sanitize3DSecureHtml,
+  safeRedirect,
+} from "../../utils/securityHelpers";
 import "./PosnetCreditCardForm.css";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -314,8 +318,12 @@ const PosnetCreditCardForm = ({
         customerEmail,
         customerPhone,
         userId,
-        successUrl: successUrl || `${process.env.REACT_APP_SITE_URL || (window.location.hostname === 'localhost' ? window.location.origin : 'https://golkoygurme.com.tr')}/checkout/success`,
-        failUrl: failUrl || `${process.env.REACT_APP_SITE_URL || (window.location.hostname === 'localhost' ? window.location.origin : 'https://golkoygurme.com.tr')}/checkout/fail`,
+        successUrl:
+          successUrl ||
+          `${process.env.REACT_APP_SITE_URL || (window.location.hostname === "localhost" ? window.location.origin : "https://golkoygurme.com.tr")}/checkout/success`,
+        failUrl:
+          failUrl ||
+          `${process.env.REACT_APP_SITE_URL || (window.location.hostname === "localhost" ? window.location.origin : "https://golkoygurme.com.tr")}/checkout/fail`,
       };
 
       const result = await PaymentService.initiatePosnet3DSecure(paymentData);
@@ -323,13 +331,14 @@ const PosnetCreditCardForm = ({
       if (result.success) {
         // 3D Secure yönlendirmesi
         if (result.redirectUrl) {
-          // Banka sayfasına yönlendir
-          window.location.href = result.redirectUrl;
+          // GÜVENLİK: Banka sayfasına güvenli yönlendirme (Open Redirect koruması)
+          safeRedirect(result.redirectUrl, "/odeme-hatasi");
         } else if (result.threeDSecureHtml) {
           // Form submit ile yönlendir - CSP uyumlu
+          // GÜVENLİK: XSS koruması için HTML sanitize
           const container = document.createElement("div");
           container.style.display = "none";
-          container.innerHTML = result.threeDSecureHtml;
+          container.innerHTML = sanitize3DSecureHtml(result.threeDSecureHtml);
           document.body.appendChild(container);
 
           // Form'u bul ve hemen submit et

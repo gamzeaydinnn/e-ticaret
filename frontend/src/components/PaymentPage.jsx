@@ -10,6 +10,7 @@ import { CampaignService } from "../services/campaignService";
 import shippingService from "../services/shippingService";
 import LoginModal from "./LoginModal";
 import { CreditCardPreview } from "./payment";
+import { sanitize3DSecureHtml, safeRedirect } from "../utils/securityHelpers";
 import "./PaymentPage.css";
 
 // UUID v4 generator for clientOrderId
@@ -509,10 +510,11 @@ const PaymentPage = () => {
       });
 
       // 3D Secure HTML formu varsa submit et - CSP uyumlu
+      // GÜVENLİK: XSS koruması için HTML sanitize
       if (initResult?.threeDSecureHtml) {
         const container = document.createElement("div");
         container.style.display = "none";
-        container.innerHTML = initResult.threeDSecureHtml;
+        container.innerHTML = sanitize3DSecureHtml(initResult.threeDSecureHtml);
         document.body.appendChild(container);
         const form = container.querySelector("form");
         if (form) {
@@ -527,8 +529,9 @@ const PaymentPage = () => {
       }
 
       // Redirect URL varsa yönlendir
+      // GÜVENLİK: Open Redirect koruması
       if (initResult?.requiresRedirect && initResult?.redirectUrl) {
-        window.location.href = initResult.redirectUrl;
+        safeRedirect(initResult.redirectUrl, "/odeme-hatasi");
         return;
       }
 

@@ -10,21 +10,25 @@ import { useAuth } from "../contexts/AuthContext";
 import { CartService } from "../services/cartService";
 import OrderDetailModal from "./OrderDetailModal";
 
-/**
- * Sipariş iptal işlemi için yardımcı fonksiyon
- * @param {number} orderId - İptal edilecek sipariş ID
- * @param {Function} onSuccess - Başarılı işlem callback'i
- * @param {Function} onError - Hata callback'i
- */
-async function cancelOrder(orderId, onSuccess, onError) {
-  try {
-    await OrderService.cancel(orderId);
-    onSuccess && onSuccess();
-  } catch (err) {
-    console.error("[OrderHistory] Sipariş iptal hatası:", err);
-    onError && onError(err);
-  }
-}
+// ============================================================================
+// BUTON DURUM GRUPLARI
+// Sipariş durumuna göre 3 farklı aksiyon butonu gösterilir:
+//   1. İptal Et       → Kargo çıkmamış (New/Pending/Confirmed/Paid)
+//                        Otomatik POSNET reverse + stok iade
+//   2. İptal Talebi   → Hazırlanıyor/Hazır/Kurye atandı (Preparing/Ready/Assigned)
+//                        Admin onayı gerekli
+//   3. İade Talebi    → Kargo yolda/teslim edildi (PickedUp → Completed)
+//                        Müşteri hizmetleri inceleyecek
+// ============================================================================
+const AUTO_CANCEL_STATUSES = ["new", "pending", "confirmed", "paid"];
+const CANCEL_REQUEST_STATUSES = ["preparing", "ready", "assigned"];
+const REFUND_REQUEST_STATUSES = [
+  "pickedup", "intransit", "outfordelivery", "shipped",
+  "delivered", "completed", "deliveryfailed", "deliverypaymentpending"
+];
+
+// GÜVENLİK: Production'da debug log'ları kapalı
+const DEBUG = process.env.NODE_ENV === "development";
 
 export default function OrderHistory() {
   // ============================================================================
@@ -36,6 +40,14 @@ export default function OrderHistory() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // İade/İptal talebi için state'ler
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundOrderId, setRefundOrderId] = useState(null);
+  const [refundReason, setRefundReason] = useState("");
+  const [refundLoading, setRefundLoading] = useState(false);
+  // Modal tipi: "auto_cancel" | "cancel_request" | "refund_request"
+  const [refundModalType, setRefundModalType] = useState("refund_request");
 
   // Misafir sipariş sorgulaması için state'ler
   const [guestSearchMode, setGuestSearchMode] = useState(false);
@@ -70,7 +82,7 @@ export default function OrderHistory() {
             (o) => !o.sessionId || o.sessionId === currentSessionId,
           );
           if (filteredOrders.length !== guestOrders.length) {
-            console.log(
+            DEBUG && console.log(
               "[OrderHistory] Session bazlı filtreleme:",
               guestOrders.length,
               "->",
@@ -82,7 +94,7 @@ export default function OrderHistory() {
       }
 
       if (guestOrders.length > 0) {
-        console.log(
+        DEBUG && console.log(
           "[OrderHistory] ✅ Storage'dan",
           guestOrders.length,
           "misafir siparişi bulundu",
@@ -113,7 +125,7 @@ export default function OrderHistory() {
 
     // Giriş yapmamış kullanıcılar için misafir modunu aç
     if (!hasValidAuth) {
-      console.log(
+      DEBUG && console.log(
         "[OrderHistory] Kullanıcı giriş yapmamış, misafir modu aktif",
       );
 
@@ -131,13 +143,13 @@ export default function OrderHistory() {
     setError(null);
 
     try {
-      console.log("[OrderHistory] Siparişler yükleniyor, userId:", user?.id);
+      DEBUG && console.log("[OrderHistory] Siparişler yükleniyor, userId:", user?.id);
       const orderList = await OrderService.list(user?.id);
 
       if (!orderList || orderList.length === 0) {
-        console.log("[OrderHistory] Kullanıcının siparişi bulunamadı");
+        DEBUG && console.log("[OrderHistory] Kullanıcının siparişi bulunamadı");
       } else {
-        console.log(
+        DEBUG && console.log(
           "[OrderHistory] ✅ Siparişler yüklendi:",
           orderList.length,
           "adet",
@@ -150,7 +162,7 @@ export default function OrderHistory() {
 
       // HTTP 400/401/403 hatası - misafir siparişlerini göster
       if (err?.status === 400 || err?.status === 401 || err?.status === 403) {
-        console.log(
+        DEBUG && console.log(
           "[OrderHistory] API hatası, misafir siparişleri deneniyor...",
         );
         const hasGuestOrders = loadGuestOrdersFromStorage();
@@ -200,7 +212,7 @@ export default function OrderHistory() {
     setGuestSearchError(null);
 
     try {
-      console.log("[OrderHistory] Misafir sipariş sorgulanıyor:", {
+      DEBUG && console.log("[OrderHistory] Misafir sipariş sorgulanıyor:", {
         email: guestEmail,
         orderNumber: guestOrderNumber,
       });
@@ -214,7 +226,7 @@ export default function OrderHistory() {
         // Tek sipariş döndü, listeye ekle
         setOrders([result]);
         setGuestSearchMode(false);
-        console.log(
+        DEBUG && console.log(
           "[OrderHistory] ✅ Misafir siparişi bulundu:",
           result.orderNumber,
         );
@@ -474,42 +486,79 @@ export default function OrderHistory() {
                         <i className="fas fa-eye me-1"></i>
                         Detay
                       </button>
-                      {["pending", "processing", "new", "confirmed"].includes(
+                      {/* ═══════════════════════════════════════════════════
+                          BUTON 1: İPTAL ET
+                          New/Pending/Confirmed/Paid → Otomatik iptal + POSNET reverse
+                          ═══════════════════════════════════════════════════ */}
+                      {AUTO_CANCEL_STATUSES.includes(
                         order.status?.toLowerCase(),
                       ) && (
                         <button
                           className="btn btn-danger btn-sm"
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                "Siparişinizi iptal etmek istediğinize emin misiniz?",
-                              )
-                            ) {
-                              return;
-                            }
-                            await cancelOrder(
-                              order.id,
-                              () => {
-                                setOrders((prev) =>
-                                  prev.map((o) =>
-                                    o.id === order.id
-                                      ? { ...o, status: "Cancelled" }
-                                      : o,
-                                  ),
-                                );
-                              },
-                              (err) => {
-                                alert(
-                                  "Sipariş iptal edilemedi: " +
-                                    (err?.message || "Bilinmeyen hata"),
-                                );
-                              },
-                            );
+                          onClick={() => {
+                            setRefundOrderId(order.id);
+                            setRefundReason("");
+                            setRefundModalType("auto_cancel");
+                            setRefundModalOpen(true);
                           }}
                         >
                           <i className="fas fa-times me-1"></i>
                           İptal Et
                         </button>
+                      )}
+                      {/* ═══════════════════════════════════════════════════
+                          BUTON 2: İPTAL TALEBİ
+                          Preparing/Ready/Assigned → Admin onayı gerekli
+                          ═══════════════════════════════════════════════════ */}
+                      {CANCEL_REQUEST_STATUSES.includes(
+                        order.status?.toLowerCase(),
+                      ) && (
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => {
+                            setRefundOrderId(order.id);
+                            setRefundReason("");
+                            setRefundModalType("cancel_request");
+                            setRefundModalOpen(true);
+                          }}
+                        >
+                          <i className="fas fa-exclamation-triangle me-1"></i>
+                          İptal Talebi
+                        </button>
+                      )}
+                      {/* ═══════════════════════════════════════════════════
+                          BUTON 3: WHATSAPP İLE İLETİŞİM
+                          Kargo yoldayken/teslim edildikten sonra müşteri
+                          doğrudan iptal edemez → WhatsApp'a yönlendirilir
+                          ═══════════════════════════════════════════════════ */}
+                      {REFUND_REQUEST_STATUSES.includes(
+                        order.status?.toLowerCase(),
+                      ) && (
+                        <a
+                          className="btn btn-success btn-sm"
+                          href={`https://wa.me/905334783072?text=${encodeURIComponent(
+                            `Merhaba, ${order.orderNumber || '#' + order.id} numaralı siparişim için iade/iptal talebi oluşturmak istiyorum.`
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <i className="fab fa-whatsapp me-1"></i>
+                          WhatsApp ile İptal/İade
+                        </a>
+                      )}
+                      {/* İade edilmiş siparişler için bilgi badge */}
+                      {order.status?.toLowerCase() === "refunded" && (
+                        <span className="badge bg-secondary">
+                          <i className="fas fa-check-circle me-1"></i>
+                          İade Edildi
+                        </span>
+                      )}
+                      {/* İptal edilmiş siparişler için bilgi badge */}
+                      {order.status?.toLowerCase() === "cancelled" && (
+                        <span className="badge bg-danger">
+                          <i className="fas fa-ban me-1"></i>
+                          İptal Edildi
+                        </span>
                       )}
                     </div>
                   </div>
@@ -527,6 +576,195 @@ export default function OrderHistory() {
         }}
         order={selectedOrder}
       />
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          İPTAL / İADE TALEBİ MODAL
+          Modal tipi (refundModalType) bazında farklı başlık, açıklama ve davranış:
+          - auto_cancel:    Otomatik iptal + POSNET reverse (para iadesi garantili)
+          - cancel_request: Admin onayı gerektiren iptal talebi
+          - refund_request: Müşteri hizmetleri incelemesi gerektiren iade talebi
+          ═══════════════════════════════════════════════════════════════════════ */}
+      {refundModalOpen && (
+        <div className="modal d-block" tabIndex="-1" style={{ background: "rgba(0,0,0,0.5)" }}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className={`modal-header ${
+                refundModalType === "auto_cancel"
+                  ? "bg-danger text-white"
+                  : refundModalType === "cancel_request"
+                    ? "bg-warning text-dark"
+                    : "bg-info text-white"
+              }`}>
+                <h5 className="modal-title">
+                  <i className={`fas ${
+                    refundModalType === "auto_cancel"
+                      ? "fa-times-circle"
+                      : refundModalType === "cancel_request"
+                        ? "fa-exclamation-triangle"
+                        : "fa-undo"
+                  } me-2`}></i>
+                  {refundModalType === "auto_cancel"
+                    ? "Sipariş İptali"
+                    : refundModalType === "cancel_request"
+                      ? "İptal Talebi Oluştur"
+                      : "İade Talebi Oluştur"}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setRefundModalOpen(false)}
+                  disabled={refundLoading}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {/* ── Tip bazlı bilgilendirme mesajı ── */}
+                {refundModalType === "auto_cancel" && (
+                  <div className="alert alert-danger mb-3">
+                    <i className="fas fa-info-circle me-2"></i>
+                    <strong>Otomatik İptal:</strong> Siparişiniz henüz hazırlanmadığı için
+                    anında iptal edilecek ve ödemeniz kartınıza iade edilecektir.
+                  </div>
+                )}
+                {refundModalType === "cancel_request" && (
+                  <div className="alert alert-warning mb-3">
+                    <i className="fas fa-info-circle me-2"></i>
+                    <strong>İptal Talebi:</strong> Siparişiniz hazırlık aşamasında olduğu için
+                    iptal talebiniz müşteri hizmetlerimize iletilecektir. En kısa sürede
+                    işlem yapılacak ve bilgilendirileceksiniz.
+                  </div>
+                )}
+                {refundModalType === "refund_request" && (
+                  <div className="alert alert-info mb-3">
+                    <i className="fas fa-info-circle me-2"></i>
+                    <strong>İade Talebi:</strong> Siparişiniz kargoya verildiği/teslim edildiği
+                    için iade talebiniz müşteri hizmetlerimiz tarafından incelenecektir.
+                    Onaylanması halinde para iadeniz başlatılacaktır.
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="form-label fw-bold">
+                    {refundModalType === "auto_cancel"
+                      ? "İptal Sebebi *"
+                      : refundModalType === "cancel_request"
+                        ? "İptal Talebi Sebebi *"
+                        : "İade Sebebi *"}
+                  </label>
+                  <textarea
+                    className="form-control"
+                    rows="3"
+                    placeholder={
+                      refundModalType === "auto_cancel"
+                        ? "Lütfen iptal sebebinizi açıklayınız..."
+                        : refundModalType === "cancel_request"
+                          ? "Lütfen iptal talebi sebebinizi açıklayınız..."
+                          : "Lütfen iade sebebinizi açıklayınız..."
+                    }
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    disabled={refundLoading}
+                    maxLength={1000}
+                  ></textarea>
+                  <div className="form-text">{refundReason.length}/1000 karakter</div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setRefundModalOpen(false)}
+                  disabled={refundLoading}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${
+                    refundModalType === "auto_cancel"
+                      ? "btn-danger"
+                      : refundModalType === "cancel_request"
+                        ? "btn-warning"
+                        : "btn-info text-white"
+                  }`}
+                  disabled={!refundReason.trim() || refundLoading}
+                  onClick={async () => {
+                    // auto_cancel için onay iste
+                    if (refundModalType === "auto_cancel") {
+                      if (!window.confirm(
+                        "Siparişiniz iptal edilecek ve para iadeniz başlatılacaktır. Onaylıyor musunuz?"
+                      )) {
+                        return;
+                      }
+                    }
+                    setRefundLoading(true);
+                    try {
+                      const result = await OrderService.createRefundRequest(
+                        refundOrderId,
+                        {
+                          reason: refundReason.trim(),
+                          refundType: refundModalType === "refund_request" ? "return" : "cancel"
+                        }
+                      );
+                      const resp = result?.data || result;
+                      setRefundModalOpen(false);
+
+                      if (resp?.autoCancelled) {
+                        // Otomatik iptal edildi - listeyi güncelle
+                        setOrders((prev) =>
+                          prev.map((o) =>
+                            o.id === refundOrderId
+                              ? { ...o, status: "Cancelled" }
+                              : o,
+                          ),
+                        );
+                        alert(resp?.message || "Siparişiniz iptal edildi ve para iadeniz başlatıldı.");
+                      } else {
+                        // Admin onayı bekliyor
+                        alert(
+                          resp?.message ||
+                          (refundModalType === "cancel_request"
+                            ? "İptal talebiniz alınmıştır. Müşteri hizmetlerimiz en kısa sürede işlem yapacaktır."
+                            : "İade talebiniz alınmıştır. Müşteri hizmetlerimiz en kısa sürede inceleyecektir.")
+                        );
+                      }
+                      // Sipariş listesini yeniden yükle
+                      loadOrders();
+                    } catch (err) {
+                      const msg =
+                        err?.response?.data?.message ||
+                        err?.message ||
+                        "İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.";
+                      alert(msg);
+                    } finally {
+                      setRefundLoading(false);
+                    }
+                  }}
+                >
+                  {refundLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      İşleniyor...
+                    </>
+                  ) : (
+                    <>
+                      <i className={`fas ${
+                        refundModalType === "auto_cancel"
+                          ? "fa-times"
+                          : "fa-paper-plane"
+                      } me-1`}></i>
+                      {refundModalType === "auto_cancel"
+                        ? "İptal Et ve Para İadesi Al"
+                        : refundModalType === "cancel_request"
+                          ? "İptal Talebi Gönder"
+                          : "İade Talebi Gönder"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loadingDetail && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
