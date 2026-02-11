@@ -447,6 +447,8 @@ builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IWeightService, WeightService>();
 builder.Services.AddScoped<IWeightAdjustmentService, WeightAdjustmentService>();
 builder.Services.AddScoped<IWeightBasedPaymentService, WeightBasedPaymentService>();
+// Mikro ERP'den tartı verisi senkronizasyonu - sipariş teslim miktarlarını çeker
+builder.Services.AddScoped<IMikroWeightSyncService, MikroWeightSyncService>();
 // Ödeme sağlayıcıları + PaymentManager (provider seçimi)
 // Stripe / PayPal devre dışı: sadece Iyzico + Posnet kullanılıyor
 builder.Services.AddScoped<IyzicoPaymentService>();
@@ -474,6 +476,7 @@ builder.Services.AddScoped<PaymentManager>();
 builder.Services.AddScoped<IPaymentService, PaymentManager>();
 builder.Services.AddScoped<IExtendedPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
+builder.Services.AddScoped<ICartSettingsService, CartSettingsManager>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();
 builder.Services.AddScoped<UserManager>();

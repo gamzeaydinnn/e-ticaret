@@ -1144,6 +1144,134 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
             return await SaveFaturaV2Async(faturaRequest, cancellationToken);
         }
+
+        // ==================== SİPARİŞ TESLİM MİKTARLARI ====================
+
+        /// <summary>
+        /// Mikro'dan sipariş teslim miktarlarını (tartı sonuçları) çeker.
+        /// NEDEN: Mağaza personeli ürünleri tartıp Mikro'ya girer,
+        /// biz sip_teslim_miktar alanından gerçek miktarları çekeriz.
+        ///
+        /// AKIŞ:
+        /// 1. SiparisListesiV2 endpoint'inden siparişleri çek
+        /// 2. sip_ozel_kod == orderNumber olan siparişi bul (e-ticaret referansı)
+        /// 3. Her satırdan sip_miktar, sip_teslim_miktar, sip_b_fiyat değerlerini al
+        /// 4. MikroDeliveryWeightsResult olarak döndür
+        /// </summary>
+        /// <param name="orderNumber">E-ticaret sipariş numarası (Mikro'daki sip_ozel_kod)</param>
+        /// <param name="cancellationToken">İptal token'ı</param>
+        /// <returns>Teslim miktarları sonucu veya hata durumunda null</returns>
+        public async Task<MikroDeliveryWeightsResult?> GetOrderDeliveryWeightsAsync(
+            string orderNumber, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(orderNumber))
+            {
+                _logger.LogWarning("[MicroService] GetOrderDeliveryWeightsAsync: orderNumber boş.");
+                return new MikroDeliveryWeightsResult
+                {
+                    Success = false,
+                    ErrorMessage = "Sipariş numarası boş olamaz.",
+                    OrderNumber = orderNumber ?? string.Empty
+                };
+            }
+
+            try
+            {
+                _logger.LogInformation(
+                    "[MicroService] GetOrderDeliveryWeightsAsync çağrılıyor. Sipariş: {OrderNumber}",
+                    orderNumber);
+
+                // SiparisListesiV2 endpoint'ini kullanarak siparişleri çek.
+                // EvrakSeri filtresi ile sadece online siparişleri (varsayılan seri) alalım.
+                var request = new MikroSiparisListesiRequestDto
+                {
+                    EvrakSeri = _settings.DefaultEvrakSeri,
+                    SayfaBuyuklugu = 100 // Yeterli büyüklükte sayfa
+                };
+
+                var siparisResult = await GetSiparisListesiV2Async(request, cancellationToken);
+
+                if (!siparisResult.Success || siparisResult.Data == null)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] GetOrderDeliveryWeightsAsync: SiparisListesiV2 başarısız. " +
+                        "Sipariş: {OrderNumber}, Mesaj: {Message}",
+                        orderNumber, siparisResult.Message);
+
+                    return new MikroDeliveryWeightsResult
+                    {
+                        Success = false,
+                        ErrorMessage = $"Mikro sipariş listesi alınamadı: {siparisResult.Message}",
+                        OrderNumber = orderNumber
+                    };
+                }
+
+                // sip_ozel_kod == orderNumber olan siparişi bul (e-ticaret referansı)
+                var matchedOrder = siparisResult.Data
+                    .FirstOrDefault(s => string.Equals(
+                        s.SipOzelKod?.Trim(), orderNumber.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (matchedOrder == null)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] GetOrderDeliveryWeightsAsync: Sipariş bulunamadı. " +
+                        "OrderNumber: {OrderNumber}, Toplam sipariş: {Count}",
+                        orderNumber, siparisResult.Data.Count);
+
+                    return new MikroDeliveryWeightsResult
+                    {
+                        Success = false,
+                        ErrorMessage = $"Mikro'da sip_ozel_kod='{orderNumber}' ile eşleşen sipariş bulunamadı.",
+                        OrderNumber = orderNumber
+                    };
+                }
+
+                // Sipariş satırlarından teslim miktarlarını çıkar
+                var items = new List<MikroDeliveryWeightItem>();
+
+                if (matchedOrder.Satirlar != null)
+                {
+                    foreach (var satir in matchedOrder.Satirlar)
+                    {
+                        items.Add(new MikroDeliveryWeightItem
+                        {
+                            StokKod = satir.SipStokKod,
+                            StokIsim = satir.SipStokIsim,
+                            SiparisMiktar = satir.SipMiktar,
+                            TeslimMiktar = satir.SipTeslimMiktar ?? 0m,
+                            BirimFiyat = satir.SipBFiyat
+                        });
+                    }
+                }
+
+                _logger.LogInformation(
+                    "[MicroService] GetOrderDeliveryWeightsAsync tamamlandı. " +
+                    "Sipariş: {OrderNumber}, Satır: {Count}, " +
+                    "Teslim edilen: {DeliveredCount}",
+                    orderNumber, items.Count,
+                    items.Count(i => i.TeslimMiktar > 0));
+
+                return new MikroDeliveryWeightsResult
+                {
+                    Success = true,
+                    OrderNumber = orderNumber,
+                    Items = items
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[MicroService] GetOrderDeliveryWeightsAsync hatası. Sipariş: {OrderNumber}",
+                    orderNumber);
+
+                return new MikroDeliveryWeightsResult
+                {
+                    Success = false,
+                    ErrorMessage = $"Mikro teslim miktarları alınırken hata: {ex.Message}",
+                    OrderNumber = orderNumber
+                };
+            }
+        }
     }
 
     // ==================== MIKRO AUTH WRAPPER DTO ====================

@@ -2,6 +2,7 @@ using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System;
 
@@ -56,6 +57,11 @@ namespace ECommerce.Business.Services.Managers
 
         public Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)
             => Task.FromResult(true);
+
+        // Mikro'dan sipariş teslim miktarlarını çeker (stub - gerçek implementasyon Infrastructure katmanında)
+        public Task<MikroDeliveryWeightsResult?> GetOrderDeliveryWeightsAsync(
+            string orderNumber, CancellationToken cancellationToken = default)
+            => Task.FromResult<MikroDeliveryWeightsResult?>(null);
     }
 }
 /*using ECommerce.Core.DTOs.Micro;

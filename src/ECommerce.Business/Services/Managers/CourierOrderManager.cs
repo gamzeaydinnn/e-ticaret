@@ -16,16 +16,17 @@ namespace ECommerce.Business.Services.Managers
 {
     /// <summary>
     /// Kurye sipariş işlemlerini yöneten servis implementasyonu.
-    /// 
+    ///
     /// Güvenlik Özellikleri:
     /// - Ownership kontrolü: Her işlemde order.CourierId == courierId kontrolü
     /// - State machine entegrasyonu: Geçersiz durum geçişleri engellenir
     /// - Audit logging: Tüm aksiyonlar loglanır
-    /// 
+    ///
     /// Tartı Entegrasyonu:
     /// - IWeightService üzerinden tartı farkı hesaplaması
+    /// - IMikroWeightSyncService ile Mikro ERP'den güncel tartı verileri çekilir
     /// - Final tutar = Order.TotalPrice + WeightDifference
-    /// 
+    ///
     /// Performans:
     /// - Eager loading ile N+1 sorgu engellenir
     /// - Gerekli alanlar için projection kullanılır
@@ -37,6 +38,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly IPaymentCaptureService _paymentCaptureService;
         private readonly IRealTimeNotificationService _notificationService;
         private readonly IWeightService _weightService;
+        private readonly IMikroWeightSyncService _mikroWeightSyncService;
         private readonly ILogger<CourierOrderManager> _logger;
 
         public CourierOrderManager(
@@ -45,6 +47,7 @@ namespace ECommerce.Business.Services.Managers
             IPaymentCaptureService paymentCaptureService,
             IRealTimeNotificationService notificationService,
             IWeightService weightService,
+            IMikroWeightSyncService mikroWeightSyncService,
             ILogger<CourierOrderManager> logger)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -52,6 +55,7 @@ namespace ECommerce.Business.Services.Managers
             _paymentCaptureService = paymentCaptureService ?? throw new ArgumentNullException(nameof(paymentCaptureService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
             _weightService = weightService ?? throw new ArgumentNullException(nameof(weightService));
+            _mikroWeightSyncService = mikroWeightSyncService ?? throw new ArgumentNullException(nameof(mikroWeightSyncService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -296,6 +300,36 @@ namespace ECommerce.Business.Services.Managers
                     return CreateFailResponse(orderId, $"Sipariş durumu '{_orderStateMachine.GetStatusDescription(order.Status)}' olduğu için teslim edilemez.");
                 }
 
+                // 2.5 Mikro ERP'den güncel tartı verilerini çek (ağırlık bazlı ürünler için)
+                try
+                {
+                    var hasWeightBasedItems = order.OrderItems?.Any(oi => oi.IsWeightBased) == true;
+                    if (hasWeightBasedItems)
+                    {
+                        _logger.LogInformation("Sipariş #{OrderId}: Mikro'dan tartı verileri çekiliyor...", orderId);
+                        var synced = await _mikroWeightSyncService.SyncDeliveryWeightsForOrderAsync(orderId);
+                        if (synced)
+                        {
+                            // Güncel ağırlıkları yükle (Mikro sync DB'yi güncelledi)
+                            order = await GetOrderWithOwnershipCheckAsync(orderId, courierId);
+                            if (order == null)
+                            {
+                                return CreateFailResponse(orderId, "Sipariş güncellemesi sırasında hata oluştu.");
+                            }
+                            _logger.LogInformation("Sipariş #{OrderId}: Mikro tartı verileri başarıyla senkronize edildi", orderId);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Sipariş #{OrderId}: Mikro'dan yeni tartı verisi yok, mevcut verilerle devam ediliyor", orderId);
+                        }
+                    }
+                }
+                catch (Exception mikroEx)
+                {
+                    // Non-blocking: Mikro ulaşılamaz olsa bile mevcut verilerle devam et
+                    _logger.LogWarning(mikroEx, "Sipariş #{OrderId}: Mikro tartı sync hatası, mevcut verilerle devam ediliyor", orderId);
+                }
+
                 // 3. Final tutarı hesapla (tartı farkı dahil)
                 var finalAmount = await CalculateFinalAmountAsync(order, dto.WeightAdjustmentGrams);
 
@@ -383,6 +417,30 @@ namespace ECommerce.Business.Services.Managers
                     order.DeliveryNotes = (order.DeliveryNotes ?? "") + $"\n[Teslim Alan] {dto.ReceiverName}";
                 }
                 await _context.SaveChangesAsync();
+
+                // 6.5 Ağırlık farkı müşteri bildirimi (tartı farkı varsa)
+                try
+                {
+                    var weightDiffAmount = finalAmount - order.FinalPrice;
+                    if (Math.Abs(weightDiffAmount) > 0.01m)
+                    {
+                        await _notificationService.NotifyCustomerWeightChargeAsync(
+                            orderId,
+                            order.OrderNumber ?? $"#{orderId}",
+                            order.FinalPrice,
+                            finalAmount,
+                            weightDiffAmount);
+
+                        _logger.LogInformation(
+                            "Sipariş #{OrderId}: Ağırlık farkı bildirimi gönderildi. Orijinal={Original:C}, Final={Final:C}, Fark={Diff:C}",
+                            orderId, order.FinalPrice, finalAmount, weightDiffAmount);
+                    }
+                }
+                catch (Exception weightNotifyEx)
+                {
+                    _logger.LogWarning(weightNotifyEx,
+                        "Sipariş #{OrderId} için ağırlık farkı bildirimi gönderilemedi", orderId);
+                }
 
                 // 7. Kurye istatistiklerini güncelle
                 await UpdateCourierStatsAsync(courierId);

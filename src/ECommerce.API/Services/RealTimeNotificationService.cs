@@ -120,7 +120,7 @@ namespace ECommerce.API.Services
             try
             {
                 var groupName = $"order-{orderId}";
-                
+
                 var notification = new
                 {
                     type = "DeliveryProblem",
@@ -129,16 +129,73 @@ namespace ECommerce.API.Services
                     message,
                     timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
                 };
-                
+
                 await _orderHub.Clients.Group(groupName).SendAsync("DeliveryProblem", notification);
-                
+
                 _logger.LogInformation(
-                    "📢 Teslimat sorunu bildirimi gönderildi. OrderId={OrderId}, ProblemType={ProblemType}", 
+                    "📢 Teslimat sorunu bildirimi gönderildi. OrderId={OrderId}, ProblemType={ProblemType}",
                     orderId, problemType);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Teslimat sorunu bildirimi gönderilemedi. OrderId={OrderId}", orderId);
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task NotifyCustomerWeightChargeAsync(int orderId, string orderNumber,
+            decimal originalAmount, decimal finalAmount, decimal weightDifferenceAmount)
+        {
+            try
+            {
+                var groupName = $"order-{orderId}";
+
+                // Ek tahsilat mı yoksa iade mi?
+                var isOverage = weightDifferenceAmount > 0;
+                var messageText = isOverage
+                    ? $"Tartı farkı nedeniyle {weightDifferenceAmount:N2} TL ek tahsilat yapıldı."
+                    : $"Tartı farkı nedeniyle {Math.Abs(weightDifferenceAmount):N2} TL iade edildi.";
+
+                var notification = new
+                {
+                    type = "WeightChargeApplied",
+                    orderId,
+                    orderNumber,
+                    originalAmount,
+                    finalAmount,
+                    weightDifferenceAmount,
+                    isOverage,
+                    message = messageText,
+                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                };
+
+                // Müşteriye sipariş takip kanalından bildirim gönder
+                await _orderHub.Clients.Group(groupName).SendAsync("WeightChargeApplied", notification);
+
+                // Admin'lere de bilgilendir
+                await _adminHub.Clients.Group(AdminGroupName).SendAsync("WeightChargeApplied", new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    type = "WeightChargeApplied",
+                    orderId,
+                    orderNumber,
+                    originalAmount,
+                    finalAmount,
+                    weightDifferenceAmount,
+                    isOverage,
+                    message = messageText,
+                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    read = false
+                });
+
+                _logger.LogInformation(
+                    "📢 Ağırlık farkı bildirimi gönderildi. OrderId={OrderId}, Fark={Diff:N2} TL, Tip={Type}",
+                    orderId, weightDifferenceAmount, isOverage ? "EkTahsilat" : "Iade");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Ağırlık farkı bildirimi gönderilemedi. OrderId={OrderId}", orderId);
             }
         }
 

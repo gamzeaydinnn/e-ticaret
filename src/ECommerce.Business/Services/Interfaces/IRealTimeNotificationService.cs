@@ -41,6 +41,19 @@ namespace ECommerce.Business.Services.Interfaces
         /// </summary>
         Task NotifyCustomerDeliveryProblemAsync(int orderId, string problemType, string message);
 
+        /// <summary>
+        /// Ağırlık farkı nedeniyle ek tahsilat yapıldığında müşteriye bildirim gönderir.
+        /// NEDEN: Tartı bazlı ürünlerde Mikro'dan gelen gerçek ağırlık ile sipariş
+        /// ağırlığı arasındaki fark nedeniyle provizyon tutarı değiştiğinde müşteri bilgilendirilir.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="orderNumber">Sipariş numarası</param>
+        /// <param name="originalAmount">Orijinal sipariş tutarı</param>
+        /// <param name="finalAmount">Final tutar (tartı farkı dahil)</param>
+        /// <param name="weightDifferenceAmount">Ağırlık farkı tutarı (pozitif=ek tahsilat, negatif=iade)</param>
+        Task NotifyCustomerWeightChargeAsync(int orderId, string orderNumber,
+            decimal originalAmount, decimal finalAmount, decimal weightDifferenceAmount);
+
         // =====================================================================
         // KURYE BİLDİRİMLERİ
         // =====================================================================

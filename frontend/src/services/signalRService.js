@@ -83,6 +83,9 @@ export const SignalREvents = {
   // Ses Bildirimi
   PLAY_SOUND: "PlaySound",
 
+  // Ağırlık Farkı Olayları (Tartı bazlı ürünler)
+  WEIGHT_CHARGE_APPLIED: "WeightChargeApplied",
+
   // Sistem Olayları
   NOTIFICATION: "Notification",
   ALERT: "Alert",
@@ -455,7 +458,10 @@ class SignalRService {
       },
     );
 
-    const results = await Promise.all([deliveryHub.start(), courierHub.start()]);
+    const results = await Promise.all([
+      deliveryHub.start(),
+      courierHub.start(),
+    ]);
 
     // Kurye bildirim odasına katıl
     if (courierHub.isConnected()) {
@@ -518,6 +524,19 @@ class SignalRService {
     return this.on(
       HUB_URLS.delivery,
       SignalREvents.DELIVERY_STATUS_CHANGED,
+      handler,
+    );
+  }
+
+  /**
+   * Ağırlık farkı tahsilat bildirimi dinler (müşteri / admin için)
+   * NEDEN: Tartı bazlı ürünlerde Mikro'dan gelen gerçek ağırlık ile sipariş
+   * ağırlığı arasındaki fark nedeniyle provizyon tutarı değiştiğinde bildirim gelir.
+   */
+  onWeightChargeApplied(handler) {
+    return this.on(
+      HUB_URLS.delivery,
+      SignalREvents.WEIGHT_CHARGE_APPLIED,
       handler,
     );
   }

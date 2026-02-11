@@ -18,7 +18,13 @@ namespace ECommerce.Core.Interfaces
         Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks);
         Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices);
         Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers);
-		 
+
+        // Mikro'dan sipariş teslim miktarlarını (tartı sonuçları) çeker.
+        // NEDEN: Mağaza personeli ürünleri tartıp Mikro'ya girdiğinde,
+        // sip_teslim_miktar alanından gerçek miktarlar çekilir.
+        Task<MikroDeliveryWeightsResult?> GetOrderDeliveryWeightsAsync(
+            string orderNumber, CancellationToken cancellationToken = default);
+
         // İhtiyaca göre diğer metodlar eklenebilir
 	}
 }

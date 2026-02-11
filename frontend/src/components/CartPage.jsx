@@ -6,6 +6,7 @@ import { CartService } from "../services/cartService";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
 import shippingService from "../services/shippingService";
+import cartSettingsService from "../services/cartSettingsService";
 import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
 import "./CartPage.css";
 
@@ -49,6 +50,12 @@ const CartPage = () => {
   const [appliedCampaigns, setAppliedCampaigns] = useState([]);
   const [campaignDiscountTotal, setCampaignDiscountTotal] = useState(0);
 
+  // =================================================================
+  // MİNİMUM SEPET TUTARI STATE'LERİ
+  // =================================================================
+  const [cartSettings, setCartSettings] = useState(null);
+  const [isCartAmountValid, setIsCartAmountValid] = useState(true);
+
   // Kargo fiyatlarını API'den yükle
   useEffect(() => {
     const loadShippingPrices = async () => {
@@ -76,6 +83,33 @@ const CartPage = () => {
     };
     loadShippingPrices();
   }, []);
+
+  // Minimum sepet tutarı ayarlarını yükle
+  useEffect(() => {
+    let mounted = true;
+    const loadCartSettings = async () => {
+      try {
+        const settings = await cartSettingsService.getCartSettings();
+        if (mounted) setCartSettings(settings);
+      } catch (error) {
+        console.warn("[CartPage] Sepet ayarları yüklenemedi:", error.message);
+      }
+    };
+    loadCartSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Sepet toplamı değiştiğinde minimum tutar kontrolü
+  useEffect(() => {
+    if (cartSettings?.isMinimumCartAmountActive) {
+      const total = getCartTotal();
+      setIsCartAmountValid(total >= cartSettings.minimumCartAmount);
+    } else {
+      setIsCartAmountValid(true);
+    }
+  }, [cartItems, cartSettings, getCartTotal]);
 
   // Sayfa yüklendiğinde önceden uygulanmış kupon varsa geri yükle
   useEffect(() => {
@@ -924,11 +958,85 @@ const CartPage = () => {
                 </div>
               </div>
 
+              {/* Minimum Sepet Tutarı Uyarısı */}
+              {!isCartAmountValid && cartSettings && (
+                <div
+                  className="mb-3 p-3 rounded-3"
+                  style={{
+                    backgroundColor: "#fff3cd",
+                    border: "1px solid #ffc107",
+                    borderRadius: "12px",
+                  }}
+                >
+                  <div className="d-flex align-items-start gap-2 mb-2">
+                    <i
+                      className="fas fa-exclamation-triangle mt-1"
+                      style={{ color: "#856404" }}
+                    ></i>
+                    <div>
+                      <strong style={{ color: "#856404", fontSize: "0.9rem" }}>
+                        Minimum Sepet Tutarı
+                      </strong>
+                      <p
+                        className="mb-1"
+                        style={{ color: "#856404", fontSize: "0.85rem" }}
+                      >
+                        {(cartSettings.minimumCartAmountMessage || "").replace(
+                          "{amount}",
+                          (cartSettings.minimumCartAmount || 0).toLocaleString(
+                            "tr-TR",
+                            { minimumFractionDigits: 2 },
+                          ),
+                        )}
+                      </p>
+                      <span
+                        className="fw-bold"
+                        style={{ color: "#856404", fontSize: "0.85rem" }}
+                      >
+                        Kalan:{" "}
+                        {(
+                          cartSettings.minimumCartAmount - getCartTotal()
+                        ).toLocaleString("tr-TR", {
+                          minimumFractionDigits: 2,
+                        })}{" "}
+                        ₺
+                      </span>
+                    </div>
+                  </div>
+                  {/* İlerleme çubuğu */}
+                  <div
+                    className="progress"
+                    style={{ height: "8px", borderRadius: "4px" }}
+                  >
+                    <div
+                      className="progress-bar bg-warning"
+                      role="progressbar"
+                      style={{
+                        width: `${Math.min(
+                          (getCartTotal() / cartSettings.minimumCartAmount) *
+                            100,
+                          100,
+                        )}%`,
+                        borderRadius: "4px",
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               {/* Checkout Button */}
               <button
                 className="checkout-btn"
                 onClick={() => navigate("/payment")}
-                disabled={cartItems.length === 0}
+                disabled={cartItems.length === 0 || !isCartAmountValid}
+                style={{
+                  opacity:
+                    cartItems.length === 0 || !isCartAmountValid ? 0.6 : 1,
+                  cursor:
+                    cartItems.length === 0 || !isCartAmountValid
+                      ? "not-allowed"
+                      : "pointer",
+                }}
               >
                 <i className="fas fa-lock me-2"></i>
                 Güvenli Ödemeye Geç

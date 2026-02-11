@@ -7,6 +7,7 @@ using ECommerce.Core.Constants;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Extensions;
 using ECommerce.API.Infrastructure;
+using ECommerce.Core.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.API.Controllers
@@ -166,6 +167,42 @@ namespace ECommerce.API.Controllers
 
             var authenticatedUserId = User.GetUserId();
             dto.UserId = authenticatedUserId > 0 ? authenticatedUserId : null;
+
+            // ══════════════════════════════════════════════════════════════════════════
+            // MİNİMUM SEPET TUTARI KONTROLÜ
+            // Sipariş oluşturmadan önce sepet toplamı minimum tutarı karşılıyor mu?
+            // ══════════════════════════════════════════════════════════════════════════
+            try
+            {
+                var cartSettingsService = HttpContext.RequestServices.GetRequiredService<ICartSettingsService>();
+                var subtotal = dto.OrderItems?.Sum(i => i.UnitPrice * i.Quantity) ?? 0;
+                var isCartValid = await cartSettingsService.ValidateMinimumCartAmountAsync(subtotal);
+
+                if (!isCartValid)
+                {
+                    var cartSettings = await cartSettingsService.GetActiveSettingsAsync();
+                    var message = (cartSettings.MinimumCartAmountMessage ?? "Minimum sepet tutarına ulaşılamadı.")
+                        .Replace("{amount}", cartSettings.MinimumCartAmount.ToString("N2"));
+
+                    _logger.LogWarning(
+                        "[CHECKOUT] Minimum sepet tutarı kontrolü başarısız. Subtotal: {Subtotal}, MinAmount: {MinAmount}",
+                        subtotal, cartSettings.MinimumCartAmount);
+
+                    return BadRequest(new
+                    {
+                        message = message,
+                        errorCode = "MINIMUM_CART_AMOUNT",
+                        minimumAmount = cartSettings.MinimumCartAmount,
+                        currentAmount = subtotal,
+                        remainingAmount = cartSettings.MinimumCartAmount - subtotal
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                // Minimum tutar servisi hata verirse siparişi engelleme (güvenli varsayılan)
+                _logger.LogWarning(ex, "[CHECKOUT] Minimum sepet tutarı kontrolü sırasında hata, sipariş devam ediyor");
+            }
 
             try
             {

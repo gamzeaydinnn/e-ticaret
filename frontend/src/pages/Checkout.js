@@ -23,6 +23,7 @@ import LoginModal from "../components/LoginModal";
 import PosnetCreditCardForm from "../components/payment/PosnetCreditCardForm";
 import { WeightBasedProductAlert } from "../components/weight";
 import shippingService from "../services/shippingService";
+import cartSettingsService from "../services/cartSettingsService";
 
 export default function Checkout() {
   const [form, setForm] = useState({
@@ -49,6 +50,10 @@ export default function Checkout() {
   const [pricingError, setPricingError] = useState("");
   const [appliedCampaigns, setAppliedCampaigns] = useState([]);
   const [campaignDiscountTotal, setCampaignDiscountTotal] = useState(0);
+
+  // Minimum sepet tutarı state'leri
+  const [cartSettings, setCartSettings] = useState(null);
+  const [isCartAmountValid, setIsCartAmountValid] = useState(true);
   const [appliedCoupon, setAppliedCoupon] = useState(() => {
     try {
       return CartService.getAppliedCoupon();
@@ -265,6 +270,35 @@ export default function Checkout() {
   }, []); // Sadece mount'ta çalış
 
   // ===========================================================================
+  // MİNİMUM SEPET TUTARI AYARLARINI YÜKLEME
+  // ===========================================================================
+  useEffect(() => {
+    let mounted = true;
+    const loadCartSettings = async () => {
+      try {
+        const settings = await cartSettingsService.getCartSettings();
+        if (mounted) setCartSettings(settings);
+      } catch (error) {
+        console.warn("[Checkout] Sepet ayarları yüklenemedi:", error.message);
+      }
+    };
+    loadCartSettings();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Sepet toplamı değiştiğinde minimum tutar kontrolü
+  useEffect(() => {
+    if (cartSettings?.isMinimumCartAmountActive) {
+      const total = getCartTotal();
+      setIsCartAmountValid(total >= cartSettings.minimumCartAmount);
+    } else {
+      setIsCartAmountValid(true);
+    }
+  }, [cartItems, cartSettings, getCartTotal]);
+
+  // ===========================================================================
   // KARGO YÖNTEMİ DEĞİŞTİĞİNDE FİYATI GÜNCELLE
   // ===========================================================================
   useEffect(() => {
@@ -369,6 +403,12 @@ export default function Checkout() {
     if (!cartItems || cartItems.length === 0) {
       alert("❌ Sepetiniz boş! Sipariş veremezsiniz.");
       navigate("/");
+      return;
+    }
+
+    // Minimum sepet tutarı kontrolü
+    if (!isCartAmountValid) {
+      alert("❌ Minimum sepet tutarına ulaşılamadı. Lütfen sepetinize daha fazla ürün ekleyin.");
       return;
     }
 
@@ -914,18 +954,49 @@ export default function Checkout() {
           </div>
         )}
 
+        {/* Minimum Sepet Tutarı Uyarısı */}
+        {!isCartAmountValid && cartSettings && (
+          <div
+            className="alert alert-warning d-flex align-items-start gap-2 mb-3"
+            role="alert"
+          >
+            <i className="fas fa-exclamation-triangle mt-1"></i>
+            <div>
+              <strong>Minimum Sepet Tutarı</strong>
+              <p className="mb-1 small">
+                {(cartSettings.minimumCartAmountMessage || "").replace(
+                  "{amount}",
+                  (cartSettings.minimumCartAmount || 0).toLocaleString("tr-TR", {
+                    minimumFractionDigits: 2,
+                  })
+                )}
+              </p>
+              <span className="fw-bold small">
+                Kalan:{" "}
+                {(cartSettings.minimumCartAmount - getCartTotal()).toLocaleString(
+                  "tr-TR",
+                  { minimumFractionDigits: 2 }
+                )}{" "}
+                ₺
+              </span>
+            </div>
+          </div>
+        )}
+
         <button
           type="submit"
           className="bg-green-600 text-white p-3 rounded w-full fw-bold"
           style={{
-            background: submitting
-              ? "#999"
-              : "linear-gradient(135deg, #16a34a, #22c55e)",
+            background:
+              submitting || !isCartAmountValid
+                ? "#999"
+                : "linear-gradient(135deg, #16a34a, #22c55e)",
             border: "none",
-            cursor: submitting ? "not-allowed" : "pointer",
+            cursor:
+              submitting || !isCartAmountValid ? "not-allowed" : "pointer",
             fontSize: "1.1rem",
           }}
-          disabled={submitting || cartItems.length === 0}
+          disabled={submitting || cartItems.length === 0 || !isCartAmountValid}
         >
           {submitting ? (
             <>

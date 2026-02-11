@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Core.Interfaces;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -28,6 +29,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly IWeightReportRepository _weightReportRepository;
         private readonly IOrderRepository _orderRepository;
         private readonly IPaymentService _paymentService;
+        private readonly IPaymentCaptureService _paymentCaptureService;
         private readonly ILogger<WeightService> _logger;
         private readonly IConfiguration _configuration;
         private readonly int _autoApproveThresholdGrams;
@@ -36,15 +38,17 @@ namespace ECommerce.Business.Services.Managers
             IWeightReportRepository weightReportRepository,
             IOrderRepository orderRepository,
             IPaymentService paymentService,
+            IPaymentCaptureService paymentCaptureService,
             ILogger<WeightService> logger,
             IConfiguration configuration)
         {
             _weightReportRepository = weightReportRepository;
             _orderRepository = orderRepository;
             _paymentService = paymentService;
+            _paymentCaptureService = paymentCaptureService;
             _logger = logger;
             _configuration = configuration;
-            
+
             // Otomatik onay eşik değeri: 0 (her fazlalık için manuel onay gerekli)
             _autoApproveThresholdGrams = 0;
         }
@@ -234,57 +238,41 @@ namespace ECommerce.Business.Services.Managers
                     return true;
                 }
 
-                // TODO: Gerçek API geldiğinde ödeme servisi entegrasyonu yapılacak
-                // Şimdilik mock implementation
-                _logger.LogWarning($"Ödeme servisi henüz entegre edilmedi. Rapor ID: {reportId}, Tutar: {report.OverageAmount} {report.Currency}");
-                
-                // Mock başarılı ödeme
-                report.Status = WeightReportStatus.Charged;
-                report.ProcessedAt = DateTimeOffset.UtcNow;
-                report.PaymentAttemptId = $"MOCK_{Guid.NewGuid():N}";
-                report.UpdatedAt = DateTime.UtcNow;
+                // Sipariş için tartı dahil final tutarı hesapla
+                var finalAmount = await CalculateFinalAmountForOrderAsync(report.OrderId);
+                _logger.LogInformation(
+                    "Ağırlık farkı capture başlıyor: ReportId={ReportId}, FazlaTutar={OverageAmount}, FinalTutar={FinalAmount}",
+                    reportId, report.OverageAmount, finalAmount);
 
-                await _weightReportRepository.UpdateAsync(report);
+                // PaymentCaptureService üzerinden gerçek POSNET capture
+                var captureResult = await _paymentCaptureService.CapturePaymentAsync(report.OrderId, finalAmount);
 
-                _logger.LogInformation($"Fazla tutar tahsil edildi (MOCK): {reportId}, Tutar: {report.OverageAmount} {report.Currency}");
-                return true;
-
-                /* Gerçek API geldiğinde:
-                try
+                if (captureResult.Success)
                 {
-                    var paymentResult = await _paymentService.ChargeOffSessionAsync(
-                        report.Order.UserId.Value,
-                        report.OverageAmount,
-                        report.Currency,
-                        $"Ağırlık farkı ödemesi - Sipariş: {report.Order.OrderNumber}"
-                    );
-
-                    if (paymentResult.Success)
-                    {
-                        report.Status = WeightReportStatus.Charged;
-                        report.PaymentAttemptId = paymentResult.TransactionId;
-                    }
-                    else
-                    {
-                        report.Status = WeightReportStatus.Failed;
-                        report.AdminNote = $"Ödeme hatası: {paymentResult.ErrorMessage}";
-                    }
-
+                    report.Status = WeightReportStatus.Charged;
+                    report.PaymentAttemptId = captureResult.CaptureReference;
                     report.ProcessedAt = DateTimeOffset.UtcNow;
                     report.UpdatedAt = DateTime.UtcNow;
                     await _weightReportRepository.UpdateAsync(report);
 
-                    return paymentResult.Success;
+                    _logger.LogInformation(
+                        "Fazla tutar başarıyla tahsil edildi: ReportId={ReportId}, Tutar={Amount} {Currency}, CaptureRef={Ref}",
+                        reportId, report.OverageAmount, report.Currency, captureResult.CaptureReference);
+                    return true;
                 }
-                catch (Exception paymentEx)
+                else
                 {
-                    _logger.LogError(paymentEx, $"Ödeme işlemi başarısız: {reportId}");
                     report.Status = WeightReportStatus.Failed;
-                    report.AdminNote = $"Ödeme hatası: {paymentEx.Message}";
+                    report.AdminNote = $"Ödeme hatası: {captureResult.Message}";
+                    report.ProcessedAt = DateTimeOffset.UtcNow;
+                    report.UpdatedAt = DateTime.UtcNow;
                     await _weightReportRepository.UpdateAsync(report);
+
+                    _logger.LogWarning(
+                        "Fazla tutar tahsilatı başarısız: ReportId={ReportId}, Hata={Error}, ErrorCode={Code}",
+                        reportId, captureResult.Message, captureResult.ErrorCode);
                     return false;
                 }
-                */
             }
             catch (Exception ex)
             {

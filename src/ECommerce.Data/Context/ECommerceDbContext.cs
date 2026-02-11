@@ -168,6 +168,12 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<ShippingSetting> ShippingSettings { get; set; }
 
+        /// <summary>
+        /// Sepet ayarlarını tutar (minimum sepet tutarı vb.).
+        /// Admin panelinden yönetilebilir, singleton pattern (tek satır).
+        /// </summary>
+        public virtual DbSet<CartSetting> CartSettings { get; set; }
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // ANA SAYFA ÜRÜN BLOK SİSTEMİ
         // Admin panelinden yönetilebilir ürün blokları (İndirimli, Süt Ürünleri vb.)
@@ -1429,6 +1435,28 @@ namespace ECommerce.Data.Context
             });
 
             // ═══════════════════════════════════════════════════════════════════════════════
+            // SEPET AYARLARI (CartSetting) KONFİGÜRASYONU
+            // Minimum sepet tutarı ve sepet kuralları
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<CartSetting>(entity =>
+            {
+                entity.ToTable("CartSettings");
+
+                // MinimumCartAmount - TL cinsinden minimum sepet tutarı
+                entity.Property(e => e.MinimumCartAmount)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+
+                // MinimumCartAmountMessage - Müşteriye gösterilecek uyarı mesajı
+                entity.Property(e => e.MinimumCartAmountMessage)
+                    .HasMaxLength(500);
+
+                // Audit alanları
+                entity.Property(e => e.UpdatedByUserName)
+                    .HasMaxLength(200);
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
             // ANA SAYFA ÜRÜN BLOK SİSTEMİ
             // HomeProductBlock ve HomeBlockProduct entity konfigürasyonları
             // ═══════════════════════════════════════════════════════════════════════════════
@@ -1631,6 +1659,25 @@ namespace ECommerce.Data.Context
                     SortOrder = 2,
                     MaxWeight = 100.0m, // Araba max 100 kg
                     MaxVolume = null,
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    UpdatedAt = null,
+                    UpdatedByUserId = null,
+                    UpdatedByUserName = null
+                }
+            );
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // SEPET AYARLARI SEED DATA
+            // Varsayılan: Minimum tutar pasif, 0 TL
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<CartSetting>().HasData(
+                new CartSetting
+                {
+                    Id = 1,
+                    MinimumCartAmount = 0,
+                    IsMinimumCartAmountActive = false,
+                    MinimumCartAmountMessage = "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.",
                     IsActive = true,
                     CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     UpdatedAt = null,

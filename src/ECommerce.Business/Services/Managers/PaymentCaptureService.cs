@@ -16,6 +16,9 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+// POSNET gerçek ödeme sağlayıcı entegrasyonu için gerekli namespace'ler
+using ECommerce.Infrastructure.Services.Payment.Posnet;
+using ECommerce.Infrastructure.Services.Payment.Posnet.Models;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -28,20 +31,31 @@ namespace ECommerce.Business.Services.Managers
         private readonly IRealTimeNotificationService _notificationService;
         private readonly ILogger<PaymentCaptureService> _logger;
 
+        // POSNET gerçek ödeme sağlayıcı servisi (opsiyonel bağımlılık)
+        // Infrastructure katmanında tanımlı olduğu için null olabilir (DI'da kayıtlı değilse)
+        private readonly IPosnetPaymentService? _posnetService;
+
         // Varsayılan tolerans yüzdesi
         private const decimal DefaultTolerancePercentage = 0.10m;
-        
+
         // Provizyon geçerlilik süresi (saat)
         private const int AuthorizationExpiryHours = 48;
 
         public PaymentCaptureService(
             ECommerceDbContext context,
             IRealTimeNotificationService notificationService,
-            ILogger<PaymentCaptureService> logger)
+            ILogger<PaymentCaptureService> logger,
+            IPosnetPaymentService? posnetService = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _posnetService = posnetService;
+
+            if (_posnetService != null)
+                _logger.LogInformation("PaymentCaptureService: POSNET servisi aktif, gerçek API çağrıları yapılacak.");
+            else
+                _logger.LogWarning("PaymentCaptureService: POSNET servisi bulunamadı, simülasyon modu aktif.");
         }
 
         /// <inheritdoc />
@@ -85,16 +99,16 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // Kredi kartı ödemesi için provizyon al
-                // TODO: Gerçek ödeme sağlayıcı (POSNET, Iyzico) ile entegrasyon
-                // Şimdilik simüle ediyoruz
-                var authResult = await SimulateAuthorizationAsync(order, authorizedAmount);
-                
+                // POSNET entegrasyonu: Checkout'ta alınmış PreAuthHostLogKey varsa onu kullan,
+                // yoksa simülasyon ile devam et (kart bilgileri bu aşamada mevcut değil)
+                var authResult = await ExecuteAuthorizationAsync(order, authorizedAmount);
+
                 if (!authResult.success)
                 {
                     _logger.LogWarning(
-                        "💳 Provizyon alınamadı. OrderId={OrderId}, Error={Error}",
+                        "Provizyon alınamadı. OrderId={OrderId}, Error={Error}",
                         orderId, authResult.errorMessage);
-                    
+
                     return PaymentAuthorizationResult.Failed(
                         authResult.errorMessage ?? "Provizyon alınamadı.",
                         "AUTHORIZATION_FAILED");
@@ -104,6 +118,12 @@ namespace ECommerce.Business.Services.Managers
                 order.AuthorizedAmount = authorizedAmount;
                 order.TolerancePercentage = tolerancePercentage;
                 order.CaptureStatus = CaptureStatus.Pending;
+
+                // POSNET PreAuthHostLogKey'i siparişe kaydet (capture/iade işlemlerinde kullanılacak)
+                if (!string.IsNullOrEmpty(authResult.authReference) && string.IsNullOrEmpty(order.PreAuthHostLogKey))
+                {
+                    order.PreAuthHostLogKey = authResult.authReference;
+                }
 
                 // Payment kaydı oluştur/güncelle
                 var payment = await _context.Payments
@@ -247,8 +267,9 @@ namespace ECommerce.Business.Services.Managers
                         "NO_AUTHORIZED_PAYMENT");
                 }
 
-                // TODO: Gerçek ödeme sağlayıcı capture işlemi
-                var captureResult = await SimulateCaptureAsync(payment, finalAmount);
+                // Kredi kartı için gerçek capture işlemi
+                // POSNET servisi mevcutsa gerçek API çağrısı, yoksa simülasyon
+                var captureResult = await ExecuteCaptureAsync(payment, finalAmount);
                 
                 if (!captureResult.success)
                 {
@@ -352,8 +373,9 @@ namespace ECommerce.Business.Services.Managers
 
                 if (payment != null)
                 {
-                    // TODO: Gerçek void işlemi
-                    var voidResult = await SimulateVoidAsync(payment);
+                    // Kredi kartı için gerçek void/iptal işlemi
+                    // POSNET servisi mevcutsa gerçek API çağrısı, yoksa simülasyon
+                    var voidResult = await ExecuteVoidAsync(payment);
                     
                     if (!voidResult.success)
                     {
@@ -421,8 +443,9 @@ namespace ECommerce.Business.Services.Managers
                         "NO_PAID_PAYMENT");
                 }
 
-                // TODO: Gerçek refund işlemi
-                var refundResult = await SimulateRefundAsync(payment, refundAmount);
+                // Kredi kartı için gerçek iade işlemi
+                // POSNET servisi mevcutsa gerçek API çağrısı, yoksa simülasyon
+                var refundResult = await ExecuteRefundAsync(payment, refundAmount);
                 
                 if (!refundResult.success)
                 {
@@ -560,37 +583,214 @@ namespace ECommerce.Business.Services.Managers
                    method == "cod";
         }
 
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // EXECUTE METODLARI - POSNET GERÇEK API ENTEGRASYONU
+        // Bu metodlar POSNET servisi mevcutsa gerçek API çağrısı yapar,
+        // POSNET servisi yoksa (null) mevcut Simulate* metodlarına düşer (fallback).
+        // Böylece POSNET yapılandırılmamış ortamlarda da sistem çalışmaya devam eder.
+        // ═══════════════════════════════════════════════════════════════════════════════
+
         /// <summary>
-        /// Provizyon işlemini simüle eder.
-        /// TODO: Gerçek ödeme sağlayıcı entegrasyonu
+        /// Provizyon (authorize) işlemini yürütür.
+        /// Checkout sırasında POSNET üzerinden alınmış PreAuthHostLogKey varsa onu kullanır,
+        /// yoksa simülasyona düşer. Kart bilgileri bu aşamada mevcut olmadığı için
+        /// ProcessAuthAsync doğrudan çağrılamaz - provizyon checkout akışında alınır.
+        /// </summary>
+        private async Task<(bool success, string? authReference, string? errorMessage)> ExecuteAuthorizationAsync(
+            Order order, decimal authorizedAmount)
+        {
+            // Checkout sırasında POSNET ile alınmış bir ön provizyon (PreAuth) var mı kontrol et
+            // PreAuthHostLogKey, 3D Secure veya direkt satış sonrası banka tarafından atanır
+            if (!string.IsNullOrEmpty(order.PreAuthHostLogKey))
+            {
+                _logger.LogInformation(
+                    "POSNET PreAuthHostLogKey mevcut, checkout provizyonu kullanılıyor. " +
+                    "OrderId={OrderId}, HostLogKey={HostLogKey}",
+                    order.Id, order.PreAuthHostLogKey);
+
+                return (true, order.PreAuthHostLogKey, null);
+            }
+
+            // POSNET servisi mevcut olsa bile kart bilgileri (PAN, CVV, ExpDate) bu noktada
+            // elimizde olmadığı için ProcessAuthAsync çağrılamaz.
+            // Kart bilgileri sadece checkout sırasında frontend'den gelir ve güvenlik gereği saklanmaz.
+            _logger.LogInformation(
+                "PreAuthHostLogKey bulunamadı, simülasyona düşülüyor. OrderId={OrderId}",
+                order.Id);
+
+            return await SimulateAuthorizationAsync(order, authorizedAmount);
+        }
+
+        /// <summary>
+        /// Finansallaştırma (capture) işlemini yürütür.
+        /// POSNET servisi mevcutsa ProcessCaptureAsync ile gerçek banka API çağrısı yapar,
+        /// yoksa simülasyona düşer. HostLogKey provizyondan alınır.
+        /// </summary>
+        private async Task<(bool success, string? captureReference, string? errorMessage)> ExecuteCaptureAsync(
+            Payments payment, decimal captureAmount)
+        {
+            // POSNET servisi DI'da kayıtlı değilse simülasyona düş
+            if (_posnetService == null)
+                return await SimulateCaptureAsync(payment, captureAmount);
+
+            // Finansallaştırma için HostLogKey gerekli - provizyon sırasında bankadan alınmış olmalı
+            var hostLogKey = payment.HostLogKey ?? payment.AuthorizationReference;
+            if (string.IsNullOrEmpty(hostLogKey))
+            {
+                _logger.LogWarning(
+                    "HostLogKey bulunamadı, capture yapılamıyor. OrderId={OrderId}",
+                    payment.OrderId);
+                return (false, null, "HostLogKey bulunamadı. Provizyon kaydı eksik.");
+            }
+
+            // POSNET üzerinden gerçek finansallaştırma API çağrısı
+            _logger.LogInformation(
+                "POSNET ProcessCaptureAsync çağrılıyor. OrderId={OrderId}, HostLogKey={HostLogKey}, Amount={Amount}",
+                payment.OrderId, hostLogKey, captureAmount);
+
+            var result = await _posnetService.ProcessCaptureAsync(
+                payment.OrderId, hostLogKey, captureAmount);
+
+            if (result.IsSuccess && result.Data != null)
+            {
+                // Başarılı capture sonrası yeni HostLogKey varsa güncelle
+                payment.HostLogKey = result.Data.HostLogKey ?? hostLogKey;
+                _logger.LogInformation(
+                    "POSNET capture başarılı. OrderId={OrderId}, NewHostLogKey={HostLogKey}",
+                    payment.OrderId, payment.HostLogKey);
+                return (true, result.Data.HostLogKey, null);
+            }
+
+            _logger.LogWarning(
+                "POSNET capture başarısız. OrderId={OrderId}, Error={Error}",
+                payment.OrderId, result.Error);
+            return (false, null, result.Error ?? "POSNET finansallaştırma başarısız");
+        }
+
+        /// <summary>
+        /// İptal (void/reverse) işlemini yürütür.
+        /// POSNET servisi mevcutsa ProcessReverseAsync ile gerçek banka API çağrısı yapar,
+        /// yoksa simülasyona düşer. Gün içi iptal işlemi için kullanılır.
+        /// </summary>
+        private async Task<(bool success, string? errorMessage)> ExecuteVoidAsync(Payments payment)
+        {
+            // POSNET servisi DI'da kayıtlı değilse simülasyona düş
+            if (_posnetService == null)
+                return await SimulateVoidAsync(payment);
+
+            // İptal için HostLogKey gerekli
+            var hostLogKey = payment.HostLogKey ?? payment.AuthorizationReference;
+            if (string.IsNullOrEmpty(hostLogKey))
+            {
+                _logger.LogWarning(
+                    "HostLogKey bulunamadı, void yapılamıyor. OrderId={OrderId}",
+                    payment.OrderId);
+                return (false, "HostLogKey bulunamadı. Provizyon kaydı eksik.");
+            }
+
+            // POSNET üzerinden gerçek iptal (reverse) API çağrısı
+            _logger.LogInformation(
+                "POSNET ProcessReverseAsync çağrılıyor. OrderId={OrderId}, HostLogKey={HostLogKey}",
+                payment.OrderId, hostLogKey);
+
+            var result = await _posnetService.ProcessReverseAsync(payment.OrderId, hostLogKey);
+
+            if (result.IsSuccess)
+            {
+                _logger.LogInformation(
+                    "POSNET void/reverse başarılı. OrderId={OrderId}",
+                    payment.OrderId);
+                return (true, null);
+            }
+
+            _logger.LogWarning(
+                "POSNET void/reverse başarısız. OrderId={OrderId}, Error={Error}",
+                payment.OrderId, result.Error);
+            return (false, result.Error ?? "POSNET iptal işlemi başarısız");
+        }
+
+        /// <summary>
+        /// İade (refund/return) işlemini yürütür.
+        /// POSNET servisi mevcutsa ProcessRefundAsync ile gerçek banka API çağrısı yapar,
+        /// yoksa simülasyona düşer. Gün sonu sonrasında iade işlemi için kullanılır.
+        /// </summary>
+        private async Task<(bool success, string? refundReference, string? errorMessage)> ExecuteRefundAsync(
+            Payments payment, decimal refundAmount)
+        {
+            // POSNET servisi DI'da kayıtlı değilse simülasyona düş
+            if (_posnetService == null)
+                return await SimulateRefundAsync(payment, refundAmount);
+
+            // İade için HostLogKey gerekli
+            var hostLogKey = payment.HostLogKey ?? payment.AuthorizationReference;
+            if (string.IsNullOrEmpty(hostLogKey))
+            {
+                _logger.LogWarning(
+                    "HostLogKey bulunamadı, iade yapılamıyor. OrderId={OrderId}",
+                    payment.OrderId);
+                return (false, null, "HostLogKey bulunamadı. Provizyon kaydı eksik.");
+            }
+
+            // POSNET üzerinden gerçek iade (return) API çağrısı
+            _logger.LogInformation(
+                "POSNET ProcessRefundAsync çağrılıyor. OrderId={OrderId}, HostLogKey={HostLogKey}, Amount={Amount}",
+                payment.OrderId, hostLogKey, refundAmount);
+
+            var result = await _posnetService.ProcessRefundAsync(
+                payment.OrderId, hostLogKey, refundAmount);
+
+            if (result.IsSuccess && result.Data != null)
+            {
+                _logger.LogInformation(
+                    "POSNET iade başarılı. OrderId={OrderId}, RefundHostLogKey={HostLogKey}",
+                    payment.OrderId, result.Data.HostLogKey);
+                return (true, result.Data.HostLogKey, null);
+            }
+
+            _logger.LogWarning(
+                "POSNET iade başarısız. OrderId={OrderId}, Error={Error}",
+                payment.OrderId, result.Error);
+            return (false, null, result.Error ?? "POSNET iade işlemi başarısız");
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // SIMULATE METODLARI - FALLBACK / TEST MODU
+        // POSNET servisi mevcut olmadığında (null) bu metodlar kullanılır.
+        // Test ortamında veya POSNET henüz yapılandırılmamışken sistemi çalışır tutar.
+        // ═══════════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Provizyon işlemini simüle eder (fallback).
+        /// POSNET servisi yoksa veya PreAuthHostLogKey mevcut değilse kullanılır.
         /// </summary>
         private async Task<(bool success, string? authReference, string? errorMessage)> SimulateAuthorizationAsync(
             Order order, decimal authorizedAmount)
         {
-            // Simülasyon - gerçek implementasyonda POSNET/Iyzico çağrılacak
+            // Simülasyon - POSNET yapılandırılmadığında veya kart bilgileri olmadığında kullanılır
             await Task.Delay(100); // API çağrısı simülasyonu
-            
+
             var authReference = $"AUTH-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            
+
             return (true, authReference, null);
         }
 
         /// <summary>
-        /// Capture işlemini simüle eder.
-        /// TODO: Gerçek ödeme sağlayıcı entegrasyonu
+        /// Capture işlemini simüle eder (fallback).
+        /// POSNET servisi yoksa kullanılır.
         /// </summary>
         private async Task<(bool success, string? captureReference, string? errorMessage)> SimulateCaptureAsync(
             Payments payment, decimal captureAmount)
         {
             await Task.Delay(100);
-            
+
             var captureReference = $"CAP-{payment.OrderId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            
+
             return (true, captureReference, null);
         }
 
         /// <summary>
-        /// Void işlemini simüle eder.
+        /// Void işlemini simüle eder (fallback).
+        /// POSNET servisi yoksa kullanılır.
         /// </summary>
         private async Task<(bool success, string? errorMessage)> SimulateVoidAsync(Payments payment)
         {
@@ -599,15 +799,16 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// Refund işlemini simüle eder.
+        /// Refund işlemini simüle eder (fallback).
+        /// POSNET servisi yoksa kullanılır.
         /// </summary>
         private async Task<(bool success, string? refundReference, string? errorMessage)> SimulateRefundAsync(
             Payments payment, decimal refundAmount)
         {
             await Task.Delay(100);
-            
+
             var refundReference = $"REF-{payment.OrderId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-            
+
             return (true, refundReference, null);
         }
 

@@ -790,6 +790,40 @@ const OrderTracking = () => {
       },
     );
 
+    // Ağırlık farkı tahsilat bildirimi dinle
+    const unsubscribeWeightCharge = signalRService.onWeightChargeApplied(
+      (data) => {
+        console.log("[OrderTracking] Ağırlık farkı bildirimi:", data);
+
+        // Bildirim göster
+        const isOverage = data.weightDifferenceAmount > 0;
+        setNotification({
+          type: isOverage ? "warning" : "info",
+          title: `Sipariş #${data.orderNumber || data.orderId}`,
+          message:
+            data.message ||
+            (isOverage
+              ? `Tartı farkı nedeniyle ${Number(data.weightDifferenceAmount).toFixed(2)} TL ek tahsilat yapıldı.`
+              : `Tartı farkı nedeniyle ${Math.abs(data.weightDifferenceAmount).toFixed(2)} TL iade edildi.`),
+          icon: "⚖️",
+          color: isOverage ? "#f59e0b" : "#10b981",
+        });
+
+        // Browser notification
+        showBrowserNotification(
+          `⚖️ Sipariş #${data.orderNumber || data.orderId}`,
+          data.message || "Ağırlık farkı uygulandı",
+          "⚖️",
+        );
+
+        // Sipariş verilerini yenile (güncel tutar bilgisi için)
+        loadOrders();
+
+        // Bildirimi 8 saniye sonra kaldır (ağırlık farkı daha uzun gösterilmeli)
+        setTimeout(() => setNotification(null), 8000);
+      },
+    );
+
     // Bağlantı durumu değişikliği dinle
     const deliveryHub = signalRService.deliveryHub;
     const unsubscribeState = deliveryHub.onStateChange((newState) => {
@@ -823,6 +857,7 @@ const OrderTracking = () => {
     return () => {
       unsubscribeStatus();
       unsubscribeDelivery();
+      unsubscribeWeightCharge();
       unsubscribeState();
       deliveryHub.off("PlaySound", handlePlaySound);
     };

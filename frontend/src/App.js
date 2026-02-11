@@ -49,6 +49,8 @@ import CouponManagement from "./pages/Admin/CouponManagement";
 import AdminNewsletter from "./pages/Admin/AdminNewsletter";
 // Kargo Ayarları
 import AdminShippingSettings from "./pages/Admin/AdminShippingSettings";
+// Sepet Ayarları
+import AdminCartSettings from "./pages/Admin/AdminCartSettings";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
@@ -955,6 +957,17 @@ function App() {
             <AdminGuard requiredPermission="settings.system">
               <AdminLayout>
                 <AdminShippingSettings />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        {/* Sepet Ayarları Sayfası */}
+        <Route
+          path="/admin/cart-settings"
+          element={
+            <AdminGuard requiredPermission="settings.system">
+              <AdminLayout>
+                <AdminCartSettings />
               </AdminLayout>
             </AdminGuard>
           }

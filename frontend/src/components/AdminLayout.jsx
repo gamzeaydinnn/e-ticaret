@@ -29,7 +29,8 @@ export default function AdminLayout({ children }) {
   const [showSessionWarning, setShowSessionWarning] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasPermission, hasAnyPermission, loadUserPermissions } = useAuth();
+  const { user, logout, hasPermission, hasAnyPermission, loadUserPermissions } =
+    useAuth();
 
   // ============================================================================
   // SAYFA DEĞİŞİKLİĞİNDE İZİN YENİLEME
@@ -241,6 +242,15 @@ export default function AdminLayout({ children }) {
         path: "/admin/shipping-settings",
         icon: "fas fa-shipping-fast",
         label: "Kargo Ayarları",
+        permission: PERMISSIONS.SETTINGS_SYSTEM,
+      },
+      // =============================================================================
+      // Sepet Ayarları - Minimum sepet tutarı ve sepet kuralları yönetimi
+      // =============================================================================
+      {
+        path: "/admin/cart-settings",
+        icon: "fas fa-shopping-cart",
+        label: "Sepet Ayarları",
         permission: PERMISSIONS.SETTINGS_SYSTEM,
       },
       // =============================================================================
