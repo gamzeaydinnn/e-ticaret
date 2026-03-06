@@ -48,7 +48,7 @@ namespace ECommerce.Infrastructure.Config
         /// <summary>
         /// API kullanıcısının şifresi (PLAIN TEXT).
         /// UYARI: Bu değer runtime'da "YYYY-MM-DD + Sifre" formatında MD5 hash'e dönüştürülür.
-        /// Örnek: Şifre="123asd" ise, bugün için "2026-02-03123asd" → MD5
+        /// Örnek: Şifre="123asd" ise, bugün için "2026-02-03 123asd" → MD5
         /// </summary>
         public string Sifre { get; set; } = string.Empty;
         

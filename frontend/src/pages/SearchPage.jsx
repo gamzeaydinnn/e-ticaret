@@ -251,7 +251,7 @@ const SearchPage = () => {
             <div className="row g-2 g-md-3">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="col-6 col-md-4 col-lg-3">
-                  <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: "10px", overflow: "hidden" }}>
+                  <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: "12px", overflow: "hidden", display: "flex", flexDirection: "column", transition: "all 0.3s ease" }}>
                     {/* Discount Badge */}
                     {product.discountPercentage > 0 && (
                       <span className="badge bg-danger position-absolute top-0 start-0 m-2" style={{ zIndex: 2, fontSize: "0.7rem" }}>
@@ -279,20 +279,20 @@ const SearchPage = () => {
 
                     {/* Image */}
                     <Link to={`/product/${product.id}`}>
-                      <div className="d-flex align-items-center justify-content-center bg-light" style={{ height: "120px", padding: "8px" }}>
+                      <div className="d-flex align-items-center justify-content-center bg-light" style={{ height: "140px", minHeight: "140px", padding: "10px" }}>
                         <img
                           src={product.imageUrl || "/images/placeholder.png"}
                           alt={product.name}
-                          style={{ maxHeight: "100px", maxWidth: "100%", objectFit: "contain" }}
+                          style={{ maxHeight: "120px", maxWidth: "100%", objectFit: "contain" }}
                         />
                       </div>
                     </Link>
 
                     {/* Body */}
-                    <div className="card-body p-2 d-flex flex-column">
+                    <div className="card-body p-2 d-flex flex-column" style={{ flex: 1 }}>
                       <small className="text-muted" style={{ fontSize: "0.65rem" }}>{product.categoryName}</small>
                       <Link to={`/product/${product.id}`} className="text-decoration-none">
-                        <h6 className="card-title text-dark mb-1" style={{ fontSize: "0.8rem", minHeight: "32px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                        <h6 className="card-title text-dark mb-1" style={{ fontSize: "0.8rem", height: "36px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: "1.3" }}>
                           {product.name}
                         </h6>
                       </Link>
@@ -301,15 +301,15 @@ const SearchPage = () => {
                         {product.discountPercentage > 0 || (product.specialPrice && product.specialPrice < product.price) ? (
                           <div className="d-flex align-items-center gap-1 flex-wrap">
                             <span className="text-muted text-decoration-line-through" style={{ fontSize: "0.7rem" }}>₺{product.price?.toFixed(2)}</span>
-                            <span className="fw-bold text-warning" style={{ fontSize: "0.9rem" }}>₺{(product.specialPrice || product.price)?.toFixed(2)}</span>
+                            <span className="fw-bold" style={{ fontSize: "0.95rem", color: "#ff6b35" }}>₺{(product.specialPrice || product.price)?.toFixed(2)}</span>
                           </div>
                         ) : (
-                          <span className="fw-bold text-success" style={{ fontSize: "0.9rem" }}>₺{product.price?.toFixed(2)}</span>
+                          <span className="fw-bold" style={{ fontSize: "0.95rem", color: "#28a745" }}>₺{product.price?.toFixed(2)}</span>
                         )}
 
                         <button
-                          className="btn btn-warning btn-sm w-100 mt-2"
-                          style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+                          className="btn w-100 mt-2 text-white"
+                          style={{ fontSize: "0.78rem", padding: "8px 12px", borderRadius: "10px", background: "linear-gradient(135deg, #ff6b35, #ff8c00)", border: "none", fontWeight: "600" }}
                           onClick={() => handleAddToCart(product)}
                         >
                           <i className="fas fa-cart-plus me-1"></i>Sepete Ekle

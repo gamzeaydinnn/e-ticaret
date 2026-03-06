@@ -166,6 +166,7 @@ const PaymentPage = () => {
             quantity: item.quantity,
           })),
           couponCode: appliedCoupon?.code || undefined,
+          shippingMethod: shippingMethod,
         });
 
         if (!mounted) return;
@@ -185,7 +186,7 @@ const PaymentPage = () => {
     return () => {
       mounted = false;
     };
-  }, [cartItems, appliedCoupon?.code]);
+  }, [cartItems, appliedCoupon?.code, shippingMethod]);
 
   useEffect(() => {
     if (!user) {

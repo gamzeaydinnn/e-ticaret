@@ -195,6 +195,7 @@ const CartPage = () => {
             quantity: item.quantity,
           })),
           couponCode: appliedCoupon?.code || undefined,
+          shippingMethod: shippingMethod,
         });
 
         if (!mounted) return;
@@ -214,7 +215,7 @@ const CartPage = () => {
     return () => {
       mounted = false;
     };
-  }, [cartItems, appliedCoupon?.code]);
+  }, [cartItems, appliedCoupon?.code, shippingMethod]);
 
   const getItemUnitPrice = (item) => {
     if (
@@ -350,6 +351,7 @@ const CartPage = () => {
               quantity: item.quantity,
             })),
             couponCode: code,
+            shippingMethod: shippingMethod,
           });
           setPricing(pricingResult);
           // Kampanya bilgilerini güncelle
@@ -378,6 +380,7 @@ const CartPage = () => {
             quantity: item.quantity,
           })),
           couponCode: code,
+          shippingMethod: shippingMethod,
         });
         setPricing(result);
         // Kampanya bilgilerini güncelle

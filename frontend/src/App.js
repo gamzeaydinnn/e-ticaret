@@ -766,6 +766,7 @@ function App() {
         {/* 3D Secure Ödeme Callback Sayfaları */}
         <Route path="/checkout/success" element={<PaymentSuccessPage />} />
         <Route path="/checkout/fail" element={<PaymentFailurePage />} />
+        <Route path="/checkout/cancel" element={<PaymentFailurePage />} />
         <Route
           path="/checkout/3dsecure-callback"
           element={<ThreeDSecureCallbackPage />}

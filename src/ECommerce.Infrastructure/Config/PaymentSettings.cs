@@ -80,7 +80,7 @@ namespace ECommerce.Infrastructure.Config
 
         /// <summary>
         /// 3D Secure callback URL - Banka ödeme sonrası bu adrese POST yapar
-        /// Örnek: https://yourdomain.com/api/payments/posnet/3d-callback
+        /// Örnek: https://golkoygurme.com.tr/api/payments/posnet/3d-callback
         /// Statik IP olarak banka tarafına bildirilmelidir
         /// </summary>
         public string? PosnetCallbackUrl { get; set; }

@@ -331,6 +331,7 @@ export default function Checkout() {
             quantity: item.quantity,
           })),
           couponCode: appliedCoupon?.code || undefined,
+          shippingMethod: shippingMethod,
         });
 
         if (!mounted) return;
@@ -350,7 +351,7 @@ export default function Checkout() {
     return () => {
       mounted = false;
     };
-  }, [cartItems, appliedCoupon?.code]);
+  }, [cartItems, appliedCoupon?.code, shippingMethod]);
 
   useEffect(() => {
     if (user) {

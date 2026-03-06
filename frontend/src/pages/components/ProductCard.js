@@ -136,13 +136,12 @@ export default function ProductCard({
     <div
       className="modern-product-card h-100"
       style={{
-        background: `linear-gradient(145deg, #ffffff, #f8f9fa)`,
+        background: "#ffffff",
         borderRadius: "16px",
         border: "1px solid rgba(255, 107, 53, 0.1)",
         overflow: "hidden",
         position: "relative",
         cursor: "pointer",
-        minHeight: "440px",
         maxWidth: "280px",
         margin: "0 auto",
         display: "flex",
@@ -232,8 +231,9 @@ export default function ProductCard({
         <div
           className="product-image-container"
           style={{
-            height: 160,
-            background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+            height: "160px",
+            minHeight: "160px",
+            background: "#ffffff",
             position: "relative",
             overflow: "hidden",
           }}
@@ -264,9 +264,7 @@ export default function ProductCard({
         <div
           className="card-body p-3 d-flex flex-column"
           style={{
-            background:
-              "linear-gradient(135deg, rgba(255,255,255,0.9), rgba(248,249,250,0.9))",
-            minHeight: "220px",
+            background: "#ffffff",
             flexGrow: 1,
           }}
         >

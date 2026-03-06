@@ -29,17 +29,20 @@ namespace ECommerce.API.Controllers
         private readonly ECommerceDbContext _context;
         private readonly IPricingEngine _pricingEngine;
         private readonly ICartService _cartService;
+        private readonly IShippingService _shippingService;
         private readonly ILogger<CartItemsController> _logger;
 
         public CartItemsController(
-            ECommerceDbContext context, 
+            ECommerceDbContext context,
             IPricingEngine pricingEngine,
             ICartService cartService,
+            IShippingService shippingService,
             ILogger<CartItemsController> logger)
         {
             _context = context;
             _pricingEngine = pricingEngine;
             _cartService = cartService;
+            _shippingService = shippingService;
             _logger = logger;
         }
 
@@ -457,6 +460,7 @@ namespace ECommerce.API.Controllers
         {
             public List<Core.DTOs.Pricing.CartItemInputDto> Items { get; set; } = new();
             public string? CouponCode { get; set; }
+            public string? ShippingMethod { get; set; }
         }
 
         [HttpPost("price-preview")]
@@ -470,6 +474,36 @@ namespace ECommerce.API.Controllers
 
             int? userId = GetCurrentUserId();
             var pricingResult = await _pricingEngine.CalculateCartAsync(userId, request.Items, request.CouponCode);
+
+            // Kargo ücretini veritabanından (ShippingSettings) dinamik olarak hesapla
+            if (!pricingResult.IsFreeShipping && !string.IsNullOrWhiteSpace(request.ShippingMethod))
+            {
+                var normalizedMethod = request.ShippingMethod.Trim().ToLowerInvariant();
+                if (normalizedMethod == "motokurye" || normalizedMethod == "motor")
+                    normalizedMethod = "motorcycle";
+                else if (normalizedMethod == "araç" || normalizedMethod == "arac")
+                    normalizedMethod = "car";
+
+                try
+                {
+                    var shippingPrice = await _shippingService.GetPriceByVehicleTypeAsync(normalizedMethod);
+                    pricingResult.DeliveryFee = shippingPrice ?? (normalizedMethod == "motorcycle" ? 40m : 60m);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Kargo fiyatı DB'den alınamadı: {Method}", normalizedMethod);
+                    pricingResult.DeliveryFee = normalizedMethod == "motorcycle" ? 40m : 60m;
+                }
+
+                // GrandTotal'ı kargo ücreti ile yeniden hesapla
+                var totalDiscount = pricingResult.CampaignDiscountTotal + pricingResult.CouponDiscountTotal;
+                pricingResult.GrandTotal = Math.Max(0, pricingResult.Subtotal - totalDiscount + pricingResult.DeliveryFee);
+            }
+            else if (pricingResult.IsFreeShipping)
+            {
+                pricingResult.DeliveryFee = 0m;
+            }
+
             return Ok(pricingResult);
         }
 

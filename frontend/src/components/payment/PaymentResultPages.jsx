@@ -430,6 +430,19 @@ export const PaymentFailurePage = () => {
       "0099": "Teknik bir hata oluştu. Lütfen daha sonra tekrar deneyin.",
       TIMEOUT: "Banka ile bağlantı zaman aşımına uğradı.",
       CANCEL: "İşlem iptal edildi.",
+      "3DS_MDSTATUS_0":
+        "3D Secure SMS doğrulaması başarısız. SMS şifresini doğru girdiğinizden emin olun.",
+      "3DS_SMS_VERIFICATION_FAILED":
+        "3D Secure SMS doğrulaması başarısız. Lütfen tekrar deneyin.",
+      "3DS_MDSTATUS_2": "Kartınız veya bankanız 3D Secure'e kayıtlı değil.",
+      "3DS_MDSTATUS_3": "Bankanız 3D Secure sistemine kayıtlı değil.",
+      "3DS_MDSTATUS_5": "Doğrulama yapılamadı. Lütfen tekrar deneyin.",
+      "3DS_MDSTATUS_6": "3D Secure doğrulama hatası.",
+      "3DS_MDSTATUS_7": "Sistem hatası. Lütfen daha sonra tekrar deneyin.",
+      "3DS_MDSTATUS_8":
+        "Bilinmeyen kart. Lütfen kart bilgilerinizi kontrol edin.",
+      MAC_VALIDATION_FAILED:
+        "Güvenlik doğrulaması başarısız. Lütfen tekrar deneyin.",
     };
 
     return (

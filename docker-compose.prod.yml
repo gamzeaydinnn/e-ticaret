@@ -89,14 +89,14 @@ services:
       # POSNET Enabled Flag - POSNET servislerinin kaydedilmesi için gerekli!
       - Payment__Posnet__Enabled=true
       # POSNET Configuration (Yapı Kredi 3D Secure)
-      - PaymentSettings__PosnetMerchantId=6700972665
-      - PaymentSettings__PosnetTerminalId=67C35037
-      - PaymentSettings__PosnetId=1010078654940127
-      - PaymentSettings__PosnetEncKey=10,10,10,10,10,10,10,10
-      - PaymentSettings__PosnetXmlServiceUrl=https://setmpos.ykb.com/PosnetWebService/XML
-      - PaymentSettings__Posnet3DServiceUrl=https://setmpos.ykb.com/3DSWebService/YKBPaymentService
+      - PaymentSettings__PosnetMerchantId=6702703092
+      - PaymentSettings__PosnetTerminalId=67D197D1
+      - PaymentSettings__PosnetId=1010756190290813
+      - PaymentSettings__PosnetEncKey=Z4H8R9B5K1N7M4H8M9T5V1S7N5
+      - PaymentSettings__PosnetXmlServiceUrl=https://posnet.yapikredi.com.tr/PosnetWebService/XML
+      - PaymentSettings__Posnet3DServiceUrl=https://posnet.yapikredi.com.tr/3DSWebService/YKBPaymentService
       - PaymentSettings__PosnetCallbackUrl=https://golkoygurme.com.tr/api/payments/posnet/3d-callback
-      - PaymentSettings__PosnetIsTestEnvironment=true
+      - PaymentSettings__PosnetIsTestEnvironment=false
       - PaymentSettings__PosnetTimeoutSeconds=60
       - PaymentSettings__PosnetWorldPointEnabled=true
       # CORS Configuration for production

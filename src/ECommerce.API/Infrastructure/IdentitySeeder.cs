@@ -153,7 +153,7 @@ namespace ECommerce.API.Infrastructure
             {
                 // Mevcut admin kullanıcıyı güncelle (gerekirse)
                 var requiresUpdate = false;
-                
+
                 if (!adminUser.EmailConfirmed)
                 {
                     adminUser.EmailConfirmed = true;
@@ -174,6 +174,23 @@ namespace ECommerce.API.Infrastructure
                 {
                     await userManager.UpdateAsync(adminUser);
                     logger?.LogInformation("✅ Admin kullanıcı güncellendi: {Email}", adminEmail);
+                }
+
+                // Şifreyi appsettings ile senkronize et
+                var passwordValid = await userManager.CheckPasswordAsync(adminUser, adminPassword);
+                if (!passwordValid)
+                {
+                    var token = await userManager.GeneratePasswordResetTokenAsync(adminUser);
+                    var resetResult = await userManager.ResetPasswordAsync(adminUser, token, adminPassword);
+                    if (resetResult.Succeeded)
+                    {
+                        logger?.LogInformation("✅ Admin şifresi appsettings ile senkronize edildi: {Email}", adminEmail);
+                    }
+                    else
+                    {
+                        logger?.LogError("❌ Admin şifresi güncellenemedi: {Errors}",
+                            string.Join(", ", resetResult.Errors.Select(e => e.Description)));
+                    }
                 }
 
                 // Role atamasını kontrol et

@@ -28,6 +28,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly ECommerce.Business.Services.Interfaces.IPushService? _pushService;
         private readonly ECommerce.Business.Services.Interfaces.ISmsService? _smsService;
         private readonly IHttpContextAccessor? _httpContextAccessor;
+        private readonly IShippingService? _shippingService;
         private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -170,7 +171,8 @@ namespace ECommerce.Business.Services.Managers
             ECommerce.Business.Services.Interfaces.INotificationService? notificationService = null,
             ECommerce.Business.Services.Interfaces.IPushService? pushService = null,
             ECommerce.Business.Services.Interfaces.ISmsService? smsService = null,
-            IHttpContextAccessor? httpContextAccessor = null)
+            IHttpContextAccessor? httpContextAccessor = null,
+            IShippingService? shippingService = null)
         {
             _context = context;
             _inventoryService = inventoryService;
@@ -180,6 +182,7 @@ namespace ECommerce.Business.Services.Managers
             _pushService = pushService;
             _smsService = smsService;
             _httpContextAccessor = httpContextAccessor;
+            _shippingService = shippingService;
         }
 
         // Siparişin tam detayını getir (fatura için)
@@ -299,7 +302,7 @@ namespace ECommerce.Business.Services.Managers
                 });
             }
             var normalizedShipping = NormalizeShippingMethod(dto.ShippingMethod);
-            var shippingCost = ComputeShippingCost(normalizedShipping);
+            var shippingCost = await ComputeShippingCostAsync(normalizedShipping);
 
             var order = new Order
             {
@@ -499,7 +502,7 @@ namespace ECommerce.Business.Services.Managers
                     }
                 // Compute shipping server-side (whitelist + fixed costs)
                 var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
-                var shippingCost = ComputeShippingCost(shippingMethod);
+                var shippingCost = await ComputeShippingCostAsync(shippingMethod);
 
                 var cartInputs = dto.OrderItems.Select(i => new CartItemInputDto
                 {
@@ -1048,11 +1051,27 @@ namespace ECommerce.Business.Services.Managers
             return "car";
         }
 
-        // Fixed shipping cost mapping for allowed shipping methods
-        // GÜNCELLEME: Kargo fiyatları 40/60 TL olarak belirlendi (eski 15/30 TL hatalıydı)
-        private static decimal ComputeShippingCost(string method)
+        // Kargo fiyatını veritabanından (ShippingSettings) dinamik olarak çeker.
+        // DB okunamazsa fallback olarak sabit değerler kullanılır.
+        private async Task<decimal> ComputeShippingCostAsync(string method)
         {
             var m = method?.Trim().ToLowerInvariant() ?? "car";
+
+            if (_shippingService != null)
+            {
+                try
+                {
+                    var price = await _shippingService.GetPriceByVehicleTypeAsync(m);
+                    if (price.HasValue)
+                        return price.Value;
+                }
+                catch
+                {
+                    // DB lookup failed, fall through to hardcoded defaults
+                }
+            }
+
+            // Fallback: sabit değerler (DB okunamazsa veya IShippingService inject edilmemişse)
             return m == "motorcycle" ? 40m : 60m;
         }
 

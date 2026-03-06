@@ -120,6 +120,7 @@
   -ms-overflow-style: none; /* IE/Edge */
   /* Mobilde smooth scroll snap */
   scroll-snap-type: x proximity;
+  align-items: stretch;
 }
 
 /* Scrollbar gizle - Webkit (Chrome, Safari) */
@@ -135,6 +136,11 @@
   width: 220px;
   min-width: 220px;
   scroll-snap-align: start;
+  display: flex;
+}
+
+.product-grid-card-wrapper > * {
+  width: 100%;
 }
 
 /* =====================================================
@@ -325,6 +331,7 @@
 
   .product-grid-card-wrapper .product-image-container {
     height: 100px !important;
+    min-height: 100px !important;
   }
 
   .product-grid-card-wrapper .card-body {
@@ -348,6 +355,11 @@
     padding: 8px 6px !important;
     font-size: 0.7rem !important;
     border-radius: 8px !important;
+  }
+
+  /* Paylaş butonunu mobilde gizle */
+  .product-grid-card-wrapper .action-buttons .btn:not(.modern-add-btn) {
+    display: none !important;
   }
 }
 
@@ -400,7 +412,7 @@
 
 /* Blok layout açıkken section ayarları */
 .product-grid-section.product-grid-block-layout {
-  background-color: #f8f9fa;
+  background-color: #ffffff;
 }
 
 /* Ana içerik wrapper - blok layout için flexbox */
