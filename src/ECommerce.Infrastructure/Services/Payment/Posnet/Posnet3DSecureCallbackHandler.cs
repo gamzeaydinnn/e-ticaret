@@ -471,8 +471,18 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 return orderId;
             }
 
-            // XID'den çıkarmayı dene (format: YKB{OrderId:D6}{HHmmss})
+            // XID'den çıkarmayı dene (format: YKB{OrderId:D5}{MMddHHmmss}{Random:XX})
             var xid = callbackRequest.Xid;
+            if (!string.IsNullOrWhiteSpace(xid) && xid.StartsWith("YKB") && xid.Length >= 8)
+            {
+                var orderIdPart = xid.Substring(3, 5);
+                if (int.TryParse(orderIdPart, out var xidOrderId))
+                {
+                    return xidOrderId;
+                }
+            }
+
+            // Fallback: eski D6 format (YKB{OrderId:D6}{...})
             if (!string.IsNullOrWhiteSpace(xid) && xid.StartsWith("YKB") && xid.Length >= 9)
             {
                 var orderIdPart = xid.Substring(3, 6);

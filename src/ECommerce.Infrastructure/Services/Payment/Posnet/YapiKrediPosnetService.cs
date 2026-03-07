@@ -1190,7 +1190,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     OrderId = GeneratePosnetOrderId(orderId),
                     Amount = PosnetSaleRequest.ConvertToKurus(amount),
                     HostLogKey = hostLogKey,
-                    RefundOrderId = $"{GeneratePosnetOrderId(orderId)}_R{DateTime.UtcNow:HHmmss}"
+                    RefundOrderId = $"R{GeneratePosnetOrderId(orderId)}"
                 };
 
                 var xml = _xmlBuilder.BuildReturnXml(request);
@@ -1370,14 +1370,16 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
         /// <summary>
         /// POSNET için benzersiz sipariş numarası oluşturur
-        /// Format: YKB + OrderId + Timestamp (24 karaktere kadar)
+        /// POSNET XID alanı max 20 karakter kabul ediyor
+        /// Format: YKB + OrderId(5) + MMddHHmmss(10) + RR(2) = 20 karakter
         /// </summary>
         private static string GeneratePosnetOrderId(int orderId)
         {
-            // POSNET max 24 karakter kabul ediyor
-            // Format: YKB{OrderId:D6}{Timestamp:HHmmss} = 3 + 6 + 6 = 15 karakter
-            var timestamp = DateTime.UtcNow.ToString("HHmmss");
-            return $"{ORDER_ID_PREFIX}{orderId:D6}{timestamp}";
+            // POSNET XID max 20 karakter, sadece alfanumerik
+            // Format: YKB{OrderId:D5}{MMddHHmmss}{Random:XX} = 3 + 5 + 10 + 2 = 20 karakter
+            var timestamp = DateTime.UtcNow.ToString("MMddHHmmss");
+            var random = Random.Shared.Next(10, 99).ToString();
+            return $"{ORDER_ID_PREFIX}{orderId:D5}{timestamp}{random}";
         }
 
         /// <summary>
