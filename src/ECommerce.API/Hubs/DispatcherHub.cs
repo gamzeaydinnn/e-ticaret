@@ -162,16 +162,11 @@ namespace ECommerce.API.Hubs
                 var userRole = GetUserRole();
 
                 _logger.LogInformation(
-                    "🔌 DispatcherHub Connected: UserId={UserId}, UserName={UserName}, Role={Role}, ConnectionId={ConnectionId}",
+                    "DispatcherHub Connected: UserId={UserId}, UserName={UserName}, Role={Role}, ConnectionId={ConnectionId}",
                     userId, userName, userRole, Context.ConnectionId);
 
-                // Otomatik olarak dispatch odasına katıl
-                await Groups.AddToGroupAsync(Context.ConnectionId, DispatchRoomName);
-
-                lock (_connectionLock)
-                {
-                    _activeConnections.Add(Context.ConnectionId);
-                }
+                // NOT: Gruba ekleme JoinDispatchRoom() ile yapılır.
+                // OnConnectedAsync'te tekrar eklenmez (double-join önlemi).
 
                 await base.OnConnectedAsync();
             }

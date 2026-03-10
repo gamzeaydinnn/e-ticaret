@@ -475,6 +475,130 @@ namespace ECommerce.API.Controllers
             }
         }
 
+        // ============================================================================
+        // MİSAFİR SİPARİŞ SORGULAMA - TELEFON NUMARASI VEYA SİPARİŞ NUMARASI
+        // Giriş yapmamış misafir kullanıcılar telefon numarası veya sipariş numarası
+        // ile kendi siparişlerini sorgulayabilir
+        // ============================================================================
+        /// <summary>
+        /// Misafir kullanıcılar için telefon numarası veya sipariş numarası ile sipariş sorgulama.
+        /// Telefon numarası verildiğinde eşleşen tüm misafir siparişlerini döner.
+        /// Sipariş numarası verildiğinde sadece ilgili siparişi döner.
+        /// </summary>
+        [HttpGet("guest-track")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GuestTrack(
+            [FromQuery] string? phone,
+            [FromQuery] string? orderNumber)
+        {
+            // En az bir parametre gerekli
+            if (string.IsNullOrWhiteSpace(phone) && string.IsNullOrWhiteSpace(orderNumber))
+            {
+                return BadRequest(new
+                {
+                    message = "Telefon numarası veya sipariş numarası zorunludur.",
+                    success = false
+                });
+            }
+
+            try
+            {
+                // Sipariş numarası ile sorgulama (tek sipariş döner)
+                if (!string.IsNullOrWhiteSpace(orderNumber))
+                {
+                    _logger.LogInformation(
+                        "[GUEST-TRACK] Sipariş numarası ile sorgu: OrderNumber={OrderNumber}",
+                        orderNumber.Trim());
+
+                    var order = await _orderService.GetByOrderNumberAsync(orderNumber.Trim());
+
+                    if (order == null)
+                    {
+                        return NotFound(new
+                        {
+                            message = "Bu sipariş numarasıyla eşleşen sipariş bulunamadı.",
+                            success = false
+                        });
+                    }
+
+                    // Telefon numarası da gönderildiyse doğrulama yap
+                    if (!string.IsNullOrWhiteSpace(phone))
+                    {
+                        var normalizedInput = new string(phone.Where(char.IsDigit).ToArray());
+                        var normalizedOrder = new string((order.CustomerPhone ?? "").Where(char.IsDigit).ToArray());
+
+                        var inputSuffix = normalizedInput.Length >= 10
+                            ? normalizedInput.Substring(normalizedInput.Length - 10)
+                            : normalizedInput;
+                        var orderSuffix = normalizedOrder.Length >= 10
+                            ? normalizedOrder.Substring(normalizedOrder.Length - 10)
+                            : normalizedOrder;
+
+                        if (inputSuffix != orderSuffix)
+                        {
+                            return NotFound(new
+                            {
+                                message = "Bu bilgilerle eşleşen sipariş bulunamadı.",
+                                success = false
+                            });
+                        }
+                    }
+
+                    return Ok(new { success = true, orders = new[] { order } });
+                }
+
+                // Telefon numarası ile sorgulama (birden fazla sipariş dönebilir)
+                if (!string.IsNullOrWhiteSpace(phone))
+                {
+                    var normalizedPhone = new string(phone.Where(char.IsDigit).ToArray());
+                    if (normalizedPhone.Length < 10)
+                    {
+                        return BadRequest(new
+                        {
+                            message = "Geçerli bir telefon numarası girin (en az 10 hane).",
+                            success = false
+                        });
+                    }
+
+                    _logger.LogInformation(
+                        "[GUEST-TRACK] Telefon numarası ile sorgu: Phone=***{PhoneLast4}",
+                        normalizedPhone.Substring(normalizedPhone.Length - 4));
+
+                    var orders = await _orderService.GetGuestOrdersByPhoneAsync(phone.Trim());
+                    var orderList = orders?.ToList() ?? new List<ECommerce.Core.DTOs.Order.OrderListDto>();
+
+                    if (orderList.Count == 0)
+                    {
+                        return NotFound(new
+                        {
+                            message = "Bu telefon numarasıyla eşleşen misafir siparişi bulunamadı.",
+                            success = false
+                        });
+                    }
+
+                    _logger.LogInformation(
+                        "[GUEST-TRACK] {Count} sipariş bulundu", orderList.Count);
+
+                    return Ok(new { success = true, orders = orderList });
+                }
+
+                return BadRequest(new
+                {
+                    message = "Geçersiz istek.",
+                    success = false
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[GUEST-TRACK] Sipariş sorgulama hatası");
+                return StatusCode(500, new
+                {
+                    message = "Sipariş sorgulama sırasında bir hata oluştu.",
+                    success = false
+                });
+            }
+        }
+
         /// <summary>
         /// Basit email format doğrulama yardımcı metodu
         /// </summary>

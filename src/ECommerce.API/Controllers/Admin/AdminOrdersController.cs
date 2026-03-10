@@ -75,21 +75,30 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> DeleteOrder(int id)
         {
             var existing = await _orderService.GetByIdAsync(id);
-            if (existing == null) return NotFound();
-            await _orderService.DeleteAsync(id);
-            await _auditLogService.WriteAsync(
-                GetAdminUserId(),
-                "OrderDeleted",
-                "Order",
-                id.ToString(),
-                new
-                {
-                    existing.Status,
-                    existing.TotalPrice,
-                    existing.OrderNumber
-                },
-                null);
-            return NoContent();
+            if (existing == null) return NotFound(new { message = "Sipariş bulunamadı." });
+
+            try
+            {
+                await _orderService.DeleteAsync(id);
+                await _auditLogService.WriteAsync(
+                    GetAdminUserId(),
+                    "OrderDeleted",
+                    "Order",
+                    id.ToString(),
+                    new
+                    {
+                        existing.Status,
+                        existing.TotalPrice,
+                        existing.OrderNumber
+                    },
+                    null);
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş silme hatası. OrderId={OrderId}", id);
+                return StatusCode(500, new { message = "Sipariş silinirken bir hata oluştu.", detail = ex.Message });
+            }
         }
 
 
@@ -190,9 +199,33 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPost("{id:int}/cancel")]
-        public Task<IActionResult> CancelOrder(int id)
+        public async Task<IActionResult> CancelOrder(int id)
         {
-            return HandleStatusChange(id, () => _orderService.CancelOrderByAdminAsync(id), "OrderStatusChanged");
+            // Admin iptali her zaman para iadesi ile birlikte yapılmalı
+            var adminUserId = GetAdminUserId();
+            var result = await _refundService.AdminCancelOrderWithRefundAsync(
+                id, adminUserId, "Admin tarafından iptal edildi");
+
+            if (!result.Success)
+            {
+                return BadRequest(new { message = result.Message });
+            }
+
+            await _auditLogService.WriteAsync(
+                adminUserId,
+                "OrderStatusChanged",
+                "Order",
+                id.ToString(),
+                null,
+                new { Status = "Cancelled", RefundType = result.RefundRequest?.TransactionType });
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                autoCancelled = result.AutoCancelled,
+                refundRequest = result.RefundRequest
+            });
         }
 
         /// <summary>

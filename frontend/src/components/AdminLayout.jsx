@@ -10,11 +10,26 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { AdminSignalRProvider, useAdminSignalR } from "../contexts/AdminSignalRContext";
 import { PERMISSIONS } from "../services/permissionService";
 import useSessionTimeout from "../hooks/useSessionTimeout";
 import SessionWarningModal from "./SessionWarningModal";
+import AdminNotificationBell from "./AdminNotificationBell";
 
+// =============================================================================
+// WRAPPER: AdminSignalRProvider ile layout'u sarar
+// NEDEN: useAdminSignalR hook'u Provider altında çalışmalı.
+// Bu wrapper sayesinde App.js'de her route'a ayrıca Provider eklemeye gerek kalmaz.
+// =============================================================================
 export default function AdminLayout({ children }) {
+  return (
+    <AdminSignalRProvider>
+      <AdminLayoutInner>{children}</AdminLayoutInner>
+    </AdminSignalRProvider>
+  );
+}
+
+function AdminLayoutInner({ children }) {
   // ============================================================================
   // MOBİL RESPONSIVE: Başlangıçta sidebar kapalı (mobilde)
   // window.innerWidth kontrolü ile masaüstünde açık, mobilde kapalı başlar
@@ -31,6 +46,9 @@ export default function AdminLayout({ children }) {
   const navigate = useNavigate();
   const { user, logout, hasPermission, hasAnyPermission, loadUserPermissions } =
     useAuth();
+
+  // Merkezi admin SignalR bağlantısı — tüm admin sayfaları arasında paylaşılır
+  const { isConnected: signalRConnected } = useAdminSignalR();
 
   // ============================================================================
   // SAYFA DEĞİŞİKLİĞİNDE İZİN YENİLEME
@@ -704,7 +722,36 @@ export default function AdminLayout({ children }) {
               <i className="fas fa-bars"></i>
             </button>
 
-            <div className="navbar-nav ms-auto">
+            <div className="navbar-nav ms-auto d-flex align-items-center gap-2">
+              {/* SignalR Bağlantı Durumu Göstergesi */}
+              <div
+                className="d-flex align-items-center me-1"
+                title={signalRConnected ? "Canlı bağlantı aktif" : "Canlı bağlantı kuruluyor..."}
+              >
+                <span
+                  className={`rounded-circle ${signalRConnected ? "bg-success" : "bg-warning"}`}
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    display: "inline-block",
+                    animation: signalRConnected ? "none" : "pulse 2s infinite",
+                  }}
+                ></span>
+                <small
+                  className="ms-1 d-none d-md-inline"
+                  style={{
+                    fontSize: "0.7rem",
+                    color: signalRConnected ? "#198754" : "#ffc107",
+                    fontWeight: "600",
+                  }}
+                >
+                  {signalRConnected ? "CANLI" : "..."}
+                </small>
+              </div>
+
+              {/* Bildirim Çanı — Merkezi AdminSignalR context'ten beslenir */}
+              <AdminNotificationBell />
+
               <div className="nav-item dropdown">
                 <button
                   className="nav-link dropdown-toggle d-flex align-items-center text-dark btn btn-link border-0"

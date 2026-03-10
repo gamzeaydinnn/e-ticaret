@@ -113,7 +113,61 @@ namespace ECommerce.API.Controllers
         #region Sipariş Aksiyonları
 
         /// <summary>
-        /// Kurye teslimat için yola çıktığını bildirir (ASSIGNED → OUT_FOR_DELIVERY).
+        /// Kurye siparişi mağazadan teslim aldığını bildirir (ASSIGNED → PICKED_UP).
+        /// </summary>
+        /// <remarks>
+        /// Bu işlem sonrasında:
+        /// - Sipariş durumu "Teslim Alındı" olarak güncellenir
+        /// - Tüm taraflara bildirim gönderilir
+        /// - PickedUpAt timestamp kaydedilir
+        ///
+        /// Sadece ASSIGNED durumundaki siparişler için kullanılabilir.
+        ///
+        /// Örnek İstek:
+        ///     POST /api/courier/orders/123/pickup
+        ///     {
+        ///         "currentLocation": "41.0082,28.9784",
+        ///         "note": "Sipariş teslim alındı"
+        ///     }
+        /// </remarks>
+        /// <param name="id">Sipariş ID</param>
+        /// <param name="dto">Teslim alma bilgileri (opsiyonel konum ve not)</param>
+        /// <returns>Başarı durumu ve yeni sipariş durumu</returns>
+        [HttpPost("{id:int}/pickup")]
+        [ProducesResponseType(typeof(CourierOrderActionResponseDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<CourierOrderActionResponseDto>> PickupOrder(
+            [FromRoute] int id,
+            [FromBody] StartDeliveryDto? dto)
+        {
+            dto ??= new StartDeliveryDto();
+
+            var courierId = await GetCurrentCourierIdAsync();
+            if (courierId == null)
+            {
+                return Unauthorized(new { message = "Kurye hesabınız aktif değil veya yetkilendirilmemiş." });
+            }
+
+            // Ownership ön kontrolü
+            if (!await _courierOrderService.ValidateOrderOwnershipAsync(id, courierId.Value))
+            {
+                return NotFound(new { message = "Sipariş bulunamadı veya bu siparişe erişim yetkiniz yok." });
+            }
+
+            var result = await _courierOrderService.PickupOrderAsync(id, courierId.Value, dto);
+
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Kurye teslimat için yola çıktığını bildirir (PICKED_UP → OUT_FOR_DELIVERY).
         /// </summary>
         /// <remarks>
         /// Bu işlem sonrasında:

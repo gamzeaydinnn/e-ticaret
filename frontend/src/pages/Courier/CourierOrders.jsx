@@ -24,6 +24,27 @@ export default function CourierOrders() {
     }
     if (courier?.id) {
       loadOrders();
+
+      // 15 saniyede bir otomatik yenileme - yeni atamalar ve durum değişiklikleri için
+      const interval = setInterval(() => {
+        loadOrders();
+      }, 15000);
+
+      // SignalR üzerinden gelen anlık bildirimlerde siparişleri yenile
+      const handleTaskAssigned = () => loadOrders();
+      const handleTaskUpdated = () => loadOrders();
+      const handleTaskCancelled = () => loadOrders();
+
+      window.addEventListener("courierTaskAssigned", handleTaskAssigned);
+      window.addEventListener("courierTaskUpdated", handleTaskUpdated);
+      window.addEventListener("courierTaskCancelled", handleTaskCancelled);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener("courierTaskAssigned", handleTaskAssigned);
+        window.removeEventListener("courierTaskUpdated", handleTaskUpdated);
+        window.removeEventListener("courierTaskCancelled", handleTaskCancelled);
+      };
     }
   }, [navigate, authLoading, isAuthenticated, courier?.id]);
 
@@ -165,6 +186,12 @@ export default function CourierOrders() {
       setSelectedOrder(null);
     } catch (error) {
       console.error("Durum güncelleme hatası:", error);
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.Message ||
+        error.message ||
+        "Bilinmeyen bir hata oluştu";
+      alert(`Durum güncellenemedi: ${errorMessage}`);
     } finally {
       setUpdating(false);
     }

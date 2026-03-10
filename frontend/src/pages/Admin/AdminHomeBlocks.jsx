@@ -978,7 +978,7 @@ export default function AdminHomeBlocks() {
           className="modal fade show d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
         >
-          <div className="modal-dialog modal-lg modal-dialog-centered">
+          <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div className="modal-content">
               <div className="modal-header bg-primary text-white">
                 <h5 className="modal-title">
@@ -993,7 +993,11 @@ export default function AdminHomeBlocks() {
                   onClick={closeModal}
                 ></button>
               </div>
-              <form onSubmit={handleSubmit}>
+              <form
+                id="home-block-form"
+                onSubmit={handleSubmit}
+                style={{ flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
                 <div className="modal-body">
                   <div className="row g-3">
                     {/* Blok Adı */}
@@ -1635,33 +1639,34 @@ export default function AdminHomeBlocks() {
                     )}
                   </div>
                 </div>
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={closeModal}
-                  >
-                    İptal
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2"></span>
-                        Kaydediliyor...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fas fa-save me-2"></i>
-                        Kaydet
-                      </>
-                    )}
-                  </button>
-                </div>
               </form>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeModal}
+                >
+                  İptal
+                </button>
+                <button
+                  type="submit"
+                  form="home-block-form"
+                  className="btn btn-primary"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Kaydediliyor...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save me-2"></i>
+                      Kaydet
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { AdminService } from "../../services/adminService";
 import { MicroService } from "../../services/microService";
 import { useAuth } from "../../contexts/AuthContext";
+import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 import { PERMISSIONS } from "../../services/permissionService";
 import "./styles/AdminDashboard.css";
 
@@ -109,6 +110,8 @@ const DistributionList = ({ title, items, theme }) => {
 
 export default function Dashboard() {
   const { hasPermission, user } = useAuth();
+  // Merkezi SignalR bağlantısı — real-time event'ler için
+  const { isConnected: signalRConnected } = useAdminSignalR();
 
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -267,15 +270,48 @@ export default function Dashboard() {
     loadDashboardStats();
     checkErpConnection();
 
+    // SignalR bağlıysa polling aralığını 60 saniyeye çıkar (fallback olarak kalır)
+    // SignalR bağlı değilse 30 saniye polling yap
+    const pollingInterval = signalRConnected ? 60000 : 30000;
     const dashboardInterval = setInterval(
       () => loadDashboardStats(true),
-      30000,
+      pollingInterval,
     );
     const erpInterval = setInterval(checkErpConnection, 60000);
 
     return () => {
       clearInterval(dashboardInterval);
       clearInterval(erpInterval);
+    };
+  }, [signalRConnected]);
+
+  // ==========================================================================
+  // SIGNALR EVENT DİNLEYİCİLERİ — Real-time dashboard güncellemeleri
+  // Merkezi context global event yayınlar, Dashboard dinleyerek anında günceller.
+  // NEDEN: Polling beklemeden yeni sipariş, durum değişikliği vb. anında yansır.
+  // ==========================================================================
+  useEffect(() => {
+    const handleDashboardRefresh = () => {
+      loadDashboardStats(true);
+    };
+
+    // Backend doğrudan DashboardUpdate event'i gönderebilir
+    window.addEventListener("adminDashboardUpdate", handleDashboardRefresh);
+    // Yeni sipariş geldiğinde dashboard'u güncelle
+    window.addEventListener("adminNewOrder", handleDashboardRefresh);
+    // Sipariş durumu değiştiğinde güncelle
+    window.addEventListener("adminOrderStatusChanged", handleDashboardRefresh);
+    // Ödeme başarılı olduğunda güncelle
+    window.addEventListener("adminPaymentSuccess", handleDashboardRefresh);
+    // Sipariş iptal edildiğinde güncelle
+    window.addEventListener("adminOrderCancelled", handleDashboardRefresh);
+
+    return () => {
+      window.removeEventListener("adminDashboardUpdate", handleDashboardRefresh);
+      window.removeEventListener("adminNewOrder", handleDashboardRefresh);
+      window.removeEventListener("adminOrderStatusChanged", handleDashboardRefresh);
+      window.removeEventListener("adminPaymentSuccess", handleDashboardRefresh);
+      window.removeEventListener("adminOrderCancelled", handleDashboardRefresh);
     };
   }, []);
 

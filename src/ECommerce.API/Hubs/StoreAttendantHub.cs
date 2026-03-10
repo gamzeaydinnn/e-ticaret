@@ -158,16 +158,11 @@ namespace ECommerce.API.Hubs
                 var userRole = GetUserRole();
 
                 _logger.LogInformation(
-                    "🔌 StoreAttendantHub Connected: UserId={UserId}, UserName={UserName}, Role={Role}, ConnectionId={ConnectionId}",
+                    "StoreAttendantHub Connected: UserId={UserId}, UserName={UserName}, Role={Role}, ConnectionId={ConnectionId}",
                     userId, userName, userRole, Context.ConnectionId);
 
-                // Otomatik olarak store odasına katıl
-                await Groups.AddToGroupAsync(Context.ConnectionId, StoreRoomName);
-
-                lock (_connectionLock)
-                {
-                    _activeConnections.Add(Context.ConnectionId);
-                }
+                // NOT: Gruba ekleme JoinStoreRoom() ile yapılır.
+                // OnConnectedAsync'te tekrar eklenmez (double-join önlemi).
 
                 await base.OnConnectedAsync();
             }

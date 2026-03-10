@@ -9,6 +9,12 @@ import React from "react";
 
 // Buton konfigürasyonları
 const BUTTON_CONFIG = {
+  PickedUp: {
+    label: "Teslim Aldım",
+    icon: "fa-box",
+    color: "info",
+    gradient: "linear-gradient(135deg, #667eea, #764ba2)",
+  },
   OutForDelivery: {
     label: "Yola Çıktım",
     icon: "fa-motorcycle",
@@ -38,24 +44,41 @@ export default function CourierActionButtons({
 
   const currentStatus = task.status;
   const allowed = task.allowedActions || {};
+
+  // Assigned → PickedUp (Teslim Aldım)
+  const canPickup =
+    allowed.canPickup ?? currentStatus === "Assigned";
+
+  // PickedUp → OutForDelivery (Yola Çıktım)
   const canStart =
-    allowed.canStartDelivery ?? currentStatus === "Assigned";
+    allowed.canStartDelivery ??
+    (currentStatus === "PickedUp" || currentStatus === "pickedup");
+
+  // OutForDelivery → Delivered (Teslim Ettim)
   const canDeliver =
     allowed.canMarkDelivered ??
     ["OutForDelivery", "InTransit"].includes(currentStatus);
+
   const canFail =
     allowed.canReportProblem ?? !["Delivered", "Failed", "Cancelled"].includes(currentStatus);
 
-  if (!canStart && !canDeliver && !canFail) {
+  if (!canPickup && !canStart && !canDeliver && !canFail) {
     return null;
   }
 
   return (
     <div className="d-flex flex-column gap-2">
       {/* Ana Aksiyon Butonu */}
-      {(canStart || canDeliver) && (
+      {(canPickup || canStart || canDeliver) && (
         <div className="d-flex gap-2">
-          {canStart && (
+          {canPickup && (
+            <PrimaryActionButton
+              config={BUTTON_CONFIG.PickedUp}
+              loading={loading}
+              onClick={() => onStatusChange("PickedUp")}
+            />
+          )}
+          {canStart && !canPickup && (
             <PrimaryActionButton
               config={BUTTON_CONFIG.OutForDelivery}
               loading={loading}
@@ -106,7 +129,9 @@ function getStatusHint(status) {
     case "Pending":
       return "Bu görevi kabul etmek için butona tıklayın";
     case "Assigned":
-      return "Siparişi teslim aldığınızda butona tıklayın";
+      return "Siparişi mağazadan teslim aldığınızda butona tıklayın";
+    case "PickedUp":
+      return "Yola çıktığınızda butona tıklayın";
     case "OutForDelivery":
     case "InTransit":
       return "Teslimatı tamamladığınızda onay butonuna tıklayın";

@@ -7,11 +7,7 @@ import {
   getCouriers as dispatcherGetCouriers,
 } from "../../services/dispatcherService";
 import { useAuth } from "../../contexts/AuthContext";
-import {
-  signalRService,
-  SignalREvents,
-  ConnectionState,
-} from "../../services/signalRService";
+import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 
 // ============================================================
 // ADMIN ORDERS - Sipariş Yönetimi
@@ -30,6 +26,9 @@ export default function AdminOrders() {
   const userRole = user?.role || "";
   const isStoreAttendant = userRole === "StoreAttendant";
 
+  // Merkezi SignalR bağlantısı — AdminSignalRProvider tarafından yönetilir
+  const { isConnected: signalRConnected } = useAdminSignalR();
+
   const [orders, setOrders] = useState([]);
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +41,6 @@ export default function AdminOrders() {
   const [autoRefresh, setAutoRefresh] = useState(true); // Otomatik yenileme aktif mi?
   const [lastUpdate, setLastUpdate] = useState(null); // Son güncelleme zamanı
   const [isRefreshing, setIsRefreshing] = useState(false); // Yenileme animasyonu
-  const [signalRConnected, setSignalRConnected] = useState(false); // SignalR bağlantı durumu
   const pollingRef = useRef(null);
 
   // ============================================================
@@ -118,50 +116,22 @@ export default function AdminOrders() {
   }, [loadData]);
 
   // ============================================================
-  // SIGNALR ENTEGRASYONU
+  // SIGNALR ENTEGRASYONU — Merkezi AdminSignalR context'i kullanır
+  // Artık kendi bağlantısını kurmaz, global event'leri dinler.
+  // NEDEN: Birden fazla admin aynı anda girdiğinde her biri
+  // merkezi context üzerinden aynı bildirimleri alır.
   // ============================================================
   useEffect(() => {
-    // SignalR bağlantısını başlat
-    const connectSignalR = async () => {
-      try {
-        await signalRService.connectAdmin();
-        setSignalRConnected(true);
-        console.log("✅ SignalR Admin Hub bağlantısı kuruldu");
-      } catch (error) {
-        console.warn(
-          "⚠️ SignalR bağlantısı kurulamadı, polling kullanılacak:",
-          error,
-        );
-        setSignalRConnected(false);
-      }
-    };
-
-    connectSignalR();
-
-    // SignalR event listener'ları - deliveryHub üzerinden dinle
-    const deliveryHub = signalRService.deliveryHub;
-    const adminHub = signalRService.adminHub;
-
-    // =========================================================================
-    // YENİ SİPARİŞ HANDLER
-    // Backend'den gelen bildirim formatı: { type, orderId, orderNumber, ... }
-    // NEDEN: Backend notification objesi içinde sipariş verisini farklı formatta gönderebilir
-    // =========================================================================
-    const handleOrderCreated = (notification) => {
+    // Yeni sipariş handler
+    const handleOrderCreated = (e) => {
+      const notification = e.detail;
       console.log("📦 Yeni sipariş bildirimi alındı:", notification);
-
-      // Bildirim ses çal (önce ses, sonra data)
       playNotificationSound();
 
-      // Eğer notification bir order objesi ise direkt ekle
-      // Eğer notification içinde orderId varsa, API'den yeni veri çek
       if (notification && (notification.orderId || notification.id)) {
-        // Sipariş listesini yeniden yükle (en güncel veriyi almak için)
         loadData(false);
       } else if (notification) {
-        // Eğer gelen veri doğrudan sipariş objesi ise
         setOrders((prev) => {
-          // Aynı sipariş zaten listede varsa ekleme
           const exists = prev.some(
             (o) =>
               o.id === notification.id ||
@@ -174,7 +144,9 @@ export default function AdminOrders() {
       setLastUpdate(new Date());
     };
 
-    const handleOrderStatusChanged = (data) => {
+    // Sipariş durumu değişikliği handler
+    const handleOrderStatusChanged = (e) => {
+      const data = e.detail;
       console.log("🔄 Sipariş durumu değişti:", data);
       setOrders((prev) =>
         prev.map((o) =>
@@ -184,7 +156,9 @@ export default function AdminOrders() {
       setLastUpdate(new Date());
     };
 
-    const handleDeliveryAssigned = (data) => {
+    // Kurye atandı handler
+    const handleDeliveryAssigned = (e) => {
+      const data = e.detail;
       console.log("🚚 Kurye atandı:", data);
       setOrders((prev) =>
         prev.map((o) =>
@@ -201,7 +175,9 @@ export default function AdminOrders() {
       setLastUpdate(new Date());
     };
 
-    const handleDeliveryCompleted = (data) => {
+    // Teslimat tamamlandı handler
+    const handleDeliveryCompleted = (e) => {
+      const data = e.detail;
       console.log("✅ Teslimat tamamlandı:", data);
       setOrders((prev) =>
         prev.map((o) =>
@@ -211,7 +187,9 @@ export default function AdminOrders() {
       setLastUpdate(new Date());
     };
 
-    const handleDeliveryFailed = (data) => {
+    // Teslimat başarısız handler
+    const handleDeliveryFailed = (e) => {
+      const data = e.detail;
       console.log("❌ Teslimat başarısız:", data);
       setOrders((prev) =>
         prev.map((o) =>
@@ -224,50 +202,26 @@ export default function AdminOrders() {
       playNotificationSound();
     };
 
-    // Event listener'ları kaydet - deliveryHub üzerinden
-    deliveryHub.on(SignalREvents.ORDER_CREATED, handleOrderCreated);
-    deliveryHub.on(
-      SignalREvents.ORDER_STATUS_CHANGED,
-      handleOrderStatusChanged,
-    );
-    deliveryHub.on(SignalREvents.DELIVERY_ASSIGNED, handleDeliveryAssigned);
-    deliveryHub.on(SignalREvents.DELIVERY_COMPLETED, handleDeliveryCompleted);
-    deliveryHub.on(SignalREvents.DELIVERY_FAILED, handleDeliveryFailed);
+    // Merkezi context'in yayınladığı global event'leri dinle
+    window.addEventListener("adminNewOrder", handleOrderCreated);
+    window.addEventListener("adminOrderStatusChanged", handleOrderStatusChanged);
+    window.addEventListener("adminDeliveryAssigned", handleDeliveryAssigned);
+    window.addEventListener("adminDeliveryCompleted", handleDeliveryCompleted);
+    window.addEventListener("adminDeliveryFailed", handleDeliveryFailed);
+    // Delivery hub'ın doğrudan yayınladığı event'leri de dinle
+    window.addEventListener("adminDeliveryOrderCreated", handleOrderCreated);
+    window.addEventListener("adminDeliveryStatusChanged", handleOrderStatusChanged);
 
-    // Admin hub üzerinden gelen bildirimler
-    adminHub.on("NewOrder", handleOrderCreated);
-    adminHub.on("OrderStatusChanged", handleOrderStatusChanged);
-
-    // =========================================================================
-    // SES BİLDİRİMİ DİNLEYİCİSİ
-    // Backend "PlaySound" event'i gönderdiğinde ses çal
-    // NEDEN: Merkezi ses yönetimi için backend kontrollü bildirim
-    // =========================================================================
-    const handlePlaySound = (data) => {
-      console.log("🔊 Backend'den ses bildirimi:", data);
-      playNotificationSound();
-    };
-
-    adminHub.on("PlaySound", handlePlaySound);
-
-    // Cleanup
     return () => {
-      deliveryHub.off(SignalREvents.ORDER_CREATED, handleOrderCreated);
-      deliveryHub.off(
-        SignalREvents.ORDER_STATUS_CHANGED,
-        handleOrderStatusChanged,
-      );
-      deliveryHub.off(SignalREvents.DELIVERY_ASSIGNED, handleDeliveryAssigned);
-      deliveryHub.off(
-        SignalREvents.DELIVERY_COMPLETED,
-        handleDeliveryCompleted,
-      );
-      deliveryHub.off(SignalREvents.DELIVERY_FAILED, handleDeliveryFailed);
-      adminHub.off("NewOrder", handleOrderCreated);
-      adminHub.off("OrderStatusChanged", handleOrderStatusChanged);
-      adminHub.off("PlaySound", handlePlaySound);
+      window.removeEventListener("adminNewOrder", handleOrderCreated);
+      window.removeEventListener("adminOrderStatusChanged", handleOrderStatusChanged);
+      window.removeEventListener("adminDeliveryAssigned", handleDeliveryAssigned);
+      window.removeEventListener("adminDeliveryCompleted", handleDeliveryCompleted);
+      window.removeEventListener("adminDeliveryFailed", handleDeliveryFailed);
+      window.removeEventListener("adminDeliveryOrderCreated", handleOrderCreated);
+      window.removeEventListener("adminDeliveryStatusChanged", handleOrderStatusChanged);
     };
-  }, []);
+  }, [loadData]);
 
   // Bildirim sesi çalma - Mixkit ses dosyası
   const playNotificationSound = () => {
@@ -330,7 +284,7 @@ export default function AdminOrders() {
   const [refundRequests, setRefundRequests] = useState([]);
   const [refundLoading, setRefundLoading] = useState(false);
   const [showRefundPanel, setShowRefundPanel] = useState(false);
-  const [refundProcessing, setRefundProcessing] = useState(null);  // İşlenen iade talebi ID
+  const [refundProcessing, setRefundProcessing] = useState(null); // İşlenen iade talebi ID
   const [refundAdminNote, setRefundAdminNote] = useState("");
 
   // ============================================================
@@ -359,7 +313,12 @@ export default function AdminOrders() {
   // İade talebi onay/ret işlemi
   const handleProcessRefund = async (refundRequestId, approve) => {
     const actionText = approve ? "onaylamak" : "reddetmek";
-    if (!window.confirm(`Bu iade talebini ${actionText} istediğinize emin misiniz?`)) return;
+    if (
+      !window.confirm(
+        `Bu iade talebini ${actionText} istediğinize emin misiniz?`,
+      )
+    )
+      return;
 
     setRefundProcessing(refundRequestId);
     try {
@@ -367,12 +326,17 @@ export default function AdminOrders() {
         approve,
         adminNote: refundAdminNote || null,
       });
-      alert(approve ? "İade onaylandı ve para iadesi başlatıldı." : "İade talebi reddedildi.");
+      alert(
+        approve
+          ? "İade onaylandı ve para iadesi başlatıldı."
+          : "İade talebi reddedildi.",
+      );
       setRefundAdminNote("");
       await loadRefundRequests();
       await loadData(false);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "İşlem başarısız.";
+      const msg =
+        err?.response?.data?.message || err?.message || "İşlem başarısız.";
       alert("Hata: " + msg);
     } finally {
       setRefundProcessing(null);
@@ -381,7 +345,8 @@ export default function AdminOrders() {
 
   // Başarısız iadeyi yeniden dene
   const handleRetryRefund = async (refundRequestId) => {
-    if (!window.confirm("Para iadesini yeniden denemek istiyor musunuz?")) return;
+    if (!window.confirm("Para iadesini yeniden denemek istiyor musunuz?"))
+      return;
 
     setRefundProcessing(refundRequestId);
     try {
@@ -390,7 +355,8 @@ export default function AdminOrders() {
       await loadRefundRequests();
       await loadData(false);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || "İşlem başarısız.";
+      const msg =
+        err?.response?.data?.message || err?.message || "İşlem başarısız.";
       alert("Hata: " + msg);
     } finally {
       setRefundProcessing(null);
@@ -557,14 +523,16 @@ export default function AdminOrders() {
   const deleteOrder = async (orderId) => {
     try {
       if (
-        !window.confirm("Bu siparişi kalıcı olarak silmek istiyor musunuz?")
+        !window.confirm(
+          "Bu siparişi kalıcı olarak silmek istiyor musunuz?\nBu işlem geri alınamaz!",
+        )
       ) {
         return;
       }
 
       await AdminService.deleteOrder(orderId);
 
-      // NEDEN: Silme sonrası listeyi tazelemek zorundayız.
+      // Silme sonrası listeyi tazele
       const updated = await AdminService.getOrders();
       setOrders(Array.isArray(updated) ? updated : []);
 
@@ -572,8 +540,13 @@ export default function AdminOrders() {
         setSelectedOrder(null);
       }
     } catch (error) {
-      console.error("❌ Sipariş silme hatası:", error);
-      alert(`Sipariş silinemedi: ${error.message || "Bilinmeyen hata"}`);
+      console.error("Sipariş silme hatası:", error);
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Bilinmeyen hata";
+      alert(`Sipariş silinemedi: ${msg}`);
     }
   };
 
@@ -584,12 +557,10 @@ export default function AdminOrders() {
     setAssigningCourier(true);
     try {
       console.log(
-        `🚀 [AdminOrders] Kurye atama başladı: Sipariş #${orderId}, Kurye ID: ${courierId}`,
+        `[AdminOrders] Kurye atama: Siparis #${orderId}, Kurye ID: ${courierId}`,
       );
-      console.log("🔍 [AdminOrders] Mevcut kuryeler:", couriers);
 
       // Backend'e kurye atama isteği gönder
-      // StoreAttendant kendi endpoint'ini kullanır (yeni eklenen yetki)
       let updatedOrder;
       if (isStoreAttendant) {
         updatedOrder = await storeAttendantService.assignCourier(
@@ -600,7 +571,7 @@ export default function AdminOrders() {
         updatedOrder = await AdminService.assignCourier(orderId, courierId);
       }
 
-      console.log("✅ [AdminOrders] API yanıtı:", updatedOrder);
+      console.log("[AdminOrders] Kurye atama API yaniti:", updatedOrder);
 
       if (isStoreAttendant && updatedOrder?.success === false) {
         throw new Error(updatedOrder.error || "Kurye atama başarısız");
@@ -609,20 +580,21 @@ export default function AdminOrders() {
       // Başarılı olursa listeyi güncelle
       if (updatedOrder) {
         // Tüm listeyi yeniden çek (en güncel veri için)
-        if (isStoreAttendant) {
-          await loadData(false);
-        } else {
-          const updated = await AdminService.getOrders();
-          setOrders(Array.isArray(updated) ? updated : []);
+        const updated = await AdminService.getOrders();
+        const orderList = Array.isArray(updated) ? updated : [];
+        setOrders(orderList);
+
+        // Seçili siparişi de güncelle (kurye bilgisi hemen görünsün)
+        const refreshedOrder = orderList.find((o) => o.id === orderId);
+        if (refreshedOrder) {
+          setSelectedOrder(refreshedOrder);
         }
 
-        // Başarı bildirimi (opsiyonel)
-        console.log(`✅ Kurye başarıyla atandı: Sipariş #${orderId}`);
+        alert("Kurye başarıyla atandı!");
       }
     } catch (error) {
-      console.error("Kurye atama hatası:", error);
-      // Kullanıcıya hata göster (ileride toast notification eklenebilir)
-      alert(`Kurye atama başarısız: ${error.message || "Bilinmeyen hata"}`);
+      console.error("Kurye atama hatasi:", error);
+      alert(`Kurye atama basarisiz: ${error.message || "Bilinmeyen hata"}`);
     } finally {
       setAssigningCourier(false);
     }
@@ -680,6 +652,9 @@ export default function AdminOrders() {
       refunded: "#6c757d",
       partialrefund: "#17a2b8",
       delivery_failed: "#dc3545",
+      deliveryfailed: "#dc3545",
+      delivery_payment_pending: "#ffc107",
+      deliverypaymentpending: "#ffc107",
     };
     const normalized = (status || "").toLowerCase();
     return hexMap[normalized] || "#6c757d";
@@ -709,7 +684,9 @@ export default function AdminOrders() {
 
       // Özel Durumlar
       delivery_failed: "Teslimat Başarısız",
+      deliveryfailed: "Teslimat Başarısız",
       delivery_payment_pending: "Ödeme Bekliyor",
+      deliverypaymentpending: "Ödeme Bekliyor",
       weight_pending: "Tartı Onayı Bekliyor",
       payment_captured: "Ödeme Tamamlandı",
     };
@@ -739,6 +716,9 @@ export default function AdminOrders() {
       refunded: "fa-undo",
       partialrefund: "fa-undo",
       delivery_failed: "fa-exclamation-triangle",
+      deliveryfailed: "fa-exclamation-triangle",
+      delivery_payment_pending: "fa-credit-card",
+      deliverypaymentpending: "fa-credit-card",
     };
     const normalized = (status || "").toLowerCase();
     return iconMap[normalized] || "fa-circle";
@@ -838,9 +818,18 @@ export default function AdminOrders() {
           >
             <i className="fas fa-undo me-1"></i>
             İade Talepleri
-            {refundRequests.filter(r => r.status === 0 || r.statusText === "Beklemede").length > 0 && (
-              <span className="badge bg-danger ms-1" style={{ fontSize: "0.6rem" }}>
-                {refundRequests.filter(r => r.status === 0 || r.statusText === "Beklemede").length}
+            {refundRequests.filter(
+              (r) => r.status === 0 || r.statusText === "Beklemede",
+            ).length > 0 && (
+              <span
+                className="badge bg-danger ms-1"
+                style={{ fontSize: "0.6rem" }}
+              >
+                {
+                  refundRequests.filter(
+                    (r) => r.status === 0 || r.statusText === "Beklemede",
+                  ).length
+                }
               </span>
             )}
           </button>
@@ -864,7 +853,9 @@ export default function AdminOrders() {
                 onClick={loadRefundRequests}
                 disabled={refundLoading}
               >
-                <i className={`fas fa-sync-alt ${refundLoading ? "fa-spin" : ""}`}></i>
+                <i
+                  className={`fas fa-sync-alt ${refundLoading ? "fa-spin" : ""}`}
+                ></i>
               </button>
               <button
                 className="btn btn-sm btn-outline-dark"
@@ -887,7 +878,10 @@ export default function AdminOrders() {
               </div>
             ) : (
               <div className="table-responsive">
-                <table className="table table-hover table-sm mb-0" style={{ fontSize: "0.8rem" }}>
+                <table
+                  className="table table-hover table-sm mb-0"
+                  style={{ fontSize: "0.8rem" }}
+                >
                   <thead className="table-light">
                     <tr>
                       <th>#</th>
@@ -902,23 +896,34 @@ export default function AdminOrders() {
                   </thead>
                   <tbody>
                     {refundRequests.map((req) => (
-                      <tr key={req.id} className={
-                        (req.status === 0 || req.statusText === "Beklemede")
-                          ? "table-warning"
-                          : (req.status === 5 || req.statusText === "İade Başarısız")
-                            ? "table-danger"
-                            : ""
-                      }>
+                      <tr
+                        key={req.id}
+                        className={
+                          req.status === 0 || req.statusText === "Beklemede"
+                            ? "table-warning"
+                            : req.status === 5 ||
+                                req.statusText === "İade Başarısız"
+                              ? "table-danger"
+                              : ""
+                        }
+                      >
                         <td>{req.id}</td>
                         <td>
-                          <strong>{req.orderNumber || `#${req.orderId}`}</strong>
+                          <strong>
+                            {req.orderNumber || `#${req.orderId}`}
+                          </strong>
                           <br />
-                          <small className="text-muted">{req.orderStatusAtRequest}</small>
+                          <small className="text-muted">
+                            {req.orderStatusAtRequest}
+                          </small>
                         </td>
                         <td>
                           {req.customerName || "-"}
                           {req.customerPhone && (
-                            <><br /><small>{req.customerPhone}</small></>
+                            <>
+                              <br />
+                              <small>{req.customerPhone}</small>
+                            </>
                           )}
                         </td>
                         <td className="fw-bold text-danger">
@@ -932,34 +937,58 @@ export default function AdminOrders() {
                           <small>{req.reason}</small>
                         </td>
                         <td>
-                          <span className={`badge ${
-                            req.statusText === "Beklemede" ? "bg-warning text-dark" :
-                            req.statusText === "Onaylandı" ? "bg-info" :
-                            req.statusText === "Reddedildi" ? "bg-secondary" :
-                            req.statusText === "İade Edildi" ? "bg-success" :
-                            req.statusText === "Otomatik İptal Edildi" ? "bg-primary" :
-                            req.statusText === "İade Başarısız" ? "bg-danger" :
-                            "bg-secondary"
-                          }`}>
+                          <span
+                            className={`badge ${
+                              req.statusText === "Beklemede"
+                                ? "bg-warning text-dark"
+                                : req.statusText === "Onaylandı"
+                                  ? "bg-info"
+                                  : req.statusText === "Reddedildi"
+                                    ? "bg-secondary"
+                                    : req.statusText === "İade Edildi"
+                                      ? "bg-success"
+                                      : req.statusText ===
+                                          "Otomatik İptal Edildi"
+                                        ? "bg-primary"
+                                        : req.statusText === "İade Başarısız"
+                                          ? "bg-danger"
+                                          : "bg-secondary"
+                            }`}
+                          >
                             {req.statusText}
                           </span>
                         </td>
                         <td>
-                          <small>{new Date(req.requestedAt).toLocaleDateString("tr-TR")}</small>
+                          <small>
+                            {new Date(req.requestedAt).toLocaleDateString(
+                              "tr-TR",
+                            )}
+                          </small>
                           <br />
                           <small className="text-muted">
-                            {new Date(req.requestedAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                            {new Date(req.requestedAt).toLocaleTimeString(
+                              "tr-TR",
+                              { hour: "2-digit", minute: "2-digit" },
+                            )}
                           </small>
                         </td>
                         <td>
-                          {(req.status === 0 || req.statusText === "Beklemede") && (
+                          {(req.status === 0 ||
+                            req.statusText === "Beklemede") && (
                             <div className="d-flex flex-column gap-1">
                               <input
                                 type="text"
                                 className="form-control form-control-sm"
                                 placeholder="Admin notu..."
-                                style={{ fontSize: "0.7rem", minWidth: "120px" }}
-                                value={refundProcessing === req.id ? refundAdminNote : ""}
+                                style={{
+                                  fontSize: "0.7rem",
+                                  minWidth: "120px",
+                                }}
+                                value={
+                                  refundProcessing === req.id
+                                    ? refundAdminNote
+                                    : ""
+                                }
                                 onChange={(e) => {
                                   setRefundProcessing(req.id);
                                   setRefundAdminNote(e.target.value);
@@ -968,16 +997,24 @@ export default function AdminOrders() {
                               <div className="btn-group btn-group-sm">
                                 <button
                                   className="btn btn-success btn-sm"
-                                  onClick={() => handleProcessRefund(req.id, true)}
-                                  disabled={refundProcessing === req.id && refundLoading}
+                                  onClick={() =>
+                                    handleProcessRefund(req.id, true)
+                                  }
+                                  disabled={
+                                    refundProcessing === req.id && refundLoading
+                                  }
                                   title="İade Onayla"
                                 >
                                   <i className="fas fa-check"></i> Onayla
                                 </button>
                                 <button
                                   className="btn btn-danger btn-sm"
-                                  onClick={() => handleProcessRefund(req.id, false)}
-                                  disabled={refundProcessing === req.id && refundLoading}
+                                  onClick={() =>
+                                    handleProcessRefund(req.id, false)
+                                  }
+                                  disabled={
+                                    refundProcessing === req.id && refundLoading
+                                  }
                                   title="İade Reddet"
                                 >
                                   <i className="fas fa-times"></i> Reddet
@@ -985,7 +1022,8 @@ export default function AdminOrders() {
                               </div>
                             </div>
                           )}
-                          {(req.status === 5 || req.statusText === "İade Başarısız") && (
+                          {(req.status === 5 ||
+                            req.statusText === "İade Başarısız") && (
                             <button
                               className="btn btn-outline-warning btn-sm"
                               onClick={() => handleRetryRefund(req.id)}
@@ -997,7 +1035,10 @@ export default function AdminOrders() {
                           )}
                           {req.processedAt && (
                             <small className="text-muted d-block mt-1">
-                              {req.processedByName || "Admin"} - {new Date(req.processedAt).toLocaleDateString("tr-TR")}
+                              {req.processedByName || "Admin"} -{" "}
+                              {new Date(req.processedAt).toLocaleDateString(
+                                "tr-TR",
+                              )}
                             </small>
                           )}
                         </td>
@@ -1045,7 +1086,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#6c757d" }}
+            style={{ borderRadius: "6px", backgroundColor: "#6c757d", cursor: "pointer", opacity: statusFilter === "pending" ? 1 : 0.85, border: statusFilter === "pending" ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "pending" ? "all" : "pending")}
           >
             <div className="card-body text-center px-1 py-2">
               <i
@@ -1068,7 +1110,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#17a2b8" }}
+            style={{ borderRadius: "6px", backgroundColor: "#17a2b8", cursor: "pointer", opacity: statusFilter === "confirmed" ? 1 : 0.85, border: statusFilter === "confirmed" ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "confirmed" ? "all" : "confirmed")}
           >
             <div className="card-body text-center px-1 py-2">
               <i
@@ -1091,7 +1134,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#fd7e14" }}
+            style={{ borderRadius: "6px", backgroundColor: "#fd7e14", cursor: "pointer", opacity: statusFilter === "preparing" ? 1 : 0.85, border: statusFilter === "preparing" ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "preparing" ? "all" : "preparing")}
           >
             <div className="card-body text-center px-1 py-2">
               <i
@@ -1114,7 +1158,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#28a745" }}
+            style={{ borderRadius: "6px", backgroundColor: "#28a745", cursor: "pointer", opacity: statusFilter === "ready" ? 1 : 0.85, border: statusFilter === "ready" ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "ready" ? "all" : "ready")}
           >
             <div className="card-body text-center px-1 py-2">
               <i className="fas fa-box mb-1" style={{ fontSize: "0.7rem" }}></i>
@@ -1133,7 +1178,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#6f42c1" }}
+            style={{ borderRadius: "6px", backgroundColor: "#6f42c1", cursor: "pointer", opacity: ["assigned", "out_for_delivery"].includes(statusFilter) ? 1 : 0.85, border: ["assigned", "out_for_delivery"].includes(statusFilter) ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "assigned" ? "all" : "assigned")}
           >
             <div className="card-body text-center px-1 py-2">
               <i
@@ -1161,7 +1207,8 @@ export default function AdminOrders() {
         <div className="col-4 col-md-2">
           <div
             className="card border-0 shadow-sm text-white"
-            style={{ borderRadius: "6px", backgroundColor: "#343a40" }}
+            style={{ borderRadius: "6px", backgroundColor: "#343a40", cursor: "pointer", opacity: statusFilter === "delivered" ? 1 : 0.85, border: statusFilter === "delivered" ? "2px solid #fff" : "2px solid transparent" }}
+            onClick={() => setStatusFilter(statusFilter === "delivered" ? "all" : "delivered")}
           >
             <div className="card-body text-center px-1 py-2">
               <i
@@ -1192,7 +1239,8 @@ export default function AdminOrders() {
           <div className="col-6 col-md-3">
             <div
               className="card border-0 shadow-sm bg-danger text-white"
-              style={{ borderRadius: "6px" }}
+              style={{ borderRadius: "6px", cursor: "pointer", opacity: statusFilter === "delivery_failed" ? 1 : 0.85, border: statusFilter === "delivery_failed" ? "2px solid #fff" : "2px solid transparent" }}
+              onClick={() => setStatusFilter(statusFilter === "delivery_failed" ? "all" : "delivery_failed")}
             >
               <div className="card-body text-center px-1 py-2">
                 <i
@@ -1215,7 +1263,8 @@ export default function AdminOrders() {
           <div className="col-6 col-md-3">
             <div
               className="card border-0 shadow-sm text-dark"
-              style={{ borderRadius: "6px", backgroundColor: "#ffc107" }}
+              style={{ borderRadius: "6px", backgroundColor: "#ffc107", cursor: "pointer", opacity: statusFilter === "delivery_payment_pending" ? 1 : 0.85, border: statusFilter === "delivery_payment_pending" ? "2px solid #fff" : "2px solid transparent" }}
+              onClick={() => setStatusFilter(statusFilter === "delivery_payment_pending" ? "all" : "delivery_payment_pending")}
             >
               <div className="card-body text-center px-1 py-2">
                 <i
@@ -1251,6 +1300,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-list me-1"></i>Tümü
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "pending" || statusFilter === "new" ? "btn-secondary" : "btn-outline-secondary"}`}
@@ -1258,6 +1308,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-circle me-1"></i>Yeni
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => ["pending", "new"].includes(normalizeStatus(o.status))).length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "confirmed" ? "btn-info" : "btn-outline-info"}`}
@@ -1265,6 +1316,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-check-circle me-1"></i>Onaylı
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "confirmed").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "preparing" ? "btn-warning" : "btn-outline-warning"}`}
@@ -1277,6 +1329,7 @@ export default function AdminOrders() {
             }}
           >
             <i className="fas fa-utensils me-1"></i>Hazırlanan
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "preparing").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "ready" ? "btn-success" : "btn-outline-success"}`}
@@ -1284,6 +1337,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-box me-1"></i>Hazır
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "ready").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "assigned" ? "btn-primary" : "btn-outline-primary"}`}
@@ -1291,6 +1345,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-user-check me-1"></i>Atandı
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "assigned").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "out_for_delivery" ? "btn-primary" : "btn-outline-primary"}`}
@@ -1304,6 +1359,7 @@ export default function AdminOrders() {
             }}
           >
             <i className="fas fa-motorcycle me-1"></i>Yolda
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "out_for_delivery").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "delivered" ? "btn-dark" : "btn-outline-dark"}`}
@@ -1311,6 +1367,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-check-double me-1"></i>Teslim
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "delivered").length}</span>
           </button>
         </div>
 
@@ -1322,6 +1379,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-exclamation-triangle me-1"></i>Başarısız
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "delivery_failed").length}</span>
           </button>
           <button
             className={`btn ${statusFilter === "delivery_payment_pending" ? "btn-warning" : "btn-outline-warning"}`}
@@ -1329,6 +1387,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-credit-card me-1"></i>Ödeme Bekl.
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => normalizeStatus(o.status) === "delivery_payment_pending").length}</span>
           </button>
         </div>
 
@@ -1347,6 +1406,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.65rem" }}
           >
             <i className="fas fa-clock me-1"></i>Ödeme Bekleyen
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => { const ps = (o.paymentStatus || "").toString().toLowerCase(); return ps !== "paid" && o.isPaid !== true; }).length}</span>
           </button>
           <button
             className={`btn ${paymentFilter === "paid" ? "btn-success" : "btn-outline-success"}`}
@@ -1354,6 +1414,7 @@ export default function AdminOrders() {
             style={{ fontSize: "0.7rem" }}
           >
             <i className="fas fa-check me-1"></i>Ödendi
+            <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => { const ps = (o.paymentStatus || "").toString().toLowerCase(); return ps === "paid" || o.isPaid === true; }).length}</span>
           </button>
         </div>
       </div>
@@ -1449,7 +1510,10 @@ export default function AdminOrders() {
                         </td>
                         {/* Ödeme Durumu Sütunu */}
                         <td className="px-1 py-2 d-none d-sm-table-cell">
-                          {(order.paymentStatus || "").toString().toLowerCase() === "paid" || order.isPaid === true ? (
+                          {(order.paymentStatus || "")
+                            .toString()
+                            .toLowerCase() === "paid" ||
+                          order.isPaid === true ? (
                             <span
                               className="badge bg-success"
                               style={{ fontSize: "0.55rem" }}
@@ -1568,43 +1632,43 @@ export default function AdminOrders() {
 
                             {/* 🛵 DAĞITIMA ÇIKTI - Kuryeye atanan sipariş için */}
                             {(normalizedStatus === "assigned" ||
-                                normalizedStatus === "picked_up" ||
-                                normalizedStatus === "pickedup") && (
-                                <button
-                                  onClick={() =>
-                                    updateOrderStatus(
-                                      order.id,
-                                      "out_for_delivery",
-                                    )
-                                  }
-                                  className="btn p-1"
-                                  style={{
-                                    fontSize: "0.6rem",
-                                    lineHeight: 1,
-                                    backgroundColor: "#6f42c1",
-                                    borderColor: "#6f42c1",
-                                    color: "white",
-                                  }}
-                                  title="🛵 Dağıtıma Çıktı"
-                                >
-                                  <i className="fas fa-shipping-fast"></i>
-                                </button>
-                              )}
+                              normalizedStatus === "picked_up" ||
+                              normalizedStatus === "pickedup") && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(
+                                    order.id,
+                                    "out_for_delivery",
+                                  )
+                                }
+                                className="btn p-1"
+                                style={{
+                                  fontSize: "0.6rem",
+                                  lineHeight: 1,
+                                  backgroundColor: "#6f42c1",
+                                  borderColor: "#6f42c1",
+                                  color: "white",
+                                }}
+                                title="🛵 Dağıtıma Çıktı"
+                              >
+                                <i className="fas fa-shipping-fast"></i>
+                              </button>
+                            )}
 
                             {/* ✅ TESLİM EDİLDİ - Dağıtımdaki sipariş için */}
                             {(normalizedStatus === "out_for_delivery" ||
-                                normalizedStatus === "outfordelivery") && (
-                                <button
-                                  onClick={() =>
-                                    updateOrderStatus(order.id, "delivered")
-                                  }
-                                  className="btn btn-dark p-1"
-                                  style={{ fontSize: "0.6rem", lineHeight: 1 }}
-                                  title="✅ Teslim Edildi"
-                                >
-                                  <i className="fas fa-check-double"></i>
-                                </button>
-                              )}
+                              normalizedStatus === "outfordelivery") && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "delivered")
+                                }
+                                className="btn btn-dark p-1"
+                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                title="✅ Teslim Edildi"
+                              >
+                                <i className="fas fa-check-double"></i>
+                              </button>
+                            )}
 
                             {/* 🚫 İPTAL + PARA İADESİ - Admin ve StoreAttendant için
                                 İptal edilince POSNET üzerinden para iadesi de tetiklenir */}
@@ -1617,16 +1681,22 @@ export default function AdminOrders() {
                                       !window.confirm(
                                         "Siparişi iptal etmek istediğinize emin misiniz?\nÖdeme yapılmışsa otomatik para iadesi yapılacaktır.",
                                       )
-                                    ) return;
+                                    )
+                                      return;
                                     try {
                                       await AdminService.cancelOrderWithRefund(
                                         order.id,
-                                        "Admin/Görevli tarafından iptal edildi"
+                                        "Admin/Görevli tarafından iptal edildi",
                                       );
                                       await loadData(false);
                                       loadRefundRequests();
                                     } catch (err) {
-                                      alert("İptal hatası: " + (err?.response?.data?.message || err?.message || "Bilinmeyen hata"));
+                                      alert(
+                                        "İptal hatası: " +
+                                          (err?.response?.data?.message ||
+                                            err?.message ||
+                                            "Bilinmeyen hata"),
+                                      );
                                     }
                                   }}
                                   className="btn btn-outline-danger p-1"
@@ -2568,8 +2638,8 @@ export default function AdminOrders() {
                         </div>
                       )}
 
-                    {/* Kurye Atama - Confirmed, Preparing veya Ready durumunda ve kurye atanmamışsa */}
-                    {["confirmed", "preparing", "ready"].includes(
+                    {/* Kurye Atama - Teslim edilmiş, iptal, iade hariç tüm durumlarda ve kurye atanmamışsa */}
+                    {!["delivered", "cancelled", "refunded"].includes(
                       normalizedStatus,
                     ) &&
                       !selectedOrder.courierId && (
@@ -2582,7 +2652,6 @@ export default function AdminOrders() {
                             Kurye Ata
                           </h6>
                           <div className="d-flex gap-1 flex-wrap">
-                            {/* Debug: Tüm kuryeleri göster - status filtresini kaldırdık */}
                             {couriers.length > 0 ? (
                               couriers.map((courier) => (
                                 <button
@@ -2613,32 +2682,11 @@ export default function AdminOrders() {
                         </div>
                       )}
 
-                    {/* Kurye Atama Bilgisi - Uygun durumda olmayan ve kurye atanmamış siparişler için */}
-                    {!["confirmed", "preparing", "ready"].includes(
-                      normalizedStatus,
-                    ) &&
-                      !selectedOrder.courierId &&
-                      ![
-                        "delivered",
-                        "cancelled",
-                        "delivery_failed",
-                        "assigned",
-                        "picked_up",
-                        "out_for_delivery",
-                      ].includes(normalizedStatus) && (
-                        <div className="mt-2 p-2 border border-warning rounded bg-warning bg-opacity-10">
-                          <small className="text-warning">
-                            <i className="fas fa-info-circle me-1"></i>
-                            Kurye atamak için siparişi önce{" "}
-                            <strong>"Onaylandı"</strong>,{" "}
-                            <strong>"Hazırlanıyor"</strong> veya{" "}
-                            <strong>"Hazır"</strong> durumuna getirin.
-                          </small>
-                        </div>
-                      )}
-
-                    {/* Kurye Bilgisi - Kurye atanmışsa göster */}
-                    {selectedOrder.courierId && (
+                    {/* Kurye Yeniden Atama - Kurye atanmış ama değiştirmek istenirse */}
+                    {selectedOrder.courierId &&
+                      !["delivered", "cancelled", "refunded"].includes(
+                        normalizedStatus,
+                      ) && (
                       <div className="mt-2 p-2 border border-info rounded bg-info bg-opacity-10">
                         <h6
                           className="fw-bold mb-1 text-info"
@@ -2647,7 +2695,7 @@ export default function AdminOrders() {
                           <i className="fas fa-motorcycle me-1"></i>
                           Atanan Kurye
                         </h6>
-                        <div className="d-flex align-items-center">
+                        <div className="d-flex align-items-center flex-wrap gap-1">
                           <span className="badge bg-info me-2">
                             Kurye #{selectedOrder.courierId}
                           </span>
@@ -2656,6 +2704,30 @@ export default function AdminOrders() {
                               {selectedOrder.courierName}
                             </span>
                           )}
+                        </div>
+                        {/* Kurye Değiştir */}
+                        <div className="mt-2">
+                          <small className="text-muted d-block mb-1">Kurye Değiştir:</small>
+                          <div className="d-flex gap-1 flex-wrap">
+                            {couriers
+                              .filter((c) => c.id !== selectedOrder.courierId)
+                              .map((courier) => (
+                                <button
+                                  key={courier.id}
+                                  onClick={() =>
+                                    assignCourier(selectedOrder.id, courier.id)
+                                  }
+                                  disabled={assigningCourier}
+                                  className="btn btn-outline-warning btn-sm px-2 py-1"
+                                  style={{ fontSize: "0.6rem" }}
+                                >
+                                  <i className="fas fa-exchange-alt me-1"></i>
+                                  {courier.courierName ||
+                                    courier.name?.split(" ")[0] ||
+                                    `Kurye ${courier.id}`}
+                                </button>
+                              ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2735,7 +2807,7 @@ export default function AdminOrders() {
                     ADMİN / MARKET GÖREVLİSİ MANUEL DURUM DEĞİŞTİRME
                     Acil durumlar için tüm durumları değiştirebilir
                     ================================================================ */}
-                    {(
+                    {
                       <div className="mt-3 p-2 border rounded bg-light">
                         <h6
                           className="fw-bold mb-2"
@@ -2843,7 +2915,7 @@ export default function AdminOrders() {
                           </div>
                         </div>
                       </div>
-                    )}
+                    }
                   </div>
                 </div>
               </div>

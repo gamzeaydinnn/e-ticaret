@@ -35,6 +35,52 @@ export function CourierSignalRProvider({ children }) {
 
   // Event handlers ref (component update'lerinde kaybolmaması için)
   const eventHandlersRef = useRef({});
+  // Cross-tab senkronizasyon kanalı
+  const broadcastChannelRef = useRef(null);
+
+  // Cross-tab bildirim senkronizasyonu
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+
+    const channel = new BroadcastChannel("courier-notifications-sync");
+    broadcastChannelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      const { type, payload } = event.data;
+      switch (type) {
+        case "NEW_NOTIFICATION":
+          setNotifications((prev) => {
+            if (prev.some((n) => n.id === payload.id)) return prev;
+            return [payload, ...prev].slice(0, 50);
+          });
+          setUnreadCount((prev) => prev + 1);
+          break;
+        case "MARK_READ":
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.id === payload.notificationId ? { ...n, read: true } : n,
+            ),
+          );
+          setUnreadCount((prev) => Math.max(0, prev - 1));
+          break;
+        case "MARK_ALL_READ":
+          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+          setUnreadCount(0);
+          break;
+        case "CLEAR_ALL":
+          setNotifications([]);
+          setUnreadCount(0);
+          break;
+        default:
+          break;
+      }
+    };
+
+    return () => {
+      channel.close();
+      broadcastChannelRef.current = null;
+    };
+  }, []);
 
   // =========================================================================
   // BAĞLANTI OLUŞTURMA
@@ -77,9 +123,9 @@ export function CourierSignalRProvider({ children }) {
         setConnectionState("connected");
         console.log("✅ Kurye SignalR bağlantısı kuruldu");
 
-        // Kurye grubuna katıl
+        // Kurye grubuna katıl (backend metod adı: JoinCourierRoom)
         if (courier?.id) {
-          await conn.invoke("JoinCourierGroup", courier.id.toString());
+          await conn.invoke("JoinCourierRoom");
         }
       } catch (error) {
         console.error("❌ SignalR bağlantı hatası:", error);
@@ -103,8 +149,8 @@ export function CourierSignalRProvider({ children }) {
     (conn) => {
       if (!conn) return;
 
-      // Yeni görev atandı
-      conn.on("TaskAssigned", (task) => {
+      // Yeni görev atandı (Backend "OrderAssigned" event'i gönderir)
+      conn.on("OrderAssigned", (task) => {
         console.log("📦 Yeni görev atandı:", task);
 
         const notification = {
@@ -125,24 +171,24 @@ export function CourierSignalRProvider({ children }) {
         );
       });
 
-      // Görev güncellendi
-      conn.on("TaskUpdated", (task) => {
-        console.log("🔄 Görev güncellendi:", task);
+      // Sipariş durumu değişti (Backend "OrderStatusChanged" event'i gönderir)
+      conn.on("OrderStatusChanged", (data) => {
+        console.log("🔄 Sipariş durumu değişti:", data);
         window.dispatchEvent(
-          new CustomEvent("courierTaskUpdated", { detail: task }),
+          new CustomEvent("courierTaskUpdated", { detail: data }),
         );
       });
 
-      // Görev iptal edildi
-      conn.on("TaskCancelled", (taskId, reason) => {
-        console.log("❌ Görev iptal edildi:", taskId, reason);
+      // Görev iptal / sipariş kaldırıldı (Backend "OrderUnassigned" event'i gönderir)
+      conn.on("OrderUnassigned", (data) => {
+        console.log("❌ Görev iptal edildi:", data);
 
         const notification = {
           id: Date.now(),
           type: "task_cancelled",
           title: "Görev İptal",
-          message: `Görev #${taskId} iptal edildi: ${reason}`,
-          data: { taskId, reason },
+          message: `Sipariş #${data.orderId || data} iptal edildi${data.reason ? ": " + data.reason : ""}`,
+          data: data,
           timestamp: new Date().toISOString(),
           read: false,
         };
@@ -150,31 +196,27 @@ export function CourierSignalRProvider({ children }) {
         addNotification(notification);
         window.dispatchEvent(
           new CustomEvent("courierTaskCancelled", {
-            detail: { taskId, reason },
+            detail: data,
           }),
         );
       });
 
-      // Görev yeniden atandı (başka kuryeye)
-      conn.on("TaskReassigned", (taskId, newCourierId, reason) => {
-        console.log("↩️ Görev yeniden atandı:", taskId);
+      // SLA uyarısı (Backend "SlaWarning" event'i gönderir)
+      conn.on("SlaWarning", (data) => {
+        console.log("⚠️ SLA uyarısı:", data);
 
         const notification = {
           id: Date.now(),
-          type: "task_reassigned",
-          title: "Görev Değişikliği",
-          message: `Görev #${taskId} başka kuryeye atandı`,
-          data: { taskId, newCourierId, reason },
+          type: "sla_warning",
+          title: "SLA Uyarısı",
+          message:
+            data.message || `Sipariş #${data.orderId} SLA süresine yaklaşıyor`,
+          data: data,
           timestamp: new Date().toISOString(),
           read: false,
         };
 
         addNotification(notification);
-        window.dispatchEvent(
-          new CustomEvent("courierTaskReassigned", {
-            detail: { taskId, newCourierId, reason },
-          }),
-        );
       });
 
       // Admin mesajı
@@ -209,11 +251,9 @@ export function CourierSignalRProvider({ children }) {
         console.log("✅ Yeniden bağlandı:", connectionId);
         setConnectionState("connected");
 
-        // Gruba yeniden katıl
+        // Gruba yeniden katıl (backend metod adı: JoinCourierRoom)
         if (courier?.id) {
-          conn
-            .invoke("JoinCourierGroup", courier.id.toString())
-            .catch(console.error);
+          conn.invoke("JoinCourierRoom").catch(console.error);
         }
       });
     },
@@ -224,8 +264,16 @@ export function CourierSignalRProvider({ children }) {
   // BİLDİRİM YÖNETİMİ
   // =========================================================================
   const addNotification = useCallback((notification) => {
-    setNotifications((prev) => [notification, ...prev].slice(0, 50)); // Max 50 bildirim
+    setNotifications((prev) => [notification, ...prev].slice(0, 50));
     setUnreadCount((prev) => prev + 1);
+
+    // Cross-tab senkronizasyon
+    try {
+      broadcastChannelRef.current?.postMessage({
+        type: "NEW_NOTIFICATION",
+        payload: notification,
+      });
+    } catch (e) {}
 
     // Sesli bildirim (opsiyonel)
     try {
@@ -246,16 +294,28 @@ export function CourierSignalRProvider({ children }) {
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)),
     );
     setUnreadCount((prev) => Math.max(0, prev - 1));
+    try {
+      broadcastChannelRef.current?.postMessage({
+        type: "MARK_READ",
+        payload: { notificationId },
+      });
+    } catch (e) {}
   }, []);
 
   const markAllAsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     setUnreadCount(0);
+    try {
+      broadcastChannelRef.current?.postMessage({ type: "MARK_ALL_READ" });
+    } catch (e) {}
   }, []);
 
   const clearNotifications = useCallback(() => {
     setNotifications([]);
     setUnreadCount(0);
+    try {
+      broadcastChannelRef.current?.postMessage({ type: "CLEAR_ALL" });
+    } catch (e) {}
   }, []);
 
   // =========================================================================

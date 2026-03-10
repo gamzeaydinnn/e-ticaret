@@ -322,8 +322,14 @@ namespace ECommerce.Core.DTOs.Courier
     public class CourierAllowedActions
     {
         /// <summary>
-        /// "Yola Çıktım" butonu aktif mi?
+        /// "Teslim Aldım" butonu aktif mi?
         /// ASSIGNED durumunda true
+        /// </summary>
+        public bool CanPickup { get; set; }
+
+        /// <summary>
+        /// "Yola Çıktım" butonu aktif mi?
+        /// PICKED_UP durumunda true
         /// </summary>
         public bool CanStartDelivery { get; set; }
 

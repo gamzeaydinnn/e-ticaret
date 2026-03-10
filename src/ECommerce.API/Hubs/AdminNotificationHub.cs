@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using System.Security.Claims;
+using ECommerce.API.Services;
 
 namespace ECommerce.API.Hubs
 {
@@ -23,7 +24,7 @@ namespace ECommerce.API.Hubs
     /// - CourierOffline(courierId, courierName, activeOrderCount)
     /// - DashboardMetricsUpdate(metrics)
     /// </summary>
-    [Authorize(Roles = "Admin,SuperAdmin,StoreManager")]
+    [Authorize(Roles = "Admin,SuperAdmin,StoreManager,CustomerSupport,Logistics,StoreAttendant,Dispatcher")]
     public class AdminNotificationHub : Hub
     {
         private readonly ILogger<AdminNotificationHub> _logger;
@@ -112,7 +113,10 @@ namespace ECommerce.API.Hubs
         {
             var userId = GetUserId();
             var userRole = GetUserRole();
-            
+
+            // Bağlantıyı kaydet
+            RealTimeNotificationService.RegisterAdminConnection(Context.ConnectionId);
+
             _logger.LogInformation(
                 "AdminNotificationHub: Admin bağlandı. UserId: {UserId}, Role: {Role}, ConnectionId: {ConnectionId}",
                 userId, userRole, Context.ConnectionId);
@@ -126,6 +130,9 @@ namespace ECommerce.API.Hubs
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
             var userId = GetUserId();
+
+            // Bağlantıyı kaldır
+            RealTimeNotificationService.UnregisterAdminConnection(Context.ConnectionId);
 
             if (exception != null)
             {

@@ -117,7 +117,10 @@ export default function CourierDashboard() {
     setStats({
       activeOrders: activeCount,
       completedToday: completedCount,
-      totalEarnings: completedCount * 15, // Sabit teslimat ücreti
+      // Fallback: API summary verisi yoksa sipariş tutarlarını topla
+      totalEarnings: orderList
+        .filter((o) => normalize(o.status) === "delivered")
+        .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
       pendingOrders: pendingCount,
       failedOrders: failedCount,
     });
@@ -632,7 +635,7 @@ export default function CourierDashboard() {
                     <i className="fas fa-lira-sign fs-4"></i>
                   </div>
                   <h4 className="fw-bold text-info mb-0">
-                    {stats.totalEarnings}₺
+                    {Number(stats.totalEarnings || 0).toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}₺
                   </h4>
                   <small className="text-muted" style={{ fontSize: "0.7rem" }}>
                     Bugün Kazanç

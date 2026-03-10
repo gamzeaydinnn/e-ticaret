@@ -213,6 +213,39 @@ export const OrderService = {
   },
 
   // ============================================================================
+  // MİSAFİR SİPARİŞ TAKİBİ - TELEFON NUMARASI VEYA SİPARİŞ NUMARASI İLE
+  // Misafir kullanıcılar telefon numarası veya sipariş numarası girerek
+  // siparişlerini sorgulayabilir (backend: GET /api/orders/guest-track)
+  // ============================================================================
+  trackGuestOrder: async ({ phone, orderNumber }) => {
+    if (!phone && !orderNumber) {
+      throw new Error("Telefon numarası veya sipariş numarası gereklidir");
+    }
+
+    try {
+      const params = {};
+      if (phone?.trim()) params.phone = phone.trim();
+      if (orderNumber?.trim()) params.orderNumber = orderNumber.trim();
+
+      const response = await api.get(`${base}/guest-track`, { params });
+
+      if (!response || !response.orders) {
+        return [];
+      }
+
+      return (response.orders || []).map(normalizeOrder);
+    } catch (error) {
+      console.error("[OrderService] Misafir sipariş takip hatası:", error);
+
+      if (error?.status === 404) {
+        return [];
+      }
+
+      throw error;
+    }
+  },
+
+  // ============================================================================
   // SİPARİŞ TAKİP NUMARASI İLE SORGULAMA
   // Takip numarası ile sipariş durumu sorgulama (public endpoint)
   // ============================================================================

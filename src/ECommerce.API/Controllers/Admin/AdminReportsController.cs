@@ -36,15 +36,22 @@ namespace ECommerce.API.Controllers.Admin
             else if (period.Equals("monthly", StringComparison.OrdinalIgnoreCase))
                 from = DateTime.UtcNow.Date.AddDays(-30);
 
-            var orders = await _context.Orders
+            // Tüm siparişleri getir (iptal hariç) - sipariş sayısı ve adet için
+            var allOrders = await _context.Orders
                 .Include(o => o.OrderItems)
-                .Where(o => o.OrderDate >= from && (o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed))
+                .Where(o => o.OrderDate >= from && o.Status != OrderStatus.Cancelled)
                 .ToListAsync();
 
-            var ordersCount = orders.Count;
-            var revenue = orders.Sum(o => o.TotalPrice);
-            var itemsSold = orders.Sum(o => o.OrderItems.Sum(i => i.Quantity));
-            var topProducts = orders
+            var ordersCount = allOrders.Count;
+            var itemsSold = allOrders.Sum(o => o.OrderItems.Sum(i => i.Quantity));
+
+            // Gelir hesaplaması: Delivered/Completed siparişlerden
+            var completedOrders = allOrders
+                .Where(o => o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed)
+                .ToList();
+            var revenue = completedOrders.Sum(o => o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice);
+
+            var topProducts = allOrders
                 .SelectMany(o => o.OrderItems)
                 .GroupBy(i => i.ProductId)
                 .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })

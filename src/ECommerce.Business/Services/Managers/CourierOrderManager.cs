@@ -68,20 +68,9 @@ namespace ECommerce.Business.Services.Managers
         {
             try
             {
-                _logger.LogInformation("🔍 Kurye #{CourierId} için sipariş listesi istendi", courierId);
+                _logger.LogInformation("Kurye #{CourierId} için sipariş listesi istendi", courierId);
 
                 filter ??= new CourierOrderFilterDto();
-
-                // DEBUG: Tüm siparişlerde bu kuryeye atanan var mı kontrol et
-                var allOrdersWithCourier = await _context.Orders
-                    .AsNoTracking()
-                    .Where(o => o.CourierId != null)
-                    .Select(o => new { o.Id, o.CourierId, o.Status })
-                    .ToListAsync();
-                _logger.LogInformation("🔍 Kurye atanmış tüm siparişler: {@Orders}", allOrdersWithCourier);
-                
-                var ordersForThisCourier = allOrdersWithCourier.Where(o => o.CourierId == courierId).ToList();
-                _logger.LogInformation("🔍 Bu kuryeye ({CourierId}) atanan siparişler: {@Orders}", courierId, ordersForThisCourier);
 
                 // Temel sorgu - sadece bu kuryeye atanan siparişler
                 var query = _context.Orders
@@ -96,6 +85,22 @@ namespace ECommerce.Business.Services.Managers
                     {
                         query = query.Where(o => o.Status == statusEnum);
                     }
+                }
+                else
+                {
+                    // Varsayılan: Sadece aktif siparişleri göster (teslim edilmiş/iptal/iade hariç)
+                    // Bu sayede teslim edilmiş siparişler aktif siparişleri pagination'da ötelemiyor
+                    var activeStatuses = new[]
+                    {
+                        OrderStatus.Assigned,
+                        OrderStatus.PickedUp,
+                        OrderStatus.OutForDelivery,
+                        OrderStatus.InTransit,
+                        OrderStatus.DeliveryFailed,
+                        OrderStatus.DeliveryPaymentPending,
+                        OrderStatus.Ready
+                    };
+                    query = query.Where(o => activeStatuses.Contains(o.Status));
                 }
 
                 // Öncelik filtresi
@@ -189,6 +194,92 @@ namespace ECommerce.Business.Services.Managers
         #endregion
 
         #region Sipariş Aksiyonları
+
+        /// <summary>
+        /// Kurye siparişi mağazadan teslim aldığını bildirir.
+        /// ASSIGNED → PICKED_UP geçişi yapar.
+        /// </summary>
+        public async Task<CourierOrderActionResponseDto> PickupOrderAsync(int orderId, int courierId, StartDeliveryDto dto)
+        {
+            try
+            {
+                _logger.LogInformation("Kurye #{CourierId} sipariş #{OrderId} teslim alıyor", courierId, orderId);
+
+                // 1. Sipariş ve ownership kontrolü
+                var order = await GetOrderWithOwnershipCheckAsync(orderId, courierId);
+                if (order == null)
+                {
+                    return CreateFailResponse(orderId, "Sipariş bulunamadı veya bu siparişe erişim yetkiniz yok.");
+                }
+
+                var previousStatus = order.Status;
+
+                // 2. Durum geçiş kontrolü (ASSIGNED → PICKED_UP)
+                if (!_orderStateMachine.CanTransition(order.Status, OrderStatus.PickedUp))
+                {
+                    _logger.LogWarning("Geçersiz durum geçişi: {CurrentStatus} → PICKED_UP", order.Status);
+                    return CreateFailResponse(orderId, $"Sipariş durumu '{_orderStateMachine.GetStatusDescription(order.Status)}' olduğu için teslim alınamaz.");
+                }
+
+                // 3. State machine ile geçiş yap
+                var transitionResult = await _orderStateMachine.TransitionAsync(
+                    orderId,
+                    OrderStatus.PickedUp,
+                    courierId,
+                    dto.Note ?? "Kurye siparişi teslim aldı",
+                    new Dictionary<string, object>
+                    {
+                        { "Location", dto.CurrentLocation ?? "" },
+                        { "ActionType", "Pickup" }
+                    });
+
+                if (!transitionResult.Success)
+                {
+                    return CreateFailResponse(orderId, transitionResult.Message ?? "Durum güncellenemedi.");
+                }
+
+                // 4. Ek alanları güncelle
+                order.PickedUpAt = DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(dto.Note))
+                {
+                    order.DeliveryNotes = (order.DeliveryNotes ?? "") + $"\n[Teslim Alma] {dto.Note}";
+                }
+                await _context.SaveChangesAsync();
+
+                // 5. Tüm taraflara bildirim gönder
+                try
+                {
+                    await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                        orderId,
+                        order.OrderNumber ?? $"#{orderId}",
+                        previousStatus.ToString(),
+                        OrderStatus.PickedUp.ToString(),
+                        $"Courier#{courierId}",
+                        courierId);
+                }
+                catch (Exception notifyEx)
+                {
+                    _logger.LogWarning(notifyEx, "Sipariş #{OrderId} için durum bildirimi gönderilemedi", orderId);
+                }
+
+                _logger.LogInformation("Kurye #{CourierId} sipariş #{OrderId} teslim aldı", courierId, orderId);
+
+                return new CourierOrderActionResponseDto
+                {
+                    Success = true,
+                    Message = "Sipariş teslim alındı!",
+                    OrderId = orderId,
+                    NewStatus = OrderStatus.PickedUp.ToString(),
+                    NewStatusText = _orderStateMachine.GetStatusDescription(OrderStatus.PickedUp),
+                    ActionTime = DateTime.UtcNow
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Sipariş #{OrderId} için teslim alma işlemi başarısız", orderId);
+                return CreateFailResponse(orderId, "İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+            }
+        }
 
         /// <summary>
         /// Kurye teslimat için yola çıktığını bildirir.
@@ -662,10 +753,12 @@ namespace ECommerce.Business.Services.Managers
                 TodayFailed = orders.Count(o => 
                     o.Status == OrderStatus.DeliveryFailed && 
                     o.UpdatedAt >= today && o.UpdatedAt < tomorrow),
+                // Kurye kazancı: Bugün teslim edilen siparişlerin toplam gerçek tutarı
+                // Not: FinalPrice, tartı farkları dahil nihai sipariş tutarını temsil eder
                 TodayEarnings = orders
-                    .Where(o => o.Status == OrderStatus.Delivered && 
+                    .Where(o => o.Status == OrderStatus.Delivered &&
                                 o.DeliveredAt >= today && o.DeliveredAt < tomorrow)
-                    .Sum(o => o.FinalPrice) * 0.05m // %5 kurye komisyonu (örnek)
+                    .Sum(o => o.FinalPrice)
             };
         }
 
@@ -864,7 +957,8 @@ namespace ECommerce.Business.Services.Managers
                 Items = order.OrderItems?.Select(MapToItemDto).ToList() ?? new List<CourierOrderItemDto>(),
                 AllowedActions = new CourierAllowedActions
                 {
-                    CanStartDelivery = order.Status == OrderStatus.Assigned,
+                    CanPickup = order.Status == OrderStatus.Assigned,
+                    CanStartDelivery = order.Status == OrderStatus.PickedUp,
                     CanMarkDelivered = order.Status == OrderStatus.OutForDelivery,
                     CanReportProblem = !_orderStateMachine.IsTerminalState(order.Status),
                     CanCallCustomer = !string.IsNullOrWhiteSpace(order.CustomerPhone),
@@ -914,6 +1008,7 @@ namespace ECommerce.Business.Services.Managers
             return status switch
             {
                 OrderStatus.Assigned => ("yellow", "Atandı"),
+                OrderStatus.PickedUp => ("info", "Teslim Alındı"),
                 OrderStatus.OutForDelivery => ("blue", "Yolda"),
                 OrderStatus.Delivered => ("green", "Teslim Edildi"),
                 OrderStatus.DeliveryFailed => ("red", "Teslimat Başarısız"),

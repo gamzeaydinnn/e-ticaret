@@ -35,6 +35,10 @@ namespace ECommerce.Core.DTOs.Order
     public string? CustomerEmail { get; set; }
     public string DeliveryNotes { get; set; } = string.Empty;
     public List<OrderItemDto> OrderItems { get; set; } = new();
+
+    // Kurye bilgileri - müşterinin siparişini kimin teslim ettiğini görmesi için
+    public int? CourierId { get; set; }
+    public string? CourierName { get; set; }
+    public string? CourierPhone { get; set; }
     }
 }
-//admin/kullanıcı için farklı projection.??

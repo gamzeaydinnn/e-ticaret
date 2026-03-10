@@ -837,7 +837,11 @@ export default function PosterManagement() {
               </div>
 
               {/* Modal Body */}
-              <form onSubmit={handleSubmit}>
+              <form
+                id="poster-form"
+                onSubmit={handleSubmit}
+                style={{ flex: "1 1 auto", overflow: "hidden", display: "flex", flexDirection: "column" }}
+              >
                 <div className="modal-body">
                   <div className="row">
                     {/* Sol Kolon: Form Alanları */}
@@ -1105,40 +1109,41 @@ export default function PosterManagement() {
                     </div>
                   </div>
                 </div>
-
-                {/* Modal Footer */}
-                <div className="modal-footer py-2 bg-light">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={closeModal}
-                    disabled={saving || uploading}
-                  >
-                    <i className="fas fa-times me-1"></i>İptal
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-success"
-                    disabled={saving || uploading}
-                  >
-                    {saving ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-1"></span>
-                        Kaydediliyor...
-                      </>
-                    ) : (
-                      <>
-                        <i
-                          className={`fas ${
-                            form.id > 0 ? "fa-save" : "fa-plus"
-                          } me-1`}
-                        ></i>
-                        {form.id > 0 ? "Kaydet" : "Ekle"}
-                      </>
-                    )}
-                  </button>
-                </div>
               </form>
+
+              {/* Modal Footer */}
+              <div className="modal-footer py-2 bg-light">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={closeModal}
+                  disabled={saving || uploading}
+                >
+                  <i className="fas fa-times me-1"></i>İptal
+                </button>
+                <button
+                  type="submit"
+                  form="poster-form"
+                  className="btn btn-success"
+                  disabled={saving || uploading}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-1"></span>
+                      Kaydediliyor...
+                    </>
+                  ) : (
+                    <>
+                      <i
+                        className={`fas ${
+                          form.id > 0 ? "fa-save" : "fa-plus"
+                        } me-1`}
+                      ></i>
+                      {form.id > 0 ? "Kaydet" : "Ekle"}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -242,7 +242,14 @@ export const CourierService = {
       });
     }
 
-    // varsayılan: yola çıktı
+    // Teslim al (Assigned → PickedUp)
+    if (normalized === "picked_up" || normalized === "pickedup") {
+      return api.post(`${ORDERS_BASE}/${orderId}/pickup`, {
+        note: notes,
+      });
+    }
+
+    // Yola çık (PickedUp → OutForDelivery)
     return api.post(`${ORDERS_BASE}/${orderId}/start-delivery`, {
       note: notes,
     });
@@ -251,13 +258,18 @@ export const CourierService = {
   // Kurye aksiyonları (detay sayfası)
   updateTaskStatus: async (orderId, newStatus) => {
     const normalized = (newStatus || "").toLowerCase();
+
+    // Teslim al (Assigned → PickedUp)
+    if (normalized === "pickedup" || normalized === "picked_up") {
+      return api.post(`${ORDERS_BASE}/${orderId}/pickup`, {});
+    }
+
+    // Yola çık (PickedUp → OutForDelivery)
     if (
       normalized === "outfordelivery" ||
       normalized === "out_for_delivery" ||
       normalized === "intransit" ||
-      normalized === "in_transit" ||
-      normalized === "pickedup" ||
-      normalized === "picked_up"
+      normalized === "in_transit"
     ) {
       return api.post(`${ORDERS_BASE}/${orderId}/start-delivery`, {});
     }

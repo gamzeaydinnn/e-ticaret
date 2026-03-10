@@ -16,16 +16,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
-import { 
-  DeliveryTaskService, 
-  DeliveryStatus, 
-  DeliveryStatusLabels, 
+import {
+  DeliveryTaskService,
+  DeliveryStatus,
+  DeliveryStatusLabels,
   DeliveryStatusColors,
   DeliveryPriority,
   DeliveryPriorityLabels,
   DeliveryPriorityColors
 } from "../../services/deliveryTaskService";
-import signalRService, { SignalREvents, ConnectionState } from "../../services/signalRService";
+import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 import CourierAssignmentModal from "./components/CourierAssignmentModal";
 import DeliveryMap from "./components/DeliveryMap";
 
@@ -54,64 +54,30 @@ export default function AdminDeliveryTasks() {
   
   // İstatistikler
   const [statistics, setStatistics] = useState(null);
-  
-  // SignalR durumu
-  const [signalRConnected, setSignalRConnected] = useState(false);
+
+  // Merkezi SignalR bağlantısı — AdminSignalRProvider tarafından yönetilir
+  const { isConnected: signalRConnected } = useAdminSignalR();
 
   // =========================================================================
-  // SİGNALR BAĞLANTISI
+  // SİGNALR EVENT DİNLEYİCİLERİ — Merkezi context'in global event'leri kullanılır
+  // NEDEN: Bağlantı yönetimi artık AdminSignalRContext'te. Bu sayfa sadece
+  // kendi ilgilendiği event'leri dinler.
   // =========================================================================
 
   useEffect(() => {
-    let unsubscribers = [];
+    const onDeliveryCreated = (e) => handleDeliveryCreated(e.detail);
+    const onDeliveryStatusChanged = (e) => handleStatusChanged(e.detail);
+    const onDeliveryAssigned = (e) => handleCourierAssigned(e.detail);
 
-    const setupSignalR = async () => {
-      try {
-        const connected = await signalRService.connectAdmin();
-        setSignalRConnected(connected);
-        
-        if (connected) {
-          // Yeni teslimat görevi oluşturulduğunda
-          const unsubCreated = signalRService.onDeliveryEvent(
-            SignalREvents.DELIVERY_CREATED,
-            handleDeliveryCreated
-          );
-          unsubscribers.push(unsubCreated);
+    window.addEventListener("adminDeliveryCreated", onDeliveryCreated);
+    window.addEventListener("adminDeliveryStatusChanged", onDeliveryStatusChanged);
+    window.addEventListener("adminDeliveryAssigned", onDeliveryAssigned);
 
-          // Teslimat durumu değiştiğinde
-          const unsubStatus = signalRService.onDeliveryEvent(
-            SignalREvents.DELIVERY_STATUS_CHANGED,
-            handleStatusChanged
-          );
-          unsubscribers.push(unsubStatus);
-
-          // Kurye atandığında
-          const unsubAssigned = signalRService.onDeliveryEvent(
-            SignalREvents.DELIVERY_ASSIGNED,
-            handleCourierAssigned
-          );
-          unsubscribers.push(unsubAssigned);
-
-          // Kurye konumu güncellendiğinde
-          const unsubLocation = signalRService.onDeliveryEvent(
-            SignalREvents.COURIER_LOCATION_UPDATED,
-            handleCourierLocation
-          );
-          unsubscribers.push(unsubLocation);
-
-          // Bağlantı durumu
-          const unsubState = signalRService.deliveryHub.onStateChange((newState) => {
-            setSignalRConnected(newState === ConnectionState.CONNECTED);
-          });
-          unsubscribers.push(unsubState);
-        }
-      } catch (error) {
-        console.error("[AdminDeliveryTasks] SignalR hatası:", error);
-      }
+    return () => {
+      window.removeEventListener("adminDeliveryCreated", onDeliveryCreated);
+      window.removeEventListener("adminDeliveryStatusChanged", onDeliveryStatusChanged);
+      window.removeEventListener("adminDeliveryAssigned", onDeliveryAssigned);
     };
-
-    setupSignalR();
-    return () => unsubscribers.forEach(unsub => typeof unsub === "function" && unsub());
   }, []);
 
   /**

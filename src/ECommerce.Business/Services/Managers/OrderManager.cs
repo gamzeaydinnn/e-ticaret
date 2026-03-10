@@ -40,27 +40,27 @@ namespace ECommerce.Business.Services.Managers
                 // YENİ SİPARİŞ AKIŞI (Ana akış)
                 // ═══════════════════════════════════════════════════════════════════════════════
                 
-                // New → Confirmed (Admin onayı) veya Cancelled
+                // New → Confirmed (Admin onayı) veya Assigned (kurye atama) veya Cancelled
                 [OrderStatus.New] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Confirmed,
+                    OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
-                
-                // Confirmed → Preparing (Market görevlisi hazırlamaya başladı) veya Cancelled
+
+                // Confirmed → Preparing (Market görevlisi hazırlamaya başladı) veya Assigned veya Cancelled
                 [OrderStatus.Confirmed] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Preparing,
+                    OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
-                
-                // Preparing → Ready (Market görevlisi hazırladı) veya Cancelled
-                // ⚠️ DÜZELTME: OutForDelivery kısa yolu KALDIRILDI - akış kilitlendi
+
+                // Preparing → Ready (Market görevlisi hazırladı) veya Assigned veya Cancelled
                 [OrderStatus.Preparing] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Ready,
-                    // OrderStatus.Shipped,        // KALDIRILDI: Kısa yol
-                    // OrderStatus.OutForDelivery, // KALDIRILDI: Assigned olmadan geçiş yapılamaz
+                    OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
                 
@@ -109,22 +109,22 @@ namespace ECommerce.Business.Services.Managers
                 // ESKİ/ALTERNATİF AKIŞLAR (Geriye uyumluluk için - KISITLANMIŞ)
                 // ═══════════════════════════════════════════════════════════════════════════════
                 
-                // Pending → Confirmed (Admin onayı gerekli) veya Cancelled
-                // ✅ DÜZELTME: Admin panelinde Preparing'e geçiş eklendi
+                // Pending → Confirmed (Admin onayı gerekli) veya Assigned veya Cancelled
                 [OrderStatus.Pending] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Paid,
                     OrderStatus.Confirmed,
-                    OrderStatus.Preparing, // Admin panelinden doğrudan hazırlamaya geçiş için
+                    OrderStatus.Preparing,
+                    OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
-                
-                // Paid → Confirmed (Admin onayı gerekli) veya Cancelled
-                // ✅ DÜZELTME: Admin panelinde Preparing'e geçiş eklendi
+
+                // Paid → Confirmed (Admin onayı gerekli) veya Assigned veya Cancelled
                 [OrderStatus.Paid] = new HashSet<OrderStatus>
                 {
-                    OrderStatus.Preparing,  // Admin panelinden doğrudan hazırlamaya geçiş için
+                    OrderStatus.Preparing,
                     OrderStatus.Confirmed,
+                    OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
                 
@@ -227,11 +227,14 @@ namespace ECommerce.Business.Services.Managers
         /// </summary>
         public async Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null)
         {
-            var query = _context.Orders.Include(o => o.OrderItems).AsQueryable();
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
+                .AsQueryable();
             if (userId.HasValue)
                 query = query.Where(o => o.UserId == userId.Value);
-            
-            // DÜZELTME: Yeni siparişler en üstte görünsün
+
             var orders = await query
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
@@ -243,6 +246,8 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.Id == id);
             return order != null ? MapToDto(order) : null;
         }
@@ -252,6 +257,8 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
 
             return order != null ? MapToDto(order) : null;
@@ -276,9 +283,61 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber.Trim());
 
             return order != null ? MapToDto(order) : null;
+        }
+
+        // ============================================================================
+        // MİSAFİR SİPARİŞ SORGULAMA - TELEFON NUMARASI İLE
+        // Güvenlik: Sadece misafir siparişlerini döner, kayıtlı kullanıcıların
+        // siparişleri bu yöntemle erişilemez
+        // ============================================================================
+        /// <summary>
+        /// Telefon numarasına göre misafir siparişlerini getirir.
+        /// Normalize edilmiş telefon numarası karşılaştırması yapar.
+        /// </summary>
+        public async Task<IEnumerable<OrderListDto>> GetGuestOrdersByPhoneAsync(string phone)
+        {
+            if (string.IsNullOrWhiteSpace(phone))
+                return Enumerable.Empty<OrderListDto>();
+
+            // Telefon numarasını normalize et (sadece rakamları al)
+            var normalizedPhone = new string(phone.Where(char.IsDigit).ToArray());
+            if (normalizedPhone.Length < 10)
+                return Enumerable.Empty<OrderListDto>();
+
+            // Sadece misafir siparişlerini getir - güvenlik katmanı
+            var orders = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
+                .Where(o => o.IsGuestOrder && o.CustomerPhone != null)
+                .ToListAsync();
+
+            // Bellekte normalize karşılaştırma yap (DB'de telefon formatları farklı olabilir)
+            var matchedOrders = orders
+                .Where(o =>
+                {
+                    var orderPhone = new string((o.CustomerPhone ?? "").Where(char.IsDigit).ToArray());
+                    // Son 10 hane karşılaştırması (ülke kodu farkını tolere eder)
+                    var phoneSuffix = normalizedPhone.Length >= 10
+                        ? normalizedPhone.Substring(normalizedPhone.Length - 10)
+                        : normalizedPhone;
+                    var orderPhoneSuffix = orderPhone.Length >= 10
+                        ? orderPhone.Substring(orderPhone.Length - 10)
+                        : orderPhone;
+                    return phoneSuffix == orderPhoneSuffix;
+                })
+                .OrderByDescending(o => o.CreatedAt)
+                .Take(20) // Performans: En fazla 20 sipariş döndür
+                .ToList();
+
+            return matchedOrders.Select(MapToDto);
         }
 
         public async Task<OrderListDto> CreateAsync(OrderCreateDto dto)
@@ -353,67 +412,134 @@ namespace ECommerce.Business.Services.Managers
 
         // ============================================================================
         // SİPARİŞ SİLME
-        // İlişkili kayıtlar (OrderItems, Payments, StatusHistory) ile birlikte silme
+        // İlişkili kayıtlar ile birlikte silme (tüm FK bağımlılıkları temizlenir)
         // Neden: Foreign key kısıtlamaları nedeniyle önce ilişkili kayıtları temizle
         // Dikkat: Bu operasyon geri alınamaz, audit log tutuluyor
         // ============================================================================
         public async Task DeleteAsync(int id)
         {
-            // Transaction başlat - atomik operasyon için
-            using var transaction = await _context.Database.BeginTransactionAsync();
-            
-            try
+            // ExecutionStrategy kullan - SqlServerRetryingExecutionStrategy ile uyumlu
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                var order = await _context.Orders
-                    .Include(o => o.OrderItems)
-                    .FirstOrDefaultAsync(o => o.Id == id);
-                    
-                if (order == null) return;
+                using var transaction = await _context.Database.BeginTransactionAsync();
 
-                // 1. OrderStatusHistory kayıtlarını sil (Cascade değil, manuel)
-                var statusHistories = await _context.OrderStatusHistories
-                    .Where(h => h.OrderId == id)
-                    .ToListAsync();
-                if (statusHistories.Any())
+                try
                 {
-                    _context.OrderStatusHistories.RemoveRange(statusHistories);
-                }
+                    var order = await _context.Orders
+                        .Include(o => o.OrderItems)
+                        .FirstOrDefaultAsync(o => o.Id == id);
 
-                // 2. Payment kayıtlarını sil (Restrict ilişki - manuel silme gerekli)
-                var payments = await _context.Payments
-                    .Where(p => p.OrderId == id)
-                    .ToListAsync();
-                if (payments.Any())
+                    if (order == null) return;
+
+                    // 1. RefundRequests sil (Restrict FK - silinmezse order silinemez)
+                    var refundRequests = await _context.RefundRequests
+                        .Where(r => r.OrderId == id)
+                        .ToListAsync();
+                    if (refundRequests.Any())
+                    {
+                        _context.RefundRequests.RemoveRange(refundRequests);
+                    }
+
+                    // 2. WeightAdjustments sil (NoAction FK - silinmezse order silinemez)
+                    var weightAdjustments = await _context.WeightAdjustments
+                        .Where(w => w.OrderId == id)
+                        .ToListAsync();
+                    if (weightAdjustments.Any())
+                    {
+                        _context.WeightAdjustments.RemoveRange(weightAdjustments);
+                    }
+
+                    // 3. WeightReports sil (Restrict FK - silinmezse order silinemez)
+                    var weightReports = await _context.WeightReports
+                        .Where(w => w.OrderId == id)
+                        .ToListAsync();
+                    if (weightReports.Any())
+                    {
+                        _context.WeightReports.RemoveRange(weightReports);
+                    }
+
+                    // 4. PaymentWebhookEvents - OrderId null yap (Restrict FK)
+                    var webhookEvents = await _context.PaymentWebhookEvents
+                        .Where(e => e.OrderId == id)
+                        .ToListAsync();
+                    if (webhookEvents.Any())
+                    {
+                        foreach (var evt in webhookEvents)
+                        {
+                            evt.OrderId = null;
+                        }
+                    }
+
+                    // 5. PosnetTransactionLogs - OrderId null yap (SetNull FK)
+                    var posnetLogs = await _context.PosnetTransactionLogs
+                        .Where(p => p.OrderId == id)
+                        .ToListAsync();
+                    if (posnetLogs.Any())
+                    {
+                        foreach (var log in posnetLogs)
+                        {
+                            log.OrderId = null;
+                        }
+                    }
+
+                    // 6. StockReservations - OrderId null yap (SetNull FK)
+                    var stockReservations = await _context.StockReservations
+                        .Where(s => s.OrderId == id)
+                        .ToListAsync();
+                    if (stockReservations.Any())
+                    {
+                        foreach (var res in stockReservations)
+                        {
+                            res.OrderId = null;
+                        }
+                    }
+
+                    // 7. OrderStatusHistory kayıtlarını sil (Cascade FK ama explicit temizle)
+                    var statusHistories = await _context.OrderStatusHistories
+                        .Where(h => h.OrderId == id)
+                        .ToListAsync();
+                    if (statusHistories.Any())
+                    {
+                        _context.OrderStatusHistories.RemoveRange(statusHistories);
+                    }
+
+                    // 8. Payment kayıtlarını sil (Restrict FK - silinmezse order silinemez)
+                    var payments = await _context.Payments
+                        .Where(p => p.OrderId == id)
+                        .ToListAsync();
+                    if (payments.Any())
+                    {
+                        _context.Payments.RemoveRange(payments);
+                    }
+
+                    // 9. CouponUsage kayıtlarını sil (Restrict FK)
+                    var couponUsages = await _context.CouponUsages
+                        .Where(cu => cu.OrderId == id)
+                        .ToListAsync();
+                    if (couponUsages.Any())
+                    {
+                        _context.CouponUsages.RemoveRange(couponUsages);
+                    }
+
+                    // 10. OrderItems sil (Cascade FK ama explicit temizle)
+                    if (order.OrderItems?.Any() == true)
+                    {
+                        _context.OrderItems.RemoveRange(order.OrderItems);
+                    }
+
+                    // 11. Siparişi sil
+                    _context.Orders.Remove(order);
+
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch (Exception)
                 {
-                    _context.Payments.RemoveRange(payments);
+                    await transaction.RollbackAsync();
+                    throw;
                 }
-
-                // 3. CouponUsage kayıtlarını sil (OrderId non-nullable, silmek zorundayız)
-                var couponUsages = await _context.CouponUsages
-                    .Where(cu => cu.OrderId == id)
-                    .ToListAsync();
-                if (couponUsages.Any())
-                {
-                    _context.CouponUsages.RemoveRange(couponUsages);
-                }
-
-                // 4. OrderItems CASCADE ile silinecek ama explicit olarak temizle
-                if (order.OrderItems?.Any() == true)
-                {
-                    _context.OrderItems.RemoveRange(order.OrderItems);
-                }
-
-                // 6. Siparişi sil
-                _context.Orders.Remove(order);
-                
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                throw; // Hatayı yukarı fırlat, controller yakalasın
-            }
+            });
         }
 
         public async Task<bool> ChangeOrderStatusAsync(int id, string newStatus)
@@ -995,7 +1121,11 @@ namespace ECommerce.Business.Services.Managers
                     ProductName = oi.Product?.Name ?? "",
                     Quantity = oi.Quantity,
                     UnitPrice = oi.UnitPrice
-                }).ToList() ?? new List<OrderItemDto>()
+                }).ToList() ?? new List<OrderItemDto>(),
+                // Kurye bilgileri
+                CourierId = order.CourierId,
+                CourierName = order.Courier?.User?.FullName,
+                CourierPhone = order.Courier?.User?.PhoneNumber
             };
         }
 
@@ -1091,11 +1221,13 @@ namespace ECommerce.Business.Services.Managers
         /// </summary>
         public async Task<OrderListDto?> AssignCourierAsync(int orderId, int courierId)
         {
-            // Siparişi bul
+            // Siparişi bul (Courier dahil - atama sonrası DTO'da kurye bilgisi dönmeli)
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
                 .Include(o => o.User)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null)
@@ -1116,22 +1248,22 @@ namespace ECommerce.Business.Services.Managers
             var previousStatus = order.Status;
 
             // Kurye ataması için izin verilen durumlar
-            // Confirmed, Preparing, Ready, Assigned durumlarında kurye atanabilir
-            // NEDEN: Assigned durumunda kurye değişikliği yapılabilmeli (yeniden atama senaryosu)
-            var allowedStatuses = new[] { 
-                OrderStatus.Confirmed, 
-                OrderStatus.Preparing, 
-                OrderStatus.Ready,
-                OrderStatus.Assigned  // Kurye değiştirme için eklendi
+            // Tüm aktif durumlardan kurye atanabilir (New, Pending, Paid dahil)
+            // NEDEN: Admin sipariş oluşturduktan hemen sonra kurye atayabilmeli
+            var disallowedStatuses = new[] {
+                OrderStatus.Delivered,
+                OrderStatus.Cancelled,
+                OrderStatus.Refunded
             };
-            
-            if (!allowedStatuses.Contains(order.Status))
+
+            if (disallowedStatuses.Contains(order.Status))
             {
-                throw new InvalidOperationException($"Kurye ataması sadece Onaylanmış, Hazırlanıyor, Hazır veya Atanmış durumundaki siparişlere yapılabilir. Mevcut durum: {order.Status}");
+                throw new InvalidOperationException($"Kurye ataması teslim edilmiş, iptal edilmiş veya iade edilmiş siparişlere yapılamaz. Mevcut durum: {order.Status}");
             }
 
             // Kurye ataması yap
             order.CourierId = courierId;
+            order.Courier = courier; // Navigation property'yi de set et (DTO mapping için)
             order.AssignedAt = DateTime.UtcNow;
             order.Status = OrderStatus.Assigned;
 

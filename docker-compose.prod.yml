@@ -96,6 +96,10 @@ services:
       - PaymentSettings__PosnetXmlServiceUrl=https://posnet.yapikredi.com.tr/PosnetWebService/XML
       - PaymentSettings__Posnet3DServiceUrl=https://posnet.yapikredi.com.tr/3DSWebService/YKBPaymentService
       - PaymentSettings__PosnetCallbackUrl=https://golkoygurme.com.tr/api/payments/posnet/3d-callback
+      - PaymentSettings__ReturnUrlSuccess=https://golkoygurme.com.tr/checkout/success
+      - PaymentSettings__ReturnUrlCancel=https://golkoygurme.com.tr/checkout/cancel
+      - PaymentSettings__IyzicoCallbackUrl=https://golkoygurme.com.tr/api/payments/iyzico/callback
+      - AppSettings__BaseUrl=https://golkoygurme.com.tr
       - PaymentSettings__PosnetIsTestEnvironment=false
       - PaymentSettings__PosnetTimeoutSeconds=60
       - PaymentSettings__PosnetWorldPointEnabled=true

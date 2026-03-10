@@ -302,6 +302,19 @@ const OrderTracking = () => {
   const [cancellingOrderId, setCancellingOrderId] = useState(null); // İptal işlemi yapılan sipariş ID'si
 
   // =========================================================================
+  // MİSAFİR SİPARİŞ ARAMA STATE'LERİ
+  // Giriş yapmamış kullanıcılar telefon no veya sipariş no ile sorgulama yapar
+  // =========================================================================
+  const [guestSearchPhone, setGuestSearchPhone] = useState("");
+  const [guestSearchOrderNo, setGuestSearchOrderNo] = useState("");
+  const [guestSearchTab, setGuestSearchTab] = useState("phone");
+  const [guestSearchLoading, setGuestSearchLoading] = useState(false);
+  const [guestSearchError, setGuestSearchError] = useState(null);
+
+  // Misafir kullanıcı mı kontrolü
+  const isGuest = !localStorage.getItem("token") || !localStorage.getItem("userId");
+
+  // =========================================================================
   // VERİ YÜKLEME
   // =========================================================================
   const loadOrders = useCallback(async () => {
@@ -413,6 +426,61 @@ const OrderTracking = () => {
       setLoading(false);
     }
   }, []);
+
+  // =========================================================================
+  // MİSAFİR SİPARİŞ ARAMA FONKSİYONU
+  // Telefon numarası veya sipariş numarası ile backend'den sorgulama yapar
+  // =========================================================================
+  const handleGuestSearch = async (e) => {
+    e.preventDefault();
+    setGuestSearchError(null);
+
+    // Validasyon
+    if (guestSearchTab === "phone" && !guestSearchPhone?.trim()) {
+      setGuestSearchError("Lütfen telefon numaranızı girin.");
+      return;
+    }
+    if (guestSearchTab === "orderNumber" && !guestSearchOrderNo?.trim()) {
+      setGuestSearchError("Lütfen sipariş numaranızı girin.");
+      return;
+    }
+    if (guestSearchTab === "phone") {
+      const digits = guestSearchPhone.replace(/\D/g, "");
+      if (digits.length < 10) {
+        setGuestSearchError("Geçerli bir telefon numarası girin (en az 10 hane).");
+        return;
+      }
+    }
+
+    setGuestSearchLoading(true);
+    try {
+      const params = {};
+      if (guestSearchTab === "phone") params.phone = guestSearchPhone.trim();
+      if (guestSearchTab === "orderNumber") params.orderNumber = guestSearchOrderNo.trim();
+
+      const results = await OrderService.trackGuestOrder(params);
+
+      if (results && results.length > 0) {
+        setOrders(results);
+        setGuestSearchError(null);
+      } else {
+        setGuestSearchError(
+          guestSearchTab === "phone"
+            ? "Bu telefon numarasıyla eşleşen sipariş bulunamadı."
+            : "Bu sipariş numarasıyla eşleşen sipariş bulunamadı."
+        );
+      }
+    } catch (err) {
+      console.error("[OrderTracking] Misafir sipariş arama hatası:", err);
+      setGuestSearchError(
+        err?.status === 404
+          ? "Bu bilgilerle eşleşen sipariş bulunamadı."
+          : "Sipariş araması sırasında bir hata oluştu."
+      );
+    } finally {
+      setGuestSearchLoading(false);
+    }
+  };
 
   const handleOpenOrder = useCallback(async (order) => {
     if (!order) return;
@@ -1043,7 +1111,188 @@ const OrderTracking = () => {
           </div>
         )}
 
-        {/* Sipariş No ile Arama kaldırıldı */}
+        {/* ================================================================
+            MİSAFİR SİPARİŞ ARAMA PANELİ
+            Giriş yapmamış kullanıcılar için telefon no veya sipariş no ile arama
+            ================================================================ */}
+        {isGuest && (
+          <div
+            className="card border-0 shadow-lg mb-4"
+            style={{ borderRadius: "16px", overflow: "hidden" }}
+          >
+            {/* Gradient başlık */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #FF8C00, #ff6b35)",
+                padding: "20px 24px 16px",
+                color: "white",
+              }}
+            >
+              <h5 className="mb-1 fw-bold" style={{ fontSize: "1.1rem" }}>
+                <i className="fas fa-search me-2"></i>
+                Sipariş Sorgula
+              </h5>
+              <p className="mb-0" style={{ fontSize: "0.82rem", opacity: 0.9 }}>
+                Telefon numaranız veya sipariş numaranız ile siparişinizi bulun
+              </p>
+            </div>
+
+            <div className="card-body p-3 p-md-4">
+              {/* Sekme butonları */}
+              <div
+                className="d-flex mb-3 p-1"
+                style={{
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: "12px",
+                  gap: "4px",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn flex-grow-1"
+                  style={{
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                    fontWeight: guestSearchTab === "phone" ? "600" : "400",
+                    backgroundColor: guestSearchTab === "phone" ? "white" : "transparent",
+                    border: "none",
+                    padding: "10px 16px",
+                    color: guestSearchTab === "phone" ? "#FF8C00" : "#666",
+                    boxShadow: guestSearchTab === "phone" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => { setGuestSearchTab("phone"); setGuestSearchError(null); }}
+                >
+                  <i className="fas fa-phone-alt me-2"></i>
+                  Telefon No
+                </button>
+                <button
+                  type="button"
+                  className="btn flex-grow-1"
+                  style={{
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                    fontWeight: guestSearchTab === "orderNumber" ? "600" : "400",
+                    backgroundColor: guestSearchTab === "orderNumber" ? "white" : "transparent",
+                    border: "none",
+                    padding: "10px 16px",
+                    color: guestSearchTab === "orderNumber" ? "#FF8C00" : "#666",
+                    boxShadow: guestSearchTab === "orderNumber" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => { setGuestSearchTab("orderNumber"); setGuestSearchError(null); }}
+                >
+                  <i className="fas fa-hashtag me-2"></i>
+                  Sipariş No
+                </button>
+              </div>
+
+              <form onSubmit={handleGuestSearch}>
+                <div className="d-flex gap-2">
+                  {/* Telefon numarası girişi */}
+                  {guestSearchTab === "phone" && (
+                    <div className="input-group flex-grow-1">
+                      <span
+                        className="input-group-text"
+                        style={{
+                          backgroundColor: "#FFF5E6",
+                          border: "2px solid #FFE0B2",
+                          borderRight: "none",
+                          color: "#FF8C00",
+                          fontWeight: "600",
+                          fontSize: "0.9rem",
+                        }}
+                      >
+                        +90
+                      </span>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        placeholder="5XX XXX XX XX"
+                        value={guestSearchPhone}
+                        onChange={(e) => setGuestSearchPhone(e.target.value)}
+                        disabled={guestSearchLoading}
+                        style={{
+                          border: "2px solid #FFE0B2",
+                          borderLeft: "none",
+                          fontSize: "0.95rem",
+                          padding: "10px 14px",
+                        }}
+                        maxLength={15}
+                      />
+                    </div>
+                  )}
+
+                  {/* Sipariş numarası girişi */}
+                  {guestSearchTab === "orderNumber" && (
+                    <input
+                      type="text"
+                      className="form-control flex-grow-1"
+                      placeholder="ORD-12345"
+                      value={guestSearchOrderNo}
+                      onChange={(e) => setGuestSearchOrderNo(e.target.value)}
+                      disabled={guestSearchLoading}
+                      style={{
+                        border: "2px solid #FFE0B2",
+                        fontSize: "0.95rem",
+                        padding: "10px 14px",
+                        borderRadius: "8px",
+                      }}
+                    />
+                  )}
+
+                  {/* Sorgula butonu */}
+                  <button
+                    type="submit"
+                    className="btn px-4"
+                    style={{
+                      background: "linear-gradient(135deg, #FF8C00, #ff6b35)",
+                      color: "white",
+                      fontWeight: "bold",
+                      borderRadius: "10px",
+                      border: "none",
+                      whiteSpace: "nowrap",
+                      fontSize: "0.9rem",
+                    }}
+                    disabled={guestSearchLoading}
+                  >
+                    {guestSearchLoading ? (
+                      <span className="spinner-border spinner-border-sm"></span>
+                    ) : (
+                      <>
+                        <i className="fas fa-search me-1"></i>
+                        Ara
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Yardımcı metin */}
+                <small className="text-muted d-block mt-2" style={{ fontSize: "0.78rem" }}>
+                  {guestSearchTab === "phone"
+                    ? "Sipariş verirken kullandığınız telefon numarasını girin"
+                    : "Sipariş onay sayfasından aldığınız sipariş numaranızı girin"}
+                </small>
+              </form>
+
+              {/* Hata mesajı */}
+              {guestSearchError && (
+                <div
+                  className="alert py-2 px-3 mt-3 mb-0 d-flex align-items-center"
+                  style={{
+                    backgroundColor: "#FFF3E0",
+                    border: "1px solid #FFE0B2",
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  <i className="fas fa-exclamation-triangle me-2" style={{ color: "#FF8C00" }}></i>
+                  <span style={{ color: "#E65100" }}>{guestSearchError}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Seçilen Sipariş Detayı */}
         {selectedOrder && (
@@ -1682,29 +1931,48 @@ const OrderStepper = ({ status }) => {
 /**
  * Boş Sipariş Durumu
  */
-const EmptyOrdersState = () => (
-  <div className="text-center py-5">
-    <div
-      className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
-      style={{
-        backgroundColor: "#fff8f0",
-        width: "120px",
-        height: "120px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <i
-        className="fas fa-shopping-bag text-warning"
-        style={{ fontSize: "3rem" }}
-      ></i>
+const EmptyOrdersState = () => {
+  const isGuestUser = !localStorage.getItem("token") || !localStorage.getItem("userId");
+
+  return (
+    <div className="text-center py-5">
+      <div
+        className="p-4 rounded-circle mx-auto mb-4 shadow-lg"
+        style={{
+          backgroundColor: "#fff8f0",
+          width: "120px",
+          height: "120px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <i
+          className="fas fa-shopping-bag text-warning"
+          style={{ fontSize: "3rem" }}
+        ></i>
+      </div>
+      {isGuestUser ? (
+        <>
+          <h4 className="text-warning fw-bold mb-3">Sipariş Bulunamadı</h4>
+          <p className="text-muted fs-6 mb-1">
+            Yukarıdaki arama kutusundan telefon numaranız veya sipariş numaranız ile siparişinizi sorgulayabilirsiniz.
+          </p>
+          <p className="text-muted small">
+            Tüm siparişlerinize erişmek için{" "}
+            <a href="/login" style={{ color: "#FF8C00", fontWeight: "600" }}>giriş yapın</a>.
+          </p>
+        </>
+      ) : (
+        <>
+          <h4 className="text-warning fw-bold mb-3">Henüz Siparişiniz Yok</h4>
+          <p className="text-muted fs-5">
+            İlk siparişinizi vermek için alışverişe başlayın!
+          </p>
+        </>
+      )}
     </div>
-    <h4 className="text-warning fw-bold mb-3">Henüz Siparişiniz Yok</h4>
-    <p className="text-muted fs-5">
-      İlk siparişinizi vermek için alışverişe başlayın!
-    </p>
-  </div>
-);
+  );
+};
 
 export default OrderTracking;

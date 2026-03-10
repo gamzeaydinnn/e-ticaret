@@ -49,8 +49,18 @@ namespace ECommerce.Business.Services.Interfaces
         #region Sipariş Aksiyonları
 
         /// <summary>
+        /// Kurye siparişi teslim aldığını bildirir.
+        /// ASSIGNED → PICKED_UP geçişi yapar.
+        /// </summary>
+        /// <param name="orderId">Sipariş ID</param>
+        /// <param name="courierId">Kurye ID</param>
+        /// <param name="dto">Teslim alma bilgileri</param>
+        /// <returns>İşlem sonucu</returns>
+        Task<CourierOrderActionResponseDto> PickupOrderAsync(int orderId, int courierId, StartDeliveryDto dto);
+
+        /// <summary>
         /// Kurye teslimat için yola çıktığını bildirir.
-        /// ASSIGNED → OUT_FOR_DELIVERY geçişi yapar.
+        /// PICKED_UP → OUT_FOR_DELIVERY geçişi yapar.
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
         /// <param name="courierId">Kurye ID</param>

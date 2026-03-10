@@ -21,8 +21,9 @@
   background-color: #fff;
   overflow: hidden;
   margin-bottom: 20px;
-  --block-card-width: 220px;
-  --block-image-height: 120px;
+  --block-card-width: 200px;
+  --block-image-height: 130px;
+  --block-card-height: 340px;
 }
 
 /* =====================================================
@@ -180,7 +181,7 @@
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 /* Poster olmadığında tam genişlik */
@@ -197,12 +198,17 @@
    ===================================================== */
 .product-block-poster {
   flex-shrink: 0;
-  width: var(--block-card-width);
+  width: 200px;
+  height: 340px;
+  min-width: 200px;
+  max-width: 200px;
+  min-height: 340px;
+  max-height: 340px;
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
   display: flex;
-  align-self: stretch;
+  align-self: flex-start;
 }
 
 .poster-image {
@@ -239,10 +245,10 @@
   gap: 15px;
   overflow-x: auto;
   scroll-behavior: smooth;
-  padding: 10px 5px;
+  padding: 0 5px;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  align-items: stretch;
+  align-items: flex-start;
 }
 
 .products-scroll-container::-webkit-scrollbar {
@@ -251,11 +257,16 @@
 
 /* Kart Stilleri - eşit yükseklik */
 .product-block-section .product-block-card {
-  width: var(--block-card-width);
-  min-width: var(--block-card-width);
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  height: 340px;
+  min-height: 340px;
+  max-height: 340px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .product-block-section .product-block-card .card-body {
@@ -269,8 +280,10 @@
 }
 
 .product-block-section .product-block-card .product-image-container {
-  height: var(--block-image-height);
-  min-height: var(--block-image-height);
+  height: 130px;
+  min-height: 130px;
+  max-height: 130px;
+  flex-shrink: 0;
 }
 
 /* Slider Arrows */
@@ -323,12 +336,40 @@
   .product-block-container {
     flex-direction: row;
     padding: 0 15px;
-    align-items: stretch;
+    align-items: flex-start;
   }
 
   .product-block-section {
     --block-card-width: 170px;
-    --block-image-height: 100px;
+    --block-image-height: 110px;
+    --block-card-height: 310px;
+  }
+
+  /* POSTER - kart ile birebir aynı boyut */
+  .product-block-poster {
+    width: 170px !important;
+    height: 310px !important;
+    min-width: 170px !important;
+    max-width: 170px !important;
+    min-height: 310px !important;
+    max-height: 310px !important;
+  }
+
+  /* KART - poster ile birebir aynı boyut */
+  .product-block-section .product-block-card {
+    width: 170px !important;
+    height: 310px !important;
+    min-width: 170px !important;
+    max-width: 170px !important;
+    min-height: 310px !important;
+    max-height: 310px !important;
+    overflow: hidden !important;
+  }
+
+  .product-block-section .product-block-card .product-image-container {
+    height: 110px !important;
+    min-height: 110px !important;
+    max-height: 110px !important;
   }
 
   .slider-arrow {
@@ -355,6 +396,7 @@
     margin-bottom: 15px;
     --block-card-width: 150px;
     --block-image-height: 96px;
+    --block-card-height: 280px;
   }
 
   .product-block-header {
@@ -375,6 +417,17 @@
   .product-block-container {
     padding: 0 12px;
     gap: 10px;
+    align-items: flex-start;
+  }
+
+  /* Mobilde poster ve kartlar aynı hizada başlasın */
+  .product-block-content {
+    align-self: flex-start;
+  }
+
+  .products-slider-wrapper {
+    align-items: flex-start;
+    height: auto;
   }
 
   /* Mobilde ok butonları gizle */
@@ -382,15 +435,44 @@
     display: none;
   }
 
+  /* POSTER - kart ile birebir aynı boyut */
+  .product-block-poster {
+    width: 150px !important;
+    height: 280px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
+    min-height: 280px !important;
+    max-height: 280px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    align-self: flex-start !important;
+  }
+
+  /* KART - poster ile birebir aynı boyut */
+  .product-block-section .product-block-card {
+    width: 150px !important;
+    height: 280px !important;
+    min-width: 150px !important;
+    max-width: 150px !important;
+    min-height: 280px !important;
+    max-height: 280px !important;
+    overflow: hidden !important;
+    scroll-snap-align: start;
+  }
+
+  .product-block-section .product-block-card .product-image-container {
+    height: 96px !important;
+    min-height: 96px !important;
+    max-height: 96px !important;
+  }
+
   /* Swipe için scroll-snap */
   .products-scroll-container {
     scroll-snap-type: x mandatory;
     gap: 10px;
-    padding: 5px 0;
-  }
-
-  .product-block-section .product-block-card {
-    scroll-snap-align: start;
+    padding: 0;
+    align-items: flex-start;
   }
 
   /* 768px için buton küçültme */
@@ -420,6 +502,7 @@
     padding: 15px 0;
     --block-card-width: 140px;
     --block-image-height: 88px;
+    --block-card-height: 260px;
   }
 
   .product-block-header {
@@ -439,33 +522,64 @@
   .product-block-container {
     padding: 0 10px;
     gap: 8px;
-    align-items: stretch;
+    align-items: flex-start;
   }
 
+  /* 576px'de de poster ve kartlar aynı hizada başlasın */
+  .product-block-content {
+    align-self: flex-start;
+  }
+
+  .products-slider-wrapper {
+    align-items: flex-start;
+    height: auto;
+  }
+
+  /* POSTER - kart ile birebir aynı boyut */
   .product-block-poster {
-    border-radius: 12px;
-    background: #fff;
-    width: var(--block-card-width);
-    align-self: stretch;
-    align-items: stretch;
+    width: 140px !important;
+    height: 260px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    min-height: 260px !important;
+    max-height: 260px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    align-self: flex-start !important;
   }
 
   .product-block-poster .poster-image {
     object-fit: cover;
     object-position: center;
-    border-radius: inherit;
     width: 100%;
     height: 100%;
   }
 
-  .products-scroll-container {
-    gap: 8px;
-  }
-
+  /* KART - poster ile birebir aynı boyut */
   .product-block-section .product-block-card {
+    width: 140px !important;
+    height: 260px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    min-height: 260px !important;
+    max-height: 260px !important;
+    overflow: hidden !important;
     border-radius: 12px;
     display: flex;
     flex-direction: column;
+  }
+
+  .product-block-section .product-block-card .product-image-container {
+    height: 88px !important;
+    min-height: 88px !important;
+    max-height: 88px !important;
+  }
+
+  .products-scroll-container {
+    gap: 8px;
+    padding: 0;
+    align-items: flex-start;
   }
 
   .product-block-section .product-block-card .card-body {

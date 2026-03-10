@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 using System.Security.Claims;
 
 namespace ECommerce.API.Hubs
@@ -29,6 +30,11 @@ namespace ECommerce.API.Hubs
     {
         private readonly ECommerceDbContext _context;
         private readonly ILogger<CourierHub> _logger;
+
+        // Kurye başına aktif bağlantı takibi (courierId -> connectionIds)
+        // Birden fazla sekme/cihazda aynı anda bağlı olma desteği için
+        private static readonly ConcurrentDictionary<int, HashSet<string>> _courierConnections = new();
+        private static readonly object _connectionLock = new();
 
         public CourierHub(ECommerceDbContext context, ILogger<CourierHub> logger)
         {
@@ -81,7 +87,10 @@ namespace ECommerce.API.Hubs
                 var groupName = GetCourierGroupName(courier.Id);
                 await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
 
-                // Kurye durumunu online yap (opsiyonel)
+                // Bağlantıyı kaydet (multi-tab desteği)
+                RegisterConnection(courier.Id, Context.ConnectionId);
+
+                // Kurye durumunu online yap
                 await UpdateCourierOnlineStatus(courier.Id, true);
 
                 _logger.LogInformation(
@@ -220,7 +229,7 @@ namespace ECommerce.API.Hubs
                     userId, Context.ConnectionId);
             }
 
-            // Bağlantı koptuğunda kurye durumunu offline yap
+            // Bağlantı koptuğunda kurye durumunu sadece başka bağlantı yoksa offline yap
             if (userId != null)
             {
                 try
@@ -230,7 +239,23 @@ namespace ECommerce.API.Hubs
 
                     if (courier != null)
                     {
-                        await UpdateCourierOnlineStatus(courier.Id, false);
+                        // Bağlantıyı kaldır
+                        UnregisterConnection(courier.Id, Context.ConnectionId);
+
+                        // Sadece başka aktif bağlantı kalmadıysa offline yap
+                        if (!HasActiveConnections(courier.Id))
+                        {
+                            await UpdateCourierOnlineStatus(courier.Id, false);
+                            _logger.LogInformation(
+                                "CourierHub: Kurye tüm bağlantıları kapandı, offline yapıldı. CourierId: {CourierId}",
+                                courier.Id);
+                        }
+                        else
+                        {
+                            _logger.LogInformation(
+                                "CourierHub: Kurye bağlantısı kapandı ama başka aktif bağlantıları var. CourierId: {CourierId}, KalanBağlantı: {Count}",
+                                courier.Id, GetConnectionCount(courier.Id));
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -255,6 +280,51 @@ namespace ECommerce.API.Hubs
         }
 
         private static string GetCourierGroupName(int courierId) => $"courier-{courierId}";
+
+        /// <summary>
+        /// Kurye bağlantısını kaydet (multi-tab desteği)
+        /// </summary>
+        private static void RegisterConnection(int courierId, string connectionId)
+        {
+            _courierConnections.AddOrUpdate(
+                courierId,
+                new HashSet<string> { connectionId },
+                (_, existing) => { lock (_connectionLock) { existing.Add(connectionId); } return existing; });
+        }
+
+        /// <summary>
+        /// Kurye bağlantısını kaldır
+        /// </summary>
+        private static void UnregisterConnection(int courierId, string connectionId)
+        {
+            if (_courierConnections.TryGetValue(courierId, out var connections))
+            {
+                lock (_connectionLock)
+                {
+                    connections.Remove(connectionId);
+                    if (connections.Count == 0)
+                        _courierConnections.TryRemove(courierId, out _);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Kuryenin aktif bağlantısı var mı kontrol et
+        /// </summary>
+        private static bool HasActiveConnections(int courierId)
+        {
+            return _courierConnections.TryGetValue(courierId, out var connections)
+                   && connections.Count > 0;
+        }
+
+        /// <summary>
+        /// Kuryenin aktif bağlantı sayısını döndür
+        /// </summary>
+        private static int GetConnectionCount(int courierId)
+        {
+            return _courierConnections.TryGetValue(courierId, out var connections)
+                   ? connections.Count : 0;
+        }
 
         /// <summary>
         /// Kurye online/offline durumunu günceller

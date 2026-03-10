@@ -551,8 +551,8 @@ const ProductBlockSection = ({
                             src={productImage}
                             alt={productName}
                             style={{
-                              maxHeight: "100px",
-                              maxWidth: "100px",
+                              maxHeight: "110px",
+                              maxWidth: "110px",
                               objectFit: "contain",
                               filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
                               transition: "all 0.3s ease",
@@ -581,7 +581,7 @@ const ProductBlockSection = ({
 
                     {/* Card Body - ProductGrid ile AYNI */}
                     <div
-                      className="card-body p-2 d-flex flex-column"
+                      className="card-body p-3 d-flex flex-column"
                       style={{ background: "#ffffff" }}
                     >
                       {/* Rating */}

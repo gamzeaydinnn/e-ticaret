@@ -22,6 +22,18 @@ namespace ECommerce.Business.Services.Interfaces
         /// <param name="orderNumber">Sipariş numarası (ör: ORD-12345)</param>
         /// <returns>Sipariş DTO'su veya null</returns>
         Task<OrderListDto?> GetByOrderNumberAsync(string orderNumber);
+
+        // ============================================================
+        // MİSAFİR SİPARİŞ SORGULAMA - TELEFON NUMARASI İLE
+        // Telefon numarasına göre misafir siparişlerini listeler
+        // ============================================================
+        /// <summary>
+        /// Telefon numarasına göre misafir siparişlerini getirir.
+        /// Güvenlik: Sadece IsGuestOrder=true olan siparişleri döner.
+        /// </summary>
+        /// <param name="phone">Müşteri telefon numarası</param>
+        /// <returns>Eşleşen misafir siparişleri listesi</returns>
+        Task<IEnumerable<OrderListDto>> GetGuestOrdersByPhoneAsync(string phone);
         
         Task<OrderListDto> CreateAsync(OrderCreateDto dto);
         Task UpdateAsync(int id, OrderUpdateDto dto);

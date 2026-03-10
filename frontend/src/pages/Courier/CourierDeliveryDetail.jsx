@@ -15,7 +15,6 @@ import {
   WeightPaymentService,
 } from "../../services/weightAdjustmentService";
 import CourierActionButtons from "./CourierActionButtons";
-import CourierPODCapture from "./CourierPODCapture";
 import CourierFailureModal from "./CourierFailureModal";
 import WeightEntryCard from "./components/WeightEntryCard";
 import WeightDifferenceSummary from "./components/WeightDifferenceSummary";
@@ -33,7 +32,6 @@ export default function CourierDeliveryDetail() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState(null);
-  const [showPODModal, setShowPODModal] = useState(false);
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [activeTab, setActiveTab] = useState("info"); // info, items, weight, timeline
 
@@ -206,13 +204,8 @@ export default function CourierDeliveryDetail() {
 
       if (result.success) {
         alert("Teslimat başarıyla tamamlandı!");
-        // POD modal aç veya listeye dön
-        if (task.requiredProofMethods?.length > 0) {
-          setShowPODModal(true);
-        } else {
-          setTask((prev) => ({ ...prev, status: "Delivered" }));
-          setTimeout(() => navigate("/courier/orders"), 1500);
-        }
+        setTask((prev) => ({ ...prev, status: "Delivered" }));
+        setTimeout(() => navigate("/courier/orders"), 500);
       } else if (result.requiresAdminApproval) {
         alert("Yüksek fark tespit edildi. Admin onayı bekleniyor.");
       } else {
@@ -268,37 +261,28 @@ export default function CourierDeliveryDetail() {
       await CourierService.updateTaskStatus?.(task.id, newStatus);
       sendStatusUpdate(task.id, newStatus);
 
-      // Duruma göre modal aç
+      // Duruma göre işlem yap
       if (newStatus === "Delivered") {
-        setShowPODModal(true);
+        // Teslim başarılı - durumu güncelle ve listeye dön
+        setTask((prev) => ({ ...prev, status: "Delivered" }));
+        alert("Sipariş başarıyla teslim edildi!");
+        setTimeout(() => {
+          navigate("/courier/orders");
+        }, 500);
       } else if (newStatus === "Failed") {
         setShowFailureModal(true);
       } else {
-        // Görev bilgisini güncelle
-        setTask((prev) => ({ ...prev, status: newStatus }));
+        // Görev bilgisini yeniden yükle (backend'den güncel durumu al)
+        await loadTaskDetail();
       }
     } catch (err) {
       console.error("Durum güncelleme hatası:", err);
-      alert("Durum güncellenirken bir hata oluştu");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handlePODComplete = async (podData) => {
-    try {
-      setUpdating(true);
-      await CourierService.submitProofOfDelivery?.(task.id, podData);
-      setShowPODModal(false);
-      setTask((prev) => ({ ...prev, status: "Delivered" }));
-
-      // Başarılı teslim sonrası listeye dön
-      setTimeout(() => {
-        navigate("/courier/orders");
-      }, 1500);
-    } catch (err) {
-      console.error("POD gönderme hatası:", err);
-      alert("Teslimat onayı gönderilemedi");
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.Message ||
+        err.message ||
+        "Bilinmeyen bir hata oluştu";
+      alert(`Durum güncellenemedi: ${errorMessage}`);
     } finally {
       setUpdating(false);
     }
@@ -776,35 +760,6 @@ export default function CourierDeliveryDetail() {
                 </div>
               </div>
 
-              {/* POD Requirements */}
-              {task.requiredProofMethods && (
-                <div className="info-card shadow-sm">
-                  <h6 className="fw-bold mb-3">
-                    <i className="fas fa-check-circle me-2 text-success"></i>
-                    Teslimat Onay Gereksinimleri
-                  </h6>
-                  <div className="d-flex flex-wrap gap-2">
-                    {task.requiredProofMethods.includes("Photo") && (
-                      <span className="badge bg-primary">
-                        <i className="fas fa-camera me-1"></i>
-                        Fotoğraf
-                      </span>
-                    )}
-                    {task.requiredProofMethods.includes("Signature") && (
-                      <span className="badge bg-info">
-                        <i className="fas fa-signature me-1"></i>
-                        İmza
-                      </span>
-                    )}
-                    {task.requiredProofMethods.includes("Otp") && (
-                      <span className="badge bg-warning text-dark">
-                        <i className="fas fa-key me-1"></i>
-                        OTP Kodu
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -1194,16 +1149,6 @@ export default function CourierDeliveryDetail() {
           </div>
         )}
       </div>
-
-      {/* POD Modal */}
-      {showPODModal && (
-        <CourierPODCapture
-          task={task}
-          onComplete={handlePODComplete}
-          onClose={() => setShowPODModal(false)}
-          loading={updating}
-        />
-      )}
 
       {/* Failure Modal */}
       {showFailureModal && (

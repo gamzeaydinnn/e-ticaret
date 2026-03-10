@@ -16,12 +16,16 @@ const CartPage = () => {
     loading: cartLoading,
     updateQuantity,
     removeFromCart,
+    clearCart,
     getCartTotal,
   } = useCart();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState({});
   const { user } = useAuth();
+  // Sepeti boşalt onay modal state'i
+  const [clearCartConfirm, setClearCartConfirm] = useState(false);
+  const [clearCartLoading, setClearCartLoading] = useState(false);
   const [shippingMethod, setShippingMethod] = useState(() => {
     try {
       return CartService.getShippingMethod();
@@ -229,6 +233,29 @@ const CartPage = () => {
     const product = products[pid] || item.product;
     const fallback = (product && (product.specialPrice || product.price)) || 0;
     return Number(fallback) || 0;
+  };
+
+  // ================================================================
+  // SEPETİ BOŞALT
+  // CartContext üzerinden tüm ürünleri temizler
+  // ================================================================
+  const handleClearCart = async () => {
+    setClearCartLoading(true);
+    try {
+      await clearCart();
+      setClearCartConfirm(false);
+      // Kupon bilgilerini de temizle
+      setAppliedCoupon(null);
+      CartService.clearAppliedCoupon();
+      setCouponCode("");
+      setPricing(null);
+      setAppliedCampaigns([]);
+      setCampaignDiscountTotal(0);
+    } catch (err) {
+      console.error("Sepet boşaltma hatası:", err);
+    } finally {
+      setClearCartLoading(false);
+    }
   };
 
   const handleUpdateQuantity = (item, newQuantity) => {
@@ -499,11 +526,121 @@ const CartPage = () => {
               </span>
             </div>
           </div>
-          <Link to="/" className="continue-shopping">
-            <i className="fas fa-arrow-left me-2"></i>
-            Alışverişe Devam Et
-          </Link>
+          <div className="d-flex align-items-center gap-2">
+            {/* Sepeti Boşalt Butonu */}
+            <button
+              className="btn btn-outline-danger btn-sm d-flex align-items-center"
+              style={{
+                borderRadius: "10px",
+                padding: "8px 16px",
+                fontSize: "0.85rem",
+                fontWeight: "500",
+                transition: "all 0.2s ease",
+              }}
+              onClick={() => setClearCartConfirm(true)}
+              title="Sepeti Boşalt"
+            >
+              <i className="fas fa-trash-alt me-1"></i>
+              <span className="d-none d-sm-inline">Sepeti Boşalt</span>
+            </button>
+            <Link to="/" className="continue-shopping">
+              <i className="fas fa-arrow-left me-2"></i>
+              Alışverişe Devam Et
+            </Link>
+          </div>
         </div>
+
+        {/* ================================================================
+            SEPETİ BOŞALT ONAY MODALI
+            Yanlışlıkla tıklamayı engellemek için kullanıcıdan onay alınır
+            ================================================================ */}
+        {clearCartConfirm && (
+          <div
+            className="modal d-block"
+            tabIndex="-1"
+            style={{ background: "rgba(0,0,0,0.5)", zIndex: 9999 }}
+          >
+            <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: "420px" }}>
+              <div
+                className="modal-content border-0 shadow"
+                style={{ borderRadius: "16px", overflow: "hidden" }}
+              >
+                <div
+                  className="modal-header border-0"
+                  style={{
+                    background: "linear-gradient(135deg, #dc3545, #c82333)",
+                    padding: "20px 24px",
+                  }}
+                >
+                  <h5 className="modal-title text-white fw-bold">
+                    <i className="fas fa-exclamation-triangle me-2"></i>
+                    Sepeti Boşalt
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close btn-close-white"
+                    onClick={() => setClearCartConfirm(false)}
+                    disabled={clearCartLoading}
+                  ></button>
+                </div>
+                <div className="modal-body text-center py-4">
+                  <div
+                    className="mb-3"
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      backgroundColor: "#FEE2E2",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto",
+                    }}
+                  >
+                    <i className="fas fa-trash-alt" style={{ fontSize: "1.5rem", color: "#dc3545" }}></i>
+                  </div>
+                  <p className="mb-1 fw-semibold" style={{ fontSize: "1.05rem" }}>
+                    Sepetinizdeki tüm ürünler silinecek
+                  </p>
+                  <p className="text-muted small mb-0">
+                    {cartItems.length} ürün sepetinizden kaldırılacaktır.
+                    Bu işlem geri alınamaz.
+                  </p>
+                </div>
+                <div className="modal-footer border-0 justify-content-center gap-2 pb-4">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary px-4"
+                    style={{ borderRadius: "10px" }}
+                    onClick={() => setClearCartConfirm(false)}
+                    disabled={clearCartLoading}
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger px-4"
+                    style={{ borderRadius: "10px" }}
+                    onClick={handleClearCart}
+                    disabled={clearCartLoading}
+                  >
+                    {clearCartLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        Siliniyor...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-trash-alt me-1"></i>
+                        Evet, Boşalt
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Ağırlık Bazlı Ürün Uyarısı */}
         <WeightBasedProductAlert
