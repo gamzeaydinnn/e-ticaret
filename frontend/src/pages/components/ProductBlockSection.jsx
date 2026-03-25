@@ -8,6 +8,40 @@ import WeightSelectionModal, {
 } from "../../components/WeightSelectionModal";
 import "./ProductBlockSection.css";
 
+const WEIGHT_FALLBACK_KEYWORDS = [
+  "kg",
+  "kilogram",
+  "gram",
+  "et",
+  "kuşbaşı",
+  "kusbasi",
+  "kıyma",
+  "kiyma",
+  "biftek",
+  "pirzola",
+  "levrek",
+  "somon",
+  "hamsi",
+  "meyve",
+  "sebze",
+  "manav",
+  "domates",
+  "salatalık",
+  "salatalik",
+  "patates",
+  "soğan",
+  "sogan",
+  "elma",
+  "armut",
+  "portakal",
+  "muz",
+  "üzüm",
+  "uzum",
+  "kiraz",
+  "çilek",
+  "cilek",
+];
+
 // Başlık şablonları - başlığa göre ikon eşleştirmesi için
 const TITLE_TEMPLATES = [
   {
@@ -82,6 +116,29 @@ const ProductBlockSection = ({
   const { addToCart } = useCart();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { user } = useAuth();
+
+  const shouldUseWeightModal = (product) => {
+    if (!product) return false;
+
+    if (isWeightBasedProduct(product)) {
+      return true;
+    }
+
+    const nameText = String(
+      product.name || product.Name || product.productName || product.ProductName || "",
+    ).toLowerCase();
+    const categoryText = String(
+      product.categoryName ||
+        product.CategoryName ||
+        product.category?.name ||
+        product.Category?.Name ||
+        "",
+    ).toLowerCase();
+
+    return WEIGHT_FALLBACK_KEYWORDS.some(
+      (keyword) => nameText.includes(keyword) || categoryText.includes(keyword),
+    );
+  };
 
   // Sepet anahtarını varyant bazında ayırmak için ortak variant info üretir
   const getVariantInfoFromProduct = (product) => {
@@ -238,9 +295,10 @@ const ProductBlockSection = ({
 
     // Product objesini düzgün formatta hazırla
     const productToAdd = {
+      ...product,
       id: resolvedId,
       productId: resolvedId,
-      name: product.name || product.Name || "",
+      name: product.name || product.Name || product.productName || product.ProductName || "",
       price:
         product.specialPrice ||
         product.discountedPrice ||
@@ -254,13 +312,21 @@ const ProductBlockSection = ({
       originalPrice: product.price || product.Price || 0,
       specialPrice: product.specialPrice || product.discountedPrice || null,
       // Kategori ve weight bilgisi
-      categoryName: product.categoryName || product.category?.name || "",
-      isWeightBased: product.isWeightBased,
-      weightUnit: product.weightUnit,
+      categoryName:
+        product.categoryName ||
+        product.CategoryName ||
+        product.category?.name ||
+        product.Category?.Name ||
+        "",
+      isWeightBased:
+        product.isWeightBased === true ||
+        product.IsWeightBased === true ||
+        product.soldByWeight === true,
+      weightUnit: product.weightUnit || product.WeightUnit || null,
     };
 
     // Kg bazlı ürün kontrolü - modal aç
-    if (isWeightBasedProduct(productToAdd)) {
+    if (shouldUseWeightModal(productToAdd)) {
       setWeightModalProduct(productToAdd);
       setWeightModalOpen(true);
       return;
