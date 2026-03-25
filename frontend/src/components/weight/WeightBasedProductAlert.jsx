@@ -79,6 +79,41 @@ export default function WeightBasedProductAlert({
     );
   }
 
+  // Cart variant: minimal ve sade bilgilendirme kartı
+  if (variant === "cart") {
+    return (
+      <div className="weight-alert-minimal">
+        <div className="weight-alert-minimal-row">
+          <i className="fas fa-balance-scale"></i>
+          <span>
+            <strong>{weightBasedItems.length} ürün</strong> tartılı satılıyor.
+            Miktar ve tutar teslimat tartımına göre netleşir.
+          </span>
+          <button
+            className="weight-alert-minimal-toggle"
+            onClick={() => setIsExpanded(!isExpanded)}
+          >
+            {isExpanded ? "Gizle" : "Detay"}
+          </button>
+        </div>
+
+        {isExpanded && (
+          <div className="weight-alert-minimal-details">
+            {weightBasedItems.map((item, index) => (
+              <div key={index} className="weight-alert-minimal-item">
+                <span>{item.name || item.productName}</span>
+                <span>
+                  {Number(item.quantity || 0).toFixed(1)}{" "}
+                  {formatWeightUnit(item.weightUnit || item.unit)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`weight-based-alert ${variant}`}>
       {/* Header */}

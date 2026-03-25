@@ -323,6 +323,17 @@
   font-weight: 700;
   font-size: 1rem;
   color: #1e293b;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 2px;
+}
+
+/* Kg birimi gösterimi */
+.qty-unit {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
 }
 
 /* Item Total */

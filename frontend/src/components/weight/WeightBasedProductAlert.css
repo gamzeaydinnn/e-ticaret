@@ -14,6 +14,53 @@
   animation: slideIn 0.3s ease;
 }
 
+/* Cart için minimalist görünüm */
+.weight-alert-minimal {
+  margin: 12px 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.weight-alert-minimal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: #374151;
+  font-size: 0.92rem;
+}
+
+.weight-alert-minimal-row i {
+  color: #f59e0b;
+  font-size: 1rem;
+}
+
+.weight-alert-minimal-toggle {
+  margin-left: auto;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.weight-alert-minimal-details {
+  border-top: 1px solid #f3f4f6;
+  padding: 8px 14px 10px;
+}
+
+.weight-alert-minimal-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.86rem;
+  color: #4b5563;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

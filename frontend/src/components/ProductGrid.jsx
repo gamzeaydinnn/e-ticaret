@@ -10,6 +10,7 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
+import WeightSelectionModal, { isWeightBasedProduct } from "./WeightSelectionModal";
 import "./ProductGrid.css";
 
 const DEMO_PRODUCTS = [
@@ -248,6 +249,9 @@ export default function ProductGrid({
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
   const [cartNotification, setCartNotification] = useState(null);
+  // Kg seçici modal için state
+  const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [weightModalProduct, setWeightModalProduct] = useState(null);
   const { user } = useAuth();
   const { addToCart: ctxAddToCart } = useCart();
   const {
@@ -312,8 +316,22 @@ export default function ProductGrid({
     const product = data.find((p) => String(p.id) === String(productId));
     if (!product) return;
 
-    // Context üzerinden sepete ekle (hem misafir hem kullanıcı için çalışır)
+    // Kg bazlı ürün kontrolü - modal aç
+    if (isWeightBasedProduct(product)) {
+      setWeightModalProduct(product);
+      setWeightModalOpen(true);
+      return;
+    }
+
+    // Normal ürün - direkt sepete ekle
     ctxAddToCart(product, 1);
+    showCartNotification(product, user ? "registered" : "guest");
+  };
+
+  // Kg bazlı ürün sepete ekleme (modal onayı sonrası)
+  const handleWeightConfirm = (product, weightKg) => {
+    console.log("[ProductGrid] Kg bazlı ürün ekleniyor:", product.name, weightKg, "kg");
+    ctxAddToCart(product, weightKg);
     showCartNotification(product, user ? "registered" : "guest");
   };
 
@@ -1672,6 +1690,20 @@ export default function ProductGrid({
           }
           setLoginAction(null);
         }}
+      />
+
+      {/* Kg Seçici Modal */}
+      <WeightSelectionModal
+        isOpen={weightModalOpen}
+        onClose={() => {
+          setWeightModalOpen(false);
+          setWeightModalProduct(null);
+        }}
+        product={weightModalProduct}
+        onConfirm={handleWeightConfirm}
+        minWeight={0.5}
+        maxWeight={10}
+        step={0.5}
       />
     </section>
   );

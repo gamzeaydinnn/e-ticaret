@@ -567,6 +567,11 @@ builder.Services.AddScoped<IXmlImportService, XmlImportManager>();
 builder.Services.AddSingleton<StockSyncJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
 builder.Services.AddHostedService<StockReservationCleanupJob>();
+
+// Kampanya süresi dolduğunda SpecialPrice'ı otomatik temizleyen job
+// Uygulama başladığında ve her saat başı çalışır
+builder.Services.AddHostedService<ECommerce.API.Services.CampaignExpirationCleanupJob>();
+
 // Reconciliation job: daily reconciliation between provider reports and Payments table
 builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());

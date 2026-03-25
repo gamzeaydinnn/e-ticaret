@@ -3,6 +3,11 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: ecommerce-sql-prod
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - ACCEPT_EULA=Y
       - SA_PASSWORD=${DB_PASSWORD:-ECom1234}
@@ -31,6 +36,11 @@ services:
       dockerfile: ECommerce.API/Dockerfile
     container_name: ecommerce-api-prod
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
     ports:
       - "5000:5000"
     extra_hosts:
@@ -132,6 +142,11 @@ services:
     image: ecommerce-frontend:latest
     container_name: ecommerce-frontend-prod
     restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:

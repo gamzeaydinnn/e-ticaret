@@ -100,7 +100,6 @@ namespace ECommerce.Core.DTOs.Promotions
         public string? ImageUrl { get; set; }
 
         [Required(ErrorMessage = "Başlangıç tarihi zorunludur")]
-        [FutureDate]
         public DateTime StartDate { get; set; }
 
         [Required(ErrorMessage = "Bitiş tarihi zorunludur")]

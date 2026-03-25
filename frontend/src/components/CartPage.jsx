@@ -10,6 +10,70 @@ import cartSettingsService from "../services/cartSettingsService";
 import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
 import "./CartPage.css";
 
+// Kg bazlı ürün anahtar kelimeleri - backend alanı eksik olsa da UI'da doğru birim gösterimi için.
+const WEIGHT_KEYWORDS = [
+  "kg",
+  "kilogram",
+  "gram",
+  "meyve",
+  "sebze",
+  "manav",
+  "domates",
+  "salatal",
+  "elma",
+  "armut",
+  "portakal",
+  "muz",
+  "üzüm",
+  "kiraz",
+  "çilek",
+  "patates",
+  "soğan",
+  "biber",
+  "havuç",
+  "et",
+  "kuşbaşı",
+  "kıyma",
+  "biftek",
+  "pirzola",
+  "balık",
+  "levrek",
+  "somon",
+  "hamsi",
+  "peynir",
+  "zeytin",
+];
+
+const isWeightBasedCartItem = (item, product) => {
+  if (!item && !product) return false;
+
+  const weightUnit = item?.weightUnit ?? product?.weightUnit;
+  const explicitWeightBased =
+    item?.isWeightBased ||
+    product?.isWeightBased ||
+    product?.soldByWeight ||
+    weightUnit === "Kilogram" ||
+    weightUnit === "Gram" ||
+    weightUnit === 2 ||
+    weightUnit === 1;
+
+  if (explicitWeightBased) return true;
+
+  const nameText = String(
+    product?.name || item?.productName || item?.product?.name || "",
+  ).toLowerCase();
+  const categoryText = String(
+    product?.categoryName ||
+      product?.category?.name ||
+      item?.categoryName ||
+      "",
+  ).toLowerCase();
+
+  return WEIGHT_KEYWORDS.some(
+    (keyword) => nameText.includes(keyword) || categoryText.includes(keyword),
+  );
+};
+
 const CartPage = () => {
   const {
     cartItems,
@@ -259,17 +323,22 @@ const CartPage = () => {
   };
 
   const handleUpdateQuantity = (item, newQuantity) => {
-    if (newQuantity < 1) {
+    const product = products[item.productId || item.id] || item.product || null;
+    const isWeightBasedItem = isWeightBasedCartItem(item, product);
+    const minQuantity = isWeightBasedItem ? 0.5 : 1;
+    if (newQuantity < minQuantity) {
       handleRemoveItem(item);
       return;
     }
     const pid = item.productId || item.id;
-    updateQuantity(pid, newQuantity);
+    const variantId = item.variantId || item.productVariantId || null;
+    updateQuantity(pid, newQuantity, variantId);
   };
 
   const handleRemoveItem = (item) => {
     const pid = item.productId || item.id;
-    removeFromCart(pid);
+    const variantId = item.variantId || item.productVariantId || null;
+    removeFromCart(pid, variantId);
   };
 
   const getTotalPrice = () => {
@@ -468,15 +537,7 @@ const CartPage = () => {
     return cartItems
       .filter((item) => {
         const product = products[item.productId || item.id];
-        // Product'ta isWeightBased varsa veya weightUnit kg/gram ise
-        return (
-          product?.isWeightBased ||
-          product?.weightUnit === "Kilogram" ||
-          product?.weightUnit === "Gram" ||
-          product?.weightUnit === 2 || // Kilogram enum
-          product?.weightUnit === 1 || // Gram enum
-          item.isWeightBased
-        );
+        return isWeightBasedCartItem(item, product);
       })
       .map((item) => {
         const product = products[item.productId || item.id];
@@ -560,7 +621,10 @@ const CartPage = () => {
             tabIndex="-1"
             style={{ background: "rgba(0,0,0,0.5)", zIndex: 9999 }}
           >
-            <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: "420px" }}>
+            <div
+              className="modal-dialog modal-dialog-centered"
+              style={{ maxWidth: "420px" }}
+            >
               <div
                 className="modal-content border-0 shadow"
                 style={{ borderRadius: "16px", overflow: "hidden" }}
@@ -597,14 +661,20 @@ const CartPage = () => {
                       margin: "0 auto",
                     }}
                   >
-                    <i className="fas fa-trash-alt" style={{ fontSize: "1.5rem", color: "#dc3545" }}></i>
+                    <i
+                      className="fas fa-trash-alt"
+                      style={{ fontSize: "1.5rem", color: "#dc3545" }}
+                    ></i>
                   </div>
-                  <p className="mb-1 fw-semibold" style={{ fontSize: "1.05rem" }}>
+                  <p
+                    className="mb-1 fw-semibold"
+                    style={{ fontSize: "1.05rem" }}
+                  >
                     Sepetinizdeki tüm ürünler silinecek
                   </p>
                   <p className="text-muted small mb-0">
-                    {cartItems.length} ürün sepetinizden kaldırılacaktır.
-                    Bu işlem geri alınamaz.
+                    {cartItems.length} ürün sepetinizden kaldırılacaktır. Bu
+                    işlem geri alınamaz.
                   </p>
                 </div>
                 <div className="modal-footer border-0 justify-content-center gap-2 pb-4">
@@ -659,18 +729,16 @@ const CartPage = () => {
             ) : (
               <div className="cart-items-list">
                 {cartItems.map((item) => {
-                  const product = products[item.productId];
+                  const product =
+                    products[item.productId || item.id] || item.product || null;
                   // Ağırlık bazlı ürün mü kontrol et
-                  const isWeightBasedItem =
-                    product?.isWeightBased ||
-                    product?.weightUnit === "Kilogram" ||
-                    product?.weightUnit === "Gram" ||
-                    product?.weightUnit === 2 ||
-                    product?.weightUnit === 1 ||
-                    item.isWeightBased;
+                  const isWeightBasedItem = isWeightBasedCartItem(
+                    item,
+                    product,
+                  );
                   return (
                     <div
-                      key={item.id || item.productId}
+                      key={`${item.id || item.productId}-${item.variantId || item.productVariantId || "base"}`}
                       className={`cart-item ${isWeightBasedItem ? "weight-based" : ""}`}
                     >
                       <div className="item-image">
@@ -770,16 +838,38 @@ const CartPage = () => {
                         <button
                           className="qty-btn minus"
                           onClick={() =>
-                            handleUpdateQuantity(item, item.quantity - 1)
+                            handleUpdateQuantity(
+                              item,
+                              isWeightBasedItem
+                                ? Math.max(0.5, item.quantity - 0.5)
+                                : item.quantity - 1,
+                            )
+                          }
+                          disabled={
+                            isWeightBasedItem
+                              ? item.quantity <= 0.5
+                              : item.quantity <= 1
                           }
                         >
                           <i className="fas fa-minus"></i>
                         </button>
-                        <span className="qty-value">{item.quantity}</span>
+                        <span className="qty-value">
+                          {isWeightBasedItem
+                            ? item.quantity.toFixed(1)
+                            : item.quantity}
+                          {isWeightBasedItem && (
+                            <span className="qty-unit"> kg</span>
+                          )}
+                        </span>
                         <button
                           className="qty-btn plus"
                           onClick={() =>
-                            handleUpdateQuantity(item, item.quantity + 1)
+                            handleUpdateQuantity(
+                              item,
+                              isWeightBasedItem
+                                ? item.quantity + 0.5
+                                : item.quantity + 1,
+                            )
                           }
                         >
                           <i className="fas fa-plus"></i>

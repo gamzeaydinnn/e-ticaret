@@ -129,6 +129,36 @@ const clearGuestToken = () => {
   console.log("🗑️ Guest token temizlendi");
 };
 
+/**
+ * Backend bazı endpoint'lerde quantity alanını int bekliyor.
+ * Sepet ekranında 0.5/1.5 gibi değerler kullanılsa da kampanya/kupon hesapları
+ * için güvenli bir tam sayı gönderilir.
+ */
+const normalizeBackendQuantity = (quantity) => {
+  const parsedQuantity = Number(quantity);
+
+  if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+    return 1;
+  }
+
+  if (Number.isInteger(parsedQuantity)) {
+    return parsedQuantity;
+  }
+
+  return Math.max(1, Math.ceil(parsedQuantity));
+};
+
+const normalizePricingPayloadItems = (items) => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    ...item,
+    quantity: normalizeBackendQuantity(item?.quantity),
+  }));
+};
+
 export const CartService = {
   // Token metodlarını dışa aktar
   getOrCreateGuestToken,
@@ -378,7 +408,14 @@ export const CartService = {
   /**
    * Sepet fiyat önizlemesi
    */
-  previewPrice: (payload) => api.post(`${base}/price-preview`, payload),
+  previewPrice: (payload) => {
+    const normalizedPayload = {
+      ...(payload || {}),
+      items: normalizePricingPayloadItems(payload?.items),
+    };
+
+    return api.post(`${base}/price-preview`, normalizedPayload);
+  },
 
   // ============================================================
   // KUPON İŞLEMLERİ
@@ -412,6 +449,7 @@ export const CartService = {
 
       normalizedItems.forEach((item) => {
         const productId = item.productId || item.id;
+        const normalizedQuantity = normalizeBackendQuantity(item.quantity);
         const categoryId =
           item.categoryId ||
           item?.product?.categoryId ||
@@ -420,7 +458,7 @@ export const CartService = {
         if (productId != null) {
           productIds.push(productId);
           productQuantities[productId] =
-            (productQuantities[productId] || 0) + (item.quantity || 0);
+            (productQuantities[productId] || 0) + normalizedQuantity;
         }
         if (categoryId != null) {
           categoryIds.push(categoryId);

@@ -190,40 +190,46 @@ namespace ECommerce.Data.Repositories
         /// <summary>
         /// Kampanya hedeflerini günceller (TRANSACTIONAL).
         /// Mevcut hedefleri siler ve yenilerini ekler.
-        /// Atomicity sağlamak için transaction kullanır.
+        /// SQL Server RetryingExecutionStrategy ile uyumlu çalışır.
         /// </summary>
         public async Task UpdateTargetsAsync(int campaignId, IEnumerable<int> targetIds, CampaignTargetKind targetKind)
         {
-            // Transaction başlat - atomicity sağla
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // SQL Server RetryingExecutionStrategy ile uyumlu transaction kullanımı
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-            try
+            await strategy.ExecuteAsync(async () =>
             {
-                // 1. Mevcut hedefleri sil (SaveChanges YOK)
-                await ClearTargetsInternalAsync(campaignId);
+                // Transaction başlat - atomicity sağla
+                using var transaction = await _context.Database.BeginTransactionAsync();
 
-                // 2. Yeni hedefleri ekle (SaveChanges YOK)
-                var targets = targetIds.Select(id => new CampaignTarget
+                try
                 {
-                    CampaignId = campaignId,
-                    TargetId = id,
-                    TargetKind = targetKind,
-                    IsActive = true,
-                    CreatedAt = DateTime.UtcNow
-                });
+                    // 1. Mevcut hedefleri sil (SaveChanges YOK)
+                    await ClearTargetsInternalAsync(campaignId);
 
-                await _context.CampaignTargets.AddRangeAsync(targets);
+                    // 2. Yeni hedefleri ekle (SaveChanges YOK)
+                    var targets = targetIds.Select(id => new CampaignTarget
+                    {
+                        CampaignId = campaignId,
+                        TargetId = id,
+                        TargetKind = targetKind,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    });
 
-                // 3. Tüm değişiklikleri birlikte commit et
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
-            }
-            catch
-            {
-                // Hata oluşursa rollback yap
-                await transaction.RollbackAsync();
-                throw;
-            }
+                    await _context.CampaignTargets.AddRangeAsync(targets);
+
+                    // 3. Tüm değişiklikleri birlikte commit et
+                    await _context.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                }
+                catch
+                {
+                    // Hata oluşursa rollback yap
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
 
         /// <summary>
@@ -263,6 +269,7 @@ namespace ECommerce.Data.Repositories
         /// <summary>
         /// Kampanyayı hedefleriyle birlikte oluşturur (TRANSACTIONAL).
         /// Atomicity garantisi sağlar - ya her şey başarılı olur, ya hiçbir şey olmaz.
+        /// SQL Server RetryingExecutionStrategy ile uyumlu çalışır.
         /// </summary>
         /// <param name="campaign">Oluşturulacak kampanya</param>
         /// <param name="targetIds">Hedef ID'leri (ürün veya kategori)</param>
@@ -273,44 +280,51 @@ namespace ECommerce.Data.Repositories
             IEnumerable<int>? targetIds,
             CampaignTargetKind targetKind)
         {
-            // Transaction başlat
-            using var transaction = await _context.Database.BeginTransactionAsync();
+            // SQL Server RetryingExecutionStrategy ile uyumlu transaction kullanımı
+            // CreateExecutionStrategy() ile tüm işlemi retriable unit olarak sarmalıyoruz
+            var strategy = _context.Database.CreateExecutionStrategy();
 
-            try
+            return await strategy.ExecuteAsync(async () =>
             {
-                // 1. Kampanyayı oluştur
-                await _context.Campaigns.AddAsync(campaign);
-                await _context.SaveChangesAsync(); // ID generate edilsin
+                // Transaction başlat
+                using var transaction = await _context.Database.BeginTransactionAsync();
 
-                // 2. Hedefler varsa ekle
-                if (targetIds != null && targetIds.Any())
+                try
                 {
-                    var targets = targetIds.Select(id => new CampaignTarget
+                    // 1. Kampanyayı oluştur
+                    await _context.Campaigns.AddAsync(campaign);
+                    await _context.SaveChangesAsync(); // ID generate edilsin
+
+                    // 2. Hedefler varsa ekle
+                    if (targetIds != null && targetIds.Any())
                     {
-                        CampaignId = campaign.Id, // Yukarıda generate edilen ID
-                        TargetId = id,
-                        TargetKind = targetKind,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow
-                    });
+                        var targets = targetIds.Select(id => new CampaignTarget
+                        {
+                            CampaignId = campaign.Id, // Yukarıda generate edilen ID
+                            TargetId = id,
+                            TargetKind = targetKind,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        });
 
-                    await _context.CampaignTargets.AddRangeAsync(targets);
-                    await _context.SaveChangesAsync();
+                        await _context.CampaignTargets.AddRangeAsync(targets);
+                        await _context.SaveChangesAsync();
+                    }
+
+                    // 3. Transaction commit et
+                    await transaction.CommitAsync();
+
+                    // 4. Hedeflerle birlikte döndür
+                    return await GetByIdWithTargetsAsync(campaign.Id)
+                        ?? throw new InvalidOperationException("Kampanya oluşturuldu ama tekrar getirilemedi");
                 }
-
-                // 3. Transaction commit et
-                await transaction.CommitAsync();
-
-                // 4. Hedeflerle birlikte döndür
-                return await GetByIdWithTargetsAsync(campaign.Id)
-                    ?? throw new InvalidOperationException("Kampanya oluşturuldu ama tekrar getirilemedi");
-            }
-            catch
-            {
-                // Hata oluşursa rollback yap
-                await transaction.RollbackAsync();
-                throw;
-            }
+                catch
+                {
+                    // Hata oluşursa rollback yap
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
     }
 }

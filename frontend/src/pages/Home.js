@@ -286,17 +286,37 @@ export default function Home() {
   // SEPET İŞLEMLERİ
   // ============================================
 
-  /** Sepete ürün ekle */
+  /**
+   * Sepete ürün ekle (geriye uyumlu)
+   * Yeni sözleşme: handleAddToCart(product, quantity, variantInfo)
+   * Eski sözleşme: handleAddToCart(productId) veya handleAddToCart(product, fallbackId)
+   */
   const handleAddToCart = useCallback(
-    async (productOrId, fallbackId) => {
+    async (productOrId, quantityOrFallback = 1, variantInfo = null) => {
       let product = null;
+      let quantity = 1;
+      let resolvedVariantInfo = variantInfo;
 
       if (productOrId && typeof productOrId === "object") {
         product = productOrId;
+
+        const numericInput = Number(quantityOrFallback);
+        if (Number.isFinite(numericInput) && numericInput > 0) {
+          const currentProductId = Number(
+            product.id ?? product.productId ?? product.Id ?? 0,
+          );
+          const looksLikeLegacyFallbackId =
+            !variantInfo &&
+            currentProductId > 0 &&
+            numericInput === currentProductId;
+
+          quantity = looksLikeLegacyFallbackId ? 1 : numericInput;
+        }
       } else {
         const productId =
-          typeof productOrId === "number" ? productOrId : fallbackId;
+          typeof productOrId === "number" ? productOrId : quantityOrFallback;
         product = featured.find((p) => p.id === productId) || null;
+        quantity = 1;
       }
 
       if (!product) {
@@ -304,8 +324,41 @@ export default function Home() {
         return;
       }
 
+      // Quantity güvenlik normalize: minimum 0.5 (kg senaryosu), step hassasiyeti korunur.
+      const numericQty = Number(quantity);
+      if (!Number.isFinite(numericQty) || numericQty <= 0) {
+        quantity = 1;
+      } else {
+        quantity = Math.max(0.5, Math.round(numericQty * 100) / 100);
+      }
+
+      // Çağrıda variantInfo gelmediyse üründen türet
+      if (!resolvedVariantInfo) {
+        const rawVariantId =
+          product.variantId ??
+          product.productVariantId ??
+          product.ProductVariantId ??
+          product.variant?.id;
+
+        if (rawVariantId !== undefined && rawVariantId !== null) {
+          const numericVariantId = Number(rawVariantId);
+          resolvedVariantInfo = {
+            variantId: Number.isNaN(numericVariantId)
+              ? rawVariantId
+              : numericVariantId,
+            variantTitle:
+              product.variantTitle || product.variant?.title || null,
+            sku:
+              product.sku || product.variantSku || product.variant?.sku || null,
+          };
+        }
+      }
+
       try {
-        await addToCart(product, 1);
+        const result = await addToCart(product, quantity, resolvedVariantInfo);
+        if (!result?.success) {
+          throw new Error(result?.error || "Sepete eklenemedi");
+        }
         setAddedProduct(product);
         setCartModalOpen(true);
       } catch (error) {

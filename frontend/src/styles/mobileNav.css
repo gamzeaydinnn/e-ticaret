@@ -100,7 +100,9 @@
   color: var(--mobile-nav-inactive);
 
   /* Geçiş animasyonu */
-  transition: color 0.2s ease, transform 0.15s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.15s ease;
 
   /* Tıklama alanını genişlet */
   -webkit-tap-highlight-color: transparent;
@@ -151,24 +153,29 @@
    ============================================ */
 .mobile-nav-badge {
   position: absolute;
-  top: -4px;
-  right: -8px;
+  top: -6px;
+  right: -10px;
 
   /* Görünüm */
   background: linear-gradient(135deg, var(--mobile-nav-badge-bg), #ec7063);
   color: white;
 
   /* Boyut ve şekil */
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  box-sizing: border-box;
 
   /* Tipografi */
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  line-height: 18px;
+  line-height: 1;
   text-align: center;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   /* Border */
   border: 2px solid white;

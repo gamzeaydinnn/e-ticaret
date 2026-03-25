@@ -22,7 +22,8 @@ namespace ECommerce.Core.Attributes
         }
 
         /// <summary>
-        /// DateTime değerinin gelecekte (veya bugün) olduğunu doğrular
+        /// DateTime değerinin gelecekte (veya bugün) olduğunu doğrular.
+        /// Timezone sorunu yaşamamak için sadece tarih kısmı (yıl/ay/gün) karşılaştırılır.
         /// </summary>
         protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
         {
@@ -40,21 +41,23 @@ namespace ECommerce.Core.Attributes
                     new[] { validationContext.MemberName ?? "Unknown" });
             }
 
-            // UTC veya Local tarih olabilir, her ikisini de destekle
-            var now = DateTime.UtcNow;
-            var compareDate = dateValue.Kind == DateTimeKind.Utc
-                ? dateValue
-                : dateValue.ToUniversalTime();
+            // TIMEZONE SORUNU DÜZELTMESİ:
+            // Frontend'den gelen tarih yerel saatte olabilir (örn: TR UTC+3).
+            // ToUniversalTime() yapıldığında tarih 1 gün geriye kayabilir.
+            // Bu nedenle sadece tarih kısmını (yıl/ay/gün) karşılaştırıyoruz,
+            // timezone dönüşümü yapmadan.
 
-            // Bugünün başlangıcını al (00:00:00)
-            var todayStart = now.Date;
-            var compareDateStart = compareDate.Date;
+            // Sunucu yerel zamanında bugünün tarihi
+            var todayLocal = DateTime.Now.Date;
+
+            // Gelen değerin sadece tarih kısmı (saat bilgisi önemsiz)
+            var compareDateLocal = dateValue.Date;
 
             // Geçmiş tarih kontrolü (bugün dahil geçerli)
-            if (compareDateStart < todayStart)
+            if (compareDateLocal < todayLocal)
             {
                 return new ValidationResult(
-                    $"'{validationContext.DisplayName}' geçmişte olamaz. Lütfen bugün ({todayStart:dd.MM.yyyy}) veya sonrası bir tarih seçin.",
+                    $"'{validationContext.DisplayName}' geçmişte olamaz. Lütfen bugün ({todayLocal:dd.MM.yyyy}) veya sonrası bir tarih seçin.",
                     new[] { validationContext.MemberName ?? "Unknown" });
             }
 

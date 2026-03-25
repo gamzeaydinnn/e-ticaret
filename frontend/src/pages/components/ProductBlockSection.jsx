@@ -3,6 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../../contexts/CartContext";
 import { useFavorites } from "../../contexts/FavoriteContext";
 import { useAuth } from "../../contexts/AuthContext";
+import WeightSelectionModal, {
+  isWeightBasedProduct,
+} from "../../components/WeightSelectionModal";
 import "./ProductBlockSection.css";
 
 // Başlık şablonları - başlığa göre ikon eşleştirmesi için
@@ -61,6 +64,7 @@ const ProductBlockSection = ({
   onAddToCart,
   onToggleFavorite,
   favorites,
+  showViewAllButton = true,
 }) => {
   const navigate = useNavigate();
   const scrollContainerRef = useRef(null);
@@ -70,10 +74,45 @@ const ProductBlockSection = ({
   // Toast bildirimi için state
   const [cartNotification, setCartNotification] = useState(null);
 
+  // Kg seçici modal için state
+  const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [weightModalProduct, setWeightModalProduct] = useState(null);
+
   // Context'ler - ProductGrid ile AYNI
   const { addToCart } = useCart();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { user } = useAuth();
+
+  // Sepet anahtarını varyant bazında ayırmak için ortak variant info üretir
+  const getVariantInfoFromProduct = (product) => {
+    if (!product) return null;
+
+    const rawVariantId =
+      product.variantId ??
+      product.productVariantId ??
+      product.ProductVariantId ??
+      product.variant?.id ??
+      product.Variant?.Id;
+
+    if (rawVariantId === undefined || rawVariantId === null) {
+      return null;
+    }
+
+    const numericVariantId = Number(rawVariantId);
+    const variantId = Number.isNaN(numericVariantId)
+      ? rawVariantId
+      : numericVariantId;
+
+    return {
+      variantId,
+      variantTitle:
+        product.variantTitle ||
+        product.variant?.title ||
+        product.Variant?.Title ||
+        null,
+      sku: product.sku || product.variantSku || product.Variant?.Sku || null,
+    };
+  };
 
   // Toast bildirim gösterme fonksiyonu
   const showCartNotification = (product, userType) => {
@@ -180,8 +219,8 @@ const ProductBlockSection = ({
     navigate(`/product/${productId}`);
   };
 
-  // Sepete ekle - ProductGrid ile AYNI
-  const handleAddToCart = (e, product, productId) => {
+  // Sepete ekle - Kg bazlı ürünler için modal aç
+  const handleAddToCart = async (e, product, productId) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -214,19 +253,103 @@ const ProductBlockSection = ({
       // Toast bildirimi için orijinal fiyatı da ekle
       originalPrice: product.price || product.Price || 0,
       specialPrice: product.specialPrice || product.discountedPrice || null,
+      // Kategori ve weight bilgisi
+      categoryName: product.categoryName || product.category?.name || "",
+      isWeightBased: product.isWeightBased,
+      weightUnit: product.weightUnit,
     };
 
+    // Kg bazlı ürün kontrolü - modal aç
+    if (isWeightBasedProduct(productToAdd)) {
+      setWeightModalProduct(productToAdd);
+      setWeightModalOpen(true);
+      return;
+    }
+
+    // Normal ürün - direkt sepete ekle
     if (typeof onAddToCart === "function") {
-      onAddToCart(productToAdd, resolvedId);
-      // Toast bildirimi göster
+      // Yeni sözleşme: onAddToCart(product, quantity, variantInfo)
+      const result = await onAddToCart(
+        productToAdd,
+        1,
+        getVariantInfoFromProduct(productToAdd),
+      );
+      if (result && result.success === false) {
+        setCartNotification({
+          type: "error",
+          message: result.error || "Sepete eklenemedi.",
+        });
+        return;
+      }
       showCartNotification(productToAdd, user ? "registered" : "guest");
       return;
     }
 
     console.log("[ProductBlockSection] Sepete ekleniyor:", productToAdd);
-    addToCart(productToAdd, 1);
-    // Toast bildirimi göster
+    const addResult = await addToCart(
+      productToAdd,
+      1,
+      getVariantInfoFromProduct(productToAdd),
+    );
+    if (addResult && addResult.success === false) {
+      setCartNotification({
+        type: "error",
+        message: addResult.error || "Sepete eklenemedi.",
+      });
+      return;
+    }
     showCartNotification(productToAdd, user ? "registered" : "guest");
+  };
+
+  // Kg bazlı ürün sepete ekleme (modal onayı sonrası)
+  const handleWeightConfirm = async (product, weightKg) => {
+    console.log(
+      "[ProductBlockSection] Kg bazlı ürün ekleniyor:",
+      product.name,
+      weightKg,
+      "kg",
+    );
+
+    // Ürün bilgisine kg miktarını ekle
+    const productWithWeight = {
+      ...product,
+      quantity: weightKg,
+      isWeightBased: true,
+      weightUnit: "Kilogram",
+    };
+
+    if (typeof onAddToCart === "function") {
+      // Kg bazlı ürünlerde seçilen miktarı quantity olarak doğrudan gönder
+      const result = await onAddToCart(
+        productWithWeight,
+        weightKg,
+        getVariantInfoFromProduct(productWithWeight),
+      );
+      if (result && result.success === false) {
+        setCartNotification({
+          type: "error",
+          message: result.error || "Sepete eklenemedi.",
+        });
+        return;
+      }
+      showCartNotification(productWithWeight, user ? "registered" : "guest");
+      return;
+    }
+
+    // Context üzerinden sepete ekle
+    const addResult = await addToCart(
+      productWithWeight,
+      weightKg,
+      getVariantInfoFromProduct(productWithWeight),
+    );
+    if (addResult && addResult.success === false) {
+      setCartNotification({
+        type: "error",
+        message: addResult.error || "Sepete eklenemedi.",
+      });
+      return;
+    }
+    showCartNotification(productWithWeight, user ? "registered" : "guest");
   };
 
   // Favorilere ekle/çıkar - ProductGrid ile AYNI
@@ -339,10 +462,12 @@ const ProductBlockSection = ({
         </div>
         <div className="header-right">
           {/* Tümünü Gör butonu */}
-          <Link to={viewAllUrl} className="view-all-btn">
-            {viewAllText}
-            <i className="fas fa-arrow-right ms-2"></i>
-          </Link>
+          {showViewAllButton && (
+            <Link to={viewAllUrl} className="view-all-btn">
+              {viewAllText}
+              <i className="fas fa-arrow-right ms-2"></i>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -431,7 +556,7 @@ const ProductBlockSection = ({
                       background: "#ffffff",
                       borderRadius: "16px",
                       border: hasDiscount
-                        ? "2px solid #ef4444"
+                        ? "1px solid rgba(220, 38, 38, 0.3)"
                         : "1px solid rgba(255, 107, 53, 0.1)",
                       overflow: "hidden",
                       position: "relative",
@@ -440,7 +565,7 @@ const ProductBlockSection = ({
                       display: "flex",
                       flexDirection: "column",
                       boxShadow: hasDiscount
-                        ? "0 8px 25px rgba(239, 68, 68, 0.2)"
+                        ? "0 5px 15px rgba(220, 38, 38, 0.12)"
                         : "0 5px 15px rgba(0, 0, 0, 0.08)",
                       transition: "all 0.3s ease",
                     }}
@@ -450,20 +575,20 @@ const ProductBlockSection = ({
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-5px)";
                       e.currentTarget.style.boxShadow = hasDiscount
-                        ? "0 20px 40px rgba(239, 68, 68, 0.25)"
+                        ? "0 15px 30px rgba(220, 38, 38, 0.18)"
                         : "0 15px 30px rgba(255, 107, 53, 0.15)";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.transform = "translateY(0)";
                       e.currentTarget.style.boxShadow = hasDiscount
-                        ? "0 8px 25px rgba(239, 68, 68, 0.2)"
+                        ? "0 5px 15px rgba(220, 38, 38, 0.12)"
                         : "0 5px 15px rgba(0, 0, 0, 0.08)";
                     }}
                   >
-                    {/* ========== İNDİRİM BADGE - SOL ÜST ========== */}
+                    {/* ========== FIRSAT BADGE - SOL ÜST (Minimalist) ========== */}
                     {hasDiscount && discountPercent > 0 && (
                       <div
-                        className="discount-badge-wrapper position-absolute"
+                        className="opportunity-badge-wrapper position-absolute"
                         style={{
                           top: "8px",
                           left: "8px",
@@ -471,26 +596,21 @@ const ProductBlockSection = ({
                         }}
                       >
                         <div
-                          className="discount-badge"
+                          className="opportunity-badge"
                           style={{
                             background:
                               "linear-gradient(135deg, #ef4444, #dc2626)",
                             color: "white",
-                            padding: "4px 10px",
-                            borderRadius: "20px",
-                            fontSize: "0.75rem",
+                            padding: "5px 12px",
+                            borderRadius: "6px",
+                            fontSize: "0.7rem",
                             fontWeight: "700",
-                            boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4)",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
+                            letterSpacing: "0.5px",
+                            textTransform: "uppercase",
+                            boxShadow: "0 2px 8px rgba(220, 38, 38, 0.35)",
                           }}
                         >
-                          <i
-                            className="fas fa-tag"
-                            style={{ fontSize: "0.65rem" }}
-                          ></i>
-                          %{discountPercent} İNDİRİM
+                          FIRSAT
                         </div>
                       </div>
                     )}
@@ -608,72 +728,50 @@ const ProductBlockSection = ({
                       {/* Ürün Adı */}
                       <h6 className="product-title mb-1">{productName}</h6>
 
-                      {/* Fiyat - İNDİRİMLİ ÜRÜNLER İÇİN DİKKAT ÇEKİCİ */}
+                      {/* Fiyat - Minimalist İndirimli Görünüm */}
                       <div className="price-section">
                         {hasDiscount && originalPrice ? (
                           <div className="price-container">
-                            {/* İndirim Yüzdesi Badge */}
-                            <div
-                              className="discount-badge-large"
-                              style={{
-                                background:
-                                  "linear-gradient(135deg, #ef4444, #dc2626)",
-                                color: "white",
-                                padding: "3px 8px",
-                                borderRadius: "12px",
-                                fontSize: "0.7rem",
-                                fontWeight: "700",
-                                display: "inline-block",
-                                marginBottom: "3px",
-                                boxShadow: "0 2px 8px rgba(239, 68, 68, 0.3)",
-                              }}
-                            >
-                              <i
-                                className="fas fa-bolt me-1"
-                                style={{ fontSize: "0.6rem" }}
-                              ></i>
-                              %{discountPercent} İNDİRİM
-                            </div>
                             {/* Eski Fiyat */}
                             <div
                               className="original-price-large"
                               style={{
-                                fontSize: "0.8rem",
-                                fontWeight: "600",
+                                fontSize: "0.75rem",
+                                fontWeight: "500",
                                 textDecoration: "line-through",
-                                textDecorationColor: "#ef4444",
-                                textDecorationThickness: "2px",
-                                color: "#6b7280",
-                                marginBottom: "1px",
+                                textDecorationColor: "#9ca3af",
+                                color: "#9ca3af",
+                                marginBottom: "2px",
                               }}
                             >
                               {originalPrice.toFixed(2)} TL
                             </div>
-                            {/* Yeni Fiyat */}
-                            <div
-                              className="new-price-large"
-                              style={{
-                                fontSize: "1.1rem",
-                                fontWeight: "800",
-                                color: "#ef4444",
-                                lineHeight: "1.2",
-                              }}
-                            >
-                              {currentPrice.toFixed(2)} TL
-                            </div>
-                            {/* Tasarruf Bilgisi */}
-                            <div
-                              className="savings-info"
-                              style={{
-                                fontSize: "0.6rem",
-                                color: "#10b981",
-                                fontWeight: "600",
-                                marginTop: "1px",
-                              }}
-                            >
-                              <i className="fas fa-gift me-1"></i>
-                              {(originalPrice - currentPrice).toFixed(2)} TL
-                              tasarruf
+                            {/* Yeni Fiyat ve İndirim Yüzdesi */}
+                            <div className="d-flex align-items-center gap-2">
+                              <div
+                                className="new-price-large"
+                                style={{
+                                  fontSize: "1.1rem",
+                                  fontWeight: "800",
+                                  color: "#dc2626",
+                                  lineHeight: "1.2",
+                                }}
+                              >
+                                {currentPrice.toFixed(2)} TL
+                              </div>
+                              <span
+                                style={{
+                                  background: "rgba(220, 38, 38, 0.1)",
+                                  color: "#b91c1c",
+                                  border: "1px solid rgba(220, 38, 38, 0.25)",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  fontSize: "0.65rem",
+                                  fontWeight: "700",
+                                }}
+                              >
+                                -%{discountPercent}
+                              </span>
                             </div>
                           </div>
                         ) : (
@@ -963,6 +1061,20 @@ const ProductBlockSection = ({
           </div>
         </div>
       )}
+
+      {/* Kg Seçici Modal */}
+      <WeightSelectionModal
+        isOpen={weightModalOpen}
+        onClose={() => {
+          setWeightModalOpen(false);
+          setWeightModalProduct(null);
+        }}
+        product={weightModalProduct}
+        onConfirm={handleWeightConfirm}
+        minWeight={0.5}
+        maxWeight={10}
+        step={0.5}
+      />
     </section>
   );
 };

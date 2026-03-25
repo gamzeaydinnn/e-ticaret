@@ -18,6 +18,8 @@ export default function ProductCard({
   onToggleFavorite,
   isFavorite,
   campaign,
+  showShare = true,
+  cardMaxWidth = "280px",
 }) {
   // Eğer ürün bilgisi gelmezse, bileşeni render etme.
   if (!product) {
@@ -104,7 +106,7 @@ export default function ProductCard({
     e.preventDefault();
     console.log("🛒 Sepete Ekle tıklandı:", product.id, product.name);
     if (onAddToCart) {
-      onAddToCart(product.id);
+      onAddToCart(product);
     } else {
       console.error("❌ onAddToCart fonksiyonu tanımlı değil!");
       alert("Sepete ekleme fonksiyonu bulunamadı. Lütfen sayfayı yenileyin.");
@@ -142,7 +144,7 @@ export default function ProductCard({
         overflow: "hidden",
         position: "relative",
         cursor: "pointer",
-        maxWidth: "280px",
+        maxWidth: cardMaxWidth,
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
@@ -402,7 +404,10 @@ export default function ProductCard({
       </div>
 
       {/* Sepete Ekle Butonu - Kartın en altında */}
-      <div className="action-buttons p-3 pt-0" style={{ marginTop: "auto", position: "relative", zIndex: 10 }}>
+      <div
+        className="action-buttons p-3 pt-0"
+        style={{ marginTop: "auto", position: "relative", zIndex: 10 }}
+      >
         <button
           type="button"
           className="modern-add-btn w-100"
@@ -428,24 +433,26 @@ export default function ProductCard({
           ></i>
           Sepete Ekle
         </button>
-        <button
-          className="btn w-100 mt-2"
-          onClick={handleShare}
-          style={{
-            borderRadius: "20px",
-            border: "1px solid rgba(0,0,0,0.1)",
-            background: "#fff",
-            fontWeight: "600",
-            padding: "8px 16px",
-            fontSize: "0.75rem",
-          }}
-        >
-          <i
-            className="fas fa-share-alt me-1"
-            style={{ fontSize: "0.7rem" }}
-          ></i>
-          Paylaş
-        </button>
+        {showShare && (
+          <button
+            className="btn w-100 mt-2"
+            onClick={handleShare}
+            style={{
+              borderRadius: "20px",
+              border: "1px solid rgba(0,0,0,0.1)",
+              background: "#fff",
+              fontWeight: "600",
+              padding: "8px 16px",
+              fontSize: "0.75rem",
+            }}
+          >
+            <i
+              className="fas fa-share-alt me-1"
+              style={{ fontSize: "0.7rem" }}
+            ></i>
+            Paylaş
+          </button>
+        )}
       </div>
     </div>
   );

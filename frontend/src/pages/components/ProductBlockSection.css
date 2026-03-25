@@ -94,8 +94,8 @@
 .product-block-section .original-price {
   font-size: 0.8rem;
   text-decoration: line-through;
-  text-decoration-color: #ef4444;
-  text-decoration-thickness: 2px;
+  text-decoration-color: #9ca3af;
+  text-decoration-thickness: 1px;
   color: #9ca3af;
 }
 
@@ -109,8 +109,7 @@
 .product-block-section .price-container .current-price {
   font-size: 1.2rem;
   font-weight: 800;
-  color: #ef4444;
-  text-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+  color: #ff6b35;
 }
 
 /* =====================================================
@@ -637,7 +636,7 @@
 
   .product-block-section .price-container .current-price {
     font-size: 0.8rem !important;
-    color: #ef4444 !important;
+    color: #ff6b35 !important;
   }
 
   .product-block-section .original-price,
@@ -645,22 +644,18 @@
     font-size: 0.6rem !important;
     display: block !important;
     line-height: 1.1 !important;
-    text-decoration-thickness: 1.5px !important;
+    text-decoration-thickness: 1px !important;
+    text-decoration-color: #9ca3af !important;
+    color: #9ca3af !important;
     margin-bottom: 1px !important;
   }
 
-  /* İndirim badge - mobilde küçült */
-  .product-block-section .discount-badge-large {
-    padding: 2px 6px !important;
+  /* FIRSAT badge - mobilde küçült */
+  .product-block-section .opportunity-badge {
+    padding: 3px 8px !important;
     font-size: 0.55rem !important;
-    border-radius: 10px !important;
-    margin-bottom: 2px !important;
-    box-shadow: none !important;
-    animation: none !important;
-  }
-
-  .product-block-section .discount-badge-large i {
-    display: none !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.3px !important;
   }
 
   /* Yeni fiyat */
@@ -668,7 +663,7 @@
     font-size: 0.8rem !important;
     font-weight: 800 !important;
     line-height: 1.1 !important;
-    text-shadow: none !important;
+    color: #ff6b35 !important;
   }
 
   /* Tasarruf bilgisi - mobilde gizle */
@@ -721,16 +716,37 @@
 }
 
 /* =====================================================
-   İNDİRİM BADGE STİLLERİ (Animasyonsuz - Profesyonel)
+   İNDİRİMLİ ÜRÜN KARTI STİLLERİ (Minimalist)
    ===================================================== */
 
-/* İndirimli ürün kartları için özel stil - sadece hafif gölge */
+/* İndirimli ürün kartları - normal kartlarla aynı görünüm */
 .product-block-card.has-discount {
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
+/* FIRSAT Badge - Minimalist Stil */
+.opportunity-badge {
+  background: linear-gradient(135deg, #ff6b35, #f97316);
+  color: white;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.35);
+}
+
 /* İndirim badge responsive */
 @media (max-width: 576px) {
+  /* FIRSAT badge - mobilde küçült */
+  .opportunity-badge {
+    padding: 3px 8px !important;
+    font-size: 0.6rem !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.3px !important;
+  }
+
   .discount-badge {
     padding: 3px 6px !important;
     font-size: 0.65rem !important;

@@ -149,8 +149,9 @@ namespace ECommerce.API.Controllers.Admin
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Kampanya oluşturma hatası");
-                return StatusCode(500, new { message = "Kampanya oluşturulurken hata oluştu." });
+                _logger.LogError(ex, "Kampanya oluşturma hatası. Detay: {Message}, InnerException: {Inner}",
+                    ex.Message, ex.InnerException?.Message);
+                return StatusCode(500, new { message = $"Kampanya oluşturulurken hata oluştu: {ex.Message}" });
             }
         }
 
