@@ -246,6 +246,7 @@ export const CartProvider = ({ children }) => {
       const variantId = variantInfo?.variantId || null;
       const fallbackQuantity = getIntegerQuantityFallback(quantity);
       const isWeightBased = isWeightBasedProductLike(product);
+      const hasFractionalQuantity = isFractionalQuantity(quantity);
 
       try {
         if (isAuthenticated && user?.id) {
@@ -277,7 +278,7 @@ export const CartProvider = ({ children }) => {
               }
               await loadCart();
               window.dispatchEvent(new Event("cart:updated"));
-              if (isWeightBased) {
+              if (hasFractionalQuantity) {
                 setWeightOverride(productId, variantId, quantity);
               }
               return {
@@ -296,9 +297,9 @@ export const CartProvider = ({ children }) => {
         // Cart updated event - diğer componentler dinleyebilir
         window.dispatchEvent(new Event("cart:updated"));
 
-        if (isWeightBased && isFractionalQuantity(quantity)) {
+        if (hasFractionalQuantity) {
           setWeightOverride(productId, variantId, quantity);
-        } else if (!isWeightBased) {
+        } else {
           removeWeightOverride(productId, variantId);
         }
 
@@ -326,7 +327,7 @@ export const CartProvider = ({ children }) => {
 
             await loadCart();
             window.dispatchEvent(new Event("cart:updated"));
-            if (isWeightBased) {
+            if (hasFractionalQuantity) {
               setWeightOverride(productId, variantId, quantity);
             }
 
@@ -404,6 +405,7 @@ export const CartProvider = ({ children }) => {
         existingItem?.weightUnit === "Gram" ||
         existingItem?.weightUnit === 2 ||
         existingItem?.weightUnit === 1;
+      const hasFractionalQuantity = isFractionalQuantity(quantity);
 
       try {
         if (isAuthenticated && user?.id) {
@@ -425,8 +427,10 @@ export const CartProvider = ({ children }) => {
         await loadCart();
         window.dispatchEvent(new Event("cart:updated"));
 
-        if (isWeightBased) {
+        if (hasFractionalQuantity) {
           setWeightOverride(productId, variantId, quantity);
+        } else {
+          removeWeightOverride(productId, variantId);
         }
 
         return { success: true };
@@ -461,8 +465,10 @@ export const CartProvider = ({ children }) => {
 
             await loadCart();
             window.dispatchEvent(new Event("cart:updated"));
-            if (isWeightBased) {
+            if (hasFractionalQuantity) {
               setWeightOverride(productId, variantId, quantity);
+            } else {
+              removeWeightOverride(productId, variantId);
             }
 
             return {
