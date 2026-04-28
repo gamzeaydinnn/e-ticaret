@@ -61,6 +61,9 @@ Thumbs.db
 
 # Deployment directory
 deploy/
+!deploy/mikro-relay/
+!deploy/mikro-relay/Dockerfile
+!deploy/mikro-relay/relay.sh
 
 # Environment files (will be created on server)
 .env
