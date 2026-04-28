@@ -54,6 +54,24 @@ fi
 # Windows'tan gelen UTF-8 BOM shell source islemini bozmasin diye ilk satirdan temizle.
 sed '1s/^\xEF\xBB\xBF//' "$ENV_FILE" > "$SANITIZED_ENV_FILE"
 
+invalid_env_line="$(awk '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+    {
+        split($0, parts, "=")
+        value = substr($0, length(parts[1]) + 2)
+        if (value ~ /[[:space:]]/ && value !~ /^["\047]/) {
+            print NR ":" $0
+            exit
+        }
+    }
+' "$SANITIZED_ENV_FILE")"
+
+if [ -n "$invalid_env_line" ]; then
+    echo "❌ .env icinde bosluk iceren ama tirnaksiz bir deger var: $invalid_env_line"
+    echo "   Ornek duzeltme: MIKRO_FIRMA_KODU=\"Ze-Me 2023\""
+    exit 1
+fi
+
 set -a
 . "$SANITIZED_ENV_FILE"
 set +a
