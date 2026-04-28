@@ -321,3 +321,13 @@ nul
 
 # Publish çıktıları (iç içe publish klasörleri)
 **/publish/publish/
+
+# Production and secret config files
+.env
+.env.production
+!.env.production.template
+vpn.ovpn
+
+# Local-only appsettings with real secrets or machine-specific VPN settings
+src/ECommerce.API/appsettings.Development.json
+src/ECommerce.API/appsettings.VpnTest.json

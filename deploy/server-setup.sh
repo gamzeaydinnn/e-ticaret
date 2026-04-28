@@ -5,7 +5,7 @@
 
 set -e  # Exit on error
 
-REMOTE_PATH="/home/huseyinadm/ecommerce"
+REMOTE_PATH="/root/eticaret"
 SERVER_DOMAIN="31.186.24.78"  # Change to your domain if available
 
 echo "=== E-Commerce Server Setup ==="
@@ -69,6 +69,15 @@ sudo ufw --force enable
 echo "[OK] Firewall configured"
 
 echo ""
+echo "=== Step 5.1: Preparing TUN Device For VPN Sidecar ==="
+sudo modprobe tun || true
+if [ ! -c /dev/net/tun ]; then
+    sudo mkdir -p /dev/net
+    sudo mknod /dev/net/tun c 10 200 || true
+fi
+echo "[OK] /dev/net/tun hazır"
+
+echo ""
 echo "=== Step 6: Creating Project Directory ==="
 if [ ! -d "$REMOTE_PATH" ]; then
     sudo mkdir -p $REMOTE_PATH
@@ -102,6 +111,24 @@ JWT_SECRET=YourVeryStrongSecretKeyMinimum32Characters!!!
 
 # Domain Configuration
 SERVER_DOMAIN=31.186.24.78
+
+# Mikro VPN Sidecar Configuration
+VPN_CONFIG_PATH=./vpn.ovpn
+MIKRO_API_TARGET_HOST=10.0.0.3
+MIKRO_API_TARGET_PORT=8084
+MIKRO_API_RELAY_PORT=8084
+MIKRO_API_KEY=CHANGE_ME
+MIKRO_FIRMA_KODU=CHANGE_ME
+MIKRO_KULLANICI_KODU=CHANGE_ME
+MIKRO_SIFRE=CHANGE_ME
+MIKRO_CALISMA_YILI=2026
+MIKRO_SQL_TARGET_HOST=10.0.0.3
+MIKRO_SQL_TARGET_PORT=1433
+MIKRO_SQL_RELAY_PORT=1433
+MIKRO_SQL_DATABASE=MikroDB_V16_2023
+MIKRO_SQL_USER=CHANGE_ME
+MIKRO_SQL_PASSWORD=CHANGE_ME
+MIKRO_SQL_COMMAND_TIMEOUT_SECONDS=30
 EOF
     echo "[OK] .env file created"
 else
@@ -113,10 +140,10 @@ echo "=== Setup Complete! ==="
 echo ""
 echo "Next steps:"
 echo "1. Upload your project files to: $REMOTE_PATH"
-echo "2. Update configuration files (appsettings.json, .env)"
-echo "3. Run: docker-compose -f docker-compose.prod.yml up -d --build"
-echo "4. Check status: docker-compose -f docker-compose.prod.yml ps"
-echo "5. View logs: docker-compose -f docker-compose.prod.yml logs -f"
+echo "2. Verify vpn.ovpn content and fill Mikro values in .env"
+echo "3. Run: docker compose -f docker-compose.prod.yml up -d --build"
+echo "4. Check status: docker compose -f docker-compose.prod.yml ps"
+echo "5. View logs: docker compose -f docker-compose.prod.yml logs -f"
 echo ""
 echo "Access your application:"
 echo "  - Frontend: http://$SERVER_DOMAIN:3000"

@@ -9,47 +9,94 @@
 
 set -e  # Hata durumunda dur
 
+compose() {
+    if docker compose version > /dev/null 2>&1; then
+        docker compose "$@"
+    else
+        docker-compose "$@"
+    fi
+}
+
 echo "=========================================="
 echo "🔄 MİKRO API ENTEGRASYON DEPLOY"
 echo "=========================================="
 echo ""
 
-# Proje dizinine git
-cd /root/eticaret
+# Scriptin bulundugu repodan proje kokunu bul
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# 1. Mikro API durumunu kontrol et
-echo "📍 Adım 1/6: Mikro API durumu kontrol ediliyor..."
-if curl -k -s https://localhost:8094/Api/APIMethods/HealthCheck > /dev/null 2>&1; then
-    echo "✅ Mikro API erişilebilir (port 8094)"
-else
-    echo "⚠️  Mikro API erişilemiyor! Port 8094'ü kontrol edin."
-    echo "    Devam edilsin mi? (y/n)"
-    read -r continue_deploy
-    if [ "$continue_deploy" != "y" ]; then
-        echo "Deploy iptal edildi."
-        exit 1
-    fi
+# Proje dizinine git
+cd "$PROJECT_ROOT"
+
+set -a
+. ./.env
+set +a
+
+vpn_config_path="${VPN_CONFIG_PATH:-./vpn.ovpn}"
+case "$vpn_config_path" in
+    /*) ;;
+    *) vpn_config_path="$PROJECT_ROOT/${vpn_config_path#./}" ;;
+esac
+
+# 1. VPN config dosyasını kontrol et
+echo "📍 Adım 1/7: VPN konfigürasyonu kontrol ediliyor..."
+if [ ! -s "$vpn_config_path" ]; then
+    echo "❌ VPN config dosyası bulunamadı veya boş: $vpn_config_path"
+    echo "   Gerçek OpenVPN config dosyasını bu path'e koymadan deploy devam etmez."
+    exit 1
+fi
+echo "✅ VPN config hazır: $vpn_config_path"
+
+if [ ! -f .env ]; then
+    echo "❌ .env bulunamadı. Mikro VPN ve Mikro SQL ayarlari olmadan deploy devam etmeyecek."
+    exit 1
+fi
+
+if grep -q '^MIKRO_SQL_USER=CHANGE_ME$' .env || grep -q '^MIKRO_SQL_PASSWORD=CHANGE_ME$' .env; then
+    echo "❌ .env icindeki MIKRO_SQL_USER / MIKRO_SQL_PASSWORD hala CHANGE_ME durumda."
+    echo "   Gercek Mikro SQL kullanici bilgilerini yazmadan deploy etmeyin."
+    exit 1
+fi
+
+if grep -q '^MIKRO_API_KEY=CHANGE_ME$' .env \
+    || grep -q '^MIKRO_FIRMA_KODU=CHANGE_ME$' .env \
+    || grep -q '^MIKRO_KULLANICI_KODU=CHANGE_ME$' .env \
+    || grep -q '^MIKRO_SIFRE=CHANGE_ME$' .env; then
+    echo "❌ .env icindeki Mikro API kimlik alanlari eksik."
+    echo "   MIKRO_API_KEY, MIKRO_FIRMA_KODU, MIKRO_KULLANICI_KODU ve MIKRO_SIFRE gercek degerler olmali."
+    exit 1
 fi
 
 # 2. Mevcut container'ları durdur
 echo ""
-echo "📍 Adım 2/6: Container'lar durduruluyor..."
-docker-compose -f docker-compose.prod.yml down || true
+echo "📍 Adım 2/7: Container'lar durduruluyor..."
+compose -f docker-compose.prod.yml down || true
 
 # 3. Backend image'ı yeniden oluştur
 echo ""
-echo "📍 Adım 3/6: Backend image build ediliyor..."
-docker-compose -f docker-compose.prod.yml build api --no-cache
+echo "📍 Adım 3/7: Gerekli image'lar build ediliyor..."
+compose -f docker-compose.prod.yml build api mikro-api-relay mikro-sql-relay --no-cache
 
 # 4. Container'ları başlat
 echo ""
-echo "📍 Adım 4/6: Container'lar başlatılıyor..."
-docker-compose -f docker-compose.prod.yml up -d
+echo "📍 Adım 4/7: Container'lar başlatılıyor..."
+compose -f docker-compose.prod.yml up -d
 
-# 5. Sağlık kontrolü
+# 5. VPN sidecar erişimini kontrol et
 echo ""
-echo "📍 Adım 5/6: Sağlık kontrolleri yapılıyor..."
+echo "📍 Adım 5/7: VPN sidecar erişimi kontrol ediliyor..."
 sleep 10  # Container'ların başlamasını bekle
+
+if docker exec mikro-vpn wget -q -O- http://127.0.0.1:8000/v1/openvpn/status > /dev/null 2>&1; then
+    echo "  ✅ mikro-vpn kontrol sunucusu yanıt veriyor"
+else
+    echo "  ⚠️  mikro-vpn kontrol sunucusuna erişilemedi"
+fi
+
+# 6. Sağlık kontrolü
+echo ""
+echo "📍 Adım 6/7: Uygulama sağlık kontrolleri yapılıyor..."
 
 # Backend health check
 echo "  → Backend health check..."
@@ -72,18 +119,18 @@ else
     echo "  ⚠️  Frontend yanıt vermiyor!"
 fi
 
-# 6. Mikro bağlantı testi
+# 7. Mikro bağlantı testi
 echo ""
-echo "📍 Adım 6/6: Mikro API bağlantı testi..."
-docker exec ecommerce-api-prod curl -k -s https://host.docker.internal:8094/Api/APIMethods/HealthCheck > /dev/null 2>&1
+echo "📍 Adım 7/7: Mikro API bağlantı testi..."
+docker exec ecommerce-api-prod curl -k -s https://mikro-vpn:${MIKRO_API_RELAY_PORT:-8084}/Api/APIMethods/HealthCheck > /dev/null 2>&1
 if [ $? -eq 0 ]; then
-    echo "  ✅ Container'dan Mikro API'ye erişim başarılı"
+    echo "  ✅ API container'ından mikro-vpn relay üzerinden Mikro API'ye erişim başarılı"
 else
-    echo "  ⚠️  Container'dan Mikro API'ye erişilemiyor!"
+    echo "  ⚠️  mikro-vpn relay üzerinden Mikro API'ye erişilemiyor!"
     echo "      Muhtemel çözümler:"
-    echo "      1. extra_hosts ayarını kontrol edin"
-    echo "      2. Firewall kurallarını kontrol edin"
-    echo "      3. Mikro API SSL sertifikasını kontrol edin"
+    echo "      1. vpn.ovpn dosyasının gecerli oldugunu kontrol edin"
+    echo "      2. .env icindeki MIKRO_API_TARGET_HOST / PORT degerlerini kontrol edin"
+    echo "      3. MikroSettings__IgnoreSslErrors ayarini kapatmadiğinizdan emin olun"
 fi
 
 # Sonuç
@@ -93,10 +140,11 @@ echo "📊 DEPLOY TAMAMLANDI"
 echo "=========================================="
 echo ""
 echo "Container durumları:"
-docker-compose -f docker-compose.prod.yml ps
+compose -f docker-compose.prod.yml ps
 echo ""
 echo "Mikro API loglarını görmek için:"
 echo "  docker logs ecommerce-api-prod 2>&1 | grep -i mikro"
+echo "  docker logs mikro-vpn"
 echo ""
 echo "Hangfire dashboard:"
 echo "  https://golkoygurme.com.tr/hangfire"

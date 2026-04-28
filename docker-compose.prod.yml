@@ -30,6 +30,61 @@ services:
       retries: 10
       start_period: 30s
 
+  mikro-vpn:
+    image: qmcgaw/gluetun:latest
+    container_name: mikro-vpn
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=${TZ:-Europe/Istanbul}
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
+      - FIREWALL_INPUT_PORTS=${MIKRO_API_RELAY_PORT:-8084},${MIKRO_SQL_RELAY_PORT:-1433}
+      - LOG_LEVEL=info
+    volumes:
+      - ${VPN_CONFIG_PATH:-./vpn.ovpn}:/gluetun/custom.conf:ro
+    networks:
+      - ecommerce-network
+
+  mikro-api-relay:
+    build:
+      context: .
+      dockerfile: deploy/mikro-relay/Dockerfile
+    container_name: mikro-api-relay
+    restart: always
+    network_mode: "service:mikro-vpn"
+    depends_on:
+      mikro-vpn:
+        condition: service_started
+    environment:
+      - RELAY_LISTEN_PORT=${MIKRO_API_RELAY_PORT:-8084}
+      - RELAY_TARGET_HOST=${MIKRO_API_TARGET_HOST:-10.0.0.3}
+      - RELAY_TARGET_PORT=${MIKRO_API_TARGET_PORT:-8084}
+
+  mikro-sql-relay:
+    build:
+      context: .
+      dockerfile: deploy/mikro-relay/Dockerfile
+    container_name: mikro-sql-relay
+    restart: always
+    network_mode: "service:mikro-vpn"
+    depends_on:
+      mikro-vpn:
+        condition: service_started
+    environment:
+      - RELAY_LISTEN_PORT=${MIKRO_SQL_RELAY_PORT:-1433}
+      - RELAY_TARGET_HOST=${MIKRO_SQL_TARGET_HOST:-10.0.0.3}
+      - RELAY_TARGET_PORT=${MIKRO_SQL_TARGET_PORT:-1433}
+
   api:
     build:
       context: ./src
@@ -43,51 +98,50 @@ services:
         max-file: "5"
     ports:
       - "5000:5000"
-    extra_hosts:
-      # Docker container içinden sunucu host'a erişim için (Mikro API)
-      - "host.docker.internal:host-gateway"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ECommerceDb;User Id=sa;Password=ECom1234;TrustServerCertificate=True;
-      - Jwt__Key=YourVeryStrongSecretKeyMinimum32CharactersLong!!!
-      - Jwt__Issuer=ECommerceAPI
-      - Jwt__Audience=ECommerceClient
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${APP_DB_NAME:-ECommerceDb};User Id=sa;Password=${DB_PASSWORD:-CHANGE_ME};TrustServerCertificate=True;
+      - Jwt__Key=${JWT_SECRET:-CHANGE_ME}
+      - Jwt__Issuer=${JWT_ISSUER:-ECommerceAPI}
+      - Jwt__Audience=${JWT_AUDIENCE:-ECommerceClient}
       # ====== MİKRO ERP ENTEGRASYON AYARLARI ======
-      # Docker container içinden sunucu host'a erişim: host.docker.internal:8094
-      # Hash Formatı: MD5(YYYY-MM-DD şifre) - Kod her gün otomatik hash üretir
-      - MikroSettings__ApiUrl=https://host.docker.internal:8094
-      - MikroSettings__ApiKey=PZDEzh44zNcY2WKpOaoPHV5+mlVG1420SPXn3QBuVqcO6MvOk1j6NlSSFONwtTJV0ovN+6CjB6IKfPYN4TLXmjs6ESUxcwa2Yp+abW9+lac=
-      - MikroSettings__FirmaKodu=Ze-Me 2023
-      - MikroSettings__KullaniciKodu=Golkoy2
-      - MikroSettings__Sifre=ZeMe@48.golkoy2
-      - MikroSettings__CalismaYili=2026
-      - MikroSettings__DefaultDepoNo=1
-      - MikroSettings__DefaultSubeNo=0
-      - MikroSettings__DefaultFirmaNo=0
-      - MikroSettings__DefaultEvrakSeri=E
-      - MikroSettings__StokSyncIntervalMinutes=15
-      - MikroSettings__FiyatSyncIntervalMinutes=60
-      - MikroSettings__MaxRetryAttempts=3
-      - MikroSettings__RequestTimeoutSeconds=30
-      - MikroSettings__OnlineMusteriPrefix=WEB-
+      # Mikro HTTP ve Mikro SQL trafiği mikro-vpn sidecar üstünden tünellenir.
+      - MikroSettings__ApiUrl=https://mikro-vpn:${MIKRO_API_RELAY_PORT:-8084}
+      - MikroSettings__ApiKey=${MIKRO_API_KEY:-CHANGE_ME}
+      - MikroSettings__FirmaKodu=${MIKRO_FIRMA_KODU:-CHANGE_ME}
+      - MikroSettings__KullaniciKodu=${MIKRO_KULLANICI_KODU:-CHANGE_ME}
+      - MikroSettings__Sifre=${MIKRO_SIFRE:-CHANGE_ME}
+      - MikroSettings__CalismaYili=${MIKRO_CALISMA_YILI:-2026}
+      - MikroSettings__DefaultDepoNo=${MIKRO_DEFAULT_DEPO_NO:-1}
+      - MikroSettings__DefaultSubeNo=${MIKRO_DEFAULT_SUBE_NO:-0}
+      - MikroSettings__DefaultFirmaNo=${MIKRO_DEFAULT_FIRMA_NO:-0}
+      - MikroSettings__DefaultEvrakSeri=${MIKRO_DEFAULT_EVRAK_SERI:-E}
+      - MikroSettings__StokSyncIntervalMinutes=${MIKRO_STOK_SYNC_INTERVAL_MINUTES:-15}
+      - MikroSettings__FiyatSyncIntervalMinutes=${MIKRO_FIYAT_SYNC_INTERVAL_MINUTES:-60}
+      - MikroSettings__MaxRetryAttempts=${MIKRO_MAX_RETRY_ATTEMPTS:-3}
+      - MikroSettings__RequestTimeoutSeconds=${MIKRO_REQUEST_TIMEOUT_SECONDS:-120}
+      - MikroSettings__IgnoreSslErrors=${MIKRO_IGNORE_SSL_ERRORS:-true}
+      - "MikroSettings__SqlConnectionString=Server=mikro-vpn,${MIKRO_SQL_RELAY_PORT:-1433};Database=${MIKRO_SQL_DATABASE:-MikroDB_V16_2023};User Id=${MIKRO_SQL_USER:-CHANGE_ME};Password=${MIKRO_SQL_PASSWORD:-CHANGE_ME};TrustServerCertificate=True;Connect Timeout=10;"
+      - MikroSettings__SqlCommandTimeoutSeconds=${MIKRO_SQL_COMMAND_TIMEOUT_SECONDS:-30}
+      - MikroSettings__OnlineMusteriPrefix=${MIKRO_ONLINE_MUSTERI_PREFIX:-WEB-}
       # ====== MİKRO SYNC JOB AYARLARI (HANGFIRE) ======
-      - MikroSync__JobsEnabled=true
-      - MikroSync__StockSyncCron=*/15 * * * *
-      - MikroSync__PriceSyncCron=0 * * * *
-      - MikroSync__FullSyncCron=0 6 * * *
-      - MikroSync__OrderPushCron=*/5 * * * *
-      - MikroSync__MaxRetryAttempts=3
-      - MikroSync__BatchSize=100
-      - MikroSync__DashboardPath=/hangfire
+      - MikroSync__JobsEnabled=${MIKRO_SYNC_JOBS_ENABLED:-true}
+      - MikroSync__StockSyncCron=${MIKRO_SYNC_STOCK_CRON:-*/15 * * * *}
+      - MikroSync__PriceSyncCron=${MIKRO_SYNC_PRICE_CRON:-0 * * * *}
+      - MikroSync__FullSyncCron=${MIKRO_SYNC_FULL_CRON:-0 6 * * *}
+      - MikroSync__OrderPushCron=${MIKRO_SYNC_ORDER_PUSH_CRON:-*/5 * * * *}
+      - MikroSync__MaxRetryAttempts=${MIKRO_SYNC_MAX_RETRY_ATTEMPTS:-3}
+      - MikroSync__BatchSize=${MIKRO_SYNC_BATCH_SIZE:-100}
+      - MikroSync__DashboardPath=${MIKRO_SYNC_DASHBOARD_PATH:-/hangfire}
       # ====== NetGSM SMS Configuration ======
-      - NetGsm__UserCode=8503078774
-      - NetGsm__Password=123456Z-M
-      - NetGsm__MsgHeader=GOLKYGURMEM
-      - NetGsm__AppName=E-Ticaret
-      - NetGsm__ApiUrl=https://api.netgsm.com.tr/sms/rest/v2
-      - NetGsm__Enabled=true
-      - NetGsm__UseMockService=false
+      - NetGsm__UserCode=${NETGSM_USERCODE:-CHANGE_ME}
+      - NetGsm__Password=${NETGSM_PASSWORD:-CHANGE_ME}
+      - NetGsm__MsgHeader=${NETGSM_MSGHEADER:-CHANGE_ME}
+      - NetGsm__AppName=${NETGSM_APPNAME:-E-Ticaret}
+      - NetGsm__ApiUrl=${NETGSM_APIURL:-https://api.netgsm.com.tr/sms/rest/v2}
+      - NetGsm__Enabled=${NETGSM_ENABLED:-true}
+      - NetGsm__UseMockService=${NETGSM_USEMOCKSERVICE:-false}
       # SMS Verification Settings
       - SmsVerification__ExpirationSeconds=180
       - SmsVerification__ResendCooldownSeconds=60
@@ -95,24 +149,24 @@ services:
       - SmsVerification__HourlyMaxOtpCount=3
       - SmsVerification__MaxWrongAttempts=3
       - SmsVerification__CodeLength=6
-      - SmsVerification__AppName=E-Ticaret
+      - SmsVerification__AppName=${SMS_APP_NAME:-E-Ticaret}
       # POSNET Enabled Flag - POSNET servislerinin kaydedilmesi için gerekli!
-      - Payment__Posnet__Enabled=true
+      - Payment__Posnet__Enabled=${PAYMENT_POSNET_ENABLED:-true}
       # POSNET Configuration (Yapı Kredi 3D Secure)
-      - PaymentSettings__PosnetMerchantId=6702703092
-      - PaymentSettings__PosnetTerminalId=67D197D1
-      - PaymentSettings__PosnetId=1010756190290813
-      - PaymentSettings__PosnetEncKey=Z4H8R9B5K1N7M4H8M9T5V1S7N5
-      - PaymentSettings__PosnetXmlServiceUrl=https://posnet.yapikredi.com.tr/PosnetWebService/XML
-      - PaymentSettings__Posnet3DServiceUrl=https://posnet.yapikredi.com.tr/3DSWebService/YKBPaymentService
-      - PaymentSettings__PosnetCallbackUrl=https://golkoygurme.com.tr/api/payments/posnet/3d-callback
-      - PaymentSettings__ReturnUrlSuccess=https://golkoygurme.com.tr/checkout/success
-      - PaymentSettings__ReturnUrlCancel=https://golkoygurme.com.tr/checkout/cancel
-      - PaymentSettings__IyzicoCallbackUrl=https://golkoygurme.com.tr/api/payments/iyzico/callback
-      - AppSettings__BaseUrl=https://golkoygurme.com.tr
-      - PaymentSettings__PosnetIsTestEnvironment=false
-      - PaymentSettings__PosnetTimeoutSeconds=60
-      - PaymentSettings__PosnetWorldPointEnabled=true
+      - PaymentSettings__PosnetMerchantId=${POSNET_MERCHANT_ID:-CHANGE_ME}
+      - PaymentSettings__PosnetTerminalId=${POSNET_TERMINAL_ID:-CHANGE_ME}
+      - PaymentSettings__PosnetId=${POSNET_ID:-CHANGE_ME}
+      - PaymentSettings__PosnetEncKey=${POSNET_ENC_KEY:-CHANGE_ME}
+      - PaymentSettings__PosnetXmlServiceUrl=${POSNET_XML_SERVICE_URL:-https://posnet.yapikredi.com.tr/PosnetWebService/XML}
+      - PaymentSettings__Posnet3DServiceUrl=${POSNET_3D_SERVICE_URL:-https://posnet.yapikredi.com.tr/3DSWebService/YKBPaymentService}
+      - PaymentSettings__PosnetCallbackUrl=${POSNET_CALLBACK_URL:-https://golkoygurme.com.tr/api/payments/posnet/3d-callback}
+      - PaymentSettings__ReturnUrlSuccess=${PAYMENT_RETURN_URL_SUCCESS:-https://golkoygurme.com.tr/checkout/success}
+      - PaymentSettings__ReturnUrlCancel=${PAYMENT_RETURN_URL_CANCEL:-https://golkoygurme.com.tr/checkout/cancel}
+      - PaymentSettings__IyzicoCallbackUrl=${IYZICO_CALLBACK_URL:-https://golkoygurme.com.tr/api/payments/iyzico/callback}
+      - AppSettings__BaseUrl=${APP_BASE_URL:-https://golkoygurme.com.tr}
+      - PaymentSettings__PosnetIsTestEnvironment=${POSNET_IS_TEST_ENVIRONMENT:-false}
+      - PaymentSettings__PosnetTimeoutSeconds=${POSNET_TIMEOUT_SECONDS:-60}
+      - PaymentSettings__PosnetWorldPointEnabled=${POSNET_WORLDPOINT_ENABLED:-true}
       # CORS Configuration for production
       - Cors__AllowedOrigins__0=https://golkoygurme.com.tr
       - Cors__AllowedOrigins__1=https://www.golkoygurme.com.tr
@@ -122,6 +176,12 @@ services:
     depends_on:
       sqlserver:
         condition: service_healthy
+      mikro-vpn:
+        condition: service_started
+      mikro-api-relay:
+        condition: service_started
+      mikro-sql-relay:
+        condition: service_started
     volumes:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
