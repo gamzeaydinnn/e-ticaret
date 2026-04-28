@@ -140,6 +140,23 @@ const ProductBlockSection = ({
     );
   };
 
+  const resolveIdFromEntity = (entity) => {
+    if (!entity || typeof entity !== "object") return null;
+
+    return (
+      entity.id ??
+      entity.Id ??
+      entity.ID ??
+      entity.productId ??
+      entity.ProductId ??
+      entity.productID ??
+      entity.ProductID ??
+      entity.urunId ??
+      entity.UrunId ??
+      null
+    );
+  };
+
   // Sepet anahtarını varyant bazında ayırmak için ortak variant info üretir
   const getVariantInfoFromProduct = (product) => {
     if (!product) return null;
@@ -245,15 +262,7 @@ const ProductBlockSection = ({
 
   const resolveProductData = (item) => {
     const product = item?.product || item?.Product || item;
-    const rawId =
-      product?.id ??
-      product?.Id ??
-      product?.productId ??
-      product?.ProductId ??
-      item?.productId ??
-      item?.ProductId ??
-      item?.id ??
-      item?.Id;
+    const rawId = resolveIdFromEntity(product) ?? resolveIdFromEntity(item);
     const productId =
       rawId === undefined || rawId === null ? null : Number(rawId);
     return {
@@ -265,7 +274,9 @@ const ProductBlockSection = ({
 
   // Ürüne tıklayınca - ProductGrid ile AYNI
   const handleProductClick = (e, productId) => {
-    if (!productId) return;
+    if (productId === undefined || productId === null || productId === "") {
+      return;
+    }
     // Butonlara tıklanmışsa yönlendirme yapma
     if (
       e.target.closest(".btn-favorite") ||
@@ -281,17 +292,16 @@ const ProductBlockSection = ({
     e.preventDefault();
     e.stopPropagation();
 
-    const rawResolvedId =
-      productId ??
-      product?.id ??
-      product?.Id ??
-      product?.productId ??
-      product?.ProductId;
+    const rawResolvedId = productId ?? resolveIdFromEntity(product);
     if (rawResolvedId === undefined || rawResolvedId === null) return;
     const numericResolvedId = Number(rawResolvedId);
     const resolvedId = Number.isNaN(numericResolvedId)
       ? rawResolvedId
       : numericResolvedId;
+
+    const resolvedStockQuantity = Number(
+      product.stockQuantity ?? product.StockQuantity ?? product.stock ?? 0,
+    );
 
     // Product objesini düzgün formatta hazırla
     const productToAdd = {
@@ -306,8 +316,9 @@ const ProductBlockSection = ({
         product.Price ||
         0,
       imageUrl: product.imageUrl || product.ImageUrl || product.image || "",
-      stockQuantity:
-        product.stockQuantity || product.StockQuantity || product.stock || 100,
+      stockQuantity: Number.isFinite(resolvedStockQuantity)
+        ? resolvedStockQuantity
+        : 0,
       // Toast bildirimi için orijinal fiyatı da ekle
       originalPrice: product.price || product.Price || 0,
       specialPrice: product.specialPrice || product.discountedPrice || null,
@@ -423,9 +434,17 @@ const ProductBlockSection = ({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!productId) return;
-    const id = parseInt(productId, 10);
-    if (Number.isNaN(id)) return;
+    if (productId === undefined || productId === null || productId === "") {
+      console.warn("[ProductBlockSection] Favori işlemi atlandı: productId boş", {
+        product,
+      });
+      return;
+    }
+    const id = Number(productId);
+    if (Number.isNaN(id)) {
+      console.warn("[ProductBlockSection] Geçersiz productId:", productId);
+      return;
+    }
 
     // Eğer zaten favoride değilse, bildirimi göster
     const alreadyFavorite = Array.isArray(favorites)
@@ -592,10 +611,12 @@ const ProductBlockSection = ({
                 const currentPrice = hasDiscount ? specialPrice : productPrice;
                 const originalPrice = hasDiscount ? productPrice : null;
                 const stock =
-                  product.stockQuantity ||
-                  product.StockQuantity ||
-                  product.stock ||
-                  100;
+                  Number(
+                    product.stockQuantity ??
+                      product.StockQuantity ??
+                      product.stock ??
+                      0,
+                  ) || 0;
                 const isOutOfStock = stock <= 0;
                 const rating = product.rating || product.Rating || 0;
                 const reviewCount =
@@ -636,7 +657,7 @@ const ProductBlockSection = ({
                       transition: "all 0.3s ease",
                     }}
                     onClick={(e) =>
-                      handleProductClick(e, productIdRaw || productId)
+                      handleProductClick(e, productIdRaw ?? productId)
                     }
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-5px)";
@@ -690,7 +711,11 @@ const ProductBlockSection = ({
                         className="btn-favorite"
                         type="button"
                         onClick={(e) =>
-                          handleToggleFavorite(e, productId, product)
+                          handleToggleFavorite(
+                            e,
+                            productIdRaw ?? productId,
+                            product,
+                          )
                         }
                         style={{
                           background: isProductFavorite
@@ -857,7 +882,7 @@ const ProductBlockSection = ({
                             handleAddToCart(
                               e,
                               product,
-                              productIdRaw || productId,
+                              productIdRaw ?? productId,
                             )
                           }
                         >

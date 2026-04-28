@@ -248,6 +248,46 @@ namespace ECommerce.Business.Services.Managers
             return allProducts.Count();
         }
 
+        /// <summary>
+        /// Sayfalı ürün listesi döndürür (PagedResult formatında).
+        /// Toplu export işlemleri için totalCount bilgisi içerir.
+        /// Cache kullanılmaz - güncel veri garantisi için.
+        /// </summary>
+        public async Task<ECommerce.Core.DTOs.PagedResult<ProductListDto>> GetProductsPagedAsync(int page = 1, int size = 50)
+        {
+            // Tüm ürünleri al (cache bypass - güncel veri için)
+            var allProducts = (await _productRepository.GetAllAsync()).ToList();
+            var totalCount = allProducts.Count;
+
+            // Sayfalama uygula
+            var pagedProducts = allProducts
+                .OrderBy(p => p.Id) // ID'ye göre sırala (deterministic)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .Select(p => new ProductListDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Slug = p.Slug ?? string.Empty,
+                    Description = p.Description ?? string.Empty,
+                    Price = p.Price,
+                    SpecialPrice = p.SpecialPrice,
+                    StockQuantity = p.StockQuantity,
+                    ImageUrl = p.ImageUrl,
+                    Brand = p.Brand?.Name ?? string.Empty,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category?.Name ?? string.Empty
+                })
+                .ToList();
+
+            return new ECommerce.Core.DTOs.PagedResult<ProductListDto>(
+                pagedProducts,
+                totalCount,
+                (page - 1) * size,
+                size
+            );
+        }
+
         public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
         {
             var cacheKey = $"all_products_{page}_{size}";

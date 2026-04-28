@@ -146,7 +146,8 @@ class SignalRHubConnection {
       this.updateState(ConnectionState.CONNECTING);
 
       // API base URL'i belirle
-      const baseUrl = process.env.REACT_APP_API_URL || "";
+      // .env yuklenmediginde 3000'e degil backend'e gitmesi icin guvenli fallback kullan
+      const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5153";
       const fullUrl = `${baseUrl}${this.hubUrl}`;
 
       // SignalR bağlantısı oluştur
@@ -154,6 +155,10 @@ class SignalRHubConnection {
         .withUrl(fullUrl, {
           // JWT token'ı access token olarak gönder
           accessTokenFactory: () => this.tokenProvider(),
+          // WebSocket uygun değilse SignalR otomatik fallback (LongPolling) kullanabilsin.
+          transport:
+            signalR.HttpTransportType.WebSockets |
+            signalR.HttpTransportType.LongPolling,
         })
         .withAutomaticReconnect({
           // Özel reconnect stratejisi: exponential backoff

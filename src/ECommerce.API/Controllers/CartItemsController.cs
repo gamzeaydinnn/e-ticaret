@@ -108,18 +108,34 @@ namespace ECommerce.API.Controllers
 
             // Varyant kontrolü (varsa)
             ProductVariant? variant = null;
+            int? resolvedVariantId = request.VariantId;
             int availableStock = product.StockQuantity;
             decimal unitPrice = product.SpecialPrice ?? product.Price;
 
-            if (request.VariantId.HasValue)
+            if (resolvedVariantId.HasValue)
             {
-                variant = await _context.ProductVariants.FindAsync(request.VariantId.Value);
+                variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
                 if (variant == null || !variant.IsActive || variant.ProductId != product.Id)
                 {
                     return BadRequest(new { message = "Geçersiz varyant." });
                 }
                 availableStock = variant.Stock;
                 unitPrice = variant.Price;
+            }
+            else
+            {
+                // VariantId gönderilmediyse stokta olan ilk aktif varyantı otomatik seç
+                variant = await _context.ProductVariants
+                    .Where(v => v.ProductId == product.Id && v.IsActive && v.Stock > 0)
+                    .OrderBy(v => v.Id)
+                    .FirstOrDefaultAsync();
+
+                if (variant != null)
+                {
+                    resolvedVariantId = variant.Id;
+                    availableStock = variant.Stock;
+                    unitPrice = variant.Price;
+                }
             }
 
             // Stok kontrolü
@@ -135,7 +151,7 @@ namespace ECommerce.API.Controllers
             var cartItem = await _cartService.AddItemToCartByTokenAsync(token, new CartItemDto
             {
                 ProductId = request.ProductId,
-                VariantId = request.VariantId,
+                VariantId = resolvedVariantId,
                 Quantity = request.Quantity,
                 UnitPrice = unitPrice,
                 ProductName = product.Name,
@@ -179,12 +195,26 @@ namespace ECommerce.API.Controllers
                     return NotFound(new { message = "Ürün bulunamadı." });
                 }
 
+                int? resolvedVariantId = request.VariantId;
                 int availableStock = product.StockQuantity;
-                if (request.VariantId.HasValue)
+                if (resolvedVariantId.HasValue)
                 {
-                    var variant = await _context.ProductVariants.FindAsync(request.VariantId.Value);
+                    var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
                     if (variant != null)
                     {
+                        availableStock = variant.Stock;
+                    }
+                }
+                else
+                {
+                    var variant = await _context.ProductVariants
+                        .Where(v => v.ProductId == product.Id && v.IsActive && v.Stock > 0)
+                        .OrderBy(v => v.Id)
+                        .FirstOrDefaultAsync();
+
+                    if (variant != null)
+                    {
+                        resolvedVariantId = variant.Id;
                         availableStock = variant.Stock;
                     }
                 }
@@ -196,6 +226,8 @@ namespace ECommerce.API.Controllers
                         availableStock = availableStock
                     });
                 }
+
+                request.VariantId = resolvedVariantId;
             }
 
             await _cartService.UpdateCartItemByTokenAsync(
@@ -376,9 +408,35 @@ namespace ECommerce.API.Controllers
                 return NotFound(new { message = "Ürün bulunamadı." });
             }
 
-            if (dto.Quantity > product.StockQuantity)
+            int? resolvedVariantId = dto.VariantId;
+            int availableStock = product.StockQuantity;
+            if (resolvedVariantId.HasValue)
             {
-                return BadRequest(new { message = $"Yetersiz stok. Maksimum {product.StockQuantity} adet." });
+                var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
+                if (variant == null || !variant.IsActive || variant.ProductId != product.Id)
+                {
+                    return BadRequest(new { message = "Geçersiz varyant." });
+                }
+
+                availableStock = variant.Stock;
+            }
+            else
+            {
+                var variant = await _context.ProductVariants
+                    .Where(v => v.ProductId == product.Id && v.IsActive && v.Stock > 0)
+                    .OrderBy(v => v.Id)
+                    .FirstOrDefaultAsync();
+
+                if (variant != null)
+                {
+                    resolvedVariantId = variant.Id;
+                    availableStock = variant.Stock;
+                }
+            }
+
+            if (dto.Quantity > availableStock)
+            {
+                return BadRequest(new { message = $"Yetersiz stok. Maksimum {availableStock} adet." });
             }
 
             // Kullanıcı ID veya CartToken kontrolü
@@ -394,7 +452,7 @@ namespace ECommerce.API.Controllers
             var item = new CartItem
             {
                 ProductId = dto.ProductId,
-                ProductVariantId = dto.VariantId,
+                ProductVariantId = resolvedVariantId,
                 Quantity = dto.Quantity,
                 UserId = userId, // Nullable - null olabilir
                 CartToken = cartToken,
@@ -404,7 +462,23 @@ namespace ECommerce.API.Controllers
 
             _context.CartItems.Add(item);
             await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetCartItem), new { id = item.Id }, item);
+
+            // Entity graph döndürmek JSON cycle'a neden olabilir (Product -> CartItems -> Product).
+            // Bu yüzden sadece gerekli alanları içeren düz bir response döndür.
+            var response = new
+            {
+                item.Id,
+                item.UserId,
+                item.ProductId,
+                ProductVariantId = item.ProductVariantId,
+                item.Quantity,
+                item.CartToken,
+                item.IsActive,
+                item.CreatedAt,
+                item.UpdatedAt
+            };
+
+            return CreatedAtAction(nameof(GetCartItem), new { id = item.Id }, response);
         }
 
         [HttpPut("{id}")]
@@ -424,13 +498,40 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = "Ürün bulunamadı." });
             }
 
-            if (dto.Quantity > product.StockQuantity)
+            int? resolvedVariantId = dto.VariantId ?? item.ProductVariantId;
+            int availableStock = product.StockQuantity;
+            if (resolvedVariantId.HasValue)
             {
-                return BadRequest(new { message = $"Yetersiz stok. Maksimum {product.StockQuantity} adet." });
+                var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
+                if (variant == null || !variant.IsActive || variant.ProductId != product.Id)
+                {
+                    return BadRequest(new { message = "Geçersiz varyant." });
+                }
+
+                availableStock = variant.Stock;
+            }
+            else
+            {
+                var variant = await _context.ProductVariants
+                    .Where(v => v.ProductId == product.Id && v.IsActive && v.Stock > 0)
+                    .OrderBy(v => v.Id)
+                    .FirstOrDefaultAsync();
+
+                if (variant != null)
+                {
+                    resolvedVariantId = variant.Id;
+                    availableStock = variant.Stock;
+                }
+            }
+
+            if (dto.Quantity > availableStock)
+            {
+                return BadRequest(new { message = $"Yetersiz stok. Maksimum {availableStock} adet." });
             }
 
             // Entity güncelleme
             item.ProductId = dto.ProductId;
+            item.ProductVariantId = resolvedVariantId;
             item.Quantity = dto.Quantity;
             item.UpdatedAt = DateTime.UtcNow;
 

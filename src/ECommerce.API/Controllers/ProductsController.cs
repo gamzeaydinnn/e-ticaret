@@ -79,6 +79,25 @@ namespace ECommerce.API.Controllers
             return Ok(products);
         }
 
+        /// <summary>
+        /// Sayfalı ürün listesi döndürür (PagedResult formatında).
+        /// Toplu export işlemleri için optimize edilmiştir.
+        /// </summary>
+        /// <param name="page">Sayfa numarası (1'den başlar)</param>
+        /// <param name="size">Sayfa başına ürün sayısı (max: 100)</param>
+        /// <returns>PagedResult formatında ürün listesi</returns>
+        [HttpGet("admin/paged")]
+        [Authorize(Roles = Roles.AdminLike)]
+        public async Task<IActionResult> GetProductsPaged([FromQuery] int page = 1, [FromQuery] int size = 50)
+        {
+            // Güvenlik: max sayfa boyutunu sınırla
+            size = Math.Min(size, 100);
+            page = Math.Max(page, 1);
+
+            var pagedResult = await _productService.GetProductsPagedAsync(page, size);
+            return Ok(pagedResult);
+        }
+
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProduct(int id)
         {

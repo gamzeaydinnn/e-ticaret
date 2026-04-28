@@ -3,12 +3,14 @@
 // Kayıtlı kullanıcılar için sipariş listesi ve detay görüntüleme
 // Misafir siparişleri için email + sipariş numarası ile sorgulama
 // Session bazlı misafir sipariş yönetimi (farklı tarayıcılarda farklı session)
+// Real-time sipariş durumu güncellemeleri (SignalR)
 // ============================================================================
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { OrderService } from "../services/orderService";
 import { useAuth } from "../contexts/AuthContext";
 import { CartService } from "../services/cartService";
 import OrderDetailModal from "./OrderDetailModal";
+import signalRService, { SignalREvents } from "../services/signalRService";
 
 // ============================================================================
 // BUTON DURUM GRUPLARI
@@ -57,6 +59,10 @@ export default function OrderHistory() {
   const [guestSearchError, setGuestSearchError] = useState(null);
   // Sorgulama yöntemi: "phone" veya "orderNumber"
   const [guestSearchTab, setGuestSearchTab] = useState("phone");
+
+  // SignalR bağlantı durumu
+  const [signalRConnected, setSignalRConnected] = useState(false);
+  const signalRUnsubscribesRef = useRef([]);
 
   const { user, isAuthenticated } = useAuth();
 
@@ -190,6 +196,165 @@ export default function OrderHistory() {
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  // ============================================================================
+  // SIGNALR REAL-TIME BAĞLANTI VE EVENT DİNLEME
+  // Sipariş durumu değişikliklerini anlık olarak günceller
+  // Hem kayıtlı hem misafir kullanıcılar için çalışır
+  // ============================================================================
+  useEffect(() => {
+    // SignalR bağlantısı kur
+    const setupSignalR = async () => {
+      try {
+        // Token varsa müşteri olarak bağlan
+        const token = localStorage.getItem("token") || localStorage.getItem("authToken");
+        if (token || orders.length > 0) {
+          await signalRService.connectCustomer();
+          setSignalRConnected(true);
+          DEBUG && console.log("[OrderHistory] SignalR bağlantısı kuruldu");
+        }
+      } catch (error) {
+        console.warn("[OrderHistory] SignalR bağlantı hatası:", error);
+        setSignalRConnected(false);
+      }
+    };
+
+    setupSignalR();
+
+    // Cleanup: component unmount olduğunda bağlantıları temizle
+    return () => {
+      signalRUnsubscribesRef.current.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+      signalRUnsubscribesRef.current = [];
+    };
+  }, [orders.length]);
+
+  // SignalR event listener'ları
+  useEffect(() => {
+    if (!signalRConnected || orders.length === 0) return;
+
+    // Önceki listener'ları temizle
+    signalRUnsubscribesRef.current.forEach(unsub => {
+      if (typeof unsub === 'function') unsub();
+    });
+    signalRUnsubscribesRef.current = [];
+
+    // Sipariş durumu değişikliği dinle
+    const handleOrderStatusChanged = (data) => {
+      DEBUG && console.log("[OrderHistory] SignalR: OrderStatusChanged", data);
+      
+      // Gelen sipariş ID'si ile eşleşen siparişi güncelle
+      setOrders(prevOrders => 
+        prevOrders.map(order => {
+          // ID eşleşmesi kontrol et (hem string hem number olabilir)
+          const matchesId = String(order.id) === String(data.orderId) || 
+                           order.orderNumber === data.orderNumber;
+          
+          if (matchesId) {
+            DEBUG && console.log("[OrderHistory] Sipariş güncellendi:", order.orderNumber, "->", data.status);
+            return {
+              ...order,
+              status: data.status || data.newStatus,
+              statusText: data.statusText,
+              updatedAt: data.timestamp || new Date().toISOString(),
+            };
+          }
+          return order;
+        })
+      );
+
+      // Eğer modal açıksa ve bu sipariş gösteriliyorsa, onu da güncelle
+      setSelectedOrder(prev => {
+        if (!prev) return prev;
+        const matchesId = String(prev.id) === String(data.orderId) || 
+                         prev.orderNumber === data.orderNumber;
+        if (matchesId) {
+          return {
+            ...prev,
+            status: data.status || data.newStatus,
+            statusText: data.statusText,
+            updatedAt: data.timestamp || new Date().toISOString(),
+          };
+        }
+        return prev;
+      });
+    };
+
+    // Ağırlık farkı tahsilatı/iadesi bildirimi
+    const handleWeightChargeApplied = (data) => {
+      DEBUG && console.log("[OrderHistory] SignalR: WeightChargeApplied", data);
+      
+      setOrders(prevOrders =>
+        prevOrders.map(order => {
+          const matchesId = String(order.id) === String(data.orderId) ||
+                           order.orderNumber === data.orderNumber;
+          if (matchesId) {
+            return {
+              ...order,
+              finalAmount: data.finalAmount,
+              weightDifferenceAmount: data.weightDifferenceAmount,
+              weightAdjustmentStatus: data.status || 'completed',
+            };
+          }
+          return order;
+        })
+      );
+
+      // Modal'ı da güncelle
+      setSelectedOrder(prev => {
+        if (!prev) return prev;
+        const matchesId = String(prev.id) === String(data.orderId) ||
+                         prev.orderNumber === data.orderNumber;
+        if (matchesId) {
+          return {
+            ...prev,
+            finalAmount: data.finalAmount,
+            weightDifferenceAmount: data.weightDifferenceAmount,
+            weightAdjustmentStatus: data.status || 'completed',
+          };
+        }
+        return prev;
+      });
+    };
+
+    // Teslimat tamamlandı bildirimi
+    const handleDeliveryCompleted = (data) => {
+      DEBUG && console.log("[OrderHistory] SignalR: DeliveryCompleted", data);
+      
+      setOrders(prevOrders =>
+        prevOrders.map(order => {
+          const matchesId = String(order.id) === String(data.orderId) ||
+                           order.orderNumber === data.orderNumber;
+          if (matchesId) {
+            return {
+              ...order,
+              status: 'delivered',
+              deliveredAt: data.deliveredAt || new Date().toISOString(),
+            };
+          }
+          return order;
+        })
+      );
+    };
+
+    // Event listener'ları kaydet
+    const unsub1 = signalRService.onOrderStatusChanged(handleOrderStatusChanged);
+    const unsub2 = signalRService.onWeightChargeApplied(handleWeightChargeApplied);
+    const unsub3 = signalRService.onDeliveryStatusChanged(handleDeliveryCompleted);
+
+    signalRUnsubscribesRef.current = [unsub1, unsub2, unsub3];
+
+    DEBUG && console.log("[OrderHistory] SignalR event listener'ları kuruldu");
+
+    // Cleanup
+    return () => {
+      signalRUnsubscribesRef.current.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+      signalRUnsubscribesRef.current = [];
+    };
+  }, [signalRConnected, orders.length]);
 
   // ============================================================================
   // MİSAFİR SİPARİŞ SORGULAMA

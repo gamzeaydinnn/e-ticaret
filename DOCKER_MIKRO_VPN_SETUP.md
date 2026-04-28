@@ -41,15 +41,15 @@ Bu profil `auth-user-pass` kullanmiyor. Sertifika, private key ve `tls-crypt-v2`
 Isterseniz repo icindeki [vpn.ovpn](c:\Users\GAMZE\Desktop\eticaret\vpn.ovpn) dosyasini aynen sunucuya tasiyabilirsiniz. Repo disinda tutmak isterseniz yine absolute path verebilirsiniz:
 
 ```bash
-mkdir -p /root/secrets
-cp /path/to/real-client.ovpn /root/secrets/mikro.ovpn
-chmod 600 /root/secrets/mikro.ovpn
+mkdir -p /home/huseyinadm/secrets
+cp /path/to/real-client.ovpn /home/huseyinadm/secrets/mikro.ovpn
+chmod 600 /home/huseyinadm/secrets/mikro.ovpn
 ```
 
 ve `.env` icinde:
 
 ```env
-VPN_CONFIG_PATH=/root/secrets/mikro.ovpn
+VPN_CONFIG_PATH=/home/huseyinadm/secrets/mikro.ovpn
 ```
 
 Bu dosya yoksa veya bossa Docker icindeki `mikro-vpn` konteyniri baglanamaz.

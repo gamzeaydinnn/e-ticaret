@@ -36,8 +36,7 @@ export const FavoriteProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   // Auth context
-  const { user } = useAuth();
-  const isAuthenticated = !!user?.id;
+  const { user, isAuthenticated } = useAuth();
 
   // ============================================================
   // FAVORİLERİ YÜKLE - Backend'den

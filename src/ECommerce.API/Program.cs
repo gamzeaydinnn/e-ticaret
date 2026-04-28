@@ -78,6 +78,8 @@ builder.Services.AddCors(options =>
                   .WithHeaders(
                       "Content-Type",
                       "Authorization",
+                      "X-Cart-Token",
+                      "X-Favorites-Token",
                       "X-CSRF-TOKEN",
                       "X-Requested-With",
                       "Accept",
@@ -92,6 +94,8 @@ builder.Services.AddCors(options =>
                   .WithHeaders(
                       "Content-Type",
                       "Authorization",
+                      "X-Cart-Token",
+                      "X-Favorites-Token",
                       "X-CSRF-TOKEN",
                       "X-Requested-With",
                       "Accept",
@@ -215,6 +219,10 @@ builder.Services.AddHttpContextAccessor();
 // Mikro ERP senkronizasyonu için recurring job'lar
 // ═══════════════════════════════════════════════════════════════════════════════
 var hangfireEnabled = builder.Configuration.GetValue<bool>("MikroApi:Jobs:HangfireEnabled", true);
+var enableBackgroundWorkers = builder.Configuration.GetValue<bool?>("BackgroundJobs:EnableWorkers")
+    ?? !builder.Environment.IsDevelopment();
+var enableMikroHostedSync = builder.Configuration.GetValue<bool?>("BackgroundJobs:EnableMikroHostedSync")
+    ?? false;
 
 if (hangfireEnabled)
 {
@@ -353,6 +361,10 @@ builder.Services.Configure<ECommerce.Infrastructure.Config.SiteSettings>(
 builder.Services.Configure<ECommerce.Infrastructure.Config.MikroSettings>(
     builder.Configuration.GetSection("MikroSettings"));
 
+// VPN Test Servisi - 10.0.0.3:8084 sunucusu için test endpoint'leri sağlar
+builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.MikroApiVpnTestService>();
+builder.Services.AddScoped<ECommerce.Infrastructure.Services.MicroServices.MikroApiVpnTestService>();
+
 // Environment-based sandbox switch: in Development mode prefer sandbox endpoints
 builder.Services.PostConfigure<PaymentSettings>(settings =>
 {
@@ -424,7 +436,10 @@ builder.Services.AddSingleton<IFileStorage>(sp =>
 // Queues and background worker for messages
 builder.Services.AddSingleton<ECommerce.Core.Messaging.MailQueue>();
 builder.Services.AddSingleton<ECommerce.Core.Messaging.SmsQueue>();
-builder.Services.AddHostedService<ECommerce.API.Services.MessageWorker>();
+if (enableBackgroundWorkers)
+{
+    builder.Services.AddHostedService<ECommerce.API.Services.MessageWorker>();
+}
 
 // Repositories
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
@@ -565,16 +580,28 @@ builder.Services.AddScoped<IXmlImportService, XmlImportManager>();
 
 // Stock sync job as hosted service and injectable singleton
 builder.Services.AddSingleton<StockSyncJob>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
-builder.Services.AddHostedService<StockReservationCleanupJob>();
+if (enableMikroHostedSync)
+{
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<StockSyncJob>());
+}
+if (enableBackgroundWorkers)
+{
+    builder.Services.AddHostedService<StockReservationCleanupJob>();
+}
 
 // Kampanya süresi dolduğunda SpecialPrice'ı otomatik temizleyen job
 // Uygulama başladığında ve her saat başı çalışır
-builder.Services.AddHostedService<ECommerce.API.Services.CampaignExpirationCleanupJob>();
+if (enableBackgroundWorkers)
+{
+    builder.Services.AddHostedService<ECommerce.API.Services.CampaignExpirationCleanupJob>();
+}
 
 // Reconciliation job: daily reconciliation between provider reports and Payments table
 builder.Services.AddSingleton<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
+if (enableBackgroundWorkers)
+{
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
+}
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
 // SSL sertifika doğrulaması - sadece Development'ta bypass edilir
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
@@ -688,8 +715,11 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IFullSyncJob,
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.ISiparisPushJob, 
     ECommerce.Business.Services.Jobs.SiparisPushJob>();
 builder.Services.AddScoped<ECommerce.Business.Services.Jobs.RetryJob>();
-builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler, 
-    ECommerce.Business.Services.Jobs.MikroJobScheduler>();
+if (hangfireEnabled)
+{
+    builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler,
+        ECommerce.Business.Services.Jobs.MikroJobScheduler>();
+}
 
 // SMS Verification Service - Factory pattern ile tüm bağımlılıkları manuel çözümle
 builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.ISmsVerificationService>(serviceProvider =>
@@ -835,6 +865,8 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
         // Büyük/küçük harf duyarsız okuma
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        // EF navigation cycle'larında serializer'ın patlamasını engelle
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 
 // FluentValidation registration
@@ -1013,27 +1045,30 @@ app.UseAuthorization();
 // HANGFIRE DASHBOARD - Zamanlanmış Görev Yönetimi
 // /hangfire endpoint'inde admin paneli
 // ═══════════════════════════════════════════════════════════════════════════════
-app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+if (hangfireEnabled)
 {
-    DashboardTitle = "Mikro ERP Sync Jobs",
-    // Sadece Admin rolündeki kullanıcılar erişebilir
-    Authorization = new[] { new HangfireAuthorizationFilter() },
-    // Read-only modunda çalıştır (default - dashboard'dan kontrol edilir)
-    IsReadOnlyFunc = _ => false // HangfireAuthorizationFilter role kontrolü yapıyor
-});
+    app.UseHangfireDashboard("/hangfire", new Hangfire.DashboardOptions
+    {
+        DashboardTitle = "Mikro ERP Sync Jobs",
+        // Sadece Admin rolündeki kullanıcılar erişebilir
+        Authorization = new[] { new HangfireAuthorizationFilter() },
+        // Read-only modunda çalıştır (default - dashboard'dan kontrol edilir)
+        IsReadOnlyFunc = _ => false // HangfireAuthorizationFilter role kontrolü yapıyor
+    });
 
-// Hangfire Job'larını Kaydet (uygulama başlangıcında)
-using (var scope = app.Services.CreateScope())
-{
-    try
+    // Hangfire Job'larını Kaydet (uygulama başlangıcında)
+    using (var scope = app.Services.CreateScope())
     {
-        var jobScheduler = scope.ServiceProvider.GetRequiredService<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler>();
-        jobScheduler.RegisterAllJobs();
-        app.Logger.LogInformation("✅ Hangfire Mikro sync job'ları başarıyla kaydedildi");
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogWarning(ex, "⚠️ Hangfire job kayıt sırasında hata oluştu - Job'lar manuel olarak kaydedilmeli");
+        try
+        {
+            var jobScheduler = scope.ServiceProvider.GetRequiredService<ECommerce.Core.Interfaces.Jobs.IMikroJobScheduler>();
+            jobScheduler.RegisterAllJobs();
+            app.Logger.LogInformation("✅ Hangfire Mikro sync job'ları başarıyla kaydedildi");
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "⚠️ Hangfire job kayıt sırasında hata oluştu - Job'lar manuel olarak kaydedilmeli");
+        }
     }
 }
 

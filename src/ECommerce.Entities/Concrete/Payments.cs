@@ -146,6 +146,11 @@ namespace ECommerce.Entities.Concrete
         public decimal? RefundedAmount { get; set; }
 
         /// <summary>
+        /// İade işlemi gerçekleşme tarihi (UTC)
+        /// </summary>
+        public DateTime? RefundedAt { get; set; }
+
+        /// <summary>
         /// Kullanılan World Puan miktarı
         /// </summary>
         public int? UsedWorldPoints { get; set; }

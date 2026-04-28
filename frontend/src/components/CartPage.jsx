@@ -111,6 +111,9 @@ const CartPage = () => {
   const [pricingError, setPricingError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+  
+  // Quantity button işlem state'i - çift tıklama önlemi
+  const [updatingItems, setUpdatingItems] = useState(new Set());
 
   // =================================================================
   // KAMPANYA SİSTEMİ STATE'LERİ
@@ -322,18 +325,58 @@ const CartPage = () => {
     }
   };
 
-  const handleUpdateQuantity = (item, newQuantity) => {
+  const handleUpdateQuantity = async (item, newQuantity) => {
     const product = products[item.productId || item.id] || item.product || null;
     const isWeightBasedItem = isWeightBasedCartItem(item, product);
     const minQuantity = isWeightBasedItem ? 0.5 : 1;
+    const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || 'default'}`;
+    
+    // Çift tıklama engelleme
+    if (updatingItems.has(itemKey)) {
+      return;
+    }
+    
     if (newQuantity < minQuantity) {
       handleRemoveItem(item);
       return;
     }
-    const pid = item.productId || item.id;
-    const variantId = item.variantId || item.productVariantId || null;
-    updateQuantity(pid, newQuantity, variantId);
+    
+    try {
+      // Loading state'i ekle
+      setUpdatingItems(prev => new Set([...prev, itemKey]));
+      
+      const pid = item.productId || item.id;
+      const variantId = item.variantId || item.productVariantId || null;
+      await updateQuantity(pid, newQuantity, variantId);
+    } catch (error) {
+      console.error('Quantity update failed:', error);
+      // Hata durumunda kullanıcıya feedback verilebir
+    } finally {
+      // Loading state'i temizle
+      setUpdatingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemKey);
+        return newSet;
+      });
+    }
   };
+
+  const getCurrentItemQuantity = useCallback(
+    (item) => {
+      const pid = item.productId || item.id;
+      const variantId = item.variantId || item.productVariantId || null;
+      const latestItem = cartItems.find(
+        (ci) =>
+          (ci.productId || ci.id) === pid &&
+          ((variantId && (ci.variantId || ci.productVariantId) === variantId) ||
+            (!variantId && !(ci.variantId || ci.productVariantId))),
+      );
+
+      const numeric = Number(latestItem?.quantity ?? item.quantity ?? 0);
+      return Number.isFinite(numeric) ? numeric : 0;
+    },
+    [cartItems],
+  );
 
   const handleRemoveItem = (item) => {
     const pid = item.productId || item.id;
@@ -835,45 +878,66 @@ const CartPage = () => {
                       </div>
 
                       <div className="item-quantity">
-                        <button
-                          className="qty-btn minus"
-                          onClick={() =>
-                            handleUpdateQuantity(
-                              item,
-                              isWeightBasedItem
-                                ? Math.max(0.5, item.quantity - 0.5)
-                                : item.quantity - 1,
-                            )
-                          }
-                          disabled={
-                            isWeightBasedItem
-                              ? item.quantity <= 0.5
-                              : item.quantity <= 1
-                          }
-                        >
-                          <i className="fas fa-minus"></i>
-                        </button>
-                        <span className="qty-value">
-                          {isWeightBasedItem
-                            ? item.quantity.toFixed(1)
-                            : item.quantity}
-                          {isWeightBasedItem && (
-                            <span className="qty-unit"> kg</span>
-                          )}
-                        </span>
-                        <button
-                          className="qty-btn plus"
-                          onClick={() =>
-                            handleUpdateQuantity(
-                              item,
-                              isWeightBasedItem
-                                ? item.quantity + 0.5
-                                : item.quantity + 1,
-                            )
-                          }
-                        >
-                          <i className="fas fa-plus"></i>
-                        </button>
+                        {(() => {
+                          const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || 'default'}`;
+                          const isUpdating = updatingItems.has(itemKey);
+                          
+                          return (
+                            <>
+                              <button
+                                className="qty-btn minus"
+                                onClick={async () =>
+                                  await handleUpdateQuantity(
+                                    item,
+                                    isWeightBasedItem
+                                      ? Math.max(
+                                          0.5,
+                                          getCurrentItemQuantity(item) - 0.5,
+                                        )
+                                      : getCurrentItemQuantity(item) - 1,
+                                  )
+                                }
+                                disabled={
+                                  isUpdating || (isWeightBasedItem
+                                    ? item.quantity <= 0.5
+                                    : item.quantity <= 1)
+                                }
+                              >
+                                {isUpdating ? (
+                                  <i className="fas fa-spinner fa-spin"></i>
+                                ) : (
+                                  <i className="fas fa-minus"></i>
+                                )}
+                              </button>
+                              <span className="qty-value">
+                                {isWeightBasedItem
+                                  ? item.quantity.toFixed(1)
+                                  : item.quantity}
+                                {isWeightBasedItem && (
+                                  <span className="qty-unit"> kg</span>
+                                )}
+                              </span>
+                              <button
+                                className="qty-btn plus"
+                                onClick={async () =>
+                                  await handleUpdateQuantity(
+                                    item,
+                                    isWeightBasedItem
+                                      ? getCurrentItemQuantity(item) + 0.5
+                                      : getCurrentItemQuantity(item) + 1,
+                                  )
+                                }
+                                disabled={isUpdating}
+                              >
+                                {isUpdating ? (
+                                  <i className="fas fa-spinner fa-spin"></i>
+                                ) : (
+                                  <i className="fas fa-plus"></i>
+                                )}
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       <div className="item-total">

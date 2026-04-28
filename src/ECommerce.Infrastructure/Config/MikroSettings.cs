@@ -51,6 +51,12 @@ namespace ECommerce.Infrastructure.Config
         /// Örnek: Şifre="123asd" ise, bugün için "2026-02-03 123asd" → MD5
         /// </summary>
         public string Sifre { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Sifre alanı zaten MD5 hash olarak veriliyorsa true yapın.
+        /// true ise runtime'da tekrar hash uygulanmaz.
+        /// </summary>
+        public bool PasswordIsPreHashed { get; set; } = false;
         
         /// <summary>
         /// Çalışma yılı (mali yıl).
@@ -104,7 +110,13 @@ namespace ECommerce.Infrastructure.Config
         /// <summary>
         /// İstek timeout süresi (saniye).
         /// </summary>
-        public int RequestTimeoutSeconds { get; set; } = 30;
+        public int RequestTimeoutSeconds { get; set; } = 120;
+        
+        /// <summary>
+        /// Paralel sayfa çekme sayısı.
+        /// Stok listesi çekerken aynı anda kaç sayfa paralel çekilecek.
+        /// </summary>
+        public int ParallelPageFetchCount { get; set; } = 5;
         
         /// <summary>
         /// SSL sertifika doğrulamasını atla.

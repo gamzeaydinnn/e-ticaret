@@ -58,6 +58,82 @@ const buildMockResponse = (message, success = true) => ({
   timestamp: new Date().toISOString(),
 });
 
+const toNumberOr = (value, fallback = 0) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+
+    // Accept values like "1.234,56", "1234,56", "1,234.56", "₺1.234,56"
+    const normalized = trimmed
+      .replace(/[^\d,.-]/g, "")
+      .replace(/\.(?=\d{3}(\D|$))/g, "")
+      .replace(/,/g, ".");
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeProductItem = (item) => {
+  const rawPrice =
+    item?.price ?? item?.satisFiyati ?? item?.fiyat ?? item?.Price ?? 0;
+  const rawStock =
+    item?.stockQuantity ??
+    item?.quantity ??
+    item?.depoMiktari ??
+    item?.satilabilirMiktar ??
+    item?.stokMiktar ??
+    item?.StockQuantity ??
+    0;
+
+  return {
+    ...item,
+    id: item?.id ?? item?.Id ?? item?.sku ?? item?.stokKod ?? item?.StoKod,
+    sku: item?.sku ?? item?.stokKod ?? item?.StoKod ?? item?.SKU ?? "",
+    name: item?.name ?? item?.stokAd ?? item?.stoIsim ?? item?.StoIsim ?? "",
+    category:
+      item?.category ??
+      item?.categoryName ??
+      item?.grupKod ??
+      item?.StoAltgrupKod ??
+      item?.StoAnagrupKod ??
+      "-",
+    price: toNumberOr(rawPrice, 0),
+    stockQuantity: Math.max(0, Math.floor(toNumberOr(rawStock, 0))),
+  };
+};
+
+const normalizeStockItem = (item) => {
+  const rawQuantity =
+    item?.quantity ??
+    item?.availableQuantity ??
+    item?.depoMiktari ??
+    item?.satilabilirMiktar ??
+    item?.stokMiktar ??
+    item?.Quantity ??
+    0;
+
+  return {
+    ...item,
+    productId:
+      item?.productId ??
+      item?.id ??
+      item?.sku ??
+      item?.stokKod ??
+      item?.StoKod ??
+      "",
+    sku: item?.sku ?? item?.stokKod ?? item?.StoKod ?? "",
+    quantity: Math.max(0, Math.floor(toNumberOr(rawQuantity, 0))),
+  };
+};
+
 // ============================================================================
 // MicroService - ERP/Mikro API Entegrasyon Servisi
 // ============================================================================
@@ -193,8 +269,37 @@ export const MicroService = {
       return Promise.resolve(clone(mockMicroProducts));
     }
     try {
-      const response = await api.get(`${baseAdmin}/products`);
-      return response;
+      const perPage = 100;
+      const maxPages = 10;
+      let page = 1;
+      let all = [];
+
+      while (page <= maxPages) {
+        const response = await api.get(
+          `${baseAdmin}/products?source=erp&page=${page}&perPage=${perPage}`,
+        );
+
+        const batchRaw = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+
+        const batch = batchRaw.map(normalizeProductItem);
+
+        if (!batch.length) break;
+        all = all.concat(batch);
+
+        const totalCount = Number(
+          response?.totalCount || response?.toplamKayit || 0,
+        );
+        if (totalCount > 0 && all.length >= totalCount) break;
+        if (batch.length < perPage) break;
+
+        page += 1;
+      }
+
+      return all;
     } catch (error) {
       console.error("Ürünler getirilemedi:", error);
       return [];
@@ -210,8 +315,37 @@ export const MicroService = {
       return Promise.resolve(clone(mockMicroStocks));
     }
     try {
-      const response = await api.get(`${baseAdmin}/stocks`);
-      return response;
+      const perPage = 100;
+      const maxPages = 10;
+      let page = 1;
+      let all = [];
+
+      while (page <= maxPages) {
+        const response = await api.get(
+          `${baseAdmin}/stocks?source=erp&page=${page}&perPage=${perPage}`,
+        );
+
+        const batchRaw = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : [];
+
+        const batch = batchRaw.map(normalizeStockItem);
+
+        if (!batch.length) break;
+        all = all.concat(batch);
+
+        const totalCount = Number(
+          response?.totalCount || response?.toplamKayit || 0,
+        );
+        if (totalCount > 0 && all.length >= totalCount) break;
+        if (batch.length < perPage) break;
+
+        page += 1;
+      }
+
+      return all;
     } catch (error) {
       console.error("Stoklar getirilemedi:", error);
       return [];
@@ -222,7 +356,17 @@ export const MicroService = {
   /**
    * Mikro API StokListesiV2 endpoint'inden detaylı stok listesi çeker
    * Backend: GET /api/admin/micro/stok-listesi
-   * @param {Object} params - { sayfa, sayfaBuyuklugu, depoNo, stokKod, grupKod, sadeceAktif }
+   *
+   * @param {Object} params - Sorgu parametreleri:
+   *   - sayfa: Sayfa numarası (varsayılan: 1)
+   *   - sayfaBuyuklugu: Sayfa başına kayıt (varsayılan: 50)
+   *   - depoNo: Depo numarası (0 = tüm depolar)
+   *   - fiyatListesiNo: Fiyat listesi numarası (1-10 arası, varsayılan: 1 = Perakende)
+   *   - stokKod: Stok kodu filtresi (opsiyonel)
+   *   - grupKod: Grup kodu filtresi (opsiyonel)
+   *   - sadeceAktif: Sadece aktif ürünler (varsayılan: true)
+   *
+   * @returns {Object} - { success, data[], toplamKayit, fiyatListesiNo, ... }
    */
   getStokListesi: async (params = {}) => {
     if (shouldUseMockData()) {
@@ -233,14 +377,30 @@ export const MicroService = {
           stokKod: p.sku,
           stokAd: p.name,
           barkod: p.barcode,
-          fiyat: p.price,
-          stokMiktar: mockMicroStocks[idx]?.quantity || 0,
+          satisFiyati: p.price,
+          depoMiktari: mockMicroStocks[idx]?.quantity || 0,
+          satilabilirMiktar: mockMicroStocks[idx]?.quantity || 0,
           birim: "ADET",
           grupKod: p.category,
+          tumFiyatlar: [
+            {
+              listeNo: 1,
+              aciklama: "Perakende",
+              fiyat: p.price,
+              kdvDahil: true,
+            },
+            {
+              listeNo: 2,
+              aciklama: "Toptan",
+              fiyat: p.price * 0.9,
+              kdvDahil: true,
+            },
+          ],
         })),
         totalCount: mockMicroProducts.length,
         page: params.sayfa || 1,
         pageSize: params.sayfaBuyuklugu || 20,
+        fiyatListesiNo: params.fiyatListesiNo || 1,
       });
     }
     try {
@@ -248,7 +408,12 @@ export const MicroService = {
       if (params.sayfa) queryParams.append("sayfa", params.sayfa);
       if (params.sayfaBuyuklugu)
         queryParams.append("sayfaBuyuklugu", params.sayfaBuyuklugu);
-      if (params.depoNo) queryParams.append("depoNo", params.depoNo);
+      // depoNo=0 tüm depolar demek, bunu da gönder
+      if (params.depoNo !== undefined)
+        queryParams.append("depoNo", params.depoNo);
+      // Fiyat listesi numarası (1-10 arası)
+      if (params.fiyatListesiNo)
+        queryParams.append("fiyatListesiNo", params.fiyatListesiNo);
       if (params.stokKod) queryParams.append("stokKod", params.stokKod);
       if (params.grupKod) queryParams.append("grupKod", params.grupKod);
       if (params.sadeceAktif !== undefined)
@@ -260,6 +425,103 @@ export const MicroService = {
     } catch (error) {
       console.error("Stok listesi getirilemedi:", error);
       return { success: false, message: error.message, data: [] };
+    }
+  },
+
+  /**
+   * Cache'teki ürünleri sayfalı getirir (hızlı - local DB).
+   * Backend: GET /api/admin/micro/cache/products
+   */
+  getCachedProducts: async (params = {}) => {
+    if (shouldUseMockData()) {
+      const page = Number(params.page || 1);
+      const pageSize = Number(params.pageSize || 50);
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      const data = mockMicroProducts.slice(start, end).map((p, index) => ({
+        stokKod: p.sku,
+        stokAd: p.name,
+        barkod: p.barcode,
+        grupKod: p.category,
+        birim: "ADET",
+        satisFiyati: p.price,
+        kdvOrani: 10,
+        depoMiktari: mockMicroStocks[index]?.quantity ?? 0,
+        satilabilirMiktar: mockMicroStocks[index]?.quantity ?? 0,
+      }));
+
+      return Promise.resolve({
+        success: true,
+        data,
+        pagination: {
+          page,
+          pageSize,
+          totalCount: mockMicroProducts.length,
+          totalPages: Math.max(1, Math.ceil(mockMicroProducts.length / pageSize)),
+          hasPreviousPage: page > 1,
+          hasNextPage: end < mockMicroProducts.length,
+        },
+      });
+    }
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.page) queryParams.append("page", params.page);
+      if (params.pageSize) queryParams.append("pageSize", params.pageSize);
+      if (params.stokKod) queryParams.append("stokKod", params.stokKod);
+      if (params.grupKod) queryParams.append("grupKod", params.grupKod);
+      if (params.search) queryParams.append("search", params.search);
+      if (params.sadeceStoklu !== undefined && params.sadeceStoklu !== null) {
+        queryParams.append("sadeceStoklu", String(params.sadeceStoklu));
+      }
+      if (params.sortBy) queryParams.append("sortBy", params.sortBy);
+      if (params.sortDesc !== undefined) {
+        queryParams.append("sortDesc", String(params.sortDesc));
+      }
+
+      const url = `${baseAdmin}/cache/products${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+      return await api.get(url);
+    } catch (error) {
+      console.error("Cache ürünleri getirilemedi:", error);
+      return {
+        success: false,
+        data: [],
+        pagination: {
+          page: Number(params.page || 1),
+          pageSize: Number(params.pageSize || 50),
+          totalCount: 0,
+          totalPages: 0,
+          hasPreviousPage: false,
+          hasNextPage: false,
+        },
+        message: error.message,
+      };
+    }
+  },
+
+  /**
+   * Cache senkronizasyonu başlatır.
+   * Backend: POST /api/admin/micro/cache/sync
+   * syncMode: full | newOnly
+   */
+  syncProductCache: async (params = {}) => {
+    if (shouldUseMockData()) {
+      return Promise.resolve(
+        buildMockResponse("Mock cache senkronizasyonu tamamlandı"),
+      );
+    }
+
+    try {
+      const queryParams = new URLSearchParams();
+      queryParams.append("fiyatListesiNo", String(params.fiyatListesiNo ?? 1));
+      queryParams.append("depoNo", String(params.depoNo ?? 0));
+      queryParams.append("syncMode", params.syncMode || "newOnly");
+
+      const url = `${baseAdmin}/cache/sync?${queryParams.toString()}`;
+      return await api.post(url);
+    } catch (error) {
+      console.error("Cache senkronizasyonu başarısız:", error);
+      return { success: false, message: error.message };
     }
   },
 

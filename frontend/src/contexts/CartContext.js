@@ -129,15 +129,20 @@ export const CartProvider = ({ children }) => {
   const isBackendIntQuantityError = (err) => {
     const status =
       err?.status || err?.response?.status || err?.raw?.response?.status;
-    const backendMessage =
-      err?.response?.data?.message ||
-      err?.raw?.response?.data?.message ||
-      err?.raw?.response?.data?.errors ||
-      err?.response?.data?.title ||
-      err?.raw?.response?.data?.title ||
-      err?.message ||
-      "";
-    const normalized = String(backendMessage).toLowerCase();
+    const payload = err?.raw?.response?.data || err?.response?.data || {};
+    const modelErrors = payload?.errors
+      ? JSON.stringify(payload.errors)
+      : "";
+    const backendMessage = [
+      payload?.message,
+      payload?.error,
+      payload?.title,
+      modelErrors,
+      err?.message,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const normalized = backendMessage.toLowerCase();
 
     if (status !== 400) return false;
 
@@ -145,8 +150,15 @@ export const CartProvider = ({ children }) => {
       normalized.includes("int32") ||
       normalized.includes("could not be converted") ||
       normalized.includes("json value") ||
+      normalized.includes("quantity") ||
       normalized.includes("geçersiz")
     );
+  };
+
+  const isBadRequestError = (err) => {
+    const status =
+      err?.status || err?.response?.status || err?.raw?.response?.status;
+    return status === 400;
   };
 
   // ============================================================
@@ -159,7 +171,7 @@ export const CartProvider = ({ children }) => {
     try {
       let cartData;
 
-      if (isAuthenticated && user?.id) {
+      if (isAuthenticated) {
         // Kayıtlı kullanıcı - JWT ile sepet al
         console.log("🔐 Kayıtlı kullanıcı sepeti yükleniyor...");
         const response = await CartService.getCartItems();
@@ -194,7 +206,7 @@ export const CartProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated]);
 
   // Kullanıcı değiştiğinde sepeti yükle
   // Login sonrası misafir sepetini merge et
@@ -214,19 +226,10 @@ export const CartProvider = ({ children }) => {
 
       // Kullanıcı login olduysa (misafir → kayıtlı)
       if (currentUserId && !prevUserId) {
-        console.log("🔄 Login algılandı, misafir sepeti merge ediliyor...");
-        try {
-          const result = await CartService.mergeGuestCart();
-          if (result.mergedCount > 0) {
-            console.log(
-              "✅ Merge başarılı:",
-              result.mergedCount,
-              "ürün eklendi",
-            );
-          }
-        } catch (err) {
-          console.error("❌ Merge hatası (sessizce devam):", err);
-        }
+        console.log(
+          "🔄 Login algılandı, misafir sepet token'ı temizleniyor (merge kapalı)",
+        );
+        CartService.clearGuestToken();
       }
 
       // Sepeti yükle (kullanıcıya özel)
@@ -249,9 +252,31 @@ export const CartProvider = ({ children }) => {
       const hasFractionalQuantity = isFractionalQuantity(quantity);
 
       try {
-        if (isAuthenticated && user?.id) {
+        if (isAuthenticated) {
           // Kayıtlı kullanıcı
-          await CartService.addItem(productId, quantity, variantId);
+          try {
+            await CartService.addItem(productId, quantity, variantId);
+          } catch (err) {
+            // 0.5kg gibi kesirli miktar backend'de hata verirse fallback dene
+            if (
+              isFractionalQuantity(quantity) &&
+              fallbackQuantity !== quantity &&
+              (isBackendIntQuantityError(err) || isBadRequestError(err))
+            ) {
+              await CartService.addItem(productId, fallbackQuantity, variantId);
+              await loadCart();
+              window.dispatchEvent(new Event("cart:updated"));
+              setWeightOverride(productId, variantId, quantity);
+              // Weight override'ı hemen uygula - fresh cart'a
+              setCartItems(prevItems => applyWeightOverrides(prevItems));
+              return {
+                success: true,
+                warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak kaydedildi.`,
+              };
+            } else {
+              throw err; // Diğer hataları yukarı fırlat
+            }
+          }
         } else {
           // Misafir kullanıcı
           const result = await CartService.addToGuestCart(
@@ -280,6 +305,8 @@ export const CartProvider = ({ children }) => {
               window.dispatchEvent(new Event("cart:updated"));
               if (hasFractionalQuantity) {
                 setWeightOverride(productId, variantId, quantity);
+                // Weight override'ı hemen uygula - fresh cart'a
+                setCartItems(prevItems => applyWeightOverrides(prevItems));
               }
               return {
                 success: true,
@@ -299,6 +326,8 @@ export const CartProvider = ({ children }) => {
 
         if (hasFractionalQuantity) {
           setWeightOverride(productId, variantId, quantity);
+          // Weight override'ı hemen uygula - fresh cart'a
+          setCartItems(prevItems => applyWeightOverrides(prevItems));
         } else {
           removeWeightOverride(productId, variantId);
         }
@@ -309,10 +338,10 @@ export const CartProvider = ({ children }) => {
         if (
           isFractionalQuantity(quantity) &&
           fallbackQuantity !== quantity &&
-          isBackendIntQuantityError(err)
+          (isBackendIntQuantityError(err) || isBadRequestError(err))
         ) {
           try {
-            if (isAuthenticated && user?.id) {
+            if (isAuthenticated) {
               await CartService.addItem(productId, fallbackQuantity, variantId);
             } else {
               const retryResult = await CartService.addToGuestCart(
@@ -345,7 +374,7 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: errorMsg };
       }
     },
-    [isAuthenticated, user?.id, loadCart],
+    [isAuthenticated, loadCart],
   );
 
   // ============================================================
@@ -354,7 +383,7 @@ export const CartProvider = ({ children }) => {
   const removeFromCart = useCallback(
     async (productId, variantId = null) => {
       try {
-        if (isAuthenticated && user?.id) {
+        if (isAuthenticated) {
           // Kayıtlı kullanıcı - cart item ID'sini bul
           const item = cartItems.find(
             (i) =>
@@ -380,7 +409,7 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: err?.message };
       }
     },
-    [isAuthenticated, user?.id, cartItems, loadCart],
+    [isAuthenticated, cartItems, loadCart],
   );
 
   // ============================================================
@@ -408,7 +437,7 @@ export const CartProvider = ({ children }) => {
       const hasFractionalQuantity = isFractionalQuantity(quantity);
 
       try {
-        if (isAuthenticated && user?.id) {
+        if (isAuthenticated) {
           // Kayıtlı kullanıcı - cart item ID'sini bul
           const item = cartItems.find(
             (i) =>
@@ -416,7 +445,7 @@ export const CartProvider = ({ children }) => {
               (variantId ? i.variantId === variantId : !i.variantId),
           );
           if (item?.id) {
-            await CartService.updateItem(item.id, productId, quantity);
+            await CartService.updateItem(item.id, productId, quantity, variantId);
           }
         } else {
           // Misafir kullanıcı
@@ -439,10 +468,10 @@ export const CartProvider = ({ children }) => {
         if (
           isFractionalQuantity(quantity) &&
           fallbackQuantity !== quantity &&
-          isBackendIntQuantityError(err)
+          (isBackendIntQuantityError(err) || isBadRequestError(err))
         ) {
           try {
-            if (isAuthenticated && user?.id) {
+            if (isAuthenticated) {
               const item = cartItems.find(
                 (i) =>
                   (i.productId || i.id) === productId &&
@@ -453,6 +482,7 @@ export const CartProvider = ({ children }) => {
                   item.id,
                   productId,
                   fallbackQuantity,
+                  variantId,
                 );
               }
             } else {
@@ -484,7 +514,7 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: err?.message };
       }
     },
-    [isAuthenticated, user?.id, cartItems, loadCart, removeFromCart],
+    [isAuthenticated, cartItems, loadCart, removeFromCart],
   );
 
   // ============================================================
@@ -492,7 +522,7 @@ export const CartProvider = ({ children }) => {
   // ============================================================
   const clearCart = useCallback(async () => {
     try {
-      if (isAuthenticated && user?.id) {
+      if (isAuthenticated) {
         // Kayıtlı kullanıcı - tüm öğeleri sil
         for (const item of cartItems) {
           if (item.id) {
@@ -509,7 +539,7 @@ export const CartProvider = ({ children }) => {
     } catch (err) {
       console.error("❌ Sepet temizleme hatası:", err);
     }
-  }, [isAuthenticated, user?.id, cartItems]);
+  }, [isAuthenticated, cartItems]);
 
   // ============================================================
   // SEPET TOPLAMI
@@ -588,7 +618,7 @@ export const CartProvider = ({ children }) => {
       console.error("❌ Sepet merge hatası:", err);
       return { mergedCount: 0 };
     }
-  }, [isAuthenticated, user?.id, loadCart]);
+  }, [isAuthenticated, loadCart]);
 
   // ============================================================
   // CONTEXT VALUE

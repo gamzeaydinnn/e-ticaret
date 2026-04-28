@@ -25,6 +25,16 @@ namespace ECommerce.Business.Services.Managers
             _productRepository = productRepository;
         }
 
+        public class ProductSyncResult
+        {
+            public int TotalProducts { get; set; }
+            public int SyncedProducts { get; set; }
+            public int CreatedProducts { get; set; }
+            public int UpdatedProducts { get; set; }
+            public int SkippedProducts { get; set; }
+            public int FailedProducts { get; set; }
+        }
+
         /// <summary>
         /// Ürünleri Mikro ERP sistemine senkronize eder.
         /// </summary>
@@ -125,6 +135,90 @@ namespace ECommerce.Business.Services.Managers
                 Message = $"{updated} ürün fiyatı güncellendi",
                 CreatedAt = DateTime.UtcNow
             });
+        }
+
+        /// <summary>
+        /// Mikro ERP'den ürünleri çekerek yerel veritabanına yazar.
+        /// Frontend tarafı /api/products üzerinden DB okuduğu için bu metot
+        /// ürünlerin arayüze yansımasını sağlar.
+        /// </summary>
+        public async Task<ProductSyncResult> SyncProductsFromMikroAsync()
+        {
+            var result = new ProductSyncResult();
+
+            var mikroProducts = (await _microService.GetProductsAsync())?.ToList() ?? new List<MicroProductDto>();
+            result.TotalProducts = mikroProducts.Count;
+
+            // Varsayılan kategori: mevcut ürünlerden ilk geçerli kategori, yoksa 1
+            var existingProducts = (await _productRepository.GetAllAsync()).ToList();
+            var defaultCategoryId = existingProducts.Select(p => p.CategoryId).FirstOrDefault(c => c > 0);
+            if (defaultCategoryId <= 0)
+            {
+                defaultCategoryId = 1;
+            }
+
+            foreach (var mikroProduct in mikroProducts)
+            {
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(mikroProduct.Sku))
+                    {
+                        result.SkippedProducts++;
+                        continue;
+                    }
+
+                    var sku = mikroProduct.Sku.Trim();
+                    var existing = await _productRepository.GetBySkuAsync(sku);
+
+                    if (existing == null)
+                    {
+                        var newProduct = new Product
+                        {
+                            Name = string.IsNullOrWhiteSpace(mikroProduct.Name) ? sku : mikroProduct.Name.Trim(),
+                            Description = string.Empty,
+                            CategoryId = defaultCategoryId,
+                            Price = mikroProduct.Price,
+                            SpecialPrice = null,
+                            StockQuantity = Math.Max(0, mikroProduct.StockQuantity > 0 ? mikroProduct.StockQuantity : mikroProduct.Stock),
+                            SKU = sku,
+                            ImageUrl = string.Empty,
+                            Currency = "TRY",
+                            IsActive = mikroProduct.IsActive
+                        };
+
+                        await _productRepository.AddAsync(newProduct);
+                        result.CreatedProducts++;
+                        result.SyncedProducts++;
+                    }
+                    else
+                    {
+                        existing.Name = string.IsNullOrWhiteSpace(mikroProduct.Name) ? existing.Name : mikroProduct.Name.Trim();
+                        existing.Price = mikroProduct.Price;
+                        existing.StockQuantity = Math.Max(0, mikroProduct.StockQuantity > 0 ? mikroProduct.StockQuantity : mikroProduct.Stock);
+                        existing.IsActive = mikroProduct.IsActive;
+                        existing.UpdatedAt = DateTime.UtcNow;
+
+                        await _productRepository.UpdateAsync(existing);
+                        result.UpdatedProducts++;
+                        result.SyncedProducts++;
+                    }
+                }
+                catch
+                {
+                    result.FailedProducts++;
+                }
+            }
+
+            await _productRepository.LogSyncAsync(new MicroSyncLog
+            {
+                EntityType = "Product",
+                Direction = "FromERP",
+                Status = result.FailedProducts == 0 ? "Success" : "PartialSuccess",
+                Message = $"Mikro ürün sync tamamlandı. Toplam: {result.TotalProducts}, Senkron: {result.SyncedProducts}, Yeni: {result.CreatedProducts}, Güncel: {result.UpdatedProducts}, Atlanan: {result.SkippedProducts}, Hatalı: {result.FailedProducts}",
+                CreatedAt = DateTime.UtcNow
+            });
+
+            return result;
         }
     }
 }

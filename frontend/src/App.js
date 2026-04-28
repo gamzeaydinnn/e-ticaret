@@ -58,6 +58,7 @@ import SystemLogsPage from "./pages/Admin/logs/SystemLogsPage";
 import AdminProfile from "./pages/Admin/AdminProfile";
 import AdminSettings from "./pages/Admin/AdminSettings";
 import AdminAccessDenied from "./pages/Admin/AdminAccessDenied";
+import AdminBulkProductExport from "./pages/Admin/AdminBulkProductExport"; // Toplu ürün export
 // Kurye sayfaları
 import CourierDashboard from "./pages/Courier/CourierDashboard";
 import CourierLogin from "./pages/Courier/CourierLogin";
@@ -863,6 +864,17 @@ function App() {
             <AdminGuard requiredPermission="products.view">
               <AdminLayout>
                 <AdminProducts />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        {/* Toplu Ürün Export Sayfası */}
+        <Route
+          path="/admin/products/bulk-export"
+          element={
+            <AdminGuard requiredPermission="products.view">
+              <AdminLayout>
+                <AdminBulkProductExport />
               </AdminLayout>
             </AdminGuard>
           }

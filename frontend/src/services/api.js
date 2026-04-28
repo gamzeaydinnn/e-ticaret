@@ -9,7 +9,7 @@ import axios from "axios";
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "",
   headers: { "Content-Type": "application/json" },
-  timeout: 60000, // 60 saniye global timeout (görsel yükleme için)
+  timeout: 180000, // 180 saniye global timeout (yavaş ERP çağrıları için)
   // GÜVENLİK: httpOnly cookie'lerin her istekle gönderilmesi için
   // Bu sayede JWT token'lar cookie üzerinden güvenli şekilde iletilir
   withCredentials: true,
@@ -118,9 +118,17 @@ api.interceptors.response.use(
       url.includes("/weight-adjustment") ||
       url.includes("/weight-payment");
 
+    const firstValidationError = (() => {
+      if (!data?.errors || typeof data.errors !== "object") return null;
+      const values = Object.values(data.errors).flat();
+      return values.length > 0 ? String(values[0]) : null;
+    })();
+
     const message =
       data?.message ||
       data?.error ||
+      firstValidationError ||
+      data?.title ||
       error?.message ||
       "Beklenmeyen bir hata oluştu.";
 

@@ -64,7 +64,7 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Ürün
         /// </summary>
-        public virtual Product? Product { get; set; }
+        public virtual Product Product { get; set; }
 
         /// <summary>
         /// Varyant (nullable - eski veriler için)

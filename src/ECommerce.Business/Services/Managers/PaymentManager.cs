@@ -595,8 +595,15 @@ namespace ECommerce.Business.Services.Managers
             try
             {
                 // POSNET için reverse işlemi
-                if (providerKey == "posnet" && _posnet != null)
+                if (providerKey == "posnet")
                 {
+                    // POSNET servisi kayıtlı değilse, para iadesi yapılamaz
+                    if (_posnet == null)
+                    {
+                        _logger?.LogError("POSNET para iadesi başarısız: POSNET servisi kayıtlı değil! PaymentId: {PaymentId}. appsettings.json'da Payment:Posnet:Enabled=true olduğundan emin olun.", paymentId);
+                        return false;
+                    }
+
                     var hostLogKey = payment.HostLogKey;
                     // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
                     if (string.IsNullOrEmpty(hostLogKey))
@@ -606,7 +613,7 @@ namespace ECommerce.Business.Services.Managers
                     }
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
-                        _logger?.LogWarning("Cancel failed: HostLogKey ve ProviderPaymentId boş. Id: {PaymentId}", paymentId);
+                        _logger?.LogError("POSNET para iadesi başarısız: HostLogKey ve ProviderPaymentId boş. PaymentId: {PaymentId}. Banka işlem referans numarası bulunamadı.", paymentId);
                         return false;
                     }
 
@@ -615,6 +622,8 @@ namespace ECommerce.Business.Services.Managers
                     if (result.IsSuccess)
                     {
                         payment.Status = "Cancelled";
+                        payment.RefundedAmount = payment.Amount;
+                        payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
                         
                         var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
@@ -626,30 +635,37 @@ namespace ECommerce.Business.Services.Managers
                         await _db.SaveChangesAsync();
 
                         _logService.Audit(
-                            action: "PAYMENT_CANCELLED",
+                            action: "PAYMENT_CANCELLED_REFUNDED",
                             entityName: "Payments",
                             entityId: paymentId,
                             oldValues: new { Status = "Paid" },
-                            newValues: new { Status = "Cancelled", Reason = reason },
+                            newValues: new { Status = "Cancelled", RefundedAmount = payment.Amount, Reason = reason },
                             performedBy: null);
 
-                        _logger?.LogInformation("POSNET payment cancelled. Id: {PaymentId}, Reason: {Reason}", paymentId, reason);
+                        _logger?.LogInformation("POSNET para iadesi başarılı. PaymentId: {PaymentId}, Tutar: {Amount}, HostLogKey: {HostLogKey}", paymentId, payment.Amount, hostLogKey);
                         return true;
                     }
                     else
                     {
-                        _logger?.LogWarning("POSNET cancel failed. Id: {PaymentId}, Error: {Error}", paymentId, result.Error);
+                        _logger?.LogError("POSNET para iadesi başarısız. PaymentId: {PaymentId}, Hata: {Error}", paymentId, result.Error);
                         return false;
                     }
                 }
 
-                // Diğer provider'lar için basit durum güncelleme
-                payment.Status = "Cancelled";
-                payment.UpdatedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-                
-                _logger?.LogInformation("Payment cancelled (local). Id: {PaymentId}", paymentId);
-                return true;
+                // Kapıda ödeme gibi para iadesi gerektirmeyen durumlar
+                if (providerKey == "cash_on_delivery" || providerKey == "cod" || string.IsNullOrEmpty(providerKey))
+                {
+                    payment.Status = "Cancelled";
+                    payment.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                    
+                    _logger?.LogInformation("Ödeme iptal edildi (para iadesi gerekmez). PaymentId: {PaymentId}, Provider: {Provider}", paymentId, providerKey ?? "unknown");
+                    return true;
+                }
+
+                // Bilinmeyen provider - para iadesi yapılamaz
+                _logger?.LogError("Para iadesi başarısız: Desteklenmeyen ödeme sağlayıcısı. PaymentId: {PaymentId}, Provider: {Provider}", paymentId, providerKey);
+                return false;
             }
             catch (Exception ex)
             {
@@ -681,8 +697,15 @@ namespace ECommerce.Business.Services.Managers
             try
             {
                 // POSNET için return işlemi
-                if (providerKey == "posnet" && _posnet != null)
+                if (providerKey == "posnet")
                 {
+                    // POSNET servisi kayıtlı değilse, para iadesi yapılamaz
+                    if (_posnet == null)
+                    {
+                        _logger?.LogError("POSNET kısmi iade başarısız: POSNET servisi kayıtlı değil! PaymentId: {PaymentId}. appsettings.json'da Payment:Posnet:Enabled=true olduğundan emin olun.", paymentId);
+                        return false;
+                    }
+
                     var hostLogKey = payment.HostLogKey;
                     // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
                     if (string.IsNullOrEmpty(hostLogKey))
@@ -692,7 +715,7 @@ namespace ECommerce.Business.Services.Managers
                     }
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
-                        _logger?.LogWarning("Partial refund failed: HostLogKey ve ProviderPaymentId boş. Id: {PaymentId}", paymentId);
+                        _logger?.LogError("POSNET kısmi iade başarısız: HostLogKey ve ProviderPaymentId boş. PaymentId: {PaymentId}. Banka işlem referans numarası bulunamadı.", paymentId);
                         return false;
                     }
 
@@ -702,6 +725,7 @@ namespace ECommerce.Business.Services.Managers
                     {
                         // Kısmi iade kaydı
                         payment.RefundedAmount = (payment.RefundedAmount ?? 0) + amount;
+                        payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
                         
                         // Tam iade olduysa status güncelle
@@ -729,12 +753,12 @@ namespace ECommerce.Business.Services.Managers
                             newValues: new { RefundedAmount = payment.RefundedAmount, Amount = amount },
                             performedBy: null);
 
-                        _logger?.LogInformation("POSNET partial refund completed. Id: {PaymentId}, Amount: {Amount}", paymentId, amount);
+                        _logger?.LogInformation("POSNET kısmi iade başarılı. PaymentId: {PaymentId}, Tutar: {Amount}, HostLogKey: {HostLogKey}", paymentId, amount, hostLogKey);
                         return true;
                     }
                     else
                     {
-                        _logger?.LogWarning("POSNET partial refund failed. Id: {PaymentId}, Error: {Error}", paymentId, result.Error);
+                        _logger?.LogError("POSNET kısmi iade başarısız. PaymentId: {PaymentId}, Hata: {Error}", paymentId, result.Error);
                         return false;
                     }
                 }
@@ -747,10 +771,12 @@ namespace ECommerce.Business.Services.Managers
                     {
                         payment.RefundedAmount = (payment.RefundedAmount ?? 0) + amount;
                         payment.Status = payment.RefundedAmount >= payment.Amount ? "Refunded" : "PartiallyRefunded";
+                        payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
                         await _db.SaveChangesAsync();
                         return true;
                     }
+                    return false;
                 }
 
                 // Iyzico için
@@ -761,12 +787,22 @@ namespace ECommerce.Business.Services.Managers
                     {
                         payment.RefundedAmount = (payment.RefundedAmount ?? 0) + amount;
                         payment.Status = payment.RefundedAmount >= payment.Amount ? "Refunded" : "PartiallyRefunded";
+                        payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
                         await _db.SaveChangesAsync();
                         return true;
                     }
+                    return false;
                 }
 
+                // Kapıda ödeme - kısmi iade gerekmez
+                if (providerKey == "cash_on_delivery" || providerKey == "cod" || string.IsNullOrEmpty(providerKey))
+                {
+                    _logger?.LogInformation("Kısmi iade atlandı (para iadesi gerekmez). PaymentId: {PaymentId}, Provider: {Provider}", paymentId, providerKey ?? "unknown");
+                    return true;
+                }
+
+                _logger?.LogError("Kısmi iade başarısız: Desteklenmeyen ödeme sağlayıcısı. PaymentId: {PaymentId}, Provider: {Provider}", paymentId, providerKey);
                 return false;
             }
             catch (Exception ex)

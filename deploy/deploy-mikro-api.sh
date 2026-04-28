@@ -9,11 +9,21 @@
 
 set -e  # Hata durumunda dur
 
-compose() {
-    if docker compose version > /dev/null 2>&1; then
-        docker compose "$@"
+docker_cmd() {
+    if docker info > /dev/null 2>&1; then
+        docker "$@"
     else
-        docker-compose "$@"
+        sudo docker "$@"
+    fi
+}
+
+compose() {
+    if docker info > /dev/null 2>&1 && docker compose version > /dev/null 2>&1; then
+        docker compose "$@"
+    elif sudo docker compose version > /dev/null 2>&1; then
+        sudo docker compose "$@"
+    else
+        sudo docker-compose "$@"
     fi
 }
 
@@ -88,7 +98,7 @@ echo ""
 echo "📍 Adım 5/7: VPN sidecar erişimi kontrol ediliyor..."
 sleep 10  # Container'ların başlamasını bekle
 
-if docker exec mikro-vpn wget -q -O- http://127.0.0.1:8000/v1/openvpn/status > /dev/null 2>&1; then
+if docker_cmd exec mikro-vpn wget -q -O- http://127.0.0.1:8000/v1/openvpn/status > /dev/null 2>&1; then
     echo "  ✅ mikro-vpn kontrol sunucusu yanıt veriyor"
 else
     echo "  ⚠️  mikro-vpn kontrol sunucusuna erişilemedi"
@@ -122,7 +132,7 @@ fi
 # 7. Mikro bağlantı testi
 echo ""
 echo "📍 Adım 7/7: Mikro API bağlantı testi..."
-docker exec ecommerce-api-prod curl -k -s https://mikro-vpn:${MIKRO_API_RELAY_PORT:-8084}/Api/APIMethods/HealthCheck > /dev/null 2>&1
+docker_cmd exec ecommerce-api-prod curl -k -s https://mikro-vpn:${MIKRO_API_RELAY_PORT:-8084}/Api/APIMethods/HealthCheck > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     echo "  ✅ API container'ından mikro-vpn relay üzerinden Mikro API'ye erişim başarılı"
 else

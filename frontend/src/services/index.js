@@ -10,3 +10,13 @@ export { CategoryService } from "./categoryService";
 export { MicroService } from "./microService";
 export { default as newsletterService } from "./newsletterService";
 export { default as siteSettingsService } from "./siteSettingsService";
+// Toplu ürün çekici servisi
+export {
+  fetchAllProductsSequential,
+  fetchAllProductsWithMemoryManagement,
+  productsToCSV,
+  downloadCSV,
+  saveProductsToIndexedDB,
+  loadProductsFromIndexedDB,
+  clearIndexedDB,
+} from "./bulkProductFetcher";

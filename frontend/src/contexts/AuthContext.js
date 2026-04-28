@@ -31,6 +31,49 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const normalizeUserData = useCallback((rawUser, fallback = {}) => {
+    if (!rawUser && !fallback) return null;
+
+    const source = {
+      ...(fallback || {}),
+      ...(rawUser || {}),
+    };
+
+    const resolvedId =
+      source.id ??
+      source.Id ??
+      source.userId ??
+      source.UserId ??
+      source.userID ??
+      source.UserID ??
+      null;
+
+    const normalizedId =
+      resolvedId != null && String(resolvedId).trim() !== ""
+        ? Number.isNaN(Number(resolvedId))
+          ? resolvedId
+          : Number(resolvedId)
+        : null;
+
+    const role = source.role || source.Role || "User";
+
+    return {
+      ...source,
+      id: normalizedId,
+      email: source.email || source.Email || "",
+      firstName: source.firstName || source.FirstName || "",
+      lastName: source.lastName || source.LastName || "",
+      name:
+        source.name ||
+        source.Name ||
+        `${source.firstName || source.FirstName || ""} ${
+          source.lastName || source.LastName || ""
+        }`.trim(),
+      role,
+      isAdmin: source.isAdmin ?? source.IsAdmin ?? role === "Admin",
+    };
+  }, []);
+
   // =========================================================================
   // Permission State - Kullanıcı izinleri
   // =========================================================================
@@ -347,8 +390,17 @@ export const AuthProvider = ({ children }) => {
 
     if (token && userData) {
       try {
-        const parsedUser = JSON.parse(userData);
+        const parsedUser = normalizeUserData(JSON.parse(userData));
+
+        if (!parsedUser?.id) {
+          clearUserData();
+          setLoading(false);
+          return;
+        }
+
         setUser(parsedUser);
+        localStorage.setItem("user", JSON.stringify(parsedUser));
+        localStorage.setItem("userId", String(parsedUser.id));
 
         // Kullanıcı izinlerini yükle
         loadUserPermissions(parsedUser);
@@ -369,7 +421,8 @@ export const AuthProvider = ({ children }) => {
       const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
 
       if (data && (data.success || data.token || data.Token)) {
-        const userData = data.user ||
+        const rawUserData =
+          data.user ||
           data.User || {
             id: data.id,
             email,
@@ -381,6 +434,9 @@ export const AuthProvider = ({ children }) => {
             role: data.role,
             isAdmin: data.isAdmin,
           };
+        const userData = normalizeUserData(rawUserData, {
+          id: data.id ?? data.userId ?? data.UserId ?? null,
+        });
         const token = data.token || data.Token;
         const refreshToken = data.refreshToken || data.RefreshToken;
 
@@ -524,17 +580,20 @@ export const AuthProvider = ({ children }) => {
       const data = resp && resp.data === undefined ? resp : resp.data;
 
       if (data && (data.Token || data.token)) {
-        const userData = {
+        const userData = normalizeUserData(data.user || data.User, {
+          id: data.id ?? data.userId ?? data.UserId ?? Date.now(),
           email,
           firstName,
           lastName,
           name: `${firstName} ${lastName}`,
-        };
+        });
 
         // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(data.Token || data.token);
         localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("userId", Date.now().toString());
+        if (userData?.id != null) {
+          localStorage.setItem("userId", String(userData.id));
+        }
 
         setUser(userData);
 
@@ -660,12 +719,16 @@ export const AuthProvider = ({ children }) => {
         AuthService.saveToken(result.token);
 
         // Kullanıcı bilgilerini decode et veya API'den al
-        const userData = {
+        const userData = normalizeUserData(result.user || result.User, {
+          id: result.userId ?? result.UserId ?? Date.now(),
           email,
           phoneNumber,
-        };
+        });
 
         localStorage.setItem("user", JSON.stringify(userData));
+        if (userData?.id != null) {
+          localStorage.setItem("userId", String(userData.id));
+        }
         setUser(userData);
 
         return {
@@ -746,7 +809,7 @@ export const AuthProvider = ({ children }) => {
     user,
     setUser,
     loading,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user?.id,
 
     // Auth functions
     login,
@@ -756,15 +819,14 @@ export const AuthProvider = ({ children }) => {
         const data = resp && resp.data === undefined ? resp : resp.data;
         if (data && (data.token || data.Token)) {
           const token = data.token || data.Token;
-          const userData = data.user ||
-            data.User || {
-              id: data.id,
-              email: data.email,
-              name: data.name,
-              firstName: data.firstName,
-              lastName: data.lastName,
-              role: data.role || "User",
-            };
+          const userData = normalizeUserData(data.user || data.User, {
+            id: data.id ?? data.userId ?? data.UserId ?? null,
+            email: data.email,
+            name: data.name,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            role: data.role || "User",
+          });
           AuthService.saveToken(token);
           localStorage.setItem("user", JSON.stringify(userData));
           if (userData?.id != null)

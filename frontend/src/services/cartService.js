@@ -340,9 +340,9 @@ export const CartService = {
   /**
    * Kayıtlı kullanıcının sepet öğesini günceller
    */
-  updateItem: async (id, productId, quantity) => {
+  updateItem: async (id, productId, quantity, variantId = null) => {
     try {
-      return await api.put(`${base}/${id}`, { productId, quantity });
+      return await api.put(`${base}/${id}`, { productId, quantity, variantId });
     } catch (error) {
       console.error("Backend sepet güncellenemedi:", error);
       throw error;

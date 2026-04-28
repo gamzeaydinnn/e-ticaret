@@ -26,6 +26,20 @@ namespace ECommerce.Data.Context
         public virtual DbSet<MicroSyncLog> MicroSyncLogs { get; set; }
         public virtual DbSet<MikroSyncState> MikroSyncStates { get; set; }
         public virtual DbSet<MikroCategoryMapping> MikroCategoryMappings { get; set; }
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // MİKRO ÜRÜN CACHE SİSTEMİ
+        // 6000+ ürünü hızlı erişim için local DB'de saklar
+        // ═══════════════════════════════════════════════════════════════════════════════
+        
+        /// <summary>
+        /// Mikro ERP'den çekilen ürünlerin yerel cache tablosu.
+        /// - Lazy loading pagination için (sayfa değişince hızlı erişim)
+        /// - Delta sync için (sadece değişen ürünleri güncelle)
+        /// - 6000+ ürün için performanslı sayfalama
+        /// </summary>
+        public virtual DbSet<MikroProductCache> MikroProductCaches { get; set; }
+        
         public virtual DbSet<Payments> Payments { get; set; }
         public virtual DbSet<ReconciliationLog> ReconciliationLogs { get; set; }
         public virtual DbSet<ProductImage> ProductImages { get; set; }
@@ -417,18 +431,21 @@ namespace ECommerce.Data.Context
                 entity.HasOne(c => c.User)
                       .WithMany(u => u.CartItems)
                       .HasForeignKey(c => c.UserId)
-                      .OnDelete(DeleteBehavior.Cascade);
+                      .OnDelete(DeleteBehavior.Cascade)
+                      .IsRequired(false);  // Explicitly optional - UserId is nullable
 
                 entity.HasOne(c => c.Product)
                       .WithMany(p => p.CartItems)
                       .HasForeignKey(c => c.ProductId)
-                      .OnDelete(DeleteBehavior.Restrict);
+                      .OnDelete(DeleteBehavior.Restrict)
+                      .IsRequired();  // Explicitly required - ProductId is non-nullable
                 
                 // Varyant ilişkisi (nullable - varyantsız ürünler için)
                 entity.HasOne(c => c.ProductVariant)
                       .WithMany()
                       .HasForeignKey(c => c.ProductVariantId)
-                      .OnDelete(DeleteBehavior.Cascade);
+                      .OnDelete(DeleteBehavior.Cascade)
+                      .IsRequired(false);  // Explicitly optional - ProductVariantId is nullable
 
                 // Aynı kullanıcı, aynı ürün ve aynı varyant tek satır olabilir
                 entity.HasIndex(c => new { c.UserId, c.ProductId, c.ProductVariantId }).IsUnique();
@@ -1032,6 +1049,73 @@ namespace ECommerce.Data.Context
                     
                 // Performans için index
                 entity.HasIndex(e => e.CategoryId);
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════════
+            // MikroProductCache Configuration
+            // Mikro ERP ürünlerinin yerel cache tablosu - 6000+ ürün için performanslı erişim
+            // ═══════════════════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<MikroProductCache>(entity =>
+            {
+                entity.ToTable("MikroProductCache");
+                
+                // Primary key: StokKod
+                entity.HasKey(e => e.StokKod);
+                
+                entity.Property(e => e.StokKod)
+                    .HasMaxLength(50)
+                    .IsRequired();
+                    
+                entity.Property(e => e.StokAd)
+                    .HasMaxLength(500);
+                    
+                entity.Property(e => e.Barkod)
+                    .HasMaxLength(50);
+                    
+                entity.Property(e => e.GrupKod)
+                    .HasMaxLength(50);
+                    
+                entity.Property(e => e.Birim)
+                    .HasMaxLength(20);
+                    
+                entity.Property(e => e.DataHash)
+                    .HasMaxLength(32);
+                
+                entity.Property(e => e.SatisFiyati)
+                    .HasPrecision(18, 4);
+                    
+                entity.Property(e => e.DepoMiktari)
+                    .HasPrecision(18, 4);
+                    
+                entity.Property(e => e.SatilabilirMiktar)
+                    .HasPrecision(18, 4);
+                    
+                entity.Property(e => e.KdvOrani)
+                    .HasPrecision(5, 2);
+                
+                // Performans indexleri - 6000+ ürün için kritik
+                entity.HasIndex(e => e.GrupKod)
+                    .HasDatabaseName("IX_MikroProductCache_GrupKod");
+                    
+                entity.HasIndex(e => e.Barkod)
+                    .HasDatabaseName("IX_MikroProductCache_Barkod");
+                    
+                entity.HasIndex(e => e.Aktif)
+                    .HasDatabaseName("IX_MikroProductCache_Aktif");
+                    
+                entity.HasIndex(e => e.GuncellemeTarihi)
+                    .HasDatabaseName("IX_MikroProductCache_GuncellemeTarihi");
+                    
+                entity.HasIndex(e => e.LocalProductId)
+                    .HasDatabaseName("IX_MikroProductCache_LocalProductId");
+                    
+                // Composite index: Sık kullanılan filtreleme kombinasyonu
+                entity.HasIndex(e => new { e.Aktif, e.GrupKod })
+                    .HasDatabaseName("IX_MikroProductCache_Aktif_GrupKod");
+                    
+                // Full-text arama için StokAd index'i (opsiyonel, SQL Server)
+                entity.HasIndex(e => e.StokAd)
+                    .HasDatabaseName("IX_MikroProductCache_StokAd");
             });
 
             // -------------------

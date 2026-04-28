@@ -1,0 +1,154 @@
+{
+  "info": {
+    "_postman_id": "vpn-mikro-api-test",
+    "name": "VPN Mikro API Test Collection",
+    "description": "10.0.0.3:8084 sunucusuna bağlanarak test",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "APILogin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ApiKey\": \"PZDEzh44zNcY2WKpOaoPHV5+mlVG1420SPXn3QBuVqcO6MvOk1j6NlSSFONwtTJV0ovN+6CjB6IKfPYN4TLXmjs6ESUxcwa2Yp+abW9+lac=\",\n  \"CalismaYili\": \"2026\",\n  \"FirmaKodu\": \"Ze-Me 2023\",\n  \"KullaniciKodu\": \"8\",\n  \"Sifre\": \"9a98bfba2c6691f8baf594ae7a95f854\",\n  \"SubeNo\": 0\n}"
+        },
+        "url": {
+          "raw": "http://10.0.0.3:8084/Api/APILogin",
+          "protocol": "http",
+          "host": [
+            "10",
+            "0",
+            "0",
+            "3"
+          ],
+          "port": "8084",
+          "path": [
+            "Api",
+            "APILogin"
+          ]
+        },
+        "description": "Mikro API'ye giriş yapma"
+      },
+      "response": []
+    },
+    {
+      "name": "Stok Sorgusu",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://10.0.0.3:8084/Api/AnaUrun?anahtar=test",
+          "protocol": "http",
+          "host": [
+            "10",
+            "0",
+            "0",
+            "3"
+          ],
+          "port": "8084",
+          "path": [
+            "Api",
+            "AnaUrun"
+          ],
+          "query": [
+            {
+              "key": "anahtar",
+              "value": "test"
+            }
+          ]
+        },
+        "description": "Stok bilgisini sorgulama"
+      },
+      "response": []
+    },
+    {
+      "name": "Müşteri Sorgula",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://10.0.0.3:8084/Api/AnaMusteri?musteriAnahtari=WEB-001",
+          "protocol": "http",
+          "host": [
+            "10",
+            "0",
+            "0",
+            "3"
+          ],
+          "port": "8084",
+          "path": [
+            "Api",
+            "AnaMusteri"
+          ],
+          "query": [
+            {
+              "key": "musteriAnahtari",
+              "value": "WEB-001"
+            }
+          ]
+        },
+        "description": "Müşteri bilgisini sorgulama"
+      },
+      "response": []
+    },
+    {
+      "name": "Fiyat Bilgisi",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://10.0.0.3:8084/Api/AnaBilgisayar",
+          "protocol": "http",
+          "host": [
+            "10",
+            "0",
+            "0",
+            "3"
+          ],
+          "port": "8084",
+          "path": [
+            "Api",
+            "AnaBilgisayar"
+          ]
+        },
+        "description": "Sistem bilgisini al"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://10.0.0.3:8084",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "PZDEzh44zNcY2WKpOaoPHV5+mlVG1420SPXn3QBuVqcO6MvOk1j6NlSSFONwtTJV0ovN+6CjB6IKfPYN4TLXmjs6ESUxcwa2Yp+abW9+lac=",
+      "type": "string"
+    },
+    {
+      "key": "firma_kodu",
+      "value": "Ze-Me 2023",
+      "type": "string"
+    },
+    {
+      "key": "kullanici_kodu",
+      "value": "8",
+      "type": "string"
+    },
+    {
+      "key": "sifre",
+      "value": "9a98bfba2c6691f8baf594ae7a95f854",
+      "type": "string"
+    }
+  ]
+}

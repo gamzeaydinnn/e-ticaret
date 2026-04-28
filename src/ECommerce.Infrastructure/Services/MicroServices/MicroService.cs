@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using ECommerce.Infrastructure.Config;
+using System.Text.RegularExpressions;
 
 namespace ECommerce.Infrastructure.Services.MicroServices
 {
@@ -36,6 +37,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         private readonly HttpClient _httpClient;
         private readonly MikroSettings _settings;
         private readonly ILogger<MicroService> _logger;
+        private static readonly Regex Md5Regex = new("^[a-fA-F0-9]{32}$", RegexOptions.Compiled);
+        private readonly SemaphoreSlim _stockSnapshotLock = new(1, 1);
+        private List<MikroStokResponseDto>? _lastStockSnapshot;
+        private DateTime _lastStockSnapshotAtUtc;
+        private static readonly TimeSpan StockSnapshotCacheTtl = TimeSpan.FromSeconds(20);
         
         // JSON serileştirme ayarları - MikroAPI'nin beklediği format için
         private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -79,11 +85,8 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         /// <returns>MD5 hash (32 karakter, lowercase hex)</returns>
         private string GenerateDailyPasswordHash(string plainPassword)
         {
-            if (string.IsNullOrEmpty(plainPassword))
-            {
-                _logger.LogWarning("[MicroService] Şifre boş! MD5 hash üretilemedi.");
-                return string.Empty;
-            }
+            // Şifre boş olsa bile Mikro formatı gereği "yyyy-MM-dd " değeri hash'lenir.
+            plainPassword ??= string.Empty;
 
             // MikroAPI formatı: YYYY-MM-DD + boşluk + şifre
             var today = DateTime.Now.ToString("yyyy-MM-dd");
@@ -97,9 +100,30 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             // Hex string'e çevir (lowercase)
             var hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
             
-            _logger.LogDebug("[MicroService] MD5 hash oluşturuldu. Tarih: {Date}", today);
+            _logger.LogDebug("[MicroService] MD5 hash oluşturuldu. Tarih: {Date}, SifreBosMu: {IsEmpty}", today, string.IsNullOrEmpty(plainPassword));
             
             return hashString;
+        }
+
+        /// <summary>
+        /// Sifre alanini MikroAPI'ye gonderilecek son forma cevirir.
+        /// - PasswordIsPreHashed=true ise oldugu gibi kullanir
+        /// - 32 karakter hex formatinda ise hash kabul eder
+        /// - Diger durumlarda gunluk MD5 hash uretir
+        /// </summary>
+        private string ResolveOutgoingPassword()
+        {
+            var password = _settings.Sifre;
+            if (password == null) return string.Empty;
+
+            if (_settings.PasswordIsPreHashed || Md5Regex.IsMatch(password))
+            {
+                _logger.LogInformation("[MicroService] Mikro sifresi pre-hashed olarak kullaniliyor.");
+                return password.ToLowerInvariant();
+            }
+
+            var plainPassword = string.IsNullOrWhiteSpace(password) ? string.Empty : password;
+            return GenerateDailyPasswordHash(plainPassword);
         }
 
         // ==================== MIKRO AUTH WRAPPER ====================
@@ -116,7 +140,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 CalismaYili = _settings.CalismaYili,
                 FirmaKodu = _settings.FirmaKodu,
                 KullaniciKodu = _settings.KullaniciKodu,
-                Sifre = GenerateDailyPasswordHash(_settings.Sifre)
+                Sifre = ResolveOutgoingPassword()
                 // NOT: FirmaNo ve SubeNo Mikro objesinin içinde değil, 
                 // request root seviyesinde veya hiç gönderilmez
             };
@@ -252,34 +276,71 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         // Bu metodlar geriye dönük uyumluluk için korunuyor ve MikroAPI V2'yi kullanıyor
 
         /// <summary>
+        /// Kısa süreli stok snapshot'ı döndürür.
+        /// Aynı anda gelen products/stocks isteklerinde Mikro'ya tekrar full tarama gönderilmesini engeller.
+        /// </summary>
+        private async Task<List<MikroStokResponseDto>> GetStockSnapshotAsync(CancellationToken cancellationToken = default)
+        {
+            await _stockSnapshotLock.WaitAsync(cancellationToken);
+            try
+            {
+                var now = DateTime.UtcNow;
+                if (_lastStockSnapshot != null && (now - _lastStockSnapshotAtUtc) < StockSnapshotCacheTtl)
+                {
+                    _logger.LogInformation(
+                        "[MicroService] Stock snapshot cache kullanılıyor. Yaş: {AgeSeconds}s, Kayıt: {Count}",
+                        (int)(now - _lastStockSnapshotAtUtc).TotalSeconds,
+                        _lastStockSnapshot.Count);
+
+                    return new List<MikroStokResponseDto>(_lastStockSnapshot);
+                }
+
+                _logger.LogInformation("[MicroService] Stock snapshot yenileniyor.");
+
+                var allStoks = new List<MikroStokResponseDto>();
+                await foreach (var stok in GetAllStokAsync(100, _settings.DefaultDepoNo, cancellationToken))
+                {
+                    allStoks.Add(stok);
+                }
+
+                _lastStockSnapshot = allStoks;
+                _lastStockSnapshotAtUtc = DateTime.UtcNow;
+
+                return new List<MikroStokResponseDto>(allStoks);
+            }
+            finally
+            {
+                _stockSnapshotLock.Release();
+            }
+        }
+
+        /// <summary>
         /// Mikro'dan tüm ürünleri çeker (geriye dönük uyumluluk).
         /// NEDEN: Eski kod bağımlılığı için korunuyor, StokListesiV2 kullanır.
+        /// ÖNEMLİ: TotalCount dönmeyen ortamlarda güvenli durma kriterleri için sıralı çekme kullanır.
         /// </summary>
         public async Task<IEnumerable<MicroProductDto>> GetProductsAsync()
         {
-            _logger.LogInformation("[MicroService] GetProductsAsync çağrılıyor (StokListesiV2 üzerinden)");
+            _logger.LogInformation("[MicroService] GetProductsAsync çağrılıyor (Sıralı StokListesiV2 üzerinden)");
 
             try
             {
-                var products = new List<MicroProductDto>();
+                var allStoks = await GetStockSnapshotAsync();
                 
-                // Varsayılan depodan tüm stokları çek
-                await foreach (var stok in GetAllStokAsync(100, _settings.DefaultDepoNo))
+                var products = allStoks.Select(stok => new MicroProductDto
                 {
-                    products.Add(new MicroProductDto
-                    {
-                        Sku = stok.StoKod ?? "",
-                        Name = stok.StoIsim ?? "",
-                        Barcode = stok.Barkod,
-                        Price = stok.SatisFiyat1 ?? 0,
-                        VatRate = stok.KdvOrani ?? 20,
-                        StockQuantity = (int)(stok.MevcutMiktar ?? 0),
-                        CategoryCode = stok.GrupKodu,
-                        Unit = stok.BirimAdi ?? "ADET",
-                        IsActive = stok.Aktif ?? true,
-                        LastModified = stok.DegisiklikTarihi
-                    });
-                }
+                    Sku = stok.StoKod ?? "",
+                    Name = stok.StoIsim ?? "",
+                    Barcode = stok.Barkod,
+                    Price = ResolveProductPriceFromStok(stok),
+                    VatRate = stok.KdvOrani ?? 20,
+                    StockQuantity = ResolveStockQuantityFromStok(stok),
+                    Stock = ResolveStockQuantityFromStok(stok),
+                    CategoryCode = stok.GrupKodu,
+                    Unit = stok.BirimAdi ?? "ADET",
+                    IsActive = stok.Aktif ?? true,
+                    LastModified = stok.DegisiklikTarihi
+                }).ToList();
 
                 _logger.LogInformation(
                     "[MicroService] GetProductsAsync tamamlandı. Toplam: {Count} ürün",
@@ -297,29 +358,27 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         /// <summary>
         /// Mikro'dan tüm stokları çeker (geriye dönük uyumluluk).
         /// NEDEN: Eski kod bağımlılığı için korunuyor, StokListesiV2 kullanır.
+        /// ÖNEMLİ: TotalCount dönmeyen ortamlarda güvenli durma kriterleri için sıralı çekme kullanır.
         /// </summary>
         public async Task<IEnumerable<MicroStockDto>> GetStocksAsync()
         {
-            _logger.LogInformation("[MicroService] GetStocksAsync çağrılıyor (StokListesiV2 üzerinden)");
+            _logger.LogInformation("[MicroService] GetStocksAsync çağrılıyor (Sıralı StokListesiV2 üzerinden)");
 
             try
             {
-                var stocks = new List<MicroStockDto>();
+                var allStoks = await GetStockSnapshotAsync();
                 
-                // Varsayılan depodan stokları çek
-                await foreach (var stok in GetAllStokAsync(100, _settings.DefaultDepoNo))
+                var stocks = allStoks.Select(stok => new MicroStockDto
                 {
-                    stocks.Add(new MicroStockDto
-                    {
-                        Sku = stok.StoKod ?? "",
-                        Barcode = stok.Barkod,
-                        Quantity = (int)(stok.MevcutMiktar ?? 0),
-                        AvailableQuantity = (int)(stok.KullanilabilirMiktar ?? stok.MevcutMiktar ?? 0),
-                        ReservedQuantity = (int)(stok.RezervedMiktar ?? 0),
-                        WarehouseCode = $"DEPO{_settings.DefaultDepoNo}",
-                        LastUpdated = stok.DegisiklikTarihi ?? DateTime.UtcNow
-                    });
-                }
+                    Sku = stok.StoKod ?? "",
+                    Barcode = stok.Barkod,
+                    Quantity = ResolveStockQuantityFromStok(stok),
+                    Stock = ResolveStockQuantityFromStok(stok),
+                    AvailableQuantity = ResolveAvailableQuantityFromStok(stok),
+                    ReservedQuantity = (int)(stok.RezervedMiktar ?? 0),
+                    WarehouseCode = $"DEPO{_settings.DefaultDepoNo}",
+                    LastUpdated = stok.DegisiklikTarihi ?? DateTime.UtcNow
+                }).ToList();
 
                 _logger.LogInformation(
                     "[MicroService] GetStocksAsync tamamlandı. Toplam: {Count} stok",
@@ -339,6 +398,58 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             // TODO: SiparisKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
             _logger.LogWarning("[MicroService] ExportOrdersToERPAsync henüz MikroAPI V2'ye migrate edilmedi.");
             return Task.FromResult(false);
+        }
+
+        private static decimal ResolveProductPriceFromStok(MikroStokResponseDto stok)
+        {
+            if (stok.SatisFiyat1.HasValue && stok.SatisFiyat1.Value > 0)
+            {
+                return stok.SatisFiyat1.Value;
+            }
+
+            var fallback = stok.SatisFiyatlari?
+                .OrderBy(f => f.SfiyatNo)
+                .FirstOrDefault(f => f.SfiyatFiyati > 0);
+
+            if (fallback?.SfiyatFiyati > 0)
+            {
+                return fallback.SfiyatFiyati;
+            }
+
+            // Bazı kayıtlarda satış fiyatı boş gelirken son alış değeri dolu olabiliyor.
+            if (stok.StoSonAlis.HasValue && stok.StoSonAlis.Value > 0)
+            {
+                return stok.StoSonAlis.Value;
+            }
+
+            return 0m;
+        }
+
+        private static int ResolveStockQuantityFromStok(MikroStokResponseDto stok)
+        {
+            var candidates = new List<decimal>
+            {
+                stok.KullanilabilirMiktar ?? 0,
+                stok.MevcutMiktar ?? 0,
+                stok.DepoMiktar ?? 0,
+                stok.StoMiktar,
+                stok.DepoStoklari?.Sum(d => d.SatilabilirMiktar ?? d.StokMiktar) ?? 0
+            };
+
+            var best = candidates.Max();
+            return (int)Math.Max(0, Math.Floor(best));
+        }
+
+        private static int ResolveAvailableQuantityFromStok(MikroStokResponseDto stok)
+        {
+            if (stok.KullanilabilirMiktar.HasValue && stok.KullanilabilirMiktar.Value > 0)
+            {
+                return (int)Math.Floor(stok.KullanilabilirMiktar.Value);
+            }
+
+            var total = ResolveStockQuantityFromStok(stok);
+            var reserved = (int)Math.Max(0, Math.Floor(stok.RezervedMiktar ?? 0));
+            return Math.Max(0, total - reserved);
         }
 
         public void UpdateProduct(MicroProductDto productDto)
@@ -558,6 +669,17 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 var result = JsonSerializer.Deserialize<MikroResponseWrapper<MikroStokResponseDto>>(
                     content, _jsonOptions);
 
+                // Mikro API bazen standart success/data yerine result[0].Data.StokListesi formatı döndürüyor.
+                // Bu durumda fallback parser ile veriyi normalize et.
+                if (result == null || (!result.Success && (result.Data == null || result.Data.Count == 0)))
+                {
+                    var legacyParsed = TryParseLegacyStokListesiResponse(content);
+                    if (legacyParsed != null)
+                    {
+                        result = legacyParsed;
+                    }
+                }
+
                 _logger.LogInformation(
                     "[MicroService] StokListesiV2 tamamlandı. Success: {Success}, Kayıt: {Count}, Toplam: {Total}, Message: {Message}",
                     result?.Success ?? false, result?.Data?.Count ?? 0, result?.TotalCount ?? 0, result?.Message ?? "null");
@@ -572,6 +694,103 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     Success = false,
                     Message = ex.Message
                 };
+            }
+        }
+
+        /// <summary>
+        /// Mikro'nun legacy response formatını parse eder:
+        /// { "result": [ { "StatusCode": 200, "Data": { "StokListesi": [...] } } ] }
+        /// </summary>
+        private MikroResponseWrapper<MikroStokResponseDto>? TryParseLegacyStokListesiResponse(string content)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var root = doc.RootElement;
+
+                if (!root.TryGetProperty("result", out var resultArray) ||
+                    resultArray.ValueKind != JsonValueKind.Array ||
+                    resultArray.GetArrayLength() == 0)
+                {
+                    return null;
+                }
+
+                var first = resultArray[0];
+
+                var statusCode = first.TryGetProperty("StatusCode", out var statusEl) && statusEl.ValueKind == JsonValueKind.Number
+                    ? statusEl.GetInt32()
+                    : 0;
+
+                var isError = first.TryGetProperty("IsError", out var isErrorEl) &&
+                              (isErrorEl.ValueKind == JsonValueKind.True || isErrorEl.ValueKind == JsonValueKind.False)
+                    ? isErrorEl.GetBoolean()
+                    : false;
+
+                var errorMessage = first.TryGetProperty("ErrorMessage", out var errEl) && errEl.ValueKind == JsonValueKind.String
+                    ? errEl.GetString() ?? string.Empty
+                    : string.Empty;
+
+                if (statusCode != 200 || isError)
+                {
+                    return new MikroResponseWrapper<MikroStokResponseDto>
+                    {
+                        Success = false,
+                        Message = string.IsNullOrWhiteSpace(errorMessage)
+                            ? $"Mikro API StatusCode: {statusCode}"
+                            : errorMessage,
+                        Data = new List<MikroStokResponseDto>()
+                    };
+                }
+
+                if (!first.TryGetProperty("Data", out var dataObj) || dataObj.ValueKind != JsonValueKind.Object)
+                {
+                    return new MikroResponseWrapper<MikroStokResponseDto>
+                    {
+                        Success = true,
+                        Message = "Veri boş döndü",
+                        Data = new List<MikroStokResponseDto>(),
+                        TotalCount = 0
+                    };
+                }
+
+                if (!dataObj.TryGetProperty("StokListesi", out var stokListEl) || stokListEl.ValueKind != JsonValueKind.Array)
+                {
+                    return new MikroResponseWrapper<MikroStokResponseDto>
+                    {
+                        Success = true,
+                        Message = "StokListesi bulunamadı",
+                        Data = new List<MikroStokResponseDto>(),
+                        TotalCount = 0
+                    };
+                }
+
+                var stoklar = JsonSerializer.Deserialize<List<MikroStokResponseDto>>(stokListEl.GetRawText(), _jsonOptions)
+                             ?? new List<MikroStokResponseDto>();
+
+                int? totalCount = null;
+                if (dataObj.TryGetProperty("ToplamKayit", out var toplamKayitEl) && toplamKayitEl.ValueKind == JsonValueKind.Number)
+                {
+                    totalCount = toplamKayitEl.GetInt32();
+                }
+                else if (dataObj.TryGetProperty("TotalCount", out var totalCountEl) && totalCountEl.ValueKind == JsonValueKind.Number)
+                {
+                    totalCount = totalCountEl.GetInt32();
+                }
+
+                return new MikroResponseWrapper<MikroStokResponseDto>
+                {
+                    Success = true,
+                    Message = string.Empty,
+                    Data = stoklar,
+                    // TotalCount bazı legacy cevaplarda gelmiyor; null bırakılırsa
+                    // çağıran taraf veri bitene kadar sayfalamaya devam eder.
+                    TotalCount = totalCount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MicroService] Legacy StokListesi response parse edilemedi.");
+                return null;
             }
         }
 
@@ -929,6 +1148,187 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         // ==================== TOPLU İŞLEMLER (V2) ====================
 
         /// <summary>
+        /// Tüm stokları paralel sayfa çekme ile hızlı getirir.
+        /// NEDEN: Mikro API yavaş yanıt verdiğinde (10-30 sn/sayfa) 
+        /// paralel çekme ile toplam süreyi dramatik azaltır.
+        /// </summary>
+        public async Task<List<MikroStokResponseDto>> GetAllStokParallelAsync(
+            int pageSize = 100,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            var allStocks = new List<MikroStokResponseDto>();
+            var parallelCount = _settings.ParallelPageFetchCount > 0 ? _settings.ParallelPageFetchCount : 5;
+            const int hardMaxPages = 10;
+            
+            _logger.LogInformation(
+                "[MicroService] Paralel stok senkronizasyonu başlıyor. Depo: {Depo}, ParalelSayfa: {Parallel}",
+                depoNo ?? _settings.DefaultDepoNo, parallelCount);
+
+            // Önce ilk sayfayı çekerek toplam kayıt sayısını öğren
+            var firstPageRequest = new MikroStokListesiRequestDto
+            {
+                SayfaNo = 1,
+                SayfaBuyuklugu = pageSize,
+                DepoNo = depoNo ?? _settings.DefaultDepoNo,
+                FiyatDahil = true,
+                BarkodDahil = true
+            };
+
+            var firstResult = await GetStokListesiV2Async(firstPageRequest, cancellationToken);
+            
+            if (!firstResult.Success || firstResult.Data == null || firstResult.Data.Count == 0)
+            {
+                _logger.LogWarning("[MicroService] İlk sayfa boş veya başarısız.");
+                return allStocks;
+            }
+
+            allStocks.AddRange(firstResult.Data);
+            
+            // TotalCount yoksa 50 sayfaya sabitlemek yerine güvenli şekilde sayfa sayfa ilerle.
+            // Mikro bazı ortamlarda toplam kayıt bilgisini dönmüyor (Toplam: 0).
+            if (!firstResult.TotalCount.HasValue || firstResult.TotalCount.Value <= 0)
+            {
+                const int maxPagesWithoutTotalCount = hardMaxPages;
+                string? lastPageFirstSku = firstResult.Data.FirstOrDefault()?.StoKod;
+                var seenFirstSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                if (!string.IsNullOrWhiteSpace(lastPageFirstSku))
+                {
+                    seenFirstSkus.Add(lastPageFirstSku);
+                }
+
+                _logger.LogWarning(
+                    "[MicroService] TotalCount dönmedi (Toplam: 0). Güvenli sayfalama moduna geçiliyor.");
+
+                for (int pageNo = 2; pageNo <= maxPagesWithoutTotalCount; pageNo++)
+                {
+                    var request = new MikroStokListesiRequestDto
+                    {
+                        SayfaNo = pageNo,
+                        SayfaBuyuklugu = pageSize,
+                        DepoNo = depoNo ?? _settings.DefaultDepoNo,
+                        FiyatDahil = true,
+                        BarkodDahil = true
+                    };
+
+                    var result = await GetStokListesiV2Async(request, cancellationToken);
+
+                    if (!result.Success || result.Data == null || result.Data.Count == 0)
+                    {
+                        _logger.LogInformation(
+                            "[MicroService] TotalCount yok modunda veri bitti. Sayfa: {Page}",
+                            pageNo);
+                        break;
+                    }
+
+                    allStocks.AddRange(result.Data);
+
+                    var currentPageFirstSku = result.Data.FirstOrDefault()?.StoKod;
+                    if (!string.IsNullOrWhiteSpace(currentPageFirstSku))
+                    {
+                        if (currentPageFirstSku == lastPageFirstSku || !seenFirstSkus.Add(currentPageFirstSku))
+                        {
+                            _logger.LogWarning(
+                                "[MicroService] TotalCount yok modunda sayfa tekrarına rastlandı. Sayfa: {Page}, İlk SKU: {Sku}. Döngü sonlandırıldı.",
+                                pageNo,
+                                currentPageFirstSku);
+                            break;
+                        }
+
+                        lastPageFirstSku = currentPageFirstSku;
+                    }
+
+                    if (result.Data.Count < pageSize)
+                    {
+                        _logger.LogInformation(
+                            "[MicroService] Son sayfa tespit edildi. Sayfa: {Page}, Kayıt: {Count}",
+                            pageNo,
+                            result.Data.Count);
+                        break;
+                    }
+                }
+
+                _logger.LogInformation(
+                    "[MicroService] TotalCount yok modunda stok senkronizasyonu tamamlandı. Toplam: {Count}",
+                    allStocks.Count);
+
+                return allStocks;
+            }
+
+            // Toplam sayfa sayısını hesapla (TotalCount varsa)
+            int totalRecords = firstResult.TotalCount.Value;
+            int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
+            totalPages = Math.Min(totalPages, hardMaxPages);
+
+            _logger.LogInformation(
+                "[MicroService] İlk sayfa alındı. Toplam kayıt: {Total}, Toplam sayfa: {Pages}",
+                totalRecords, totalPages);
+
+            if (totalPages <= 1)
+            {
+                return allStocks;
+            }
+
+            // Kalan sayfaları paralel çek
+            var pagesToFetch = Enumerable.Range(2, totalPages - 1).ToList();
+            var allPageResults = new System.Collections.Concurrent.ConcurrentBag<(int Page, List<MikroStokResponseDto> Data)>();
+            
+            // Paralel gruplar halinde çek
+            var semaphore = new SemaphoreSlim(parallelCount);
+            var tasks = pagesToFetch.Select(async pageNo =>
+            {
+                await semaphore.WaitAsync(cancellationToken);
+                try
+                {
+                    var request = new MikroStokListesiRequestDto
+                    {
+                        SayfaNo = pageNo,
+                        SayfaBuyuklugu = pageSize,
+                        DepoNo = depoNo ?? _settings.DefaultDepoNo,
+                        FiyatDahil = true,
+                        BarkodDahil = true
+                    };
+
+                    var result = await GetStokListesiV2Async(request, cancellationToken);
+                    
+                    if (result.Success && result.Data != null && result.Data.Count > 0)
+                    {
+                        allPageResults.Add((pageNo, result.Data));
+                        _logger.LogDebug(
+                            "[MicroService] Paralel sayfa {Page}/{Total} tamamlandı. Kayıt: {Count}",
+                            pageNo, totalPages, result.Data.Count);
+                    }
+                    else if (result.Data == null || result.Data.Count == 0)
+                    {
+                        // Boş sayfa - daha fazla veri yok
+                        _logger.LogDebug("[MicroService] Sayfa {Page} boş, muhtemelen son sayfa geçildi.", pageNo);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[MicroService] Sayfa {Page} çekilemedi.", pageNo);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
+
+            // Sonuçları sayfa sırasına göre sırala ve ekle
+            var orderedResults = allPageResults.OrderBy(x => x.Page).SelectMany(x => x.Data);
+            allStocks.AddRange(orderedResults);
+
+            _logger.LogInformation(
+                "[MicroService] Paralel stok senkronizasyonu tamamlandı. Toplam: {Count} kayıt",
+                allStocks.Count);
+
+            return allStocks;
+        }
+
+        /// <summary>
         /// Tüm stokları sayfalı olarak çeker (full sync).
         /// NEDEN: İlk kurulumda veya tam senkronizasyon gerektiğinde
         /// tüm ürünlerin çekilmesi için kullanılır.
@@ -940,6 +1340,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         {
             int pageNo = 1;
             bool hasMore = true;
+            int yieldedCount = 0;
+            string? lastPageFirstSku = null;
+            var seenFirstSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            const int maxPagesWithoutTotalCount = 10;
+            const int hardMaxPages = 10;
 
             _logger.LogInformation(
                 "[MicroService] Tam stok senkronizasyonu başlıyor. Depo: {Depo}",
@@ -947,6 +1352,14 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
             while (hasMore && !cancellationToken.IsCancellationRequested)
             {
+                if (pageNo > hardMaxPages)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] Sayfa üst sınırına ulaşıldı ({MaxPages}). Döngü sonlandırıldı.",
+                        hardMaxPages);
+                    yield break;
+                }
+
                 var request = new MikroStokListesiRequestDto
                 {
                     SayfaNo = pageNo,
@@ -966,11 +1379,55 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 foreach (var stok in result.Data)
                 {
+                    yieldedCount++;
                     yield return stok;
                 }
 
-                // Sonraki sayfa var mı kontrol et
-                hasMore = result.Data.Count == pageSize;
+                // Mikro API bazı ortamlarda istenen pageSize'tan daha az kayıt döndürebilir (örn. max 20).
+                // Bu yüzden devam kararını mümkünse TotalCount ile, yoksa veri bitene kadar sürdür.
+                if (result.TotalCount.HasValue && result.TotalCount.Value > 0)
+                {
+                    hasMore = yieldedCount < result.TotalCount.Value;
+                }
+                else
+                {
+                    // TotalCount gelmiyorsa en güvenli strateji:
+                    // 1) Sayfa boyutu dolu değilse bitti kabul et
+                    // 2) İlk SKU tekrar ederse API sayfaları döndürüp tekrar ediyor olabilir, döngüyü kes
+                    // 3) Üst güvenlik limiti ile sonsuz döngüyü engelle
+                    hasMore = result.Data.Count >= pageSize;
+
+                    if (pageNo >= maxPagesWithoutTotalCount)
+                    {
+                        _logger.LogWarning(
+                            "[MicroService] TotalCount olmadan maksimum sayfa limitine ulaşıldı ({MaxPages}). Döngü sonlandırıldı.",
+                            maxPagesWithoutTotalCount);
+                        hasMore = false;
+                    }
+                }
+
+                // Koruma: Aynı ilk SKU tekrar geliyorsa sayfalama ilerlemiyor olabilir.
+                var currentPageFirstSku = result.Data.FirstOrDefault()?.StoKod;
+                if (hasMore && !string.IsNullOrWhiteSpace(currentPageFirstSku) && currentPageFirstSku == lastPageFirstSku)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] Sayfalama ilerlemiyor olabilir. Sayfa: {Page}, İlk SKU: {Sku}. Döngü sonlandırıldı.",
+                        pageNo, currentPageFirstSku);
+                    hasMore = false;
+                }
+
+                if (hasMore && !result.TotalCount.HasValue && !string.IsNullOrWhiteSpace(currentPageFirstSku))
+                {
+                    if (!seenFirstSkus.Add(currentPageFirstSku))
+                    {
+                        _logger.LogWarning(
+                            "[MicroService] TotalCount yok ve ilk SKU tekrar etti. Sayfa: {Page}, İlk SKU: {Sku}. Döngü sonlandırıldı.",
+                            pageNo, currentPageFirstSku);
+                        hasMore = false;
+                    }
+                }
+
+                lastPageFirstSku = currentPageFirstSku;
                 pageNo++;
 
                 _logger.LogDebug(

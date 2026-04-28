@@ -5,7 +5,9 @@
 
 set -e  # Exit on error
 
-REMOTE_PATH="/root/eticaret"
+TARGET_USER="${SUDO_USER:-$USER}"
+TARGET_HOME="$(eval echo "~$TARGET_USER")"
+REMOTE_PATH="${TARGET_HOME}/eticaret"
 SERVER_DOMAIN="31.186.24.78"  # Change to your domain if available
 
 echo "=== E-Commerce Server Setup ==="
@@ -80,8 +82,8 @@ echo "[OK] /dev/net/tun hazır"
 echo ""
 echo "=== Step 6: Creating Project Directory ==="
 if [ ! -d "$REMOTE_PATH" ]; then
-    sudo mkdir -p $REMOTE_PATH
-    sudo chown -R $USER:$USER $REMOTE_PATH
+    sudo mkdir -p "$REMOTE_PATH"
+    sudo chown -R "$TARGET_USER":"$TARGET_USER" "$REMOTE_PATH"
     echo "[OK] Project directory created"
 else
     echo "[OK] Project directory already exists"
@@ -89,7 +91,7 @@ fi
 
 echo ""
 echo "=== Step 7: Setting Up Environment ==="
-cd $REMOTE_PATH
+cd "$REMOTE_PATH"
 
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then

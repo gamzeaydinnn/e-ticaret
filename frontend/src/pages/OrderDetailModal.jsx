@@ -2,11 +2,13 @@
 // OrderDetailModal.jsx - Sipariş Detay Modal Komponenti
 // ==========================================================================
 // Sipariş detaylarını ve ağırlık fark bilgilerini gösteren modal.
+// Real-time güncellemeler için SignalR entegrasyonu.
 // Profesyonel tasarım, mobil uyumlu.
 // ==========================================================================
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./OrderDetailModal.css";
+import signalRService from "../services/signalRService";
 
 /**
  * Durum badge'ini render et
@@ -231,12 +233,100 @@ const WeightDifferenceCard = ({ weightAdjustment }) => {
   );
 };
 
-export default function OrderDetailModal({ show, onHide, order }) {
-  if (!show || !order) return null;
+export default function OrderDetailModal({ show, onHide, order, onOrderUpdate }) {
+  // Real-time order updates state
+  const [localOrder, setLocalOrder] = useState(order);
+  const signalRUnsubscribesRef = useRef([]);
+  const DEBUG = process.env.NODE_ENV === "development";
 
-  const weightAdjustment = order.weightAdjustment || order.weightReport;
+  // Order prop değiştiğinde local state'i güncelle
+  useEffect(() => {
+    setLocalOrder(order);
+  }, [order]);
+
+  // SignalR event listener'ları
+  useEffect(() => {
+    if (!show || !localOrder?.id) return;
+
+    // Önceki listener'ları temizle
+    signalRUnsubscribesRef.current.forEach(unsub => {
+      if (typeof unsub === 'function') unsub();
+    });
+    signalRUnsubscribesRef.current = [];
+
+    // Sipariş durumu değişikliği
+    const handleOrderStatusChanged = (data) => {
+      const matchesId = String(localOrder.id) === String(data.orderId) ||
+                       localOrder.orderNumber === data.orderNumber;
+      if (matchesId) {
+        DEBUG && console.log("[OrderDetailModal] SignalR: Sipariş güncellendi", data);
+        setLocalOrder(prev => ({
+          ...prev,
+          status: data.status || data.newStatus,
+          statusText: data.statusText,
+          updatedAt: data.timestamp || new Date().toISOString(),
+        }));
+        // Parent component'e bildir
+        if (onOrderUpdate) {
+          onOrderUpdate({
+            ...localOrder,
+            status: data.status || data.newStatus,
+            statusText: data.statusText,
+          });
+        }
+      }
+    };
+
+    // Ağırlık farkı bildirimi
+    const handleWeightChargeApplied = (data) => {
+      const matchesId = String(localOrder.id) === String(data.orderId) ||
+                       localOrder.orderNumber === data.orderNumber;
+      if (matchesId) {
+        DEBUG && console.log("[OrderDetailModal] SignalR: Ağırlık farkı uygulandı", data);
+        setLocalOrder(prev => ({
+          ...prev,
+          finalAmount: data.finalAmount,
+          weightDifferenceAmount: data.weightDifferenceAmount,
+          weightAdjustmentStatus: data.status || 'completed',
+        }));
+      }
+    };
+
+    // Teslimat tamamlandı
+    const handleDeliveryCompleted = (data) => {
+      const matchesId = String(localOrder.id) === String(data.orderId) ||
+                       localOrder.orderNumber === data.orderNumber;
+      if (matchesId) {
+        DEBUG && console.log("[OrderDetailModal] SignalR: Teslimat tamamlandı", data);
+        setLocalOrder(prev => ({
+          ...prev,
+          status: 'delivered',
+          deliveredAt: data.deliveredAt || new Date().toISOString(),
+        }));
+      }
+    };
+
+    // Event listener'ları kaydet
+    const unsub1 = signalRService.onOrderStatusChanged(handleOrderStatusChanged);
+    const unsub2 = signalRService.onWeightChargeApplied(handleWeightChargeApplied);
+    const unsub3 = signalRService.onDeliveryStatusChanged(handleDeliveryCompleted);
+
+    signalRUnsubscribesRef.current = [unsub1, unsub2, unsub3];
+
+    // Cleanup
+    return () => {
+      signalRUnsubscribesRef.current.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+      signalRUnsubscribesRef.current = [];
+    };
+  }, [show, localOrder?.id, localOrder?.orderNumber, onOrderUpdate, DEBUG]);
+
+  if (!show || !localOrder) return null;
+
+  const weightAdjustment = localOrder.weightAdjustment || localOrder.weightReport;
   const hasWeightAdjustment = !!weightAdjustment;
-  const hasWeightBasedItems = (order.orderItems || []).some(
+  const hasWeightBasedItems = (localOrder.orderItems || []).some(
     (item) => item.isWeightBased || item.weightUnit,
   );
 
@@ -251,10 +341,10 @@ export default function OrderDetailModal({ show, onHide, order }) {
           <div className="header-content">
             <div className="order-badge">
               <i className="fas fa-receipt"></i>
-              <span>#{order.id || order.orderNumber}</span>
+              <span>#{localOrder.id || localOrder.orderNumber}</span>
             </div>
             <h5>Sipariş Detayları</h5>
-            <StatusBadge status={order.status} />
+            <StatusBadge status={localOrder.status} />
           </div>
           <button className="close-btn" onClick={onHide}>
             <i className="fas fa-times"></i>
@@ -269,7 +359,7 @@ export default function OrderDetailModal({ show, onHide, order }) {
 
           {hasWeightBasedItems &&
             !hasWeightAdjustment &&
-            order.status !== "Delivered" && (
+            localOrder.status !== "Delivered" && (
               <div className="weight-pending-notice">
                 <i className="fas fa-balance-scale"></i>
                 <div>
@@ -288,20 +378,20 @@ export default function OrderDetailModal({ show, onHide, order }) {
               <div className="info-row">
                 <span className="label">Tarih</span>
                 <span className="value">
-                  {order.orderDate
-                    ? new Date(order.orderDate).toLocaleString("tr-TR")
+                  {localOrder.orderDate
+                    ? new Date(localOrder.orderDate).toLocaleString("tr-TR")
                     : "-"}
                 </span>
               </div>
               <div className="info-row">
                 <span className="label">Durum</span>
-                <span className="value">{order.status}</span>
+                <span className="value">{localOrder.status}</span>
               </div>
               <div className="info-row">
                 <span className="label">Kargo</span>
                 <span className="value">
-                  {order.shippingMethod}
-                  {order.shippingCost ? ` (₺${order.shippingCost})` : ""}
+                  {localOrder.shippingMethod}
+                  {localOrder.shippingCost ? ` (₺${localOrder.shippingCost})` : ""}
                 </span>
               </div>
             </div>
@@ -312,22 +402,22 @@ export default function OrderDetailModal({ show, onHide, order }) {
               </h6>
               <div className="info-row">
                 <span className="label">Alıcı</span>
-                <span className="value">{order.customerName}</span>
+                <span className="value">{localOrder.customerName}</span>
               </div>
-              {order.customerPhone && (
+              {localOrder.customerPhone && (
                 <div className="info-row">
                   <span className="label">Telefon</span>
-                  <span className="value">{order.customerPhone}</span>
+                  <span className="value">{localOrder.customerPhone}</span>
                 </div>
               )}
               <div className="info-row">
                 <span className="label">Adres</span>
                 <span className="value address">
-                  {order.deliveryAddress ||
-                    order.shippingAddress ||
-                    order.address ||
-                    order.fullAddress ||
-                    order.addressSummary ||
+                  {localOrder.deliveryAddress ||
+                    localOrder.shippingAddress ||
+                    localOrder.address ||
+                    localOrder.fullAddress ||
+                    localOrder.addressSummary ||
                     "-"}
                 </span>
               </div>
@@ -340,7 +430,7 @@ export default function OrderDetailModal({ show, onHide, order }) {
               <i className="fas fa-box"></i> Ürünler
             </h6>
             <div className="products-list">
-              {(order.orderItems || []).map((item, idx) => (
+              {(localOrder.orderItems || []).map((item, idx) => (
                 <div
                   key={idx}
                   className={`product-item ${item.isWeightBased ? "weight-based" : ""}`}
@@ -367,16 +457,16 @@ export default function OrderDetailModal({ show, onHide, order }) {
           <div className="order-summary">
             <div className="summary-row">
               <span>Toplam</span>
-              <span className="total-price">₺{order.totalAmount}</span>
+              <span className="total-price">₺{localOrder.totalAmount}</span>
             </div>
           </div>
 
-          {order.deliveryNotes && (
+          {localOrder.deliveryNotes && (
             <div className="delivery-notes">
               <h6>
                 <i className="fas fa-sticky-note"></i> Not
               </h6>
-              <p>{order.deliveryNotes}</p>
+              <p>{localOrder.deliveryNotes}</p>
             </div>
           )}
         </div>

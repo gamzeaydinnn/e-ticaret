@@ -22,7 +22,7 @@ const CourierSignalRContext = createContext(null);
 // SignalR Hub URL
 const HUB_URL = process.env.REACT_APP_API_URL
   ? `${process.env.REACT_APP_API_URL}/hubs/courier`
-  : "http://localhost:5000/hubs/courier";
+  : "http://localhost:5153/hubs/courier";
 
 export function CourierSignalRProvider({ children }) {
   const { token, courier, isAuthenticated, logout } = useCourierAuth();

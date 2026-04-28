@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ECommerce.Entities.Concrete;  // Product
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.DTOs.ProductReview;   // Product DTO'ları
+using ECommerce.Core.DTOs; // PagedResult
 
 
 
@@ -25,6 +26,15 @@ namespace ECommerce.Business.Services.Interfaces
         Task<bool> UpdateStockAsync(int id, int stock);
         Task<int> GetProductCountAsync();
         Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10);
+
+        /// <summary>
+        /// Sayfalı ürün listesi döndürür (PagedResult formatında).
+        /// Toplu export işlemleri için totalCount bilgisi içerir.
+        /// </summary>
+        /// <param name="page">Sayfa numarası (1'den başlar)</param>
+        /// <param name="size">Sayfa başına ürün sayısı</param>
+        /// <returns>PagedResult formatında ürün listesi</returns>
+        Task<PagedResult<ProductListDto>> GetProductsPagedAsync(int page = 1, int size = 50);
 
         // Kullanıcı tarafı ürün listeleme
         Task<IEnumerable<ProductListDto>> GetActiveProductsAsync(int page = 1, int size = 10, int? categoryId = null);
