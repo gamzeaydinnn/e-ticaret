@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/Admin/XmlImportModal";
-import VariantManager from "../../components/Admin/VariantManager";
+import XmlImportModal from "../../components/admin/XmlImportModal";
+import VariantManager from "../../components/admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
