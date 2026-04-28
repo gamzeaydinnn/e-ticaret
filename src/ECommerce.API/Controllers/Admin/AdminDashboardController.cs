@@ -5,6 +5,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Interfaces;
 using ECommerce.API.Authorization;
 using ECommerce.Core.DTOs.Admin;
+using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
 using ECommerce.Entities.Concrete;
@@ -30,6 +31,7 @@ namespace ECommerce.API.Controllers.Admin
         private readonly ICourierService _courierService;
         private readonly IPaymentService _paymentService;
         private readonly ECommerceDbContext _dbContext;
+        private readonly IMikroDbService _mikroDbService;
 
         public AdminDashboardController(
             IUserService userService,
@@ -40,7 +42,8 @@ namespace ECommerce.API.Controllers.Admin
             IFavoriteService favoriteService,
             ICourierService courierService,
             IPaymentService paymentService,
-            ECommerceDbContext dbContext
+            ECommerceDbContext dbContext,
+            IMikroDbService mikroDbService
         )
         {
             _userService = userService;
@@ -52,6 +55,7 @@ namespace ECommerce.API.Controllers.Admin
             _courierService = courierService;
             _paymentService = paymentService;
             _dbContext = dbContext;
+            _mikroDbService = mikroDbService;
         }
 
         [HttpGet("stats")]
@@ -77,7 +81,11 @@ namespace ECommerce.API.Controllers.Admin
             var last14DaysStart = todayStart.AddDays(-13);
 
             var totalUsers = await _userService.GetUserCountAsync();
-            var totalProducts = await _productService.GetProductCountAsync();
+            // Mikro ERP bağlıysa gerçek web-aktif ürün sayısını oradan al,
+            // değilse yerel DB'den say — dashboard'da doğru rakam gösterir
+            var totalProducts = _mikroDbService.IsConfigured
+                ? await _mikroDbService.GetWebProductCountAsync()
+                : await _productService.GetProductCountAsync();
             var totalOrders = await _orderService.GetOrderCountAsync();
             var totalRevenue = await _orderService.GetTotalRevenueAsync();
             var todayOrders = await _orderService.GetTodayOrderCountAsync();

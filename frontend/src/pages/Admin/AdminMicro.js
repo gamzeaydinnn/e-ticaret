@@ -1,9 +1,15 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { MicroService } from "../../services/microService";
+import { useGlobalStockUpdates } from "../../hooks/useStockUpdates";
+import SyncHealthDashboard from "../../components/Admin/SyncHealthDashboard";
 
 // Yardımcı fonksiyonlar
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 const formatDuration = (ms) => {
   if (!ms || ms <= 0) return "-";
   const seconds = Math.floor(ms / 1000);
@@ -26,14 +32,19 @@ export default function AdminMicro() {
   const [stokListesiMeta, setStokListesiMeta] = useState({
     totalCount: 0,
     page: 1,
-    pageSize: 500,
+    pageSize: 100,
   });
   const [grupKodFilter, setGrupKodFilter] = useState("");
+  const [grupKodlari, setGrupKodlari] = useState([]);
+  const [depoListesi, setDepoListesi] = useState([
+    { depoNo: 0, depoAdi: "Tum Depolar" },
+  ]);
+  const [aramaMetni, setAramaMetni] = useState("");
+  const [stokDurumuFilter, setStokDurumuFilter] = useState("hepsi");
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [connectionLoading, setConnectionLoading] = useState(false);
 
-  // Fiyat listesi ve depo seçimi için yeni state'ler
-  const [fiyatListesiNo, setFiyatListesiNo] = useState(1); // 1-10 arası, varsayılan Perakende
+  // Depo seçimi state'i
   const [depoNo, setDepoNo] = useState(0); // 0 = Tüm depolar
 
   // Genel durum
@@ -77,6 +88,10 @@ export default function AdminMicro() {
     minStok: "",
   });
 
+  // loadBulkSqlPage her re-render'da yeniden oluştuğundan, stale closure olmadan
+  // kendinden çağrı yapabilmek için ref tutuyoruz (auto-retry page 1 için)
+  const loadBulkSqlPageRef = useRef(null);
+
   const [bulkFetchConfig, setBulkFetchConfig] = useState({
     pageSize: 50, // Sayfa başına ürün
     throttleDelayMs: 300, // İstekler arası bekleme (ms)
@@ -84,12 +99,39 @@ export default function AdminMicro() {
     retryDelayMs: 3000, // Retry bekleme süresi (ms)
     syncMode: "newOnly", // newOnly | full
     grupKod: "", // Grup kodu filtresi
-    fiyatListesiNo: 1, // Fiyat listesi numarası
+    fiyatListesiNo: 0, // 0 = Tüm fiyatlar / ilk uygun fiyat
     depoNo: 0, // Depo numarası (0 = tüm depolar)
+    pasifDahil: false, // Pasif ürünleri de dahil et
   });
+
+  // Ayarlar tab - aktif/pasif yonetimi ve import state
+  const [activeProducts, setActiveProducts] = useState([]);
+  const [activeProductsLoading, setActiveProductsLoading] = useState(false);
+  const [activeSearchText, setActiveSearchText] = useState("");
+  const [activeFilter, setActiveFilter] = useState("hepsi");
+  const [activePage, setActivePage] = useState(1);
+  const [activePageSize, setActivePageSize] = useState(20);
+  const [activeTotalPages, setActiveTotalPages] = useState(1);
+  const [activeTotalCount, setActiveTotalCount] = useState(0);
+  const [selectedStokKodlar, setSelectedStokKodlar] = useState([]);
+  const [importFile, setImportFile] = useState(null);
+  const [syncDiagnostics, setSyncDiagnostics] = useState(null);
+  const [syncDiagnosticsLoading, setSyncDiagnosticsLoading] = useState(false);
+  const [syncActionLoading, setSyncActionLoading] = useState(null);
 
   // Abort controller ref - iptal için
   const bulkFetchAbortRef = useRef(null);
+
+  // ==========================================================================
+  // ANLIK STOK TAKİBİ (SignalR StockHub global feed)
+  // NEDEN: HotPoll 10sn'de bir delta yayınlıyor, admin bu canlı akışı izlemeli
+  // ==========================================================================
+  const {
+    updates: realtimeStockUpdates,
+    isConnected: stockHubConnected,
+    clearHistory: clearStockHistory,
+    totalUpdates: totalStockUpdates,
+  } = useGlobalStockUpdates({ maxHistory: 200 });
 
   // ============================================================================
   // Sayfa açılışında verileri yükle
@@ -112,12 +154,20 @@ export default function AdminMicro() {
   const loadInitial = async () => {
     try {
       setLoading(true);
-      const [prods, stk] = await Promise.all([
+      const [prods, stk, grupResult, depoResult] = await Promise.all([
         MicroService.getProducts(),
         MicroService.getStocks(),
+        MicroService.getGrupKodlari(),
+        MicroService.getDepoListesi(),
       ]);
       setProducts(prods || []);
       setStocks(stk || []);
+      setGrupKodlari(Array.isArray(grupResult?.data) ? grupResult.data : []);
+      setDepoListesi(
+        Array.isArray(depoResult?.data) && depoResult.data.length > 0
+          ? depoResult.data
+          : [{ depoNo: 0, depoAdi: "Tum Depolar" }],
+      );
     } catch (err) {
       setMessage(err.message || "Veriler yüklenemedi");
       setMessageType("danger");
@@ -183,85 +233,39 @@ export default function AdminMicro() {
   // Fiyat listesi ve depo seçimine göre doğru verileri çeker
   // ============================================================================
   const loadStokListesi = useCallback(
-    async (sayfa = 1, sayfaBuyuklugu = 500, grupKod = grupKodFilter) => {
+    async (
+      sayfa = 1,
+      sayfaBuyuklugu = 100,
+      grupKod = grupKodFilter,
+      arama = aramaMetni,
+    ) => {
       setLoading(true);
       try {
+        const normalizedSearch = (arama || "").trim();
+        const effectiveSearch =
+          normalizedSearch.length >= 3 ? normalizedSearch : undefined;
+
         const result = await MicroService.getStokListesi({
           sayfa,
           sayfaBuyuklugu,
           depoNo: depoNo, // Seçilen depo (0 = tüm depolar)
-          fiyatListesiNo: fiyatListesiNo, // Seçilen fiyat listesi (1-10)
+          fiyatListesiNo: 0, // Tüm fiyatlar
           grupKod: (grupKod || "").trim() || undefined,
+          aramaMetni: effectiveSearch,
+          sadeceStoklu:
+            stokDurumuFilter === "stokta"
+              ? true
+              : stokDurumuFilter === "stoksuz"
+                ? false
+                : undefined,
           sadeceAktif: true,
         });
 
         if (result?.success) {
-          const initialBatch = Array.isArray(result.data) ? result.data : [];
-          let mergedData = [...initialBatch];
+          const fetchedData = Array.isArray(result.data) ? result.data : [];
+          setStokListesi(fetchedData);
 
-          // Mikro bazı ortamlarda her çağrıda en fazla ~20 kayıt döndürüyor.
-          // Kullanıcı 500 istediğinde ek sayfaları otomatik çekip listeyi tamamla.
-          if (
-            sayfa === 1 &&
-            mergedData.length > 0 &&
-            mergedData.length < sayfaBuyuklugu
-          ) {
-            const estimatedPageSize = Math.max(1, mergedData.length);
-            const maxExtraPages = Math.max(
-              10,
-              Math.ceil(sayfaBuyuklugu / estimatedPageSize) + 5,
-            );
-            let nextPage = 2;
-            const seenFirstSkus = new Set();
-            const firstSku = mergedData[0]?.stokKod;
-            if (firstSku) {
-              seenFirstSkus.add(firstSku);
-            }
-
-            for (
-              let i = 0;
-              i < maxExtraPages && mergedData.length < sayfaBuyuklugu;
-              i += 1
-            ) {
-              const nextResult = await MicroService.getStokListesi({
-                sayfa: nextPage,
-                sayfaBuyuklugu,
-                depoNo: depoNo,
-                fiyatListesiNo: fiyatListesiNo,
-                grupKod: (grupKod || "").trim() || undefined,
-                sadeceAktif: true,
-              });
-
-              const nextBatch =
-                nextResult?.success && Array.isArray(nextResult?.data)
-                  ? nextResult.data
-                  : [];
-
-              if (!nextBatch.length) {
-                break;
-              }
-
-              const nextFirstSku = nextBatch[0]?.stokKod;
-              if (nextFirstSku && seenFirstSkus.has(nextFirstSku)) {
-                break;
-              }
-
-              if (nextFirstSku) {
-                seenFirstSkus.add(nextFirstSku);
-              }
-
-              mergedData = mergedData.concat(nextBatch);
-              nextPage += 1;
-            }
-
-            if (mergedData.length > sayfaBuyuklugu) {
-              mergedData = mergedData.slice(0, sayfaBuyuklugu);
-            }
-          }
-
-          setStokListesi(mergedData);
-
-          const fetchedCount = mergedData.length;
+          const fetchedCount = fetchedData.length;
           const totalCountFromApi = Number(
             result.toplamKayit || result.totalCount || 0,
           );
@@ -295,8 +299,24 @@ export default function AdminMicro() {
         setLoading(false);
       }
     },
-    [grupKodFilter, fiyatListesiNo, depoNo],
+    [grupKodFilter, aramaMetni, depoNo, stokDurumuFilter],
   );
+
+  // Arama alanı için debounce (500ms) + minimum 3 karakter.
+  useEffect(() => {
+    if (activeTab !== "stokListesi") {
+      return undefined;
+    }
+
+    const handle = setTimeout(() => {
+      const value = (aramaMetni || "").trim();
+      if (value.length === 0 || value.length >= 3) {
+        loadStokListesi(1, 100, grupKodFilter, value);
+      }
+    }, 500);
+
+    return () => clearTimeout(handle);
+  }, [aramaMetni, activeTab, grupKodFilter, loadStokListesi]);
 
   const syncProducts = async () => {
     setLoading(true);
@@ -378,6 +398,265 @@ export default function AdminMicro() {
     }
   };
 
+  const loadActiveProducts = useCallback(
+    async (page = 1) => {
+      setActiveProductsLoading(true);
+      try {
+        const normalizedSearch = activeSearchText.trim();
+        const sadeceAktif =
+          activeFilter === "hepsi" ? undefined : activeFilter === "aktif";
+
+        // Aktif/pasif yönetimi, kullanıcı müdahalesi (toggle) yapılan cache
+        // kaynağından okunur. Böylece listede görülen durum ile yazılan durum
+        // birebir tutarlı kalır.
+        const response = await MicroService.getCachedProducts({
+          page,
+          pageSize: activePageSize,
+          search: normalizedSearch || undefined,
+          sadeceAktif,
+          sortBy: "stokKod",
+          sortDesc: false,
+        });
+
+        if (!response?.success) {
+          setMessage(response?.message || "Ürün listesi alınamadı");
+          setMessageType("danger");
+          return;
+        }
+
+        const items = Array.isArray(response.data) ? response.data : [];
+        const pagination = response.pagination || {};
+        const currentPage = Number(pagination.page || page || 1);
+        const totalPages = Number(pagination.totalPages || 1);
+        const totalCount = Number(pagination.totalCount || items.length || 0);
+
+        setActiveProducts(items);
+        setActivePage(currentPage);
+        setActiveTotalPages(Math.max(1, totalPages));
+        setActiveTotalCount(totalCount);
+        setSelectedStokKodlar((prev) =>
+          prev.filter((code) => items.some((item) => item.stokKod === code)),
+        );
+      } catch (err) {
+        setMessage(err.message || "Ürün listesi alınamadı");
+        setMessageType("danger");
+      } finally {
+        setActiveProductsLoading(false);
+      }
+    },
+    [activeFilter, activePageSize, activeSearchText],
+  );
+
+  const toggleSingleProductActive = useCallback(
+    async (stokKod, mevcutAktif) => {
+      setLoading(true);
+      try {
+        const result = await MicroService.toggleProductActive(
+          stokKod,
+          !mevcutAktif,
+        );
+        if (!result?.success) {
+          setMessage(result?.message || "Aktiflik durumu guncellenemedi");
+          setMessageType("danger");
+          return;
+        }
+
+        setMessage(result?.message || "Urun durumu guncellendi");
+        setMessageType("success");
+        await loadActiveProducts(activePage);
+      } catch (err) {
+        setMessage(err.message || "Aktiflik durumu guncellenemedi");
+        setMessageType("danger");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activePage, loadActiveProducts],
+  );
+
+  const bulkChangeProductStatus = useCallback(
+    async (aktif) => {
+      if (selectedStokKodlar.length === 0) {
+        setMessage("Toplu islem icin en az bir urun secin");
+        setMessageType("warning");
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const result = await MicroService.bulkToggleProductActive(
+          selectedStokKodlar,
+          aktif,
+        );
+
+        if (!result?.success) {
+          setMessage(result?.message || "Toplu aktiflik guncellenemedi");
+          setMessageType("danger");
+          return;
+        }
+
+        setMessage(result?.message || "Toplu aktiflik guncellendi");
+        setMessageType("success");
+        setSelectedStokKodlar([]);
+        await loadActiveProducts(activePage);
+      } catch (err) {
+        setMessage(err.message || "Toplu aktiflik guncellenemedi");
+        setMessageType("danger");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activePage, loadActiveProducts, selectedStokKodlar],
+  );
+
+  const handleImportActiveProducts = useCallback(async () => {
+    if (!importFile) {
+      setMessage("Import icin once dosya secin");
+      setMessageType("warning");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await MicroService.importActiveProducts(importFile);
+      if (!result?.success) {
+        setMessage(result?.message || "Excel import basarisiz");
+        setMessageType("danger");
+        return;
+      }
+
+      const stats = result?.stats || {};
+      setMessage(
+        `${result?.message || "Import tamamlandi"} (Basarili: ${stats.successCount || 0}, Basarisiz: ${stats.failedCount || 0}, Atlanan: ${stats.skippedCount || 0})`,
+      );
+      setMessageType("success");
+      setImportFile(null);
+      await loadActiveProducts(1);
+    } catch (err) {
+      setMessage(err.message || "Excel import basarisiz");
+      setMessageType("danger");
+    } finally {
+      setLoading(false);
+    }
+  }, [importFile, loadActiveProducts]);
+
+  const handleDownloadImportTemplate = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await MicroService.downloadImportTemplate();
+      if (!result?.success) {
+        setMessage(result?.message || "Template indirilemedi");
+        setMessageType("danger");
+        return;
+      }
+
+      setMessage("Import template indirildi");
+      setMessageType("success");
+    } catch (err) {
+      setMessage(err.message || "Template indirilemedi");
+      setMessageType("danger");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadSyncDiagnostics = useCallback(async (hours = 24) => {
+    setSyncDiagnosticsLoading(true);
+    try {
+      const result = await MicroService.getSyncDiagnostics(hours);
+      if (!result?.success) {
+        setMessage(result?.message || "Sync diagnostics alınamadı");
+        setMessageType("danger");
+        return;
+      }
+
+      setSyncDiagnostics(result.data || null);
+    } catch (err) {
+      setMessage(err.message || "Sync diagnostics alınamadı");
+      setMessageType("danger");
+    } finally {
+      setSyncDiagnosticsLoading(false);
+    }
+  }, []);
+
+  const handleRetrySyncLog = useCallback(
+    async (logId) => {
+      setSyncActionLoading(`retry-${logId}`);
+      try {
+        const result = await MicroService.retrySyncLog(logId);
+        if (!result?.success) {
+          setMessage(result?.message || "Retry işlemi başarısız");
+          setMessageType("danger");
+          return;
+        }
+
+        setMessage(result?.message || "Kayıt retry kuyruğuna alındı");
+        setMessageType("success");
+        await loadSyncDiagnostics(24);
+      } catch (err) {
+        setMessage(err.message || "Retry işlemi başarısız");
+        setMessageType("danger");
+      } finally {
+        setSyncActionLoading(null);
+      }
+    },
+    [loadSyncDiagnostics],
+  );
+
+  const handleResolveConflict = useCallback(
+    async (logId, strategy) => {
+      setSyncActionLoading(`resolve-${logId}-${strategy}`);
+      try {
+        const result = await MicroService.resolveSyncConflict(logId, strategy);
+        if (!result?.success) {
+          setMessage(result?.message || "Conflict çözüm işlemi başarısız");
+          setMessageType("danger");
+          return;
+        }
+
+        setMessage(result?.message || "Conflict çözüldü");
+        setMessageType("success");
+        await loadSyncDiagnostics(24);
+      } catch (err) {
+        setMessage(err.message || "Conflict çözüm işlemi başarısız");
+        setMessageType("danger");
+      } finally {
+        setSyncActionLoading(null);
+      }
+    },
+    [loadSyncDiagnostics],
+  );
+
+  const allVisibleActiveProductsSelected =
+    activeProducts.length > 0 &&
+    activeProducts.every((item) => selectedStokKodlar.includes(item.stokKod));
+
+  const toggleSelectAllVisibleActiveProducts = () => {
+    const visibleCodes = activeProducts
+      .map((item) => item.stokKod)
+      .filter(Boolean);
+
+    if (allVisibleActiveProductsSelected) {
+      setSelectedStokKodlar((prev) =>
+        prev.filter((code) => !visibleCodes.includes(code)),
+      );
+      return;
+    }
+
+    setSelectedStokKodlar((prev) => {
+      const merged = new Set([...prev, ...visibleCodes]);
+      return Array.from(merged);
+    });
+  };
+
+  const toggleSelectActiveProduct = (stokKod) => {
+    setSelectedStokKodlar((prev) =>
+      prev.includes(stokKod)
+        ? prev.filter((code) => code !== stokKod)
+        : [...prev, stokKod],
+    );
+  };
+
   // Sayfalama için
   const handlePageChange = (newPage) => {
     loadStokListesi(newPage, stokListesiMeta.pageSize, grupKodFilter);
@@ -389,18 +668,150 @@ export default function AdminMicro() {
   // Gemini talimatlarına göre: Promise.all KULLANMA, sıralı istek yap,
   // retry mekanizması, throttle gecikmesi, ilerleme takibi
   // ============================================================================
-  const startBulkFetch = useCallback(async () => {
-    // Zaten çalışıyorsa durdur
-    if (bulkFetchState.isRunning) {
-      console.warn("⚠️ Zaten bir toplu çekme işlemi devam ediyor.");
-      return;
-    }
+  const loadBulkSqlPage = useCallback(
+    async (
+      page = 1,
+      {
+        syncFirst = false,
+        syncModeOverride = null,
+        pageSizeOverride = null,
+        filterOverrides = null, // Filtre temizleme/override için (stale closure sorununu önler)
+      } = {},
+    ) => {
+      if (bulkFetchState.isRunning) return;
 
-    // Abort controller oluştur
-    bulkFetchAbortRef.current = new AbortController();
+      const startedAt = Date.now();
+      const pageSize = Number(
+        pageSizeOverride || bulkFetchPagination.pageSize || 50,
+      );
+      // filterOverrides varsa onu kullan (Temizle butonu vb.), yoksa state'ten oku
+      const activeFilters = filterOverrides ?? bulkFetchFilters;
 
-    // State'i sıfırla ve başlat
-    setBulkFetchState({
+      setBulkFetchState((prev) => ({
+        ...prev,
+        isRunning: true,
+        error: null,
+      }));
+
+      try {
+        // Bu bölüm artık cache tablosunu değil, doğrudan SQL tabanlı Mikro
+        // stok listesini kullanıyor. syncFirst parametresi geriye dönük uyumluluk
+        // için korunuyor ama veri akışını etkilemiyor.
+        const response = await MicroService.getStokListesi({
+          sayfa: page,
+          sayfaBuyuklugu: pageSize,
+          depoNo: bulkFetchConfig.depoNo,
+          fiyatListesiNo: bulkFetchConfig.fiyatListesiNo || 1,
+          stokKod: activeFilters.stokKod || undefined,
+          grupKod:
+            activeFilters.grupKod || bulkFetchConfig.grupKod || undefined,
+          sadeceAktif: true,
+          sadeceStoklu:
+            activeFilters.stokDurumu === "stokta"
+              ? true
+              : activeFilters.stokDurumu === "stoksuz"
+                ? false
+                : undefined,
+        });
+
+        if (!response?.success) {
+          throw new Error(response?.message || "Ürünler getirilemedi");
+        }
+
+        const items = Array.isArray(response.data) ? response.data : [];
+        const totalPages = Number(
+          response.toplamSayfa || response.totalPages || 1,
+        );
+        const totalCount = Number(
+          response.toplamKayit || response.totalCount || items.length || 0,
+        );
+        const currentPage = Number(
+          response.sayfa || response.page || page || 1,
+        );
+        const elapsedMs = Date.now() - startedAt;
+
+        // Geçersiz sayfa: filtre değişti ama eski page > yeni totalPages ise sayfa 1'e dön
+        if (items.length === 0 && page > 1 && page > totalPages) {
+          setBulkFetchState((prev) => ({ ...prev, isRunning: false }));
+          setBulkFetchPagination((prev) => ({ ...prev, currentPage: 1 }));
+          setTimeout(() => {
+            if (loadBulkSqlPageRef.current) loadBulkSqlPageRef.current(1);
+          }, 0);
+          return;
+        }
+
+        setBulkFetchProducts(items);
+        setBulkFetchPagination((prev) => ({
+          ...prev,
+          currentPage,
+          pageSize,
+        }));
+
+        setBulkFetchState((prev) => ({
+          ...prev,
+          isRunning: false,
+          isComplete: true,
+          progress: Math.min(
+            100,
+            Math.round((currentPage / Math.max(1, totalPages)) * 100),
+          ),
+          currentPage,
+          totalPages,
+          fetchedCount: items.length,
+          totalCount,
+          failedPages: [],
+          elapsedMs,
+          estimatedRemainingMs: 0,
+          error: null,
+          stats: {
+            totalRequests: 1,
+            successfulRequests: 1,
+            failedRequests: 0,
+            retryCount: 0,
+            avgResponseTimeMs: elapsedMs,
+          },
+        }));
+
+        setMessage(
+          `SQL sayfa ${currentPage}/${Math.max(1, totalPages)} yüklendi. (${formatNumber(totalCount)} toplam ürün)`,
+        );
+        setMessageType("success");
+      } catch (error) {
+        setBulkFetchState((prev) => ({
+          ...prev,
+          isRunning: false,
+          error: error.message || "İşlem başarısız",
+        }));
+        setMessage(error.message || "İşlem başarısız");
+        setMessageType("danger");
+      }
+    },
+    [
+      bulkFetchConfig,
+      bulkFetchFilters,
+      bulkFetchPagination.pageSize,
+      bulkFetchState.isRunning,
+    ],
+  );
+
+  // loadBulkSqlPage her yeniden oluştuğunda ref'i güncelle (auto-retry için gerekli)
+  useEffect(() => {
+    loadBulkSqlPageRef.current = loadBulkSqlPage;
+  }, [loadBulkSqlPage]);
+
+  // ============================================================================
+  // SSE (Server-Sent Events) ile Gerçek Zamanlı Cache Sync
+  // ============================================================================
+  // Backend'den streaming progress alarak UI'ı gerçek zamanlı günceller.
+  // Bu sayede uzun süren işlemlerde tarayıcı donmaz.
+  // ============================================================================
+  const startStreamingSync = useCallback(async () => {
+    if (bulkFetchState.isRunning) return;
+
+    const startedAt = Date.now();
+
+    setBulkFetchState((prev) => ({
+      ...prev,
       isRunning: true,
       isComplete: false,
       progress: 0,
@@ -408,251 +819,249 @@ export default function AdminMicro() {
       totalPages: 0,
       fetchedCount: 0,
       totalCount: 0,
-      failedPages: [],
+      error: null,
       elapsedMs: 0,
       estimatedRemainingMs: 0,
-      error: null,
-      stats: null,
-    });
-    setBulkFetchProducts([]);
+    }));
 
-    const config = bulkFetchConfig;
-    const startTime = Date.now();
-    const allProducts = [];
-    const failedPages = [];
-    let currentPage = 1;
-    let totalCount = 0;
-    let totalPages = null;
-    let consecutiveErrors = 0;
-
-    // İstatistikler
-    const stats = {
-      totalRequests: 0,
-      successfulRequests: 0,
-      failedRequests: 0,
-      retryCount: 0,
-      avgResponseTimeMs: 0,
-      responseTimes: [],
-    };
-
-    console.log("🚀 Mikro API'den toplu ürün çekme başlatıldı...");
-    console.log(
-      `📊 Konfigürasyon: pageSize=${config.pageSize}, throttle=${config.throttleDelayMs}ms`,
-    );
-
-    setMessage("Toplu ürün çekme işlemi başlatıldı...");
+    setMessage("Mikro ERP'den ürünler çekiliyor...");
     setMessageType("info");
 
-    // ============================================================
-    // SIRALI DÖNGÜ - while ile sequential request (Promise.all YOK!)
-    // ============================================================
-    while (true) {
-      // İptal kontrolü
-      if (bulkFetchAbortRef.current?.signal?.aborted) {
-        console.warn("⚠️ İşlem kullanıcı tarafından iptal edildi.");
+    try {
+      // SSE bağlantısı oluştur
+      const apiUrl = process.env.REACT_APP_API_URL || "";
+      const sseUrl = `${apiUrl}/api/admin/micro/cache/sync-stream?fiyatListesiNo=${bulkFetchConfig.fiyatListesiNo}&depoNo=${bulkFetchConfig.depoNo}&syncMode=full`;
+
+      const eventSource = new EventSource(sseUrl, { withCredentials: true });
+      bulkFetchAbortRef.current = { abort: () => eventSource.close() };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "progress") {
+            // İlerleme güncellemesi
+            setBulkFetchState((prev) => ({
+              ...prev,
+              progress: data.progressPercent || 0,
+              currentPage: data.currentPage || 0,
+              totalPages: data.totalPages || 0,
+              fetchedCount: data.fetchedCount || 0,
+              totalCount: data.totalCount || 0,
+              elapsedMs: (data.elapsedSeconds || 0) * 1000,
+              estimatedRemainingMs:
+                (data.estimatedRemainingSeconds || 0) * 1000,
+            }));
+          } else if (data.type === "complete") {
+            // İşlem tamamlandı
+            eventSource.close();
+
+            const elapsedMs = Date.now() - startedAt;
+
+            setBulkFetchState((prev) => ({
+              ...prev,
+              isRunning: false,
+              isComplete: true,
+              progress: 100,
+              fetchedCount: data.totalFetched || 0,
+              elapsedMs,
+              estimatedRemainingMs: 0,
+              error: data.success ? null : data.message,
+              stats: {
+                totalFetched: data.totalFetched,
+                newProducts: data.newProducts,
+                updatedProducts: data.updatedProducts,
+                unchangedProducts: data.unchangedProducts,
+                durationSeconds: data.durationSeconds,
+              },
+            }));
+
+            if (data.success) {
+              setMessage(
+                `✅ ${formatNumber(data.totalFetched)} ürün işlendi. ` +
+                  `Yeni: ${data.newProducts}, Güncellenen: ${data.updatedProducts}, ` +
+                  `Değişmeyen: ${data.unchangedProducts}. Süre: ${formatDuration(elapsedMs)}`,
+              );
+              setMessageType("success");
+
+              // SQL tabanlı ilk sayfayı yükle
+              loadBulkSqlPage(1, { syncFirst: false });
+            } else {
+              setMessage(`❌ Hata: ${data.message}`);
+              setMessageType("danger");
+            }
+          } else if (data.type === "error") {
+            eventSource.close();
+            setBulkFetchState((prev) => ({
+              ...prev,
+              isRunning: false,
+              error: data.message,
+            }));
+            setMessage(`❌ Hata: ${data.message}`);
+            setMessageType("danger");
+          }
+        } catch (parseErr) {
+          console.error("SSE parse hatası:", parseErr, event.data);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error("SSE bağlantı hatası:", err);
+        eventSource.close();
+
         setBulkFetchState((prev) => ({
           ...prev,
           isRunning: false,
-          error: "İşlem iptal edildi",
+          error: "Sunucu bağlantısı kesildi",
         }));
-        setMessage("İşlem iptal edildi.");
-        setMessageType("warning");
-        return;
-      }
-
-      const requestStartTime = Date.now();
-      let pageSuccess = false;
-      let retryAttempt = 0;
-
-      // ============================================================
-      // RETRY MEKANIZMASI - try-catch bloğu
-      // ============================================================
-      while (retryAttempt < config.maxRetryCount && !pageSuccess) {
-        try {
-          stats.totalRequests++;
-
-          // Mikro API'den stok listesi çek (await ile bekle - sequential)
-          // Fiyat listesi ve depo numarası config'den alınır
-          const response = await MicroService.getStokListesi({
-            sayfa: currentPage,
-            sayfaBuyuklugu: config.pageSize,
-            depoNo: config.depoNo || 0,
-            fiyatListesiNo: config.fiyatListesiNo || 1,
-            grupKod: config.grupKod?.trim() || undefined,
-            sadeceAktif: true,
-          });
-
-          // Yanıtı işle
-          if (response?.success) {
-            const items = Array.isArray(response.data) ? response.data : [];
-
-            // İlk sayfada toplam değerleri ayarla
-            if (currentPage === 1) {
-              totalCount = Number(
-                response.toplamKayit || response.totalCount || 0,
-              );
-              totalPages = Math.ceil(totalCount / config.pageSize) || 1;
-              console.log(
-                `📦 Toplam ${totalCount} ürün, ${totalPages} sayfa bulundu. (Fiyat Listesi: ${config.fiyatListesiNo}, Depo: ${config.depoNo || "Tüm"})`,
-              );
-            }
-
-            // Ürünleri ana diziye ekle
-            allProducts.push(...items);
-
-            // İstatistikleri güncelle
-            const responseTime = Date.now() - requestStartTime;
-            stats.responseTimes.push(responseTime);
-            stats.successfulRequests++;
-            stats.avgResponseTimeMs =
-              stats.responseTimes.reduce((a, b) => a + b, 0) /
-              stats.responseTimes.length;
-
-            pageSuccess = true;
-            consecutiveErrors = 0;
-          } else {
-            throw new Error(response?.message || "API yanıtı başarısız");
-          }
-        } catch (error) {
-          retryAttempt++;
-          stats.retryCount++;
-          consecutiveErrors++;
-
-          const errorMessage = error.message || "Bilinmeyen hata";
-          console.warn(
-            `⚠️ Sayfa ${currentPage} - Hata (Deneme ${retryAttempt}/${config.maxRetryCount}): ${errorMessage}`,
-          );
-
-          // Son deneme değilse bekle ve tekrar dene
-          if (retryAttempt < config.maxRetryCount) {
-            console.log(`⏳ ${config.retryDelayMs}ms bekleniyor...`);
-            await sleep(config.retryDelayMs);
-          }
-        }
-      }
-
-      // Tüm retry'lar başarısız olduysa sayfayı hatalı işaretle
-      if (!pageSuccess) {
-        console.error(`❌ Sayfa ${currentPage} - Tüm denemeler başarısız!`);
-        failedPages.push(currentPage);
-        stats.failedRequests++;
-      }
-
-      // ============================================================
-      // İLERLEME TAKİBİ - Progress = (Current_Page / Total_Pages) * 100
-      // ============================================================
-      const elapsedMs = Date.now() - startTime;
-      const progressPercentage = totalPages
-        ? Math.round((currentPage / totalPages) * 100)
-        : 0;
-      const avgTimePerPage = elapsedMs / currentPage;
-      const remainingPages = (totalPages || 1) - currentPage;
-      const estimatedRemainingMs = avgTimePerPage * remainingPages;
-
-      // State güncelle
+        setMessage("Sunucu bağlantısı kesildi. Tekrar deneyin.");
+        setMessageType("danger");
+      };
+    } catch (error) {
       setBulkFetchState((prev) => ({
         ...prev,
-        progress: progressPercentage,
-        currentPage,
-        totalPages: totalPages || 0,
-        fetchedCount: allProducts.length,
-        totalCount,
-        elapsedMs,
-        estimatedRemainingMs,
-        failedPages: [...failedPages],
+        isRunning: false,
+        error: error.message || "İşlem başarısız",
       }));
-
-      // Ürünleri state'e ekle (gerçek zamanlı gösterim için)
-      setBulkFetchProducts([...allProducts]);
-      
-      // Debug: State güncelleme sonrasında ürün sayısını logla
-      console.log(`[DEBUG] setBulkFetchProducts çağrıldı: ${allProducts.length} ürün, örnek:`, 
-        allProducts.length > 0 ? allProducts[0] : 'boş');
-
-      // Konsola log
-      console.log(
-        `📄 [${progressPercentage}%] Sayfa ${currentPage}/${totalPages || "?"} ` +
-          `| Çekilen: ${allProducts.length}/${totalCount} ürün ` +
-          `| Süre: ${(elapsedMs / 1000).toFixed(1)}s`,
-      );
-
-      // ============================================================
-      // DÖNGÜ SONLANDIRMA KONTROLÜ
-      // ============================================================
-      // Son sayfaya ulaştık mı?
-      if (totalPages !== null && currentPage >= totalPages) {
-        console.log("✅ Tüm sayfalar tamamlandı!");
-        break;
-      }
-
-      // Hiç ürün gelmiyorsa döngüyü sonlandır (güvenlik)
-      if (pageSuccess && allProducts.length === 0 && currentPage > 1) {
-        console.warn("⚠️ Boş yanıt alındı, döngü sonlandırılıyor.");
-        break;
-      }
-
-      // Art arda çok fazla hata varsa dur (sunucu sorunu)
-      if (consecutiveErrors >= 5) {
-        console.error("❌ Art arda 5 hata! İşlem durduruluyor.");
-        setBulkFetchState((prev) => ({
-          ...prev,
-          error: "Art arda 5 hata oluştu",
-        }));
-        break;
-      }
-
-      // ============================================================
-      // THROTTLE (NEFES ALDIRMA) GECİKMESİ - Rate limit önleme
-      // ============================================================
-      await sleep(config.throttleDelayMs);
-
-      // Sonraki sayfaya geç
-      currentPage++;
+      setMessage(error.message || "İşlem başarısız");
+      setMessageType("danger");
     }
+  }, [bulkFetchConfig, bulkFetchState.isRunning, loadBulkSqlPage]);
 
-    // ============================================================
-    // İŞLEM TAMAMLANDI - Sonuçları kaydet
-    // ============================================================
-    const totalElapsedMs = Date.now() - startTime;
+  // Eski startBulkFetch'i güncelle - tüm sayfaları sıralı çeker
+  const startBulkFetch = useCallback(async () => {
+    if (bulkFetchState.isRunning) return;
+
+    const startedAt = Date.now();
+    const pageSize = Number(bulkFetchPagination.pageSize || 50);
 
     setBulkFetchState((prev) => ({
       ...prev,
-      isRunning: false,
-      isComplete: true,
-      progress: 100,
-      elapsedMs: totalElapsedMs,
+      isRunning: true,
+      isComplete: false,
+      progress: 0,
+      currentPage: 0,
+      totalPages: 0,
+      fetchedCount: 0,
+      totalCount: 0,
+      error: null,
+      elapsedMs: 0,
       estimatedRemainingMs: 0,
-      stats: {
-        ...stats,
-        totalPages: totalPages || currentPage,
-        pagesProcessed: currentPage,
-        avgResponseTimeMs: Math.round(stats.avgResponseTimeMs),
-      },
     }));
 
-    // Final log ve mesaj
-    console.log("════════════════════════════════════════════════");
-    console.log("📊 TOPLU ÜRÜN ÇEKME İŞLEMİ TAMAMLANDI");
-    console.log("════════════════════════════════════════════════");
-    console.log(`✅ Başarıyla çekilen: ${allProducts.length} ürün`);
-    console.log(
-      `❌ Başarısız sayfalar: ${failedPages.length > 0 ? failedPages.join(", ") : "Yok"}`,
-    );
-    console.log(`⏱️ Toplam süre: ${(totalElapsedMs / 1000).toFixed(2)} saniye`);
-    console.log("════════════════════════════════════════════════");
+    setMessage("SQL'den tüm sayfalar yükleniyor...");
+    setMessageType("info");
 
-    if (failedPages.length > 0) {
+    let allProducts = [];
+    let page = 1;
+    let totalPages = 1;
+    let totalCount = 0;
+
+    try {
+      // İlk sayfayı çek, toplam sayfa sayısını öğren
+      while (page <= totalPages) {
+        const response = await MicroService.getStokListesi({
+          sayfa: page,
+          sayfaBuyuklugu: pageSize,
+          depoNo: bulkFetchConfig.depoNo,
+          fiyatListesiNo: bulkFetchConfig.fiyatListesiNo || 1,
+          stokKod: bulkFetchFilters.stokKod || undefined,
+          grupKod:
+            bulkFetchFilters.grupKod || bulkFetchConfig.grupKod || undefined,
+          sadeceAktif: true,
+          sadeceStoklu:
+            bulkFetchFilters.stokDurumu === "stokta"
+              ? true
+              : bulkFetchFilters.stokDurumu === "stoksuz"
+                ? false
+                : undefined,
+        });
+
+        if (!response?.success) {
+          throw new Error(response?.message || "Ürünler getirilemedi");
+        }
+
+        const items = Array.isArray(response.data) ? response.data : [];
+
+        if (page === 1) {
+          totalPages = Number(response.toplamSayfa || response.totalPages || 1);
+          totalCount = Number(response.toplamKayit || response.totalCount || 0);
+        }
+
+        allProducts = [...allProducts, ...items];
+        const elapsedMs = Date.now() - startedAt;
+        const progress = Math.min(
+          100,
+          Math.round((page / Math.max(1, totalPages)) * 100),
+        );
+
+        setBulkFetchState((prev) => ({
+          ...prev,
+          progress,
+          currentPage: page,
+          totalPages,
+          fetchedCount: allProducts.length,
+          totalCount,
+          elapsedMs,
+          estimatedRemainingMs:
+            page < totalPages ? (elapsedMs / page) * (totalPages - page) : 0,
+        }));
+
+        // Son sayfa veya boş yanıt → dur
+        if (items.length === 0 || page >= totalPages) break;
+        page++;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+
+      // Son sayfa ürünlerini göster, state'i tamamlandı olarak işaretle
+      setBulkFetchProducts(allProducts.slice(-pageSize));
+      setBulkFetchPagination((prev) => ({
+        ...prev,
+        currentPage: totalPages,
+        pageSize,
+      }));
+
+      setBulkFetchState((prev) => ({
+        ...prev,
+        isRunning: false,
+        isComplete: true,
+        progress: 100,
+        currentPage: totalPages,
+        totalPages,
+        fetchedCount: allProducts.length,
+        totalCount,
+        elapsedMs,
+        estimatedRemainingMs: 0,
+        error: null,
+        stats: {
+          totalRequests: totalPages,
+          successfulRequests: totalPages,
+          failedRequests: 0,
+          retryCount: 0,
+          avgResponseTimeMs: Math.round(elapsedMs / Math.max(1, totalPages)),
+        },
+      }));
+
       setMessage(
-        `${allProducts.length} ürün çekildi (${failedPages.length} sayfa hatalı)`,
-      );
-      setMessageType("warning");
-    } else {
-      setMessage(
-        `${allProducts.length} ürün başarıyla çekildi! (${(totalElapsedMs / 1000).toFixed(1)}s)`,
+        `✅ Tüm sayfalar yüklendi. ${formatNumber(allProducts.length)} ürün çekildi. Süre: ${formatDuration(elapsedMs)}`,
       );
       setMessageType("success");
+    } catch (error) {
+      setBulkFetchState((prev) => ({
+        ...prev,
+        isRunning: false,
+        error: error.message || "İşlem başarısız",
+      }));
+      setMessage(error.message || "İşlem başarısız");
+      setMessageType("danger");
     }
-  }, [bulkFetchState.isRunning, bulkFetchConfig]);
+  }, [
+    bulkFetchConfig,
+    bulkFetchFilters,
+    bulkFetchPagination.pageSize,
+    bulkFetchState.isRunning,
+  ]);
 
   // İptal fonksiyonu
   const cancelBulkFetch = useCallback(() => {
@@ -690,60 +1099,124 @@ export default function AdminMicro() {
     setBulkFetchPagination({ currentPage: 1, pageSize: 50 });
   }, [cancelBulkFetch]);
 
-  // CSV Export fonksiyonu
-  const exportBulkFetchToCSV = useCallback(() => {
-    if (bulkFetchProducts.length === 0) {
-      setMessage("Export edilecek ürün yok!");
+  // CSV Export fonksiyonu - TÜM ürünleri SQL'den sayfa sayfa çeker ve indirir
+  const exportBulkFetchToCSV = useCallback(async () => {
+    // Ürün yoksa uyar
+    if (bulkFetchState.totalCount === 0 && bulkFetchProducts.length === 0) {
+      setMessage("Export edilecek ürün yok! Önce ürünleri çekin.");
       setMessageType("warning");
       return;
     }
 
-    // CSV başlık satırı
-    const headers = [
-      "Stok Kodu",
-      "Stok Adı",
-      "Grup Kodu",
-      "Barkod",
-      "Birim",
-      "Satış Fiyatı",
-      "KDV Oranı",
-      "Stok Miktarı",
-    ];
+    setMessage("Tüm ürünler SQL'den çekiliyor, lütfen bekleyin...");
+    setMessageType("info");
 
-    // CSV satırları
-    const rows = bulkFetchProducts.map((p) => [
-      p.stokKod || "",
-      `"${(p.stokAd || "").replace(/"/g, '""')}"`,
-      p.grupKod || "",
-      p.barkod || "",
-      p.birim || "",
-      p.satisFiyati ?? p.fiyat ?? 0,
-      p.kdvOrani ?? 0,
-      p.depoMiktari ?? p.satilabilirMiktar ?? p.stokMiktar ?? 0,
-    ]);
+    try {
+      // Tüm sayfaları sıralı çekerek tam ürün listesini oluştur
+      const pageSize = 200; // CSV export için daha büyük sayfa
+      let allProducts = [];
+      let page = 1;
+      let totalPages = 1;
 
-    // UTF-8 BOM + içerik
-    const BOM = "\uFEFF";
-    const csv =
-      BOM + headers.join(";") + "\n" + rows.map((r) => r.join(";")).join("\n");
+      while (page <= totalPages) {
+        const response = await MicroService.getStokListesi({
+          sayfa: page,
+          sayfaBuyuklugu: pageSize,
+          depoNo: bulkFetchConfig.depoNo,
+          fiyatListesiNo: bulkFetchConfig.fiyatListesiNo || 1,
+          stokKod: bulkFetchFilters.stokKod || undefined,
+          grupKod:
+            bulkFetchFilters.grupKod || bulkFetchConfig.grupKod || undefined,
+          sadeceAktif: true,
+          sadeceStoklu:
+            bulkFetchFilters.stokDurumu === "stokta"
+              ? true
+              : bulkFetchFilters.stokDurumu === "stoksuz"
+                ? false
+                : undefined,
+        });
 
-    // Dosya indir
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    const timestamp = new Date().toISOString().split("T")[0];
+        if (!response?.success || !Array.isArray(response.data)) {
+          throw new Error(response?.message || "Ürünler alınamadı");
+        }
 
-    link.setAttribute("href", url);
-    link.setAttribute("download", `mikro_urunler_${timestamp}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+        const items = response.data;
+        if (page === 1) {
+          totalPages = Number(response.toplamSayfa || 1);
+        }
 
-    setMessage(`${bulkFetchProducts.length} ürün CSV olarak indirildi.`);
-    setMessageType("success");
-  }, [bulkFetchProducts]);
+        allProducts = [...allProducts, ...items];
+        if (items.length === 0) break;
+        page++;
+      }
+
+      if (allProducts.length === 0) {
+        setMessage("Export edilecek ürün bulunamadı!");
+        setMessageType("warning");
+        return;
+      }
+
+      // CSV başlık satırı
+      const headers = [
+        "Stok Kodu",
+        "Stok Adı",
+        "Grup Kodu",
+        "Barkod",
+        "Birim",
+        "Satış Fiyatı",
+        "KDV Oranı",
+        "Stok Miktarı",
+      ];
+
+      // CSV satırları
+      const rows = allProducts.map((p) => [
+        p.stokKod || "",
+        `"${(p.stokAd || "").replace(/"/g, '""')}"`,
+        p.grupKod || "",
+        p.barkod || "",
+        p.birim || "",
+        p.satisFiyati ?? p.fiyat ?? 0,
+        p.kdvOrani ?? 0,
+        p.depoMiktari ?? p.satilabilirMiktar ?? p.stokMiktar ?? 0,
+      ]);
+
+      // UTF-8 BOM + içerik
+      const BOM = "\uFEFF";
+      const csv =
+        BOM +
+        headers.join(";") +
+        "\n" +
+        rows.map((r) => r.join(";")).join("\n");
+
+      // Dosya indir
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().split("T")[0];
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", `mikro_urunler_${timestamp}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setMessage(
+        `${formatNumber(allProducts.length)} ürün CSV olarak indirildi.`,
+      );
+      setMessageType("success");
+    } catch (error) {
+      console.error("CSV export hatası:", error);
+      setMessage("CSV export sırasında hata oluştu: " + error.message);
+      setMessageType("danger");
+    }
+  }, [
+    bulkFetchState.totalCount,
+    bulkFetchProducts.length,
+    bulkFetchFilters,
+    bulkFetchConfig,
+  ]);
 
   // CSV Export fonksiyonu (Alias - Yeni tablo için)
   const exportBulkProductsToCSV = exportBulkFetchToCSV;
@@ -754,44 +1227,8 @@ export default function AdminMicro() {
   // Sayfalanmış ürünleri hesapla
   // Filtrelenmiş ürün listesini hesapla
   const filteredBulkProducts = useMemo(() => {
-    if (!bulkFetchProducts.length) return [];
-
-    return bulkFetchProducts.filter((product) => {
-      // Stok kodu filtresi
-      if (bulkFetchFilters.stokKod) {
-        const stokKod = (product.stokKod || "").toLowerCase();
-        if (!stokKod.includes(bulkFetchFilters.stokKod.toLowerCase())) {
-          return false;
-        }
-      }
-      // Grup kodu filtresi
-      if (bulkFetchFilters.grupKod) {
-        const grupKod = (product.grupKod || "").toLowerCase();
-        if (!grupKod.includes(bulkFetchFilters.grupKod.toLowerCase())) {
-          return false;
-        }
-      }
-      // Stok durumu filtresi
-      const stokMiktari = product.depoMiktari ?? product.satilabilirMiktar ?? 0;
-      if (bulkFetchFilters.stokDurumu === "stokta" && stokMiktari <= 0) {
-        return false;
-      }
-      if (bulkFetchFilters.stokDurumu === "stoksuz" && stokMiktari > 0) {
-        return false;
-      }
-      // Minimum stok filtresi
-      if (
-        bulkFetchFilters.minStok !== "" &&
-        bulkFetchFilters.minStok !== null
-      ) {
-        const minValue = parseFloat(bulkFetchFilters.minStok);
-        if (!isNaN(minValue) && stokMiktari < minValue) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [bulkFetchProducts, bulkFetchFilters]);
+    return bulkFetchProducts;
+  }, [bulkFetchProducts]);
 
   // Eski fonksiyonu uyumluluk için tut (varolan kullanımlar için)
   const getFilteredBulkProducts = useCallback(() => {
@@ -800,17 +1237,8 @@ export default function AdminMicro() {
 
   // Sayfalanmış ürünleri hesapla (useMemo ile performanslı)
   const paginatedBulkProducts = useMemo(() => {
-    if (!filteredBulkProducts.length) return [];
-
-    const pageSize = bulkFetchPagination.pageSize || 50;
-    const currentPage = bulkFetchPagination.currentPage || 1;
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    
-    console.log(`[DEBUG] paginatedBulkProducts: filtered=${filteredBulkProducts.length}, page=${currentPage}, pageSize=${pageSize}, start=${startIndex}, end=${endIndex}`);
-    
-    return filteredBulkProducts.slice(startIndex, endIndex);
-  }, [filteredBulkProducts, bulkFetchPagination]);
+    return filteredBulkProducts;
+  }, [filteredBulkProducts]);
 
   // Eski fonksiyonu uyumluluk için tut
   const getPaginatedBulkProducts = useCallback(() => {
@@ -819,9 +1247,8 @@ export default function AdminMicro() {
 
   // Toplam sayfa sayısını hesapla
   const bulkProductsTotalPages = useMemo(() => {
-    const pageSize = bulkFetchPagination.pageSize || 50;
-    return Math.ceil(filteredBulkProducts.length / pageSize) || 1;
-  }, [filteredBulkProducts.length, bulkFetchPagination.pageSize]);
+    return Math.max(1, Number(bulkFetchState.totalPages || 1));
+  }, [bulkFetchState.totalPages]);
 
   // Eski fonksiyonu uyumluluk için tut
   const getBulkProductsTotalPages = useCallback(() => {
@@ -831,26 +1258,50 @@ export default function AdminMicro() {
   // Sayfa değiştir - filtrelenmiş ürün sayısına göre hesapla
   const changeBulkProductsPage = useCallback(
     (newPage) => {
-      // Filtrelenmiş ürün sayısına göre toplam sayfa hesapla
-      const pageSize = bulkFetchPagination.pageSize || 50;
-      const totalPages = Math.ceil(filteredBulkProducts.length / pageSize) || 1;
-      
-      console.log(`[DEBUG] changeBulkProductsPage: newPage=${newPage}, totalPages=${totalPages}, filtered=${filteredBulkProducts.length}, pageSize=${pageSize}`);
-      
+      const totalPages = Math.max(1, Number(bulkFetchState.totalPages || 1));
+
       if (newPage >= 1 && newPage <= totalPages) {
-        setBulkFetchPagination((prev) => ({ ...prev, currentPage: newPage }));
+        loadBulkSqlPage(newPage);
       }
     },
-    [filteredBulkProducts.length, bulkFetchPagination.pageSize],
+    [bulkFetchState.totalPages, loadBulkSqlPage],
   );
 
   // Sayfa boyutunu değiştir
-  const changeBulkProductsPageSize = useCallback((newPageSize) => {
-    setBulkFetchPagination((prev) => ({
-      currentPage: 1, // Sayfa boyutu değişince ilk sayfaya dön
-      pageSize: newPageSize,
-    }));
-  }, []);
+  const changeBulkProductsPageSize = useCallback(
+    (newPageSize) => {
+      setBulkFetchPagination((prev) => ({
+        currentPage: 1, // Sayfa boyutu değişince ilk sayfaya dön
+        pageSize: newPageSize,
+      }));
+      loadBulkSqlPage(1, { pageSizeOverride: newPageSize });
+    },
+    [loadBulkSqlPage],
+  );
+
+  const bulkAutoReloadKey = useMemo(
+    () =>
+      JSON.stringify({
+        stokKod: bulkFetchFilters.stokKod,
+        grupKod: bulkFetchFilters.grupKod,
+        stokDurumu: bulkFetchFilters.stokDurumu,
+        minStok: bulkFetchFilters.minStok,
+        configGrupKod: bulkFetchConfig.grupKod,
+        pageSize: bulkFetchPagination.pageSize,
+      }),
+    [
+      bulkFetchConfig.grupKod,
+      bulkFetchFilters.grupKod,
+      bulkFetchFilters.minStok,
+      bulkFetchFilters.stokDurumu,
+      bulkFetchFilters.stokKod,
+      bulkFetchPagination.pageSize,
+    ],
+  );
+
+  // Otomatik tekrar yukleme kapatildi.
+  // NEDEN: surekli state degisimlerinde tekrar API cagrisi yapip UI'da takilmaya neden oluyordu.
+  // Veri yukleme artik sadece kullanici aksiyonlariyla (Toplu Cek, sayfa degistir, filtre ara) tetiklenir.
 
   return (
     <div className="container-fluid p-2 p-md-4">
@@ -975,7 +1426,12 @@ export default function AdminMicro() {
         <li className="nav-item">
           <button
             className={`nav-link ${activeTab === "bulkFetch" ? "active" : ""}`}
-            onClick={() => setActiveTab("bulkFetch")}
+            onClick={() => {
+              setActiveTab("bulkFetch");
+              if (bulkFetchState.totalCount > 0) {
+                loadBulkSqlPage(1);
+              }
+            }}
           >
             <i className="fas fa-cloud-download-alt me-1"></i> Toplu Ürün Çek
             {bulkFetchState.isRunning && (
@@ -988,9 +1444,42 @@ export default function AdminMicro() {
         <li className="nav-item">
           <button
             className={`nav-link ${activeTab === "settings" ? "active" : ""}`}
-            onClick={() => setActiveTab("settings")}
+            onClick={() => {
+              setActiveTab("settings");
+              loadActiveProducts(1);
+              loadSyncDiagnostics(24);
+            }}
           >
             <i className="fas fa-cog me-1"></i> Ayarlar
+          </button>
+        </li>
+        {/* Sync Sağlık & Monitoring — Phase 5 */}
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === "syncHealth" ? "active" : ""}`}
+            onClick={() => setActiveTab("syncHealth")}
+          >
+            <i className="fas fa-heartbeat me-1"></i> Sync Sağlık
+          </button>
+        </li>
+        {/* Anlık Stok Akışı — SignalR StockHub canlı feed */}
+        <li className="nav-item">
+          <button
+            className={`nav-link ${activeTab === "realtime" ? "active" : ""}`}
+            onClick={() => setActiveTab("realtime")}
+          >
+            <i className="fas fa-broadcast-tower me-1"></i> Anlık Stok
+            {stockHubConnected && (
+              <span
+                className="badge bg-success ms-2"
+                style={{ fontSize: "0.6rem" }}
+              >
+                CANLI
+              </span>
+            )}
+            {totalStockUpdates > 0 && (
+              <span className="badge bg-info ms-1">{totalStockUpdates}</span>
+            )}
           </button>
         </li>
       </ul>
@@ -1098,7 +1587,6 @@ export default function AdminMicro() {
 
           {/* Ürünler ve Stoklar Tabloları */}
           <div className="row g-3">
-            {/* Ürünler */}
             <div className="col-12 col-xl-6">
               <div className="card border-0 shadow-sm h-100">
                 <div className="card-header bg-white d-flex justify-content-between align-items-center py-2 px-3">
@@ -1250,44 +1738,31 @@ export default function AdminMicro() {
                   Mikro API Stok Listesi
                 </h6>
                 <small className="text-muted">
-                  Toplam: {stokListesiMeta.totalCount} kayıt | 
-                  Fiyat Listesi: {fiyatListesiNo} | 
+                  Toplam: {stokListesiMeta.totalCount} kayıt | Fiyat: Otomatik |
                   Depo: {depoNo === 0 ? "Tümü" : depoNo}
                 </small>
               </div>
               <button
                 className="btn btn-primary btn-sm"
-                onClick={() => loadStokListesi(1, 500, grupKodFilter)}
+                onClick={() =>
+                  loadStokListesi(1, 100, grupKodFilter, aramaMetni)
+                }
                 disabled={loading}
               >
-                <i className="fas fa-download me-1"></i> Mikro'dan Çek (500)
+                <i className="fas fa-download me-1"></i> Mikro'dan Çek (100)
               </button>
             </div>
-            
+
             {/* Filtre Satırı */}
             <div className="row g-2 align-items-end">
               <div className="col-md-3">
                 <label className="form-label small mb-1">
                   <i className="fas fa-tags me-1 text-success"></i>
-                  Fiyat Listesi
+                  Fiyat
                 </label>
-                <select
-                  className="form-select form-select-sm"
-                  value={fiyatListesiNo}
-                  onChange={(e) => setFiyatListesiNo(parseInt(e.target.value, 10))}
-                  disabled={loading}
-                >
-                  <option value={1}>1 - Perakende</option>
-                  <option value={2}>2 - Toptan</option>
-                  <option value={3}>3 - Bayi</option>
-                  <option value={4}>4 - İndirimli</option>
-                  <option value={5}>5 - Özel</option>
-                  <option value={6}>6 - Liste 6</option>
-                  <option value={7}>7 - Liste 7</option>
-                  <option value={8}>8 - Liste 8</option>
-                  <option value={9}>9 - Liste 9</option>
-                  <option value={10}>10 - Liste 10</option>
-                </select>
+                <div className="form-control form-control-sm bg-light text-muted">
+                  Otomatik - tüm listeler
+                </div>
               </div>
               <div className="col-md-2">
                 <label className="form-label small mb-1">
@@ -1300,34 +1775,59 @@ export default function AdminMicro() {
                   onChange={(e) => setDepoNo(parseInt(e.target.value, 10))}
                   disabled={loading}
                 >
-                  <option value={0}>Tüm Depolar</option>
-                  <option value={1}>Depo 1</option>
-                  <option value={2}>Depo 2</option>
-                  <option value={3}>Depo 3</option>
-                  <option value={4}>Depo 4</option>
-                  <option value={5}>Depo 5</option>
+                  {depoListesi.map((depo) => (
+                    <option key={depo.depoNo} value={depo.depoNo}>
+                      {depo.depoAdi}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="col-md-4">
-                <label className="form-label small mb-1">Grup Kodu</label>
+              <div className="col-md-3">
+                <label className="form-label small mb-1">Arama (min 3)</label>
                 <input
                   type="text"
                   className="form-control form-control-sm"
-                  placeholder="Grup kodu ara"
-                  value={grupKodFilter}
-                  onChange={(e) => setGrupKodFilter(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      loadStokListesi(1, 500, grupKodFilter);
-                    }
-                  }}
+                  placeholder="Stok kodu / ad / barkod"
+                  value={aramaMetni}
+                  onChange={(e) => setAramaMetni(e.target.value)}
                   disabled={loading}
                 />
               </div>
-              <div className="col-md-3">
+              <div className="col-md-2">
+                <label className="form-label small mb-1">Stok Durumu</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={stokDurumuFilter}
+                  onChange={(e) => setStokDurumuFilter(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="hepsi">Hepsi</option>
+                  <option value="stokta">Sadece Stokta</option>
+                  <option value="stoksuz">Sadece Stoksuz</option>
+                </select>
+              </div>
+              <div className="col-md-2">
+                <label className="form-label small mb-1">Grup Kodu</label>
+                <select
+                  className="form-select form-select-sm"
+                  value={grupKodFilter}
+                  onChange={(e) => setGrupKodFilter(e.target.value)}
+                  disabled={loading}
+                >
+                  <option value="">Tum Gruplar</option>
+                  {grupKodlari.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-2">
                 <button
                   className="btn btn-outline-secondary btn-sm w-100"
-                  onClick={() => loadStokListesi(1, 500, grupKodFilter)}
+                  onClick={() =>
+                    loadStokListesi(1, 100, grupKodFilter, aramaMetni)
+                  }
                   disabled={loading}
                 >
                   <i className="fas fa-search me-1"></i> Ara / Yenile
@@ -1346,7 +1846,7 @@ export default function AdminMicro() {
                     <th>Stok Kodu</th>
                     <th>Stok Adı</th>
                     <th>Barkod</th>
-                    <th className="text-end">Fiyat (Liste {fiyatListesiNo})</th>
+                    <th className="text-end">Fiyat</th>
                     <th className="text-end">Miktar</th>
                     <th>Birim</th>
                     <th>Grup</th>
@@ -1475,72 +1975,53 @@ export default function AdminMicro() {
                         }
                         disabled={bulkFetchState.isRunning}
                       >
-                        <option value={20}>20 ürün/sayfa</option>
                         <option value={50}>50 ürün/sayfa</option>
                         <option value={100}>100 ürün/sayfa</option>
+                        <option value={250}>250 ürün/sayfa</option>
+                        <option value={500}>500 ürün/sayfa</option>
                       </select>
                       <small className="text-muted">
-                        Her istekte çekilecek ürün sayısı
+                        Her sayfa geçişinde SQL'den okunacak ürün sayısı
                       </small>
                     </div>
                     <div className="col-6">
                       <label className="form-label small fw-semibold">
-                        Gecikme (ms)
+                        Senkron Modu
                       </label>
                       <select
                         className="form-select form-select-sm"
-                        value={bulkFetchConfig.throttleDelayMs}
+                        value={bulkFetchConfig.syncMode}
                         onChange={(e) =>
                           setBulkFetchConfig((prev) => ({
                             ...prev,
-                            throttleDelayMs: Number(e.target.value),
+                            syncMode: e.target.value,
                           }))
                         }
                         disabled={bulkFetchState.isRunning}
                       >
-                        <option value={200}>200ms (Hızlı)</option>
-                        <option value={300}>300ms (Normal)</option>
-                        <option value={500}>500ms (Yavaş)</option>
-                        <option value={1000}>1000ms (Çok Yavaş)</option>
+                        <option value="newOnly">
+                          Sadece yeni ürün varsa güncelle
+                        </option>
+                        <option value="full">
+                          Tam senkron (tüm ürünleri kontrol et)
+                        </option>
                       </select>
                       <small className="text-muted">
-                        İstekler arası bekleme
+                        Varsayılan: yeni ürün yoksa ERP'ye toplu çekim yapma
                       </small>
                     </div>
-                    
-                    {/* Fiyat Listesi Seçimi */}
+
+                    {/* Fiyat Listesi Seçimi kaldırıldı */}
                     <div className="col-md-6">
                       <label className="form-label small fw-semibold">
                         <i className="fas fa-tags me-1 text-success"></i>
-                        Fiyat Listesi No
+                        Fiyat
                       </label>
-                      <select
-                        className="form-select form-select-sm"
-                        value={bulkFetchConfig.fiyatListesiNo}
-                        onChange={(e) =>
-                          setBulkFetchConfig((prev) => ({
-                            ...prev,
-                            fiyatListesiNo: parseInt(e.target.value, 10),
-                          }))
-                        }
-                        disabled={bulkFetchState.isRunning}
-                      >
-                        <option value={1}>1 - Perakende</option>
-                        <option value={2}>2 - Toptan</option>
-                        <option value={3}>3 - Bayi</option>
-                        <option value={4}>4 - İndirimli</option>
-                        <option value={5}>5 - Özel</option>
-                        <option value={6}>6 - Liste 6</option>
-                        <option value={7}>7 - Liste 7</option>
-                        <option value={8}>8 - Liste 8</option>
-                        <option value={9}>9 - Liste 9</option>
-                        <option value={10}>10 - Liste 10</option>
-                      </select>
-                      <small className="text-muted">
-                        Hangi fiyat listesinden fiyat çekilecek
-                      </small>
+                      <div className="form-control form-control-sm bg-light text-muted">
+                        Otomatik - tüm fiyatlar
+                      </div>
                     </div>
-                    
+
                     {/* Depo Seçimi */}
                     <div className="col-md-6">
                       <label className="form-label small fw-semibold">
@@ -1569,7 +2050,7 @@ export default function AdminMicro() {
                         Hangi deponun stoğu gösterilecek
                       </small>
                     </div>
-                    
+
                     <div className="col-12">
                       <label className="form-label small fw-semibold">
                         Grup Kodu Filtresi (Opsiyonel)
@@ -1603,28 +2084,40 @@ export default function AdminMicro() {
                 <i className="fas fa-info-circle me-2"></i>
                 <strong>Nasıl Çalışır?</strong>
                 <ul className="mb-0 mt-1 ps-3">
-                  <li>Ürünler sayfa sayfa sıralı olarak çekilir</li>
+                  <li>İlk adımda ürünler cache'e senkronize edilir</li>
                   <li>
-                    Sunucu yüklenmemesi için istekler arası bekleme yapılır
+                    Sonrasında sadece açtığın sayfa SQL kaynağından yüklenir
                   </li>
-                  <li>Hata durumunda otomatik 3 kez yeniden denenir</li>
-                  <li>İşlem sürerken iptal edilebilir</li>
+                  <li>Yeni ürün yoksa tekrar toplu ERP çekimi yapılmaz</li>
+                  <li>6000+ ürün listesi daha hızlı ve stabil açılır</li>
                 </ul>
               </div>
 
               {/* Aksiyon Butonları */}
               <div className="d-flex gap-2 flex-wrap">
                 {!bulkFetchState.isRunning && !bulkFetchState.isComplete && (
-                  <button
-                    className="btn text-white fw-semibold"
-                    style={{
-                      background: "linear-gradient(135deg, #10b981, #059669)",
-                    }}
-                    onClick={startBulkFetch}
-                  >
-                    <i className="fas fa-rocket me-2"></i>
-                    Toplu Çekmeyi Başlat
-                  </button>
+                  <>
+                    {/* SQL'den yükle (hızlı) */}
+                    <button
+                      className="btn btn-outline-primary fw-semibold"
+                      onClick={startBulkFetch}
+                    >
+                      <i className="fas fa-database me-2"></i>
+                      SQL'den Yükle
+                    </button>
+
+                    {/* ERP'den çek (streaming ile) */}
+                    <button
+                      className="btn text-white fw-semibold"
+                      style={{
+                        background: "linear-gradient(135deg, #10b981, #059669)",
+                      }}
+                      onClick={startStreamingSync}
+                    >
+                      <i className="fas fa-cloud-download-alt me-2"></i>
+                      ERP'den Tüm Ürünleri Çek
+                    </button>
+                  </>
                 )}
 
                 {bulkFetchState.isRunning && (
@@ -1637,13 +2130,18 @@ export default function AdminMicro() {
                   </button>
                 )}
 
-                {bulkFetchProducts.length > 0 && (
+                {(bulkFetchProducts.length > 0 ||
+                  bulkFetchState.totalCount > 0) && (
                   <button
                     className="btn btn-success fw-semibold"
                     onClick={exportBulkFetchToCSV}
                   >
                     <i className="fas fa-file-csv me-2"></i>
-                    CSV İndir ({formatNumber(bulkFetchProducts.length)})
+                    CSV İndir (
+                    {formatNumber(
+                      bulkFetchState.totalCount || bulkFetchProducts.length,
+                    )}{" "}
+                    ürün)
                   </button>
                 )}
 
@@ -1822,13 +2320,8 @@ export default function AdminMicro() {
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <h6 className="mb-0 fw-bold">
                         <i className="fas fa-table me-2 text-success"></i>
-                        Çekilen Ürünler ({bulkFetchProducts.length} adet)
-                        {getFilteredBulkProducts().length !==
-                          bulkFetchProducts.length && (
-                          <span className="badge bg-info ms-2">
-                            {getFilteredBulkProducts().length} sonuç
-                          </span>
-                        )}
+                        Ürünler (Bu sayfa: {bulkFetchProducts.length} | Toplam:{" "}
+                        {bulkFetchState.totalCount || 0})
                       </h6>
 
                       {/* Sayfa boyutu seçici */}
@@ -1839,18 +2332,13 @@ export default function AdminMicro() {
                           style={{ width: "80px" }}
                           value={bulkFetchPagination.pageSize}
                           onChange={(e) =>
-                            setBulkFetchPagination((prev) => ({
-                              ...prev,
-                              pageSize: Number(e.target.value),
-                              currentPage: 1,
-                            }))
+                            changeBulkProductsPageSize(Number(e.target.value))
                           }
                         >
                           <option value={10}>10</option>
                           <option value={25}>25</option>
                           <option value={50}>50</option>
                           <option value={100}>100</option>
-                          <option value={200}>200</option>
                         </select>
 
                         {/* CSV Export Butonu */}
@@ -1876,7 +2364,7 @@ export default function AdminMicro() {
                           <input
                             type="text"
                             className="form-control"
-                            placeholder="Stok Kodu ara..."
+                            placeholder="Stok Kodu ara... (Enter ile ara)"
                             value={bulkFetchFilters.stokKod}
                             onChange={(e) => {
                               setBulkFetchFilters((prev) => ({
@@ -1888,19 +2376,27 @@ export default function AdminMicro() {
                                 currentPage: 1,
                               }));
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") loadBulkSqlPage(1);
+                            }}
                           />
                           {bulkFetchFilters.stokKod && (
                             <button
                               className="btn btn-outline-secondary"
+                              title="Temizle ve yeniden ara"
                               onClick={() => {
-                                setBulkFetchFilters((prev) => ({
-                                  ...prev,
+                                const cleared = {
+                                  ...bulkFetchFilters,
                                   stokKod: "",
-                                }));
+                                };
+                                setBulkFetchFilters(cleared);
                                 setBulkFetchPagination((prev) => ({
                                   ...prev,
                                   currentPage: 1,
                                 }));
+                                loadBulkSqlPage(1, {
+                                  filterOverrides: cleared,
+                                });
                               }}
                             >
                               <i className="fas fa-times"></i>
@@ -1916,7 +2412,7 @@ export default function AdminMicro() {
                           <input
                             type="text"
                             className="form-control"
-                            placeholder="Grup Kodu ara..."
+                            placeholder="Grup Kodu ara... (Enter ile ara)"
                             value={bulkFetchFilters.grupKod}
                             onChange={(e) => {
                               setBulkFetchFilters((prev) => ({
@@ -1928,19 +2424,27 @@ export default function AdminMicro() {
                                 currentPage: 1,
                               }));
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") loadBulkSqlPage(1);
+                            }}
                           />
                           {bulkFetchFilters.grupKod && (
                             <button
                               className="btn btn-outline-secondary"
+                              title="Temizle ve yeniden ara"
                               onClick={() => {
-                                setBulkFetchFilters((prev) => ({
-                                  ...prev,
+                                const cleared = {
+                                  ...bulkFetchFilters,
                                   grupKod: "",
-                                }));
+                                };
+                                setBulkFetchFilters(cleared);
                                 setBulkFetchPagination((prev) => ({
                                   ...prev,
                                   currentPage: 1,
                                 }));
+                                loadBulkSqlPage(1, {
+                                  filterOverrides: cleared,
+                                });
                               }}
                             >
                               <i className="fas fa-times"></i>
@@ -1959,14 +2463,20 @@ export default function AdminMicro() {
                             className="form-select form-select-sm"
                             value={bulkFetchFilters.stokDurumu}
                             onChange={(e) => {
-                              setBulkFetchFilters((prev) => ({
-                                ...prev,
-                                stokDurumu: e.target.value,
-                              }));
+                              const val = e.target.value;
+                              const updated = {
+                                ...bulkFetchFilters,
+                                stokDurumu: val,
+                              };
+                              setBulkFetchFilters(updated);
                               setBulkFetchPagination((prev) => ({
                                 ...prev,
                                 currentPage: 1,
                               }));
+                              // Dropdown değişince hemen sayfa 1'den ara
+                              loadBulkSqlPage(1, {
+                                filterOverrides: updated,
+                              });
                             }}
                           >
                             <option value="hepsi">Tüm Ürünler</option>
@@ -1998,24 +2508,39 @@ export default function AdminMicro() {
                                 currentPage: 1,
                               }));
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") loadBulkSqlPage(1);
+                            }}
                           />
                         </div>
                       </div>
 
                       <div className="col-md-3 d-flex gap-2">
                         <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => loadBulkSqlPage(1)}
+                          disabled={bulkFetchState.isRunning}
+                          title="Filtreyle sayfa 1'den ara"
+                        >
+                          <i className="fas fa-search me-1"></i>
+                          Ara
+                        </button>
+                        <button
                           className="btn btn-sm btn-outline-secondary"
                           onClick={() => {
-                            setBulkFetchFilters({
+                            const cleared = {
                               stokKod: "",
                               grupKod: "",
                               stokDurumu: "hepsi",
                               minStok: "",
-                            });
+                            };
+                            setBulkFetchFilters(cleared);
                             setBulkFetchPagination((prev) => ({
                               ...prev,
                               currentPage: 1,
                             }));
+                            // filterOverrides ile stale closure sorununu önle
+                            loadBulkSqlPage(1, { filterOverrides: cleared });
                           }}
                           disabled={
                             !bulkFetchFilters.stokKod &&
@@ -2050,82 +2575,88 @@ export default function AdminMicro() {
                         <tbody>
                           {paginatedBulkProducts.length === 0 ? (
                             <tr>
-                              <td colSpan="9" className="text-center py-5 text-muted">
+                              <td
+                                colSpan="9"
+                                className="text-center py-5 text-muted"
+                              >
                                 <i className="fas fa-inbox fa-3x mb-3 d-block opacity-50"></i>
-                                {bulkFetchProducts.length === 0 
+                                {bulkFetchProducts.length === 0
                                   ? "Henüz ürün çekilmedi. Yukarıdan 'Toplu Çekmeyi Başlat' butonuna tıklayın."
                                   : "Filtrelere uygun ürün bulunamadı."}
                               </td>
                             </tr>
                           ) : (
-                          paginatedBulkProducts.map((product, index) => {
-                            const stokMiktari =
-                              product.depoMiktari ??
-                              product.satilabilirMiktar ??
-                              0;
-                            const urunAdi =
-                              product.stokAd ||
-                              product.aciklama ||
-                              product.stokKod ||
-                              "İsimsiz Ürün";
-                            return (
-                              <tr key={product.stokKod || index}>
-                                <td className="py-2 ps-3 text-muted small">
-                                  {((bulkFetchPagination.currentPage || 1) - 1) *
-                                    (bulkFetchPagination.pageSize || 50) +
-                                    index +
-                                    1}
-                                </td>
-                                <td className="py-2">
-                                  <code className="text-primary small">
-                                    {product.stokKod || "-"}
-                                  </code>
-                                </td>
-                                <td className="py-2">
-                                  <span
-                                    className={`fw-medium ${!product.stokAd ? "text-warning" : ""}`}
-                                    title={
-                                      !product.stokAd
-                                        ? "Mikro'dan isim gelmedi"
-                                        : ""
-                                    }
-                                  >
-                                    {urunAdi}
-                                  </span>
-                                </td>
-                                <td className="py-2">
-                                  <span className="badge bg-secondary-subtle text-dark">
-                                    {product.grupKod || "-"}
-                                  </span>
-                                </td>
-                                <td className="py-2">
-                                  <span className="badge bg-light text-dark">
-                                    {product.barkod || "-"}
-                                  </span>
-                                </td>
-                                <td className="py-2">{product.birim || "-"}</td>
-                                <td className="py-2 text-center">
-                                  <span
-                                    className={`badge ${stokMiktari > 0 ? "bg-success" : "bg-danger"}`}
-                                  >
-                                    {stokMiktari}
-                                  </span>
-                                </td>
-                                <td className="py-2">
-                                  <span className="fw-semibold text-success">
-                                    {typeof product.satisFiyati === "number"
-                                      ? `${product.satisFiyati.toFixed(2)} ₺`
-                                      : product.satisFiyati || "0.00 ₺"}
-                                  </span>
-                                </td>
-                                <td className="py-2">
-                                  <span className="badge bg-warning text-dark">
-                                    %{product.kdvOrani || "0"}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })
+                            paginatedBulkProducts.map((product, index) => {
+                              const stokMiktari =
+                                product.depoMiktari ??
+                                product.satilabilirMiktar ??
+                                0;
+                              const urunAdi =
+                                product.stokAd ||
+                                product.aciklama ||
+                                product.stokKod ||
+                                "İsimsiz Ürün";
+                              return (
+                                <tr key={product.stokKod || index}>
+                                  <td className="py-2 ps-3 text-muted small">
+                                    {((bulkFetchPagination.currentPage || 1) -
+                                      1) *
+                                      (bulkFetchPagination.pageSize || 50) +
+                                      index +
+                                      1}
+                                  </td>
+                                  <td className="py-2">
+                                    <code className="text-primary small">
+                                      {product.stokKod || "-"}
+                                    </code>
+                                  </td>
+                                  <td className="py-2">
+                                    <span
+                                      className={`fw-medium ${!product.stokAd ? "text-warning" : ""}`}
+                                      title={
+                                        !product.stokAd
+                                          ? "Mikro'dan isim gelmedi"
+                                          : ""
+                                      }
+                                    >
+                                      {urunAdi}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    <span className="badge bg-secondary-subtle text-dark">
+                                      {product.grupKod || "-"}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    <span className="badge bg-light text-dark">
+                                      {product.barkod || "-"}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    {product.birim || "-"}
+                                  </td>
+                                  <td className="py-2 text-center">
+                                    <span
+                                      className={`badge ${stokMiktari > 0 ? "bg-success" : "bg-danger"}`}
+                                    >
+                                      {stokMiktari}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    <span className="fw-semibold text-success">
+                                      {typeof product.satisFiyati === "number"
+                                        ? `${product.satisFiyati.toFixed(2)} ₺`
+                                        : product.satisFiyati || "0.00 ₺"}
+                                    </span>
+                                  </td>
+                                  <td className="py-2">
+                                    <span className="badge bg-warning text-dark">
+                                      %{product.kdvOrani || "0"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
@@ -2136,37 +2667,17 @@ export default function AdminMicro() {
                       {/* Sol: Bilgi */}
                       <div className="text-muted small">
                         <span>
-                          {filteredBulkProducts.length !== bulkFetchProducts.length ? (
+                          {bulkFetchState.totalCount > 0 ? (
                             <>
-                              {filteredBulkProducts.length} sonuçtan{" "}
-                              {filteredBulkProducts.length > 0
-                                ? Math.min(
-                                    ((bulkFetchPagination.currentPage || 1) - 1) *
-                                      (bulkFetchPagination.pageSize || 50) +
-                                      1,
-                                    filteredBulkProducts.length,
-                                  )
-                                : 0}
+                              Toplam {bulkFetchState.totalCount} üründen{" "}
+                              {(bulkFetchPagination.currentPage - 1) *
+                                bulkFetchPagination.pageSize +
+                                1}
                               -
                               {Math.min(
-                                (bulkFetchPagination.currentPage || 1) *
-                                  (bulkFetchPagination.pageSize || 50),
-                                filteredBulkProducts.length,
-                              )}{" "}
-                              arası gösteriliyor (toplam{" "}
-                              {bulkFetchProducts.length} ürün)
-                            </>
-                          ) : bulkFetchProducts.length > 0 ? (
-                            <>
-                              Toplam {bulkFetchProducts.length} üründen{" "}
-                              {Math.max(1, ((bulkFetchPagination.currentPage || 1) - 1) *
-                                (bulkFetchPagination.pageSize || 50) +
-                                1)}
-                              -
-                              {Math.min(
-                                (bulkFetchPagination.currentPage || 1) *
-                                  (bulkFetchPagination.pageSize || 50),
-                                bulkFetchProducts.length,
+                                bulkFetchPagination.currentPage *
+                                  bulkFetchPagination.pageSize,
+                                bulkFetchState.totalCount,
                               )}{" "}
                               arası gösteriliyor
                             </>
@@ -2267,79 +2778,785 @@ export default function AdminMicro() {
 
       {/* Ayarlar Tab'ı */}
       {activeTab === "settings" && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-header bg-white py-3">
-            <h6 className="mb-0 fw-bold">
-              <i className="fas fa-cog me-2 text-secondary"></i>
-              ERP Bağlantı Ayarları
-            </h6>
+        <div className="row g-3">
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3">
+                <h6 className="mb-0 fw-bold">
+                  <i className="fas fa-cog me-2 text-secondary"></i>
+                  ERP Bağlantı Ayarları
+                </h6>
+              </div>
+              <div className="card-body">
+                <div className="alert alert-info">
+                  <i className="fas fa-info-circle me-2"></i>
+                  <strong>Not:</strong> ERP bağlantı ayarları{" "}
+                  <code>appsettings.json</code> dosyasından yönetilmektedir.
+                  Değişiklik yapmak için sunucu yapılandırmasını güncelleyin.
+                </div>
+                <div className="row">
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">API URL</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={connectionStatus?.apiUrl || "Bilinmiyor"}
+                        disabled
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">
+                        Bağlantı Durumu
+                      </label>
+                      <input
+                        type="text"
+                        className={`form-control ${connectionStatus?.isConnected ? "text-success" : "text-danger"}`}
+                        value={
+                          connectionStatus?.isConnected
+                            ? "Bağlı"
+                            : "Bağlantı Yok"
+                        }
+                        disabled
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">
+                        Son Bağlantı Zamanı
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={
+                          connectionStatus?.timestamp
+                            ? new Date(
+                                connectionStatus.timestamp,
+                              ).toLocaleString("tr-TR")
+                            : "-"
+                        }
+                        disabled
+                      />
+                    </div>
+                    <div className="mb-3">
+                      <label className="form-label fw-semibold">
+                        Varsayılan Depo No
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value="1"
+                        disabled
+                      />
+                      <small className="text-muted">
+                        Tek depo kullanılmaktadır.
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="card-body">
-            <div className="alert alert-info">
-              <i className="fas fa-info-circle me-2"></i>
-              <strong>Not:</strong> ERP bağlantı ayarları{" "}
-              <code>appsettings.json</code> dosyasından yönetilmektedir.
-              Değişiklik yapmak için sunucu yapılandırmasını güncelleyin.
-            </div>
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">API URL</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={connectionStatus?.apiUrl || "Bilinmiyor"}
-                    disabled
-                  />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">
-                    Bağlantı Durumu
-                  </label>
-                  <input
-                    type="text"
-                    className={`form-control ${connectionStatus?.isConnected ? "text-success" : "text-danger"}`}
-                    value={
-                      connectionStatus?.isConnected ? "Bağlı" : "Bağlantı Yok"
-                    }
-                    disabled
-                  />
-                </div>
+
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <h6 className="mb-0 fw-bold">
+                  <i className="fas fa-power-off me-2 text-warning"></i>
+                  Aktif/Pasif Ürün Yönetimi
+                </h6>
+                <small className="text-muted">
+                  Toplam: {formatNumber(activeTotalCount)} ürün
+                </small>
               </div>
-              <div className="col-md-6">
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">
-                    Son Bağlantı Zamanı
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={
-                      connectionStatus?.timestamp
-                        ? new Date(connectionStatus.timestamp).toLocaleString(
-                            "tr-TR",
-                          )
-                        : "-"
-                    }
-                    disabled
-                  />
+              <div className="card-body">
+                <div className="row g-2 mb-3">
+                  <div className="col-md-4">
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      placeholder="Stok kodu veya urun adi ara"
+                      value={activeSearchText}
+                      onChange={(e) => setActiveSearchText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          loadActiveProducts(1);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="col-md-3">
+                    <select
+                      className="form-select form-select-sm"
+                      value={activeFilter}
+                      onChange={(e) => setActiveFilter(e.target.value)}
+                    >
+                      <option value="hepsi">Tum Durumlar</option>
+                      <option value="aktif">Sadece Aktif</option>
+                      <option value="pasif">Sadece Pasif</option>
+                    </select>
+                  </div>
+                  <div className="col-md-2">
+                    <select
+                      className="form-select form-select-sm"
+                      value={activePageSize}
+                      onChange={(e) =>
+                        setActivePageSize(Number(e.target.value))
+                      }
+                    >
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                  <div className="col-md-3 d-flex gap-2">
+                    <button
+                      className="btn btn-sm btn-outline-primary"
+                      onClick={() => loadActiveProducts(1)}
+                      disabled={activeProductsLoading}
+                    >
+                      <i className="fas fa-search me-1"></i>
+                      Listele
+                    </button>
+                    <button
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={() => {
+                        setActiveSearchText("");
+                        setActiveFilter("hepsi");
+                        setActivePage(1);
+                        loadActiveProducts(1);
+                      }}
+                    >
+                      Temizle
+                    </button>
+                  </div>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label fw-semibold">
-                    Varsayılan Depo No
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value="1"
-                    disabled
-                  />
+
+                <div className="d-flex flex-wrap gap-2 mb-3">
+                  <button
+                    className="btn btn-sm btn-success"
+                    onClick={() => bulkChangeProductStatus(true)}
+                    disabled={selectedStokKodlar.length === 0 || loading}
+                  >
+                    <i className="fas fa-check me-1"></i>
+                    Secilenleri Aktif Et ({selectedStokKodlar.length})
+                  </button>
+                  <button
+                    className="btn btn-sm btn-warning"
+                    onClick={() => bulkChangeProductStatus(false)}
+                    disabled={selectedStokKodlar.length === 0 || loading}
+                  >
+                    <i className="fas fa-ban me-1"></i>
+                    Secilenleri Pasif Et ({selectedStokKodlar.length})
+                  </button>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="table table-sm table-hover align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: 40 }}>
+                          <input
+                            type="checkbox"
+                            checked={allVisibleActiveProductsSelected}
+                            onChange={toggleSelectAllVisibleActiveProducts}
+                          />
+                        </th>
+                        <th>Stok Kodu</th>
+                        <th>Urun Adi</th>
+                        <th>Durum</th>
+                        <th className="text-end">Islem</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeProductsLoading ? (
+                        <tr>
+                          <td
+                            colSpan="5"
+                            className="text-center py-3 text-muted"
+                          >
+                            <i className="fas fa-spinner fa-spin me-2"></i>
+                            Yukleniyor...
+                          </td>
+                        </tr>
+                      ) : activeProducts.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="5"
+                            className="text-center py-3 text-muted"
+                          >
+                            Kayit bulunamadi.
+                          </td>
+                        </tr>
+                      ) : (
+                        activeProducts.map((item) => {
+                          const stokKod = item.stokKod || item.sku;
+                          const aktif = item.aktif === true;
+                          return (
+                            <tr key={stokKod}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedStokKodlar.includes(stokKod)}
+                                  onChange={() =>
+                                    toggleSelectActiveProduct(stokKod)
+                                  }
+                                />
+                              </td>
+                              <td>
+                                <code>{stokKod}</code>
+                              </td>
+                              <td>{item.stokAd || item.name || "-"}</td>
+                              <td>
+                                <span
+                                  className={`badge ${aktif ? "bg-success" : "bg-secondary"}`}
+                                >
+                                  {aktif ? "Aktif" : "Pasif"}
+                                </span>
+                              </td>
+                              <td className="text-end">
+                                <button
+                                  className={`btn btn-sm ${aktif ? "btn-outline-warning" : "btn-outline-success"}`}
+                                  onClick={() =>
+                                    toggleSingleProductActive(stokKod, aktif)
+                                  }
+                                  disabled={loading}
+                                >
+                                  {aktif ? "Pasif Yap" : "Aktif Yap"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="d-flex justify-content-between align-items-center mt-2">
                   <small className="text-muted">
-                    Tek depo kullanılmaktadır.
+                    Sayfa {activePage} / {activeTotalPages}
                   </small>
+                  <div className="btn-group btn-group-sm">
+                    <button
+                      className="btn btn-outline-secondary"
+                      disabled={activePage <= 1 || activeProductsLoading}
+                      onClick={() => loadActiveProducts(activePage - 1)}
+                    >
+                      <i className="fas fa-chevron-left"></i>
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary"
+                      disabled={
+                        activePage >= activeTotalPages || activeProductsLoading
+                      }
+                      onClick={() => loadActiveProducts(activePage + 1)}
+                    >
+                      <i className="fas fa-chevron-right"></i>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 className="mb-0 fw-bold">
+                  <i className="fas fa-shield-alt me-2 text-danger"></i>
+                  Sync Sağlığı ve Conflict Özeti
+                </h6>
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => loadSyncDiagnostics(24)}
+                  disabled={syncDiagnosticsLoading}
+                >
+                  <i className="fas fa-sync-alt me-1"></i>
+                  Yenile
+                </button>
+              </div>
+              <div className="card-body">
+                {syncDiagnosticsLoading ? (
+                  <div className="text-muted">
+                    <i className="fas fa-spinner fa-spin me-2"></i>
+                    Diagnostics yükleniyor...
+                  </div>
+                ) : !syncDiagnostics ? (
+                  <div className="text-muted">
+                    Henüz diagnostics verisi yok.
+                  </div>
+                ) : (
+                  <>
+                    <div className="row g-2 mb-3">
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold">
+                            {formatNumber(
+                              syncDiagnostics?.summary?.totalOperations || 0,
+                            )}
+                          </div>
+                          <small className="text-muted">Toplam</small>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold text-success">
+                            {formatNumber(
+                              syncDiagnostics?.summary?.successfulOperations ||
+                                0,
+                            )}
+                          </div>
+                          <small className="text-muted">Başarılı</small>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold text-danger">
+                            {formatNumber(
+                              syncDiagnostics?.summary?.failedOperations || 0,
+                            )}
+                          </div>
+                          <small className="text-muted">Başarısız</small>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold text-warning">
+                            {formatNumber(
+                              syncDiagnostics?.summary?.pendingRetries || 0,
+                            )}
+                          </div>
+                          <small className="text-muted">Pending Retry</small>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold text-primary">
+                            {formatNumber(
+                              syncDiagnostics?.summary?.conflictCount || 0,
+                            )}
+                          </div>
+                          <small className="text-muted">Conflict</small>
+                        </div>
+                      </div>
+                      <div className="col-6 col-md-2">
+                        <div className="border rounded p-2 text-center bg-light">
+                          <div className="fw-bold">
+                            %{syncDiagnostics?.summary?.successRate ?? 0}
+                          </div>
+                          <small className="text-muted">Başarı Oranı</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="row g-3">
+                      <div className="col-12">
+                        <h6 className="small fw-bold mb-2">
+                          Son Conflict Kayıtları
+                        </h6>
+                        <div
+                          className="table-responsive"
+                          style={{ maxHeight: "240px" }}
+                        >
+                          <table className="table table-sm align-middle">
+                            <thead className="table-light">
+                              <tr>
+                                <th>Entity</th>
+                                <th>Yön</th>
+                                <th>Mesaj</th>
+                                <th className="text-end">Aksiyon</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(syncDiagnostics?.recentConflicts || [])
+                                .length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan="4"
+                                    className="text-muted text-center"
+                                  >
+                                    Kayıt yok
+                                  </td>
+                                </tr>
+                              ) : (
+                                (syncDiagnostics?.recentConflicts || [])
+                                  .slice(0, 20)
+                                  .map((x) => (
+                                    <tr key={`c-${x.id}`}>
+                                      <td>{x.entityType || "-"}</td>
+                                      <td>{x.direction || "-"}</td>
+                                      <td title={x.message || ""}>
+                                        {x.message || "-"}
+                                      </td>
+                                      <td className="text-end">
+                                        <div className="btn-group btn-group-sm">
+                                          <button
+                                            className="btn btn-outline-primary"
+                                            disabled={Boolean(
+                                              syncActionLoading,
+                                            )}
+                                            onClick={() =>
+                                              handleResolveConflict(
+                                                x.id,
+                                                "erpWins",
+                                              )
+                                            }
+                                          >
+                                            {syncActionLoading ===
+                                            `resolve-${x.id}-erpWins`
+                                              ? "..."
+                                              : "ERP'yi Al"}
+                                          </button>
+                                          <button
+                                            className="btn btn-outline-secondary"
+                                            disabled={Boolean(
+                                              syncActionLoading,
+                                            )}
+                                            onClick={() =>
+                                              handleResolveConflict(
+                                                x.id,
+                                                "localWins",
+                                              )
+                                            }
+                                          >
+                                            {syncActionLoading ===
+                                            `resolve-${x.id}-localWins`
+                                              ? "..."
+                                              : "Local'i Tut"}
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <h6 className="small fw-bold mb-2">Son Hatalar</h6>
+                        <div
+                          className="table-responsive"
+                          style={{ maxHeight: "240px" }}
+                        >
+                          <table className="table table-sm align-middle">
+                            <thead className="table-light">
+                              <tr>
+                                <th>Entity</th>
+                                <th>Yön</th>
+                                <th>Durum</th>
+                                <th>Hata</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(syncDiagnostics?.recentFailures || [])
+                                .length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan="4"
+                                    className="text-muted text-center"
+                                  >
+                                    Kayıt yok
+                                  </td>
+                                </tr>
+                              ) : (
+                                (syncDiagnostics?.recentFailures || [])
+                                  .slice(0, 20)
+                                  .map((x) => (
+                                    <tr key={`f-${x.id}`}>
+                                      <td>{x.entityType || "-"}</td>
+                                      <td>{x.direction || "-"}</td>
+                                      <td>{x.status || "-"}</td>
+                                      <td
+                                        className="text-danger"
+                                        title={x.lastError || ""}
+                                      >
+                                        {x.lastError || "-"}
+                                      </td>
+                                    </tr>
+                                  ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <h6 className="small fw-bold mb-2">
+                          Pending Retry Kayıtları
+                        </h6>
+                        <div
+                          className="table-responsive"
+                          style={{ maxHeight: "240px" }}
+                        >
+                          <table className="table table-sm align-middle">
+                            <thead className="table-light">
+                              <tr>
+                                <th>Entity</th>
+                                <th>Yön</th>
+                                <th>Deneme</th>
+                                <th>Mesaj</th>
+                                <th className="text-end">Aksiyon</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(syncDiagnostics?.pendingRetries || [])
+                                .length === 0 ? (
+                                <tr>
+                                  <td
+                                    colSpan="5"
+                                    className="text-muted text-center"
+                                  >
+                                    Kayıt yok
+                                  </td>
+                                </tr>
+                              ) : (
+                                (syncDiagnostics?.pendingRetries || [])
+                                  .slice(0, 20)
+                                  .map((x) => (
+                                    <tr key={`p-${x.id}`}>
+                                      <td>{x.entityType || "-"}</td>
+                                      <td>{x.direction || "-"}</td>
+                                      <td>{x.attempts || 0}</td>
+                                      <td title={x.message || ""}>
+                                        {x.message || "-"}
+                                      </td>
+                                      <td className="text-end">
+                                        <button
+                                          className="btn btn-sm btn-outline-primary"
+                                          disabled={Boolean(syncActionLoading)}
+                                          onClick={() =>
+                                            handleRetrySyncLog(x.id)
+                                          }
+                                        >
+                                          {syncActionLoading === `retry-${x.id}`
+                                            ? "..."
+                                            : "Retry"}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3">
+                <h6 className="mb-0 fw-bold">
+                  <i className="fas fa-file-import me-2 text-primary"></i>
+                  Excel / CSV Import (Aktiflik)
+                </h6>
+              </div>
+              <div className="card-body">
+                <div className="row g-2 align-items-end">
+                  <div className="col-md-6">
+                    <label className="form-label small fw-semibold">
+                      Dosya Sec
+                    </label>
+                    <input
+                      type="file"
+                      className="form-control form-control-sm"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) =>
+                        setImportFile(e.target.files?.[0] || null)
+                      }
+                    />
+                    <small className="text-muted">
+                      Beklenen kolonlar: StokKod,Aktif
+                    </small>
+                  </div>
+                  <div className="col-md-6 d-flex gap-2 flex-wrap">
+                    <button
+                      className="btn btn-outline-secondary btn-sm"
+                      onClick={handleDownloadImportTemplate}
+                      disabled={loading}
+                    >
+                      <i className="fas fa-download me-1"></i>
+                      Template Indir
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={handleImportActiveProducts}
+                      disabled={!importFile || loading}
+                    >
+                      <i className="fas fa-upload me-1"></i>
+                      Import Et
+                    </button>
+                    {importFile && (
+                      <span className="badge bg-light text-dark border align-self-center">
+                        {importFile.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* SYNC SAĞLIK TAB — Phase 5 Monitoring Dashboard                    */}
+      {/* Kanal sağlığı, metrikler, uyarılar, ürün bilgi sync operasyonları */}
+      {/* ================================================================= */}
+      {activeTab === "syncHealth" && <SyncHealthDashboard />}
+
+      {/* ================================================================= */}
+      {/* ANLIK STOK AKIŞI TAB — SignalR StockHub canlı feed                 */}
+      {/* HotPoll her 10sn'de delta tarayıp StockHub'a push ediyor.          */}
+      {/* Bu panel, admin'e anlık görünürlük sağlar.                         */}
+      {/* ================================================================= */}
+      {activeTab === "realtime" && (
+        <div className="card">
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <h5 className="mb-0">
+              <i className="fas fa-broadcast-tower me-2"></i>
+              Anlık Stok Değişiklikleri
+            </h5>
+            <div className="d-flex align-items-center gap-2">
+              <span
+                className={`badge ${stockHubConnected ? "bg-success" : "bg-danger"}`}
+              >
+                {stockHubConnected ? "Bağlı" : "Bağlantı Yok"}
+              </span>
+              <span className="badge bg-secondary">
+                Toplam: {totalStockUpdates}
+              </span>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={clearStockHistory}
+                title="Geçmişi temizle"
+              >
+                <i className="fas fa-trash-alt me-1"></i> Temizle
+              </button>
+            </div>
+          </div>
+          <div className="card-body p-0">
+            {realtimeStockUpdates.length === 0 ? (
+              <div className="text-center text-muted py-5">
+                <i className="fas fa-satellite-dish fa-3x mb-3 d-block opacity-50"></i>
+                <p>Henüz stok değişikliği alınmadı.</p>
+                <small>
+                  HotPoll servisi 10 saniyede bir delta taraması yapar,
+                  değişiklik olduğunda burada görünür.
+                </small>
+              </div>
+            ) : (
+              <div
+                className="table-responsive"
+                style={{ maxHeight: "600px", overflowY: "auto" }}
+              >
+                <table className="table table-sm table-hover mb-0">
+                  <thead className="table-light sticky-top">
+                    <tr>
+                      <th style={{ width: 50 }}>Tip</th>
+                      <th>Ürün ID</th>
+                      <th>Ürün Adı</th>
+                      <th className="text-end">Önceki</th>
+                      <th className="text-end">Yeni</th>
+                      <th className="text-end">Fark</th>
+                      <th>Zaman</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {realtimeStockUpdates.map((update, idx) => {
+                      const isStockUpdate =
+                        update.type === "stock" ||
+                        update.newQuantity !== undefined;
+                      const isPriceUpdate =
+                        update.type === "price" ||
+                        update.newPrice !== undefined;
+                      const oldVal = isStockUpdate
+                        ? update.oldQuantity
+                        : update.oldPrice;
+                      const newVal = isStockUpdate
+                        ? update.newQuantity
+                        : update.newPrice;
+                      const diff = (newVal ?? 0) - (oldVal ?? 0);
+                      const isNegative = diff < 0;
+                      const isZeroStock = isStockUpdate && (newVal ?? 0) <= 0;
+
+                      return (
+                        <tr
+                          key={`${update.productId}-${update.timestamp || idx}`}
+                          className={isZeroStock ? "table-danger" : ""}
+                        >
+                          <td>
+                            {isStockUpdate && (
+                              <span
+                                className="badge bg-primary"
+                                title="Stok değişikliği"
+                              >
+                                <i className="fas fa-boxes"></i>
+                              </span>
+                            )}
+                            {isPriceUpdate && (
+                              <span
+                                className="badge bg-warning text-dark"
+                                title="Fiyat değişikliği"
+                              >
+                                <i className="fas fa-tag"></i>
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <code>#{update.productId}</code>
+                          </td>
+                          <td>
+                            {update.productName || "-"}
+                            {isZeroStock && (
+                              <span className="badge bg-danger ms-1">
+                                TÜKENDİ
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-end text-muted">
+                            {oldVal !== undefined && oldVal !== null
+                              ? isPriceUpdate
+                                ? `₺${Number(oldVal).toFixed(2)}`
+                                : formatNumber(oldVal)
+                              : "-"}
+                          </td>
+                          <td className="text-end fw-bold">
+                            {newVal !== undefined && newVal !== null
+                              ? isPriceUpdate
+                                ? `₺${Number(newVal).toFixed(2)}`
+                                : formatNumber(newVal)
+                              : "-"}
+                          </td>
+                          <td
+                            className={`text-end fw-bold ${isNegative ? "text-danger" : "text-success"}`}
+                          >
+                            {diff !== 0
+                              ? `${isNegative ? "" : "+"}${isPriceUpdate ? `₺${diff.toFixed(2)}` : formatNumber(diff)}`
+                              : "-"}
+                          </td>
+                          <td className="text-muted small">
+                            {update.timestamp
+                              ? new Date(update.timestamp).toLocaleTimeString(
+                                  "tr-TR",
+                                )
+                              : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

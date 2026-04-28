@@ -120,12 +120,28 @@ const ProductBlockSection = ({
   const shouldUseWeightModal = (product) => {
     if (!product) return false;
 
+    // NEDEN: İsimde sayı+birim varsa (ör: "3 KG", "1 LT", "50 GR") sabit paket ürünüdür.
+    // isWeightBased veya fallback keyword'lerden önce kontrol et — hepsini bypass eder.
+    const rawName = String(
+      product.name ||
+        product.Name ||
+        product.productName ||
+        product.ProductName ||
+        "",
+    ).toUpperCase();
+    if (/\d+\s*(GR|KG|LT|ML|CL|L)\b/.test(rawName)) return false;
+    if (/\bADET\b/.test(rawName)) return false;
+
     if (isWeightBasedProduct(product)) {
       return true;
     }
 
     const nameText = String(
-      product.name || product.Name || product.productName || product.ProductName || "",
+      product.name ||
+        product.Name ||
+        product.productName ||
+        product.ProductName ||
+        "",
     ).toLowerCase();
     const categoryText = String(
       product.categoryName ||
@@ -308,7 +324,12 @@ const ProductBlockSection = ({
       ...product,
       id: resolvedId,
       productId: resolvedId,
-      name: product.name || product.Name || product.productName || product.ProductName || "",
+      name:
+        product.name ||
+        product.Name ||
+        product.productName ||
+        product.ProductName ||
+        "",
       price:
         product.specialPrice ||
         product.discountedPrice ||
@@ -435,9 +456,12 @@ const ProductBlockSection = ({
     e.stopPropagation();
 
     if (productId === undefined || productId === null || productId === "") {
-      console.warn("[ProductBlockSection] Favori işlemi atlandı: productId boş", {
-        product,
-      });
+      console.warn(
+        "[ProductBlockSection] Favori işlemi atlandı: productId boş",
+        {
+          product,
+        },
+      );
       return;
     }
     const id = Number(productId);

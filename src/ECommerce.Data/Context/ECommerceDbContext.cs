@@ -26,6 +26,7 @@ namespace ECommerce.Data.Context
         public virtual DbSet<MicroSyncLog> MicroSyncLogs { get; set; }
         public virtual DbSet<MikroSyncState> MikroSyncStates { get; set; }
         public virtual DbSet<MikroCategoryMapping> MikroCategoryMappings { get; set; }
+        public virtual DbSet<SyncAuditLog> SyncAuditLogs { get; set; }
         
         // ═══════════════════════════════════════════════════════════════════════════════
         // MİKRO ÜRÜN CACHE SİSTEMİ
@@ -357,6 +358,11 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.CouponDiscountAmount).HasPrecision(18, 2);
                 entity.Property(e => e.CampaignDiscountAmount).HasPrecision(18, 2);
                 entity.Property(e => e.ShippingCost).HasPrecision(18, 2);
+                entity.Property(e => e.AuthorizedAmount).HasPrecision(18, 2);
+                entity.Property(e => e.CapturedAmount).HasPrecision(18, 2);
+                entity.Property(e => e.CourierWeightAdjustment).HasPrecision(18, 3);
+                entity.Property(e => e.TolerancePercentage).HasPrecision(5, 4);
+                entity.Property(e => e.WeightDifference).HasPrecision(18, 3);
 
                 entity.HasOne(o => o.User)
                       .WithMany(u => u.Orders)
@@ -956,6 +962,8 @@ namespace ECommerce.Data.Context
                 entity.ToTable("CouponUsages");
                 
                 entity.Property(cu => cu.DiscountApplied).HasPrecision(18, 2);
+                entity.Property(cu => cu.OrderTotalBeforeDiscount).HasPrecision(18, 2);
+                entity.Property(cu => cu.OrderTotalAfterDiscount).HasPrecision(18, 2);
                 entity.Property(cu => cu.CouponCode).HasMaxLength(50);
                 entity.Property(cu => cu.IpAddress).HasMaxLength(50);
                 entity.Property(cu => cu.UserAgent).HasMaxLength(500);
@@ -1051,6 +1059,29 @@ namespace ECommerce.Data.Context
                 entity.HasIndex(e => e.CategoryId);
             });
 
+            // -------------------
+            // SyncAuditLog Configuration
+            // Sync operasyonlarının detaylı denetim kaydı (çakışma, CB, alert geçmişi)
+            // -------------------
+            modelBuilder.Entity<SyncAuditLog>(entity =>
+            {
+                entity.ToTable("SyncAuditLogs");
+
+                entity.Property(e => e.EventType).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.Severity).HasMaxLength(20).IsRequired();
+                entity.Property(e => e.Source).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.EntityId).HasMaxLength(100);
+                entity.Property(e => e.Message).HasMaxLength(1000).IsRequired();
+                entity.Property(e => e.Details).HasColumnType("nvarchar(max)");
+                entity.Property(e => e.CorrelationId).HasMaxLength(50);
+
+                // Sorgu performansı: EventType + Severity filtreleri
+                entity.HasIndex(e => e.EventType);
+                entity.HasIndex(e => e.Severity);
+                entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.CorrelationId);
+            });
+
             // ═══════════════════════════════════════════════════════════════════════════════
             // MikroProductCache Configuration
             // Mikro ERP ürünlerinin yerel cache tablosu - 6000+ ürün için performanslı erişim
@@ -1073,6 +1104,9 @@ namespace ECommerce.Data.Context
                     .HasMaxLength(50);
                     
                 entity.Property(e => e.GrupKod)
+                    .HasMaxLength(50);
+
+                entity.Property(e => e.AnagrupKod)
                     .HasMaxLength(50);
                     
                 entity.Property(e => e.Birim)
@@ -1112,6 +1146,10 @@ namespace ECommerce.Data.Context
                 // Composite index: Sık kullanılan filtreleme kombinasyonu
                 entity.HasIndex(e => new { e.Aktif, e.GrupKod })
                     .HasDatabaseName("IX_MikroProductCache_Aktif_GrupKod");
+
+                // AnagrupKod index — kategori eşleme sorgularında kullanılır
+                entity.HasIndex(e => e.AnagrupKod)
+                    .HasDatabaseName("IX_MikroProductCache_AnagrupKod");
                     
                 // Full-text arama için StokAd index'i (opsiyonel, SQL Server)
                 entity.HasIndex(e => e.StokAd)

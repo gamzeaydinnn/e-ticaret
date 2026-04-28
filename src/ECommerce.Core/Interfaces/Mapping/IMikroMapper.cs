@@ -25,9 +25,10 @@ namespace ECommerce.Core.Interfaces.Mapping
         /// - sto_birim1_ad → WeightUnit (mapping tablosundan)
         /// </summary>
         /// <param name="mikroStok">Mikro'dan gelen stok verisi</param>
-        /// <param name="categoryMapping">Kategori eşleme bilgisi (opsiyonel)</param>
+        /// <param name="categoryId">Atanacak kategori ID'si. 0 veya null ise "Diğer" kategorisine düşer.</param>
+        /// <param name="brandId">Opsiyonel marka ID'si</param>
         /// <returns>E-ticaret Product entity'si</returns>
-        Product MapToProduct(MikroStokResponseDto mikroStok, MikroCategoryMapping? categoryMapping = null);
+        Product MapToProduct(MikroStokResponseDto mikroStok, int categoryId = 0, int? brandId = null);
 
         /// <summary>
         /// Mevcut ürünü Mikro verileriyle günceller.
@@ -35,7 +36,11 @@ namespace ECommerce.Core.Interfaces.Mapping
         /// NEDEN: Yeni ürün oluşturmak yerine mevcut ürünü
         /// güncellemek gerektiğinde kullanılır (delta sync).
         /// </summary>
-        void UpdateProduct(Product existingProduct, MikroStokResponseDto mikroStok);
+        /// <param name="existingProduct">Güncellenecek mevcut ürün</param>
+        /// <param name="mikroStok">Mikro'dan gelen stok verisi</param>
+        /// <param name="categoryId">Yeni kategori ID'si. null ise mevcut kategori korunur.</param>
+        /// <param name="brandId">Yeni marka ID'si. null ise mevcut marka korunur.</param>
+        void UpdateProduct(Product existingProduct, MikroStokResponseDto mikroStok, int? categoryId = null, int? brandId = null);
 
         /// <summary>
         /// E-ticaret ürününü Mikro stok formatına dönüştürür (ters yön).
@@ -156,5 +161,11 @@ namespace ECommerce.Core.Interfaces.Mapping
         /// </summary>
         Task<IEnumerable<MikroCategoryMapping>> GetAllMappingsAsync(
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Bellek içi mapping cache'ini invalidate eder.
+        /// Mapping CRUD sonrası çağrılmalı.
+        /// </summary>
+        Task InvalidateCacheAsync(CancellationToken cancellationToken = default);
     }
 }

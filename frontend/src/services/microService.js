@@ -1,8 +1,9 @@
-import { debugLog, shouldUseMockData } from "../config/apiConfig";
+import { debugLog, shouldUseMockData, API_CONFIG } from "../config/apiConfig";
 import api from "./api";
 
 // Backend API endpoint'leri - AdminMicroController'a karşılık gelir
 const baseAdmin = "/api/admin/micro";
+const apiBaseUrl = API_CONFIG.BASE_URL; // Excel import için full URL gerekli
 
 // ============================================================================
 // Mock Data - Geliştirme ortamında backend çalışmadığında kullanılır
@@ -134,6 +135,92 @@ const normalizeStockItem = (item) => {
   };
 };
 
+const normalizeStokListesiItem = (item) => {
+  const rawPrice = item?.satisFiyati ?? item?.price ?? item?.fiyat ?? 0;
+  const rawQuantity =
+    item?.satilabilirMiktar ?? item?.depoMiktari ?? item?.quantity ?? 0;
+
+  return {
+    ...item,
+    id: item?.stokKod ?? item?.sku ?? item?.id ?? item?.productId ?? "",
+    productId: item?.stokKod ?? item?.sku ?? item?.id ?? item?.productId ?? "",
+    sku: item?.stokKod ?? item?.sku ?? item?.id ?? "",
+    name: item?.stokAd ?? item?.name ?? "",
+    category: item?.grupKod ?? item?.category ?? "-",
+    barcode: item?.barkod ?? item?.barcode ?? "",
+    price: toNumberOr(rawPrice, 0),
+    stockQuantity: Math.max(0, Math.floor(toNumberOr(rawQuantity, 0))),
+    quantity: Math.max(0, Math.floor(toNumberOr(rawQuantity, 0))),
+  };
+};
+
+const fetchStokListesiPage = async (params = {}) => {
+  const queryParams = new URLSearchParams();
+  if (params.sayfa) queryParams.append("sayfa", params.sayfa);
+  if (params.sayfaBuyuklugu)
+    queryParams.append("sayfaBuyuklugu", params.sayfaBuyuklugu);
+  if (params.depoNo !== undefined) queryParams.append("depoNo", params.depoNo);
+  if (params.fiyatListesiNo !== undefined)
+    queryParams.append("fiyatListesiNo", params.fiyatListesiNo);
+  if (params.stokKod) queryParams.append("stokKod", params.stokKod);
+  if (params.grupKod) queryParams.append("grupKod", params.grupKod);
+  if (params.sadeceAktif !== undefined)
+    queryParams.append("sadeceAktif", String(params.sadeceAktif));
+  if (params.aramaMetni) queryParams.append("aramaMetni", params.aramaMetni);
+  if (params.sadeceStoklu !== undefined && params.sadeceStoklu !== null) {
+    queryParams.append("sadeceStoklu", String(params.sadeceStoklu));
+  }
+
+  const url = `${baseAdmin}/stok-listesi${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  return api.get(url);
+};
+
+const fetchAllStokListesiRows = async (params = {}) => {
+  const pageSize = Number(params.sayfaBuyuklugu || params.pageSize || 100);
+  const maxPages = Number(params.maxPages || 10);
+  let page = 1;
+  let allRows = [];
+  let expectedTotal = 0;
+
+  while (page <= maxPages) {
+    const response = await fetchStokListesiPage({
+      ...params,
+      sayfa: page,
+      sayfaBuyuklugu: pageSize,
+    });
+
+    const batchRaw = Array.isArray(response)
+      ? response
+      : Array.isArray(response?.data)
+        ? response.data
+        : [];
+
+    const batch = batchRaw.map(normalizeStokListesiItem);
+    if (!batch.length) break;
+
+    allRows = allRows.concat(batch);
+
+    const totalCount = Number(
+      response?.toplamKayit || response?.totalCount || 0,
+    );
+    if (Number.isFinite(totalCount) && totalCount > 0) {
+      expectedTotal = totalCount;
+    }
+    if (expectedTotal > 0 && allRows.length >= expectedTotal) break;
+
+    page += 1;
+  }
+
+  const seen = new Set();
+  return allRows.filter((item) => {
+    const key = item?.sku || item?.stokKod || item?.id;
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 // ============================================================================
 // MicroService - ERP/Mikro API Entegrasyon Servisi
 // ============================================================================
@@ -162,6 +249,68 @@ export const MicroService = {
         isConnected: false,
         message: error.message || "Bağlantı kurulamadı",
         timestamp: new Date().toISOString(),
+      };
+    }
+  },
+
+  // ==================== GRUP KODLARI (KATEGORİLER) ====================
+  /**
+   * Mikro'daki benzersiz grup kodlarını (kategorileri) getirir.
+   * Grup kodu dropdown'ı için kullanılır.
+   * Backend: GET /api/admin/micro/grup-kodlari
+   */
+  getGrupKodlari: async () => {
+    if (shouldUseMockData()) {
+      debugLog("Micro getGrupKodlari - Mock");
+      return Promise.resolve({
+        success: true,
+        source: "mock",
+        data: [
+          "Et ve Et Ürünleri",
+          "Süt Ürünleri",
+          "Meyve ve Sebze",
+          "İçecekler",
+          "Bakkaliye",
+        ],
+        count: 5,
+      });
+    }
+    try {
+      const response = await api.get(`${baseAdmin}/grup-kodlari`);
+      return response;
+    } catch (error) {
+      console.error("Grup kodları getirilemedi:", error);
+      return { success: false, message: error.message, data: [] };
+    }
+  },
+
+  /**
+   * Mikro'daki depo listesini getirir.
+   * Backend: GET /api/admin/micro/depo-listesi
+   */
+  getDepoListesi: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        source: "mock",
+        data: [
+          { depoNo: 0, depoAdi: "Tum Depolar" },
+          { depoNo: 1, depoAdi: "Depo 1" },
+          { depoNo: 2, depoAdi: "Depo 2" },
+          { depoNo: 3, depoAdi: "Depo 3" },
+        ],
+      });
+    }
+
+    try {
+      const response = await api.get(`${baseAdmin}/depo-listesi`);
+      return response;
+    } catch (error) {
+      console.error("Depo listesi getirilemedi:", error);
+      return {
+        success: false,
+        message: error.message,
+        data: [{ depoNo: 0, depoAdi: "Tum Depolar" }],
       };
     }
   },
@@ -269,37 +418,31 @@ export const MicroService = {
       return Promise.resolve(clone(mockMicroProducts));
     }
     try {
-      const perPage = 100;
-      const maxPages = 10;
-      let page = 1;
-      let all = [];
+      const rows = await fetchAllStokListesiRows({
+        sayfaBuyuklugu: 100,
+        depoNo: 0,
+        fiyatListesiNo: 0,
+        sadeceAktif: true,
+        maxPages: 10,
+      });
 
-      while (page <= maxPages) {
-        const response = await api.get(
-          `${baseAdmin}/products?source=erp&page=${page}&perPage=${perPage}`,
-        );
-
-        const batchRaw = Array.isArray(response)
-          ? response
-          : Array.isArray(response?.data)
-            ? response.data
-            : [];
-
-        const batch = batchRaw.map(normalizeProductItem);
-
-        if (!batch.length) break;
-        all = all.concat(batch);
-
-        const totalCount = Number(
-          response?.totalCount || response?.toplamKayit || 0,
-        );
-        if (totalCount > 0 && all.length >= totalCount) break;
-        if (batch.length < perPage) break;
-
-        page += 1;
-      }
-
-      return all;
+      return rows.map((item) => ({
+        ...item,
+        id: item.id || item.sku,
+        sku: item.sku || item.stokKod || item.id,
+        name: item.name || item.stokAd || "",
+        category: item.category || item.grupKod || "-",
+        price: toNumberOr(item.price ?? item.satisFiyati ?? 0, 0),
+        stockQuantity: Math.max(
+          0,
+          Math.floor(
+            toNumberOr(
+              item.stockQuantity ?? item.quantity ?? item.depoMiktari ?? 0,
+              0,
+            ),
+          ),
+        ),
+      }));
     } catch (error) {
       console.error("Ürünler getirilemedi:", error);
       return [];
@@ -315,37 +458,28 @@ export const MicroService = {
       return Promise.resolve(clone(mockMicroStocks));
     }
     try {
-      const perPage = 100;
-      const maxPages = 10;
-      let page = 1;
-      let all = [];
+      const rows = await fetchAllStokListesiRows({
+        sayfaBuyuklugu: 100,
+        depoNo: 0,
+        fiyatListesiNo: 0,
+        sadeceAktif: true,
+        maxPages: 10,
+      });
 
-      while (page <= maxPages) {
-        const response = await api.get(
-          `${baseAdmin}/stocks?source=erp&page=${page}&perPage=${perPage}`,
-        );
-
-        const batchRaw = Array.isArray(response)
-          ? response
-          : Array.isArray(response?.data)
-            ? response.data
-            : [];
-
-        const batch = batchRaw.map(normalizeStockItem);
-
-        if (!batch.length) break;
-        all = all.concat(batch);
-
-        const totalCount = Number(
-          response?.totalCount || response?.toplamKayit || 0,
-        );
-        if (totalCount > 0 && all.length >= totalCount) break;
-        if (batch.length < perPage) break;
-
-        page += 1;
-      }
-
-      return all;
+      return rows.map((item) => ({
+        productId: item.productId || item.sku || item.stokKod || item.id || "",
+        sku: item.sku || item.stokKod || item.id || "",
+        quantity: Math.max(
+          0,
+          Math.floor(
+            toNumberOr(
+              item.quantity ?? item.stockQuantity ?? item.depoMiktari ?? 0,
+              0,
+            ),
+          ),
+        ),
+        warehouseCode: item.warehouseCode || item.depoNo || "DEPO0",
+      }));
     } catch (error) {
       console.error("Stoklar getirilemedi:", error);
       return [];
@@ -418,6 +552,12 @@ export const MicroService = {
       if (params.grupKod) queryParams.append("grupKod", params.grupKod);
       if (params.sadeceAktif !== undefined)
         queryParams.append("sadeceAktif", params.sadeceAktif);
+      // Arama metni filtresi
+      if (params.aramaMetni)
+        queryParams.append("aramaMetni", params.aramaMetni);
+      // Stok durumu filtresi: true = sadece stoklu, false = sadece stoksuz, undefined = hepsi
+      if (params.sadeceStoklu !== undefined && params.sadeceStoklu !== null)
+        queryParams.append("sadeceStoklu", params.sadeceStoklu);
 
       const url = `${baseAdmin}/stok-listesi${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
       const response = await api.get(url);
@@ -457,7 +597,10 @@ export const MicroService = {
           page,
           pageSize,
           totalCount: mockMicroProducts.length,
-          totalPages: Math.max(1, Math.ceil(mockMicroProducts.length / pageSize)),
+          totalPages: Math.max(
+            1,
+            Math.ceil(mockMicroProducts.length / pageSize),
+          ),
           hasPreviousPage: page > 1,
           hasNextPage: end < mockMicroProducts.length,
         },
@@ -473,6 +616,9 @@ export const MicroService = {
       if (params.search) queryParams.append("search", params.search);
       if (params.sadeceStoklu !== undefined && params.sadeceStoklu !== null) {
         queryParams.append("sadeceStoklu", String(params.sadeceStoklu));
+      }
+      if (params.sadeceAktif !== undefined && params.sadeceAktif !== null) {
+        queryParams.append("sadeceAktif", String(params.sadeceAktif));
       }
       if (params.sortBy) queryParams.append("sortBy", params.sortBy);
       if (params.sortDesc !== undefined) {
@@ -499,6 +645,249 @@ export const MicroService = {
     }
   },
 
+  // ==================== AKTİF/PASİF YÖNETİMİ ====================
+
+  /**
+   * Tek ürünün aktif/pasif durumunu değiştirir.
+   * Backend: PUT /api/admin/micro/cache/products/{stokKod}/toggle-active
+   * @param {string} stokKod - Stok kodu
+   * @param {boolean} aktif - Yeni aktiflik durumu
+   */
+  toggleProductActive: async (stokKod, aktif) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro toggleProductActive - Mock", { stokKod, aktif });
+      const product = mockMicroProducts.find((p) => p.sku === stokKod);
+      if (product) {
+        product.aktif = aktif;
+        return Promise.resolve({
+          success: true,
+          message: aktif ? "Ürün aktif edildi" : "Ürün pasif edildi",
+          stokKod,
+          aktif,
+        });
+      }
+      return Promise.resolve({ success: false, message: "Ürün bulunamadı" });
+    }
+
+    try {
+      const url = `${baseAdmin}/cache/products/${encodeURIComponent(stokKod)}/toggle-active?aktif=${aktif}`;
+      return await api.put(url);
+    } catch (error) {
+      console.error("Ürün aktiflik değişikliği başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Birden fazla ürünün aktif/pasif durumunu toplu değiştirir.
+   * Backend: PUT /api/admin/micro/cache/products/bulk-toggle-active
+   * @param {string[]} stokKodlar - Stok kodları listesi
+   * @param {boolean} aktif - Yeni aktiflik durumu
+   */
+  bulkToggleProductActive: async (stokKodlar, aktif) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro bulkToggleProductActive - Mock", { stokKodlar, aktif });
+      let successCount = 0;
+      stokKodlar.forEach((stokKod) => {
+        const product = mockMicroProducts.find((p) => p.sku === stokKod);
+        if (product) {
+          product.aktif = aktif;
+          successCount++;
+        }
+      });
+      return Promise.resolve({
+        success: true,
+        message: `${successCount} ürün ${aktif ? "aktif" : "pasif"} edildi`,
+        stats: {
+          successCount,
+          failedCount: stokKodlar.length - successCount,
+          failedCodes: [],
+        },
+      });
+    }
+
+    try {
+      const url = `${baseAdmin}/cache/products/bulk-toggle-active`;
+      return await api.put(url, { stokKodlar, aktif });
+    } catch (error) {
+      console.error("Toplu aktiflik değişikliği başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ==================== EXCEL IMPORT ====================
+
+  /**
+   * Excel dosyasından aktif ürün listesini import eder.
+   * Backend: POST /api/admin/micro/import/active-products
+   * @param {File} file - Excel veya CSV dosyası
+   */
+  importActiveProducts: async (file) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro importActiveProducts - Mock", { fileName: file.name });
+      return Promise.resolve({
+        success: true,
+        message: "Mock import başarılı: 150 ürün aktif edildi",
+        stats: {
+          totalRows: 150,
+          successCount: 150,
+          failedCount: 0,
+          skippedCount: 0,
+        },
+        details: [],
+      });
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        `${apiBaseUrl}/api/admin/micro/import/active-products`,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Import başarısız");
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Excel import başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Excel import template dosyasını indirir.
+   * Backend: GET /api/admin/micro/import/template
+   */
+  downloadImportTemplate: async () => {
+    if (shouldUseMockData()) {
+      // Mock CSV indir
+      const csvContent = "StokKod,Aktif\nORNEK001,true\nORNEK002,false\n";
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "mikro_aktif_urunler_template.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      return { success: true };
+    }
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/api/admin/micro/import/template`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error("Template indirilemedi");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "mikro_aktif_urunler_template.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      return { success: true };
+    } catch (error) {
+      console.error("Template indirilirken hata:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ==================== MİKRO'YA SYNC (ToERP) ====================
+
+  /**
+   * Ürün bilgilerini Mikro ERP'ye sync eder.
+   * Backend: PUT /api/admin/micro/sync/product
+   * @param {Object} data - Ürün bilgileri
+   */
+  syncProductToMikro: async (data) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro syncProductToMikro - Mock", data);
+      return Promise.resolve({
+        success: true,
+        message: `Ürün ${data.stokKod} Mikro'ya senkronize edildi (Mock)`,
+        stokKod: data.stokKod,
+      });
+    }
+
+    try {
+      return await api.put(`${baseAdmin}/sync/product`, data);
+    } catch (error) {
+      console.error("Ürün sync hatası:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Ürün fiyatını Mikro ERP'ye sync eder.
+   * Backend: PUT /api/admin/micro/sync/price
+   * @param {Object} data - Fiyat bilgileri
+   */
+  syncPriceToMikro: async (data) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro syncPriceToMikro - Mock", data);
+      return Promise.resolve({
+        success: true,
+        message: `Fiyat ${data.stokKod} Mikro'ya senkronize edildi (Mock)`,
+        stokKod: data.stokKod,
+        yeniFiyat: data.yeniFiyat,
+      });
+    }
+
+    try {
+      return await api.put(`${baseAdmin}/sync/price`, data);
+    } catch (error) {
+      console.error("Fiyat sync hatası:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Ürün bilgilerini ve fiyatı birlikte Mikro ERP'ye sync eder.
+   * Backend: PUT /api/admin/micro/sync/product-full
+   * @param {Object} data - Ürün ve fiyat bilgileri
+   */
+  syncProductFullToMikro: async (data) => {
+    if (shouldUseMockData()) {
+      debugLog("Micro syncProductFullToMikro - Mock", data);
+      return Promise.resolve({
+        success: true,
+        message: `Ürün ${data.stokKod} tam senkronize edildi (Mock)`,
+        stokKod: data.stokKod,
+      });
+    }
+
+    try {
+      return await api.put(`${baseAdmin}/sync/product-full`, data);
+    } catch (error) {
+      console.error("Tam ürün sync hatası:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
   /**
    * Cache senkronizasyonu başlatır.
    * Backend: POST /api/admin/micro/cache/sync
@@ -522,6 +911,135 @@ export const MicroService = {
     } catch (error) {
       console.error("Cache senkronizasyonu başarısız:", error);
       return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Mikro sync tanılama verilerini getirir.
+   * Backend: GET /api/admin/micro/sync/diagnostics
+   */
+  getSyncDiagnostics: async (hours = 24) => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        data: {
+          since: new Date(Date.now() - hours * 60 * 60 * 1000).toISOString(),
+          hours,
+          summary: {
+            totalOperations: 120,
+            successfulOperations: 112,
+            failedOperations: 6,
+            pendingRetries: 2,
+            conflictCount: 3,
+            successRate: 93.33,
+            byEntityType: {},
+            byDirection: { FromERP: 90, ToERP: 30 },
+          },
+          recentFailures: [],
+          pendingRetries: [],
+        },
+      });
+    }
+
+    try {
+      const query = new URLSearchParams({ hours: String(hours || 24) });
+      return await api.get(`${baseAdmin}/sync/diagnostics?${query.toString()}`);
+    } catch (error) {
+      console.error("Sync diagnostics alınamadı:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Belirli bir sync log kaydını manuel retry kuyruğuna alır.
+   * Backend: POST /api/admin/micro/sync/logs/{logId}/retry
+   */
+  retrySyncLog: async (logId) => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        message: `Log #${logId} retry kuyruğuna alındı (Mock)`,
+      });
+    }
+
+    try {
+      return await api.post(`${baseAdmin}/sync/logs/${logId}/retry`);
+    } catch (error) {
+      console.error("Retry sync log başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Conflict kaydını manuel çözer.
+   * strategy: erpWins | localWins
+   * Backend: POST /api/admin/micro/sync/conflicts/{logId}/resolve
+   */
+  resolveSyncConflict: async (logId, strategy = "erpWins") => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        message: `Conflict #${logId} çözüldü (${strategy}) (Mock)`,
+      });
+    }
+
+    try {
+      const query = new URLSearchParams({ strategy });
+      return await api.post(
+        `${baseAdmin}/sync/conflicts/${logId}/resolve?${query.toString()}`,
+      );
+    } catch (error) {
+      console.error("Resolve conflict başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * CSV export için TÜM cache ürünlerini getirir (limit yok).
+   * Backend: GET /api/admin/micro/cache/export-all
+   * @param {Object} params - Filtre parametreleri
+   * @param {string} [params.grupKod] - Grup kodu filtresi
+   * @param {boolean} [params.sadeceStoklu] - Sadece stoklu ürünler
+   * @param {boolean} [params.sadeceAktif] - Sadece aktif ürünler (null=hepsi)
+   */
+  exportAllCachedProducts: async (params = {}) => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        data: mockMicroProducts.map((p, index) => ({
+          stokKod: p.sku,
+          stokAd: p.name,
+          barkod: p.barcode,
+          grupKod: p.category,
+          birim: "ADET",
+          satisFiyati: p.price,
+          kdvOrani: 10,
+          depoMiktari: mockMicroStocks[index]?.quantity ?? 0,
+        })),
+        totalCount: mockMicroProducts.length,
+      });
+    }
+
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.grupKod) queryParams.append("grupKod", params.grupKod);
+      if (params.sadeceStoklu !== undefined && params.sadeceStoklu !== null) {
+        queryParams.append("sadeceStoklu", String(params.sadeceStoklu));
+      }
+      if (params.sadeceAktif !== undefined && params.sadeceAktif !== null) {
+        queryParams.append("sadeceAktif", String(params.sadeceAktif));
+      }
+
+      const url = `${baseAdmin}/cache/export-all${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+      return await api.get(url);
+    } catch (error) {
+      console.error("Tüm cache ürünleri export edilemedi:", error);
+      return {
+        success: false,
+        data: [],
+        totalCount: 0,
+        message: error.message,
+      };
     }
   },
 
@@ -557,6 +1075,210 @@ export const MicroService = {
       return response;
     } catch (error) {
       console.error("Stok detayı getirilemedi:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ==================== SYNC SAĞLIK & MONİTÖRİNG (Phase 5) ====================
+
+  /**
+   * Sync sağlık özeti — tüm kanalların durumunu döner.
+   * Backend: GET /api/admin/micro/sync/health
+   */
+  getSyncHealth: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        overallStatus: "Healthy",
+        totalSyncChannels: 6,
+        healthyChannels: 5,
+        degradedChannels: 1,
+        unhealthyChannels: 0,
+        activeAlertCount: 1,
+        recentErrorCount: 2,
+        channels: [
+          {
+            syncType: "HotPoll",
+            direction: "FromERP",
+            status: "Healthy",
+            lastSyncTime: new Date().toISOString(),
+            lastSyncSuccess: true,
+            consecutiveFailures: 0,
+          },
+          {
+            syncType: "StockSync",
+            direction: "FromERP",
+            status: "Degraded",
+            lastSyncTime: new Date(Date.now() - 3600000).toISOString(),
+            lastSyncSuccess: true,
+            consecutiveFailures: 1,
+          },
+        ],
+      });
+    }
+    try {
+      return await api.get(`${baseAdmin}/sync/health`);
+    } catch (error) {
+      console.error("Sync sağlık bilgisi alınamadı:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Sync metrikleri — saatlik breakdown ile trend verisi.
+   * Backend: GET /api/admin/micro/sync/metrics?hours=24
+   * @param {number} hours - Kaç saatlik veri (varsayılan: 24)
+   */
+  getSyncMetrics: async (hours = 24) => {
+    if (shouldUseMockData()) {
+      const now = Date.now();
+      return Promise.resolve({
+        success: true,
+        periodHours: hours,
+        totalOperations: 480,
+        successfulOperations: 460,
+        failedOperations: 20,
+        successRate: 95.83,
+        avgDurationMs: 1200,
+        hourlyBreakdown: Array.from(
+          { length: Math.min(hours, 24) },
+          (_, i) => ({
+            hour: new Date(now - (hours - 1 - i) * 3600000).toISOString(),
+            totalOps: 20,
+            successOps: 19,
+            failedOps: 1,
+            avgDurationMs: 1100 + Math.random() * 300,
+          }),
+        ),
+      });
+    }
+    try {
+      const query = new URLSearchParams({ hours: String(hours) });
+      return await api.get(`${baseAdmin}/sync/metrics?${query.toString()}`);
+    } catch (error) {
+      console.error("Sync metrikleri alınamadı:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Aktif sync uyarıları.
+   * Backend: GET /api/admin/micro/sync/alerts
+   */
+  getSyncAlerts: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        alerts: [
+          {
+            alertType: "ConsecutiveFailure",
+            severity: "Warning",
+            channel: "StockSync",
+            message: "3 ardışık başarısız deneme",
+            detectedAt: new Date().toISOString(),
+          },
+        ],
+      });
+    }
+    try {
+      return await api.get(`${baseAdmin}/sync/alerts`);
+    } catch (error) {
+      console.error("Sync uyarıları alınamadı:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ==================== ÜRÜN BİLGİ SYNC (Phase 4) ====================
+
+  /**
+   * Cache'ten Product tablosuna tam bilgi senkronizasyonu (ad, slug, birim, kategori, durum).
+   * Backend: POST /api/admin/micro/sync/product-info
+   */
+  syncProductInfo: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        message: "Ürün bilgileri senkronize edildi (Mock)",
+        totalProcessed: 150,
+        namesUpdated: 5,
+        categoriesUpdated: 3,
+        weightInfoUpdated: 2,
+        statusUpdated: 1,
+      });
+    }
+    try {
+      return await api.post(`${baseAdmin}/sync/product-info`);
+    } catch (error) {
+      console.error("Ürün bilgi sync başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Kategori mapping senkronizasyonu — MikroCategoryMapping tablosundan eşleşme.
+   * Backend: POST /api/admin/micro/sync/categories
+   */
+  syncCategories: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        message: "Kategori eşleştirmesi yapıldı (Mock)",
+        totalProcessed: 200,
+        categoriesUpdated: 15,
+      });
+    }
+    try {
+      return await api.post(`${baseAdmin}/sync/categories`);
+    } catch (error) {
+      console.error("Kategori sync başarısız:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Eşleştirilmemiş GrupKod'ları getirir.
+   * Backend: GET /api/admin/micro/sync/unmapped-groups
+   */
+  getUnmappedGroups: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        unmappedGroups: [
+          { grupKod: "MEYVE", productCount: 12 },
+          { grupKod: "ET", productCount: 8 },
+        ],
+      });
+    }
+    try {
+      return await api.get(`${baseAdmin}/sync/unmapped-groups`);
+    } catch (error) {
+      console.error("Eşleştirilmemiş gruplar alınamadı:", error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  /**
+   * Resim durumu raporu — kaç ürünün görseli var/yok.
+   * Backend: GET /api/admin/micro/sync/image-status
+   */
+  getImageStatus: async () => {
+    if (shouldUseMockData()) {
+      return Promise.resolve({
+        success: true,
+        totalProducts: 500,
+        productsWithImages: 420,
+        productsWithoutImages: 80,
+        coveragePercent: 84.0,
+        missingImageProducts: [
+          { productId: 101, name: "Elma", sku: "ELMA001" },
+          { productId: 102, name: "Portakal", sku: "PORT001" },
+        ],
+      });
+    }
+    try {
+      return await api.get(`${baseAdmin}/sync/image-status`);
+    } catch (error) {
+      console.error("Resim durumu raporu alınamadı:", error);
       return { success: false, message: error.message };
     }
   },

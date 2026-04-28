@@ -10,11 +10,12 @@ namespace ECommerce.Business.Services.Jobs
     /// GÖREV: Her 5 dakikada bekleyen retry'ları işler.
     /// 
     /// ÇALIŞMA PRENSIBI:
-    /// 1. Pending durumundaki logları al
-    /// 2. Retry delay geçmiş mi kontrol et (exponential backoff)
-    /// 3. Her log için ilgili sync servisini çağır
-    /// 4. Başarılı/başarısız durumu güncelle
-    /// 5. 3+ başarısız olanları Dead Letter'a taşı
+    /// 1. Pending durumundaki logları al (FromERP yönü — RetryService)
+    /// 2. Başarısız outbound push'ları tekrar dene (ToERP yönü — OutboundSyncService)
+    /// 3. Retry delay geçmiş mi kontrol et (exponential backoff)
+    /// 4. Her log için ilgili sync servisini çağır
+    /// 5. Başarılı/başarısız durumu güncelle
+    /// 6. 3+ başarısız olanları Dead Letter'a taşı
     /// 
     /// CRON: */5 * * * * (Her 5 dakika)
     /// QUEUE: mikro-retry (ayrı kuyruk, sync'leri bloke etmesin)
@@ -22,6 +23,7 @@ namespace ECommerce.Business.Services.Jobs
     public class RetryJob : IMikroSyncJob
     {
         private readonly IRetryService _retryService;
+        private readonly IMikroOutboundSyncService? _outboundSyncService;
         private readonly ILogger<RetryJob> _logger;
 
         /// <inheritdoc />
@@ -32,10 +34,12 @@ namespace ECommerce.Business.Services.Jobs
 
         public RetryJob(
             IRetryService retryService,
-            ILogger<RetryJob> logger)
+            ILogger<RetryJob> logger,
+            IMikroOutboundSyncService? outboundSyncService = null)
         {
             _retryService = retryService ?? throw new ArgumentNullException(nameof(retryService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _outboundSyncService = outboundSyncService;
         }
 
         /// <inheritdoc />
@@ -82,6 +86,32 @@ namespace ECommerce.Business.Services.Jobs
                 if (retryResult.Errors.Any())
                 {
                     result.Errors.AddRange(retryResult.Errors);
+                }
+
+                // ── Outbound push retry (EC→Mikro yönü) ──
+                // NEDEN: HotPoll FromERP yönünü çözer, ama admin panelden yapılan
+                // stok/fiyat değişiklikleri Mikro'ya push edilemezse burada retry edilir
+                if (_outboundSyncService != null)
+                {
+                    try
+                    {
+                        var outboundResult = await _outboundSyncService.RetryFailedPushesAsync(cancellationToken);
+                        result.SuccessCount += outboundResult.PushedCount;
+                        result.ErrorCount += outboundResult.FailedCount;
+                        result.ProcessedCount += outboundResult.PushedCount + outboundResult.FailedCount;
+                        result.Metadata["OutboundRetrySuccess"] = outboundResult.PushedCount;
+                        result.Metadata["OutboundRetryFailed"] = outboundResult.FailedCount;
+
+                        _logger.LogInformation(
+                            "[{JobName}] Outbound retry: {Success} başarılı, {Failed} başarısız",
+                            JobName, outboundResult.PushedCount, outboundResult.FailedCount);
+                    }
+                    catch (Exception outboundEx)
+                    {
+                        _logger.LogWarning(outboundEx,
+                            "[{JobName}] Outbound retry sırasında hata (ana retry etkilenmez)",
+                            JobName);
+                    }
                 }
 
                 _logger.LogInformation(

@@ -763,6 +763,8 @@ function App() {
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:slug" element={<CampaignDetail />} />
         <Route path="/product/:id" element={<Product />} />
+        {/* Mikro-only ürünler için SKU bazlı detay rotası */}
+        <Route path="/product/sku/:sku" element={<Product />} />
         <Route path="/checkout" element={<Checkout />} />
         {/* 3D Secure Ödeme Callback Sayfaları */}
         <Route path="/checkout/success" element={<PaymentSuccessPage />} />

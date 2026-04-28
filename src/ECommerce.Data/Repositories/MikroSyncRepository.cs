@@ -165,6 +165,15 @@ namespace ECommerce.Data.Repositories
         }
 
         /// <inheritdoc />
+        public async Task<MicroSyncLog?> GetLogByIdAsync(
+            int logId,
+            CancellationToken cancellationToken = default)
+        {
+            return await _context.MicroSyncLogs
+                .FirstOrDefaultAsync(l => l.Id == logId, cancellationToken);
+        }
+
+        /// <inheritdoc />
         public async Task<MicroSyncLog?> GetLastLogAsync(
             string entityType,
             string? externalId = null,

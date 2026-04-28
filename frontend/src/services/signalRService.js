@@ -29,6 +29,7 @@ const HUB_URLS = {
   courierNotification: "/hubs/courier", // Kurye bildirimleri
   storeAttendant: "/hubs/store", // Market görevlisi bildirimleri
   dispatcher: "/hubs/dispatch", // Sevkiyat görevlisi bildirimleri
+  stock: "/hubs/stock", // Stok/Fiyat anlık güncelleme hub'ı
 };
 
 /**
@@ -85,6 +86,13 @@ export const SignalREvents = {
 
   // Ağırlık Farkı Olayları (Tartı bazlı ürünler)
   WEIGHT_CHARGE_APPLIED: "WeightChargeApplied",
+
+  // Stok/Fiyat Anlık Güncelleme Olayları (StockHub)
+  STOCK_CHANGED: "StockChanged",
+  PRICE_CHANGED: "PriceChanged",
+  PRODUCT_INFO_CHANGED: "ProductInfoChanged",
+  BULK_STOCK_UPDATE: "BulkStockUpdate",
+  STOCK_ALERT: "StockAlert",
 
   // Sistem Olayları
   NOTIFICATION: "Notification",
@@ -598,6 +606,171 @@ class SignalRService {
    */
   get dispatcherHub() {
     return this.getOrCreateConnection(HUB_URLS.dispatcher);
+  }
+
+  /**
+   * Stock hub'ına hızlı erişim
+   * NEDEN: Stok/fiyat anlık güncelleme bildirimleri için (anonim kullanıcılar dahil)
+   */
+  get stockHub() {
+    return this.getOrCreateConnection(HUB_URLS.stock);
+  }
+
+  /**
+   * Stok güncellemeleri için hub bağlantısı kurar.
+   * NEDEN: Auth gerektirmez — anonim kullanıcılar da stok değişimini görür.
+   * Ürün detay veya sepet sayfasında çağrılır.
+   */
+  async connectStock() {
+    const stockHub = this.getOrCreateConnection(HUB_URLS.stock);
+    return await stockHub.start();
+  }
+
+  /**
+   * Belirli bir ürünün stok/fiyat odasına katılır.
+   * Ürün detay sayfası açıldığında çağrılır.
+   */
+  async joinProductRoom(productId) {
+    if (!productId || productId <= 0) return false;
+
+    const stockHub = this.getOrCreateConnection(HUB_URLS.stock);
+    if (!stockHub.isConnected()) {
+      await stockHub.start();
+    }
+
+    if (stockHub.isConnected()) {
+      try {
+        await stockHub.invoke("JoinProductRoom", productId);
+        console.log(`[SignalR] Ürün #${productId} stok odasına katıldı`);
+        return true;
+      } catch (error) {
+        console.warn("[SignalR] Ürün stok odasına katılma hatası:", error);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Belirli bir ürünün stok/fiyat odasından ayrılır.
+   */
+  async leaveProductRoom(productId) {
+    if (!productId || productId <= 0) return;
+
+    const stockHub = this.connections.get(HUB_URLS.stock);
+    if (stockHub?.isConnected()) {
+      try {
+        await stockHub.invoke("LeaveProductRoom", productId);
+      } catch (error) {
+        console.warn("[SignalR] Ürün odasından ayrılma hatası:", error);
+      }
+    }
+  }
+
+  /**
+   * Sepetteki ürünleri toplu izlemeye başlar.
+   * Sepet sayfası açıldığında çağrılır.
+   */
+  async joinCartRooms(productIds) {
+    if (!productIds?.length) return false;
+
+    const stockHub = this.getOrCreateConnection(HUB_URLS.stock);
+    if (!stockHub.isConnected()) {
+      await stockHub.start();
+    }
+
+    if (stockHub.isConnected()) {
+      try {
+        await stockHub.invoke("JoinCartRooms", productIds);
+        console.log(`[SignalR] ${productIds.length} sepet ürünü izleniyor`);
+        return true;
+      } catch (error) {
+        console.warn("[SignalR] Sepet odalarına katılma hatası:", error);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Sepet odalarından toplu çıkış.
+   */
+  async leaveCartRooms(productIds) {
+    if (!productIds?.length) return;
+
+    const stockHub = this.connections.get(HUB_URLS.stock);
+    if (stockHub?.isConnected()) {
+      try {
+        await stockHub.invoke("LeaveCartRooms", productIds);
+      } catch (error) {
+        console.warn("[SignalR] Sepet odalarından ayrılma hatası:", error);
+      }
+    }
+  }
+
+  /**
+   * Admin global stok izlemeye başlar.
+   * Admin stok yönetim sayfasında çağrılır.
+   */
+  async joinGlobalStockUpdates() {
+    const stockHub = this.getOrCreateConnection(HUB_URLS.stock);
+    if (!stockHub.isConnected()) {
+      await stockHub.start();
+    }
+
+    if (stockHub.isConnected()) {
+      try {
+        await stockHub.invoke("JoinGlobalStockUpdates");
+        console.log("[SignalR] Global stok güncellemelerine katıldı");
+        return true;
+      } catch (error) {
+        console.warn("[SignalR] Global stok odasına katılma hatası:", error);
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Stok değişikliği dinler
+   */
+  onStockChanged(handler) {
+    return this.on(HUB_URLS.stock, SignalREvents.STOCK_CHANGED, handler);
+  }
+
+  /**
+   * Fiyat değişikliği dinler
+   */
+  onPriceChanged(handler) {
+    return this.on(HUB_URLS.stock, SignalREvents.PRICE_CHANGED, handler);
+  }
+
+  /**
+   * Ürün bilgi değişikliği dinler
+   */
+  onProductInfoChanged(handler) {
+    return this.on(HUB_URLS.stock, SignalREvents.PRODUCT_INFO_CHANGED, handler);
+  }
+
+  /**
+   * Toplu stok güncelleme dinler
+   */
+  onBulkStockUpdate(handler) {
+    return this.on(HUB_URLS.stock, SignalREvents.BULK_STOCK_UPDATE, handler);
+  }
+
+  /**
+   * Stock hub bağlantısını kapatır
+   */
+  async disconnectStock() {
+    const stockHub = this.connections.get(HUB_URLS.stock);
+    if (stockHub) {
+      try {
+        await stockHub.stop();
+      } catch (error) {
+        console.warn("[SignalR] Stock bağlantı kapatma hatası:", error);
+      }
+    }
   }
 
   /**

@@ -57,7 +57,7 @@ namespace ECommerce.Business.Services.Mapping
         }
 
         /// <inheritdoc />
-        public Product MapToProduct(MikroStokResponseDto mikroStok, MikroCategoryMapping? categoryMapping = null)
+        public Product MapToProduct(MikroStokResponseDto mikroStok, int categoryId = 0, int? brandId = null)
         {
             if (mikroStok == null)
                 throw new ArgumentNullException(nameof(mikroStok));
@@ -83,16 +83,21 @@ namespace ECommerce.Business.Services.Mapping
                 UpdatedAt = mikroStok.StoLastupDate ?? DateTime.UtcNow
             };
 
-            // Kategori eşlemesi
-            if (categoryMapping != null)
+            // NEDEN: Tek sorumluluk — mapper sadece map yapar, kategori lookup dışarıda yapılır.
+            // categoryId=0 ise çağıran lookup yapmamış demektir — fallback uyarısı ver.
+            if (categoryId > 0)
             {
-                product.CategoryId = categoryMapping.CategoryId;
-                product.BrandId = categoryMapping.BrandId;
+                product.CategoryId = categoryId;
+                product.BrandId = brandId;
             }
             else
             {
-                // Varsayılan kategori (tanımsız ürünler için)
-                product.CategoryId = 1;
+                // NEDEN: Hardcoded CategoryId=1 tüm eşleşmeyenleri ilk kategoriye (Et) atıyordu.
+                // Şimdi 0 bırak — ProductsController'daki MatchCategorySlug fallback devreye girer.
+                _logger.LogWarning(
+                    "[MikroStokMapper] categoryId=0 ile çağrıldı — çağıran resolve etmeli! SKU: {Sku}",
+                    mikroStok.StoKod);
+                product.CategoryId = 0;
             }
 
             // Birim ve ağırlık bazlı satış
@@ -120,7 +125,7 @@ namespace ECommerce.Business.Services.Mapping
         }
 
         /// <inheritdoc />
-        public void UpdateProduct(Product existingProduct, MikroStokResponseDto mikroStok)
+        public void UpdateProduct(Product existingProduct, MikroStokResponseDto mikroStok, int? categoryId = null, int? brandId = null)
         {
             if (existingProduct == null)
                 throw new ArgumentNullException(nameof(existingProduct));
@@ -138,6 +143,18 @@ namespace ECommerce.Business.Services.Mapping
             existingProduct.Price = ExtractPrice(mikroStok.SatisFiyatlari);
             existingProduct.IsActive = !mikroStok.StoPasifFl;
             existingProduct.UpdatedAt = DateTime.UtcNow;
+
+            // NEDEN: Kategori güncellemesi opsiyonel — null geçilirse mevcut kategori korunur.
+            // Bu, OverwriteExistingCategory=false config’ine uymak için.
+            if (categoryId.HasValue && categoryId.Value > 0)
+            {
+                existingProduct.CategoryId = categoryId.Value;
+            }
+
+            if (brandId.HasValue)
+            {
+                existingProduct.BrandId = brandId.Value;
+            }
 
             // Ağırlık özelliklerini güncelle
             MapWeightProperties(existingProduct, mikroStok);

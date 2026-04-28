@@ -132,6 +132,40 @@ namespace ECommerce.Infrastructure.Config
         /// Örnek: "WEB-" → "WEB-12345"
         /// </summary>
         public string OnlineMusteriPrefix { get; set; } = "WEB-";
+
+        // ==================== BİRLEŞİK SYNC AYARLARI ====================
+
+        /// <summary>
+        /// Birleşik (SQL tabanlı) sync aktif mi? true → MikroUnifiedSyncJob çalışır,
+        /// false → eski ayrı stok/fiyat job'ları çalışır.
+        /// </summary>
+        public bool UnifiedSyncEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Birleşik sync cron ifadesi. Varsayılan: her 15 dakikada bir.
+        /// </summary>
+        public string UnifiedSyncCron { get; set; } = "*/15 * * * *";
+
+        // ==================== DİREKT SQL SERVER BAĞLANTI AYARLARI ====================
+
+        /// <summary>
+        /// Mikro ERP MSSQL Server'a direkt bağlantı string'i.
+        /// 
+        /// NEDEN: /Api/APIMethods/SqlVeriOkuV2 HTTP endpoint'i 90s+ timeout yapıyor.
+        /// Direkt SqlConnection ile aynı sorgular &lt;2s'de tamamlanıyor.
+        /// 
+        /// Format: Server=10.0.0.3,1433;Database=MIKRO_DB;User Id=sa;Password=XXX;TrustServerCertificate=True;
+        /// 
+        /// UYARI: Bu ayar boş bırakılırsa MikroDbService devre dışı kalır ve HTTP
+        /// endpoint fallback'i kullanılmaz (boş sonuç döner).
+        /// </summary>
+        public string? SqlConnectionString { get; set; }
+
+        /// <summary>
+        /// Direkt SQL sorgusu için komut timeout'u (saniye).
+        /// Varsayılan: 30s — büyük stok tablolarında 60s gerekebilir.
+        /// </summary>
+        public int SqlCommandTimeoutSeconds { get; set; } = 30;
     }
 }
 

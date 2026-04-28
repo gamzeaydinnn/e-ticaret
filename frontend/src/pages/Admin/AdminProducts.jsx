@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/admin/XmlImportModal";
-import VariantManager from "../../components/admin/VariantManager";
+import XmlImportModal from "../../components/Admin/XmlImportModal";
+import VariantManager from "../../components/Admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -27,6 +27,7 @@ const AdminProducts = () => {
   // Excel Import State'leri
   const [showExcelModal, setShowExcelModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
+  const [excelImageFiles, setExcelImageFiles] = useState([]); // Görsel dosyaları
   const [excelLoading, setExcelLoading] = useState(false);
   const [excelResult, setExcelResult] = useState(null);
   const [excelError, setExcelError] = useState(null);
@@ -41,6 +42,9 @@ const AdminProducts = () => {
 
   // Excel Export State'leri
   const [exportLoading, setExportLoading] = useState(false);
+
+  // Otomatik Kategorize State'leri
+  const [categorizingLoading, setCategorizingLoading] = useState(false);
 
   // Resim Upload State'leri
   const [imageFile, setImageFile] = useState(null);
@@ -137,10 +141,11 @@ const AdminProducts = () => {
         categoryId: parseInt(formData.categoryId),
         imageUrl: formData.imageUrl?.trim() || null,
         isActive: formData.isActive !== false,
+        sku: formData.sku || "", // Mikro ERP ürünlerinde SKU bazlı güncelleme için
       };
 
       if (editingProduct) {
-        // Mevcut ürünü güncelle - ProductService.updateAdmin kullan
+        // Mevcut ürünü güncelle — id > 0 ise id bazlı, değilse SKU bazlı (Mikro ürünleri)
         await ProductService.updateAdmin(editingProduct.id, productData);
         alert("✅ Ürün başarıyla güncellendi!");
       } else {
@@ -201,6 +206,7 @@ const AdminProducts = () => {
       description: product.description || "",
       imageUrl: product.imageUrl || "",
       isActive: product.isActive,
+      sku: product.sku || "", // Mikro ERP ürünlerinde SKU üzerinden güncelleme
     });
     setShowModal(true);
   };
@@ -375,8 +381,11 @@ const AdminProducts = () => {
     setExcelError(null);
 
     try {
-      // ProductService.importExcel kullanarak dosyayı yükle
-      const result = await ProductService.importExcel(excelFile);
+      // excelImageFiles: kullanıcının seçtiği görsel dosyaları array'i
+      const result = await ProductService.importExcel(
+        excelFile,
+        excelImageFiles,
+      );
       setExcelResult(result);
       // Başarılı olursa ürün listesini yenile
       fetchProducts();
@@ -446,6 +455,48 @@ const AdminProducts = () => {
       );
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  // Tüm Mikro ürünlerini otomatik kategorize et
+  const handleAutoCategorize = async () => {
+    if (
+      !window.confirm(
+        "Tüm Mikro ERP ürünleri otomatik kategorize edilecek. Devam etmek istiyor musunuz?",
+      )
+    )
+      return;
+
+    setCategorizingLoading(true);
+    try {
+      const api = (await import("../../services/api")).default;
+      const response = await api.post("/api/products/admin/auto-categorize");
+      const result = response?.data || response;
+
+      let msg = `✅ Otomatik kategorileme tamamlandı!\n`;
+      msg += `Toplam: ${result.totalProducts} ürün\n`;
+      msg += `Yeni oluşturulan: ${result.created}\n`;
+      msg += `Güncellenen: ${result.updated}\n`;
+      if (result.newCategories > 0)
+        msg += `Yeni kategori: ${result.newCategories}\n`;
+      if (result.distribution) {
+        msg += `\nKategori dağılımı:\n`;
+        result.distribution.forEach((d) => {
+          msg += `  ${d.category}: ${d.productCount} ürün\n`;
+        });
+      }
+      alert(msg);
+
+      // Listeyi ve kategorileri yenile
+      fetchProducts();
+      fetchCategories();
+    } catch (err) {
+      console.error("Otomatik kategorize hatası:", err);
+      alert(
+        "❌ Kategorize hatası: " + (err.response?.data?.message || err.message),
+      );
+    } finally {
+      setCategorizingLoading(false);
     }
   };
 
@@ -564,6 +615,28 @@ const AdminProducts = () => {
               onClick={handleDownloadTemplate}
             >
               <i className="fas fa-download me-1"></i>Şablon
+            </button>
+            {/* Otomatik Kategorize Butonu */}
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1"
+              style={{
+                background: "linear-gradient(135deg, #ec4899, #f472b6)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={handleAutoCategorize}
+              disabled={categorizingLoading}
+            >
+              {categorizingLoading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1"></span>
+                  Kategorize ediliyor...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-tags me-1"></i>Otomatik Kategorize
+                </>
+              )}
             </button>
             {/* Yeni Ürün Ekle Butonu */}
             <button
@@ -1174,7 +1247,13 @@ const AdminProducts = () => {
                   <button
                     type="button"
                     className="btn-close btn-close-white"
-                    onClick={() => setShowExcelModal(false)}
+                    onClick={() => {
+                      setShowExcelModal(false);
+                      setExcelFile(null);
+                      setExcelImageFiles([]);
+                      setExcelResult(null);
+                      setExcelError(null);
+                    }}
                   ></button>
                 </div>
                 <div className="modal-body p-4">
@@ -1187,17 +1266,33 @@ const AdminProducts = () => {
                     <p className="mb-2 small">
                       Excel (.xlsx, .xls) veya CSV dosyası yükleyebilirsiniz.
                     </p>
-                    <p className="mb-0 small">
+                    <p className="mb-1 small">
                       <strong>Sütunlar:</strong> Ürün Adı, Açıklama, Fiyat,
-                      Stok, Kategori ID, Görsel URL
+                      Stok, Kategori ID, Görsel URL, İndirimli Fiyat
                     </p>
+                    <div className="mt-2 small">
+                      <strong>Görsel URL seçenekleri:</strong>
+                      <ul className="mb-0 mt-1 ps-3">
+                        <li>
+                          <code>https://...</code> — URL'den otomatik indirilir
+                        </li>
+                        <li>
+                          <code>urun.jpg</code> — aşağıdan görsel seçin, dosya
+                          adıyla eşleştirilir
+                        </li>
+                        <li>
+                          <code>/uploads/products/urun.jpg</code> — mevcut
+                          sisteme bağlanır
+                        </li>
+                      </ul>
+                    </div>
                   </div>
 
                   {/* Dosya seçimi */}
                   <form onSubmit={handleExcelUpload}>
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <label className="form-label fw-semibold">
-                        Dosya Seçin
+                        Excel / CSV Dosyası
                       </label>
                       <input
                         type="file"
@@ -1210,6 +1305,52 @@ const AdminProducts = () => {
                           <i className="fas fa-check-circle me-1"></i>
                           {excelFile.name} seçildi
                         </small>
+                      )}
+                    </div>
+
+                    {/* Görsel dosyaları seçimi */}
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold">
+                        Görsel Dosyaları{" "}
+                        <span className="text-muted fw-normal">
+                          (isteğe bağlı)
+                        </span>
+                      </label>
+                      <input
+                        type="file"
+                        className="form-control"
+                        accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif,.avif,.svg"
+                        multiple
+                        onChange={(e) =>
+                          setExcelImageFiles(Array.from(e.target.files))
+                        }
+                      />
+                      <small className="text-muted d-block mt-1">
+                        Birden fazla görsel seçebilirsiniz. CSV'deki görsel
+                        adıyla eşleştirilir. Desteklenen: JPG, PNG, GIF, WEBP,
+                        BMP, TIFF, AVIF, SVG
+                      </small>
+                      {excelImageFiles.length > 0 && (
+                        <div className="mt-2">
+                          <small className="text-success d-block mb-1">
+                            <i className="fas fa-images me-1"></i>
+                            {excelImageFiles.length} görsel seçildi:
+                          </small>
+                          <div
+                            className="d-flex flex-wrap gap-1"
+                            style={{ maxHeight: "80px", overflowY: "auto" }}
+                          >
+                            {excelImageFiles.map((f, i) => (
+                              <span
+                                key={i}
+                                className="badge bg-light text-dark border"
+                                style={{ fontSize: "0.75rem" }}
+                              >
+                                {f.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       )}
                     </div>
 
@@ -1243,6 +1384,12 @@ const AdminProducts = () => {
                           <div className="text-success">
                             Başarılı: {excelResult.successCount}
                           </div>
+                          {excelResult.imagesProcessed > 0 && (
+                            <div className="text-primary">
+                              Görsel: {excelResult.imagesProcessed} adet
+                              yüklendi
+                            </div>
+                          )}
                           {excelResult.errorCount > 0 && (
                             <div className="text-danger">
                               Hatalı: {excelResult.errorCount}

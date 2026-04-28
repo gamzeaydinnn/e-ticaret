@@ -107,7 +107,9 @@ namespace ECommerce.Business.Services.Jobs
                 JobType.SiparisPush => BackgroundJob.Enqueue<ISiparisPushJob>(
                     j => j.PushPendingOrdersAsync(CancellationToken.None)),
                 
-                // ADIM 6: RETRY JOB TETİKLEME
+                JobType.UnifiedSync => BackgroundJob.Enqueue<IUnifiedSyncJob>(
+                    j => j.ExecuteAsync(CancellationToken.None)),
+                
                 JobType.RetrySync => BackgroundJob.Enqueue<RetryJob>(
                     j => j.ExecuteAsync(CancellationToken.None)),
                 
@@ -238,7 +240,18 @@ namespace ECommerce.Business.Services.Jobs
                     TimeoutMinutes = 10,
                     Queue = "mikro-orders"
                 },
-                // ADIM 6: RETRY SYNC JOB
+                // Birleşik SQL senkronizasyon job'ı — stok + fiyat + bilgi tek sorguda
+                ["mikro-unified-sync"] = new JobDefinition
+                {
+                    Name = "mikro-unified-sync",
+                    Description = "Birleşik stok+fiyat senkronizasyonu (15 dk, tek SQL)",
+                    CronExpression = section["UnifiedSyncCron"] ?? "*/15 * * * *",
+                    JobType = JobType.UnifiedSync,
+                    IsEnabled = section.GetValue("UnifiedSyncEnabled", true),
+                    TimeoutMinutes = 10,
+                    Queue = "mikro-sync"
+                },
+                // LEGACY: Eski stok ve fiyat job'ları devre dışı (unified sync kapsar)
                 ["mikro-retry-sync"] = new JobDefinition
                 {
                     Name = "mikro-retry-sync",
@@ -285,6 +298,14 @@ namespace ECommerce.Business.Services.Jobs
 
                     case JobType.FullSync:
                         _recurringJobManager.AddOrUpdate<IFullSyncJob>(
+                            job.Name,
+                            j => j.ExecuteAsync(CancellationToken.None),
+                            job.CronExpression,
+                            options);
+                        break;
+
+                    case JobType.UnifiedSync:
+                        _recurringJobManager.AddOrUpdate<IUnifiedSyncJob>(
                             job.Name,
                             j => j.ExecuteAsync(CancellationToken.None),
                             job.CronExpression,
@@ -403,7 +424,8 @@ namespace ECommerce.Business.Services.Jobs
             FiyatSync,
             FullSync,
             SiparisPush,
-            RetrySync  // ADIM 6: Başarısız senkronizasyonları tekrar deneme
+            RetrySync,     // Başarısız senkronizasyonları tekrar deneme
+            UnifiedSync    // Birleşik SQL ile stok+fiyat+bilgi senkronizasyonu
         }
 
         #endregion

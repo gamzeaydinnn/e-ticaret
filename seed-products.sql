@@ -12,9 +12,18 @@ VALUES
 (4, N'İçecekler', N'Soğuk ve sıcak içecekler', '/images/coca-cola.jpg', 'icecekler', 4, 1, GETDATE(), GETDATE()),
 (5, N'Atıştırmalık', N'Cipsi, kraker ve atıştırmalıklar', '/images/tahil-cipsi.jpg', 'atistirmalik', 5, 1, GETDATE(), GETDATE()),
 (6, N'Temizlik', N'Ev temizlik ürünleri', '/images/yeşil-cif-krem.jpg', 'temizlik', 6, 1, GETDATE(), GETDATE()),
-(7, N'Temel Gıda', N'Temel gıda ürünleri', '/images/bulgur.png', 'temel-gida', 7, 1, GETDATE(), GETDATE());
+(7, N'Temel Gıda', N'Temel gıda ürünleri', '/images/bulgur.png', 'temel-gida', 7, 1, GETDATE(), GETDATE()),
+(8, N'Diğer', N'Henüz kategorize edilmemiş ürünler', NULL, 'diger', 999, 1, GETDATE(), GETDATE());
 
 SET IDENTITY_INSERT Categories OFF;
+GO
+
+-- Wildcard kategori eşlemesi — eşlenemeyen ürünler "Diğer" kategorisine atanır
+IF NOT EXISTS (SELECT 1 FROM MikroCategoryMappings WHERE MikroAnagrupKod = '*')
+BEGIN
+    INSERT INTO MikroCategoryMappings (MikroAnagrupKod, MikroAltgrupKod, MikroMarkaKod, CategoryId, BrandId, Priority, IsActive, MikroGrupAciklama, Notes, CreatedAt)
+    VALUES (N'*', NULL, NULL, 8, NULL, 999, 1, N'Varsayılan eşleme', N'Seed tarafından oluşturuldu', GETDATE());
+END
 GO
 
 -- Ürünleri ekle

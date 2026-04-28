@@ -9,7 +9,7 @@ import axios from "axios";
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || "",
   headers: { "Content-Type": "application/json" },
-  timeout: 180000, // 180 saniye global timeout (yavaş ERP çağrıları için)
+  timeout: 60000, // 60 saniye global timeout (birleşik SQL sorgusu ile ERP çağrıları hızlandı)
   // GÜVENLİK: httpOnly cookie'lerin her istekle gönderilmesi için
   // Bu sayede JWT token'lar cookie üzerinden güvenli şekilde iletilir
   withCredentials: true,

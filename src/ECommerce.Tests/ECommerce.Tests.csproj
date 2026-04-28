@@ -24,6 +24,7 @@
     <ProjectReference Include="..\ECommerce.API\ECommerce.API.csproj" />
     <ProjectReference Include="..\ECommerce.Business\ECommerce.Business.csproj" />
     <ProjectReference Include="..\ECommerce.Core\ECommerce.Core.csproj" />
+    <ProjectReference Include="..\ECommerce.Infrastructure\ECommerce.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

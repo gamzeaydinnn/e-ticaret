@@ -543,7 +543,7 @@ namespace ECommerce.Tests.Services
             var result = await orderManager.CancelOrderAsync(order.Id, 1);
 
             // Assert
-            Assert.True(result);
+            Assert.True(result.Success);
             var updated = await context.Orders.FindAsync(order.Id);
             Assert.NotNull(updated);
             Assert.Equal(OrderStatus.Cancelled, updated!.Status);
@@ -563,7 +563,7 @@ namespace ECommerce.Tests.Services
             var result = await orderManager.CancelOrderAsync(999, 1);
 
             // Assert
-            Assert.False(result);
+            Assert.False(result.Success);
         }
 
         [Fact]

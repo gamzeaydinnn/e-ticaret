@@ -100,13 +100,23 @@ export const CartProvider = ({ children }) => {
 
   const isWeightBasedProductLike = (product) => {
     if (!product) return false;
+
+    const productName = (product.name || product.Name || "").toUpperCase();
+
+    // NEDEN: İsimde sayı+birim varsa sabit paket ürünüdür — KG seçici çıkmamalı.
+    // "50 GR", "3 KG", "1 LT", "500 ML" → fixed-quantity. "DOMATES KG" → tartılı (regex eşleşmez).
+    if (/\d+\s*(GR|KG|LT|ML|CL|L)\b/.test(productName)) return false;
+    if (/\bADET\b/.test(productName)) return false;
+
+    // Mikro ERP birim bilgisi — "KG" ise kg bazlı, başka birim varsa değil
+    // unit varsa kesin karar ver, fallback'e düşme
+    const unit = (product.unit || "").toUpperCase().trim();
+    if (unit) return unit === "KG";
     return (
       product.isWeightBased === true ||
       product.soldByWeight === true ||
       product.weightUnit === "Kilogram" ||
-      product.weightUnit === "Gram" ||
-      product.weightUnit === 2 ||
-      product.weightUnit === 1
+      product.weightUnit === 2
     );
   };
 
@@ -130,9 +140,7 @@ export const CartProvider = ({ children }) => {
     const status =
       err?.status || err?.response?.status || err?.raw?.response?.status;
     const payload = err?.raw?.response?.data || err?.response?.data || {};
-    const modelErrors = payload?.errors
-      ? JSON.stringify(payload.errors)
-      : "";
+    const modelErrors = payload?.errors ? JSON.stringify(payload.errors) : "";
     const backendMessage = [
       payload?.message,
       payload?.error,
@@ -245,7 +253,51 @@ export const CartProvider = ({ children }) => {
   // ============================================================
   const addToCart = useCallback(
     async (product, quantity = 1, variantInfo = null) => {
-      const productId = product.id || product.productId;
+      // NEDEN: product.id=0 falsy — || operatörü 0'ı undefined'a düşürürdü.
+      // Mikro-only ürünler (id=0) backend'de kayıtlı değil — ensure-local ile anında ekle.
+      let productId =
+        product.id > 0
+          ? product.id
+          : product.productId > 0
+            ? product.productId
+            : null;
+
+      // id=0 ama SKU var: backend'e ensure-local gönder, gerçek ID al
+      if (!productId && product.sku) {
+        try {
+          const res = await import("./api")
+            .then((m) => m.default ?? m)
+            .catch(() => null);
+          // api imi dinamik import ile alınabilir, ama biz services/api'yi kullanıyoruz
+          // CartService'in api objesini kullanmak için dolaylı import yapmak yerine
+          // fetch kullan (circular dep'ten kaçın)
+          const base = process.env.REACT_APP_API_URL || "";
+          const response = await fetch(
+            `${base}/api/products/ensure-local/${encodeURIComponent(product.sku)}`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+          if (response.ok) {
+            const data = await response.json();
+            productId = data?.id || null;
+            // Product objesini de güncelle (aynı oturum içinde)
+            if (productId) product = { ...product, id: productId };
+          }
+        } catch (e) {
+          console.warn("[CartContext] ensure-local hatası:", e);
+        }
+      }
+
+      if (!productId) {
+        console.warn(
+          "[CartContext] Geçersiz productId — sepete eklenemiyor:",
+          product.name || product.sku,
+        );
+        return { success: false, error: "Bu ürün şu an sepete eklenemiyor." };
+      }
       const variantId = variantInfo?.variantId || null;
       const fallbackQuantity = getIntegerQuantityFallback(quantity);
       const isWeightBased = isWeightBasedProductLike(product);
@@ -268,7 +320,7 @@ export const CartProvider = ({ children }) => {
               window.dispatchEvent(new Event("cart:updated"));
               setWeightOverride(productId, variantId, quantity);
               // Weight override'ı hemen uygula - fresh cart'a
-              setCartItems(prevItems => applyWeightOverrides(prevItems));
+              setCartItems((prevItems) => applyWeightOverrides(prevItems));
               return {
                 success: true,
                 warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak kaydedildi.`,
@@ -306,7 +358,7 @@ export const CartProvider = ({ children }) => {
               if (hasFractionalQuantity) {
                 setWeightOverride(productId, variantId, quantity);
                 // Weight override'ı hemen uygula - fresh cart'a
-                setCartItems(prevItems => applyWeightOverrides(prevItems));
+                setCartItems((prevItems) => applyWeightOverrides(prevItems));
               }
               return {
                 success: true,
@@ -327,7 +379,7 @@ export const CartProvider = ({ children }) => {
         if (hasFractionalQuantity) {
           setWeightOverride(productId, variantId, quantity);
           // Weight override'ı hemen uygula - fresh cart'a
-          setCartItems(prevItems => applyWeightOverrides(prevItems));
+          setCartItems((prevItems) => applyWeightOverrides(prevItems));
         } else {
           removeWeightOverride(productId, variantId);
         }
@@ -370,7 +422,12 @@ export const CartProvider = ({ children }) => {
         }
 
         console.error("❌ Sepete ekleme hatası:", err);
-        const errorMsg = err?.response?.data?.message || "Sepete eklenemedi";
+        const rawMsg = err?.response?.data?.message || "Sepete eklenemedi";
+        // NEDEN: Backend "Yetersiz stok. Maksimum 0 adet." gibi teknik mesaj döner —
+        // kullanıcıya anlamlı, net bir stok mesajı gösteriyoruz.
+        const errorMsg = /stok|yetersiz/i.test(rawMsg)
+          ? "Bu ürün şu an stokta bulunmamaktadır."
+          : rawMsg;
         return { success: false, error: errorMsg };
       }
     },
@@ -445,7 +502,12 @@ export const CartProvider = ({ children }) => {
               (variantId ? i.variantId === variantId : !i.variantId),
           );
           if (item?.id) {
-            await CartService.updateItem(item.id, productId, quantity, variantId);
+            await CartService.updateItem(
+              item.id,
+              productId,
+              quantity,
+              variantId,
+            );
           }
         } else {
           // Misafir kullanıcı

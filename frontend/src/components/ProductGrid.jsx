@@ -10,7 +10,9 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
-import WeightSelectionModal, { isWeightBasedProduct } from "./WeightSelectionModal";
+import WeightSelectionModal, {
+  isWeightBasedProduct,
+} from "./WeightSelectionModal";
 import "./ProductGrid.css";
 
 const DEMO_PRODUCTS = [
@@ -223,6 +225,8 @@ export default function ProductGrid({
   posterUrl = null, // Sol tarafta gösterilecek poster görseli
   posterAlt = "", // Poster için alternatif metin
   layout = "default", // 'default' (sadece ürünler) veya 'block' (poster + ürünler)
+  // "carousel" = yatay kaydırma (varsayılan), "grid" = satır-sütun grid layout
+  displayMode = "carousel",
 } = {}) {
   const navigate = useNavigate();
 
@@ -249,6 +253,9 @@ export default function ProductGrid({
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
   const [cartNotification, setCartNotification] = useState(null);
+  // NEDEN: Backend 400 "Yetersiz stok" döndüğünde ürünü anlık out-of-stock işaretle
+  // — sayfa yenilenmeden buton devre dışı kalır, kullanıcı tekrar deneyemez.
+  const [outOfStockIds, setOutOfStockIds] = useState(new Set());
   // Kg seçici modal için state
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [weightModalProduct, setWeightModalProduct] = useState(null);
@@ -312,8 +319,10 @@ export default function ProductGrid({
     return data.filter((p) => Number(p.categoryId) === cid);
   }, [data, categoryId]);
 
-  const handleAddToCart = (productId) => {
-    const product = data.find((p) => String(p.id) === String(productId));
+  // NEDEN: product objesi alır — id=0 Mikro ürünlerde id ile arama hatalı sonuç verirdi
+  // NEDEN async: ctxAddToCart sonucu beklenmezse backend hatası gizlenir,
+  // kullanıcı "Sepete Eklendi!" görür ama ürün sepette olmaz. Yanıltıcı UX engellendi.
+  const handleAddToCart = async (product) => {
     if (!product) return;
 
     // Kg bazlı ürün kontrolü - modal aç
@@ -323,15 +332,49 @@ export default function ProductGrid({
       return;
     }
 
-    // Normal ürün - direkt sepete ekle
-    ctxAddToCart(product, 1);
+    // Normal ürün - direkt sepete ekle, sonucu bekle
+    const result = await ctxAddToCart(product, 1);
+    if (result && result.success === false) {
+      const isStockErr = /stok|bulunmamaktadır/i.test(result.error || "");
+      if (isStockErr) {
+        // Butonu hemen "Stokta Yok" yap — kullanıcı tekrar denemez
+        setOutOfStockIds((prev) =>
+          new Set(prev).add(product.id ?? product.sku),
+        );
+      }
+      setCartNotification({
+        type: "error",
+        message: result.error || "Sepete eklenemedi.",
+      });
+      setTimeout(() => setCartNotification(null), 4000);
+      return;
+    }
     showCartNotification(product, user ? "registered" : "guest");
   };
 
   // Kg bazlı ürün sepete ekleme (modal onayı sonrası)
-  const handleWeightConfirm = (product, weightKg) => {
-    console.log("[ProductGrid] Kg bazlı ürün ekleniyor:", product.name, weightKg, "kg");
-    ctxAddToCart(product, weightKg);
+  const handleWeightConfirm = async (product, weightKg) => {
+    console.log(
+      "[ProductGrid] Kg bazlı ürün ekleniyor:",
+      product.name,
+      weightKg,
+      "kg",
+    );
+    const result = await ctxAddToCart(product, weightKg);
+    if (result && result.success === false) {
+      const isStockErr = /stok|bulunmamaktadır/i.test(result.error || "");
+      if (isStockErr) {
+        setOutOfStockIds((prev) =>
+          new Set(prev).add(product.id ?? product.sku),
+        );
+      }
+      setCartNotification({
+        type: "error",
+        message: result.error || "Sepete eklenemedi.",
+      });
+      setTimeout(() => setCartNotification(null), 4000);
+      return;
+    }
     showCartNotification(product, user ? "registered" : "guest");
   };
 
@@ -362,8 +405,16 @@ export default function ProductGrid({
         const product = data.find((p) => p.id === parseInt(productId));
         if (product) {
           // Kullanıcının seçtiği miktarı doğru şekilde sepete ekle
-          ctxAddToCart(product, quantity);
-          showCartNotification(product, "guest");
+          const result = await ctxAddToCart(product, quantity);
+          if (result && result.success === false) {
+            setCartNotification({
+              type: "error",
+              message: result.error || "Sepete eklenemedi.",
+            });
+            setTimeout(() => setCartNotification(null), 4000);
+          } else {
+            showCartNotification(product, "guest");
+          }
         }
         localStorage.removeItem("tempProductId");
         localStorage.removeItem("tempProductQty");
@@ -391,11 +442,35 @@ export default function ProductGrid({
   };
 
   // Favoriler için fonksiyonlar
-  const handleAddToFavorites = (productId) => {
-    const product = data.find((p) => p.id === productId);
+  // NEDEN: product objesi alır — id=0 ürünlerde id ile arama yanlış ürün bulurdu
+  const handleAddToFavorites = async (product) => {
     if (!product) return;
 
-    // Context üzerinden favori toggle (hem misafir hem kullanıcı için çalışır)
+    let productId = product.id > 0 ? product.id : null;
+
+    // id=0 ama SKU var: ensure-local çağır (sepete ekle ile aynı mantık)
+    if (!productId && product.sku) {
+      try {
+        const base = process.env.REACT_APP_API_URL || "";
+        const res = await fetch(
+          `${base}/api/products/ensure-local/${encodeURIComponent(product.sku)}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          productId = data?.id || null;
+        }
+      } catch (e) {
+        console.warn("[ProductGrid] ensure-local (favori) hatası:", e);
+      }
+    }
+
+    if (!productId) return; // Sessizce yoksay — SKU bile yoksa bir şey yapamayız
+
     ctxToggleFavorite(productId);
     showFavoriteNotification(product);
   };
@@ -449,8 +524,17 @@ export default function ProductGrid({
       return;
     }
 
-    // Modal yerine ürün detay sayfasına yönlendir
-    navigate(`/product/${product.id}`);
+    // NEDEN: Mikro-only ürünlerde id=0 — slug veya sku ile yönlendir.
+    // /product/0 → backend 404 dönerdi. Slug varsa slug, yoksa sku/ prefix kullan.
+    if (product.id && product.id > 0) {
+      navigate(`/product/${product.slug || product.id}`);
+    } else if (product.slug) {
+      navigate(`/product/${product.slug}`);
+    } else if (product.sku) {
+      navigate(`/product/sku/${product.sku}`);
+    } else {
+      navigate(`/product/${product.id}`);
+    }
   };
 
   useEffect(() => {
@@ -666,14 +750,19 @@ export default function ProductGrid({
             </div>
           ) : (
             /* =====================================================
-               CAROUSEL YAPISINA DÖNÜŞTÜRÜLDÜ
-               - Yatay kaydırmalı (overflow-x: auto)
-               - Web'de ok butonlarıyla kaydırma
-               - Mobilde swipe ile kaydırma
+               ÜRÜN LISTELEME — CAROUSEL VEYA GRID
+               displayMode="grid": CSS grid ile satır-sütun layout
+               displayMode="carousel": Yatay kaydırmalı carousel (varsayılan)
                ===================================================== */
-            <div className="product-grid-carousel-wrapper">
-              {/* Sol Ok - Web için */}
-              {canScrollLeft && (
+            <div
+              className={
+                displayMode === "grid"
+                  ? "product-grid-grid-container"
+                  : "product-grid-carousel-wrapper"
+              }
+            >
+              {/* Sol Ok - Sadece carousel modda */}
+              {displayMode !== "grid" && canScrollLeft && (
                 <button
                   className="product-grid-arrow product-grid-arrow-left"
                   onClick={() => scroll("left")}
@@ -683,15 +772,21 @@ export default function ProductGrid({
                 </button>
               )}
 
-              {/* Ürün Carousel Container */}
+              {/* Ürün Container — grid modda CSS grid, carousel modda yatay scroll */}
               <div
-                className="product-grid-scroll-container"
-                ref={scrollContainerRef}
-                onScroll={checkScroll}
+                className={
+                  displayMode === "grid"
+                    ? "product-grid-grid-inner"
+                    : "product-grid-scroll-container"
+                }
+                ref={displayMode !== "grid" ? scrollContainerRef : undefined}
+                onScroll={displayMode !== "grid" ? checkScroll : undefined}
               >
                 {filteredProducts.map((p, index) => {
                   const stock = p.stock ?? p.stockQuantity ?? 0;
-                  const isOutOfStock = stock <= 0;
+                  // outOfStockIds: backend 400 sonrası anlık işaretlenenler
+                  const isOutOfStock =
+                    stock <= 0 || outOfStockIds.has(p.id ?? p.sku);
                   const isLowStock = !isOutOfStock && stock <= 5;
 
                   // Kampanya/indirim bilgisi hesaplama
@@ -716,7 +811,10 @@ export default function ProductGrid({
                   const campaignName = p.campaignName;
 
                   return (
-                    <div key={p.id} className="product-grid-card-wrapper">
+                    <div
+                      key={p.sku || `id-${p.id}-${index}`}
+                      className="product-grid-card-wrapper"
+                    >
                       <div
                         className="modern-product-card h-100"
                         style={{
@@ -788,7 +886,7 @@ export default function ProductGrid({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation(); // Ürün detay modalının açılmasını engelle
-                              handleAddToFavorites(p.id);
+                              handleAddToFavorites(p);
                             }}
                             style={{
                               background: isFavorite(p.id)
@@ -1073,7 +1171,7 @@ export default function ProductGrid({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (isOutOfStock) return;
-                                  handleAddToCart(p.id);
+                                  handleAddToCart(p);
                                 }}
                                 onMouseEnter={(e) => {
                                   e.target.style.background =
@@ -1101,8 +1199,8 @@ export default function ProductGrid({
                 })}
               </div>
 
-              {/* Sağ Ok - Web için */}
-              {canScrollRight && (
+              {/* Sağ Ok - Sadece carousel modda */}
+              {displayMode !== "grid" && canScrollRight && (
                 <button
                   className="product-grid-arrow product-grid-arrow-right"
                   onClick={() => scroll("right")}
@@ -1678,13 +1776,15 @@ export default function ProductGrid({
           if (loginAction === "cart") {
             const productId = localStorage.getItem("tempProductId");
             if (productId) {
-              handleAddToCart(parseInt(productId));
+              const p = data.find((x) => x.id === parseInt(productId));
+              if (p) handleAddToCart(p);
               localStorage.removeItem("tempProductId");
             }
           } else if (loginAction === "favorite") {
             const productId = localStorage.getItem("tempFavoriteProductId");
             if (productId) {
-              handleAddToFavorites(parseInt(productId));
+              const p = data.find((x) => x.id === parseInt(productId));
+              if (p) handleAddToFavorites(p);
               localStorage.removeItem("tempFavoriteProductId");
             }
           }

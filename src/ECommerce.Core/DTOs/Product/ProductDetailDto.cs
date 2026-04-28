@@ -25,6 +25,11 @@ namespace ECommerce.Core.DTOs.Product
         public int? BrandId { get; set; }
         public string? ImageUrl { get; set; }
 
+        /// <summary>
+        /// Ölçü birimi (Mikro ERP'den): "KG", "ADET", "LT" vb.
+        /// </summary>
+        public string? Unit { get; set; }
+
         #endregion
 
         #region Kategori Bilgisi

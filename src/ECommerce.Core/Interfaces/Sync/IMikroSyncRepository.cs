@@ -72,6 +72,13 @@ namespace ECommerce.Core.Interfaces.Sync
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Log kaydını Id ile getirir.
+        /// </summary>
+        Task<MicroSyncLog?> GetLogByIdAsync(
+            int logId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Belirli bir entity için son log kaydını getirir.
         /// </summary>
         Task<MicroSyncLog?> GetLastLogAsync(

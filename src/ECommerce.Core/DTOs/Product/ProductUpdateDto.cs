@@ -15,5 +15,11 @@ namespace ECommerce.Core.DTOs.Product
         public string? ImageUrl { get; set; }
 
         public int? BrandId { get; set; } // Brand ilişkisi için id
+
+        /// <summary>
+        /// SKU bazlı güncelleme için — Mikro ERP ürünlerinde id=0 olduğundan
+        /// SKU üzerinden eşleştirme yapılır.
+        /// </summary>
+        public string? SKU { get; set; }
     }
 }

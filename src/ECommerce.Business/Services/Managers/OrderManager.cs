@@ -1065,6 +1065,14 @@ namespace ECommerce.Business.Services.Managers
                 return await GetByIdAsync(orderId);
             }
 
+            // NEDEN: İade onaylandığında stok geri dönmeli — ürün depoya geri geldi.
+            // Cancelled ile aynı stok geri kazanım mantığı uygulanır.
+            if (targetStatus == OrderStatus.Refunded)
+            {
+                await CancelOrderInternalAsync(order);
+                return await GetByIdAsync(orderId);
+            }
+
             previousStatus = order.Status;
             order.Status = targetStatus;
             AddStatusHistory(order, previousStatus, targetStatus);

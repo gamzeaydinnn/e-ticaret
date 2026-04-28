@@ -11,7 +11,7 @@ namespace ECommerce.API.Controllers.VpnTest
     /// <summary>
     /// VPN Test Mikro API Controller
     /// 
-    /// Bu controller, VPN sunucusu (10.0.0.3:8084) üzerindeki Mikro API'yi
+    /// Bu controller, VPN üzerinden erişilen Mikro API rotasını
     /// test etmek için kullanılabilir.
     /// 
     /// Kullanım:
@@ -48,6 +48,7 @@ namespace ECommerce.API.Controllers.VpnTest
             try
             {
                 var config = _mikroSettings.Value;
+                var isVpnRoute = UsesVpnRoute(config.ApiUrl);
                 
                 var response = new ConfigResponse
                 {
@@ -57,7 +58,7 @@ namespace ECommerce.API.Controllers.VpnTest
                     CalismaYili = config.CalismaYili,
                     DefaultDepoNo = config.DefaultDepoNo,
                     RequestTimeoutSeconds = config.RequestTimeoutSeconds,
-                    IsVpnTest = config.ApiUrl.Contains("10.0.0.3"),
+                    IsVpnTest = isVpnRoute,
                     Message = "✅ Konfigürasyon başarıyla yüklendi"
                 };
 
@@ -217,7 +218,7 @@ namespace ECommerce.API.Controllers.VpnTest
             {
                 Timestamp = DateTime.UtcNow,
                 ApiUrl = config.ApiUrl,
-                IsVpnTest = config.ApiUrl.Contains("10.0.0.3")
+                IsVpnTest = UsesVpnRoute(config.ApiUrl)
             };
 
             try
@@ -243,6 +244,20 @@ namespace ECommerce.API.Controllers.VpnTest
 
                 return StatusCode(500, response);
             }
+        }
+
+        private static bool UsesVpnRoute(string? apiUrl)
+        {
+            if (string.IsNullOrWhiteSpace(apiUrl) ||
+                !Uri.TryCreate(apiUrl, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            var host = uri.Host.ToLowerInvariant();
+            return host == "10.0.0.3"
+                || host == "mikro-vpn"
+                || host.Contains("vpn");
         }
     }
 

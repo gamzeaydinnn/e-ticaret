@@ -8,6 +8,7 @@ import { CampaignService } from "../services/campaignService";
 import shippingService from "../services/shippingService";
 import cartSettingsService from "../services/cartSettingsService";
 import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
+import { useCartStockUpdates } from "../hooks/useStockUpdates";
 import "./CartPage.css";
 
 // Kg bazlı ürün anahtar kelimeleri - backend alanı eksik olsa da UI'da doğru birim gösterimi için.
@@ -111,9 +112,24 @@ const CartPage = () => {
   const [pricingError, setPricingError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  
+
   // Quantity button işlem state'i - çift tıklama önlemi
   const [updatingItems, setUpdatingItems] = useState(new Set());
+
+  // =================================================================
+  // ANLIK STOK TAKİBİ (SignalR StockHub)
+  // NEDEN: Sepetteki ürünlerin stok değişikliklerini anlık takip eder.
+  // Kullanıcı sepette beklerken, bir ürün tükenirse anında uyarı gösterir.
+  // =================================================================
+  const cartProductIds = useMemo(
+    () => cartItems.map((item) => item.productId || item.id).filter(Boolean),
+    [cartItems],
+  );
+  const {
+    stockMap: realtimeStockMap,
+    hasOutOfStockItems,
+    isConnected: stockHubConnected,
+  } = useCartStockUpdates(cartProductIds);
 
   // =================================================================
   // KAMPANYA SİSTEMİ STATE'LERİ
@@ -329,31 +345,31 @@ const CartPage = () => {
     const product = products[item.productId || item.id] || item.product || null;
     const isWeightBasedItem = isWeightBasedCartItem(item, product);
     const minQuantity = isWeightBasedItem ? 0.5 : 1;
-    const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || 'default'}`;
-    
+    const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || "default"}`;
+
     // Çift tıklama engelleme
     if (updatingItems.has(itemKey)) {
       return;
     }
-    
+
     if (newQuantity < minQuantity) {
       handleRemoveItem(item);
       return;
     }
-    
+
     try {
       // Loading state'i ekle
-      setUpdatingItems(prev => new Set([...prev, itemKey]));
-      
+      setUpdatingItems((prev) => new Set([...prev, itemKey]));
+
       const pid = item.productId || item.id;
       const variantId = item.variantId || item.productVariantId || null;
       await updateQuantity(pid, newQuantity, variantId);
     } catch (error) {
-      console.error('Quantity update failed:', error);
+      console.error("Quantity update failed:", error);
       // Hata durumunda kullanıcıya feedback verilebir
     } finally {
       // Loading state'i temizle
-      setUpdatingItems(prev => {
+      setUpdatingItems((prev) => {
         const newSet = new Set(prev);
         newSet.delete(itemKey);
         return newSet;
@@ -819,6 +835,32 @@ const CartPage = () => {
                         <WeightEstimateIndicator
                           isWeightBased={isWeightBasedItem}
                         />
+                        {/* Anlık stok uyarısı — SignalR StockHub'dan gelen veri */}
+                        {(() => {
+                          const pid = item.productId || item.id;
+                          const rtStock = realtimeStockMap[pid];
+                          if (rtStock !== undefined && rtStock <= 0) {
+                            return (
+                              <div className="text-danger small fw-bold mt-1">
+                                <i className="fas fa-exclamation-circle me-1"></i>
+                                Bu ürünün stoku tükendi
+                              </div>
+                            );
+                          }
+                          if (
+                            rtStock !== undefined &&
+                            rtStock > 0 &&
+                            rtStock <= 5
+                          ) {
+                            return (
+                              <div className="text-warning small fw-bold mt-1">
+                                <i className="fas fa-exclamation-triangle me-1"></i>
+                                Son {rtStock} adet kaldı
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         {/* ========== KAMPANYA BİLGİSİ ========== */}
                         {(() => {
                           // Pricing'den bu ürüne uygulanan kampanya var mı kontrol et
@@ -879,9 +921,9 @@ const CartPage = () => {
 
                       <div className="item-quantity">
                         {(() => {
-                          const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || 'default'}`;
+                          const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || "default"}`;
                           const isUpdating = updatingItems.has(itemKey);
-                          
+
                           return (
                             <>
                               <button
@@ -898,7 +940,8 @@ const CartPage = () => {
                                   )
                                 }
                                 disabled={
-                                  isUpdating || (isWeightBasedItem
+                                  isUpdating ||
+                                  (isWeightBasedItem
                                     ? item.quantity <= 0.5
                                     : item.quantity <= 1)
                                 }
@@ -1319,15 +1362,36 @@ const CartPage = () => {
               )}
 
               {/* Checkout Button */}
+              {/* Anlık stok tükenmesi varsa checkout'u engelle */}
+              {hasOutOfStockItems && (
+                <div
+                  className="alert alert-danger py-2 mb-2 text-center"
+                  role="alert"
+                >
+                  <i className="fas fa-exclamation-triangle me-1"></i>
+                  Sepetinizdeki bazı ürünlerin stoku tükendi. Lütfen kontrol
+                  edin.
+                </div>
+              )}
               <button
                 className="checkout-btn"
                 onClick={() => navigate("/payment")}
-                disabled={cartItems.length === 0 || !isCartAmountValid}
+                disabled={
+                  cartItems.length === 0 ||
+                  !isCartAmountValid ||
+                  hasOutOfStockItems
+                }
                 style={{
                   opacity:
-                    cartItems.length === 0 || !isCartAmountValid ? 0.6 : 1,
+                    cartItems.length === 0 ||
+                    !isCartAmountValid ||
+                    hasOutOfStockItems
+                      ? 0.6
+                      : 1,
                   cursor:
-                    cartItems.length === 0 || !isCartAmountValid
+                    cartItems.length === 0 ||
+                    !isCartAmountValid ||
+                    hasOutOfStockItems
                       ? "not-allowed"
                       : "pointer",
                 }}

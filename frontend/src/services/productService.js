@@ -225,6 +225,24 @@ export const ProductService = {
   },
 
   /**
+   * SKU (Mikro stok kodu) ile ürün detayı getirir.
+   * Mikro ERP'den gelen Id=0 ürünler için kullanılır.
+   */
+  getBySku: async (sku) => {
+    try {
+      if (!sku) return null;
+      const response = await api.get(
+        `/api/products/sku/${encodeURIComponent(sku)}`,
+      );
+      const product = response?.data || response;
+      return product ? mapProduct(product) : null;
+    } catch (err) {
+      console.error(`❌ Ürün bulunamadı (SKU: ${sku}):`, err);
+      return null;
+    }
+  },
+
+  /**
    * Kategoriye göre ürünleri getirir
    * @param {number} categoryId - Kategori ID
    * @returns {Promise<Array>} Ürün listesi
@@ -246,7 +264,7 @@ export const ProductService = {
     } catch (err) {
       console.error(
         `❌ Kategori ürünleri yüklenemedi (ID: ${categoryId}):`,
-        err
+        err,
       );
       return [];
     }
@@ -267,8 +285,8 @@ export const ProductService = {
 
       const response = await api.get(
         `/api/products/search?query=${encodeURIComponent(
-          query
-        )}&page=${page}&size=${size}`
+          query,
+        )}&page=${page}&size=${size}`,
       );
       const items = extractItems(response);
 
@@ -321,8 +339,10 @@ export const ProductService = {
    */
   getAll: async () => {
     try {
-      // Admin endpoint'i dene
-      const response = await api.get("/api/products/admin/all?size=500");
+      // Admin endpoint — Mikro ERP SQL tabanlı, sadece web aktif ürünler
+      const response = await api.get(
+        "/api/products/admin/all?page=1&size=5000",
+      );
       const items = extractItems(response);
       return items.map(mapProduct).filter((p) => p !== null);
     } catch (err) {
@@ -330,7 +350,7 @@ export const ProductService = {
 
       // Fallback: normal endpoint
       try {
-        const response = await api.get("/api/products?size=500");
+        const response = await api.get("/api/products?size=1000");
         const items = extractItems(response);
         return items.map(mapProduct).filter((p) => p !== null);
       } catch (err2) {
@@ -376,16 +396,13 @@ export const ProductService = {
 
   /**
    * Mevcut ürünü günceller
-   * @param {number} id - Ürün ID
-   * @param {object} formData - Güncellenecek veriler
+   * ID > 0 ise id bazlı, değilse SKU bazlı güncelleme yapar (Mikro ERP ürünleri).
+   * @param {number} id - Ürün ID (0 ise SKU kullanılır)
+   * @param {object} formData - Güncellenecek veriler (sku alanı içermeli)
    * @returns {Promise<object>} Güncellenen ürün
    */
   updateAdmin: async (id, formData) => {
     try {
-      if (!id) {
-        throw new Error("Ürün ID gerekli");
-      }
-
       // Form verilerini API formatına dönüştür
       const payload = {
         name: formData.name?.trim() || "",
@@ -400,11 +417,28 @@ export const ProductService = {
         isActive: formData.isActive !== false,
       };
 
-      const response = await api.put(`/api/products/${id}`, payload);
+      let response;
+      // Sayısal id kontrolü — 0 ve altı Mikro ürünü demek
+      const numericId = typeof id === "number" ? id : parseInt(id) || 0;
+      const hasSku = formData.sku && formData.sku.trim() !== "";
+
+      if (numericId > 0) {
+        // Yerel DB'de kayıtlı ürün — id bazlı güncelleme
+        response = await api.put(`/api/products/${numericId}`, payload);
+      } else if (hasSku) {
+        // Mikro ERP ürünü (id=0) — SKU bazlı upsert
+        response = await api.put(
+          `/api/products/by-sku/${encodeURIComponent(formData.sku.trim())}`,
+          payload,
+        );
+      } else {
+        throw new Error("Ürün ID veya SKU gerekli");
+      }
+
       const result = response?.data || response;
 
       // Subscriber'lara bildir (ana sayfa güncellemesi için)
-      notifySubscribers("update", { id, ...result });
+      notifySubscribers("update", { id: numericId, ...result });
 
       return result;
     } catch (err) {
@@ -470,7 +504,7 @@ export const ProductService = {
    * @param {File} file - Yüklenecek Excel dosyası
    * @returns {Promise<object>} Import sonucu (successCount, errorCount, errors)
    */
-  importExcel: async (file) => {
+  importExcel: async (file, imageFiles = []) => {
     try {
       if (!file) {
         throw new Error("Dosya seçilmedi");
@@ -483,22 +517,29 @@ export const ProductService = {
 
       if (!isValid) {
         throw new Error(
-          "Sadece Excel (.xlsx, .xls) veya CSV dosyaları kabul edilir"
+          "Sadece Excel (.xlsx, .xls) veya CSV dosyaları kabul edilir",
         );
       }
 
-      // Dosya boyutu kontrolü (50MB)
-      const maxSize = 50 * 1024 * 1024;
+      // Dosya boyutu kontrolü (200MB — görseller dahil)
+      const maxSize = 200 * 1024 * 1024;
       if (file.size > maxSize) {
-        throw new Error("Dosya boyutu maksimum 50MB olabilir");
+        throw new Error("Dosya boyutu maksimum 200MB olabilir");
       }
 
       const formData = new FormData();
       formData.append("file", file);
 
+      // Görsel dosyalarını ekle (tümü "images" key'i altında, backend IFormFileCollection alır)
+      if (imageFiles && imageFiles.length > 0) {
+        for (const img of imageFiles) {
+          formData.append("images", img);
+        }
+      }
+
       const response = await api.post("/api/products/import/excel", formData, {
         headers: { "Content-Type": "multipart/form-data" },
-        timeout: 120000, // 2 dakika (büyük dosyalar için)
+        timeout: 300000, // 5 dakika (görseller dahil büyük yüklemeler için)
       });
 
       const result = response?.data || response;
@@ -576,7 +617,7 @@ export const ProductService = {
       ];
       if (!allowedTypes.includes(imageFile.type)) {
         throw new Error(
-          "Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir"
+          "Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir",
         );
       }
 

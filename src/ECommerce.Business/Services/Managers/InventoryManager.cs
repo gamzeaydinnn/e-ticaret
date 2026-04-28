@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Business.Services.Sync;
 using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Interfaces;
@@ -59,6 +60,10 @@ namespace ECommerce.Business.Services.Managers
                 oldStock,
                 product.StockQuantity,
                 "ManualIncrease");
+
+            // Mikro ERP'ye stok değişikliğini anında push et (arka planda)
+            MikroOutboundPushTrigger.EnqueueStockPush(productId, product.StockQuantity, "ManualIncrease");
+
             return true;
         }
 
@@ -78,6 +83,10 @@ namespace ECommerce.Business.Services.Managers
                 product.StockQuantity,
                 "ManualDecrease");
             await CheckThresholdAndNotifyAsync(product);
+
+            // Mikro ERP'ye stok değişikliğini anında push et (arka planda)
+            MikroOutboundPushTrigger.EnqueueStockPush(productId, product.StockQuantity, "ManualDecrease");
+
             return true;
         }
 
@@ -103,6 +112,11 @@ namespace ECommerce.Business.Services.Managers
                 product.StockQuantity,
                 BuildReference("Decrease", changeType, note, performedByUserId));
             await CheckThresholdAndNotifyAsync(product);
+
+            // Mikro ERP'ye stok değişikliğini anında push et (arka planda)
+            // NEDEN: Sipariş/iade/sayım sonrası Mikro'daki stok hemen güncellenmeli
+            MikroOutboundPushTrigger.EnqueueStockPush(productId, product.StockQuantity, changeType.ToString());
+
             return true;
         }
 
@@ -122,6 +136,10 @@ namespace ECommerce.Business.Services.Managers
                 oldStock,
                 product.StockQuantity,
                 BuildReference("Increase", changeType, note, performedByUserId));
+
+            // Mikro ERP'ye stok değişikliğini anında push et (arka planda)
+            MikroOutboundPushTrigger.EnqueueStockPush(productId, product.StockQuantity, changeType.ToString());
+
             return true;
         }
 

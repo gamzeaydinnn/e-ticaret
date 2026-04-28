@@ -342,14 +342,7 @@ namespace ECommerce.Business.Services.Sync
             int logId,
             CancellationToken cancellationToken)
         {
-            // Repository'de GetByIdAsync yok, GetPendingLogsAsync ile al ve filtrele
-            // veya direkt DbContext kullan
-            var logs = await _repository.GetLogsByDateRangeAsync(
-                DateTime.MinValue,
-                DateTime.MaxValue,
-                cancellationToken: cancellationToken);
-
-            return logs.FirstOrDefault(l => l.Id == logId);
+            return await _repository.GetLogByIdAsync(logId, cancellationToken);
         }
 
         /// <summary>

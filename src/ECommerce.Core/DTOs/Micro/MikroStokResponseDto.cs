@@ -101,6 +101,12 @@ namespace ECommerce.Core.DTOs.Micro
         [JsonPropertyName("depo_miktar")]
         public decimal? DepoMiktar { get; set; }
 
+        [JsonPropertyName("DepoMiktar")]
+        public decimal? DepoMiktarPascal
+        {
+            set => DepoMiktar = value;
+        }
+
         /// <summary>
         /// Rezerve edilen miktar.
         /// NEDEN: Bekleyen siparişler için ayrılan stok.
@@ -108,6 +114,12 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("rezerve_miktar")]
         public decimal? RezerveMiktar { get; set; }
+
+        [JsonPropertyName("RezerveMiktar")]
+        public decimal? RezerveMiktarPascal
+        {
+            set => RezerveMiktar = value;
+        }
 
         /// <summary>
         /// Minimum stok seviyesi.
@@ -133,6 +145,12 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("sto_son_alis")]
         public decimal? StoSonAlis { get; set; }
+
+        [JsonPropertyName("StoSonAlis")]
+        public decimal? StoSonAlisPascal
+        {
+            set => StoSonAlis = value;
+        }
 
         /// <summary>
         /// Ürün durumu - aktif/pasif.
@@ -189,6 +207,12 @@ namespace ECommerce.Core.DTOs.Micro
         [JsonPropertyName("satis_fiyatlari")]
         public List<MikroStokFiyatResponseDto>? SatisFiyatlari { get; set; }
 
+        [JsonPropertyName("SatisFiyatlari")]
+        public List<MikroStokFiyatResponseDto>? SatisFiyatlariPascal
+        {
+            set => SatisFiyatlari = value;
+        }
+
         /// <summary>
         /// Alış fiyatları listesi.
         /// </summary>
@@ -201,6 +225,12 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("depo_stoklari")]
         public List<MikroDepoStokResponseDto>? DepoStoklari { get; set; }
+
+        [JsonPropertyName("DepoStoklari")]
+        public List<MikroDepoStokResponseDto>? DepoStoklariPascal
+        {
+            set => DepoStoklari = value;
+        }
 
         /// <summary>
         /// Ürün resimleri.
@@ -314,6 +344,12 @@ namespace ECommerce.Core.DTOs.Micro
         [JsonPropertyName("sfiyat_no")]
         public int SfiyatNo { get; set; }
 
+        [JsonPropertyName("SfiyatNo")]
+        public int SfiyatNoPascal
+        {
+            set => SfiyatNo = value;
+        }
+
         /// <summary>
         /// Fiyat tipi açıklaması.
         /// </summary>
@@ -325,6 +361,12 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("sfiyat_fiyati")]
         public decimal SfiyatFiyati { get; set; }
+
+        [JsonPropertyName("SfiyatFiyati")]
+        public decimal SfiyatFiyatiPascal
+        {
+            set => SfiyatFiyati = value;
+        }
 
         /// <summary>
         /// Para birimi (0=TL, 1=USD, 2=EUR).
@@ -364,6 +406,12 @@ namespace ECommerce.Core.DTOs.Micro
         [JsonPropertyName("dep_no")]
         public int DepNo { get; set; }
 
+        [JsonPropertyName("DepNo")]
+        public int DepNoPascal
+        {
+            set => DepNo = value;
+        }
+
         /// <summary>
         /// Depo adı.
         /// </summary>
@@ -376,6 +424,12 @@ namespace ECommerce.Core.DTOs.Micro
         [JsonPropertyName("stok_miktar")]
         public decimal StokMiktar { get; set; }
 
+        [JsonPropertyName("StokMiktar")]
+        public decimal StokMiktarPascal
+        {
+            set => StokMiktar = value;
+        }
+
         /// <summary>
         /// Rezerve edilen miktar.
         /// </summary>
@@ -387,6 +441,12 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("satilabilir_miktar")]
         public decimal? SatilabilirMiktar { get; set; }
+
+        [JsonPropertyName("SatilabilirMiktar")]
+        public decimal? SatilabilirMiktarPascal
+        {
+            set => SatilabilirMiktar = value;
+        }
     }
 
     /// <summary>

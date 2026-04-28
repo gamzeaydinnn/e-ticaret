@@ -338,6 +338,22 @@ namespace ECommerce.Business.Services.Mapping
             }
         }
 
+        /// <inheritdoc />
+        public async Task InvalidateCacheAsync(CancellationToken cancellationToken = default)
+        {
+            await _cacheLock.WaitAsync(cancellationToken);
+            try
+            {
+                _cache.Clear();
+                _cacheExpiry = DateTime.MinValue;
+                _logger.LogDebug("[CategoryMappingService] Cache async invalidate edildi");
+            }
+            finally
+            {
+                _cacheLock.Release();
+            }
+        }
+
         #endregion
     }
 }

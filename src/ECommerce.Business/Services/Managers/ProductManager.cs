@@ -220,6 +220,73 @@ namespace ECommerce.Business.Services.Managers
             return true;
         }
 
+        /// <summary>
+        /// SKU bazlı upsert: yerel DB'de SKU varsa günceller, yoksa yeni ürün oluşturur.
+        /// Mikro ERP ürünlerinde local id=0 olduğundan SKU üzerinden eşleştirme yapılır.
+        /// </summary>
+        public async Task<ProductListDto> UpdateBySkuAsync(string sku, ProductUpdateDto productDto)
+        {
+            var product = await _productRepository.GetBySkuAsync(sku);
+
+            if (product != null)
+            {
+                // Mevcut ürünü güncelle
+                var oldStock = product.StockQuantity;
+                product.Name = productDto.Name;
+                product.Description = productDto.Description;
+                product.Price = productDto.Price;
+                product.SpecialPrice = productDto.SpecialPrice;
+                product.StockQuantity = productDto.StockQuantity;
+                product.CategoryId = productDto.CategoryId;
+                product.ImageUrl = productDto.ImageUrl ?? product.ImageUrl;
+                product.BrandId = productDto.BrandId;
+
+                await _productRepository.UpdateAsync(product);
+                if (oldStock != product.StockQuantity)
+                {
+                    await _inventoryLogService.WriteAsync(
+                        product.Id, "ProductUpdated",
+                        Math.Abs(product.StockQuantity - oldStock),
+                        oldStock, product.StockQuantity,
+                        $"Product:{product.Id}");
+                }
+            }
+            else
+            {
+                // Yeni ürün oluştur — Mikro'dan gelen SKU korunur
+                product = new Product
+                {
+                    Name = productDto.Name,
+                    Description = productDto.Description,
+                    Price = productDto.Price,
+                    SpecialPrice = productDto.SpecialPrice,
+                    StockQuantity = productDto.StockQuantity,
+                    CategoryId = productDto.CategoryId,
+                    ImageUrl = productDto.ImageUrl ?? string.Empty,
+                    BrandId = productDto.BrandId,
+                    SKU = sku
+                };
+                await _productRepository.AddAsync(product);
+            }
+
+            InvalidateProductCaches();
+
+            return new ProductListDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Slug = product.Slug ?? string.Empty,
+                Description = product.Description ?? string.Empty,
+                Price = product.Price,
+                SpecialPrice = product.SpecialPrice,
+                StockQuantity = product.StockQuantity,
+                ImageUrl = product.ImageUrl,
+                Brand = product.Brand?.Name ?? string.Empty,
+                CategoryId = product.CategoryId,
+                CategoryName = product.Category?.Name ?? string.Empty
+            };
+        }
+
         public async Task<bool> UpdateStockAsync(int id, int stock)
         {
             var product = await _productRepository.GetByIdAsync(id);
@@ -482,6 +549,7 @@ namespace ECommerce.Business.Services.Managers
             return new ProductListDto
             {
                 Id = product.Id,
+                Sku = product.SKU,
                 Name = product.Name,
                 Slug = product.Slug ?? string.Empty,
                 Description = product.Description ?? string.Empty,

@@ -67,6 +67,17 @@ namespace ECommerce.Core.Interfaces.Jobs
     }
 
     /// <summary>
+    /// Birleşik stok+fiyat senkronizasyon job'ı.
+    /// Her 15 dakikada çalışır.
+    /// TEK SQL sorgusuyla web-aktif ürünlerin fiyat + stok + bilgilerini çeker.
+    /// NEDEN: Ayrı stok ve fiyat job'ları 2 farklı endpoint'e 10+ istek atıyordu.
+    /// Bu job tek SQL ile tüm veriyi çekerek Mikro yükünü %80+ azaltır.
+    /// </summary>
+    public interface IUnifiedSyncJob : IMikroSyncJob
+    {
+    }
+
+    /// <summary>
     /// Tam senkronizasyon job'ı.
     /// Her gün 06:00'da çalışır.
     /// Tüm ürün, stok ve fiyat verilerini senkronize eder.

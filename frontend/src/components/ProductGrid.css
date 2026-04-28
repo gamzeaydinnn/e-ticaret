@@ -96,6 +96,48 @@
 }
 
 /* =====================================================
+   GRID MODE — Kategori sayfası, ürün listesi
+   Ürünler satır-sütun şeklinde CSS Grid ile dizilir.
+   ===================================================== */
+.product-grid-grid-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.product-grid-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  padding: 15px 0;
+}
+
+/* Grid modda kart wrapper — sabit genişlik yok, grid hücresine uysun */
+.product-grid-grid-inner .product-grid-card-wrapper {
+  width: auto;
+  min-width: unset;
+  flex-shrink: unset;
+}
+
+/* Responsive grid ayarları */
+@media (max-width: 768px) {
+  .product-grid-grid-inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .product-grid-grid-container {
+    padding: 0 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .product-grid-grid-inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+/* =====================================================
    CAROUSEL WRAPPER - OK BUTONLARI DAHİL
    ===================================================== */
 .product-grid-carousel-wrapper {

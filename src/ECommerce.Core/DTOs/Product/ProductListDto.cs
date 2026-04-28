@@ -10,6 +10,10 @@ namespace ECommerce.Core.DTOs.Product
     public class ProductListDto
     {
         public int Id { get; set; }
+        /// <summary>
+        /// Mikro ERP stok kodu — Id=0 olan ürünlerde detay sayfası navigasyonu için kullanılır
+        /// </summary>
+        public string? Sku { get; set; }
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string? Slug { get; set; }
@@ -34,6 +38,13 @@ namespace ECommerce.Core.DTOs.Product
         public int StockQuantity { get; set; }
         public string? ImageUrl { get; set; }
         public string? Brand { get; set; }
+
+        /// <summary>
+        /// Ölçü birimi (Mikro ERP'den): "KG", "ADET", "LT" vb.
+        /// Frontend KG seçici gösteriminde kullanılır.
+        /// </summary>
+        public string? Unit { get; set; }
+
         public int? CategoryId { get; set; }
         public string? CategoryName { get; set; }
         

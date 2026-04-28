@@ -37,7 +37,8 @@ namespace ECommerce.Data.Repositories
         }
         public new async Task<List<Product>> GetAllAsync()
         {
-            return await _context.Products.ToListAsync();
+            // Sadece aktif (webe_gonderilecek_fl=1 karşılığı) ürünler — pasifler gösterilmez
+            return await _context.Products.Where(p => p.IsActive).ToListAsync();
         }
 
         /*public async Task<Product> UpdateAsync(Product product)

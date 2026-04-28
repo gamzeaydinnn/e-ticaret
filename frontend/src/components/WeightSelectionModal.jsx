@@ -92,19 +92,28 @@ const WEIGHT_BASED_KEYWORDS = [
 export const isWeightBasedProduct = (product) => {
   if (!product) return false;
 
+  const productName = (product.name || product.Name || "").toUpperCase();
+
+  // NEDEN: İsim kontrolü HER şeyden önce gelir — backend isWeightBased=true demiş olsa bile
+  // "3 KG", "1 LT", "50 GR" gibi sabit paket ürünler weight modal açmamalı.
+  // "DOMATES KG" (sayısız) → regex eşleşmez → devam eder. ✓
+  if (/\d+\s*(GR|KG|LT|ML|CL|L)\b/.test(productName)) return false;
+  if (/\bADET\b/.test(productName)) return false;
+
   // Backend'den gelen isWeightBased veya weightUnit kontrolü
   if (product.isWeightBased === true) return true;
   if (product.soldByWeight === true) return true;
-  if (
-    product.weightUnit === "Kilogram" ||
-    product.weightUnit === "Gram" ||
-    product.weightUnit === 2 ||
-    product.weightUnit === 1
-  ) {
+  if (product.weightUnit === "Kilogram" || product.weightUnit === 2) {
     return true;
   }
 
-  // Kategori adına göre kontrol
+  // NEDEN: Mikro ERP'den gelen birim bilgisi — "KG" ise kg bazlı, değilse değil.
+  // unit alanı varsa kesin karar ver, keyword fallback'e düşme.
+  // "ANANAS ADET" (unit=ADET) → false, "DOMATES KG" (unit=KG) → true
+  const unit = (product.unit || "").toUpperCase().trim();
+  if (unit) return unit === "KG";
+
+  // unit alanı yoksa (eski ürünler / local DB) → kategori/keyword fallback
   const categoryName = (
     product.categoryName ||
     product.category?.name ||
@@ -114,9 +123,10 @@ export const isWeightBasedProduct = (product) => {
     return true;
   }
 
-  // Ürün adına göre kontrol
-  const productName = (product.name || product.Name || "").toLowerCase();
-  if (WEIGHT_BASED_KEYWORDS.some((keyword) => productName.includes(keyword))) {
+  const productNameLower = productName.toLowerCase();
+  if (
+    WEIGHT_BASED_KEYWORDS.some((keyword) => productNameLower.includes(keyword))
+  ) {
     return true;
   }
 
@@ -172,7 +182,7 @@ export default function WeightSelectionModal({
       const rounded = Math.round(value / step) * step;
       setSelectedWeight(Math.round(rounded * 100) / 100);
     },
-    [step]
+    [step],
   );
 
   // Onay butonu
@@ -199,7 +209,7 @@ export default function WeightSelectionModal({
         handleClose();
       }
     },
-    [handleClose]
+    [handleClose],
   );
 
   // Gösterilmiyorsa render etme
@@ -211,7 +221,7 @@ export default function WeightSelectionModal({
     product.specialPrice ||
       product.discountedPrice ||
       product.DiscountedPrice ||
-      0
+      0,
   );
   const hasDiscount = specialPrice > 0 && specialPrice < basePrice;
   const pricePerKg = hasDiscount ? specialPrice : basePrice;
@@ -220,7 +230,10 @@ export default function WeightSelectionModal({
 
   // Resim URL'i
   const imageUrl =
-    product.imageUrl || product.ImageUrl || product.image || "/images/placeholder.png";
+    product.imageUrl ||
+    product.ImageUrl ||
+    product.image ||
+    "/images/placeholder.png";
 
   return (
     <div
@@ -252,7 +265,9 @@ export default function WeightSelectionModal({
             <h4>{product.name || product.Name}</h4>
             <div className="price-per-kg">
               {hasDiscount && (
-                <span className="original-price">₺{basePrice.toFixed(2)}/kg</span>
+                <span className="original-price">
+                  ₺{basePrice.toFixed(2)}/kg
+                </span>
               )}
               <span className="current-price">₺{pricePerKg.toFixed(2)}/kg</span>
             </div>
@@ -321,7 +336,9 @@ export default function WeightSelectionModal({
         <div className="weight-modal-summary">
           <div className="summary-row">
             <span>Seçilen Miktar:</span>
-            <span className="summary-value">{selectedWeight.toFixed(1)} kg</span>
+            <span className="summary-value">
+              {selectedWeight.toFixed(1)} kg
+            </span>
           </div>
           {originalTotal && (
             <div className="summary-row original">

@@ -95,7 +95,8 @@ const InfoCard = ({ icon, title, children, variant = "info" }) => (
 // ============================================================
 
 export default function Product() {
-  const { id } = useParams();
+  // NEDEN: /product/:id ve /product/sku/:sku iki ayrı rota — her ikisini destekle
+  const { id, sku } = useParams();
   const navigate = useNavigate();
 
   // Context hooks
@@ -128,11 +129,16 @@ export default function Product() {
       setError(null);
 
       try {
-        const data = await ProductService.get(id);
+        // NEDEN: SKU rotasından geliyorsa (/product/sku/:sku) farklı endpoint çağır.
+        // Mikro-only ürünlerde id=0 olur, normal /api/products/0 çalışmaz.
+        const data = sku
+          ? await ProductService.getBySku(sku)
+          : await ProductService.get(id);
 
         if (!mounted) return;
 
-        if (data && data.id) {
+        // Id=0 olan Mikro ürünleri de geçerli — sadece data varlığını kontrol et
+        if (data && (data.id > 0 || data.sku || data.name)) {
           setProduct(data);
         } else {
           setError("Ürün bulunamadı");
@@ -154,7 +160,7 @@ export default function Product() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, sku]);
 
   // ============================================================
   // KATEGORİ KURALLARINI YÜKLE
@@ -538,7 +544,7 @@ export default function Product() {
               className={`product-page__action-btn ${
                 isFavorite(product.id) ? "product-page__action-btn--active" : ""
               }`}
-              onClick={() => toggleFavorite(product.id)}
+              onClick={() => product.id > 0 && toggleFavorite(product.id)}
               aria-label={
                 isFavorite(product.id)
                   ? "Favorilerden çıkar"
@@ -742,7 +748,7 @@ export default function Product() {
                   ? "product-page__favorite-btn--active"
                   : ""
               }`}
-              onClick={() => toggleFavorite(product.id)}
+              onClick={() => product.id > 0 && toggleFavorite(product.id)}
               aria-label={
                 isFavorite(product.id)
                   ? "Favorilerden çıkar"

@@ -361,6 +361,21 @@ builder.Services.Configure<ECommerce.Infrastructure.Config.SiteSettings>(
 builder.Services.Configure<ECommerce.Infrastructure.Config.MikroSettings>(
     builder.Configuration.GetSection("MikroSettings"));
 
+// Mikro resilience (Polly Circuit Breaker + Retry) ayarları
+builder.Services.Configure<ECommerce.Infrastructure.Config.MikroResilienceSettings>(
+    builder.Configuration.GetSection("MikroResilience"));
+
+// Polly resilience pipeline factory — singleton (pipeline'lar thread-safe, bir kez inşa edilir)
+builder.Services.AddSingleton<ECommerce.Infrastructure.Resilience.MikroResiliencePipelineFactory>();
+
+// Sync denetim kaydı servisi — çakışma, CB, alert geçmişi
+builder.Services.AddScoped<ECommerce.Business.Services.Sync.ISyncAuditService,
+    ECommerce.Business.Services.Sync.SyncAuditService>();
+
+// Correlation ID context — herhangi bir katmandan correlation ID erişimi
+builder.Services.AddScoped<ECommerce.API.Infrastructure.ICorrelationContext,
+    ECommerce.API.Infrastructure.CorrelationContext>();
+
 // VPN Test Servisi - 10.0.0.3:8084 sunucusu için test endpoint'leri sağlar
 builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.MikroApiVpnTestService>();
 builder.Services.AddScoped<ECommerce.Infrastructure.Services.MicroServices.MikroApiVpnTestService>();
@@ -433,6 +448,13 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsRateLimitRepository, EC
 builder.Services.AddSingleton<EmailSender>();
 builder.Services.AddSingleton<IFileStorage>(sp =>
     new LocalFileStorage(builder.Environment.ContentRootPath));
+
+// CSV/Excel import sırasında harici URL'lerden görsel indirmek için kullanılan HttpClient
+builder.Services.AddHttpClient("ImageDownload", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("ECommerceImporter/1.0");
+});
 // Queues and background worker for messages
 builder.Services.AddSingleton<ECommerce.Core.Messaging.MailQueue>();
 builder.Services.AddSingleton<ECommerce.Core.Messaging.SmsQueue>();
@@ -519,6 +541,8 @@ builder.Services.AddScoped<ICourierAuthService, CourierAuthManager>();
 builder.Services.AddScoped<ICourierOrderService, CourierOrderManager>();
 
 builder.Services.AddScoped<MicroSyncManager>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Cache.IMikroProductCacheService,
+    ECommerce.API.Services.MikroProductCacheService>();
 builder.Services.AddScoped<IBannerService, BannerManager>();
 builder.Services.AddScoped<IBrandRepository, BrandRepository>();
 builder.Services.AddScoped<IDiscountRepository, DiscountRepository>();
@@ -602,8 +626,15 @@ if (enableBackgroundWorkers)
 {
     builder.Services.AddHostedService(sp => sp.GetRequiredService<ECommerce.Infrastructure.Services.BackgroundJobs.ReconciliationJob>());
 }
+// MikroDbService — Mikro ERP MSSQL'e direkt SqlConnection (HTTP timeout sorununu kökten çözer)
+// NEDEN SCOPED: Her request için yeni instance; SqlConnection thread-safe değil.
+builder.Services.AddScoped<ECommerce.Infrastructure.Services.MicroServices.IMikroDbService,
+    ECommerce.Infrastructure.Services.MicroServices.MikroDbService>();
+
+var mikroIgnoreSslErrors = builder.Configuration.GetValue<bool>("MikroSettings:IgnoreSslErrors");
+
 // MicroService ve MicroSyncManager (HttpClient tabanlı)
-// SSL sertifika doğrulaması - sadece Development'ta bypass edilir
+// SSL sertifika doğrulaması - Development'ta veya explicit config ile bypass edilir
 builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.MicroServices.MicroService>(client =>
 {
     var baseUrl = builder.Configuration["MikroSettings:ApiUrl"];
@@ -616,15 +647,14 @@ builder.Services.AddHttpClient<IMicroService, ECommerce.Infrastructure.Services.
     // ═══════════════════════════════════════════════════════════
     // SSL CERTIFICATE VALIDATION
     // Development: Self-signed certificate'lar için bypass
-    // Production: Gerçek certificate validation (MITM koruması)
+    // Production: Sadece explicit IgnoreSslErrors=true ise bypass edilir
     // ═══════════════════════════════════════════════════════════
-    if (builder.Environment.IsDevelopment())
+    if (builder.Environment.IsDevelopment() || mikroIgnoreSslErrors)
     {
-        // Dev: Self-signed sertifika kabul et
+        // Mikro sidecar/raw TCP relay kullanırken upstream certificate CN eşleşmeyebilir.
         handler.ServerCertificateCustomValidationCallback =
             HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
     }
-    // Production: Varsayılan certificate validation kullanılır (güvenli)
 
     return handler;
 })
@@ -639,7 +669,7 @@ builder.Services.AddHttpClient<ECommerce.Infrastructure.Services.MicroServices.M
 .ConfigurePrimaryHttpMessageHandler(() =>
 {
     var handler = new HttpClientHandler();
-    if (builder.Environment.IsDevelopment())
+    if (builder.Environment.IsDevelopment() || mikroIgnoreSslErrors)
     {
         handler.ServerCertificateCustomValidationCallback =
             HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
@@ -686,6 +716,9 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroCariMapper,
     ECommerce.Business.Services.Mapping.MikroCariMapper>();
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IMikroCategoryMappingService, 
     ECommerce.Business.Services.Mapping.CategoryMappingService>();
+// Otomatik kategori eşleme motoru — Mikro grup kodlarını fuzzy match ile kategorilere eşler
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Mapping.IAutoCategoryMappingEngine,
+    ECommerce.Business.Services.Mapping.AutoCategoryMappingEngine>();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ÇAKIŞMA YÖNETİMİ VE LOGLAMA SERVİSLERİ - ADIM 6
@@ -699,9 +732,39 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IConflictResolver,
     ECommerce.Business.Services.Sync.StockConflictResolver>();
 builder.Services.AddScoped<ECommerce.Business.Services.Sync.PriceConflictResolver>();
 
+// Çakışma Koordinatörü - Stok/Fiyat/Bilgi çakışmalarını merkezi yönetir
+builder.Services.AddScoped<ECommerce.Business.Services.Sync.SyncConflictCoordinator>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANLIK SENKRONİZASYON SERVİSLERİ - HotPoll + Outbound Push + SignalR
+// ═══════════════════════════════════════════════════════════════════════════════
+// StockHub SignalR bildirimleri
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IStockNotificationService, 
+    ECommerce.API.Services.StockNotificationService>();
+
+// EC→Mikro yönünde anlık push servisi (Hangfire ile)
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IMikroOutboundSyncService, 
+    ECommerce.Business.Services.Sync.MikroOutboundSyncService>();
+
+// Mikro→EC yönünde 10sn delta polling (BackgroundService olarak çalışır)
+builder.Services.AddSingleton<ECommerce.Business.Services.Sync.MikroHotPollBackgroundService>();
+builder.Services.AddHostedService(sp => 
+    sp.GetRequiredService<ECommerce.Business.Services.Sync.MikroHotPollBackgroundService>());
+
 // Retry Service - Başarısız işlemleri yeniden dener
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IRetryService, 
     ECommerce.Business.Services.Sync.RetryService>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ÜRÜN BİLGİ SENKRONİZASYONU + MONİTORİNG SERVİSLERİ (Phase 4 + 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Ürün bilgi sync — cache → Product (isim, kategori, birim, ağırlık, aktif/pasif)
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IProductInfoSyncService,
+    ECommerce.Business.Services.Sync.ProductInfoSyncService>();
+
+// Sync metrikleri ve alert servisi — sağlık izleme + eşik bazlı uyarılar
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.ISyncMetricsService,
+    ECommerce.Business.Services.Sync.SyncMetricsService>();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // HANGFIRE JOB SERVİSLERİ - Zamanlanmış Mikro Senkronizasyon Görevleri
@@ -710,6 +773,8 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IStokSyncJob,
     ECommerce.Business.Services.Jobs.MikroStokSyncJob>();
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IFiyatSyncJob, 
     ECommerce.Business.Services.Jobs.MikroFiyatSyncJob>();
+builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IUnifiedSyncJob,
+    ECommerce.Business.Services.Jobs.MikroUnifiedSyncJob>();
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.IFullSyncJob, 
     ECommerce.Business.Services.Jobs.MikroFullSyncJob>();
 builder.Services.AddScoped<ECommerce.Core.Interfaces.Jobs.ISiparisPushJob, 
@@ -785,6 +850,25 @@ builder.Services.AddSignalR(options =>
 
 // RealTimeNotificationService - Hub'lara bildirim göndermek için merkezi servis
 builder.Services.AddScoped<IRealTimeNotificationService, ECommerce.API.Services.RealTimeNotificationService>();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEALTH CHECKS — Mikro SQL, Mikro HTTP API bağlantı sağlık kontrolleri
+// NEDEN: /health endpoint'i üzerinden servislerin erişilebilirliği izlenir.
+// Degraded: yapılandırılmamış veya yavaş yanıt. Unhealthy: bağlantı başarısız.
+// ═══════════════════════════════════════════════════════════════════════════════
+builder.Services.AddHealthChecks()
+    .AddCheck<ECommerce.API.HealthChecks.MikroSqlHealthCheck>(
+        "mikro-sql",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+        tags: new[] { "mikro", "database" })
+    .AddCheck<ECommerce.API.HealthChecks.MikroApiHealthCheck>(
+        "mikro-api",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+        tags: new[] { "mikro", "api" })
+    .AddDbContextCheck<ECommerce.Data.Context.ECommerceDbContext>(
+        "ecommerce-db",
+        failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+        tags: new[] { "database" });
 
 // CSRF protection (for cookie-based flows). For SPA using Authorization header this is not strictly
 // necessary, but we expose a token endpoint for cases where a cookie+header double-submit is used.
@@ -938,11 +1022,12 @@ using (var scope = app.Services.CreateScope())
         logger.LogInformation("✅ BannerSeeder tamamlandı");
         Console.WriteLine("✅ BannerSeeder tamamlandı");
         
-        // logger.LogInformation("🔍 CategorySeeder başlatılıyor...");
-        // Console.WriteLine("🔍 CategorySeeder başlatılıyor...");
-        // CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
-        // logger.LogInformation("✅ CategorySeeder tamamlandı");
-        // Console.WriteLine("✅ CategorySeeder tamamlandı");
+        // Kategori + wildcard mapping seed — "Diğer" kategorisi ve fallback mapping'i garanti eder
+        logger.LogInformation("🔍 CategorySeeder başlatılıyor...");
+        Console.WriteLine("🔍 CategorySeeder başlatılıyor...");
+        CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
+        logger.LogInformation("✅ CategorySeeder tamamlandı");
+        Console.WriteLine("✅ CategorySeeder tamamlandı");
         
         logger.LogInformation("✅ Tüm seed işlemleri başarıyla tamamlandı!");
         Console.WriteLine("✅✅✅ TÜM SEED İŞLEMLERİ BAŞARIYLA TAMAMLANDI! ✅✅✅");
@@ -1082,6 +1167,9 @@ app.MapGet("/api/csrf/token", (IAntiforgery antiforgery, HttpContext http) =>
 // Centralized CSRF validation + logging middleware
 app.UseMiddleware<ECommerce.API.Infrastructure.CsrfLoggingMiddleware>();
 
+// Correlation ID — her isteğe benzersiz izleme ID'si atar (GlobalException'dan önce olmalı)
+app.UseMiddleware<ECommerce.API.Infrastructure.CorrelationIdMiddleware>();
+
 // Global exception handler (en sonda değil, controller'lardan önce)
 app.UseMiddleware<ECommerce.API.Infrastructure.GlobalExceptionMiddleware>();
 
@@ -1110,6 +1198,37 @@ app.MapHub<StoreAttendantHub>("/hubs/store")
 // Sipariş hazır olduğunda, kurye atandığında bildirim alır
 app.MapHub<DispatcherHub>("/hubs/dispatch")
     .RequireCors("SignalR");
+
+// Stok/Fiyat anlık güncelleme hub'ı - Mikro↔EC senkronizasyonu için
+// Tüm kullanıcılar (anonim dahil) stok değişikliklerini görebilmeli
+app.MapHub<ECommerce.API.Hubs.StockHub>("/hubs/stock")
+    .RequireCors("SignalR");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HEALTH CHECK ENDPOINT — /health ile tüm servislerin durumunu JSON döner
+// Rate-limit exemption zaten mevcut (Program.cs satır ~1032)
+// ═══════════════════════════════════════════════════════════════════════════════
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            totalDuration = report.TotalDuration.TotalMilliseconds,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.TotalMilliseconds,
+                data = e.Value.Data
+            })
+        });
+        await context.Response.WriteAsync(result);
+    }
+});
 
 app.MapControllers();
 app.Run();

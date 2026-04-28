@@ -12,7 +12,11 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
 using ECommerce.Infrastructure.Config;
+using ECommerce.Infrastructure.Resilience;
+using ECommerce.Core.Exceptions;
 using System.Text.RegularExpressions;
+using System.Globalization;
+using Polly.CircuitBreaker;
 
 namespace ECommerce.Infrastructure.Services.MicroServices
 {
@@ -37,11 +41,35 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         private readonly HttpClient _httpClient;
         private readonly MikroSettings _settings;
         private readonly ILogger<MicroService> _logger;
+        // Direkt SQL bağlantı servisi — HTTP SqlVeriOkuV2 timeout sorununu ortadan kaldırır
+        private readonly IMikroDbService _mikroDbService;
+        // Polly resilience pipeline — circuit breaker + retry + timeout
+        private readonly MikroResiliencePipelineFactory _resilienceFactory;
         private static readonly Regex Md5Regex = new("^[a-fA-F0-9]{32}$", RegexOptions.Compiled);
-        private readonly SemaphoreSlim _stockSnapshotLock = new(1, 1);
-        private List<MikroStokResponseDto>? _lastStockSnapshot;
-        private DateTime _lastStockSnapshotAtUtc;
+        private static readonly SemaphoreSlim StockSnapshotLock = new(1, 1);
+        private static List<MikroStokResponseDto>? _sharedStockSnapshot;
+        private static DateTime _sharedStockSnapshotAtUtc;
+        private static int _sharedStockSnapshotDepoNo = int.MinValue;
         private static readonly TimeSpan StockSnapshotCacheTtl = TimeSpan.FromSeconds(20);
+        private static readonly SemaphoreSlim SqlPriceMapLock = new(1, 1);
+        private static Dictionary<string, MikroFiyatSatirDto>? _sharedSqlPriceMap;
+        private static DateTime _sharedSqlPriceMapAtUtc;
+        private static int _sharedSqlPriceMapListNo = int.MinValue;
+        private static readonly TimeSpan SqlPriceMapCacheTtl = TimeSpan.FromSeconds(20);
+        private static int _initLogWritten;
+        private const string StokListesiV2Endpoint = "/Api/APIMethods/StokListesiV2";
+        private const string SqlVeriOkuV2Endpoint = "/Api/APIMethods/SqlVeriOkuV2";
+        private static readonly TimeSpan StokListesiTimeout = TimeSpan.FromSeconds(45);
+        private static readonly TimeSpan StokReadCooldown = TimeSpan.FromMinutes(3);
+        private const int StokTimeoutStrikeThreshold = 2;
+        private static readonly TimeSpan SqlVeriOkuTimeout = TimeSpan.FromSeconds(180);
+        private static readonly TimeSpan SqlReadCooldown = TimeSpan.FromMinutes(2);
+        private const int SqlTimeoutStrikeThreshold = 2;
+        private static readonly object CircuitStateLock = new();
+        private static DateTime _skipStokReadsUntilUtc = DateTime.MinValue;
+        private static int _stokTimeoutStrike;
+        private static DateTime _skipSqlReadsUntilUtc = DateTime.MinValue;
+        private static int _sqlTimeoutStrike;
         
         // JSON serileştirme ayarları - MikroAPI'nin beklediği format için
         private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -55,18 +83,29 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         public MicroService(
             HttpClient httpClient, 
             IOptions<MikroSettings> settings,
-            ILogger<MicroService> logger)
+            ILogger<MicroService> logger,
+            IMikroDbService mikroDbService,
+            MikroResiliencePipelineFactory resilienceFactory)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            // Direkt DB servisi — timeout sorunu bu injection ile çözülüyor
+            _mikroDbService = mikroDbService ?? throw new ArgumentNullException(nameof(mikroDbService));
+            // Polly resilience pipeline — circuit breaker + retry + timeout katmanları
+            _resilienceFactory = resilienceFactory ?? throw new ArgumentNullException(nameof(resilienceFactory));
             
             // HttpClient timeout ayarı
-            _httpClient.Timeout = TimeSpan.FromSeconds(_settings.RequestTimeoutSeconds);
+            var minTimeoutForSql = (int)Math.Ceiling(SqlVeriOkuTimeout.TotalSeconds) + 10;
+            var effectiveTimeoutSeconds = Math.Max(_settings.RequestTimeoutSeconds, minTimeoutForSql);
+            _httpClient.Timeout = TimeSpan.FromSeconds(effectiveTimeoutSeconds);
             
-            _logger.LogInformation(
-                "[MicroService] Başlatıldı. API URL: {ApiUrl}, Firma: {FirmaKodu}, Yıl: {CalismaYili}",
-                _settings.ApiUrl, _settings.FirmaKodu, _settings.CalismaYili);
+            if (Interlocked.Exchange(ref _initLogWritten, 1) == 0)
+            {
+                _logger.LogInformation(
+                    "[MicroService] Başlatıldı. API URL: {ApiUrl}, Firma: {FirmaKodu}, Yıl: {CalismaYili}",
+                    _settings.ApiUrl, _settings.FirmaKodu, _settings.CalismaYili);
+            }
         }
 
         // ==================== MD5 HASH MEKANİZMASI ====================
@@ -140,9 +179,9 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 CalismaYili = _settings.CalismaYili,
                 FirmaKodu = _settings.FirmaKodu,
                 KullaniciKodu = _settings.KullaniciKodu,
-                Sifre = ResolveOutgoingPassword()
-                // NOT: FirmaNo ve SubeNo Mikro objesinin içinde değil, 
-                // request root seviyesinde veya hiç gönderilmez
+                Sifre = ResolveOutgoingPassword(),
+                FirmaNo = _settings.DefaultFirmaNo,
+                SubeNo = _settings.DefaultSubeNo
             };
         }
 
@@ -190,156 +229,188 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         // ==================== HTTP İSTEK GÖNDERİM ====================
         
         /// <summary>
-        /// MikroAPI'ye POST isteği gönderir ve retry mekanizması uygular.
+        /// MikroAPI'ye POST isteği gönderir — Polly resilience pipeline üzerinden.
         /// 
-        /// RETRY POLİTİKASI:
-        /// - 5XX hataları → Yeniden dene (exponential backoff)
-        /// - 4XX hataları → Yeniden deneme (client hatası)
-        /// - Network hataları → Yeniden dene
+        /// RESILIENCE KATMANLARI:
+        /// 1. Total Timeout → tüm retry'lar dahil max süre
+        /// 2. Retry → exponential backoff + jitter (5xx, timeout, network hataları)
+        /// 3. Circuit Breaker → ardışık hatalarda devreyi açar
+        /// 4. Per-Attempt Timeout → tek istek zaman aşımı
+        /// 
+        /// Circuit breaker açıksa MikroCircuitOpenException fırlatılır.
         /// </summary>
         private async Task<HttpResponseMessage> SendMikroRequestAsync(
             string endpoint, 
             object requestBody,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            int? maxAttemptsOverride = null)
         {
-            var maxAttempts = _settings.MaxRetryAttempts;
-            Exception? lastException = null;
-            
-            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            _logger.LogDebug(
+                "[MicroService] İstek gönderiliyor. Endpoint: {Endpoint}",
+                endpoint);
+
+            // Request body'yi JSON'a serialize et (pipeline dışında — her retry'da yeni content gerekir)
+            var jsonContent = JsonSerializer.Serialize(requestBody, _jsonOptions);
+
+            try
             {
-                try
+                // Polly pipeline ile istek gönder — retry, CB, timeout otomatik yönetilir
+                var pipeline = _resilienceFactory.GetHttpPipeline();
+                var response = await pipeline.ExecuteAsync(async ct =>
                 {
-                    _logger.LogDebug(
-                        "[MicroService] İstek gönderiliyor. Endpoint: {Endpoint}, Deneme: {Attempt}/{Max}",
-                        endpoint, attempt, maxAttempts);
-                    
-                    // Request body'yi JSON'a serialize et
-                    var jsonContent = JsonSerializer.Serialize(requestBody, _jsonOptions);
+                    // Her retry denemesinde yeni StringContent oluşturulmalı (HttpContent tek kullanımlık)
                     var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-                    
-                    // POST isteği gönder
-                    var response = await _httpClient.PostAsync(endpoint, content, cancellationToken);
-                    
-                    // Başarılı veya client hatası (4XX) ise döndür
-                    if (response.IsSuccessStatusCode || (int)response.StatusCode < 500)
-                    {
-                        _logger.LogInformation(
-                            "[MicroService] İstek tamamlandı. Endpoint: {Endpoint}, Status: {Status}",
-                            endpoint, response.StatusCode);
-                        return response;
-                    }
-                    
-                    // 5XX hatası - retry gerekli
-                    _logger.LogWarning(
-                        "[MicroService] Sunucu hatası. Endpoint: {Endpoint}, Status: {Status}, Deneme: {Attempt}",
-                        endpoint, response.StatusCode, attempt);
-                    
-                    if (attempt < maxAttempts)
-                    {
-                        // Exponential backoff: 250ms, 1s, 2.25s
-                        var delay = TimeSpan.FromMilliseconds(250 * attempt * attempt);
-                        await Task.Delay(delay, cancellationToken);
-                    }
-                    else
-                    {
-                        return response; // Son denemede de başarısızsa response'u döndür
-                    }
-                }
-                catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
-                {
-                    _logger.LogError(ex, "[MicroService] Timeout hatası. Endpoint: {Endpoint}", endpoint);
-                    lastException = ex;
-                }
-                catch (HttpRequestException ex)
-                {
-                    _logger.LogError(ex, "[MicroService] HTTP hatası. Endpoint: {Endpoint}", endpoint);
-                    lastException = ex;
-                    
-                    if (attempt < maxAttempts)
-                    {
-                        var delay = TimeSpan.FromMilliseconds(250 * attempt * attempt);
-                        await Task.Delay(delay, cancellationToken);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "[MicroService] Beklenmeyen hata. Endpoint: {Endpoint}", endpoint);
-                    throw; // Beklenmeyen hataları yeniden fırlat
-                }
+                    return await _httpClient.PostAsync(endpoint, content, ct);
+                }, cancellationToken);
+
+                _logger.LogInformation(
+                    "[MicroService] İstek tamamlandı. Endpoint: {Endpoint}, Status: {Status}",
+                    endpoint, response.StatusCode);
+
+                return response;
             }
-            
-            // Tüm denemeler başarısız
-            throw lastException ?? new Exception($"MikroAPI isteği başarısız oldu: {endpoint}");
+            catch (BrokenCircuitException ex)
+            {
+                // Circuit breaker açık — Mikro API erişilemez durumda
+                _logger.LogError(
+                    "[MicroService] Circuit Breaker AÇIK — Mikro API istekleri engellendi. Endpoint: {Endpoint}",
+                    endpoint);
+
+                throw new MikroCircuitOpenException(
+                    $"Mikro API circuit breaker açık. Endpoint: {endpoint}",
+                    _resilienceFactory.HttpCircuitState == Resilience.CircuitBreakerState.Open
+                        ? TimeSpan.FromSeconds(30) : null)
+                {
+                    StokKod = null,
+                    Direction = "FromERP"
+                };
+            }
+            catch (Polly.Timeout.TimeoutRejectedException ex)
+            {
+                _logger.LogError(ex,
+                    "[MicroService] Toplam timeout aşıldı. Endpoint: {Endpoint}", endpoint);
+
+                throw new MikroSyncTimeoutException(
+                    $"Mikro API timeout: {endpoint}",
+                    TimeSpan.FromSeconds(_settings.RequestTimeoutSeconds),
+                    ex)
+                {
+                    Direction = "FromERP"
+                };
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex,
+                    "[MicroService] Tüm retry denemeleri başarısız. Endpoint: {Endpoint}", endpoint);
+
+                throw new MikroApiException(
+                    $"Mikro API isteği başarısız: {endpoint} — {ex.Message}",
+                    statusCode: null,
+                    inner: ex)
+                {
+                    Endpoint = endpoint,
+                    Direction = "FromERP"
+                };
+            }
+            catch (MikroSyncException)
+            {
+                throw; // Domain exception'ları olduğu gibi geçir
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[MicroService] Beklenmeyen hata. Endpoint: {Endpoint}", endpoint);
+                throw;
+            }
         }
 
         // ==================== MEVCUT INTERFACE METODLARİ ====================
         // Bu metodlar geriye dönük uyumluluk için korunuyor ve MikroAPI V2'yi kullanıyor
 
         /// <summary>
-        /// Kısa süreli stok snapshot'ı döndürür.
+        /// [LEGACY] Kısa süreli stok snapshot'ı döndürür.
         /// Aynı anda gelen products/stocks isteklerinde Mikro'ya tekrar full tarama gönderilmesini engeller.
+        /// NEDEN DEPRECATED: Birleşik SQL sorgusu (GetUnifiedProductMapAsync) ile StokListesiV2 gereksizleşti.
         /// </summary>
+        [Obsolete("Birleşik SQL akışı (GetUnifiedProductMapAsync) kullanın. Bu metod legacy StokListesiV2 akışı içindir.")]
         private async Task<List<MikroStokResponseDto>> GetStockSnapshotAsync(CancellationToken cancellationToken = default)
         {
-            await _stockSnapshotLock.WaitAsync(cancellationToken);
+            await StockSnapshotLock.WaitAsync(cancellationToken);
             try
             {
                 var now = DateTime.UtcNow;
-                if (_lastStockSnapshot != null && (now - _lastStockSnapshotAtUtc) < StockSnapshotCacheTtl)
+                var targetDepoNo = _settings.DefaultDepoNo;
+                var staleSnapshot = _sharedStockSnapshot;
+                if (_sharedStockSnapshot != null &&
+                    _sharedStockSnapshotDepoNo == targetDepoNo &&
+                    (now - _sharedStockSnapshotAtUtc) < StockSnapshotCacheTtl)
                 {
                     _logger.LogInformation(
-                        "[MicroService] Stock snapshot cache kullanılıyor. Yaş: {AgeSeconds}s, Kayıt: {Count}",
-                        (int)(now - _lastStockSnapshotAtUtc).TotalSeconds,
-                        _lastStockSnapshot.Count);
+                        "[MicroService] Stock snapshot cache kullanılıyor. Depo: {DepoNo}, Yaş: {AgeSeconds}s, Kayıt: {Count}",
+                        targetDepoNo,
+                        (int)(now - _sharedStockSnapshotAtUtc).TotalSeconds,
+                        _sharedStockSnapshot.Count);
 
-                    return new List<MikroStokResponseDto>(_lastStockSnapshot);
+                    return new List<MikroStokResponseDto>(_sharedStockSnapshot);
                 }
 
-                _logger.LogInformation("[MicroService] Stock snapshot yenileniyor.");
+                _logger.LogInformation("[MicroService] Stock snapshot yenileniyor. Depo: {DepoNo}", targetDepoNo);
 
-                var allStoks = new List<MikroStokResponseDto>();
-                await foreach (var stok in GetAllStokAsync(100, _settings.DefaultDepoNo, cancellationToken))
+                var allStoks = await GetAllStokParallelAsync(500, targetDepoNo, cancellationToken);
+
+                if (allStoks.Count == 0 &&
+                    staleSnapshot != null &&
+                    staleSnapshot.Count > 0 &&
+                    _sharedStockSnapshotDepoNo == targetDepoNo)
                 {
-                    allStoks.Add(stok);
+                    _logger.LogWarning(
+                        "[MicroService] Stock snapshot yenilemesi boş döndü. Son bilinen snapshot kullanılacak. Depo: {DepoNo}, Kayıt: {Count}",
+                        targetDepoNo,
+                        staleSnapshot.Count);
+
+                    return new List<MikroStokResponseDto>(staleSnapshot);
                 }
 
-                _lastStockSnapshot = allStoks;
-                _lastStockSnapshotAtUtc = DateTime.UtcNow;
+                _sharedStockSnapshot = allStoks;
+                _sharedStockSnapshotAtUtc = DateTime.UtcNow;
+                _sharedStockSnapshotDepoNo = targetDepoNo;
 
                 return new List<MikroStokResponseDto>(allStoks);
             }
             finally
             {
-                _stockSnapshotLock.Release();
+                StockSnapshotLock.Release();
             }
         }
 
         /// <summary>
-        /// Mikro'dan tüm ürünleri çeker (geriye dönük uyumluluk).
-        /// NEDEN: Eski kod bağımlılığı için korunuyor, StokListesiV2 kullanır.
-        /// ÖNEMLİ: TotalCount dönmeyen ortamlarda güvenli durma kriterleri için sıralı çekme kullanır.
+        /// Mikro ERP'den ürünleri doğrudan SQL üzerinden çeker.
+        /// YÖNTEM: GetUnifiedProductMapAsync → STOKLAR + STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW + STOK_SATIS_FIYAT_LISTELERI
+        /// HTTP API çağrısı yapılmaz; timeout sorunu yoktur.
         /// </summary>
         public async Task<IEnumerable<MicroProductDto>> GetProductsAsync()
         {
-            _logger.LogInformation("[MicroService] GetProductsAsync çağrılıyor (Sıralı StokListesiV2 üzerinden)");
+            _logger.LogInformation("[MicroService] GetProductsAsync çağrılıyor (SQL tabanlı birleşik sorgu)");
 
             try
             {
-                var allStoks = await GetStockSnapshotAsync();
-                
-                var products = allStoks.Select(stok => new MicroProductDto
+                var unified = await GetUnifiedProductMapAsync();
+
+                var products = unified.Select(u => new MicroProductDto
                 {
-                    Sku = stok.StoKod ?? "",
-                    Name = stok.StoIsim ?? "",
-                    Barcode = stok.Barkod,
-                    Price = ResolveProductPriceFromStok(stok),
-                    VatRate = stok.KdvOrani ?? 20,
-                    StockQuantity = ResolveStockQuantityFromStok(stok),
-                    Stock = ResolveStockQuantityFromStok(stok),
-                    CategoryCode = stok.GrupKodu,
-                    Unit = stok.BirimAdi ?? "ADET",
-                    IsActive = stok.Aktif ?? true,
-                    LastModified = stok.DegisiklikTarihi
+                    Sku = u.StokKod,
+                    Name = u.StokAd,
+                    Barcode = u.Barkod,
+                    Price = u.Fiyat,
+                    VatRate = u.KdvOrani,
+                    StockQuantity = (int)Math.Max(0, u.StokMiktar),
+                    Stock = (int)Math.Max(0, u.StokMiktar),
+                    // NEDEN: AnagrupKod = ana kategori kodu (doğru). GrupKod = alt grup (yanlıştı).
+                    // Kategori eşleme AnagrupKod'a göre yapılmalı, GrupKod yedek bilgi.
+                    CategoryCode = !string.IsNullOrWhiteSpace(u.AnagrupKod) ? u.AnagrupKod : u.GrupKod,
+                    Unit = string.IsNullOrWhiteSpace(u.Birim) ? "ADET" : u.Birim,
+                    IsActive = u.WebeGonderilecekFl,
+                    LastModified = u.SonHareketTarihi
                 }).ToList();
 
                 _logger.LogInformation(
@@ -356,10 +427,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         /// <summary>
-        /// Mikro'dan tüm stokları çeker (geriye dönük uyumluluk).
-        /// NEDEN: Eski kod bağımlılığı için korunuyor, StokListesiV2 kullanır.
-        /// ÖNEMLİ: TotalCount dönmeyen ortamlarda güvenli durma kriterleri için sıralı çekme kullanır.
+        /// [LEGACY] Mikro'dan tüm stokları çeker (geriye dönük uyumluluk).
+        /// NEDEN DEPRECATED: Birleşik SQL akışı ile stok verisi tek sorguda gelir.
+        /// Eski StokSyncService bağımlılığı için korunuyor.
         /// </summary>
+        [Obsolete("Birleşik SQL akışı (GetUnifiedProductMapAsync) kullanın. Bu metod legacy StokListesiV2 akışı içindir.")]
         public async Task<IEnumerable<MicroStockDto>> GetStocksAsync()
         {
             _logger.LogInformation("[MicroService] GetStocksAsync çağrılıyor (Sıralı StokListesiV2 üzerinden)");
@@ -422,47 +494,933 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 return stok.StoSonAlis.Value;
             }
 
+            if (stok.StoOrtMaliyet.HasValue && stok.StoOrtMaliyet.Value > 0)
+            {
+                return stok.StoOrtMaliyet.Value;
+            }
+
+            var alisFallback = stok.AlisFiyatlari?
+                .OrderBy(f => f.SfiyatNo)
+                .FirstOrDefault(f => f.SfiyatFiyati > 0);
+
+            if (alisFallback?.SfiyatFiyati > 0)
+            {
+                return alisFallback.SfiyatFiyati;
+            }
+
             return 0m;
         }
 
-        private static int ResolveStockQuantityFromStok(MikroStokResponseDto stok)
+        /// <summary>
+        /// Mikro stok verisinden en doğru stok miktarını çözer.
+        /// 
+        /// NEDEN: MikroAPI farklı ortamlarda farklı alanları doldurabilir.
+        /// Bu metod tüm olasılıkları kontrol ederek en güvenilir değeri bulur.
+        /// 
+        /// ÖNCELİK SIRASI (en güvenilirden az güvenilire):
+        /// 1. SatilabilirMiktar (depo bazlı, rezerve düşülmüş)
+        /// 2. KullanilabilirMiktar (hesaplanmış)
+        /// 3. DepoMiktar (belirli depo stoğu)
+        /// 4. StoMiktar (toplam stok)
+        /// 5. DepoStoklari toplamı (çoklu depo)
+        /// </summary>
+        private static int ResolveStockQuantityFromStok(MikroStokResponseDto stok, int? targetDepoNo = null)
         {
-            var candidates = new List<decimal>
+            // 1. Belirli bir depo istendiyse, önce DepoStoklari'ndan o depoyu ara
+            if (targetDepoNo.HasValue && targetDepoNo.Value > 0 && stok.DepoStoklari?.Any() == true)
             {
-                stok.KullanilabilirMiktar ?? 0,
-                stok.MevcutMiktar ?? 0,
-                stok.DepoMiktar ?? 0,
-                stok.StoMiktar,
-                stok.DepoStoklari?.Sum(d => d.SatilabilirMiktar ?? d.StokMiktar) ?? 0
-            };
+                var depoStok = stok.DepoStoklari.FirstOrDefault(d => d.DepNo == targetDepoNo.Value);
+                if (depoStok != null)
+                {
+                    // Satılabilir miktar varsa onu al, yoksa stok miktarını
+                    var depoMiktar = depoStok.SatilabilirMiktar ?? depoStok.StokMiktar;
+                    if (depoMiktar > 0)
+                    {
+                        return (int)Math.Max(0, Math.Floor(depoMiktar));
+                    }
+                }
+            }
 
-            var best = candidates.Max();
-            return (int)Math.Max(0, Math.Floor(best));
+            // 2. Tüm depoların toplamı isteniyorsa (targetDepoNo = 0 veya null)
+            if ((!targetDepoNo.HasValue || targetDepoNo.Value == 0) && stok.DepoStoklari?.Any() == true)
+            {
+                var toplamDepoStok = stok.DepoStoklari.Sum(d => d.SatilabilirMiktar ?? d.StokMiktar);
+                if (toplamDepoStok > 0)
+                {
+                    return (int)Math.Max(0, Math.Floor(toplamDepoStok));
+                }
+            }
+
+            // 3. Diğer alanlardan en yüksek değeri bul
+            var candidates = new List<decimal>();
+            
+            // KullanilabilirMiktar: DepoMiktar - Rezerve hesabı (en güvenilir)
+            if (stok.KullanilabilirMiktar.HasValue && stok.KullanilabilirMiktar.Value > 0)
+            {
+                candidates.Add(stok.KullanilabilirMiktar.Value);
+            }
+            
+            // DepoMiktar: API'den gelen depo stoğu
+            if (stok.DepoMiktar.HasValue && stok.DepoMiktar.Value > 0)
+            {
+                candidates.Add(stok.DepoMiktar.Value);
+            }
+            
+            // MevcutMiktar: Helper property (DepoMiktar ?? StoMiktar)
+            if (stok.MevcutMiktar.HasValue && stok.MevcutMiktar.Value > 0)
+            {
+                candidates.Add(stok.MevcutMiktar.Value);
+            }
+            
+            // StoMiktar: Toplam stok (tüm depolar)
+            if (stok.StoMiktar > 0)
+            {
+                candidates.Add(stok.StoMiktar);
+            }
+            
+            // DepoStoklari toplamı
+            if (stok.DepoStoklari?.Any() == true)
+            {
+                var depoToplam = stok.DepoStoklari.Sum(d => d.SatilabilirMiktar ?? d.StokMiktar);
+                if (depoToplam > 0)
+                {
+                    candidates.Add(depoToplam);
+                }
+            }
+
+            // En yüksek değeri döndür
+            if (candidates.Count > 0)
+            {
+                var best = candidates.Max();
+                return (int)Math.Max(0, Math.Floor(best));
+            }
+
+            // Hiçbir değer bulunamadı
+            return 0;
         }
 
-        private static int ResolveAvailableQuantityFromStok(MikroStokResponseDto stok)
+        /// <summary>
+        /// Satılabilir (kullanılabilir) stok miktarını çözer.
+        /// Rezerve miktarı düşülmüş net stok.
+        /// </summary>
+        private static int ResolveAvailableQuantityFromStok(MikroStokResponseDto stok, int? targetDepoNo = null)
         {
+            // Önce KullanilabilirMiktar'ı kontrol et
             if (stok.KullanilabilirMiktar.HasValue && stok.KullanilabilirMiktar.Value > 0)
             {
                 return (int)Math.Floor(stok.KullanilabilirMiktar.Value);
             }
+            
+            // Belirli depo için SatilabilirMiktar
+            if (targetDepoNo.HasValue && targetDepoNo.Value > 0 && stok.DepoStoklari?.Any() == true)
+            {
+                var depoStok = stok.DepoStoklari.FirstOrDefault(d => d.DepNo == targetDepoNo.Value);
+                if (depoStok?.SatilabilirMiktar.HasValue == true)
+                {
+                    return (int)Math.Max(0, Math.Floor(depoStok.SatilabilirMiktar.Value));
+                }
+            }
 
-            var total = ResolveStockQuantityFromStok(stok);
+            // Fallback: Toplam stok - rezerve
+            var total = ResolveStockQuantityFromStok(stok, targetDepoNo);
             var reserved = (int)Math.Max(0, Math.Floor(stok.RezervedMiktar ?? 0));
             return Math.Max(0, total - reserved);
         }
 
         public void UpdateProduct(MicroProductDto productDto)
         {
-            // TODO: StokKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] UpdateProduct henüz MikroAPI V2'ye migrate edilmedi.");
+            // Fire-and-forget: tek ürün güncelleme — SaveStokV2Async üzerinden
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var request = new MikroStokKaydetRequestDto
+                    {
+                        StoKod = productDto.Sku,
+                        StoIsim = productDto.Name,
+                        StoBirim1Ad = productDto.Unit,
+                        StoToptanVergi = productDto.VatRate,
+                        StoPerakendeVergi = productDto.VatRate,
+                        StoAnagrupKod = productDto.CategoryCode,
+                        SatisFiyatlari = productDto.Price > 0
+                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = productDto.Price, SfiyatNo = 1 } }
+                            : new List<MikroStokFiyatDto>()
+                    };
+                    var result = await SaveStokV2Async(request);
+                    if (!result.Success)
+                        _logger.LogWarning("[MicroService] UpdateProduct — {Sku} başarısız: {Msg}", productDto.Sku, result.Message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[MicroService] UpdateProduct hata — {Sku}", productDto.Sku);
+                }
+            });
         }
 
         public Task<IEnumerable<MicroPriceDto>> GetPricesAsync()
         {
-            // TODO: StokListesiV2'den fiyat bilgisi çekilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] GetPricesAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult<IEnumerable<MicroPriceDto>>(new List<MicroPriceDto>());
+            return GetPricesFromSqlAsync();
+        }
+
+        public async Task<Dictionary<string, MikroFiyatSatirDto>> GetSqlPriceMapAsync(
+            int? fiyatListesiNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            var normalizedListNo = fiyatListesiNo ?? -1;
+            var now = DateTime.UtcNow;
+
+            if (_sharedSqlPriceMap != null &&
+                _sharedSqlPriceMapListNo == normalizedListNo &&
+                (now - _sharedSqlPriceMapAtUtc) < SqlPriceMapCacheTtl)
+            {
+                _logger.LogDebug(
+                    "[MicroService] Sql fiyat map cache kullanılıyor. FiyatListesiNo: {FiyatListesiNo}, Kayıt: {Count}",
+                    normalizedListNo,
+                    _sharedSqlPriceMap.Count);
+
+                return new Dictionary<string, MikroFiyatSatirDto>(_sharedSqlPriceMap, StringComparer.OrdinalIgnoreCase);
+            }
+
+            await SqlPriceMapLock.WaitAsync(cancellationToken);
+            try
+            {
+                now = DateTime.UtcNow;
+                var staleMap = _sharedSqlPriceMap;
+                if (_sharedSqlPriceMap != null &&
+                    _sharedSqlPriceMapListNo == normalizedListNo &&
+                    (now - _sharedSqlPriceMapAtUtc) < SqlPriceMapCacheTtl)
+                {
+                    return new Dictionary<string, MikroFiyatSatirDto>(_sharedSqlPriceMap, StringComparer.OrdinalIgnoreCase);
+                }
+
+                var priceRows = await GetSqlPriceRowsAsync(fiyatListesiNo, cancellationToken);
+
+                var map = new Dictionary<string, MikroFiyatSatirDto>(StringComparer.OrdinalIgnoreCase);
+                foreach (var row in priceRows)
+                {
+                    if (string.IsNullOrWhiteSpace(row.StokKod))
+                    {
+                        continue;
+                    }
+
+                    var normalizedStokKod = row.StokKod.Trim();
+                    if (string.IsNullOrWhiteSpace(normalizedStokKod))
+                    {
+                        continue;
+                    }
+
+                    row.StokKod = normalizedStokKod;
+
+                    if (!map.TryGetValue(normalizedStokKod, out var existing) ||
+                        (existing.Fiyat <= 0 && row.Fiyat > 0))
+                    {
+                        map[normalizedStokKod] = row;
+                    }
+                }
+
+                if (map.Count == 0 &&
+                    staleMap != null &&
+                    staleMap.Count > 0 &&
+                    _sharedSqlPriceMapListNo == normalizedListNo)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] Sql fiyat map yenilemesi boş döndü. Son bilinen map kullanılacak. FiyatListesiNo: {FiyatListesiNo}, Kayıt: {Count}",
+                        normalizedListNo,
+                        staleMap.Count);
+
+                    return new Dictionary<string, MikroFiyatSatirDto>(staleMap, StringComparer.OrdinalIgnoreCase);
+                }
+
+                _sharedSqlPriceMap = map;
+                _sharedSqlPriceMapAtUtc = DateTime.UtcNow;
+                _sharedSqlPriceMapListNo = normalizedListNo;
+
+                return new Dictionary<string, MikroFiyatSatirDto>(map, StringComparer.OrdinalIgnoreCase);
+            }
+            finally
+            {
+                SqlPriceMapLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Admin mikro ekranı için ürün listesi döndürür.
+        /// 
+        /// NEDEN REFACTOR EDİLDİ:
+        /// Eski akış: GetStockSnapshotAsync (StokListesiV2) → timeout → GetProductsFromSqlOnlyAsync
+        /// Yeni akış: GetUnifiedProductMapAsync (tek SQL, lock + 60s cache)
+        /// 
+        /// CONCURRENCY FIX: Eski akışta N eşzamanlı istek, N ayrı SqlVeriOkuV2 isteği açıyordu.
+        /// Yeni akışta UnifiedProductMapLock sayesinde yalnızca 1 SQL çalışır, kalanlar cache'ten döner.
+        /// </summary>
+        public async Task<List<MikroUrunDto>> GetProductsWithSqlAsync(
+            int? depoNo = null,
+            int? fiyatListesiNo = null,
+            string? stokKod = null,
+            string? grupKod = null,
+            bool? sadeceStoklu = null,
+            bool? sadeceAktif = true,
+            int sayfaNo = 1,
+            int sayfaBuyuklugu = 20,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var page = Math.Max(1, sayfaNo);
+                var size = Math.Clamp(sayfaBuyuklugu, 1, 1000);
+                var normalizedStokKod = string.IsNullOrWhiteSpace(stokKod) ? null : stokKod.Trim();
+                var normalizedGrupKod = string.IsNullOrWhiteSpace(grupKod) ? null : grupKod.Trim();
+                var resolvedDepoNo = depoNo ?? _settings.DefaultDepoNo;
+
+                // Birleşik SQL sorgusu: lock + cache — eşzamanlı N istek → tek Mikro API çağrısı
+                var unified = await GetUnifiedProductMapAsync(fiyatListesiNo, depoNo, cancellationToken);
+
+                if (unified.Count == 0)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] GetProductsWithSqlAsync: Unified sorgu boş döndü (circuit breaker veya Mikro erişilemez).");
+                    return new List<MikroUrunDto>();
+                }
+
+                IEnumerable<MikroUrunDto> projected = unified.Select(u => new MikroUrunDto
+                {
+                    StokKod     = u.StokKod,
+                    UrunAdi     = u.StokAd,
+                    Fiyat       = u.Fiyat,
+                    StokMiktar  = u.StokMiktar,
+                    DepoAdi     = $"Depo {(u.DepoNo ?? resolvedDepoNo)}",
+                    DepoNo      = u.DepoNo ?? resolvedDepoNo,
+                    IsWebActive = u.WebeGonderilecekFl,
+                    Birim       = u.Birim,
+                    GrupKod     = u.GrupKod,
+                    KdvOrani    = u.KdvOrani,
+                    Barkod      = u.Barkod ?? string.Empty
+                });
+
+                if (!string.IsNullOrWhiteSpace(normalizedStokKod))
+                    projected = projected.Where(p => p.StokKod.Contains(normalizedStokKod, StringComparison.OrdinalIgnoreCase));
+
+                if (!string.IsNullOrWhiteSpace(normalizedGrupKod))
+                    projected = projected.Where(p => p.GrupKod.Contains(normalizedGrupKod, StringComparison.OrdinalIgnoreCase));
+
+                if (sadeceStoklu.HasValue)
+                    projected = sadeceStoklu.Value
+                        ? projected.Where(p => p.StokMiktar > 0)
+                        : projected.Where(p => p.StokMiktar <= 0);
+
+                if (sadeceAktif == true)
+                    projected = projected.Where(p => p.IsWebActive);
+
+                var ordered    = projected.OrderBy(p => p.StokKod).ToList();
+                var totalCount = ordered.Count;
+                var pageItems  = ordered.Skip((page - 1) * size).Take(size).ToList();
+
+                foreach (var item in pageItems)
+                    item.ToplamKayit = totalCount;
+
+                _logger.LogInformation(
+                    "[MicroService] GetProductsWithSqlAsync tamamlandı. Toplam: {Total}, Sayfa: {Page}, Dönen: {Count}",
+                    totalCount, page, pageItems.Count);
+
+                return pageItems;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] GetProductsWithSqlAsync hatası.");
+                return new List<MikroUrunDto>();
+            }
+        }
+
+        private async Task<List<MikroUrunDto>> GetProductsFromSqlOnlyAsync(
+            int? depoNo,
+            int? fiyatListesiNo,
+            string? normalizedStokKod,
+            string? normalizedGrupKod,
+            bool? sadeceStoklu,
+            bool? sadeceAktif,
+            int page,
+            int size,
+            CancellationToken cancellationToken)
+        {
+            var resolvedDepoNo = depoNo ?? _settings.DefaultDepoNo;
+
+            var priceRows = await GetSqlPriceRowsAsync(fiyatListesiNo, cancellationToken);
+            if (priceRows.Count == 0)
+            {
+                return new List<MikroUrunDto>();
+            }
+
+            var stockMap = await GetSqlStockMapAsync(depoNo, cancellationToken);
+
+            var projected = priceRows
+                .Where(r => !string.IsNullOrWhiteSpace(r.StokKod))
+                .GroupBy(r => r.StokKod, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(x => x.Fiyat).First())
+                .Select(row =>
+                {
+                    stockMap.TryGetValue(row.StokKod, out var sqlStockQty);
+
+                    return new MikroUrunDto
+                    {
+                        StokKod = row.StokKod,
+                        UrunAdi = string.IsNullOrWhiteSpace(row.UrunAdi) ? row.StokKod : row.UrunAdi,
+                        Fiyat = row.Fiyat,
+                        StokMiktar = sqlStockQty,
+                        DepoAdi = $"Depo {resolvedDepoNo}",
+                        DepoNo = resolvedDepoNo,
+                        IsWebActive = row.WebeGonderilecekFl ?? true,
+                        Birim = "ADET",
+                        GrupKod = string.Empty
+                    };
+                });
+
+            if (!string.IsNullOrWhiteSpace(normalizedStokKod))
+            {
+                projected = projected.Where(p => p.StokKod.Contains(normalizedStokKod, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(normalizedGrupKod))
+            {
+                projected = projected.Where(p => p.GrupKod.Contains(normalizedGrupKod, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (sadeceStoklu.HasValue)
+            {
+                projected = sadeceStoklu.Value
+                    ? projected.Where(p => p.StokMiktar > 0)
+                    : projected.Where(p => p.StokMiktar <= 0);
+            }
+
+            if (sadeceAktif == true)
+            {
+                projected = projected.Where(p => p.IsWebActive);
+            }
+
+            var ordered = projected
+                .OrderBy(p => p.StokKod)
+                .ToList();
+
+            var totalCount = ordered.Count;
+            var pageItems = ordered
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToList();
+
+            foreach (var item in pageItems)
+            {
+                item.ToplamKayit = totalCount;
+            }
+
+            return pageItems;
+        }
+
+        private async Task<IEnumerable<MicroPriceDto>> GetPricesFromSqlAsync(
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var rows = await GetSqlPriceRowsAsync(null, cancellationToken);
+                return rows
+                    .Where(x => !string.IsNullOrWhiteSpace(x.StokKod))
+                    .GroupBy(x => x.StokKod, StringComparer.OrdinalIgnoreCase)
+                    .Select(g => g.OrderByDescending(x => x.Fiyat).First())
+                    .Select(x => new MicroPriceDto
+                    {
+                        Sku = x.StokKod,
+                        Price = x.Fiyat,
+                        Currency = "TRY",
+                        EffectiveDate = DateTime.UtcNow
+                    })
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] GetPricesAsync SqlVeriOkuV2 hatası.");
+                return new List<MicroPriceDto>();
+            }
+        }
+
+        private async Task<List<MikroFiyatSatirDto>> GetSqlPriceRowsAsync(
+            int? fiyatListesiNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            // YENİ AKIŞ: Direkt DB — HTTP SqlVeriOkuV2 timeout'u ortadan kaldırıldı
+            try
+            {
+                _logger.LogInformation(
+                    "[MicroService] Fiyat satırları DB'den çekiliyor (direkt SQL). FiyatListesiNo: {FiyatListesiNo}",
+                    fiyatListesiNo ?? -1);
+
+                var rows = await _mikroDbService.GetFiyatSatirlariAsync(fiyatListesiNo, cancellationToken);
+
+                _logger.LogInformation(
+                    "[MicroService] Fiyat satırları DB sorgusu tamamlandı. Satır: {Count}",
+                    rows.Count);
+
+                return rows;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] GetSqlPriceRowsAsync DB hatası.");
+                return [];
+            }
+        }
+
+        /// <summary>
+        /// Depo bazlı stok miktarlarını direkt DB'den çeker.
+        /// NEDEN: Eski akış SqlVeriOkuV2 HTTP endpoint üzerindeydi → timeout.
+        /// Yeni akış: IMikroDbService → direkt SqlConnection → 2s altı.
+        /// </summary>
+        public async Task<Dictionary<string, decimal>> GetSqlStockMapAsync(
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _logger.LogInformation(
+                    "[MicroService] Stok miktarları DB'den çekiliyor (direkt SQL). DepoNo: {DepoNo}",
+                    depoNo ?? -1);
+
+                var map = await _mikroDbService.GetStokMiktarlariAsync(depoNo, cancellationToken);
+
+                _logger.LogInformation(
+                    "[MicroService] Stok miktarları DB sorgusu tamamlandı. Ürün: {Count}",
+                    map.Count);
+
+                return map;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] GetSqlStockMapAsync DB hatası.");
+                return new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        /// <summary>
+        /// Stok miktarını çekmek için SQL sorgusu oluşturur.
+        /// Bu sorgu Mikro'daki stok kartlarından doğrudan stok miktarını çeker.
+        /// </summary>
+        private static string BuildSqlStockQuery(int? depoNo)
+        {
+            _ = depoNo; // View toplam stok döner — depo filtresi uygulanmıyor
+
+            return @"SELECT
+    S.sto_kod                                    AS stokkod,
+    ISNULL(ST.stok_miktar, 0)                    AS stok_miktar
+FROM STOKLAR S
+LEFT JOIN (
+    SELECT sth_stok_kod,
+           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
+    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+    GROUP BY sth_stok_kod
+) ST ON ST.sth_stok_kod = S.sto_kod
+WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
+        }
+
+        private bool ShouldSkipSqlReads(out TimeSpan remaining)
+        {
+            lock (CircuitStateLock)
+            {
+                var now = DateTime.UtcNow;
+                if (_sqlTimeoutStrike >= SqlTimeoutStrikeThreshold && now < _skipSqlReadsUntilUtc)
+                {
+                    remaining = _skipSqlReadsUntilUtc - now;
+                    return true;
+                }
+
+                // Cooldown süresi geçtiyse strike'ı otomatik temizle.
+                if (now >= _skipSqlReadsUntilUtc && _sqlTimeoutStrike >= SqlTimeoutStrikeThreshold)
+                {
+                    _sqlTimeoutStrike = 0;
+                    _skipSqlReadsUntilUtc = DateTime.MinValue;
+                }
+
+                remaining = TimeSpan.Zero;
+                return false;
+            }
+        }
+
+        private void RegisterSqlTimeout(string source)
+        {
+            lock (CircuitStateLock)
+            {
+                _sqlTimeoutStrike++;
+                if (_sqlTimeoutStrike >= SqlTimeoutStrikeThreshold)
+                {
+                    _skipSqlReadsUntilUtc = DateTime.UtcNow.Add(SqlReadCooldown);
+                    _logger.LogWarning(
+                        "[MicroService] SqlVeriOkuV2 {Source} timeout kaydedildi. Strike: {Strike}, Cooldown aktif: {CooldownSeconds}s",
+                        source,
+                        _sqlTimeoutStrike,
+                        (int)SqlReadCooldown.TotalSeconds);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "[MicroService] SqlVeriOkuV2 {Source} timeout kaydedildi. Strike: {Strike}/{Threshold}, Cooldown henüz aktif değil.",
+                    source,
+                    _sqlTimeoutStrike,
+                    SqlTimeoutStrikeThreshold);
+            }
+        }
+
+        private void RegisterSqlSuccess()
+        {
+            lock (CircuitStateLock)
+            {
+                if (_sqlTimeoutStrike == 0 && _skipSqlReadsUntilUtc <= DateTime.UtcNow)
+                {
+                    return;
+                }
+
+                _sqlTimeoutStrike = 0;
+                _skipSqlReadsUntilUtc = DateTime.MinValue;
+            }
+        }
+
+        /// <summary>
+        /// SQL stok sorgusu sonucunu parse eder.
+        /// </summary>
+        private Dictionary<string, decimal> ParseSqlStockRows(string content)
+        {
+            var map = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var rowObjects = EnumerateSqlStockRowObjects(doc.RootElement).ToList();
+                _logger.LogInformation("[MicroService] ParseSqlStockRows: toplam enumerasyon sayısı: {Count}", rowObjects.Count);
+                
+                foreach (var row in rowObjects)
+                {
+                    var stokKod = ReadStringFromRow(row, "stokkod", "sto_kod", "StoKod", "stokKod");
+                    if (string.IsNullOrWhiteSpace(stokKod))
+                    {
+                        continue;
+                    }
+
+                    var stokRaw = ReadStringFromRow(row, "stok_miktar", "sto_miktar", "StokMiktar", "miktar");
+                    var stokMiktar = ParseDecimalFlexible(stokRaw);
+
+                    var normalizedStokKod = stokKod.Trim();
+                    if (!map.ContainsKey(normalizedStokKod) || map[normalizedStokKod] < stokMiktar)
+                    {
+                        map[normalizedStokKod] = stokMiktar;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MicroService] SqlVeriOkuV2 stok parse hatası.");
+            }
+
+            return map;
+        }
+
+        private static IEnumerable<JsonElement> EnumerateSqlStockRowObjects(JsonElement node)
+        {
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                if (LooksLikeSqlStockRow(node))
+                {
+                    yield return node;
+                    yield break;
+                }
+
+                foreach (var prop in node.EnumerateObject())
+                {
+                    foreach (var child in EnumerateSqlStockRowObjects(prop.Value))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in node.EnumerateArray())
+                {
+                    foreach (var child in EnumerateSqlStockRowObjects(item))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+        }
+
+        private static bool LooksLikeSqlStockRow(JsonElement obj)
+        {
+            if (obj.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var hasStock = TryGetPropertyIgnoreCase(obj, "stokkod", out _) ||
+                           TryGetPropertyIgnoreCase(obj, "sto_kod", out _) ||
+                           TryGetPropertyIgnoreCase(obj, "stokkod", out _);
+
+            var hasQuantity = TryGetPropertyIgnoreCase(obj, "stok_miktar", out _) ||
+                              TryGetPropertyIgnoreCase(obj, "sto_miktar", out _) ||
+                              TryGetPropertyIgnoreCase(obj, "miktar", out _);
+
+            return hasStock && hasQuantity;
+        }
+
+        private static string BuildSqlPriceQuery(int? fiyatListesiNo)
+        {
+            // NEDEN: Web fiyat listesi Liste 11'e hazırlanır — default 2 hatalıydı
+            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+
+            return $@"SELECT
+    ISNULL(CONVERT(NVARCHAR(36), Hedef.sfiyat_Guid), '00000000-0000-0000-0000-000000000000') AS guid,
+    S.sto_kod                                        AS stokkod,
+    ISNULL(S.sto_isim, '')                           AS stokad,
+    ISNULL(Hedef.sfiyat_fiyati, 0)                   AS fiyat,
+    ISNULL(BK.bar_kodu, '-BARKODYOK-')               AS barkod,
+    ISNULL(S.sto_webe_gonderilecek_fl, 0)            AS webe_gonderilecek_fl
+FROM STOKLAR S
+LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
+       ON  Hedef.sfiyat_stokkod     = S.sto_kod
+       AND Hedef.sfiyat_listesirano = {hedefListe}
+OUTER APPLY (
+    SELECT TOP 1 bar_kodu
+    FROM   BARKOD_TANIMLARI
+    WHERE  bar_stokkodu = S.sto_kod
+) BK
+WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
+        }
+
+        private List<MikroFiyatSatirDto> ParseSqlPriceRows(string content)
+        {
+            var rows = new List<MikroFiyatSatirDto>();
+
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                var rowObjects = EnumerateSqlRowObjects(doc.RootElement).ToList();
+                _logger.LogInformation("[MicroService] ParseSqlPriceRows: toplam enumerasyon sayısı: {Count}", rowObjects.Count);
+                
+                foreach (var row in rowObjects)
+                {
+                    var stokKod = ReadStringFromRow(row, "stokkod", "sfiyat_stokkod", "StoKod", "stokKod");
+                    if (string.IsNullOrWhiteSpace(stokKod) || string.Equals(stokKod, "TANIMSIZ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var fiyatRaw = ReadStringFromRow(row, "fiyat", "sfiyat_fiyati", "Price", "price");
+                    var fiyat = ParseDecimalFlexible(fiyatRaw);
+
+                    rows.Add(new MikroFiyatSatirDto
+                    {
+                        Guid = ReadStringFromRow(row, "guid", "sfiyat_guid", "Guid", "GUID"),
+                        StokKod = stokKod.Trim(),
+                        UrunAdi = ReadStringFromRow(row, "stokad", "sto_isim", "StokAd", "urunAdi"),
+                        Fiyat = fiyat,
+                        Barkod = ReadStringFromRow(row, "barkod", "bar_kodu", "Barkod", "barcode"),
+                        WebeGonderilecekFl = ParseBoolFlexible(
+                            ReadStringFromRow(
+                                row,
+                                "webe_gonderilecek_fl",
+                                "sto_webe_gonderilecek_fl",
+                                "WebeGonderilecekFl",
+                                "webAktif"
+                            )
+                        )
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MicroService] SqlVeriOkuV2 parse hatası.");
+            }
+
+            return rows;
+        }
+
+        private static IEnumerable<JsonElement> EnumerateSqlRowObjects(JsonElement node)
+        {
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                if (LooksLikeSqlRow(node))
+                {
+                    yield return node;
+                    yield break;
+                }
+
+                foreach (var prop in node.EnumerateObject())
+                {
+                    foreach (var child in EnumerateSqlRowObjects(prop.Value))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in node.EnumerateArray())
+                {
+                    foreach (var child in EnumerateSqlRowObjects(item))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+        }
+
+        private static bool LooksLikeSqlRow(JsonElement obj)
+        {
+            if (obj.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var hasStock = TryGetPropertyIgnoreCase(obj, "stokkod", out _) ||
+                           TryGetPropertyIgnoreCase(obj, "sfiyat_stokkod", out _);
+
+            var hasPrice = TryGetPropertyIgnoreCase(obj, "fiyat", out _) ||
+                           TryGetPropertyIgnoreCase(obj, "sfiyat_fiyati", out _);
+
+            return hasStock && hasPrice;
+        }
+
+        private static bool TryGetPropertyIgnoreCase(JsonElement obj, string propertyName, out JsonElement value)
+        {
+            foreach (var prop in obj.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = prop.Value;
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static string ReadStringFromRow(JsonElement row, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (!TryGetPropertyIgnoreCase(row, key, out var value))
+                {
+                    continue;
+                }
+
+                return value.ValueKind switch
+                {
+                    JsonValueKind.String => value.GetString() ?? string.Empty,
+                    JsonValueKind.Number => value.ToString(),
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    _ => string.Empty
+                };
+            }
+
+            return string.Empty;
+        }
+
+        private static decimal ParseDecimalFlexible(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return 0m;
+            }
+
+            var cleaned = Regex.Replace(input, "[^0-9,.-]", string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                return 0m;
+            }
+
+            var hasDot = cleaned.Contains('.');
+            var hasComma = cleaned.Contains(',');
+
+            if (hasDot && hasComma)
+            {
+                var lastDot = cleaned.LastIndexOf('.');
+                var lastComma = cleaned.LastIndexOf(',');
+
+                if (lastComma > lastDot)
+                {
+                    cleaned = cleaned.Replace(".", string.Empty).Replace(',', '.');
+                }
+                else
+                {
+                    cleaned = cleaned.Replace(",", string.Empty);
+                }
+            }
+            else if (hasComma)
+            {
+                cleaned = cleaned.Replace(',', '.');
+            }
+
+            return decimal.TryParse(cleaned, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : 0m;
+        }
+
+        private static bool? ParseBoolFlexible(string? input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return null;
+            }
+
+            var normalized = input.Trim().ToLowerInvariant();
+            if (normalized is "1" or "true" or "evet" or "yes")
+            {
+                return true;
+            }
+
+            if (normalized is "0" or "false" or "hayir" or "hayır" or "no")
+            {
+                return false;
+            }
+
+            return null;
+        }
+
+        private static decimal ResolveProductPriceFromSources(
+            MikroStokResponseDto stok,
+            IReadOnlyDictionary<string, MikroFiyatSatirDto> priceMap)
+        {
+            var sku = stok.StoKod ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(sku) && priceMap.TryGetValue(sku, out var priceRow) && priceRow.Fiyat > 0)
+            {
+                return priceRow.Fiyat;
+            }
+
+            return ResolveProductPriceFromStok(stok);
+        }
+
+        private static string? ResolveBarcodeFromSources(
+            MikroStokResponseDto stok,
+            IReadOnlyDictionary<string, MikroFiyatSatirDto> priceMap)
+        {
+            if (!string.IsNullOrWhiteSpace(stok.Barkod))
+            {
+                return stok.Barkod;
+            }
+
+            var sku = stok.StoKod ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(sku) &&
+                priceMap.TryGetValue(sku, out var priceRow) &&
+                !string.IsNullOrWhiteSpace(priceRow.Barkod) &&
+                !string.Equals(priceRow.Barkod, "-BARKODYOK-", StringComparison.OrdinalIgnoreCase))
+            {
+                return priceRow.Barkod;
+            }
+
+            return stok.Barkod;
         }
 
         public Task<IEnumerable<MicroCustomerDto>> GetCustomersAsync()
@@ -472,11 +1430,52 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             return Task.FromResult<IEnumerable<MicroCustomerDto>>(new List<MicroCustomerDto>());
         }
 
-        public Task<bool> UpsertProductsAsync(IEnumerable<MicroProductDto> products)
+        public async Task<bool> UpsertProductsAsync(IEnumerable<MicroProductDto> products)
         {
-            // TODO: StokKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] UpsertProductsAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult(false);
+            // SaveStokV2Async üzerinden Mikro ERP'ye ürün yazma
+            var productList = products.ToList();
+            if (productList.Count == 0) return true;
+
+            _logger.LogInformation("[MicroService] UpsertProductsAsync başlatılıyor. Ürün sayısı: {Count}", productList.Count);
+
+            int success = 0, fail = 0;
+            foreach (var product in productList)
+            {
+                try
+                {
+                    var request = new MikroStokKaydetRequestDto
+                    {
+                        StoKod = product.Sku,
+                        StoIsim = product.Name,
+                        StoBirim1Ad = product.Unit,
+                        StoToptanVergi = product.VatRate,
+                        StoPerakendeVergi = product.VatRate,
+                        StoAnagrupKod = product.CategoryCode,
+                        Barkodlar = !string.IsNullOrEmpty(product.Barcode)
+                            ? new List<MikroStokBarkodDto> { new() { BarBarkodNo = product.Barcode, BarCarpan = 1 } }
+                            : new List<MikroStokBarkodDto>(),
+                        SatisFiyatlari = product.Price > 0
+                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = product.Price, SfiyatNo = 1 } }
+                            : new List<MikroStokFiyatDto>()
+                    };
+
+                    var result = await SaveStokV2Async(request);
+                    if (result.Success) success++;
+                    else
+                    {
+                        fail++;
+                        _logger.LogWarning("[MicroService] UpsertProducts — {Sku} başarısız: {Msg}", product.Sku, result.Message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    fail++;
+                    _logger.LogError(ex, "[MicroService] UpsertProducts — {Sku} hata", product.Sku);
+                }
+            }
+
+            _logger.LogInformation("[MicroService] UpsertProductsAsync tamamlandı. Başarılı: {Ok}, Başarısız: {Fail}", success, fail);
+            return fail == 0;
         }
 
         public Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks)
@@ -628,8 +1627,19 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             MikroStokListesiRequestDto? request = null,
             CancellationToken cancellationToken = default)
         {
-            const string endpoint = "/Api/APIMethods/StokListesiV2";
-            
+            if (ShouldSkipStokReads(out var remaining))
+            {
+                _logger.LogWarning(
+                    "[MicroService] StokListesiV2 çağrısı cooldown nedeniyle atlandı. Kalan bekleme: {RemainingSeconds}s",
+                    Math.Max(0, (int)remaining.TotalSeconds));
+
+                return new MikroResponseWrapper<MikroStokResponseDto>
+                {
+                    Success = false,
+                    Message = "Stok servisi geçici olarak yavaş yanıt veriyor. Kısa süre sonra tekrar deneyin."
+                };
+            }
+
             try
             {
                 _logger.LogInformation(
@@ -644,7 +1654,10 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     JsonSerializer.Serialize(requestBody, new JsonSerializerOptions { WriteIndented = false }));
                 
                 // API'ye gönder
-                var response = await SendMikroRequestAsync(endpoint, requestBody, cancellationToken);
+                using var stokTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                stokTimeoutCts.CancelAfter(StokListesiTimeout);
+
+                var response = await SendMikroRequestAsync(StokListesiV2Endpoint, requestBody, stokTimeoutCts.Token, 1);
                 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -658,6 +1671,8 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                         Message = $"HTTP {(int)response.StatusCode}: {response.ReasonPhrase}"
                     };
                 }
+
+                RegisterStokSuccess();
 
                 // Response'u parse et
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -686,6 +1701,19 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 return result ?? new MikroResponseWrapper<MikroStokResponseDto> { Success = false, Message = "Parse hatası" };
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                RegisterStokTimeout();
+                _logger.LogWarning(
+                    "[MicroService] StokListesiV2 timeout. Timeout: {TimeoutSeconds}s",
+                    (int)StokListesiTimeout.TotalSeconds);
+
+                return new MikroResponseWrapper<MikroStokResponseDto>
+                {
+                    Success = false,
+                    Message = "Stok servisi zaman aşımına uğradı."
+                };
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[MicroService] StokListesiV2 hatası.");
@@ -694,6 +1722,64 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     Success = false,
                     Message = ex.Message
                 };
+            }
+        }
+
+        private bool ShouldSkipStokReads(out TimeSpan remaining)
+        {
+            lock (CircuitStateLock)
+            {
+                var now = DateTime.UtcNow;
+                if (_stokTimeoutStrike >= StokTimeoutStrikeThreshold && now < _skipStokReadsUntilUtc)
+                {
+                    remaining = _skipStokReadsUntilUtc - now;
+                    return true;
+                }
+
+                if (now >= _skipStokReadsUntilUtc && _stokTimeoutStrike >= StokTimeoutStrikeThreshold)
+                {
+                    _stokTimeoutStrike = 0;
+                    _skipStokReadsUntilUtc = DateTime.MinValue;
+                }
+
+                remaining = TimeSpan.Zero;
+                return false;
+            }
+        }
+
+        private void RegisterStokTimeout()
+        {
+            lock (CircuitStateLock)
+            {
+                _stokTimeoutStrike++;
+                if (_stokTimeoutStrike >= StokTimeoutStrikeThreshold)
+                {
+                    _skipStokReadsUntilUtc = DateTime.UtcNow.Add(StokReadCooldown);
+                    _logger.LogWarning(
+                        "[MicroService] StokListesiV2 timeout kaydedildi. Strike: {Strike}, Cooldown aktif: {CooldownSeconds}s",
+                        _stokTimeoutStrike,
+                        (int)StokReadCooldown.TotalSeconds);
+                    return;
+                }
+
+                _logger.LogWarning(
+                    "[MicroService] StokListesiV2 timeout kaydedildi. Strike: {Strike}/{Threshold}, Cooldown henüz aktif değil.",
+                    _stokTimeoutStrike,
+                    StokTimeoutStrikeThreshold);
+            }
+        }
+
+        private void RegisterStokSuccess()
+        {
+            lock (CircuitStateLock)
+            {
+                if (_stokTimeoutStrike == 0 && _skipStokReadsUntilUtc <= DateTime.UtcNow)
+                {
+                    return;
+                }
+
+                _stokTimeoutStrike = 0;
+                _skipStokReadsUntilUtc = DateTime.MinValue;
             }
         }
 
@@ -717,6 +1803,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 var first = resultArray[0];
 
+                var successFromPayload = first.TryGetProperty("success", out var successEl) &&
+                                         (successEl.ValueKind == JsonValueKind.True || successEl.ValueKind == JsonValueKind.False)
+                    ? successEl.GetBoolean()
+                    : true;
+
                 var statusCode = first.TryGetProperty("StatusCode", out var statusEl) && statusEl.ValueKind == JsonValueKind.Number
                     ? statusEl.GetInt32()
                     : 0;
@@ -730,7 +1821,14 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     ? errEl.GetString() ?? string.Empty
                     : string.Empty;
 
-                if (statusCode != 200 || isError)
+                if (string.IsNullOrWhiteSpace(errorMessage) &&
+                    first.TryGetProperty("errorText", out var errorTextEl) &&
+                    errorTextEl.ValueKind == JsonValueKind.String)
+                {
+                    errorMessage = errorTextEl.GetString() ?? string.Empty;
+                }
+
+                if (statusCode != 200 || isError || !successFromPayload)
                 {
                     return new MikroResponseWrapper<MikroStokResponseDto>
                     {
@@ -1145,25 +2243,26 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             }
         }
 
-        // ==================== TOPLU İŞLEMLER (V2) ====================
+        // ==================== TOPLU İŞLEMLER (V2) — LEGACY ====================
 
         /// <summary>
-        /// Tüm stokları paralel sayfa çekme ile hızlı getirir.
-        /// NEDEN: Mikro API yavaş yanıt verdiğinde (10-30 sn/sayfa) 
-        /// paralel çekme ile toplam süreyi dramatik azaltır.
+        /// [LEGACY] Tüm stokları paralel sayfa çekme ile hızlı getirir.
+        /// NEDEN DEPRECATED: Birleşik SQL sorgusu (GetUnifiedProductMapAsync) tek istekle tüm veriyi çeker.
+        /// Sayfalı paralel çekim artık gereksiz — 180s+ timeout sorunları biter.
         /// </summary>
+        [Obsolete("Birleşik SQL akışı (GetUnifiedProductMapAsync) kullanın. Sayfalı StokListesiV2 çekimi gereksizleşti.")]
         public async Task<List<MikroStokResponseDto>> GetAllStokParallelAsync(
-            int pageSize = 100,
+            int pageSize = 500,
             int? depoNo = null,
             CancellationToken cancellationToken = default)
         {
             var allStocks = new List<MikroStokResponseDto>();
             var parallelCount = _settings.ParallelPageFetchCount > 0 ? _settings.ParallelPageFetchCount : 5;
-            const int hardMaxPages = 10;
+            const int hardMaxPages = 100; // 100 sayfa x 500 = 50.000 ürün kapasitesi
             
             _logger.LogInformation(
-                "[MicroService] Paralel stok senkronizasyonu başlıyor. Depo: {Depo}, ParalelSayfa: {Parallel}",
-                depoNo ?? _settings.DefaultDepoNo, parallelCount);
+                "[MicroService] Paralel stok senkronizasyonu başlıyor. Depo: {Depo}, ParalelSayfa: {Parallel}, SayfaBoyutu: {PageSize}",
+                depoNo ?? _settings.DefaultDepoNo, parallelCount, pageSize);
 
             // Önce ilk sayfayı çekerek toplam kayıt sayısını öğren
             var firstPageRequest = new MikroStokListesiRequestDto
@@ -1329,12 +2428,13 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         /// <summary>
-        /// Tüm stokları sayfalı olarak çeker (full sync).
-        /// NEDEN: İlk kurulumda veya tam senkronizasyon gerektiğinde
-        /// tüm ürünlerin çekilmesi için kullanılır.
+        /// [LEGACY] Tüm stokları sayfalı olarak çeker (full sync).
+        /// NEDEN DEPRECATED: Birleşik SQL sorgusu ile sayfalı çekim gereksizleşti.
+        /// Tek SQL sorgusu sadece web-aktif ürünleri çeker (~500-1200 vs 6000+).
         /// </summary>
+        [Obsolete("Birleşik SQL akışı (GetUnifiedProductMapAsync) kullanın. Sayfalı StokListesiV2 çekimi gereksizleşti.")]
         public async IAsyncEnumerable<MikroStokResponseDto> GetAllStokAsync(
-            int pageSize = 100,
+            int pageSize = 500,
             int? depoNo = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -1343,12 +2443,12 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             int yieldedCount = 0;
             string? lastPageFirstSku = null;
             var seenFirstSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            const int maxPagesWithoutTotalCount = 10;
-            const int hardMaxPages = 10;
+            const int maxPagesWithoutTotalCount = 100; // TotalCount yoksa max 100 sayfa
+            const int hardMaxPages = 100; // Kesin üst sınır: 100 sayfa x 500 = 50.000 ürün
 
             _logger.LogInformation(
-                "[MicroService] Tam stok senkronizasyonu başlıyor. Depo: {Depo}",
-                depoNo ?? -1);
+                "[MicroService] Tam stok senkronizasyonu başlıyor. Depo: {Depo}, SayfaBoyutu: {PageSize}",
+                depoNo ?? -1, pageSize);
 
             while (hasMore && !cancellationToken.IsCancellationRequested)
             {
@@ -1729,6 +2829,341 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 };
             }
         }
+
+        // ==================== BİRLEŞİK SQL SORGUSU (UNIFIED) ====================
+
+        // Birleşik sorgu cache alanları — StokListesiV2 yerine tek SQL ile tüm web ürünlerini çekeriz.
+        // NEDEN: 2 ayrı SqlVeriOkuV2 + sayfalı StokListesiV2 çağrıları yerine tek istek → %80+ yük azalması.
+        private static readonly SemaphoreSlim UnifiedProductMapLock = new(1, 1);
+        private static List<MikroUnifiedProductDto>? _sharedUnifiedProductMap;
+        private static DateTime _sharedUnifiedProductMapAtUtc;
+        private static int _sharedUnifiedProductMapFiyatListesiNo = int.MinValue; // Cache key
+        private static readonly TimeSpan UnifiedProductMapCacheTtl = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Fiyat + stok + ürün bilgisi + barkod verilerini TEK SQL sorgusuyla çeken birleşik sorgu oluşturur.
+        /// 
+        /// FİYAT: PrepareWebPriceListAsync ile liste 11 önceden doldurulduğu için
+        /// doğrudan hedef listeden okunur. Fallback: Liste 1 Depo 1 (ana perakende deposu).
+        /// </summary>
+        private static string BuildUnifiedProductQuery(int? fiyatListesiNo, int? depoNo)
+        {
+            // NEDEN: Web fiyat listesi Liste 11'e hazırlanır — default 2 hatalıydı
+            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+            var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
+
+            return $@"SELECT
+    S.sto_kod                                     AS stokkod,
+    ISNULL(S.sto_isim, '')                        AS stokad,
+    COALESCE(
+        NULLIF(Hedef.sfiyat_fiyati, 0),
+        NULLIF(Kaynak.MaxFiyat, 0),
+        0
+    )                                             AS fiyat,
+    ISNULL(ST.stok_miktar, 0)                     AS stok_miktar,
+    {hedefDepo}                                   AS depo_no,
+    ISNULL(BK.bar_kodu, '')                       AS barkod,
+    ISNULL(S.sto_altgrup_kod, '')                 AS grup_kod,
+    ISNULL(S.sto_anagrup_kod, '')                 AS anagrup_kod,
+    ISNULL(S.sto_birim1_ad, 'ADET')               AS birim,
+    CASE ISNULL(S.sto_perakende_vergi, 0)
+        WHEN 0 THEN 0
+        WHEN 1 THEN 0
+        WHEN 2 THEN 1
+        WHEN 3 THEN 10
+        WHEN 4 THEN 10
+        WHEN 5 THEN 10
+        WHEN 6 THEN 20
+        ELSE 20
+    END                                           AS kdv_orani,
+    1                                             AS webe_gonderilecek_fl,
+    NULL                                          AS son_hareket_tarihi
+FROM STOKLAR S
+LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
+       ON  Hedef.sfiyat_stokkod     = S.sto_kod
+       AND Hedef.sfiyat_listesirano = {hedefListe}
+       AND Hedef.sfiyat_deposirano  = {hedefDepo}
+-- Fallback: Orijinal fiyat listesi (1), Depo 1 — PrepareWebPriceListAsync çalışmadıysa buradan oku
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = 1
+      AND  sfiyat_deposirano  = 1
+    GROUP BY sfiyat_stokkod
+) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
+LEFT JOIN (
+    SELECT sth_stok_kod,
+           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
+    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+    GROUP BY sth_stok_kod
+) ST ON ST.sth_stok_kod = S.sto_kod
+OUTER APPLY (
+    SELECT TOP 1 bar_kodu
+    FROM   BARKOD_TANIMLARI
+    WHERE  bar_stokkodu = S.sto_kod
+) BK
+WHERE S.sto_webe_gonderilecek_fl = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
+        }
+
+        /// <summary>
+        /// Mikro ERP'den TEK SQL sorgusuyla tüm web-aktif ürünleri çeker.
+        /// 
+        /// AVANTAJLAR:
+        /// - StokListesiV2 sayfalı çekim yerine SqlVeriOkuV2 ile tek istek
+        /// - Fiyat + stok + barkod + ürün bilgisi tek seferde
+        /// - Sadece webe_gonderilecek = 1 ürünler (veri hacmi %80 azalır)
+        /// - 60 saniye TTL cache (concurrent isteklerde Mikro'ya tekrar gitmez)
+        /// 
+        /// HATA DURUMU: Boş liste döner, çağıran servis eski cache'den devam edebilir.
+        /// </summary>
+        public async Task<List<MikroUnifiedProductDto>> GetUnifiedProductMapAsync(
+            int? fiyatListesiNo = null,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            var now = DateTime.UtcNow;
+            // Cache key: fiyatListesiNo bazlı — farklı liste parametresi cache'i geçersiz kılar
+            var cacheKeyListNo = fiyatListesiNo ?? 0;
+
+            // Hızlı cache kontrolü — lock almadan önce kontrol et (double-check pattern)
+            // ÖNEMLI: Sadece dolu (Count > 0) cache kabul edilir; boş liste cache'lenmez.
+            if (_sharedUnifiedProductMap != null &&
+                _sharedUnifiedProductMap.Count > 0 &&
+                _sharedUnifiedProductMapFiyatListesiNo == cacheKeyListNo &&
+                (now - _sharedUnifiedProductMapAtUtc) < UnifiedProductMapCacheTtl)
+            {
+                _logger.LogInformation(
+                    "[MicroService] Birleşik ürün cache HIT. Kayıt: {Count}, Yaş: {AgeSeconds}s",
+                    _sharedUnifiedProductMap.Count,
+                    (int)(now - _sharedUnifiedProductMapAtUtc).TotalSeconds);
+                return new List<MikroUnifiedProductDto>(_sharedUnifiedProductMap);
+            }
+
+            await UnifiedProductMapLock.WaitAsync(cancellationToken);
+            try
+            {
+                // Double-check: Lock aldıktan sonra başka thread doldurmuş olabilir
+                now = DateTime.UtcNow;
+                if (_sharedUnifiedProductMap != null &&
+                    _sharedUnifiedProductMap.Count > 0 &&
+                    _sharedUnifiedProductMapFiyatListesiNo == cacheKeyListNo &&
+                    (now - _sharedUnifiedProductMapAtUtc) < UnifiedProductMapCacheTtl)
+                {
+                    return new List<MikroUnifiedProductDto>(_sharedUnifiedProductMap);
+                }
+
+                // Circuit breaker kontrolü — artık sadece direkt DB için (HTTP değil)
+                if (!_mikroDbService.IsConfigured)
+                {
+                    _logger.LogWarning(
+                        "[MicroService] MikroDbService yapılandırılmamış. " +
+                        "MikroSettings:SqlConnectionString eksik.");
+
+                    return _sharedUnifiedProductMap != null
+                        ? new List<MikroUnifiedProductDto>(_sharedUnifiedProductMap)
+                        : new List<MikroUnifiedProductDto>();
+                }
+
+                _logger.LogInformation(
+                    "[MicroService] Birleşik SQL sorgusu DOĞRUDAN DB'ye gönderiliyor. FiyatListesiNo: {FiyatListesiNo}, DepoNo: {DepoNo}",
+                    fiyatListesiNo ?? -1, depoNo ?? -1);
+
+                // ÖN ADIM: Liste 1'deki fiyatları Liste 11'e kopyala (DELETE 11 → INSERT → UPDATE from 1)
+                // NEDEN: Liste 1 orijinal Mikro fiyatları, liste 11 web için temiz kopya.
+                // SELECT sorguları liste 11'den okur — orijinal veriye dokunulmaz.
+                const int webListeNo = 11;
+                const int kaynakListeNo = 1;
+                var hedefDepo = depoNo ?? 0;
+                var (deleted, inserted, updated) = await _mikroDbService.PrepareWebPriceListAsync(
+                    webListeNo, kaynakListeNo, hedefDepo, cancellationToken);
+
+                _logger.LogInformation(
+                    "[MicroService] Web fiyat listesi hazırlandı (Liste {Kaynak} → Liste {Hedef}). Silinen: {Deleted}, Eklenen: {Inserted}, Güncellenen: {Updated}",
+                    kaynakListeNo, webListeNo, deleted, inserted, updated);
+
+                // YENİ AKIŞ: Liste 11'den oku — hazırlanmış fiyatlar
+                // NEDEN: SqlVeriOkuV2 → timeout. Direkt conn → <2s
+                var products = await _mikroDbService.GetUnifiedProductsAsync(
+                    webListeNo, depoNo, cancellationToken);
+
+                _logger.LogInformation(
+                    "[MicroService] Birleşik SQL sorgusu tamamlandı. Toplam ürün: {Count}, Fiyat>0: {PriceOk}, Stok>0: {StockOk}",
+                    products.Count,
+                    products.Count(p => p.Fiyat > 0),
+                    products.Count(p => p.StokMiktar > 0));
+
+                // Direkt DB başarılı — circuit breaker sıfırla (HTTP fallback kalıntısı)
+                RegisterSqlSuccess();
+
+                // NEDEN: Boş sonuç cache'lenmez — bağlantı hatası veya geçici DB sorunu
+                // olabilir. Sonraki istekte tekrar denenmeli.
+                if (products.Count > 0)
+                {
+                    _sharedUnifiedProductMap = products;
+                    _sharedUnifiedProductMapAtUtc = DateTime.UtcNow;
+                    _sharedUnifiedProductMapFiyatListesiNo = cacheKeyListNo;
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "[MicroService] GetUnifiedProductMapAsync: DB sorgusu 0 kayıt döndürdü. " +
+                        "Bağlantı string: {ConnStr}",
+                        _settings.SqlConnectionString?.Substring(0, Math.Min(60, _settings.SqlConnectionString?.Length ?? 0)) + "...");
+                }
+
+                return new List<MikroUnifiedProductDto>(products);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("[MicroService] Birleşik DB sorgusu timeout/iptal.");
+
+                return _sharedUnifiedProductMap != null
+                    ? new List<MikroUnifiedProductDto>(_sharedUnifiedProductMap)
+                    : new List<MikroUnifiedProductDto>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] Birleşik DB sorgusu beklenmeyen hata.");
+
+                return _sharedUnifiedProductMap != null
+                    ? new List<MikroUnifiedProductDto>(_sharedUnifiedProductMap)
+                    : new List<MikroUnifiedProductDto>();
+            }
+            finally
+            {
+                UnifiedProductMapLock.Release();
+            }
+        }
+
+        /// <summary>
+        /// Birleşik SQL sorgusu sonucunu MikroUnifiedProductDto listesine parse eder.
+        /// 
+        /// NEDEN AYRI METOD: Parse mantığı test edilebilir ve izole kalır.
+        /// Mikro response formatı tutarsız olabilir (nested JSON, array-in-object vb.),
+        /// mevcut EnumerateSqlRowObjects/EnumerateSqlStockRowObjects yaklaşımı kullanılır.
+        /// </summary>
+        private List<MikroUnifiedProductDto> ParseUnifiedProductRows(string content)
+        {
+            var rows = new List<MikroUnifiedProductDto>();
+
+            try
+            {
+                using var doc = JsonDocument.Parse(content);
+                // Mikro SqlVeriOkuV2 response yapısı değişken — deep enumerate ile row objeleri bulunur
+                var rowObjects = EnumerateUnifiedRowObjects(doc.RootElement).ToList();
+                _logger.LogInformation(
+                    "[MicroService] ParseUnifiedProductRows: toplam enumerasyon sayısı: {Count}",
+                    rowObjects.Count);
+
+                // Duplikat stok kodlarını önlemek için set — ilk gelen (en güncel hareket) kazanır
+                var seenStokKods = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var row in rowObjects)
+                {
+                    var stokKod = ReadStringFromRow(row, "stokkod", "stok_kod", "StoKod");
+                    if (string.IsNullOrWhiteSpace(stokKod))
+                        continue;
+
+                    var normalizedSku = stokKod.Trim();
+
+                    // ORDER BY son_hareket_tarihi DESC olduğu için ilk gelen en güncel
+                    if (!seenStokKods.Add(normalizedSku))
+                        continue;
+
+                    var fiyatRaw = ReadStringFromRow(row, "fiyat", "sfiyat_fiyati", "Fiyat");
+                    var stokRaw = ReadStringFromRow(row, "stok_miktar", "StokMiktar", "miktar");
+                    var depoNoRaw = ReadStringFromRow(row, "depo_no", "DepoNo");
+                    var kdvRaw = ReadStringFromRow(row, "kdv_orani", "KdvOrani");
+                    var webFlagRaw = ReadStringFromRow(row, "webe_gonderilecek_fl", "WebeGonderilecekFl");
+                    var sonHareketRaw = ReadStringFromRow(row, "son_hareket_tarihi", "SonHareketTarihi");
+
+                    rows.Add(new MikroUnifiedProductDto
+                    {
+                        StokKod = normalizedSku,
+                        StokAd = ReadStringFromRow(row, "stokad", "sto_isim", "StokAd"),
+                        Fiyat = ParseDecimalFlexible(fiyatRaw),
+                        StokMiktar = ParseDecimalFlexible(stokRaw),
+                        DepoNo = int.TryParse(depoNoRaw, out var dno) ? dno : null,
+                        Barkod = ReadStringFromRow(row, "barkod", "bar_kodu", "Barkod"),
+                        GrupKod = ReadStringFromRow(row, "grup_kod", "sto_grup_kod", "GrupKod"),
+                        // NEDEN: AnagrupKod SQL'den dönüyor ama parse edilmiyordu — kategori eşleme bozuktu
+                        AnagrupKod = ReadStringFromRow(row, "anagrup_kod", "sto_anagrup_kod", "AnagrupKod"),
+                        Birim = ReadStringFromRow(row, "birim", "sto_birim1_ad", "Birim"),
+                        KdvOrani = ParseDecimalFlexible(kdvRaw),
+                        WebeGonderilecekFl = ParseBoolFlexible(webFlagRaw) ?? true,
+                        SonHareketTarihi = DateTime.TryParse(sonHareketRaw, out var sht) ? sht : null
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MicroService] Birleşik SQL parse hatası.");
+            }
+
+            return rows;
+        }
+
+        /// <summary>
+        /// Birleşik SQL response JSON'ından row objelerini recursive olarak bulur.
+        /// NEDEN: Mikro SqlVeriOkuV2 response formatı ortama göre değişebilir
+        /// (direkt array, nested object, result wrapper vb.).
+        /// Satır tanıma kriteri: hem "stokkod" hem "fiyat" hem "stok_miktar" alanı olan obje.
+        /// </summary>
+        private static IEnumerable<JsonElement> EnumerateUnifiedRowObjects(JsonElement node)
+        {
+            if (node.ValueKind == JsonValueKind.Object)
+            {
+                if (LooksLikeUnifiedRow(node))
+                {
+                    yield return node;
+                    yield break;
+                }
+
+                foreach (var prop in node.EnumerateObject())
+                {
+                    foreach (var child in EnumerateUnifiedRowObjects(prop.Value))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+            else if (node.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in node.EnumerateArray())
+                {
+                    foreach (var child in EnumerateUnifiedRowObjects(item))
+                    {
+                        yield return child;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// JSON objesinin birleşik sorgu satırı olup olmadığını kontrol eder.
+        /// Kriter: stokkod + (fiyat veya stok_miktar) alanlarının varlığı.
+        /// </summary>
+        private static bool LooksLikeUnifiedRow(JsonElement obj)
+        {
+            if (obj.ValueKind != JsonValueKind.Object)
+                return false;
+
+            var hasStokkod = TryGetPropertyIgnoreCase(obj, "stokkod", out _) ||
+                             TryGetPropertyIgnoreCase(obj, "stok_kod", out _);
+
+            // Birleşik sorgu hem fiyat hem stok içerir — en az biri varsa tanırız
+            var hasFiyat = TryGetPropertyIgnoreCase(obj, "fiyat", out _) ||
+                           TryGetPropertyIgnoreCase(obj, "sfiyat_fiyati", out _);
+
+            var hasStokMiktar = TryGetPropertyIgnoreCase(obj, "stok_miktar", out _) ||
+                                TryGetPropertyIgnoreCase(obj, "StokMiktar", out _);
+
+            return hasStokkod && (hasFiyat || hasStokMiktar);
+        }
     }
 
     // ==================== MIKRO AUTH WRAPPER DTO ====================
@@ -1736,7 +3171,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
     /// <summary>
     /// MikroAPI V2 için authentication wrapper sınıfı.
     /// Tüm V2 endpoint'leri request body'de bu yapıyı bekler.
-    /// Sadece 5 alan içermelidir: ApiKey, CalismaYili, FirmaKodu, KullaniciKodu, Sifre
+    /// Mikro objesi içinde auth + şirket/şube context alanları taşınır.
     /// </summary>
     internal class MikroAuthWrapper
     {
@@ -1754,5 +3189,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         
         /// <summary>Günlük MD5 hash'lenmiş şifre</summary>
         public string Sifre { get; set; } = string.Empty;
+
+        /// <summary>Firma numarası (genellikle 0)</summary>
+        public int FirmaNo { get; set; }
+
+        /// <summary>Şube numarası (genellikle 0)</summary>
+        public int SubeNo { get; set; }
     }
 }

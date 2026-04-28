@@ -734,9 +734,11 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("OrderTotalAfterDiscount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("OrderTotalBeforeDiscount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("SessionId")
@@ -1261,6 +1263,118 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("MikroCategoryMappings", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.MikroProductCache", b =>
+                {
+                    b.Property<string>("StokKod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("Aktif")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("AnagrupKod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Barkod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Birim")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("DataHash")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<decimal>("DepoMiktari")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("DepoNo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FiyatListesiNo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GrupKod")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("GuncellemeTarihi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("KdvOrani")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<int?>("LocalProductId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("MikroGuncellemeTarihi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("OlusturmaTarihi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("SatilabilirMiktar")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("SatisFiyati")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<DateTime?>("SonHareketTarihi")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StokAd")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("SyncStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TumDepolarJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TumFiyatlarJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("VeriKaynagi")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.HasKey("StokKod");
+
+                    b.HasIndex("Aktif")
+                        .HasDatabaseName("IX_MikroProductCache_Aktif");
+
+                    b.HasIndex("AnagrupKod")
+                        .HasDatabaseName("IX_MikroProductCache_AnagrupKod");
+
+                    b.HasIndex("Barkod")
+                        .HasDatabaseName("IX_MikroProductCache_Barkod");
+
+                    b.HasIndex("GrupKod")
+                        .HasDatabaseName("IX_MikroProductCache_GrupKod");
+
+                    b.HasIndex("GuncellemeTarihi")
+                        .HasDatabaseName("IX_MikroProductCache_GuncellemeTarihi");
+
+                    b.HasIndex("LocalProductId")
+                        .HasDatabaseName("IX_MikroProductCache_LocalProductId");
+
+                    b.HasIndex("StokAd")
+                        .HasDatabaseName("IX_MikroProductCache_StokAd");
+
+                    b.HasIndex("Aktif", "GrupKod")
+                        .HasDatabaseName("IX_MikroProductCache_Aktif_GrupKod");
+
+                    b.ToTable("MikroProductCache", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.MikroSyncState", b =>
                 {
                     b.Property<int>("Id")
@@ -1463,6 +1577,7 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<decimal>("AuthorizedAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("CampaignDiscountAmount")
@@ -1479,6 +1594,7 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("CapturedAmount")
+                        .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime?>("CapturedAt")
@@ -1498,7 +1614,8 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("CourierWeightAdjustment")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1647,7 +1764,8 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("TolerancePercentage")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(5, 4)
+                        .HasColumnType("decimal(5,4)");
 
                     b.Property<decimal>("TotalPrice")
                         .HasPrecision(18, 2)
@@ -1681,7 +1799,8 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("WeightDifference")
-                        .HasColumnType("decimal(18,2)");
+                        .HasPrecision(18, 3)
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<int?>("WeightInGrams")
                         .HasColumnType("int");
@@ -2069,6 +2188,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<decimal?>("RefundedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -3258,6 +3380,61 @@ namespace ECommerce.Data.Migrations
                     b.HasIndex("ProductVariantId");
 
                     b.ToTable("Stocks");
+                });
+
+            modelBuilder.Entity("ECommerce.Entities.Concrete.SyncAuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntityId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EventType");
+
+                    b.HasIndex("Severity");
+
+                    b.ToTable("SyncAuditLogs", (string)null);
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.User", b =>

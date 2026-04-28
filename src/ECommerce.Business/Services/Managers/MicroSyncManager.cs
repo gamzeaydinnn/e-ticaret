@@ -3,9 +3,12 @@ using System.Linq;
 using ECommerce.Core.DTOs.Micro;
 // using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
 using ECommerce.Core.Interfaces;
+using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Entities.Concrete;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Data.Repositories;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -18,11 +21,24 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly IMicroService _microService;
         private readonly IProductRepository _productRepository;
+        // NEDEN: Yeni ürün oluşturulurken CategoryCode → CategoryId resolve etmek için
+        private readonly IAutoCategoryMappingEngine? _autoMappingEngine;
+        private readonly ILogger<MicroSyncManager>? _logger;
+        // Config: Mevcut ürünlerin kategorisini üzerine yaz mı?
+        private readonly bool _overwriteExistingCategory;
 
-        public MicroSyncManager(IMicroService microService, IProductRepository productRepository)
+        public MicroSyncManager(
+            IMicroService microService,
+            IProductRepository productRepository,
+            IAutoCategoryMappingEngine? autoMappingEngine = null,
+            ILogger<MicroSyncManager>? logger = null,
+            IConfiguration? configuration = null)
         {
             _microService = microService;
             _productRepository = productRepository;
+            _autoMappingEngine = autoMappingEngine;
+            _logger = logger;
+            _overwriteExistingCategory = configuration?.GetValue("CategoryMapping:OverwriteExistingCategory", false) ?? false;
         }
 
         public class ProductSyncResult
@@ -149,12 +165,21 @@ namespace ECommerce.Business.Services.Managers
             var mikroProducts = (await _microService.GetProductsAsync())?.ToList() ?? new List<MicroProductDto>();
             result.TotalProducts = mikroProducts.Count;
 
-            // Varsayılan kategori: mevcut ürünlerden ilk geçerli kategori, yoksa 1
-            var existingProducts = (await _productRepository.GetAllAsync()).ToList();
-            var defaultCategoryId = existingProducts.Select(p => p.CategoryId).FirstOrDefault(c => c > 0);
-            if (defaultCategoryId <= 0)
+            // Varsayılan kategori: "Diğer" kategorisi (CategorySeeder garanti eder)
+            // NEDEN: Eski hardcode CategoryId=1 yerine auto-mapping engine kullan.
+            // Engine yoksa bile en kötü 1'e fallback (ama bu olmamalı).
+            int fallbackCategoryId = 1;
+            if (_autoMappingEngine != null)
             {
-                defaultCategoryId = 1;
+                try
+                {
+                    // "*" wildcard mapping → "Diğer" kategorisi ID'sini al
+                    fallbackCategoryId = await _autoMappingEngine.ResolveOrCreateMappingAsync("*");
+                }
+                catch
+                {
+                    _logger?.LogWarning("[MicroSyncManager] Wildcard kategori resolve edilemedi, fallback=1");
+                }
             }
 
             foreach (var mikroProduct in mikroProducts)
@@ -172,11 +197,28 @@ namespace ECommerce.Business.Services.Managers
 
                     if (existing == null)
                     {
+                        // ADIM 8: Yeni ürün — CategoryCode varsa auto-mapping ile resolve et
+                        int categoryId = fallbackCategoryId;
+                        if (!string.IsNullOrWhiteSpace(mikroProduct.CategoryCode) && _autoMappingEngine != null)
+                        {
+                            try
+                            {
+                                categoryId = await _autoMappingEngine.ResolveOrCreateMappingAsync(
+                                    mikroProduct.CategoryCode);
+                            }
+                            catch (Exception catEx)
+                            {
+                                _logger?.LogWarning(catEx,
+                                    "[MicroSyncManager] Kategori resolve hatası: {Sku}, CategoryCode={Code}",
+                                    sku, mikroProduct.CategoryCode);
+                            }
+                        }
+
                         var newProduct = new Product
                         {
                             Name = string.IsNullOrWhiteSpace(mikroProduct.Name) ? sku : mikroProduct.Name.Trim(),
                             Description = string.Empty,
-                            CategoryId = defaultCategoryId,
+                            CategoryId = categoryId,
                             Price = mikroProduct.Price,
                             SpecialPrice = null,
                             StockQuantity = Math.Max(0, mikroProduct.StockQuantity > 0 ? mikroProduct.StockQuantity : mikroProduct.Stock),
@@ -197,6 +239,25 @@ namespace ECommerce.Business.Services.Managers
                         existing.StockQuantity = Math.Max(0, mikroProduct.StockQuantity > 0 ? mikroProduct.StockQuantity : mikroProduct.Stock);
                         existing.IsActive = mikroProduct.IsActive;
                         existing.UpdatedAt = DateTime.UtcNow;
+
+                        // ADIM 8: Mevcut ürün kategori güncellemesi (config ile kontrol)
+                        if (_overwriteExistingCategory &&
+                            !string.IsNullOrWhiteSpace(mikroProduct.CategoryCode) &&
+                            _autoMappingEngine != null)
+                        {
+                            try
+                            {
+                                var resolvedCategoryId = await _autoMappingEngine.ResolveOrCreateMappingAsync(
+                                    mikroProduct.CategoryCode);
+                                existing.CategoryId = resolvedCategoryId;
+                            }
+                            catch (Exception catEx)
+                            {
+                                _logger?.LogWarning(catEx,
+                                    "[MicroSyncManager] Mevcut ürün kategori güncelleme hatası: {Sku}",
+                                    sku);
+                            }
+                        }
 
                         await _productRepository.UpdateAsync(existing);
                         result.UpdatedProducts++;

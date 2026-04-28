@@ -18,6 +18,7 @@ import ReviewForm from "../components/ReviewForm";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { validateNumericId } from "../utils/securityHelpers";
+import { useStockUpdates } from "../hooks/useStockUpdates";
 
 export default function ProductDetail() {
   const { id: rawId } = useParams();
@@ -30,6 +31,22 @@ export default function ProductDetail() {
   const [reviews, setReviews] = useState([]);
   const { user } = useAuth();
   const { addToCart: ctxAddToCart } = useCart();
+
+  // Anlık stok/fiyat güncellemesi — StockHub üzerinden 10sn'de bir delta alır
+  // NEDEN: Kullanıcı ürün detay sayfasındayken stok tükenirse veya fiyat değişirse
+  // sayfa yenilemeden anında fark etmeli (Mikro ERP'den HotPoll ile geliyor)
+  const {
+    stockQuantity: realtimeStock,
+    price: realtimePrice,
+    isOutOfStock: realtimeOutOfStock,
+    lastUpdate: stockLastUpdate,
+  } = useStockUpdates(product?.id, {
+    initialStock: product?.stock ?? product?.stockQuantity ?? null,
+    initialPrice: product?.price ?? null,
+    onOutOfStock: (data) => {
+      console.warn("[ProductDetail] Stok tükendi:", data.productName);
+    },
+  });
 
   // Ürün detayını getir
   useEffect(() => {
@@ -384,10 +401,15 @@ export default function ProductDetail() {
                 ? Math.round(100 - (currentPrice / basePrice) * 100)
                 : 0;
 
-              const stock = product.stock ?? product.stockQuantity ?? null;
-              const isOutOfStock = typeof stock === "number" && stock <= 0;
+              // Anlık stok verisi varsa onu kullan (SignalR HotPoll'dan geliyor)
+              const stock =
+                realtimeStock ?? product.stock ?? product.stockQuantity ?? null;
+              const isOutOfStock =
+                realtimeOutOfStock || (typeof stock === "number" && stock <= 0);
               const isLowStock =
                 typeof stock === "number" && stock > 0 && stock <= 5;
+              // Fiyat: realtime varsa onu kullan
+              const displayPrice = realtimePrice ?? currentPrice;
 
               return (
                 <>
@@ -403,7 +425,7 @@ export default function ProductDetail() {
                       </div>
                     )}
                     <div className="fs-2 fw-bold text-warning">
-                      ₺{currentPrice.toFixed(2)}
+                      ₺{displayPrice.toFixed(2)}
                     </div>
                     {campaignInfo && (
                       <div className="mt-2 d-flex flex-wrap align-items-center gap-2">
@@ -608,8 +630,10 @@ export default function ProductDetail() {
             )}
 
             {(() => {
-              const stock = product.stock ?? product.stockQuantity ?? null;
-              const isOutOfStock = typeof stock === "number" && stock <= 0;
+              const stock =
+                realtimeStock ?? product.stock ?? product.stockQuantity ?? null;
+              const isOutOfStock =
+                realtimeOutOfStock || (typeof stock === "number" && stock <= 0);
               return (
                 <button
                   onClick={validateAndAdd}

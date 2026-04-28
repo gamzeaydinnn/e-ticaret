@@ -40,10 +40,18 @@ namespace ECommerce.Entities.Concrete
         public string? Barkod { get; set; }
 
         /// <summary>
-        /// Grup kodu (kategori mapping için)
+        /// Alt grup kodu (kategori mapping için — sto_altgrup_kod)
         /// </summary>
         [StringLength(50)]
         public string? GrupKod { get; set; }
+
+        /// <summary>
+        /// Ana grup kodu (kategori mapping için — sto_anagrup_kod).
+        /// NEDEN: MikroCategoryMapping.MikroAnagrupKod ile eşleştirilir.
+        /// GrupKod tek başına yeterli değil — anagrup+altgrup combo ile spesifik eşleme yapılır.
+        /// </summary>
+        [StringLength(50)]
+        public string? AnagrupKod { get; set; }
 
         /// <summary>
         /// Birim adı (ADET, KG, vb.)
@@ -137,6 +145,22 @@ namespace ECommerce.Entities.Concrete
         /// </summary>
         [StringLength(32)]
         public string? DataHash { get; set; }
+
+        /// <summary>
+        /// Verinin hangi kaynaktan geldiğini belirtir.
+        /// "SQL_UNIFIED" = Birleşik SQL sorgusu (yeni akış)
+        /// "STOK_LISTESI_V2" = Eski StokListesiV2 + ayrı SQL sorguları
+        /// NEDEN: Geçiş döneminde hangi ürünlerin yeni/eski akıştan geldiğini ayırt etmek için.
+        /// </summary>
+        [StringLength(30)]
+        public string? VeriKaynagi { get; set; }
+
+        /// <summary>
+        /// Yıl içindeki en son stok hareketi tarihi.
+        /// NEDEN: Delta sync sıralaması ve "aktif hareket gören ürün" tespiti için.
+        /// SQL kaynağı: MAX(STOK_HAREKETLERI.sth_tarih)
+        /// </summary>
+        public DateTime? SonHareketTarihi { get; set; }
     }
 
     /// <summary>

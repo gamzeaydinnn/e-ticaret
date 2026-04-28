@@ -165,8 +165,8 @@ export default function Category() {
         )}
       </div>
 
-      {/* Ürün listesi */}
-      {category && <ProductGrid categoryId={category.id} showTitle={false} />}
+      {/* Ürün listesi — grid modda (satır-sütun) */}
+      {category && <ProductGrid categoryId={category.id} showTitle={false} displayMode="grid" />}
 
       {!category && !loading && !error && (
         <div className="text-muted">Kategori bulunamadı.</div>
