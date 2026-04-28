@@ -39,8 +39,23 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Proje dizinine git
 cd "$PROJECT_ROOT"
 
+ENV_FILE=".env"
+SANITIZED_ENV_FILE="$(mktemp)"
+cleanup() {
+    rm -f "$SANITIZED_ENV_FILE"
+}
+trap cleanup EXIT
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "❌ .env bulunamadı. Mikro VPN ve Mikro SQL ayarlari olmadan deploy devam etmeyecek."
+    exit 1
+fi
+
+# Windows'tan gelen UTF-8 BOM shell source islemini bozmasin diye ilk satirdan temizle.
+sed '1s/^\xEF\xBB\xBF//' "$ENV_FILE" > "$SANITIZED_ENV_FILE"
+
 set -a
-. ./.env
+. "$SANITIZED_ENV_FILE"
 set +a
 
 vpn_config_path="${VPN_CONFIG_PATH:-./vpn.ovpn}"
@@ -57,11 +72,6 @@ if [ ! -s "$vpn_config_path" ]; then
     exit 1
 fi
 echo "✅ VPN config hazır: $vpn_config_path"
-
-if [ ! -f .env ]; then
-    echo "❌ .env bulunamadı. Mikro VPN ve Mikro SQL ayarlari olmadan deploy devam etmeyecek."
-    exit 1
-fi
 
 if grep -q '^MIKRO_SQL_USER=CHANGE_ME$' .env || grep -q '^MIKRO_SQL_PASSWORD=CHANGE_ME$' .env; then
     echo "❌ .env icindeki MIKRO_SQL_USER / MIKRO_SQL_PASSWORD hala CHANGE_ME durumda."
