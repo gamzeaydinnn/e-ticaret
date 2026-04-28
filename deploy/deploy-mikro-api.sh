@@ -96,6 +96,12 @@ case "$vpn_config_path" in
     *) vpn_config_path="$PROJECT_ROOT/${vpn_config_path#./}" ;;
 esac
 
+default_user_vpn_path="$HOME/secrets/mikro.ovpn"
+if [ ! -s "$vpn_config_path" ] && [ -s "$default_user_vpn_path" ]; then
+    echo "ℹ️ VPN_CONFIG_PATH bulunamadi, standart yol kullaniliyor: $default_user_vpn_path"
+    vpn_config_path="$default_user_vpn_path"
+fi
+
 # 1. VPN config dosyasını kontrol et
 echo "📍 Adım 1/7: VPN konfigürasyonu kontrol ediliyor..."
 if [ ! -s "$vpn_config_path" ]; then
