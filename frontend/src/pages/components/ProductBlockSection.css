@@ -24,6 +24,9 @@
   --block-card-width: 200px;
   --block-image-height: 130px;
   --block-card-height: 340px;
+  --block-shell-border: 1px solid rgba(255, 107, 53, 0.1);
+  --block-shell-radius: 16px;
+  --block-shell-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
 /* =====================================================
@@ -118,24 +121,59 @@
 .product-block-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 0 20px 20px;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 0 20px 18px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .header-left {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.block-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ff7a3d;
+}
+
+.block-title-row {
+  display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+}
+
+.block-title-icon {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(255, 122, 61, 0.14), rgba(255, 184, 107, 0.26));
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 61, 0.18);
+  font-size: 1.05rem;
 }
 
 .block-title {
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: 1.45rem;
+  line-height: 1.08;
+  font-weight: 800;
   color: #1a1a2e;
   margin: 0;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.03em;
 }
 
 .header-right {
@@ -147,20 +185,21 @@
   align-items: center;
   gap: 8px;
   color: #ff6b35;
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 700;
   text-decoration: none;
-  padding: 10px 20px;
-  border: 2px solid #ff6b35;
-  border-radius: 25px;
-  background: transparent;
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  border-radius: 999px;
+  background: #ffffff;
   transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
 }
 
 .view-all-btn:hover {
-  background: #ff6b35;
-  color: #fff;
-  transform: translateX(3px);
+  background: #fff3eb;
+  color: #ff6b35;
+  transform: translateX(2px);
 }
 
 .view-all-btn i {
@@ -175,12 +214,17 @@
    İÇERİK BÖLÜMÜ - POSTER + ÜRÜNLER
    ===================================================== */
 .product-block-container {
-  display: flex;
-  gap: 15px;
+  display: grid;
+  gap: 18px;
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
-  align-items: flex-start;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.product-block-container.with-poster {
+  grid-template-columns: var(--block-card-width) minmax(0, 1fr);
 }
 
 /* Poster olmadığında tam genişlik */
@@ -197,17 +241,21 @@
    ===================================================== */
 .product-block-poster {
   flex-shrink: 0;
-  width: 200px;
-  height: 340px;
-  min-width: 200px;
-  max-width: 200px;
-  min-height: 340px;
-  max-height: 340px;
-  border-radius: 16px;
+  width: var(--block-card-width);
+  height: var(--block-card-height);
+  min-width: var(--block-card-width);
+  max-width: var(--block-card-width);
+  min-height: var(--block-card-height);
+  max-height: var(--block-card-height);
+  border-radius: var(--block-shell-radius);
+  border: var(--block-shell-border);
   overflow: hidden;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--block-shell-shadow);
   display: flex;
-  align-self: flex-start;
+  align-self: stretch;
+  box-sizing: border-box;
+  background: #ffffff;
+  align-self: start;
 }
 
 .poster-image {
@@ -229,25 +277,28 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-self: start;
+  min-height: var(--block-card-height);
 }
 
 .products-slider-wrapper {
   position: relative;
   display: flex;
-  align-items: stretch;
-  height: 100%;
+  align-items: flex-start;
+  min-height: var(--block-card-height);
 }
 
 /* Scroll Container */
 .products-scroll-container {
   display: flex;
-  gap: 15px;
+  gap: 14px;
   overflow-x: auto;
   scroll-behavior: smooth;
-  padding: 0 5px;
+  padding: 0 2px;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  align-items: flex-start;
+  align-items: stretch;
+  min-height: var(--block-card-height);
 }
 
 .products-scroll-container::-webkit-scrollbar {
@@ -256,16 +307,30 @@
 
 /* Kart Stilleri - eşit yükseklik */
 .product-block-section .product-block-card {
-  width: 200px;
-  min-width: 200px;
-  max-width: 200px;
-  height: 340px;
-  min-height: 340px;
-  max-height: 340px;
+  width: var(--block-card-width);
+  min-width: var(--block-card-width);
+  max-width: var(--block-card-width);
+  height: var(--block-card-height);
+  min-height: var(--block-card-height);
+  max-height: var(--block-card-height);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
+  border-radius: var(--block-shell-radius);
+  min-height: var(--block-card-height) !important;
+  max-height: var(--block-card-height) !important;
+  align-self: start;
+}
+
+.product-block-section .modern-product-card.product-block-card {
+  width: var(--block-card-width) !important;
+  min-width: var(--block-card-width) !important;
+  max-width: var(--block-card-width) !important;
+  height: var(--block-card-height) !important;
+  min-height: var(--block-card-height) !important;
+  max-height: var(--block-card-height) !important;
 }
 
 .product-block-section .product-block-card .card-body {
@@ -279,9 +344,9 @@
 }
 
 .product-block-section .product-block-card .product-image-container {
-  height: 130px;
-  min-height: 130px;
-  max-height: 130px;
+  height: var(--block-image-height);
+  min-height: var(--block-image-height);
+  max-height: var(--block-image-height);
   flex-shrink: 0;
 }
 
@@ -326,16 +391,29 @@
 @media (max-width: 992px) {
   .product-block-header {
     padding: 0 15px 15px;
+    align-items: flex-start;
   }
 
   .block-title {
-    font-size: 1.4rem;
+    font-size: 1.25rem;
+  }
+
+  .block-title-icon {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    border-radius: 12px;
+    font-size: 0.98rem;
   }
 
   .product-block-container {
-    flex-direction: row;
     padding: 0 15px;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .product-block-container.with-poster {
+    grid-template-columns: var(--block-card-width) minmax(0, 1fr);
   }
 
   .product-block-section {
@@ -352,6 +430,7 @@
     max-width: 170px !important;
     min-height: 310px !important;
     max-height: 310px !important;
+    border-radius: 14px !important;
   }
 
   /* KART - poster ile birebir aynı boyut */
@@ -402,10 +481,28 @@
     padding: 0 12px 15px;
     flex-wrap: wrap;
     gap: 10px;
+    align-items: flex-start;
   }
 
   .block-title {
-    font-size: 1.25rem;
+    font-size: 1.08rem;
+  }
+
+  .block-eyebrow {
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+  }
+
+  .block-title-row {
+    gap: 10px;
+  }
+
+  .block-title-icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    border-radius: 11px;
+    font-size: 0.92rem;
   }
 
   .view-all-btn {
@@ -416,17 +513,23 @@
   .product-block-container {
     padding: 0 12px;
     gap: 10px;
-    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .product-block-container.with-poster {
+    grid-template-columns: var(--block-card-width) minmax(0, 1fr);
   }
 
   /* Mobilde poster ve kartlar aynı hizada başlasın */
   .product-block-content {
     align-self: flex-start;
+    min-height: var(--block-card-height);
   }
 
   .products-slider-wrapper {
     align-items: flex-start;
-    height: auto;
+    min-height: var(--block-card-height);
   }
 
   /* Mobilde ok butonları gizle */
@@ -509,7 +612,23 @@
   }
 
   .block-title {
-    font-size: 1.1rem;
+    font-size: 1rem;
+  }
+
+  .block-eyebrow {
+    font-size: 0.62rem;
+  }
+
+  .block-title-row {
+    gap: 8px;
+  }
+
+  .block-title-icon {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    border-radius: 10px;
+    font-size: 0.8rem;
   }
 
   .view-all-btn {

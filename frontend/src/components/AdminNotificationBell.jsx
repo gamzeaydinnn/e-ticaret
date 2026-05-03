@@ -210,7 +210,7 @@ export default function AdminNotificationBell() {
     <div className="position-relative" ref={dropdownRef}>
       {/* Bildirim Çanı Butonu */}
       <button
-        className="btn btn-link position-relative p-2"
+        className="btn btn-link position-relative p-2 admin-notification-trigger"
         onClick={() => setIsOpen(!isOpen)}
         style={{ color: "#6c757d" }}
         title={
@@ -237,7 +237,7 @@ export default function AdminNotificationBell() {
 
         {/* Bağlantı Göstergesi */}
         <span
-          className={`position-absolute rounded-circle ${isConnected ? "bg-success" : "bg-warning"}`}
+          className={`position-absolute rounded-circle admin-notification-connection-dot ${isConnected ? "bg-success" : "bg-warning"}`}
           style={{
             width: "8px",
             height: "8px",

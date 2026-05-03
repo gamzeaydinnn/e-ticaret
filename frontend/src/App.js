@@ -140,6 +140,17 @@ import MobileBottomNav from "./components/MobileBottomNav";
 import "./styles/mobileNav.css";
 import "./styles/panelMobile.css"; // Panel sayfaları için mobil stiller
 
+const HEADER_FALLBACK_CATEGORIES = [
+  { id: "fallback-et", name: "Et ve Et Ürünleri", slug: "et-ve-et-urunleri" },
+  { id: "fallback-sut", name: "Süt Ürünleri", slug: "sut-urunleri" },
+  { id: "fallback-meyve", name: "Meyve ve Sebze", slug: "meyve-ve-sebze" },
+  { id: "fallback-icecek", name: "İçecekler", slug: "icecekler" },
+  { id: "fallback-atistirmalik", name: "Atıştırmalık", slug: "atistirmalik" },
+  { id: "fallback-temizlik", name: "Temizlik", slug: "temizlik" },
+  { id: "fallback-temel", name: "Temel Gıda", slug: "temel-gida" },
+  { id: "fallback-diger", name: "Diğer", slug: "diger" },
+];
+
 function Header() {
   const { count: cartCount } = useCartCount();
   const navigate = useNavigate();
@@ -158,11 +169,18 @@ function Header() {
     const loadCategories = async () => {
       try {
         const cats = await categoryServiceReal.getActive();
-        setCategories(cats || []);
+        const normalizedCategories = Array.isArray(cats)
+          ? cats.filter(Boolean)
+          : [];
+        setCategories(
+          normalizedCategories.length > 0
+            ? normalizedCategories
+            : HEADER_FALLBACK_CATEGORIES,
+        );
       } catch (err) {
-        // Hata durumunda konsola yaz, UI boş kategori ile devam eder
+        // Hata durumunda boş header yerine güvenli fallback kategori seti göster.
         console.error("[Header] Kategoriler yüklenemedi:", err.message);
-        setCategories([]);
+        setCategories(HEADER_FALLBACK_CATEGORIES);
       }
     };
 
@@ -230,49 +248,15 @@ function Header() {
             {/* Logo */}
             <div className="col-md-3 col-auto">
               <Link to="/" className="text-decoration-none">
-                <div className="d-flex align-items-center logo-stack">
-                  <div className="logo-container">
-                    <img
-                      src="/images/golkoy-logo.png"
-                      alt="Gölköy Gurme"
-                      className="main-logo"
-                      style={{
-                        height: "150px",
-                        width: "auto",
-                        filter: "drop-shadow(0 3px 10px rgba(255,107,53,0.4))",
-                        transition: "all 0.3s ease",
-                        marginTop: "-15px",
-                        marginBottom: "-15px",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.transform = "scale(1.05)";
-                        e.target.style.filter =
-                          "drop-shadow(0 4px 12px rgba(255,107,53,0.4))";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.transform = "scale(1)";
-                        e.target.style.filter =
-                          "drop-shadow(0 2px 8px rgba(255,107,53,0.3))";
-                      }}
-                    />
-                  </div>
-                  <div
-                    className="secondary-logo-container"
-                    style={{ display: "flex", alignItems: "center" }}
-                  >
-                    <img
-                      className="secondary-logo"
-                      src="/images/dogadan-sofranza-logo.png"
-                      alt="Gölköy Gurme"
-                      style={{
-                        height: "180px",
-                        width: "auto",
-                        marginLeft: "-70px",
-                        marginTop: "-15px",
-                        marginBottom: "-15px",
-                        filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.2))",
-                      }}
-                    />
+                <div className="d-flex align-items-center logo-stack brand-logo-shell">
+                  <div className="logo-container brand-logo-main">
+                    <div className="main-logo brand-logo-crop" aria-label="Gölköy Gurme">
+                      <img
+                        className="brand-logo-image"
+                        src="/images/golkoy-logo-new.png"
+                        alt="Gölköy Gurme"
+                      />
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -2080,33 +2064,28 @@ function HomePage() {
           <div className="row">
             {/* Company Info */}
             <div className="col-lg-4 col-md-6 mb-4">
-              <div className="footer-brand">
-                <div className="d-flex align-items-center mb-4">
-                  <img
-                    src="/images/golkoy-logo1.png"
-                    alt="Gölköy Gurme"
-                    style={{
-                      height: "140px",
-                      width: "auto",
-                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
-                    }}
-                    className="me-4"
-                  />
-                  <img
-                    src="/images/dogadan-sofranza-logo.png"
-                    alt="Gölköy Gurme"
-                    style={{
-                      height: "140px",
-                      width: "auto",
-                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
-                    }}
-                  />
+              <div className="footer-brand footer-brand-panel">
+                <div className="d-flex align-items-center mb-4 footer-brand-logos">
+                  <div className="footer-brand-main">
+                    <div className="footer-logo-crop" aria-label="Gölköy Gurme">
+                      <img
+                        className="footer-logo-image"
+                        src="/images/golkoy-logo-new.png"
+                        alt="Gölköy Gurme"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <p className="footer-description">
                   Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli
                   ürünleri, en yüksek kalite standartlarında siz değerli
                   müşterilerimize sunmayı amaçlıyoruz.
                 </p>
+                <div className="footer-trust-row">
+                  <span className="footer-trust-chip">Dogal Secki</span>
+                  <span className="footer-trust-chip">Soguk Zincir</span>
+                  <span className="footer-trust-chip">Guvenli Odeme</span>
+                </div>
                 <div className="footer-features">
                   <div className="footer-feature">
                     <i className="fas fa-shield-alt text-success me-2"></i>

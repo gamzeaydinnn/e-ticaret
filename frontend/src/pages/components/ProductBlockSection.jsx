@@ -48,50 +48,221 @@ const TITLE_TEMPLATES = [
     icon: "fas fa-bullseye",
     color: "#ef4444",
     title: "Bu Fırsatları Kaçırmayın",
+    keywords: ["fırsat", "kampanya", "indirim"],
   },
-  { icon: "fas fa-bolt", color: "#f59e0b", title: "Şok İndirimler" },
-  { icon: "fas fa-tags", color: "#ef4444", title: "Süper Fırsatlar" },
+  {
+    icon: "fas fa-bolt",
+    color: "#f59e0b",
+    title: "Şok İndirimler",
+    keywords: ["şok", "indirim"],
+  },
+  {
+    icon: "fas fa-tags",
+    color: "#ef4444",
+    title: "Süper Fırsatlar",
+    keywords: ["fırsat"],
+  },
   {
     icon: "fas fa-percentage",
     color: "#10b981",
     title: "Haftalık Kampanyalar",
+    keywords: ["kampanya"],
   },
-  { icon: "fas fa-star", color: "#8b5cf6", title: "Özel Seçimler" },
-  { icon: "fas fa-gift", color: "#ec4899", title: "Hediye Fırsatlar" },
-  { icon: "fas fa-gem", color: "#6366f1", title: "Premium Koleksiyon" },
-  { icon: "fas fa-crown", color: "#f59e0b", title: "Elit Ürünler" },
-  { icon: "fas fa-fire", color: "#ef4444", title: "En Çok Satanlar" },
-  { icon: "fas fa-trophy", color: "#f59e0b", title: "Haftanın Yıldızları" },
-  { icon: "fas fa-heart", color: "#ef4444", title: "Müşteri Favorileri" },
+  {
+    icon: "fas fa-star",
+    color: "#8b5cf6",
+    title: "Özel Seçimler",
+    keywords: ["özel", "seçim"],
+  },
+  {
+    icon: "fas fa-gift",
+    color: "#ec4899",
+    title: "Hediye Fırsatlar",
+    keywords: ["hediye"],
+  },
+  {
+    icon: "fas fa-gem",
+    color: "#6366f1",
+    title: "Premium Koleksiyon",
+    keywords: ["premium", "koleksiyon"],
+  },
+  {
+    icon: "fas fa-crown",
+    color: "#f59e0b",
+    title: "Elit Ürünler",
+    keywords: ["elit"],
+  },
+  {
+    icon: "fas fa-fire",
+    color: "#ef4444",
+    title: "En Çok Satanlar",
+    keywords: ["en çok satan", "çok satan"],
+  },
+  {
+    icon: "fas fa-trophy",
+    color: "#f59e0b",
+    title: "Haftanın Yıldızları",
+    keywords: ["hafta", "yıldız"],
+  },
+  {
+    icon: "fas fa-heart",
+    color: "#ef4444",
+    title: "Müşteri Favorileri",
+    keywords: ["favori"],
+  },
   {
     icon: "fas fa-thumbs-up",
     color: "#3b82f6",
     title: "Sizin İçin Seçtiklerimiz",
+    keywords: ["sizin için", "seçtiklerimiz"],
   },
-  { icon: "fas fa-magic", color: "#8b5cf6", title: "Özel Öneriler" },
-  { icon: "fas fa-sparkles", color: "#10b981", title: "Yeni Gelenler" },
-  { icon: "fas fa-rocket", color: "#3b82f6", title: "Az Önce Eklendi" },
-  { icon: "fas fa-leaf", color: "#10b981", title: "Taze Ürünler" },
-  { icon: "fas fa-cheese", color: "#f59e0b", title: "Süt & Süt Ürünleri" },
+  {
+    icon: "fas fa-magic",
+    color: "#8b5cf6",
+    title: "Özel Öneriler",
+    keywords: ["öneri"],
+  },
+  {
+    icon: "fas fa-box-open",
+    color: "#10b981",
+    title: "Yeni Gelenler",
+    keywords: ["yeni"],
+  },
+  {
+    icon: "fas fa-rocket",
+    color: "#3b82f6",
+    title: "Az Önce Eklendi",
+    keywords: ["az önce", "eklendi"],
+  },
+  {
+    icon: "fas fa-leaf",
+    color: "#10b981",
+    title: "Taze Ürünler",
+    keywords: ["taze"],
+  },
+  {
+    icon: "fas fa-cheese",
+    color: "#f59e0b",
+    title: "Süt & Süt Ürünleri",
+    keywords: ["süt", "peynir", "yoğurt"],
+  },
   {
     icon: "fas fa-drumstick-bite",
     color: "#ef4444",
     title: "Et & Et Ürünleri",
+    keywords: ["et", "tavuk", "şarküteri"],
   },
-  { icon: "fas fa-carrot", color: "#f97316", title: "Meyve & Sebze" },
-  { icon: "fas fa-cheese", color: "#fbbf24", title: "Peynir Dünyası" },
-  { icon: "fas fa-bread-slice", color: "#d97706", title: "Fırından Taze" },
-  { icon: "fas fa-pump-soap", color: "#06b6d4", title: "Temizlik & Bakım" },
-  { icon: "fas fa-cookie", color: "#a855f7", title: "Atıştırmalıklar" },
-  { icon: "fas fa-mug-hot", color: "#78350f", title: "Kahve & İçecekler" },
-  { icon: "fas fa-wheat-awn", color: "#ca8a04", title: "Bakliyat & Tahıllar" },
-  { icon: "fas fa-jar", color: "#65a30d", title: "Konserveler" },
-  { icon: "fas fa-egg", color: "#fbbf24", title: "Kahvaltılık Lezzetler" },
-  { icon: "fas fa-cart-plus", color: "#ff6b35", title: "Hemen Sepete" },
-  { icon: "fas fa-percent", color: "#ef4444", title: "Kampanyalı Ürünler" },
-  { icon: "fas fa-bell", color: "#f59e0b", title: "Son Fırsat" },
-  { icon: "fas fa-clock", color: "#ef4444", title: "Sınırlı Süre" },
+  {
+    icon: "fas fa-carrot",
+    color: "#f97316",
+    title: "Meyve & Sebze",
+    keywords: ["meyve", "sebze", "manav"],
+  },
+  {
+    icon: "fas fa-cheese",
+    color: "#fbbf24",
+    title: "Peynir Dünyası",
+    keywords: ["peynir"],
+  },
+  {
+    icon: "fas fa-bread-slice",
+    color: "#d97706",
+    title: "Fırından Taze",
+    keywords: ["fırın", "ekmek"],
+  },
+  {
+    icon: "fas fa-pump-soap",
+    color: "#06b6d4",
+    title: "Temizlik & Bakım",
+    keywords: ["temizlik", "bakım"],
+  },
+  {
+    icon: "fas fa-cookie",
+    color: "#a855f7",
+    title: "Atıştırmalıklar",
+    keywords: ["atıştırmalık", "çikolata", "bisküvi"],
+  },
+  {
+    icon: "fas fa-mug-hot",
+    color: "#78350f",
+    title: "Kahve & İçecekler",
+    keywords: ["kahve", "içecek", "çay"],
+  },
+  {
+    icon: "fas fa-wheat-awn",
+    color: "#ca8a04",
+    title: "Bakliyat & Tahıllar",
+    keywords: ["bakliyat", "tahıl", "temel gıda"],
+  },
+  {
+    icon: "fas fa-jar",
+    color: "#65a30d",
+    title: "Konserveler",
+    keywords: ["konserve", "sos"],
+  },
+  {
+    icon: "fas fa-egg",
+    color: "#fbbf24",
+    title: "Kahvaltılık Lezzetler",
+    keywords: ["kahvaltı"],
+  },
+  {
+    icon: "fas fa-cart-plus",
+    color: "#ff6b35",
+    title: "Hemen Sepete",
+    keywords: ["sepete"],
+  },
+  {
+    icon: "fas fa-percent",
+    color: "#ef4444",
+    title: "Kampanyalı Ürünler",
+    keywords: ["kampanyalı"],
+  },
+  {
+    icon: "fas fa-bell",
+    color: "#f59e0b",
+    title: "Son Fırsat",
+    keywords: ["son fırsat"],
+  },
+  {
+    icon: "fas fa-clock",
+    color: "#ef4444",
+    title: "Sınırlı Süre",
+    keywords: ["sınırlı", "süre"],
+  },
 ];
+
+const normalizeBlockTitle = (value) =>
+  String(value || "")
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const findTitleTemplate = (value) => {
+  const normalizedTitle = normalizeBlockTitle(value);
+  const lowerTitle = normalizedTitle.toLocaleLowerCase("tr-TR");
+
+  return (
+    TITLE_TEMPLATES.find((template) => template.title === normalizedTitle) ||
+    TITLE_TEMPLATES.find((template) =>
+      Array.isArray(template.keywords)
+        ? template.keywords.some((keyword) => lowerTitle.includes(keyword))
+        : false,
+    ) ||
+    null
+  );
+};
+
+const getBlockEyebrow = (value) => {
+  const lowerTitle = normalizeBlockTitle(value).toLocaleLowerCase("tr-TR");
+
+  if (/(kampanya|fırsat|indirim)/.test(lowerTitle)) return "Günün Seçkisi";
+  if (/(et|süt|meyve|sebze|kahve|içecek|temizlik|bakliyat|kahvaltı)/.test(lowerTitle)) {
+    return "Öne Çıkan Kategori";
+  }
+
+  return "Özenle Seçildi";
+};
 
 const ProductBlockSection = ({
   block,
@@ -239,14 +410,17 @@ const ProductBlockSection = ({
   const products = block.products || block.Products || [];
   // BAŞLIK: title öncelikli, yoksa name kullan (eski bloklar için fallback)
   const title = block.title || block.Title || block.name || block.Name || "";
+  const normalizedTitle = normalizeBlockTitle(title);
   const posterUrl = block.posterImageUrl || block.PosterImageUrl || "";
+  const titleTemplate = findTitleTemplate(normalizedTitle);
+  const blockEyebrow = getBlockEyebrow(normalizedTitle);
 
   // Debug log - konsol kontrolü için
   console.log("📦 [ProductBlockSection] Block:", {
     id: block.id,
     name: block.name,
     title: block.title,
-    displayTitle: title,
+    displayTitle: normalizedTitle,
     posterUrl: posterUrl,
     productsCount: products.length,
     rawBlock: block,
@@ -539,26 +713,24 @@ const ProductBlockSection = ({
 
   // Başlık için ikon/emoji analizi
   const renderTitle = () => {
-    if (!title) return null;
+    if (!normalizedTitle) return null;
 
-    // Başlık metnine göre şablondan uygun ikonu bul
-    const template = TITLE_TEMPLATES.find((t) => t.title === title);
-
-    if (template) {
-      // Şablonda bulunan başlık - ikon ile göster
-      return (
-        <h2 className="block-title">
-          <i
-            className={template.icon}
-            style={{ color: template.color, marginRight: "10px" }}
-          ></i>
-          {title}
-        </h2>
-      );
-    }
-
-    // Özel başlık veya eski emoji'li başlık - olduğu gibi göster
-    return <h2 className="block-title">{title}</h2>;
+    return (
+      <>
+        <span className="block-eyebrow">{blockEyebrow}</span>
+        <div className="block-title-row">
+          {titleTemplate ? (
+            <span
+              className="block-title-icon"
+              style={{ color: titleTemplate.color }}
+            >
+              <i className={titleTemplate.icon}></i>
+            </span>
+          ) : null}
+          <h2 className="block-title">{normalizedTitle}</h2>
+        </div>
+      </>
+    );
   };
 
   return (
@@ -587,7 +759,11 @@ const ProductBlockSection = ({
         {/* Sol Taraf - Poster (Opsiyonel) */}
         {posterUrl && (
           <div className="product-block-poster">
-            <img src={posterUrl} alt={title} className="poster-image" />
+            <img
+              src={posterUrl}
+              alt={normalizedTitle || title}
+              className="poster-image"
+            />
           </div>
         )}
 

@@ -16,7 +16,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import homeBlockService from "../services/homeBlockService";
-import ProductBlockSection from "./components/ProductBlockSection";
+import ProductGrid from "../components/ProductGrid";
 import "./CollectionPage.css";
 
 const CollectionPage = () => {
@@ -75,6 +75,7 @@ const CollectionPage = () => {
 
   const products = block?.products || [];
   const title = block?.title || block?.name || "Koleksiyon";
+  const posterUrl = block?.posterImageUrl || "";
 
   // ============================================
   // RENDER - CONDITIONAL RENDER EN SONDA
@@ -113,6 +114,37 @@ const CollectionPage = () => {
 
   return (
     <div className="collection-page">
+      <div className="collection-header">
+        <div className="container py-4">
+          <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            <div className="d-flex align-items-center gap-3">
+              {posterUrl ? (
+                <div className="collection-poster">
+                  <img
+                    src={posterUrl}
+                    alt={title}
+                    className="poster-thumbnail"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <p className="collection-count text-uppercase fw-bold text-warning mb-2">
+                  Özel Seçki
+                </p>
+                <h1 className="collection-title">{title}</h1>
+                <p className="collection-count text-muted mb-0">
+                  {products.length} ürün tek listede gösteriliyor
+                </p>
+              </div>
+            </div>
+            <Link to="/" className="btn btn-outline-warning rounded-pill px-4 py-2 fw-semibold">
+              <i className="fas fa-arrow-left me-2"></i>
+              Ana Sayfaya Dön
+            </Link>
+          </div>
+        </div>
+      </div>
+
       <div className="container py-4">
         {products.length === 0 ? (
           <div className="text-center py-5">
@@ -142,7 +174,13 @@ const CollectionPage = () => {
             </Link>
           </div>
         ) : (
-          <ProductBlockSection block={block} showViewAllButton={false} />
+          <ProductGrid
+            products={products}
+            title={title}
+            showTitle={false}
+            showViewAll={false}
+            displayMode="grid"
+          />
         )}
       </div>
     </div>

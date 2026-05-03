@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/admin/XmlImportModal";
-import VariantManager from "../../components/admin/VariantManager";
+import XmlImportModal from "../../components/Admin/XmlImportModal";
+import VariantManager from "../../components/Admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -527,35 +527,324 @@ const AdminProducts = () => {
     );
   }
 
+  const totalProducts = products.length;
+  const activeProducts = products.filter((product) => product.isActive).length;
+  const lowStockProducts = products.filter(
+    (product) => (product.stock ?? product.stockQuantity ?? 0) <= 10,
+  ).length;
+  const totalCategories = categories.length;
+
   return (
     <div>
       {/* Mobil için CSS */}
       <style>{`
+        .admin-products-hero {
+          background: linear-gradient(135deg, #ffffff 0%, #fff7ed 100%);
+          border: 1px solid rgba(249, 115, 22, 0.12);
+          border-radius: 18px;
+          padding: 1rem;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        }
+
+        .admin-products-kicker {
+          font-size: 0.72rem;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #f97316;
+          margin-bottom: 0.35rem;
+        }
+
+        .admin-products-hero-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 0.9rem;
+        }
+
+        .admin-products-subtitle {
+          margin: 0.35rem 0 0;
+          color: #64748b;
+          font-size: 0.88rem;
+          line-height: 1.45;
+        }
+
+        .admin-products-summary {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(84px, 1fr));
+          gap: 0.55rem;
+          min-width: 180px;
+        }
+
+        .admin-products-stat {
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid rgba(226, 232, 240, 0.95);
+          border-radius: 14px;
+          padding: 0.7rem 0.8rem;
+        }
+
+        .admin-products-stat-value {
+          display: block;
+          font-size: 1rem;
+          font-weight: 800;
+          color: #0f172a;
+          line-height: 1.1;
+        }
+
+        .admin-products-stat-label {
+          display: block;
+          margin-top: 0.2rem;
+          color: #64748b;
+          font-size: 0.68rem;
+          font-weight: 600;
+        }
+
+        .admin-products-actions {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.55rem;
+        }
+
+        .admin-products-action-btn {
+          min-height: 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.35rem;
+          white-space: nowrap;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+        }
+
+        .admin-product-card {
+          border-radius: 16px !important;
+          border: 1px solid #dbe4f0 !important;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+          overflow: hidden;
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .admin-product-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+        }
+
+        .admin-product-image-wrap {
+          position: relative;
+          background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+          border-bottom: 1px solid #eef2f7;
+        }
+
+        .admin-product-status-badge {
+          font-size: 0.76rem !important;
+          font-weight: 700 !important;
+          padding: 0.38rem 0.68rem !important;
+          border-radius: 999px !important;
+          letter-spacing: 0.01em;
+          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+        }
+
+        .admin-product-stock-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 0.78rem !important;
+          font-weight: 700 !important;
+          padding: 0.38rem 0.72rem !important;
+          border-radius: 999px !important;
+          min-width: 74px;
+          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .admin-product-meta {
+          min-height: 34px;
+        }
+
+        .admin-product-actions {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.55rem;
+          align-items: stretch;
+        }
+
+        .admin-product-action-btn {
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          gap: 0.35rem;
+          min-height: 70px;
+          width: 100%;
+          border-radius: 14px !important;
+          font-size: 0.72rem !important;
+          font-weight: 700 !important;
+          padding: 0.7rem 0.45rem !important;
+          text-transform: none !important;
+          letter-spacing: 0.01em;
+          background: #ffffff;
+          border-width: 1px !important;
+          box-shadow: 0 6px 14px rgba(15, 23, 42, 0.04);
+        }
+
+        .admin-product-action-btn.btn-outline-primary {
+          background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+          border-color: #bfdbfe !important;
+        }
+
+        .admin-product-action-btn.btn-outline-success {
+          background: linear-gradient(180deg, #f3fff8 0%, #ebfbf2 100%);
+          border-color: #bbf7d0 !important;
+        }
+
+        .admin-product-action-btn.btn-outline-danger {
+          background: linear-gradient(180deg, #fff7f7 0%, #fff0f0 100%);
+          border-color: #fecaca !important;
+        }
+
+        .admin-product-action-btn i {
+          font-size: 1rem;
+        }
+
+        .admin-product-action-text {
+          display: block;
+          width: 100%;
+          text-align: center;
+          line-height: 1.1;
+          white-space: normal;
+          word-break: break-word;
+        }
+
         @media (max-width: 576px) {
+          .admin-products-hero {
+            padding: 0.8rem;
+            border-radius: 16px;
+          }
+
+          .admin-products-hero-top {
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+          }
+
+          .admin-products-summary {
+            width: 100%;
+            min-width: 0;
+          }
+
+          .admin-products-actions {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .admin-products-action-btn {
+            font-size: 0.68rem !important;
+            min-height: 40px;
+            padding: 0.45rem 0.35rem !important;
+            white-space: normal;
+            line-height: 1.15;
+          }
+
           .admin-product-card img { height: 60px !important; }
-          .admin-product-card .p-2 { padding: 0.4rem !important; }
-          .admin-product-card h6 { font-size: 0.7rem !important; }
-          .admin-product-card .badge { font-size: 0.5rem !important; padding: 1px 3px !important; }
-          .admin-product-card .btn { font-size: 0.6rem !important; padding: 2px 4px !important; }
-          .admin-product-card .fw-bold { font-size: 0.7rem !important; }
+          .admin-product-card .p-2 { padding: 0.65rem !important; }
+          .admin-product-card h6 { font-size: 0.85rem !important; }
+          .admin-product-card .fw-bold { font-size: 0.86rem !important; }
+          .admin-product-status-badge {
+            font-size: 0.68rem !important;
+            padding: 0.28rem 0.56rem !important;
+          }
+          .admin-product-stock-badge {
+            min-width: 64px;
+            font-size: 0.7rem !important;
+            padding: 0.3rem 0.55rem !important;
+          }
+          .admin-product-actions {
+            gap: 0.4rem;
+          }
+          .admin-product-action-btn {
+            gap: 0.18rem;
+            min-height: 58px;
+            padding: 0.45rem 0.2rem !important;
+            font-size: 0.58rem !important;
+            border-radius: 12px !important;
+          }
+          .admin-product-action-btn i {
+            font-size: 0.82rem;
+          }
+          .admin-product-action-text {
+            line-height: 1.05;
+            letter-spacing: 0;
+          }
+        }
+
+        @media (min-width: 577px) and (max-width: 991.98px) {
+          .admin-product-action-btn {
+            min-height: 64px;
+            padding: 0.6rem 0.3rem !important;
+            font-size: 0.64rem !important;
+          }
+
+          .admin-product-action-btn i {
+            font-size: 0.9rem;
+          }
+        }
+
+        @media (min-width: 992px) {
+          .admin-product-actions {
+            gap: 0.65rem;
+          }
+
+          .admin-product-action-btn {
+            min-height: 74px;
+            padding: 0.8rem 0.5rem !important;
+          }
+
+          .admin-product-action-text {
+            font-size: 0.74rem;
+          }
         }
       `}</style>
       <div className="container-fluid px-2">
-        {/* Header - Mobil Uyumlu */}
-        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-          <div>
-            <h5
-              className="mb-0 fw-bold"
-              style={{ color: "#1e293b", fontSize: "1rem" }}
-            >
-              <i className="fas fa-box me-1" style={{ color: "#f97316" }}></i>
-              Ürünler
-            </h5>
+        <div className="admin-products-hero mb-3">
+          <div className="admin-products-hero-top">
+            <div>
+              <div className="admin-products-kicker">Katalog Yönetimi</div>
+              <h5
+                className="mb-0 fw-bold"
+                style={{ color: "#1e293b", fontSize: "1.05rem" }}
+              >
+                <i className="fas fa-box me-2" style={{ color: "#f97316" }}></i>
+                Ürünler
+              </h5>
+              <p className="admin-products-subtitle">
+                Ürünleri düzenleyin, içe ve dışa aktarım işlemlerini yönetin,
+                stok ve kategori durumunu tek alandan izleyin.
+              </p>
+            </div>
+
+            <div className="admin-products-summary">
+              <div className="admin-products-stat">
+                <span className="admin-products-stat-value">{totalProducts}</span>
+                <span className="admin-products-stat-label">Toplam Ürün</span>
+              </div>
+              <div className="admin-products-stat">
+                <span className="admin-products-stat-value">{activeProducts}</span>
+                <span className="admin-products-stat-label">Aktif</span>
+              </div>
+              <div className="admin-products-stat">
+                <span className="admin-products-stat-value">{lowStockProducts}</span>
+                <span className="admin-products-stat-label">Düşük Stok</span>
+              </div>
+              <div className="admin-products-stat">
+                <span className="admin-products-stat-value">{totalCategories}</span>
+                <span className="admin-products-stat-label">Kategori</span>
+              </div>
+            </div>
           </div>
-          <div className="d-flex gap-2 flex-wrap">
+
+          <div className="admin-products-actions">
             {/* Excel'den Yükle Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #10b981, #34d399)",
                 borderRadius: "6px",
@@ -572,7 +861,7 @@ const AdminProducts = () => {
             </button>
             {/* XML Import Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #8b5cf6, #a78bfa)",
                 borderRadius: "6px",
@@ -584,7 +873,7 @@ const AdminProducts = () => {
             </button>
             {/* Excel Export Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #3b82f6, #60a5fa)",
                 borderRadius: "6px",
@@ -606,7 +895,7 @@ const AdminProducts = () => {
             </button>
             {/* Şablon İndir Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #6366f1, #818cf8)",
                 borderRadius: "6px",
@@ -618,7 +907,7 @@ const AdminProducts = () => {
             </button>
             {/* Otomatik Kategorize Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #ec4899, #f472b6)",
                 borderRadius: "6px",
@@ -640,7 +929,7 @@ const AdminProducts = () => {
             </button>
             {/* Yeni Ürün Ekle Butonu */}
             <button
-              className="btn border-0 text-white fw-medium px-2 py-1"
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
               style={{
                 background: "linear-gradient(135deg, #f97316, #fb923c)",
                 borderRadius: "6px",
@@ -678,20 +967,22 @@ const AdminProducts = () => {
 
         {/* Products Grid - Mobil 2'li */}
         <div className="row g-2">
-          {products.map((product) => (
+          {products.map((product) => {
+            const displayedStock = product.stock ?? product.stockQuantity ?? 0;
+            const stockBadgeClass =
+              displayedStock > 10
+                ? "bg-success"
+                : displayedStock > 0
+                  ? "bg-warning text-dark"
+                  : "bg-danger";
+
+            return (
             <div key={product.id} className="col-6 col-md-4 col-lg-3">
               <div
                 className="admin-product-card h-100"
-                style={{
-                  borderRadius: "8px",
-                  border: "1px solid #e2e8f0",
-                  backgroundColor: "#fff",
-                  overflow: "hidden",
-                }}
               >
                 <div
-                  className="position-relative"
-                  style={{ backgroundColor: "#f8f9fa" }}
+                  className="admin-product-image-wrap"
                 >
                   <img
                     src={product.imageUrl || "/images/placeholder.png"}
@@ -707,10 +998,9 @@ const AdminProducts = () => {
                     }}
                   />
                   <span
-                    className={`badge position-absolute top-0 end-0 m-1 ${
+                    className={`badge position-absolute top-0 end-0 m-2 admin-product-status-badge ${
                       product.isActive ? "bg-success" : "bg-secondary"
                     }`}
-                    style={{ fontSize: "0.55rem", padding: "2px 5px" }}
                   >
                     {product.isActive ? "Aktif" : "Pasif"}
                   </span>
@@ -719,48 +1009,40 @@ const AdminProducts = () => {
                 <div className="p-2">
                   <h6
                     className="fw-bold mb-1 text-truncate"
-                    style={{ fontSize: "0.75rem", color: "#2d3748" }}
+                    style={{ fontSize: "0.9rem", color: "#1e293b" }}
                   >
                     {product.name}
                   </h6>
                   <p
-                    className="text-muted mb-1 text-truncate"
-                    style={{ fontSize: "0.65rem" }}
+                    className="text-muted mb-2 text-truncate admin-product-meta"
+                    style={{ fontSize: "0.72rem" }}
                   >
                     {product.categoryName || "-"}
                   </p>
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <span
                       className="fw-bold"
-                      style={{ color: "#f57c00", fontSize: "0.8rem" }}
+                      style={{ color: "#f57c00", fontSize: "1rem" }}
                     >
                       ₺{product.price?.toFixed(2)}
                     </span>
                     <span
-                      className={`badge ${
-                        product.stock > 10
-                          ? "bg-success"
-                          : product.stock > 0
-                            ? "bg-warning"
-                            : "bg-danger"
-                      }`}
-                      style={{ fontSize: "0.55rem", padding: "2px 4px" }}
+                      className={`badge admin-product-stock-badge ${stockBadgeClass}`}
                     >
-                      {product.stock}
+                      Stok {displayedStock}
                     </span>
                   </div>
-                  <div className="d-flex gap-1">
+                  <div className="admin-product-actions">
                     <button
-                      className="btn btn-outline-primary btn-sm flex-fill"
-                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
+                      className="btn btn-outline-primary btn-sm flex-fill admin-product-action-btn"
                       onClick={() => handleEdit(product)}
                       title="Düzenle"
                     >
                       <i className="fas fa-edit"></i>
+                      <span className="admin-product-action-text">Düzenle</span>
                     </button>
                     <button
-                      className="btn btn-outline-success btn-sm"
-                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
+                      className="btn btn-outline-success btn-sm admin-product-action-btn"
                       onClick={() => {
                         setSelectedProductForVariants(product);
                         setShowVariantManager(true);
@@ -768,20 +1050,21 @@ const AdminProducts = () => {
                       title="Varyantlar"
                     >
                       <i className="fas fa-layer-group"></i>
+                      <span className="admin-product-action-text">Varyant Yönet</span>
                     </button>
                     <button
-                      className="btn btn-outline-danger btn-sm"
-                      style={{ fontSize: "0.65rem", padding: "3px 6px" }}
+                      className="btn btn-outline-danger btn-sm admin-product-action-btn"
                       onClick={() => handleDelete(product.id)}
                       title="Sil"
                     >
                       <i className="fas fa-trash"></i>
+                      <span className="admin-product-action-text">Sil</span>
                     </button>
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+          );})}
 
           {products.length === 0 && (
             <div className="col-12">

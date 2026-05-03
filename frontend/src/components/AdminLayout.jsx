@@ -711,25 +711,26 @@ function AdminLayoutInner({ children }) {
       >
         {/* Top Navigation */}
         <nav
-          className="navbar navbar-expand-lg bg-white shadow-sm sticky-top"
+          className="navbar navbar-expand-lg bg-white shadow-sm sticky-top py-1 py-lg-2"
           style={{ borderBottom: "1px solid #e5e7eb" }}
         >
-          <div className="container-fluid">
+          <div className="container-fluid px-2 px-lg-3 admin-topbar-shell">
             <button
-              className="btn btn-outline-secondary d-lg-none me-2"
+              className="btn btn-sm btn-outline-secondary d-lg-none me-2 admin-topbar-menu-btn"
               onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ padding: "4px 8px" }}
             >
               <i className="fas fa-bars"></i>
             </button>
 
-            <div className="navbar-nav ms-auto d-flex align-items-center gap-2">
+            <div className="ms-auto d-flex align-items-center gap-2 admin-topbar-actions">
               {/* SignalR Bağlantı Durumu Göstergesi */}
               <div
-                className="d-flex align-items-center me-1"
+                className="d-flex align-items-center me-1 admin-topbar-status"
                 title={signalRConnected ? "Canlı bağlantı aktif" : "Canlı bağlantı kuruluyor..."}
               >
                 <span
-                  className={`rounded-circle ${signalRConnected ? "bg-success" : "bg-warning"}`}
+                  className={`rounded-circle admin-topbar-live-dot ${signalRConnected ? "bg-success" : "bg-warning"}`}
                   style={{
                     width: "8px",
                     height: "8px",
@@ -752,7 +753,7 @@ function AdminLayoutInner({ children }) {
               {/* Bildirim Çanı — Merkezi AdminSignalR context'ten beslenir */}
               <AdminNotificationBell />
 
-              <div className="nav-item dropdown">
+              <div className="nav-item dropdown admin-topbar-profile">
                 <button
                   className="nav-link dropdown-toggle d-flex align-items-center text-dark btn btn-link border-0"
                   type="button"
@@ -760,7 +761,7 @@ function AdminLayoutInner({ children }) {
                   style={{ fontSize: "0.9rem", textDecoration: "none" }}
                 >
                   <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-2"
+                    className="rounded-circle d-flex align-items-center justify-content-center me-2 admin-topbar-avatar"
                     style={{
                       width: "32px",
                       height: "32px",
@@ -772,7 +773,7 @@ function AdminLayoutInner({ children }) {
                       style={{ fontSize: "0.75rem" }}
                     ></i>
                   </div>
-                  {user?.name || "Admin"}
+                  <span className="d-none d-sm-inline">{user?.name || "Admin"}</span>
                 </button>
                 <ul className="dropdown-menu dropdown-menu-end shadow">
                   <li>
@@ -820,7 +821,7 @@ function AdminLayoutInner({ children }) {
 
         {/* Page Content */}
         <main
-          className="p-4 p-md-4 p-sm-2 admin-layout-main"
+          className="p-2 p-md-4 admin-layout-main"
           style={{
             maxWidth: "100%",
             overflowX: "hidden",
@@ -919,6 +920,54 @@ const styles = `
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
+
+  .admin-topbar-shell {
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .admin-topbar-actions {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .admin-topbar-menu-btn {
+    flex: 0 0 auto;
+  }
+
+  .admin-topbar-status {
+    margin-right: 0 !important;
+    min-width: 24px;
+  }
+
+  .admin-topbar-profile .nav-link {
+    padding: 0.15rem 0 !important;
+  }
+
+  .admin-topbar-profile .dropdown-toggle::after {
+    margin-left: 0.35rem;
+    color: #94a3b8;
+  }
+
+  .admin-topbar-avatar {
+    width: 30px !important;
+    height: 30px !important;
+    box-shadow: 0 8px 18px rgba(249, 115, 22, 0.22);
+    margin-right: 0 !important;
+  }
+
+  .admin-topbar-live-dot {
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px;
+    min-height: 8px;
+    box-shadow: 0 0 0 4px rgba(255, 193, 7, 0.12);
+  }
   
   .sidebar-container {
     position: fixed !important;
@@ -962,6 +1011,41 @@ const styles = `
     padding-right: 0.5rem !important;
   }
   
+  /* Navbar yüksekliğini küçült */
+  .navbar {
+    min-height: 44px !important;
+  }
+
+  .navbar .btn-link,
+  .navbar .dropdown-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .admin-topbar-profile .nav-link,
+  .admin-notification-trigger {
+    min-height: 34px;
+    border-radius: 12px;
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+  }
+
+  .admin-topbar-profile .nav-link {
+    padding: 0.2rem 0.45rem !important;
+  }
+
+  .admin-notification-trigger {
+    padding: 0.35rem 0.45rem !important;
+    color: #475569 !important;
+  }
+
+  .admin-notification-connection-dot {
+    width: 8px !important;
+    height: 8px !important;
+  }
+  
   /* Form elemanları */
   .form-control,
   .form-select {
@@ -985,6 +1069,27 @@ const styles = `
 @media (max-width: 575.98px) {
   .sidebar-container {
     width: 200px !important;
+  }
+
+  .admin-topbar-shell {
+    min-height: 48px;
+  }
+
+  .admin-topbar-actions {
+    gap: 0.35rem !important;
+  }
+
+  .admin-topbar-status {
+    display: none !important;
+  }
+
+  .admin-topbar-profile .nav-link {
+    gap: 0.2rem;
+    padding-right: 0.35rem !important;
+  }
+
+  .admin-topbar-profile .dropdown-toggle::after {
+    margin-left: 0.15rem;
   }
   
   .admin-layout-main {
