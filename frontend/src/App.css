@@ -4306,11 +4306,17 @@ html {
 @media (max-width: 576px) {
   /* === HEADER === */
   .main-header {
-    padding: 4px 0 !important;
+    padding: 0 !important;
+    background: linear-gradient(180deg, #fffaf5 0%, #ffffff 72%) !important;
+    border-bottom: 1px solid rgba(225, 103, 49, 0.12) !important;
+    box-shadow: 0 10px 28px rgba(26, 32, 44, 0.08) !important;
   }
 
   .main-header .container-fluid {
-    padding: 0 5px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 4px 10px 8px !important;
   }
 
   .main-header .row {
@@ -4319,12 +4325,22 @@ html {
     align-items: center !important;
   }
 
+  .mobile-header-row {
+    display: none !important;
+  }
+
   /* Logo bölümü - sola yasla */
   .main-header .col-md-3.col-auto {
     flex: 0 0 auto !important;
     width: auto !important;
     padding: 0 !important;
-    margin-left: -5px !important;
+    margin-left: 0 !important;
+  }
+
+  .brand-logo-shell {
+    width: 122px !important;
+    min-width: 122px !important;
+    height: 42px !important;
   }
 
   .logo-stack {
@@ -4350,13 +4366,13 @@ html {
   }
 
   .brand-logo-crop {
-    width: 140px !important;
-    height: 54px !important;
+    width: 122px !important;
+    height: 42px !important;
   }
 
   .brand-logo-image {
-    width: 206px !important;
-    transform: translate(-26px, -61px) !important;
+    width: 178px !important;
+    transform: translate(-21px, -50px) !important;
   }
 
   .secondary-logo {
@@ -4374,25 +4390,27 @@ html {
   .main-header .col-md-3.col-auto.ms-auto {
     flex: 0 0 auto !important;
     width: auto !important;
-    padding: 0 5px 0 0 !important;
+    padding: 0 !important;
   }
 
   .header-actions {
-    gap: 4px !important;
+    gap: 6px !important;
   }
 
   .modern-action-btn {
-    padding: 2px !important;
+    padding: 0 !important;
+    min-width: auto !important;
   }
 
   .action-icon {
-    width: 28px !important;
-    height: 28px !important;
-    padding: 5px !important;
+    width: 34px !important;
+    height: 34px !important;
+    padding: 0 !important;
+    box-shadow: 0 8px 16px rgba(255, 107, 53, 0.16) !important;
   }
 
   .action-icon i {
-    font-size: 11px !important;
+    font-size: 13px !important;
   }
 
   .action-label {
@@ -4407,6 +4425,63 @@ html {
     font-size: 8px !important;
     top: -3px !important;
     right: -3px !important;
+  }
+
+  .mobile-search-row {
+    order: -1 !important;
+    margin-top: 0 !important;
+  }
+
+  .mobile-search-row > .col-12 {
+    padding: 0 !important;
+  }
+
+  .mobile-search-shell {
+    position: relative;
+    padding: 2px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 244, 236, 0.96));
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+    border: 1px solid rgba(255, 126, 72, 0.12);
+  }
+
+  .mobile-search-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(255, 126, 72, 0.12), transparent 28%, transparent 72%, rgba(35, 84, 173, 0.08));
+    pointer-events: none;
+  }
+
+  .mobile-search-shell .search-container,
+  .mobile-search-shell .modern-search-container {
+    margin: 0 !important;
+  }
+
+  .mobile-search-shell .input-group {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  .mobile-search-shell .search-autocomplete {
+    margin: 0 !important;
+  }
+
+  .mobile-search-shell input.form-control {
+    height: 40px !important;
+    padding-left: 16px !important;
+    padding-right: 40px !important;
+    font-size: 0.84rem !important;
+    border-radius: 14px !important;
+    box-shadow: none !important;
+  }
+
+  .mobile-search-shell button[type="submit"] {
+    right: 7px !important;
+    width: 28px !important;
+    height: 28px !important;
   }
 
   /* === KATEGORİLER === */

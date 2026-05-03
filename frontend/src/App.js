@@ -242,9 +242,9 @@ function Header() {
     <div className="App">
       <GlobalToastContainer />
       {/* Main Header */}
-      <header className="main-header bg-white shadow-sm py-1">
+      <header className="main-header main-header--storefront bg-white shadow-sm py-1">
         <div className="container-fluid px-4">
-          <div className="row align-items-center">
+          <div className="row align-items-center mobile-header-row">
             {/* Logo */}
             <div className="col-md-3 col-auto">
               <Link to="/" className="text-decoration-none">
@@ -640,9 +640,11 @@ function Header() {
           </div>
 
           {/* Mobil Arama - Sadece mobilde görünür */}
-          <div className="row d-md-none mt-2">
+          <div className="row d-md-none mobile-search-row">
             <div className="col-12">
-              <SearchAutocomplete />
+              <div className="mobile-search-shell">
+                <SearchAutocomplete />
+              </div>
             </div>
           </div>
         </div>
