@@ -75,6 +75,14 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     \
+    # index.html - asla cache'leme (her deploy'da yeni JS hash geliyor) \
+    location = /index.html { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        add_header Expires "0"; \
+        try_files $uri =404; \
+    } \
+    \
     # Ana sayfa ve diğer rotalar - SPA Fallback \
     location / { \
         try_files $uri $uri/ /index.html; \
