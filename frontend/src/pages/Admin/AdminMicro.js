@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { MicroService } from "../../services/microService";
 import { useGlobalStockUpdates } from "../../hooks/useStockUpdates";
-import SyncHealthDashboard from "../../components/Admin/SyncHealthDashboard";
+import SyncHealthDashboard from "../../components/admin/SyncHealthDashboard";
 
 // Yardımcı fonksiyonlar
 const formatDuration = (ms) => {
