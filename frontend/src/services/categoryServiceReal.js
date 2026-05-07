@@ -13,6 +13,7 @@
 import api from "./api";
 
 export const CATEGORY_SLUG_ALIASES = {
+  diger: "ev-ve-mutfak",
   "sut-urunleri": "sut-ve-sut-urunleri",
   "meyve-sebze": "meyve-ve-sebze",
   "et-tavuk": "et-ve-et-urunleri",

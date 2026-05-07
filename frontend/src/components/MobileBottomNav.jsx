@@ -18,7 +18,9 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCartCount } from "../hooks/useCartCount";
-import categoryServiceReal from "../services/categoryServiceReal";
+import categoryServiceReal, {
+  normalizeCategorySlug,
+} from "../services/categoryServiceReal";
 import "../styles/mobileNav.css";
 
 // Slug oluşturma fonksiyonu (App.js ile aynı)
@@ -147,7 +149,7 @@ const MobileBottomNav = () => {
    * Kategori seçme handler'ı
    */
   const handleCategoryClick = (cat) => {
-    const slug = cat.slug || createSlug(cat.name);
+    const slug = normalizeCategorySlug(cat.slug || createSlug(cat.name));
     setShowCategories(false);
     navigate(`/category/${slug}`);
   };

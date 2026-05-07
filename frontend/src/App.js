@@ -150,7 +150,7 @@ const HEADER_FALLBACK_CATEGORIES = [
   { id: "fallback-atistirmalik", name: "Atıştırmalık", slug: "atistirmalik" },
   { id: "fallback-temizlik", name: "Temizlik", slug: "temizlik" },
   { id: "fallback-temel", name: "Temel Gıda", slug: "temel-gida" },
-  { id: "fallback-diger", name: "Diğer", slug: "diger" },
+  { id: "fallback-ev-mutfak", name: "Ev ve Mutfak", slug: "ev-ve-mutfak" },
 ];
 
 function Header() {

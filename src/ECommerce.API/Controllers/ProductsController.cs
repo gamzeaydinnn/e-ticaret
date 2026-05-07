@@ -28,6 +28,14 @@ namespace ECommerce.API.Controllers
     [Route("api/[controller]")]
     public class ProductsController : ControllerBase
     {
+        private static readonly Dictionary<string, string> CategorySlugAliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["sut-urunleri"] = "sut-ve-sut-urunleri",
+            ["meyve-sebze"] = "meyve-ve-sebze",
+            ["et-tavuk"] = "et-ve-et-urunleri",
+            ["et-tavuk-balik"] = "et-ve-et-urunleri"
+        };
+
         private readonly IProductService _productService;
         private readonly IWebHostEnvironment _environment;
         private readonly IFileStorage _fileStorage;
@@ -87,6 +95,19 @@ namespace ECommerce.API.Controllers
             if (_mikroDbService.IsConfigured)
             {
                 var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                if (unified.Count == 0)
+                {
+                    _logger.LogWarning("[Products] Mikro configured but returned 0 products. Falling back to local DB. CategoryId: {CategoryId}", categoryId);
+                    var fallbackProducts = await _productService.GetActiveProductsWithCampaignAsync(page, size, categoryId);
+                    return Ok(fallbackProducts);
+                }
+
+                var requestedCategory = categoryId.HasValue
+                    ? await _dbContext.Categories
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.Id == categoryId.Value, HttpContext.RequestAborted)
+                    : null;
+                var requestedCategorySlug = ResolveRequestedCategorySlug(requestedCategory);
 
                 // Local DB'deki ürünleri SKU bazlı eşle (kategori, isim, fiyat override)
                 var localAll = await _dbContext.Products
@@ -133,6 +154,7 @@ namespace ECommerce.API.Controllers
                         // 3. Local DB CategoryId KULLANILMAZ — eski bug'lı sync yanlış atamış
                         int? catId = null;
                         string catName = string.Empty;
+                        string categorySlug = string.Empty;
 
                         // Öncelik 1: AnagrupKod mapping
                         if (!string.IsNullOrWhiteSpace(p.AnagrupKod) &&
@@ -140,12 +162,16 @@ namespace ECommerce.API.Controllers
                         {
                             catId = mappedCatId;
                             if (idToSlug.TryGetValue(mappedCatId, out var mappedSlug))
+                            {
+                                categorySlug = NormalizeCategorySlug(mappedSlug);
                                 catName = slugToName.GetValueOrDefault(mappedSlug, string.Empty);
+                            }
                         }
                         else
                         {
                             // Öncelik 2: Keyword tabanlı anlık eşleme
                             var matchedSlug = MatchCategorySlug(p.StokAd);
+                            categorySlug = NormalizeCategorySlug(matchedSlug);
                             if (slugToId.TryGetValue(matchedSlug, out var resolvedId))
                             {
                                 catId = resolvedId;
@@ -153,38 +179,47 @@ namespace ECommerce.API.Controllers
                             }
                         }
 
-                        return new ProductListDto
+                        return new
                         {
-                            Id = hasLocal ? local!.Id : 0,
-                            // NEDEN: SKU, Id=0 ürünlerde detay sayfasına yönlendirmek için kullanılır
-                            Sku = p.StokKod,
-                            Name = hasLocal && !string.IsNullOrEmpty(local!.Name) ? local.Name : p.StokAd,
-                            Slug = hasLocal && !string.IsNullOrEmpty(local!.Slug) ? local.Slug : GenerateSlug(p.StokAd),
-                            Description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
-                            Price = hasLocal && local!.Price > 0 ? local.Price : p.Fiyat,
-                            SpecialPrice = hasLocal ? local!.SpecialPrice : null,
-                            StockQuantity = (int)Math.Max(0, p.StokMiktar),
-                            ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
-                            // NEDEN: Mikro ERP birim bilgisi — KG ürünlerde frontend ağırlık seçici gösterir
-                            Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
-                            CategoryId = catId,
-                            CategoryName = catName,
+                            Product = new ProductListDto
+                            {
+                                Id = hasLocal ? local!.Id : 0,
+                                // NEDEN: SKU, Id=0 ürünlerde detay sayfasına yönlendirmek için kullanılır
+                                Sku = p.StokKod,
+                                Name = hasLocal && !string.IsNullOrEmpty(local!.Name) ? local.Name : p.StokAd,
+                                Slug = hasLocal && !string.IsNullOrEmpty(local!.Slug) ? local.Slug : GenerateSlug(p.StokAd),
+                                Description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
+                                Price = hasLocal && local!.Price > 0 ? local.Price : p.Fiyat,
+                                SpecialPrice = hasLocal ? local!.SpecialPrice : null,
+                                StockQuantity = (int)Math.Max(0, p.StokMiktar),
+                                ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                                // NEDEN: Mikro ERP birim bilgisi — KG ürünlerde frontend ağırlık seçici gösterir
+                                Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
+                                CategoryId = catId,
+                                CategoryName = catName,
+                            },
+                            CategorySlug = categorySlug,
                         };
                     })
-                    .Where(p => p.Price > 0) // Fiyatsız ürünleri gösterme
-                    .ToList();
+                    .Where(x => x.Product.Price > 0); // Fiyatsız ürünleri gösterme
 
                 // Kategoriye göre filtrele
                 if (categoryId.HasValue)
-                    merged = merged.Where(p => p.CategoryId == categoryId.Value).ToList();
+                {
+                    merged = merged.Where(x =>
+                        x.Product.CategoryId == categoryId.Value ||
+                        (!string.IsNullOrWhiteSpace(requestedCategorySlug) &&
+                         string.Equals(x.CategorySlug, requestedCategorySlug, StringComparison.OrdinalIgnoreCase)));
+                }
 
                 // Sırala ve sayfalandır
                 var result = merged
-                    .OrderByDescending(p => p.HasActiveCampaign)
-                    .ThenByDescending(p => p.DiscountPercentage ?? 0)
-                    .ThenBy(p => p.Name)
+                    .OrderByDescending(x => x.Product.HasActiveCampaign)
+                    .ThenByDescending(x => x.Product.DiscountPercentage ?? 0)
+                    .ThenBy(x => x.Product.Name)
                     .Skip((Math.Max(1, page) - 1) * Math.Max(1, size))
                     .Take(Math.Max(1, size))
+                    .Select(x => x.Product)
                     .ToList();
 
                 return Ok(result);
@@ -527,6 +562,33 @@ namespace ECommerce.API.Controllers
             slug = System.Text.RegularExpressions.Regex.Replace(slug, @"[\s]+", "-");
             slug = System.Text.RegularExpressions.Regex.Replace(slug, @"-+", "-");
             return slug.Trim('-');
+        }
+
+        private static string NormalizeCategorySlug(string? slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return string.Empty;
+
+            var normalized = GenerateSlug(slug);
+            return CategorySlugAliases.TryGetValue(normalized, out var alias)
+                ? alias
+                : normalized;
+        }
+
+        private static string ResolveRequestedCategorySlug(Category? category)
+        {
+            if (category == null) return string.Empty;
+
+            var slugFromEntity = NormalizeCategorySlug(category.Slug);
+            var slugFromName = NormalizeCategorySlug(category.Name);
+
+            if (!string.IsNullOrWhiteSpace(slugFromName) &&
+                (string.IsNullOrWhiteSpace(slugFromEntity) ||
+                 string.Equals(slugFromEntity, "diger", StringComparison.OrdinalIgnoreCase)))
+            {
+                return slugFromName;
+            }
+
+            return !string.IsNullOrWhiteSpace(slugFromEntity) ? slugFromEntity : slugFromName;
         }
 
         /// <summary>
