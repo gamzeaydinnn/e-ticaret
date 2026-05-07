@@ -123,7 +123,9 @@ import VisionMission from "./pages/VisionMission.jsx";
 import NotFound from "./pages/NotFound.jsx"; // 404 sayfası
 import ErrorBoundary from "./components/ErrorBoundary.jsx"; // Global error handler
 import SearchAutocomplete from "./components/SearchAutocomplete";
-import categoryServiceReal from "./services/categoryServiceReal";
+import categoryServiceReal, {
+  normalizeCategorySlug,
+} from "./services/categoryServiceReal";
 import bannerService from "./services/bannerService";
 import homeBlockService from "./services/homeBlockService";
 import ProductBlockSection from "./pages/components/ProductBlockSection";
@@ -142,7 +144,7 @@ import "./styles/panelMobile.css"; // Panel sayfaları için mobil stiller
 
 const HEADER_FALLBACK_CATEGORIES = [
   { id: "fallback-et", name: "Et ve Et Ürünleri", slug: "et-ve-et-urunleri" },
-  { id: "fallback-sut", name: "Süt Ürünleri", slug: "sut-urunleri" },
+  { id: "fallback-sut", name: "Süt Ürünleri", slug: "sut-ve-sut-urunleri" },
   { id: "fallback-meyve", name: "Meyve ve Sebze", slug: "meyve-ve-sebze" },
   { id: "fallback-icecek", name: "İçecekler", slug: "icecekler" },
   { id: "fallback-atistirmalik", name: "Atıştırmalık", slug: "atistirmalik" },
@@ -664,7 +666,7 @@ function Header() {
               KATEGORİLER
             </button>
             {categories.map((cat) => {
-              const slug = cat.slug || createSlug(cat.name);
+              const slug = normalizeCategorySlug(cat.slug || createSlug(cat.name));
               const isActive = location.pathname.startsWith(
                 `/category/${slug}`,
               );
@@ -2110,17 +2112,17 @@ function HomePage() {
               <h6 className="footer-title">Kategoriler</h6>
               <ul className="footer-links">
                 <li>
-                  <a href="/category/meyve-sebze" className="footer-link">
+                  <a href="/category/meyve-ve-sebze" className="footer-link">
                     Meyve & Sebze
                   </a>
                 </li>
                 <li>
-                  <a href="/category/et-tavuk-balik" className="footer-link">
+                  <a href="/category/et-ve-et-urunleri" className="footer-link">
                     Et & Tavuk & Balık
                   </a>
                 </li>
                 <li>
-                  <a href="/category/sut-urunleri" className="footer-link">
+                  <a href="/category/sut-ve-sut-urunleri" className="footer-link">
                     Süt Ürünleri
                   </a>
                 </li>

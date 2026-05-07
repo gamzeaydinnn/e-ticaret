@@ -350,7 +350,10 @@ builder.Services.AddAuthentication(options =>
 // Bind settings
 builder.Services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection("AppSettings:EmailSettings"));
-builder.Services.Configure<PaymentSettings>(builder.Configuration.GetSection("PaymentSettings"));
+builder.Services.AddSingleton<IValidateOptions<PaymentSettings>, PosnetPaymentSettingsValidator>();
+builder.Services.AddOptions<PaymentSettings>()
+    .Bind(builder.Configuration.GetSection("PaymentSettings"))
+    .ValidateOnStart();
 
 // Site ayarları (Footer, İletişim bilgileri vb.)
 builder.Services.Configure<ECommerce.Infrastructure.Config.SiteSettings>(
@@ -484,6 +487,7 @@ builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IWeightService, WeightService>();
 builder.Services.AddScoped<IWeightAdjustmentService, WeightAdjustmentService>();
 builder.Services.AddScoped<IWeightBasedPaymentService, WeightBasedPaymentService>();
+builder.Services.AddHostedService<ECommerce.API.Services.PreAuthExpiryBackgroundService>();
 // Mikro ERP'den tartı verisi senkronizasyonu - sipariş teslim miktarlarını çeker
 builder.Services.AddScoped<IMikroWeightSyncService, MikroWeightSyncService>();
 // Ödeme sağlayıcıları + PaymentManager (provider seçimi)
@@ -628,8 +632,18 @@ if (enableBackgroundWorkers)
 }
 // MikroDbService — Mikro ERP MSSQL'e direkt SqlConnection (HTTP timeout sorununu kökten çözer)
 // NEDEN SCOPED: Her request için yeni instance; SqlConnection thread-safe değil.
-builder.Services.AddScoped<ECommerce.Infrastructure.Services.MicroServices.IMikroDbService,
-    ECommerce.Infrastructure.Services.MicroServices.MikroDbService>();
+builder.Services.AddScoped<ECommerce.Infrastructure.Services.MicroServices.MikroDbService>();
+
+// MikroDbCachedService — In-Memory cache katmanı (Decorator Pattern)
+// NEDEN SINGLETON: Bellekte tek cache instance'ı, tüm request'ler arasında paylaşılır.
+// Her HTTP isteğinde SQL'e gitmek yerine 2dk cache'den döner → connection pool tükenmesini önler.
+// IServiceScopeFactory ile scoped inner service'e (MikroDbService) güvenli erişim sağlar.
+builder.Services.AddSingleton<ECommerce.Infrastructure.Services.MicroServices.MikroDbCachedService>();
+
+// IMikroDbService → MikroDbCachedService yönlendirmesi
+// Tüm controller ve servisler otomatik olarak cache katmanını kullanır.
+builder.Services.AddSingleton<ECommerce.Infrastructure.Services.MicroServices.IMikroDbService>(sp =>
+    sp.GetRequiredService<ECommerce.Infrastructure.Services.MicroServices.MikroDbCachedService>());
 
 var mikroIgnoreSslErrors = builder.Configuration.GetValue<bool>("MikroSettings:IgnoreSslErrors");
 

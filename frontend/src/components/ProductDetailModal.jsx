@@ -773,48 +773,44 @@ export default function ProductDetailModal({
 
                 <div className="pdm-info__details">
                   <h3>Ürün Detayları</h3>
-                  <table className="pdm-info__table">
-                    <tbody>
+                  <dl className="pdm-info__list">
                       {product.brand && (
-                        <tr>
-                          <td>Marka</td>
-                          <td>{product.brand}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Marka</dt>
+                          <dd>{product.brand}</dd>
+                        </div>
                       )}
                       {product.sku && (
-                        <tr>
-                          <td>SKU</td>
-                          <td>{product.sku}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>SKU</dt>
+                          <dd>{product.sku}</dd>
+                        </div>
                       )}
                       {product.barcode && (
-                        <tr>
-                          <td>Barkod</td>
-                          <td>{product.barcode}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Barkod</dt>
+                          <dd>{product.barcode}</dd>
+                        </div>
                       )}
                       {product.weight && (
-                        <tr>
-                          <td>Ağırlık</td>
-                          <td>
-                            {product.weight} {product.weightUnit || "g"}
-                          </td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Ağırlık</dt>
+                          <dd>{product.weight} {product.weightUnit || "g"}</dd>
+                        </div>
                       )}
                       {product.origin && (
-                        <tr>
-                          <td>Menşei</td>
-                          <td>{product.origin}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Menşei</dt>
+                          <dd>{product.origin}</dd>
+                        </div>
                       )}
                       {product.categoryName && (
-                        <tr>
-                          <td>Kategori</td>
-                          <td>{product.categoryName}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Kategori</dt>
+                          <dd>{product.categoryName}</dd>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
+                  </dl>
                 </div>
 
                 {product.ingredients && (
@@ -882,30 +878,28 @@ export default function ProductDetailModal({
               <div className="pdm-package">
                 <div className="pdm-package__info">
                   <h3>Paket Bilgileri</h3>
-                  <table className="pdm-info__table">
-                    <tbody>
-                      <tr>
-                        <td>Paket İçeriği</td>
-                        <td>{product.packageContent || "1 adet"}</td>
-                      </tr>
-                      <tr>
-                        <td>Paket Boyutu</td>
-                        <td>{product.packageSize || "Standart"}</td>
-                      </tr>
+                  <dl className="pdm-info__list">
+                      <div className="pdm-info__row">
+                        <dt>Paket İçeriği</dt>
+                        <dd>{product.packageContent || "1 adet"}</dd>
+                      </div>
+                      <div className="pdm-info__row">
+                        <dt>Paket Boyutu</dt>
+                        <dd>{product.packageSize || "Standart"}</dd>
+                      </div>
                       {product.packageWeight && (
-                        <tr>
-                          <td>Paket Ağırlığı</td>
-                          <td>{product.packageWeight}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Paket Ağırlığı</dt>
+                          <dd>{product.packageWeight}</dd>
+                        </div>
                       )}
                       {product.packageDimensions && (
-                        <tr>
-                          <td>Paket Boyutları</td>
-                          <td>{product.packageDimensions}</td>
-                        </tr>
+                        <div className="pdm-info__row">
+                          <dt>Paket Boyutları</dt>
+                          <dd>{product.packageDimensions}</dd>
+                        </div>
                       )}
-                    </tbody>
-                  </table>
+                  </dl>
                 </div>
 
                 <InfoCard

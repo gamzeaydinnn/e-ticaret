@@ -3,7 +3,10 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
-import categoryServiceReal from "../services/categoryServiceReal";
+import categoryServiceReal, {
+  matchesCategorySlug,
+  normalizeCategorySlug,
+} from "../services/categoryServiceReal";
 import { sanitizeUrlParam } from "../utils/securityHelpers";
 
 // Slug oluşturma fonksiyonu
@@ -25,7 +28,10 @@ const createSlug = (name) => {
 export default function Category() {
   const { slug: rawSlug } = useParams();
   // GÜVENLİK: URL parametresini sanitize et
-  const slug = useMemo(() => sanitizeUrlParam(rawSlug), [rawSlug]);
+  const slug = useMemo(
+    () => normalizeCategorySlug(sanitizeUrlParam(rawSlug)),
+    [rawSlug],
+  );
 
   const [category, setCategory] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -69,7 +75,7 @@ export default function Category() {
       // Sonra slug ile eşleşme dene
       const foundCat = allCategories.find((c) => {
         const catSlug = c.slug || createSlug(c.name);
-        return catSlug === slug;
+        return matchesCategorySlug(catSlug, slug);
       });
 
       if (foundCat) {

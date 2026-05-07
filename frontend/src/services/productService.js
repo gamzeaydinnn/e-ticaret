@@ -225,6 +225,23 @@ export const ProductService = {
   },
 
   /**
+   * Slug ile ürün detayı getirir.
+   */
+  getBySlug: async (slug) => {
+    try {
+      if (!slug) return null;
+      const response = await api.get(
+        `/api/products/slug/${encodeURIComponent(slug)}`,
+      );
+      const product = response?.data || response;
+      return product ? mapProduct(product) : null;
+    } catch (err) {
+      console.error(`❌ Ürün bulunamadı (slug: ${slug}):`, err);
+      return null;
+    }
+  },
+
+  /**
    * SKU (Mikro stok kodu) ile ürün detayı getirir.
    * Mikro ERP'den gelen Id=0 ürünler için kullanılır.
    */

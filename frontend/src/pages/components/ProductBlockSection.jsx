@@ -462,9 +462,47 @@ const ProductBlockSection = ({
     };
   };
 
+  const getProductDetailPath = (product, productId, productIdRaw) => {
+    const slug =
+      product?.slug ??
+      product?.Slug ??
+      product?.seoUrl ??
+      product?.SeoUrl ??
+      null;
+    const sku =
+      product?.sku ??
+      product?.SKU ??
+      product?.stokKod ??
+      product?.StokKod ??
+      null;
+
+    if (typeof productId === "number" && productId > 0) {
+      return `/product/${slug || productId}`;
+    }
+
+    if (slug) {
+      return `/product/${slug}`;
+    }
+
+    if (sku) {
+      return `/product/sku/${sku}`;
+    }
+
+    if (
+      productIdRaw !== undefined &&
+      productIdRaw !== null &&
+      productIdRaw !== ""
+    ) {
+      return `/product/${productIdRaw}`;
+    }
+
+    return null;
+  };
+
   // Ürüne tıklayınca - ProductGrid ile AYNI
-  const handleProductClick = (e, productId) => {
-    if (productId === undefined || productId === null || productId === "") {
+  const handleProductClick = (e, product, productId, productIdRaw) => {
+    const detailPath = getProductDetailPath(product, productId, productIdRaw);
+    if (!detailPath) {
       return;
     }
     // Butonlara tıklanmışsa yönlendirme yapma
@@ -474,7 +512,7 @@ const ProductBlockSection = ({
     ) {
       return;
     }
-    navigate(`/product/${productId}`);
+    navigate(detailPath);
   };
 
   // Sepete ekle - Kg bazlı ürünler için modal aç
@@ -857,7 +895,7 @@ const ProductBlockSection = ({
                       transition: "all 0.3s ease",
                     }}
                     onClick={(e) =>
-                      handleProductClick(e, productIdRaw ?? productId)
+                      handleProductClick(e, product, productId, productIdRaw)
                     }
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-5px)";

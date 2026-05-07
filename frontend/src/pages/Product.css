@@ -20,6 +20,7 @@
   padding: 20px 16px;
   min-height: 100vh;
   background: #f9fafb;
+  overflow-x: hidden;
 }
 
 @media (min-width: 768px) {
@@ -948,6 +949,9 @@
   border-radius: 16px;
   padding: 20px;
   flex: 1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .info-card--info {
@@ -977,13 +981,15 @@
 
 .info-card__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .info-card__icon {
   font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .info-card--info .info-card__icon {
@@ -1007,12 +1013,15 @@
   font-weight: 700;
   margin: 0;
   color: #1f2937;
+  line-height: 1.2;
 }
 
 .info-card__content {
   font-size: 0.85rem;
   line-height: 1.6;
   color: #4b5563;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .info-card__content p {
@@ -1037,6 +1046,29 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  width: 100%;
+  min-width: 0;
+}
+
+.product-page__safety > *,
+.product-page__package > *,
+.product-page__return > * {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.product-page__package-info {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #eef2f7;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  box-sizing: border-box;
 }
 
 .product-page__info-description h3,
@@ -1095,6 +1127,266 @@
   font-weight: 500;
 }
 
+/* ==================== ÜRÜN BİLGİ LİSTESİ (dl tabanlı mobil uyumlu) ==================== */
+.product-page__info-list {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.product-page__info-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  border-bottom: 1px solid #f3f4f6;
+  padding: 10px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.product-page__info-row dt {
+  flex: 0 0 38%;
+  color: #6b7280;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.product-page__info-row dd {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  color: #1f2937;
+  font-weight: 500;
+  font-size: 0.9rem;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  .product-page__info-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .product-page__info-row dt {
+    flex: none;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .product-page__info-row dd {
+    font-size: 0.92rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .product-page {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+
+  .product-page__tabs-section {
+    padding: 0 14px 24px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .product-page__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 54px;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .product-page__favorite-btn,
+  .product-page__compare-btn {
+    width: 54px;
+    min-width: 54px;
+    max-width: 54px;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    border-radius: 12px;
+  }
+
+  .product-page__tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding: 16px 0 14px;
+    align-items: stretch;
+  }
+
+  .product-page__tab {
+    min-width: 0;
+    min-height: 56px;
+    padding: 10px 8px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .product-page__tab:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .product-page__tab--active::after {
+    display: none;
+  }
+
+  .product-page__tab-content {
+    padding-top: 18px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .product-page__safety,
+  .product-page__package,
+  .product-page__return {
+    gap: 14px;
+  }
+
+  .product-page__package-info {
+    padding: 18px 16px;
+    border-radius: 18px;
+  }
+
+  .product-page__nutrition {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .product-page__nutrition-table-wrapper {
+    overflow-x: visible;
+  }
+
+  .product-page__nutrition-table {
+    min-width: 0;
+    font-size: 0.84rem;
+    display: block;
+    width: 100%;
+  }
+
+  .product-page__nutrition-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .product-page__nutrition-table thead {
+    display: none;
+  }
+
+  .nutrition-row td {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .nutrition-row {
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff, #f9fafb);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .nutrition-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .nutrition-row td {
+    display: block;
+    width: 100%;
+  }
+
+  .nutrition-label {
+    margin-bottom: 4px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .nutrition-value {
+    font-size: 0.98rem;
+    line-height: 1.35;
+    text-align: left;
+    color: #111827;
+  }
+
+  .nutrition-value::before {
+    content: "100 g / ml";
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #9ca3af;
+  }
+
+  .info-card {
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  .info-card__header {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .info-card__title {
+    font-size: 0.98rem;
+  }
+
+  .info-card__content,
+  .info-card__content p,
+  .info-card__content li {
+    font-size: 0.92rem;
+    line-height: 1.6;
+  }
+
+  .product-page__info-table,
+  .product-page__info-table tbody,
+  .product-page__info-table tr,
+  .product-page__info-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .product-page__info-table tr {
+    padding: 12px 0;
+  }
+
+  .product-page__info-table td {
+    padding: 0;
+  }
+
+  .product-page__info-table td:first-child {
+    width: 100%;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .product-page__info-table td:last-child {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
 .product-page__info-ingredients p {
   font-size: 0.9rem;
   line-height: 1.6;
@@ -1126,26 +1418,137 @@
 /* ==================== MOBİL UYUMLU DÜZENLEMELER ==================== */
 @media (max-width: 480px) {
   .product-page {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .product-page__breadcrumb {
+    gap: 6px;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    font-size: 0.76rem;
+    border-radius: 10px;
   }
 
   .product-page__content {
-    padding: 16px;
+    gap: 18px;
+    padding: 14px;
     border-radius: 16px;
   }
 
+  .product-page__image-section {
+    gap: 12px;
+  }
+
+  .product-page__image-container {
+    max-width: min(100%, 290px);
+    border-radius: 18px;
+  }
+
+  .product-page__image {
+    max-width: 78%;
+    max-height: 78%;
+  }
+
+  .product-page__discount-badge {
+    top: 10px;
+    left: 10px;
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+
+  .product-page__discount-badge span {
+    font-size: 1.05rem;
+  }
+
+  .product-page__discount-badge small,
+  .product-page__new-badge {
+    font-size: 0.62rem;
+  }
+
+  .product-page__info-section {
+    gap: 12px;
+  }
+
+  .product-page__brand {
+    font-size: 0.82rem;
+  }
+
   .product-page__title {
-    font-size: 1.25rem;
+    font-size: 1.12rem;
+    line-height: 1.25;
+  }
+
+  .product-page__rating {
+    gap: 6px;
+  }
+
+  .product-page__rating-stars .fas,
+  .product-page__rating-count {
+    font-size: 0.8rem;
+  }
+
+  .product-page__price-section {
+    gap: 6px;
+    padding: 14px 0;
+  }
+
+  .product-page__campaign-badge {
+    top: -10px;
+    padding: 5px 10px;
+    font-size: 0.7rem;
+  }
+
+  .product-page__campaign-name {
+    padding: 7px 10px;
+    font-size: 0.78rem;
   }
 
   .product-page__special-price-box {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
+    padding: 12px;
   }
 
   .product-page__special-price-value {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
+  }
+
+  .product-page__price--original {
+    font-size: 0.92rem;
+  }
+
+  .product-page__price--current {
+    font-size: 1.55rem;
+  }
+
+  .product-page__unit-price,
+  .product-page__quantity-label,
+  .product-page__quantity-unit,
+  .product-page__quantity-info,
+  .product-page__validation-error,
+  .product-page__stock-info,
+  .product-page__order-limit,
+  .product-page__store-info {
+    font-size: 0.78rem;
+  }
+
+  .product-page__quantity-controls {
+    gap: 10px;
+  }
+
+  .product-page__quantity-btn,
+  .product-page__quantity-input {
+    height: 38px;
+  }
+
+  .product-page__quantity-btn {
+    width: 38px;
+  }
+
+  .product-page__quantity-input {
+    width: 62px;
+    font-size: 0.95rem;
   }
 
   .product-page__quantity-controls {
@@ -1153,27 +1556,68 @@
   }
 
   .product-page__actions {
-    flex-direction: column;
+    gap: 10px;
+  }
+
+  .product-page__add-to-cart {
+    height: 46px;
+    border-radius: 12px;
+    font-size: 0.95rem;
   }
 
   .product-page__favorite-btn,
   .product-page__compare-btn {
-    width: 100%;
-    height: 48px;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
     border-radius: 12px;
   }
 
+  .product-page {
+    padding-inline: 10px;
+  }
+
   .product-page__tabs-section {
-    padding: 0 16px 16px;
+    padding: 0 12px 20px;
     border-radius: 16px;
   }
 
-  .product-page__tab {
-    padding: 8px 14px;
-    font-size: 0.8rem;
+  .product-page__tabs {
+    gap: 6px;
+    padding: 12px 0 12px;
   }
 
-  .product-page__nutrition {
-    flex-direction: column;
+  .product-page__tab {
+    min-height: 54px;
+    padding: 8px 8px;
+    font-size: 0.76rem;
+    border-radius: 10px;
+  }
+
+  .product-page__tab:last-child {
+    grid-column: span 2;
+  }
+
+  .product-page__info-description h3,
+  .product-page__info-details h3,
+  .product-page__info-ingredients h3,
+  .product-page__package-info h3 {
+    font-size: 1rem;
+    margin-bottom: 10px;
+  }
+
+  .product-page__package-info {
+    padding: 16px 14px;
+    border-radius: 16px;
+  }
+
+  .product-page__info-description p,
+  .product-page__info-ingredients p,
+  .info-card__content {
+    font-size: 0.88rem;
+    line-height: 1.55;
   }
 }

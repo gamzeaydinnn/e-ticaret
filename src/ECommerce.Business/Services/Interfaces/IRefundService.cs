@@ -94,6 +94,16 @@ namespace ECommerce.Business.Services.Interfaces
         /// <param name="reason">İptal sebebi</param>
         /// <returns>İşlem sonucu</returns>
         Task<RefundRequestResult> AdminCancelOrderWithRefundAsync(int orderId, int adminUserId, string reason);
+
+        /// <summary>
+        /// Admin/Market görevlisi siparişe tam para iadesi uygular.
+        /// Tam iade durumunda sipariş Refunded durumuna geçirilir.
+        /// </summary>
+        /// <param name="orderId">İade edilecek sipariş ID</param>
+        /// <param name="adminUserId">İşlemi yapan admin/görevli ID</param>
+        /// <param name="reason">İade sebebi</param>
+        /// <returns>İşlem sonucu</returns>
+        Task<RefundRequestResult> AdminRefundOrderAsync(int orderId, int adminUserId, string reason);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

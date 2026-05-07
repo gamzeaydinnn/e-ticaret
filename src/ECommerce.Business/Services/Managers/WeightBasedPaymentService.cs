@@ -927,6 +927,10 @@ namespace ECommerce.Business.Services.Managers
                     }
 
                     // Siparişi güncelle
+                    order.CaptureStatus = CaptureStatus.Voided;
+                    order.PreAuthHostLogKey = null;
+                    order.PreAuthDate = null;
+                    order.PreAuthAmount = 0m;
                     order.WeightAdjustmentStatus = WeightAdjustmentStatus.Failed;
                     order.DeliveryNotes = string.IsNullOrEmpty(order.DeliveryNotes)
                         ? "[SİSTEM] Provizyon süresi doldu, otomatik iptal edildi."

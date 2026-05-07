@@ -1,0 +1,160 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using ECommerce.Business.Services.Managers;
+using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
+using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Xunit;
+
+namespace ECommerce.Tests.Services
+{
+    public class HomeBlockManagerTests
+    {
+        private static ECommerceDbContext GetInMemoryDbContext()
+        {
+            var options = new DbContextOptionsBuilder<ECommerceDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options;
+
+            return new ECommerceDbContext(options);
+        }
+
+        private static HomeBlockManager CreateManager(ECommerceDbContext context)
+        {
+            var repositoryMock = new Mock<IHomeBlockRepository>();
+            var loggerMock = new Mock<ILogger<HomeBlockManager>>();
+            return new HomeBlockManager(repositoryMock.Object, context, loggerMock.Object);
+        }
+
+        [Fact]
+        public async Task GetProductsByBlockTypeAsync_ShouldOrderBestsellersBySoldQuantity()
+        {
+            using var context = GetInMemoryDbContext();
+
+            var category = new Category { Name = "Kategori", Slug = "kategori", IsActive = true };
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+
+            var productA = new Product { Name = "A", Price = 10m, CategoryId = category.Id, IsActive = true };
+            var productB = new Product { Name = "B", Price = 10m, CategoryId = category.Id, IsActive = true };
+            var productC = new Product { Name = "C", Price = 10m, CategoryId = category.Id, IsActive = true };
+
+            context.Products.AddRange(productA, productB, productC);
+            await context.SaveChangesAsync();
+
+            var deliveredOrder = new Order
+            {
+                OrderNumber = "ORD-1",
+                Status = OrderStatus.Delivered,
+                PaymentStatus = PaymentStatus.Pending,
+                OrderDate = DateTime.UtcNow.AddDays(-2)
+            };
+            var completedOrder = new Order
+            {
+                OrderNumber = "ORD-2",
+                Status = OrderStatus.Completed,
+                PaymentStatus = PaymentStatus.Pending,
+                OrderDate = DateTime.UtcNow.AddDays(-1)
+            };
+            var paidOrder = new Order
+            {
+                OrderNumber = "ORD-3",
+                Status = OrderStatus.Paid,
+                PaymentStatus = PaymentStatus.Paid,
+                OrderDate = DateTime.UtcNow
+            };
+            var cancelledOrder = new Order
+            {
+                OrderNumber = "ORD-4",
+                Status = OrderStatus.Cancelled,
+                PaymentStatus = PaymentStatus.Paid,
+                OrderDate = DateTime.UtcNow
+            };
+
+            context.Orders.AddRange(deliveredOrder, completedOrder, paidOrder, cancelledOrder);
+            await context.SaveChangesAsync();
+
+            context.OrderItems.AddRange(
+                new OrderItem { OrderId = deliveredOrder.Id, ProductId = productA.Id, Quantity = 2, UnitPrice = 10m },
+                new OrderItem { OrderId = completedOrder.Id, ProductId = productB.Id, Quantity = 5, UnitPrice = 10m },
+                new OrderItem { OrderId = paidOrder.Id, ProductId = productC.Id, Quantity = 1, UnitPrice = 10m },
+                new OrderItem { OrderId = cancelledOrder.Id, ProductId = productA.Id, Quantity = 99, UnitPrice = 10m }
+            );
+            await context.SaveChangesAsync();
+
+            var manager = CreateManager(context);
+
+            var result = (await manager.GetProductsByBlockTypeAsync("bestseller", null, 3)).ToList();
+
+            Assert.Equal(3, result.Count);
+            Assert.Equal(productB.Id, result[0].Id);
+            Assert.Equal(productA.Id, result[1].Id);
+            Assert.Equal(productC.Id, result[2].Id);
+        }
+
+        [Fact]
+        public async Task GetProductsByBlockTypeAsync_ShouldFallbackToNewest_WhenNoQualifiedSalesExist()
+        {
+            using var context = GetInMemoryDbContext();
+
+            var category = new Category { Name = "Kategori", Slug = "kategori", IsActive = true };
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+
+            var olderProduct = new Product
+            {
+                Name = "Older",
+                Price = 10m,
+                CategoryId = category.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow.AddDays(-5)
+            };
+            var newestProduct = new Product
+            {
+                Name = "Newest",
+                Price = 10m,
+                CategoryId = category.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            context.Products.AddRange(olderProduct, newestProduct);
+            await context.SaveChangesAsync();
+
+            var cancelledOrder = new Order
+            {
+                OrderNumber = "ORD-X",
+                Status = OrderStatus.Cancelled,
+                PaymentStatus = PaymentStatus.Paid,
+                OrderDate = DateTime.UtcNow
+            };
+
+            context.Orders.Add(cancelledOrder);
+            await context.SaveChangesAsync();
+
+            context.OrderItems.Add(new OrderItem
+            {
+                OrderId = cancelledOrder.Id,
+                ProductId = olderProduct.Id,
+                Quantity = 10,
+                UnitPrice = 10m
+            });
+            await context.SaveChangesAsync();
+
+            var manager = CreateManager(context);
+
+            var result = (await manager.GetProductsByBlockTypeAsync("bestseller", null, 2)).ToList();
+
+            Assert.Equal(2, result.Count);
+            Assert.Equal(newestProduct.Id, result[0].Id);
+            Assert.Equal(olderProduct.Id, result[1].Id);
+        }
+    }
+}

@@ -64,23 +64,14 @@ export default function Footer() {
                   <img
                     src={company.logoUrl}
                     alt={company.name}
-                    style={{
-                      height: "140px",
-                      width: "auto",
-                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
-                    }}
-                    className="me-4"
+                    className="footer-brand-logo-image me-4"
                   />
                 )}
                 {footer.showSecondaryLogo && company.secondaryLogoUrl && (
                   <img
                     src={company.secondaryLogoUrl}
                     alt={`${company.name} İkincil Logo`}
-                    style={{
-                      height: "140px",
-                      width: "auto",
-                      filter: "drop-shadow(0 3px 12px rgba(255,107,53,0.4))",
-                    }}
+                    className="footer-brand-secondary-image"
                   />
                 )}
               </div>
@@ -113,17 +104,17 @@ export default function Footer() {
             <h6 className="footer-title">Kategoriler</h6>
             <ul className="footer-links">
               <li>
-                <a href="/category/meyve-sebze" className="footer-link">
+                <a href="/category/meyve-ve-sebze" className="footer-link">
                   Meyve & Sebze
                 </a>
               </li>
               <li>
-                <a href="/category/et-tavuk-balik" className="footer-link">
+                <a href="/category/et-ve-et-urunleri" className="footer-link">
                   Et & Tavuk & Balık
                 </a>
               </li>
               <li>
-                <a href="/category/sut-urunleri" className="footer-link">
+                <a href="/category/sut-ve-sut-urunleri" className="footer-link">
                   Süt Ürünleri
                 </a>
               </li>

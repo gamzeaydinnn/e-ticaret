@@ -835,7 +835,7 @@
 }
 
 .nutrition-label {
-  color: #4b5563;
+    min-width: 0;
 }
 
 .nutrition-value {
@@ -853,6 +853,9 @@
   border-radius: 16px;
   padding: 20px;
   flex: 1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .info-card--info {
@@ -882,13 +885,15 @@
 
 .info-card__header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   margin-bottom: 12px;
 }
 
 .info-card__icon {
   font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .info-card--info .info-card__icon {
@@ -912,12 +917,15 @@
   font-weight: 700;
   margin: 0;
   color: #1f2937;
+  line-height: 1.2;
 }
 
 .info-card__content {
   font-size: 0.85rem;
   line-height: 1.6;
   color: #4b5563;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .info-card__content p {
@@ -997,6 +1005,246 @@
 .pdm-info__table td:last-child {
   color: #1f2937;
   font-weight: 500;
+}
+
+/* ==================== BİLGİ LİSTESİ (dl tabanlı mobil uyumlu) ==================== */
+.pdm-info__list {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdm-info__row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  border-bottom: 1px solid #f3f4f6;
+  padding: 10px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pdm-info__row dt {
+  flex: 0 0 38%;
+  color: #6b7280;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.pdm-info__row dd {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  color: #1f2937;
+  font-weight: 500;
+  font-size: 0.9rem;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  .pdm-info__row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .pdm-info__row dt {
+    flex: none;
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .pdm-info__row dd {
+    font-size: 0.92rem;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .pdm-tabs-section {
+    padding: 0 14px 24px;
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .pdm-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 54px;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .pdm-favorite-btn {
+    width: 54px;
+    min-width: 54px;
+    max-width: 54px;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    border-radius: 12px;
+  }
+
+  .pdm-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+    padding: 16px 0 14px;
+    align-items: stretch;
+  }
+
+  .pdm-tab {
+    min-width: 0;
+    min-height: 56px;
+    padding: 10px 8px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .pdm-tab:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .pdm-tab--active::after {
+    display: none;
+  }
+
+  .pdm-tab-content {
+    padding-top: 18px;
+  }
+
+  .pdm-nutrition {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .pdm-nutrition__table-wrapper {
+    overflow-x: visible;
+  }
+
+  .pdm-nutrition__table {
+    min-width: 0;
+    font-size: 0.84rem;
+    display: block;
+    width: 100%;
+  }
+
+  .pdm-nutrition__table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .pdm-nutrition__table thead {
+    display: none;
+  }
+
+  .nutrition-row {
+    display: block;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff, #f9fafb);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  }
+
+  .nutrition-row:last-child {
+    margin-bottom: 0;
+  }
+
+  .nutrition-row td {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .nutrition-label {
+    margin-bottom: 4px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .nutrition-value {
+    font-size: 0.98rem;
+    line-height: 1.35;
+    text-align: left;
+    color: #111827;
+  }
+
+  .nutrition-value::before {
+    content: "100 g / ml";
+    display: block;
+    margin-bottom: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #9ca3af;
+  }
+
+  .info-card {
+    padding: 16px 14px;
+    border-radius: 14px;
+  }
+
+  .info-card__header {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .info-card__title {
+    font-size: 0.98rem;
+  }
+
+  .info-card__content,
+  .info-card__content p,
+  .info-card__content li {
+    font-size: 0.92rem;
+    line-height: 1.6;
+  }
+
+  .pdm-info__table,
+  .pdm-info__table tbody,
+  .pdm-info__table tr,
+  .pdm-info__table td {
+    display: block;
+    width: 100%;
+  }
+
+  .pdm-info__table tr {
+    padding: 12px 0;
+  }
+
+  .pdm-info__table td {
+    padding: 0;
+  }
+
+  .pdm-info__table td:first-child {
+    width: 100%;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .pdm-info__table td:last-child {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 .pdm-info__ingredients p {
@@ -1130,26 +1378,43 @@
   }
 
   .pdm-actions {
-    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pdm-add-to-cart {
+    height: 46px;
+    border-radius: 12px;
+    font-size: 0.95rem;
   }
 
   .pdm-favorite-btn {
-    width: 100%;
-    height: 48px;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
     border-radius: 12px;
   }
 
-  .pdm-tabs-section {
-    padding: 0 16px 16px;
+  .pdm-tabs {
+    gap: 6px;
+    padding: 12px 0 12px;
   }
 
   .pdm-tab {
-    padding: 8px 14px;
-    font-size: 0.8rem;
+    min-height: 54px;
+    padding: 8px 8px;
+    font-size: 0.76rem;
+    border-radius: 10px;
   }
 
-  .pdm-nutrition {
-    flex-direction: column;
+  .pdm-tab:last-child {
+    grid-column: span 2;
+  }
+
+  .pdm-tabs-section {
+    padding: 0 14px 18px;
   }
 
   .pdm-footer {

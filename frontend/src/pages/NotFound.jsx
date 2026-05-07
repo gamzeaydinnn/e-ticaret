@@ -58,13 +58,13 @@ const NotFound = () => {
               Popüler Kategorilerimize Göz Atın:
             </p>
             <div className="suggestions-links">
-              <Link to="/category/meyve-sebze" className="suggestion-link">
+              <Link to="/category/meyve-ve-sebze" className="suggestion-link">
                 🍎 Meyve & Sebze
               </Link>
-              <Link to="/category/sut-urunleri" className="suggestion-link">
+              <Link to="/category/sut-ve-sut-urunleri" className="suggestion-link">
                 🥛 Süt Ürünleri
               </Link>
-              <Link to="/category/et-tavuk" className="suggestion-link">
+              <Link to="/category/et-ve-et-urunleri" className="suggestion-link">
                 🍗 Et & Tavuk
               </Link>
               <Link to="/campaigns" className="suggestion-link">

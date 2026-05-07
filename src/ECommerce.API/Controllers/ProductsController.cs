@@ -686,6 +686,52 @@ namespace ECommerce.API.Controllers
             return Ok(product);
         }
 
+        [HttpGet("slug/{slug}")]
+        public async Task<IActionResult> GetProductBySlug(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return BadRequest();
+
+            slug = slug.Trim();
+
+            var localProduct = await _dbContext.Products
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Slug == slug, HttpContext.RequestAborted);
+
+            if (localProduct != null)
+            {
+                var localDto = await _productService.GetProductByIdWithCampaignAsync(localProduct.Id);
+                if (localDto != null)
+                {
+                    if (_mikroDbService.IsConfigured && !string.IsNullOrEmpty(localDto.Sku))
+                    {
+                        var unifiedLocal = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                        var mikroLocal = unifiedLocal.FirstOrDefault(u =>
+                            string.Equals(u.StokKod, localDto.Sku, StringComparison.OrdinalIgnoreCase));
+
+                        if (mikroLocal != null)
+                        {
+                            localDto.StockQuantity = (int)Math.Max(0, mikroLocal.StokMiktar);
+                            localDto.Unit = string.IsNullOrWhiteSpace(mikroLocal.Birim)
+                                ? "ADET"
+                                : mikroLocal.Birim.Trim().ToUpperInvariant();
+                        }
+                    }
+
+                    return Ok(localDto);
+                }
+            }
+
+            if (!_mikroDbService.IsConfigured) return NotFound();
+
+            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+            var mikro = unified.FirstOrDefault(u =>
+                string.Equals(GenerateSlug(u.StokAd), slug, StringComparison.OrdinalIgnoreCase));
+
+            if (mikro == null) return NotFound();
+
+            return await GetProductBySku(mikro.StokKod);
+        }
+
         /// <summary>
         /// SKU ile ürün detayı getir — Mikro ERP'de local DB kaydı olmayan (Id=0) ürünler için.
         /// Frontend, Id=0 ürünlerde SKU ile bu endpoint'i çağırır.

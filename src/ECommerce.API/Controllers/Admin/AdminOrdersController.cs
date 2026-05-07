@@ -155,8 +155,33 @@ namespace ECommerce.API.Controllers.Admin
                 return BadRequest(new { message = "Status alanı zorunludur." });
 
             var oldOrder = await _orderService.GetByIdAsync(id);
+            var normalizedStatus = dto.Status.Trim().Replace("_", string.Empty, StringComparison.Ordinal);
 
-            await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            if (string.Equals(normalizedStatus, OrderStatus.Cancelled.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                var cancelResult = await _refundService.AdminCancelOrderWithRefundAsync(
+                    id,
+                    GetAdminUserId(),
+                    "Admin tarafından durum güncellemesi ile iptal edildi");
+
+                if (!cancelResult.Success)
+                    return BadRequest(new { message = cancelResult.Message, errorCode = cancelResult.ErrorCode });
+            }
+            else if (string.Equals(normalizedStatus, OrderStatus.Refunded.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                var refundResult = await _refundService.AdminRefundOrderAsync(
+                    id,
+                    GetAdminUserId(),
+                    "Admin tarafından durum güncellemesi ile iade edildi");
+
+                if (!refundResult.Success)
+                    return BadRequest(new { message = refundResult.Message, errorCode = refundResult.ErrorCode });
+            }
+            else
+            {
+                await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            }
+
             if (oldOrder != null)
             {
                 var updatedOrder = await _orderService.GetByIdAsync(id);
@@ -273,9 +298,36 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         [HttpPost("{id:int}/refund")]
-        public Task<IActionResult> RefundOrder(int id)
+        public async Task<IActionResult> RefundOrder(int id)
         {
-            return HandleStatusChange(id, () => _orderService.RefundOrderAsync(id), "OrderStatusChanged");
+            var adminUserId = GetAdminUserId();
+            var result = await _refundService.AdminRefundOrderAsync(
+                id,
+                adminUserId,
+                "Admin tarafından iade edildi");
+
+            if (!result.Success)
+            {
+                return BadRequest(new { success = false, message = result.Message, errorCode = result.ErrorCode });
+            }
+
+            var updatedOrder = await _orderService.GetByIdAsync(id);
+
+            await _auditLogService.WriteAsync(
+                adminUserId,
+                "OrderRefunded",
+                "Order",
+                id.ToString(),
+                null,
+                new { Status = "Refunded", RefundType = result.RefundRequest?.TransactionType });
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                order = updatedOrder,
+                refundRequest = result.RefundRequest
+            });
         }
 
         [HttpGet("recent")]

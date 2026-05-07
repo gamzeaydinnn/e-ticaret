@@ -351,6 +351,7 @@ namespace ECommerce.Business.Services.Mapping
                 PaymentStatus.Paid => "KK",      // Kredi Kartı
                 PaymentStatus.Pending => "KOD",  // Kapıda Ödeme
                 PaymentStatus.Failed => "KOD",   // Kapıda Ödeme
+                PaymentStatus.Cancelled => "IAD",// İptal / iade
                 PaymentStatus.Refunded => "IAD", // İade
                 _ => "KK"
             };

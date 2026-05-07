@@ -50,6 +50,9 @@ services:
       - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.conf
       - FIREWALL_INPUT_PORTS=${MIKRO_API_RELAY_PORT:-8084},${MIKRO_SQL_RELAY_PORT:-1433}
       - LOG_LEVEL=info
+      # Mikro ERP VPN'i sadece 10.0.0.x private ağına route açar, genel internet trafigi tünellenmez.
+      # Gluetun'un default healthcheck hedefi (1.1.1.1/8.8.8.8) yerine Mikro ERP IP'si kullanılır.
+      - HEALTH_TARGET_ADDRESS=10.0.0.3:1433
     volumes:
       - ${VPN_CONFIG_PATH:-./vpn.ovpn}:/gluetun/custom.conf:ro
     networks:
@@ -153,10 +156,10 @@ services:
       # POSNET Enabled Flag - POSNET servislerinin kaydedilmesi için gerekli!
       - Payment__Posnet__Enabled=${PAYMENT_POSNET_ENABLED:-true}
       # POSNET Configuration (Yapı Kredi 3D Secure)
-      - PaymentSettings__PosnetMerchantId=${POSNET_MERCHANT_ID:-CHANGE_ME}
-      - PaymentSettings__PosnetTerminalId=${POSNET_TERMINAL_ID:-CHANGE_ME}
-      - PaymentSettings__PosnetId=${POSNET_ID:-CHANGE_ME}
-      - PaymentSettings__PosnetEncKey=${POSNET_ENC_KEY:-CHANGE_ME}
+      - PaymentSettings__PosnetMerchantId=${POSNET_MERCHANT_ID:?POSNET_MERCHANT_ID is required}
+      - PaymentSettings__PosnetTerminalId=${POSNET_TERMINAL_ID:?POSNET_TERMINAL_ID is required}
+      - PaymentSettings__PosnetId=${POSNET_ID:?POSNET_ID is required}
+      - PaymentSettings__PosnetEncKey=${POSNET_ENC_KEY:?POSNET_ENC_KEY is required}
       - PaymentSettings__PosnetXmlServiceUrl=${POSNET_XML_SERVICE_URL:-https://posnet.yapikredi.com.tr/PosnetWebService/XML}
       - PaymentSettings__Posnet3DServiceUrl=${POSNET_3D_SERVICE_URL:-https://posnet.yapikredi.com.tr/3DSWebService/YKBPaymentService}
       - PaymentSettings__PosnetCallbackUrl=${POSNET_CALLBACK_URL:-https://golkoygurme.com.tr/api/payments/posnet/3d-callback}
@@ -173,6 +176,9 @@ services:
       - Cors__AllowedOrigins__2=http://golkoygurme.com.tr
       - Cors__AllowedOrigins__3=http://www.golkoygurme.com.tr
       - Cors__AllowedOrigins__4=http://localhost:3000
+      # Mikro ERP alt grup kodları (1001, 1002...) sayısal ve anlamsız; otomatik kategori oluşturma kapalı.
+      # Eşleşmeyen ürünler 'Diğer' kategorisine atanır, admin panelinden manuel eşleme yapılabilir.
+      - CategoryMapping__AutoCreateCategories=false
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -222,7 +228,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:80/",
+            "http://127.0.0.1:80/",
         ]
       interval: 60s
       timeout: 10s

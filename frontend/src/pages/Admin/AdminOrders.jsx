@@ -1670,6 +1670,28 @@ export default function AdminOrders() {
                               </button>
                             )}
 
+                            {normalizedStatus === "delivered" && (
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      "Bu sipariş teslim edilmiş görünüyor. Tam para iadesi yapmak istediğinize emin misiniz?",
+                                    )
+                                  ) {
+                                    return;
+                                  }
+
+                                  await updateOrderStatus(order.id, "refunded");
+                                  loadRefundRequests();
+                                }}
+                                className="btn btn-outline-warning p-1"
+                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                title="↩️ Tam İade Yap"
+                              >
+                                <i className="fas fa-undo-alt"></i>
+                              </button>
+                            )}
+
                             {/* 🚫 İPTAL + PARA İADESİ - Admin ve StoreAttendant için
                                 İptal edilince POSNET üzerinden para iadesi de tetiklenir */}
                             {normalizedStatus !== "delivered" &&
@@ -2885,6 +2907,7 @@ export default function AdminOrders() {
                               <option value="delivery_failed">
                                 ❌ Teslimat Başarısız
                               </option>
+                              <option value="refunded">↩️ İade Edildi</option>
                               <option value="cancelled">🚫 İptal Edildi</option>
                             </select>
                           </div>
@@ -2893,24 +2916,41 @@ export default function AdminOrders() {
                               className="btn btn-danger btn-sm w-100"
                               style={{ fontSize: "0.7rem" }}
                               onClick={() => {
+                                const normalizedSelectedStatus = (
+                                  selectedOrder.status || ""
+                                )
+                                  .toString()
+                                  .toLowerCase()
+                                  .replace(/_/g, "");
+                                const targetStatus =
+                                  normalizedSelectedStatus === "delivered"
+                                    ? "refunded"
+                                    : "cancelled";
+                                const actionLabel =
+                                  targetStatus === "refunded"
+                                    ? "İADE"
+                                    : "İPTAL";
+
                                 if (
                                   window.confirm(
-                                    "Bu siparişi İPTAL etmek istediğinize emin misiniz?",
+                                    `Bu sipariş için ${actionLabel} işlemi yapmak istediğinize emin misiniz?`,
                                   )
                                 ) {
-                                  updateOrderStatus(
-                                    selectedOrder.id,
-                                    "cancelled",
-                                  );
+                                  updateOrderStatus(selectedOrder.id, targetStatus);
                                   setSelectedOrder({
                                     ...selectedOrder,
-                                    status: "cancelled",
+                                    status: targetStatus,
                                   });
                                 }
                               }}
                             >
                               <i className="fas fa-times me-1"></i>
-                              İptal Et
+                              {((selectedOrder.status || "")
+                                .toString()
+                                .toLowerCase()
+                                .replace(/_/g, "") === "delivered")
+                                ? "İade Et"
+                                : "İptal Et"}
                             </button>
                           </div>
                         </div>

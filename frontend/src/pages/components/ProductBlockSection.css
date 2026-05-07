@@ -119,9 +119,9 @@
    BAŞLIK BÖLÜMÜ - Referans Tasarım
    ===================================================== */
 .product-block-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 18px;
   padding: 0 20px 18px;
   max-width: 1400px;
@@ -178,6 +178,8 @@
 
 .header-right {
   flex-shrink: 0;
+  justify-self: end;
+  margin-left: auto;
 }
 
 .view-all-btn {
@@ -194,6 +196,7 @@
   background: #ffffff;
   transition: all 0.3s ease;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  white-space: nowrap;
 }
 
 .view-all-btn:hover {
@@ -478,10 +481,10 @@
   }
 
   .product-block-header {
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 12px 15px;
-    flex-wrap: wrap;
     gap: 10px;
-    align-items: flex-start;
+    align-items: start;
   }
 
   .block-title {
@@ -608,6 +611,7 @@
   }
 
   .product-block-header {
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 10px 12px;
   }
 

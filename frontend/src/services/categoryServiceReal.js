@@ -12,6 +12,25 @@
 
 import api from "./api";
 
+export const CATEGORY_SLUG_ALIASES = {
+  "sut-urunleri": "sut-ve-sut-urunleri",
+  "meyve-sebze": "meyve-ve-sebze",
+  "et-tavuk": "et-ve-et-urunleri",
+  "et-tavuk-balik": "et-ve-et-urunleri",
+};
+
+export const normalizeCategorySlug = (slug) => {
+  if (!slug || typeof slug !== "string") return "";
+  const normalized = slug.trim().toLowerCase();
+  return CATEGORY_SLUG_ALIASES[normalized] || normalized;
+};
+
+export const matchesCategorySlug = (candidateSlug, requestedSlug) => {
+  const normalizedCandidate = normalizeCategorySlug(candidateSlug);
+  const normalizedRequested = normalizeCategorySlug(requestedSlug);
+  return normalizedCandidate !== "" && normalizedCandidate === normalizedRequested;
+};
+
 // ============================================================
 // YARDIMCI FONKSİYONLAR
 // ============================================================
@@ -105,7 +124,10 @@ const categoryServiceReal = {
   async getBySlug(slug) {
     try {
       if (!slug) return null;
-      return await api.get(`/api/categories/${encodeURIComponent(slug)}`);
+      const normalizedSlug = normalizeCategorySlug(slug);
+      return await api.get(
+        `/api/categories/${encodeURIComponent(normalizedSlug)}`,
+      );
     } catch (error) {
       console.error(
         `[CategoryService] Kategori bulunamadı: ${slug}`,

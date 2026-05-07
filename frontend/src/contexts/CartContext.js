@@ -265,9 +265,6 @@ export const CartProvider = ({ children }) => {
       // id=0 ama SKU var: backend'e ensure-local gönder, gerçek ID al
       if (!productId && product.sku) {
         try {
-          const res = await import("./api")
-            .then((m) => m.default ?? m)
-            .catch(() => null);
           // api imi dinamik import ile alınabilir, ama biz services/api'yi kullanıyoruz
           // CartService'in api objesini kullanmak için dolaylı import yapmak yerine
           // fetch kullan (circular dep'ten kaçın)

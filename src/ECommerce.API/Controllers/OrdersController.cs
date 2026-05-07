@@ -670,7 +670,34 @@ namespace ECommerce.API.Controllers
             if (dto == null || string.IsNullOrWhiteSpace(dto.Status))
                 return BadRequest(new { message = "Status alanı zorunludur." });
 
-            await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            var adminUserId = User.GetUserId();
+            var normalizedStatus = dto.Status.Trim().Replace("_", string.Empty, StringComparison.Ordinal);
+
+            if (string.Equals(normalizedStatus, "Cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                var cancelResult = await _refundService.AdminCancelOrderWithRefundAsync(
+                    id,
+                    adminUserId,
+                    "Yetkili kullanıcı tarafından durum güncellemesi ile iptal edildi");
+
+                if (!cancelResult.Success)
+                    return BadRequest(new { message = cancelResult.Message, errorCode = cancelResult.ErrorCode });
+            }
+            else if (string.Equals(normalizedStatus, "Refunded", StringComparison.OrdinalIgnoreCase))
+            {
+                var refundResult = await _refundService.AdminRefundOrderAsync(
+                    id,
+                    adminUserId,
+                    "Yetkili kullanıcı tarafından durum güncellemesi ile iade edildi");
+
+                if (!refundResult.Success)
+                    return BadRequest(new { message = refundResult.Message, errorCode = refundResult.ErrorCode });
+            }
+            else
+            {
+                await _orderService.UpdateOrderStatusAsync(id, dto.Status);
+            }
+
             return NoContent();
         }
 

@@ -1145,8 +1145,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         "[POSNET] İptal başarılı. OrderId: {OrderId}",
                         orderId);
 
-                    // İptal durumu için Failed kullanılıyor (Cancelled enum'da yok)
-                    await UpdateOrderPaymentStatusAsync(orderId, PaymentStatus.Failed, cancellationToken);
+                    await UpdateOrderPaymentStatusAsync(orderId, PaymentStatus.Cancelled, cancellationToken);
                     await UpdatePaymentStatusAsync(hostLogKey, "Cancelled", cancellationToken);
                 }
 

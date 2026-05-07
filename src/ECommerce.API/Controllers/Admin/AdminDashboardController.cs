@@ -81,11 +81,21 @@ namespace ECommerce.API.Controllers.Admin
             var last14DaysStart = todayStart.AddDays(-13);
 
             var totalUsers = await _userService.GetUserCountAsync();
-            // Mikro ERP bağlıysa gerçek web-aktif ürün sayısını oradan al,
-            // değilse yerel DB'den say — dashboard'da doğru rakam gösterir
-            var totalProducts = _mikroDbService.IsConfigured
-                ? await _mikroDbService.GetWebProductCountAsync()
-                : await _productService.GetProductCountAsync();
+            // Mikro ERP bağlıysa cache'deki ürün sayısını kullan,
+            // değilse yerel DB'den say — dashboard'da doğru rakam gösterir.
+            // NEDEN: GetWebProductCountAsync her seferinde SQL bağlantısı açıyordu.
+            // Cache zaten 2dk'da bir yenileniyor — Count doğru ve anında döner.
+            int totalProducts;
+            if (_mikroDbService.IsConfigured)
+            {
+                var cachedProducts = await _mikroDbService.GetUnifiedProductsAsync(
+                    null, null, HttpContext.RequestAborted);
+                totalProducts = cachedProducts.Count;
+            }
+            else
+            {
+                totalProducts = await _productService.GetProductCountAsync();
+            }
             var totalOrders = await _orderService.GetOrderCountAsync();
             var totalRevenue = await _orderService.GetTotalRevenueAsync();
             var todayOrders = await _orderService.GetTodayOrderCountAsync();

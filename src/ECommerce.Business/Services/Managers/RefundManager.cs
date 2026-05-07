@@ -63,6 +63,14 @@ namespace ECommerce.Business.Services.Managers
             OrderStatus.Completed
         };
 
+        private static readonly string[] ReversiblePaymentStatuses =
+        {
+            "Success",
+            "Paid",
+            "Authorized",
+            "PartiallyRefunded"
+        };
+
         public RefundManager(
             ECommerceDbContext db,
             IExtendedPaymentService paymentService,
@@ -73,6 +81,75 @@ namespace ECommerce.Business.Services.Managers
             _paymentService = paymentService ?? throw new ArgumentNullException(nameof(paymentService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        private Task<Payments?> GetLatestReversiblePaymentAsync(int orderId)
+        {
+            return _db.Payments
+                .Where(p => p.OrderId == orderId && ReversiblePaymentStatuses.Contains(p.Status))
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        private static decimal CalculateRefundAmount(Order order, Payments? payment)
+        {
+            if (order.CapturedAmount > 0)
+            {
+                return order.CapturedAmount;
+            }
+
+            if (order.FinalAmount > 0)
+            {
+                return order.FinalAmount;
+            }
+
+            if (payment?.CapturedAmount > 0)
+            {
+                return payment.CapturedAmount;
+            }
+
+            if (payment?.Amount > 0)
+            {
+                return payment.Amount;
+            }
+
+            return order.FinalPrice;
+        }
+
+        private static void MarkWeightPaymentCancelled(Order order)
+        {
+            if (string.IsNullOrEmpty(order.PreAuthHostLogKey) && order.PreAuthAmount <= 0)
+            {
+                return;
+            }
+
+            order.PreAuthHostLogKey = null;
+            order.PreAuthDate = null;
+            order.PreAuthAmount = 0m;
+            order.CaptureStatus = CaptureStatus.Voided;
+
+            if (order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing ||
+                order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingAdminApproval)
+            {
+                order.WeightAdjustmentStatus = WeightAdjustmentStatus.Failed;
+            }
+        }
+
+        private static bool HasActiveWeightPreAuthorization(Order order)
+        {
+            return (!string.IsNullOrEmpty(order.PreAuthHostLogKey) || order.PreAuthAmount > 0)
+                && (order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing
+                    || order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingAdminApproval);
+        }
+
+        private static string BuildWeightCancellationMessage(string reason, bool hadActiveWeightPreAuthorization)
+        {
+            if (!hadActiveWeightPreAuthorization)
+            {
+                return reason;
+            }
+
+            return $"{reason} Provizyon kaldırma süresi bankaya göre değişebilir.";
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -172,11 +249,9 @@ namespace ECommerce.Business.Services.Managers
                 order.Id, order.Status);
 
             // Ödeme kaydını bul
-            var payment = await _db.Payments
-                .Where(p => p.OrderId == order.Id &&
-                       (p.Status == "Success" || p.Status == "Paid"))
-                .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync();
+            var payment = await GetLatestReversiblePaymentAsync(order.Id);
+            var refundAmount = CalculateRefundAmount(order, payment);
+            refundRequest.RefundAmount = refundAmount;
 
             bool paymentRefunded = false;
             string transactionType = "none";
@@ -202,7 +277,7 @@ namespace ECommerce.Business.Services.Managers
                     {
                         // Reverse başarısız olduysa return (iade) dene
                         // NEDEN: Aynı gün geçmiş olabilir (batch kapanmış)
-                        var refundResult = await _paymentService.PartialRefundAsync(payment.Id, refundRequest.RefundAmount);
+                        var refundResult = await _paymentService.PartialRefundAsync(payment.Id, refundAmount);
                         if (refundResult)
                         {
                             paymentRefunded = true;
@@ -234,9 +309,14 @@ namespace ECommerce.Business.Services.Managers
             }
 
             // Sipariş durumunu güncelle
+            var hadActiveWeightPreAuthorization = HasActiveWeightPreAuthorization(order);
             order.Status = OrderStatus.Cancelled;
             order.CancelledAt = DateTime.UtcNow;
             order.CancelReason = $"Müşteri iade talebi: {refundRequest.Reason}";
+            if (paymentRefunded)
+            {
+                MarkWeightPaymentCancelled(order);
+            }
 
             // Stok iadesi - sipariş kalemlerini geri ekle
             await RestoreStockAsync(order);
@@ -275,7 +355,7 @@ namespace ECommerce.Business.Services.Managers
                 await _notificationService.NotifyOrderCancelledAsync(
                     order.Id,
                     order.OrderNumber ?? $"#{order.Id}",
-                    "Müşteri iade talebi - otomatik iptal",
+                    BuildWeightCancellationMessage("Müşteri iade talebi - otomatik iptal", hadActiveWeightPreAuthorization),
                     "system");
             }
             catch (Exception ex)
@@ -397,11 +477,15 @@ namespace ECommerce.Business.Services.Managers
             refundRequest.Status = RefundRequestStatus.Approved;
 
             // Ödeme kaydını bul
-            var payment = await _db.Payments
-                .Where(p => p.OrderId == order.Id &&
-                       (p.Status == "Success" || p.Status == "Paid" || p.Status == "PartiallyRefunded"))
-                .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync();
+            var payment = await GetLatestReversiblePaymentAsync(order.Id);
+            var maxRefundableAmount = CalculateRefundAmount(order, payment);
+
+            if (payment != null && refundAmount > maxRefundableAmount)
+            {
+                return RefundRequestResult.Failed(
+                    $"İade tutarı en fazla {maxRefundableAmount:C} olabilir.",
+                    "INVALID_AMOUNT");
+            }
 
             bool refundSuccess = false;
 
@@ -475,6 +559,7 @@ namespace ECommerce.Business.Services.Managers
                 // Kısmi iade
                 var previousStatus = order.Status;
                 order.Status = OrderStatus.PartialRefund;
+                order.CaptureStatus = CaptureStatus.PartialCapture;
 
                 _db.OrderStatusHistories.Add(new OrderStatusHistory
                 {
@@ -562,11 +647,22 @@ namespace ECommerce.Business.Services.Managers
             if (order.Status == OrderStatus.Refunded)
                 return RefundRequestResult.Failed("Bu sipariş için zaten iade yapılmış.", "ALREADY_REFUNDED");
 
+            if (order.Status == OrderStatus.Delivered || order.Status == OrderStatus.Completed)
+            {
+                _logger.LogInformation(
+                    "[İADE-ADMIN] Teslim edilmiş sipariş için cancel isteği refund akışına yönlendiriliyor. OrderId={OrderId}, Status={Status}",
+                    orderId,
+                    order.Status);
+
+                return await AdminRefundOrderAsync(orderId, adminUserId, reason);
+            }
+
             _logger.LogInformation(
                 "[İADE-ADMIN] Admin siparişi iptal ediyor. OrderId={OrderId}, AdminId={AdminId}, Status={Status}",
                 orderId, adminUserId, order.Status);
 
             var previousStatus = order.Status;
+            var hadActiveWeightPreAuthorization = HasActiveWeightPreAuthorization(order);
 
             // İade talebi kaydı oluştur (audit trail için)
             var refundRequest = new RefundRequest
@@ -584,11 +680,9 @@ namespace ECommerce.Business.Services.Managers
             };
 
             // Ödeme kaydını bul
-            var payment = await _db.Payments
-                .Where(p => p.OrderId == orderId &&
-                       (p.Status == "Success" || p.Status == "Paid"))
-                .OrderByDescending(p => p.CreatedAt)
-                .FirstOrDefaultAsync();
+            var payment = await GetLatestReversiblePaymentAsync(orderId);
+            var refundAmount = CalculateRefundAmount(order, payment);
+            refundRequest.RefundAmount = refundAmount;
 
             bool paymentRefunded = false;
             string transactionType = "none";
@@ -614,7 +708,7 @@ namespace ECommerce.Business.Services.Managers
                     {
                         // Reverse başarısız → return (iade) dene
                         var refundResult = await _paymentService.PartialRefundAsync(
-                            payment.Id, order.FinalPrice);
+                            payment.Id, refundAmount);
                         if (refundResult)
                         {
                             paymentRefunded = true;
@@ -647,6 +741,10 @@ namespace ECommerce.Business.Services.Managers
             order.Status = OrderStatus.Cancelled;
             order.CancelledAt = DateTime.UtcNow;
             order.CancelReason = $"Admin/Görevli iptal: {reason}";
+            if (paymentRefunded)
+            {
+                MarkWeightPaymentCancelled(order);
+            }
 
             // Stok iadesi
             await RestoreStockAsync(order);
@@ -682,7 +780,7 @@ namespace ECommerce.Business.Services.Managers
                 await _notificationService.NotifyOrderCancelledAsync(
                     orderId,
                     order.OrderNumber ?? $"#{orderId}",
-                    $"Admin tarafından iptal edildi: {reason}",
+                    BuildWeightCancellationMessage($"Admin tarafından iptal edildi: {reason}", hadActiveWeightPreAuthorization),
                     $"admin-{adminUserId}");
             }
             catch (Exception ex)
@@ -696,6 +794,146 @@ namespace ECommerce.Business.Services.Managers
                 : "Sipariş iptal edildi ancak para iadesi başarısız. Tekrar denenebilir.";
 
             return RefundRequestResult.Succeeded(resultDto, message, autoCancelled: true);
+        }
+
+        /// <inheritdoc />
+        public async Task<RefundRequestResult> AdminRefundOrderAsync(
+            int orderId, int adminUserId, string reason)
+        {
+            var order = await _db.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+                return RefundRequestResult.Failed("Sipariş bulunamadı.", "ORDER_NOT_FOUND");
+
+            if (order.Status == OrderStatus.Refunded)
+                return RefundRequestResult.Failed("Bu sipariş için zaten iade yapılmış.", "ALREADY_REFUNDED");
+
+            var payment = await GetLatestReversiblePaymentAsync(orderId);
+            var refundAmount = CalculateRefundAmount(order, payment);
+
+            if (refundAmount <= 0)
+                return RefundRequestResult.Failed("İade edilebilir tutar bulunamadı.", "INVALID_AMOUNT");
+
+            var previousStatus = order.Status;
+            var refundRequest = new RefundRequest
+            {
+                OrderId = orderId,
+                UserId = order.UserId,
+                Reason = reason,
+                RefundType = "full",
+                RefundAmount = refundAmount,
+                OrderStatusAtRequest = order.Status.ToString(),
+                RequestedAt = DateTime.UtcNow,
+                ProcessedByUserId = adminUserId,
+                ProcessedAt = DateTime.UtcNow,
+                AdminNote = $"Admin #{adminUserId} tarafından tam iade uygulandı.",
+                Status = RefundRequestStatus.Approved
+            };
+
+            var refundSuccess = false;
+            var transactionType = "none";
+            var isCardPayment = order.PaymentMethod?.ToLower() != "cash_on_delivery"
+                && order.PaymentMethod?.ToLower() != "kapida_odeme";
+
+            if (payment != null && isCardPayment)
+            {
+                try
+                {
+                    var hasCapture = order.CapturedAmount > 0 || payment.CapturedAmount > 0 || payment.Status != "Authorized";
+
+                    if (!hasCapture)
+                    {
+                        refundSuccess = await _paymentService.CancelPaymentAsync(
+                            payment.Id,
+                            $"Admin refund: {reason}");
+                        transactionType = refundSuccess ? "reverse" : "none";
+                    }
+                    else
+                    {
+                        refundSuccess = await _paymentService.PartialRefundAsync(payment.Id, refundAmount);
+                        transactionType = refundSuccess ? "return" : "none";
+                    }
+
+                    if (refundSuccess)
+                    {
+                        refundRequest.PosnetHostLogKey = payment.HostLogKey;
+                        refundRequest.RefundedAt = DateTime.UtcNow;
+                        refundRequest.Status = RefundRequestStatus.Refunded;
+                    }
+                    else
+                    {
+                        refundRequest.Status = RefundRequestStatus.RefundFailed;
+                        refundRequest.RefundFailureReason = "POSNET iade işlemi başarısız oldu.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    refundRequest.Status = RefundRequestStatus.RefundFailed;
+                    refundRequest.RefundFailureReason = $"Hata: {ex.Message}";
+                    _logger.LogError(ex,
+                        "[İADE-ADMIN] Tam iade hatası. OrderId={OrderId}", orderId);
+                }
+            }
+            else
+            {
+                refundSuccess = true;
+                refundRequest.RefundedAt = DateTime.UtcNow;
+                refundRequest.Status = RefundRequestStatus.Refunded;
+            }
+
+            refundRequest.TransactionType = transactionType;
+
+            if (refundSuccess)
+            {
+                order.Status = OrderStatus.Refunded;
+                order.RefundedAt = DateTime.UtcNow;
+
+                if (payment?.Status == "Authorized" && order.CapturedAmount <= 0 && payment.CapturedAmount <= 0)
+                {
+                    MarkWeightPaymentCancelled(order);
+                }
+
+                await RestoreStockAsync(order);
+
+                _db.OrderStatusHistories.Add(new OrderStatusHistory
+                {
+                    OrderId = orderId,
+                    PreviousStatus = previousStatus,
+                    NewStatus = OrderStatus.Refunded,
+                    ChangedBy = $"Admin #{adminUserId}",
+                    Reason = $"Admin tam iade: {reason}",
+                    ChangedAt = DateTime.UtcNow
+                });
+            }
+
+            _db.RefundRequests.Add(refundRequest);
+            await _db.SaveChangesAsync();
+
+            if (refundSuccess)
+            {
+                try
+                {
+                    await _notificationService.NotifyOrderStatusChangedAsync(
+                        orderId,
+                        order.OrderNumber ?? $"#{orderId}",
+                        OrderStatus.Refunded.ToString(),
+                        "İade işleminiz tamamlandı.",
+                        null);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[İADE-ADMIN] Tam iade bildirim hatası. OrderId={OrderId}", orderId);
+                }
+            }
+
+            var resultDto = MapToDto(refundRequest, order);
+            var message = refundSuccess
+                ? "Sipariş için para iadesi tamamlandı."
+                : "Para iadesi başarısız oldu. Tekrar denenebilir.";
+
+            return RefundRequestResult.Succeeded(resultDto, message);
         }
 
         /// <inheritdoc />

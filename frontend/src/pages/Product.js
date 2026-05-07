@@ -129,11 +129,17 @@ export default function Product() {
       setError(null);
 
       try {
+        const normalizedId = typeof id === "string" ? id.trim() : "";
+        const isNumericId = /^\d+$/.test(normalizedId);
+
         // NEDEN: SKU rotasından geliyorsa (/product/sku/:sku) farklı endpoint çağır.
         // Mikro-only ürünlerde id=0 olur, normal /api/products/0 çalışmaz.
+        // Slug rotasında ise ürün adından türeyen /product/{slug} URL'si backend'de slug endpoint'ine gider.
         const data = sku
           ? await ProductService.getBySku(sku)
-          : await ProductService.get(id);
+          : isNumericId
+            ? await ProductService.get(Number(normalizedId))
+            : await ProductService.getBySlug(normalizedId);
 
         if (!mounted) return;
 
@@ -971,48 +977,44 @@ export default function Product() {
 
               <div className="product-page__info-details">
                 <h3>Ürün Detayları</h3>
-                <table className="product-page__info-table">
-                  <tbody>
+                <dl className="product-page__info-list">
                     {product.brand && (
-                      <tr>
-                        <td>Marka</td>
-                        <td>{product.brand}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Marka</dt>
+                        <dd>{product.brand}</dd>
+                      </div>
                     )}
                     {product.sku && (
-                      <tr>
-                        <td>SKU</td>
-                        <td>{product.sku}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>SKU</dt>
+                        <dd>{product.sku}</dd>
+                      </div>
                     )}
                     {product.barcode && (
-                      <tr>
-                        <td>Barkod</td>
-                        <td>{product.barcode}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Barkod</dt>
+                        <dd>{product.barcode}</dd>
+                      </div>
                     )}
                     {product.weight && (
-                      <tr>
-                        <td>Ağırlık</td>
-                        <td>
-                          {product.weight} {product.weightUnit || "g"}
-                        </td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Ağırlık</dt>
+                        <dd>{product.weight} {product.weightUnit || "g"}</dd>
+                      </div>
                     )}
                     {product.origin && (
-                      <tr>
-                        <td>Menşei</td>
-                        <td>{product.origin}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Menşei</dt>
+                        <dd>{product.origin}</dd>
+                      </div>
                     )}
                     {product.categoryName && (
-                      <tr>
-                        <td>Kategori</td>
-                        <td>{product.categoryName}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Kategori</dt>
+                        <dd>{product.categoryName}</dd>
+                      </div>
                     )}
-                  </tbody>
-                </table>
+                </dl>
               </div>
 
               {product.ingredients && (
@@ -1080,30 +1082,28 @@ export default function Product() {
             <div className="product-page__package">
               <div className="product-page__package-info">
                 <h3>Paket Bilgileri</h3>
-                <table className="product-page__info-table">
-                  <tbody>
-                    <tr>
-                      <td>Paket İçeriği</td>
-                      <td>{product.packageContent || "1 adet"}</td>
-                    </tr>
-                    <tr>
-                      <td>Paket Boyutu</td>
-                      <td>{product.packageSize || "Standart"}</td>
-                    </tr>
+                <dl className="product-page__info-list">
+                    <div className="product-page__info-row">
+                      <dt>Paket İçeriği</dt>
+                      <dd>{product.packageContent || "1 adet"}</dd>
+                    </div>
+                    <div className="product-page__info-row">
+                      <dt>Paket Boyutu</dt>
+                      <dd>{product.packageSize || "Standart"}</dd>
+                    </div>
                     {product.packageWeight && (
-                      <tr>
-                        <td>Paket Ağırlığı</td>
-                        <td>{product.packageWeight}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Paket Ağırlığı</dt>
+                        <dd>{product.packageWeight}</dd>
+                      </div>
                     )}
                     {product.packageDimensions && (
-                      <tr>
-                        <td>Paket Boyutları</td>
-                        <td>{product.packageDimensions}</td>
-                      </tr>
+                      <div className="product-page__info-row">
+                        <dt>Paket Boyutları</dt>
+                        <dd>{product.packageDimensions}</dd>
+                      </div>
                     )}
-                  </tbody>
-                </table>
+                </dl>
               </div>
 
               <InfoCard

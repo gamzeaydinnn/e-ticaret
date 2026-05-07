@@ -430,6 +430,7 @@ export default function Home() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              gap: "12px",
               marginBottom: "20px",
             }}
           >
@@ -442,6 +443,8 @@ export default function Home() {
                 alignItems: "center",
                 gap: "10px",
                 color: "#1f2937",
+                minWidth: 0,
+                flex: "1 1 auto",
               }}
             >
               <div
@@ -478,6 +481,9 @@ export default function Home() {
                 display: "flex",
                 alignItems: "center",
                 gap: "6px",
+                marginLeft: "auto",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
                 background: "linear-gradient(135deg, #f97316, #ea580c)",
                 padding: "8px 16px",
                 borderRadius: "10px",

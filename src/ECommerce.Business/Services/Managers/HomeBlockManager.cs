@@ -8,6 +8,7 @@ using ECommerce.Core.DTOs.HomeBlock;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -23,7 +24,7 @@ namespace ECommerce.Business.Services.Managers
     /// - category: Product tablosu CategoryId filtresi
     /// - discounted: Product tablosu SpecialPrice != null && SpecialPrice < Price
     /// - newest: Product tablosu CreatedAt DESC
-    /// - bestseller: OrderItems sayısına göre (future)
+    /// - bestseller: Başarılı siparişlerdeki satış miktarına göre
     /// 
     /// Slug Oluşturma:
     /// - Türkçe karakterler çevrilir (ğ→g, ü→u, ş→s vb.)
@@ -463,8 +464,8 @@ namespace ECommerce.Business.Services.Managers
                     return newestProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "bestseller":
-                    // En çok satanlar - Şimdilik newest ile aynı (TODO: Order sayısına göre)
-                    var bestsellerProducts = await GetProductsByTypeAsync("newest", null, maxCount);
+                    // En çok satanlar - başarılı siparişlerde satılan toplam adet bazlı
+                    var bestsellerProducts = await GetProductsByTypeAsync("bestseller", null, maxCount);
                     return bestsellerProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 default:
@@ -506,10 +507,76 @@ namespace ECommerce.Business.Services.Managers
                     break;
 
                 case "bestseller":
-                    // TODO: OrderItems count'a göre sıralama eklenebilir
-                    // Şimdilik en yeni ürünler
-                    query = query.OrderByDescending(p => p.CreatedAt);
-                    break;
+                    var bestSellerCategoryIds = categoryId.HasValue
+                        ? await GetCategoryWithChildrenIdsAsync(categoryId.Value)
+                        : null;
+
+                    var bestSellerStats = await (
+                        from orderItem in _context.OrderItems.AsNoTracking()
+                        join order in _context.Orders.AsNoTracking() on orderItem.OrderId equals order.Id
+                        join product in _context.Products.AsNoTracking() on orderItem.ProductId equals product.Id
+                        where product.IsActive &&
+                              order.Status != OrderStatus.Cancelled &&
+                              order.Status != OrderStatus.DeliveryFailed &&
+                              order.Status != OrderStatus.PaymentFailed &&
+                              order.Status != OrderStatus.Refunded &&
+                              order.Status != OrderStatus.ChargebackPending &&
+                              (
+                                  order.PaymentStatus == PaymentStatus.Paid ||
+                                  order.Status == OrderStatus.Delivered ||
+                                  order.Status == OrderStatus.Completed
+                              ) &&
+                              (!categoryId.HasValue || bestSellerCategoryIds!.Contains(product.CategoryId))
+                        group new { orderItem, order } by orderItem.ProductId into grouped
+                        select new
+                        {
+                            ProductId = grouped.Key,
+                            TotalQuantity = grouped.Sum(x => x.orderItem.Quantity),
+                            OrderCount = grouped.Select(x => x.orderItem.OrderId).Distinct().Count(),
+                            LastOrderDate = grouped.Max(x => x.order.OrderDate)
+                        })
+                        .OrderByDescending(x => x.TotalQuantity)
+                        .ThenByDescending(x => x.OrderCount)
+                        .ThenByDescending(x => x.LastOrderDate)
+                        .Take(maxCount)
+                        .ToListAsync();
+
+                    if (bestSellerStats.Count == 0)
+                    {
+                        query = query.OrderByDescending(p => p.CreatedAt);
+                        break;
+                    }
+
+                    var bestSellerProductIds = bestSellerStats.Select(x => x.ProductId).ToList();
+                    var bestSellerProducts = await query
+                        .Where(p => bestSellerProductIds.Contains(p.Id))
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    var bestSellerLookup = bestSellerProducts.ToDictionary(p => p.Id);
+                    var orderedBestSellerProducts = new List<Product>();
+
+                    foreach (var stat in bestSellerStats)
+                    {
+                        if (bestSellerLookup.TryGetValue(stat.ProductId, out var product))
+                        {
+                            orderedBestSellerProducts.Add(product);
+                        }
+                    }
+
+                    if (orderedBestSellerProducts.Count < maxCount)
+                    {
+                        var remainingProducts = await query
+                            .Where(p => !bestSellerProductIds.Contains(p.Id))
+                            .OrderByDescending(p => p.CreatedAt)
+                            .Take(maxCount - orderedBestSellerProducts.Count)
+                            .AsNoTracking()
+                            .ToListAsync();
+
+                        orderedBestSellerProducts.AddRange(remainingProducts);
+                    }
+
+                    return orderedBestSellerProducts;
 
                 default:
                     query = query.OrderBy(p => p.Name);

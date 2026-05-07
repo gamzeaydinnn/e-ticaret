@@ -29,17 +29,20 @@ namespace ECommerce.API.Controllers
     public class StoreAttendantOrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly IRefundService _refundService;
         private readonly IHubContext<DispatcherHub> _dispatcherHubContext;
         private readonly IRealTimeNotificationService _notificationService;
         private readonly ILogger<StoreAttendantOrderController> _logger;
 
         public StoreAttendantOrderController(
             IOrderService orderService,
+            IRefundService refundService,
             IHubContext<DispatcherHub> dispatcherHubContext,
             IRealTimeNotificationService notificationService,
             ILogger<StoreAttendantOrderController> logger)
         {
             _orderService = orderService;
+            _refundService = refundService;
             _dispatcherHubContext = dispatcherHubContext;
             _notificationService = notificationService;
             _logger = logger;
@@ -315,7 +318,33 @@ namespace ECommerce.API.Controllers
                     return NotFound(new { error = "Sipariş bulunamadı." });
 
                 // Durum güncelleme işlemi
-                await _orderService.UpdateOrderStatusAsync(orderId, dto.Status);
+                var normalizedStatus = dto.Status.Trim().Replace("_", string.Empty, StringComparison.Ordinal);
+
+                if (string.Equals(normalizedStatus, "Cancelled", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cancelResult = await _refundService.AdminCancelOrderWithRefundAsync(
+                        orderId,
+                        GetUserId(),
+                        "Market görevlisi tarafından durum güncellemesi ile iptal edildi");
+
+                    if (!cancelResult.Success)
+                        return BadRequest(new { error = cancelResult.Message, errorCode = cancelResult.ErrorCode });
+                }
+                else if (string.Equals(normalizedStatus, "Refunded", StringComparison.OrdinalIgnoreCase))
+                {
+                    var refundResult = await _refundService.AdminRefundOrderAsync(
+                        orderId,
+                        GetUserId(),
+                        "Market görevlisi tarafından durum güncellemesi ile iade edildi");
+
+                    if (!refundResult.Success)
+                        return BadRequest(new { error = refundResult.Message, errorCode = refundResult.ErrorCode });
+                }
+                else
+                {
+                    await _orderService.UpdateOrderStatusAsync(orderId, dto.Status);
+                }
+
                 var updatedOrder = await _orderService.GetByIdAsync(orderId);
 
                 if (updatedOrder != null)
@@ -494,9 +523,36 @@ namespace ECommerce.API.Controllers
         [ProducesResponseType(404)]
         public async Task<IActionResult> CancelOrder(int orderId)
         {
-            return await HandleStatusChange(orderId, 
-                () => _orderService.CancelOrderByAdminAsync(orderId), 
-                "Cancelled");
+            var oldOrder = await _orderService.GetByIdAsync(orderId);
+            if (oldOrder == null)
+                return NotFound(new { error = "Sipariş bulunamadı." });
+
+            var result = await _refundService.AdminCancelOrderWithRefundAsync(
+                orderId,
+                GetUserId(),
+                "Market görevlisi tarafından iptal edildi");
+
+            if (!result.Success)
+                return BadRequest(new { error = result.Message, errorCode = result.ErrorCode });
+
+            var updatedOrder = await _orderService.GetByIdAsync(orderId);
+            if (updatedOrder == null)
+                return NotFound(new { error = "Sipariş güncellenemedi." });
+
+            await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                updatedOrder.Id,
+                updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                oldOrder.Status,
+                updatedOrder.Status,
+                GetUserName());
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                order = updatedOrder,
+                refundRequest = result.RefundRequest
+            });
         }
 
         /// <summary>
@@ -511,9 +567,36 @@ namespace ECommerce.API.Controllers
         [ProducesResponseType(404)]
         public async Task<IActionResult> RefundOrder(int orderId)
         {
-            return await HandleStatusChange(orderId, 
-                () => _orderService.RefundOrderAsync(orderId), 
-                "Refunded");
+            var oldOrder = await _orderService.GetByIdAsync(orderId);
+            if (oldOrder == null)
+                return NotFound(new { error = "Sipariş bulunamadı." });
+
+            var result = await _refundService.AdminRefundOrderAsync(
+                orderId,
+                GetUserId(),
+                "Market görevlisi tarafından iade edildi");
+
+            if (!result.Success)
+                return BadRequest(new { error = result.Message, errorCode = result.ErrorCode });
+
+            var updatedOrder = await _orderService.GetByIdAsync(orderId);
+            if (updatedOrder == null)
+                return NotFound(new { error = "Sipariş güncellenemedi." });
+
+            await _notificationService.NotifyAllPartiesOrderStatusChangedAsync(
+                updatedOrder.Id,
+                updatedOrder.OrderNumber ?? $"#{updatedOrder.Id}",
+                oldOrder.Status,
+                updatedOrder.Status,
+                GetUserName());
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                order = updatedOrder,
+                refundRequest = result.RefundRequest
+            });
         }
 
         /// <summary>

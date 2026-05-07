@@ -17,8 +17,8 @@
    BAŞLIK ALANI
    ===================================================== */
 .product-grid-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   padding: 0 20px 20px;
   max-width: 1400px;
@@ -29,6 +29,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
 
 .product-grid-title {
@@ -78,6 +79,8 @@
   border-radius: 25px;
   background: rgba(255, 107, 53, 0.08);
   transition: all 0.3s ease;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .product-grid-view-all:hover {
@@ -294,8 +297,7 @@
   }
 
   .product-grid-header {
-    flex-direction: row;
-    justify-content: space-between;
+    grid-template-columns: minmax(0, 1fr) auto;
     padding: 0 15px 15px;
   }
 
