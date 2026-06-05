@@ -81,6 +81,7 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> SyncProducts()
         {
             var syncResult = await _microSyncManager.SyncProductsFromMikroAsync();
+            var autoCategorizeResult = await TryRunAutomaticRecategorizeAsync();
 
             return Ok(new
             {
@@ -90,8 +91,44 @@ namespace ECommerce.API.Controllers.Admin
                 createdProducts = syncResult.CreatedProducts,
                 updatedProducts = syncResult.UpdatedProducts,
                 skippedProducts = syncResult.SkippedProducts,
-                failedProducts = syncResult.FailedProducts
+                failedProducts = syncResult.FailedProducts,
+                autoCategorize = autoCategorizeResult == null
+                    ? null
+                    : new
+                    {
+                        success = autoCategorizeResult.Success,
+                        totalProducts = autoCategorizeResult.TotalProducts,
+                        categoriesUpdated = autoCategorizeResult.CategoriesUpdated,
+                        newMappingsCreated = autoCategorizeResult.NewMappingsCreated,
+                        newCategoriesCreated = autoCategorizeResult.NewCategoriesCreated,
+                        fallbackToDiger = autoCategorizeResult.FallbackToDiger,
+                        errors = autoCategorizeResult.Errors,
+                        message = autoCategorizeResult.Message
+                    }
             });
+        }
+
+        private async Task<RecategorizeResult?> TryRunAutomaticRecategorizeAsync()
+        {
+            // NEDEN: Mikro senkronizasyonu sonrası kategori atamasını ayrı butona bırakmak,
+            // yeni gelen ürünlerin admin ekranında kategorisiz görünmesine yol açıyordu.
+            // Başarılı sync sonrasında aynı request içinde yeniden kategorileyip görünümü tutarlı tutuyoruz.
+            var infoSyncService = HttpContext.RequestServices.GetService<IProductInfoSyncService>();
+            if (infoSyncService == null)
+            {
+                _logger.LogWarning("[AdminMicroController] IProductInfoSyncService bulunamadı, otomatik kategorileme atlandı");
+                return null;
+            }
+
+            try
+            {
+                return await infoSyncService.RecategorizeAllProductsAsync(HttpContext.RequestAborted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[AdminMicroController] Sync sonrası otomatik kategorileme hatası");
+                return null;
+            }
         }
         
         /// <summary>
@@ -2030,6 +2067,8 @@ namespace ECommerce.API.Controllers.Admin
 
                 if (result.Success)
                 {
+                    var autoCategorizeResult = await TryRunAutomaticRecategorizeAsync();
+
                     return Ok(new
                     {
                         success = true,
@@ -2041,7 +2080,19 @@ namespace ECommerce.API.Controllers.Admin
                             updatedProducts = result.UpdatedProducts,
                             unchangedProducts = result.UnchangedProducts,
                             durationSeconds = result.Duration.TotalSeconds
-                        }
+                        },
+                        autoCategorize = autoCategorizeResult == null
+                            ? null
+                            : new
+                            {
+                                success = autoCategorizeResult.Success,
+                                categoriesUpdated = autoCategorizeResult.CategoriesUpdated,
+                                newMappingsCreated = autoCategorizeResult.NewMappingsCreated,
+                                newCategoriesCreated = autoCategorizeResult.NewCategoriesCreated,
+                                fallbackToDiger = autoCategorizeResult.FallbackToDiger,
+                                errors = autoCategorizeResult.Errors,
+                                message = autoCategorizeResult.Message
+                            }
                     });
                 }
                 else
@@ -2368,8 +2419,18 @@ namespace ECommerce.API.Controllers.Admin
                     }
                 });
 
+                var normalizedMode = (syncMode ?? "newOnly").Trim().ToLowerInvariant();
+
                 // Sync işlemini başlat
-                var result = await _cacheService.FetchAllAndCacheAsync(fiyatListesiNo, depoNo, progress);
+                var result = normalizedMode switch
+                {
+                    "full" => await _cacheService.FetchAllAndCacheAsync(fiyatListesiNo, depoNo, progress),
+                    "newonly" => await _cacheService.SyncNewProductsOnlyAsync(fiyatListesiNo, depoNo),
+                    _ => await _cacheService.SyncNewProductsOnlyAsync(fiyatListesiNo, depoNo)
+                };
+                var autoCategorizeResult = result.Success
+                    ? await TryRunAutomaticRecategorizeAsync()
+                    : null;
 
                 // İşlem tamamlandı event'i gönder
                 var completeData = System.Text.Json.JsonSerializer.Serialize(new
@@ -2382,7 +2443,19 @@ namespace ECommerce.API.Controllers.Admin
                     updatedProducts = result.UpdatedProducts,
                     unchangedProducts = result.UnchangedProducts,
                     durationSeconds = Math.Round(result.Duration.TotalSeconds, 1),
-                    errors = result.Errors
+                    errors = result.Errors,
+                    autoCategorize = autoCategorizeResult == null
+                        ? null
+                        : new
+                        {
+                            success = autoCategorizeResult.Success,
+                            categoriesUpdated = autoCategorizeResult.CategoriesUpdated,
+                            newMappingsCreated = autoCategorizeResult.NewMappingsCreated,
+                            newCategoriesCreated = autoCategorizeResult.NewCategoriesCreated,
+                            fallbackToDiger = autoCategorizeResult.FallbackToDiger,
+                            errors = autoCategorizeResult.Errors,
+                            message = autoCategorizeResult.Message
+                        }
                 });
 
                 await Response.WriteAsync($"data: {completeData}\n\n", cancellationToken);

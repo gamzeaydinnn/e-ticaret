@@ -41,6 +41,18 @@ namespace ECommerce.Business.Services.Interfaces
         /// <returns>PagedResult formatında ürün listesi</returns>
         Task<PagedResult<ProductListDto>> GetProductsPagedAsync(int page = 1, int size = 50);
 
+        /// <summary>
+        /// Belirli bir kategorideki aktif ürünleri sayfalı döndürür.
+        /// Sıralama ve stok filtresi DB seviyesinde uygulanır.
+        /// </summary>
+        Task<PagedResult<ProductListDto>> GetProductsByCategoryPagedAsync(
+            int categoryId,
+            int page = 1,
+            int size = 50,
+            string sort = "name",
+            string direction = "asc",
+            bool? inStock = null);
+
         // Kullanıcı tarafı ürün listeleme
         Task<IEnumerable<ProductListDto>> GetActiveProductsAsync(int page = 1, int size = 10, int? categoryId = null);
 

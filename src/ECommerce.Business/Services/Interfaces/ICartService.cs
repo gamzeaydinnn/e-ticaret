@@ -26,7 +26,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// <summary>
         /// Kayıtlı kullanıcının sepet öğesinin miktarını günceller
         /// </summary>
-        Task UpdateCartItemAsync(int userId, int cartItemId, int quantity);
+        Task UpdateCartItemAsync(int userId, int cartItemId, decimal quantity);
 
         /// <summary>
         /// Kayıtlı kullanıcının sepetinden öğe siler
@@ -55,7 +55,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// <summary>
         /// Misafir kullanıcının sepet öğesinin miktarını günceller
         /// </summary>
-        Task UpdateCartItemByTokenAsync(string cartToken, int productId, int quantity, int? variantId = null);
+        Task UpdateCartItemByTokenAsync(string cartToken, int productId, decimal quantity, int? variantId = null);
 
         /// <summary>
         /// Misafir kullanıcının sepetinden öğe siler

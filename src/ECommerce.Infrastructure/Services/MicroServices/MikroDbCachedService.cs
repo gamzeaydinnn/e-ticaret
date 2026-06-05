@@ -120,6 +120,22 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     using var scope = _scopeFactory.CreateScope();
                     var innerService = scope.ServiceProvider.GetRequiredService<MikroDbService>();
 
+                    var targetPriceList = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+                    var targetDepot = depoNo ?? 0;
+
+                    if (targetPriceList == 11)
+                    {
+                        var (deleted, inserted, updated) = await innerService.PrepareWebPriceListAsync(
+                            hedefListeNo: targetPriceList,
+                            kaynakListeNo: 1,
+                            hedefDepoNo: targetDepot,
+                            cancellationToken);
+
+                        _logger.LogInformation(
+                            "[MikroDbCachedService] Web fiyat listesi hazırlandı. HedefListe: {List}, Depo: {Depot}, Silinen: {Deleted}, Eklenen: {Inserted}, Güncellenen: {Updated}",
+                            targetPriceList, targetDepot, deleted, inserted, updated);
+                    }
+
                     var products = await innerService.GetUnifiedProductsAsync(
                         fiyatListesiNo, depoNo, cancellationToken);
 

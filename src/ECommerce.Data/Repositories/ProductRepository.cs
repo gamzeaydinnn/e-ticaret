@@ -92,7 +92,13 @@ namespace ECommerce.Data.Repositories
 
         public async Task<Product?> GetBySkuAsync(string sku)
         {
-            return await _dbSet.FirstOrDefaultAsync(p => p.SKU == sku && p.IsActive);
+            var normalizedSku = (sku ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedSku))
+            {
+                return null;
+            }
+
+            return await _dbSet.FirstOrDefaultAsync(p => p.IsActive && p.SKU.ToLower() == normalizedSku.ToLower());
         }
 
         /// <summary>

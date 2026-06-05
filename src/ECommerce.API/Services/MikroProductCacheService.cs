@@ -6,12 +6,15 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
+using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Cache;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using IMikroDbService = ECommerce.Infrastructure.Services.MicroServices.IMikroDbService;
 using MikroApiService = ECommerce.Infrastructure.Services.MicroServices.MicroService;
 
 namespace ECommerce.API.Services
@@ -23,7 +26,9 @@ namespace ECommerce.API.Services
     {
         private readonly ECommerceDbContext _context;
         private readonly MikroApiService _mikroApiService;
+        private readonly IMikroDbService _mikroDbService;
         private readonly ILogger<MikroProductCacheService> _logger;
+        private readonly IProductAdminOverrideSettingsService? _productAdminOverrideSettingsService;
         // NEDEN: Cache sync sonrası yeni gelen grup kodlarını otomatik eşle
         private readonly IAutoCategoryMappingEngine? _autoMappingEngine;
         private static readonly SemaphoreSlim CacheWarmupLock = new(1, 1);
@@ -38,13 +43,17 @@ namespace ECommerce.API.Services
         public MikroProductCacheService(
             ECommerceDbContext context,
             MikroApiService mikroApiService,
+            IMikroDbService mikroDbService,
             ILogger<MikroProductCacheService> logger,
-            IAutoCategoryMappingEngine? autoMappingEngine = null)
+            IAutoCategoryMappingEngine? autoMappingEngine = null,
+            IProductAdminOverrideSettingsService? productAdminOverrideSettingsService = null)
         {
             _context = context;
             _mikroApiService = mikroApiService;
+            _mikroDbService = mikroDbService;
             _logger = logger;
             _autoMappingEngine = autoMappingEngine;
+            _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
         }
 
         /// <summary>
@@ -407,8 +416,144 @@ namespace ECommerce.API.Services
         /// </summary>
         public async Task<MikroCacheSyncResult> SyncNewProductsOnlyAsync(int fiyatListesiNo = 1, int depoNo = 0)
         {
-            // Birleşik SQL zaten hem yeni hem değişen ürünleri handle ediyor
-            return await FetchAllAndCacheAsync(fiyatListesiNo, depoNo);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var result = new MikroCacheSyncResult();
+
+            try
+            {
+                if (!_mikroDbService.IsConfigured)
+                {
+                    _logger.LogWarning("[MikroProductCacheService] Delta sync için SQL bağlantısı yok, full sync'e düşülüyor.");
+                    return await FetchAllAndCacheAsync(fiyatListesiNo, depoNo);
+                }
+
+                var lastSyncTime = await _context.MikroSyncStates
+                    .Where(s => s.SyncType == "ProductCache")
+                    .Select(s => s.LastSyncTime)
+                    .FirstOrDefaultAsync();
+
+                if (!lastSyncTime.HasValue)
+                {
+                    _logger.LogInformation("[MikroProductCacheService] Önceki sync zamanı yok, newOnly yerine full sync çalıştırılıyor.");
+                    return await FetchAllAndCacheAsync(fiyatListesiNo, depoNo);
+                }
+
+                var changedProducts = await _mikroDbService.GetDeltaChangedProductsAsync(
+                    lastSyncTime.Value.AddSeconds(-5),
+                    fiyatListesiNo,
+                    depoNo > 0 ? depoNo : null);
+
+                if (changedProducts.Count == 0)
+                {
+                    await UpdateSyncStateAsync();
+                    sw.Stop();
+                    result.Success = true;
+                    result.Duration = sw.Elapsed;
+                    result.Message = "Son senkronizasyondan sonra yeni veya değişen ürün bulunamadı.";
+                    return result;
+                }
+
+                var changedSkuList = changedProducts
+                    .Select(item => item.StokKod)
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var existingProducts = await _context.MikroProductCaches
+                    .Where(p => changedSkuList.Contains(p.StokKod))
+                    .ToDictionaryAsync(p => p.StokKod, p => p, StringComparer.OrdinalIgnoreCase);
+
+                var newProducts = new List<MikroProductCache>();
+
+                foreach (var item in changedProducts)
+                {
+                    if (string.IsNullOrWhiteSpace(item.StokKod))
+                        continue;
+
+                    var cacheItem = DirectMapToCache(item, fiyatListesiNo, depoNo);
+
+                    if (existingProducts.TryGetValue(cacheItem.StokKod, out var existing))
+                    {
+                        if (existing.DataHash != cacheItem.DataHash || existing.Aktif != cacheItem.Aktif)
+                        {
+                            existing.StokAd = cacheItem.StokAd;
+                            existing.Barkod = cacheItem.Barkod;
+                            existing.GrupKod = cacheItem.GrupKod;
+                            existing.AnagrupKod = cacheItem.AnagrupKod;
+                            existing.Birim = cacheItem.Birim;
+                            existing.KdvOrani = cacheItem.KdvOrani;
+                            existing.SatisFiyati = cacheItem.SatisFiyati;
+                            existing.FiyatListesiNo = cacheItem.FiyatListesiNo;
+                            existing.DepoMiktari = cacheItem.DepoMiktari;
+                            existing.SatilabilirMiktar = cacheItem.SatilabilirMiktar;
+                            existing.DepoNo = cacheItem.DepoNo;
+                            existing.TumFiyatlarJson = null;
+                            existing.TumDepolarJson = null;
+                            existing.DataHash = cacheItem.DataHash;
+                            existing.GuncellemeTarihi = DateTime.UtcNow;
+                            existing.Aktif = cacheItem.Aktif;
+                            existing.VeriKaynagi = "SQL_UNIFIED";
+                            existing.SonHareketTarihi = cacheItem.SonHareketTarihi;
+                            result.UpdatedProducts++;
+                        }
+                        else
+                        {
+                            result.UnchangedProducts++;
+                        }
+                    }
+                    else
+                    {
+                        newProducts.Add(cacheItem);
+                        result.NewProducts++;
+                    }
+
+                    result.TotalFetched++;
+                }
+
+                if (newProducts.Count > 0)
+                {
+                    for (int i = 0; i < newProducts.Count; i += BATCH_INSERT_SIZE)
+                    {
+                        var batch = newProducts.Skip(i).Take(BATCH_INSERT_SIZE).ToList();
+                        await _context.MikroProductCaches.AddRangeAsync(batch);
+                        await _context.SaveChangesAsync();
+                    }
+                }
+                else
+                {
+                    await _context.SaveChangesAsync();
+                }
+
+                await UpdateSyncStateAsync();
+
+                if (_autoMappingEngine != null && (result.NewProducts > 0 || result.UpdatedProducts > 0))
+                {
+                    try
+                    {
+                        await _autoMappingEngine.DiscoverAndMapAllAsync();
+                    }
+                    catch (Exception autoEx)
+                    {
+                        _logger.LogWarning(autoEx,
+                            "[MikroProductCacheService] Delta sync sonrası otomatik kategori eşleme hatası");
+                    }
+                }
+
+                sw.Stop();
+                result.Success = true;
+                result.Duration = sw.Elapsed;
+                result.Message = $"{result.TotalFetched} değişen ürün işlendi. Yeni: {result.NewProducts}, Güncellenen: {result.UpdatedProducts}, Değişmeyen: {result.UnchangedProducts}";
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MikroProductCacheService] SyncNewProductsOnlyAsync hatası");
+                result.Success = false;
+                result.Message = $"Hata: {ex.Message}";
+                result.Errors.Add(ex.ToString());
+                result.Duration = sw.Elapsed;
+                return result;
+            }
         }
 
         /// <summary>
@@ -553,7 +698,7 @@ namespace ECommerce.API.Services
                 TumDepolarJson = null,    // Birleşik sorguda tekil depo gelir — multi-depo JSON gereksiz
                 OlusturmaTarihi = DateTime.UtcNow,
                 GuncellemeTarihi = DateTime.UtcNow,
-                Aktif = true,
+                Aktif = item.WebeGonderilecekFl,
                 DataHash = dataHash,
                 VeriKaynagi = "SQL_UNIFIED",
                 SonHareketTarihi = item.SonHareketTarihi
@@ -800,6 +945,9 @@ namespace ECommerce.API.Services
                     .ToListAsync();
 
                 int updatedCount = 0;
+                var overrideDefaults = _productAdminOverrideSettingsService != null
+                    ? await _productAdminOverrideSettingsService.GetSettingsAsync()
+                    : new ProductAdminOverrideSettingsDto();
 
                 foreach (var product in products)
                 {
@@ -813,7 +961,9 @@ namespace ECommerce.API.Services
 
                     // Fiyat güncellemesi — cache'den gelen fiyat > 0 ise güncelle
                     // NEDEN > 0 kontrolü: 0 fiyatlı ürünler teknik hata olabilir, mevcut fiyatı korumak daha güvenli
-                    if (cache.SatisFiyati > 0 && product.Price != cache.SatisFiyati)
+                    if (ProductAdminOverridePolicy.CanSyncPrice(product, overrideDefaults) &&
+                        cache.SatisFiyati > 0 &&
+                        product.Price != cache.SatisFiyati)
                     {
                         product.Price = cache.SatisFiyati;
                         changed = true;

@@ -68,8 +68,9 @@ namespace ECommerce.Tests.Services
                 mikroDbMock.Object,
                 resilienceFactory);
 
+            var mikroDbServiceMock = new Mock<ECommerce.Infrastructure.Services.MicroServices.IMikroDbService>();
             var loggerMock = new Mock<ILogger<MikroProductCacheService>>();
-            return new MikroProductCacheService(context, mikro, loggerMock.Object);
+            return new MikroProductCacheService(context, mikro, mikroDbServiceMock.Object, loggerMock.Object);
         }
 
         // ==================== TEST 1: Boş Cache ====================

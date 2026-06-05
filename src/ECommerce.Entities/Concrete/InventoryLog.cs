@@ -11,9 +11,9 @@ namespace ECommerce.Entities.Concrete
     {
         public int ProductId { get; set; }
         public string Action { get; set; } = string.Empty;
-        public int Quantity { get; set; }
-        public int OldStock { get; set; }
-        public int NewStock { get; set; }
+        public decimal Quantity { get; set; }
+        public decimal OldStock { get; set; }
+        public decimal NewStock { get; set; }
         public string? ReferenceId { get; set; }
 
         public virtual Product? Product { get; set; }

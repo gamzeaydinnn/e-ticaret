@@ -116,6 +116,12 @@ namespace ECommerce.Business.Services.Managers
             return order.FinalPrice;
         }
 
+        private static bool IsCashOnDelivery(string? paymentMethod)
+        {
+            var normalized = paymentMethod?.Trim().ToLowerInvariant();
+            return normalized == "cash_on_delivery" || normalized == "kapida_odeme";
+        }
+
         private static void MarkWeightPaymentCancelled(Order order)
         {
             if (string.IsNullOrEmpty(order.PreAuthHostLogKey) && order.PreAuthAmount <= 0)
@@ -679,6 +685,13 @@ namespace ECommerce.Business.Services.Managers
                 AdminNote = $"Admin #{adminUserId} tarafından iptal edildi."
             };
 
+            var manualRefundRequired = IsCashOnDelivery(order.PaymentMethod);
+            refundRequest.ManualRefundRequired = manualRefundRequired;
+            if (manualRefundRequired)
+            {
+                refundRequest.AdminNote = $"Admin #{adminUserId} tarafından iptal edildi. Kapıda ödeme yapılmışsa müşteriye manuel iade yapılmalı.";
+            }
+
             // Ödeme kaydını bul
             var payment = await GetLatestReversiblePaymentAsync(orderId);
             var refundAmount = CalculateRefundAmount(order, payment);
@@ -688,8 +701,7 @@ namespace ECommerce.Business.Services.Managers
             string transactionType = "none";
 
             // Kredi kartı ödemesi varsa para iadesini yap
-            if (payment != null && order.PaymentMethod?.ToLower() != "cash_on_delivery"
-                                && order.PaymentMethod?.ToLower() != "kapida_odeme")
+            if (payment != null && !manualRefundRequired)
             {
                 try
                 {
@@ -832,10 +844,16 @@ namespace ECommerce.Business.Services.Managers
                 Status = RefundRequestStatus.Approved
             };
 
+            var manualRefundRequired = IsCashOnDelivery(order.PaymentMethod);
+            refundRequest.ManualRefundRequired = manualRefundRequired;
+            if (manualRefundRequired)
+            {
+                refundRequest.AdminNote = $"Admin #{adminUserId} tarafından tam iade uygulandı. Kapıda ödeme yapılmışsa müşteriye manuel iade yapılmalı.";
+            }
+
             var refundSuccess = false;
             var transactionType = "none";
-            var isCardPayment = order.PaymentMethod?.ToLower() != "cash_on_delivery"
-                && order.PaymentMethod?.ToLower() != "kapida_odeme";
+            var isCardPayment = !manualRefundRequired;
 
             if (payment != null && isCardPayment)
             {

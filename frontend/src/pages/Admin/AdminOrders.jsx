@@ -286,6 +286,10 @@ export default function AdminOrders() {
   const [showRefundPanel, setShowRefundPanel] = useState(false);
   const [refundProcessing, setRefundProcessing] = useState(null); // İşlenen iade talebi ID
   const [refundAdminNote, setRefundAdminNote] = useState("");
+  const [cancelDialogOrder, setCancelDialogOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelProcessing, setCancelProcessing] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   // ============================================================
   // İADE TALEPLERİNİ YÜKLEME
@@ -550,6 +554,68 @@ export default function AdminOrders() {
     }
   };
 
+  const canCancelWithRefund = (status) => {
+    const normalizedStatus = normalizeStatus(status);
+    return normalizedStatus !== "cancelled" && normalizedStatus !== "refunded";
+  };
+
+  const openCancelDialog = (order) => {
+    setCancelDialogOrder(order);
+    setCancelReason("");
+  };
+
+  const closeCancelDialog = () => {
+    if (cancelProcessing) {
+      return;
+    }
+
+    setCancelDialogOrder(null);
+    setCancelReason("");
+  };
+
+  const handleCancelWithRefund = async () => {
+    if (!cancelDialogOrder) {
+      return;
+    }
+
+    const trimmedReason = cancelReason.trim();
+    if (!trimmedReason) {
+      setActionFeedback({
+        type: "danger",
+        message: "İptal/iade işlemi için sebep girişi zorunludur.",
+      });
+      return;
+    }
+
+    setCancelProcessing(true);
+    try {
+      await AdminService.cancelOrderWithRefund(cancelDialogOrder.id, trimmedReason);
+      await loadData(false);
+      await loadRefundRequests();
+
+      const refreshedOrderResponse = await AdminService.getOrder(cancelDialogOrder.id);
+      const refreshedOrder = refreshedOrderResponse?.data || refreshedOrderResponse;
+      if (selectedOrder?.id === cancelDialogOrder.id && refreshedOrder) {
+        setSelectedOrder(refreshedOrder);
+      }
+
+      setActionFeedback({
+        type: "success",
+        message: "İptal/iade işlemi başlatıldı.",
+      });
+      closeCancelDialog();
+    } catch (err) {
+      const message =
+        err?.response?.data?.message || err?.message || "İptal/iade işlemi başarısız oldu.";
+      setActionFeedback({
+        type: "danger",
+        message,
+      });
+    } finally {
+      setCancelProcessing(false);
+    }
+  };
+
   // ============================================================
   // KURYE ATAMA - Backend'e POST isteği gönderir
   // ============================================================
@@ -737,6 +803,20 @@ export default function AdminOrders() {
 
   return (
     <div style={{ overflow: "hidden", maxWidth: "100%" }}>
+      {actionFeedback && (
+        <div className={`alert alert-${actionFeedback.type} py-2 mx-1`} role="alert">
+          <div className="d-flex align-items-center justify-content-between gap-2">
+            <span>{actionFeedback.message}</span>
+            <button
+              type="button"
+              className="btn-close"
+              aria-label="Kapat"
+              onClick={() => setActionFeedback(null)}
+            ></button>
+          </div>
+        </div>
+      )}
+
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2 px-1">
         <div>
           <h5 className="fw-bold text-dark mb-0" style={{ fontSize: "1rem" }}>
@@ -1672,18 +1752,7 @@ export default function AdminOrders() {
 
                             {normalizedStatus === "delivered" && (
                               <button
-                                onClick={async () => {
-                                  if (
-                                    !window.confirm(
-                                      "Bu sipariş teslim edilmiş görünüyor. Tam para iadesi yapmak istediğinize emin misiniz?",
-                                    )
-                                  ) {
-                                    return;
-                                  }
-
-                                  await updateOrderStatus(order.id, "refunded");
-                                  loadRefundRequests();
-                                }}
+                                onClick={() => openCancelDialog(order)}
                                 className="btn btn-outline-warning p-1"
                                 style={{ fontSize: "0.6rem", lineHeight: 1 }}
                                 title="↩️ Tam İade Yap"
@@ -1694,33 +1763,9 @@ export default function AdminOrders() {
 
                             {/* 🚫 İPTAL + PARA İADESİ - Admin ve StoreAttendant için
                                 İptal edilince POSNET üzerinden para iadesi de tetiklenir */}
-                            {normalizedStatus !== "delivered" &&
-                              normalizedStatus !== "cancelled" &&
-                              normalizedStatus !== "refunded" && (
+                            {canCancelWithRefund(order.status) && (
                                 <button
-                                  onClick={async () => {
-                                    if (
-                                      !window.confirm(
-                                        "Siparişi iptal etmek istediğinize emin misiniz?\nÖdeme yapılmışsa otomatik para iadesi yapılacaktır.",
-                                      )
-                                    )
-                                      return;
-                                    try {
-                                      await AdminService.cancelOrderWithRefund(
-                                        order.id,
-                                        "Admin/Görevli tarafından iptal edildi",
-                                      );
-                                      await loadData(false);
-                                      loadRefundRequests();
-                                    } catch (err) {
-                                      alert(
-                                        "İptal hatası: " +
-                                          (err?.response?.data?.message ||
-                                            err?.message ||
-                                            "Bilinmeyen hata"),
-                                      );
-                                    }
-                                  }}
+                                  onClick={() => openCancelDialog(order)}
                                   className="btn btn-outline-danger p-1"
                                   style={{ fontSize: "0.6rem", lineHeight: 1 }}
                                   title="🚫 İptal Et + Para İadesi"
@@ -2915,42 +2960,11 @@ export default function AdminOrders() {
                             <button
                               className="btn btn-danger btn-sm w-100"
                               style={{ fontSize: "0.7rem" }}
-                              onClick={() => {
-                                const normalizedSelectedStatus = (
-                                  selectedOrder.status || ""
-                                )
-                                  .toString()
-                                  .toLowerCase()
-                                  .replace(/_/g, "");
-                                const targetStatus =
-                                  normalizedSelectedStatus === "delivered"
-                                    ? "refunded"
-                                    : "cancelled";
-                                const actionLabel =
-                                  targetStatus === "refunded"
-                                    ? "İADE"
-                                    : "İPTAL";
-
-                                if (
-                                  window.confirm(
-                                    `Bu sipariş için ${actionLabel} işlemi yapmak istediğinize emin misiniz?`,
-                                  )
-                                ) {
-                                  updateOrderStatus(selectedOrder.id, targetStatus);
-                                  setSelectedOrder({
-                                    ...selectedOrder,
-                                    status: targetStatus,
-                                  });
-                                }
-                              }}
+                              onClick={() => openCancelDialog(selectedOrder)}
+                              disabled={!canCancelWithRefund(selectedOrder.status)}
                             >
                               <i className="fas fa-times me-1"></i>
-                              {((selectedOrder.status || "")
-                                .toString()
-                                .toLowerCase()
-                                .replace(/_/g, "") === "delivered")
-                                ? "İade Et"
-                                : "İptal Et"}
+                              İptal / İade
                             </button>
                           </div>
                         </div>
@@ -2962,6 +2976,72 @@ export default function AdminOrders() {
             </div>
           );
         })()}
+
+      {cancelDialogOrder && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeCancelDialog();
+            }
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Siparişi İptal Et ve Para İadesini Başlat</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  aria-label="Kapat"
+                  onClick={closeCancelDialog}
+                  disabled={cancelProcessing}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-2">
+                  <strong>Sipariş:</strong> #{cancelDialogOrder.id}
+                </p>
+                <p className="text-muted small mb-3">
+                  Bu işlem ödeme varsa otomatik iade akışını başlatır. Kapıda ödeme siparişlerinde manuel iade takibi gerekebilir.
+                </p>
+                <label htmlFor="cancelReason" className="form-label">
+                  İptal / iade sebebi
+                </label>
+                <textarea
+                  id="cancelReason"
+                  className="form-control"
+                  rows="4"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Örn. müşteri talebi, teslimat problemi, stok sorunu"
+                  disabled={cancelProcessing}
+                ></textarea>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={closeCancelDialog}
+                  disabled={cancelProcessing}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleCancelWithRefund}
+                  disabled={cancelProcessing}
+                >
+                  {cancelProcessing ? "İşleniyor..." : "İptal Et ve Para İadesini Başlat"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

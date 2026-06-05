@@ -19,67 +19,6 @@ import { CartService } from "../services/cartService";
 import { useAuth } from "./AuthContext";
 
 const CartContext = createContext();
-const WEIGHT_QTY_OVERRIDES_KEY = "cart_weight_qty_overrides_v1";
-
-const buildWeightOverrideKey = (productId, variantId = null) =>
-  `${productId}:${variantId ?? "base"}`;
-
-const readWeightOverrides = () => {
-  try {
-    const raw = localStorage.getItem(WEIGHT_QTY_OVERRIDES_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-};
-
-const writeWeightOverrides = (overrides) => {
-  try {
-    localStorage.setItem(WEIGHT_QTY_OVERRIDES_KEY, JSON.stringify(overrides));
-  } catch {
-    // Storage erişim hatası sepet akışını bloklamamalı.
-  }
-};
-
-const setWeightOverride = (productId, variantId, quantity) => {
-  if (
-    !productId ||
-    !Number.isFinite(Number(quantity)) ||
-    Number(quantity) <= 0
-  ) {
-    return;
-  }
-  const overrides = readWeightOverrides();
-  overrides[buildWeightOverrideKey(productId, variantId)] =
-    Math.round(Number(quantity) * 100) / 100;
-  writeWeightOverrides(overrides);
-};
-
-const removeWeightOverride = (productId, variantId = null) => {
-  if (!productId) return;
-  const overrides = readWeightOverrides();
-  delete overrides[buildWeightOverrideKey(productId, variantId)];
-  writeWeightOverrides(overrides);
-};
-
-const applyWeightOverrides = (items = []) => {
-  const overrides = readWeightOverrides();
-  return items.map((item) => {
-    const key = buildWeightOverrideKey(
-      item.productId || item.id,
-      item.variantId,
-    );
-    const overrideQty = overrides[key];
-    if (!Number.isFinite(Number(overrideQty))) {
-      return item;
-    }
-
-    return {
-      ...item,
-      quantity: Number(overrideQty),
-    };
-  });
-};
 
 export const useCart = () => {
   const context = useContext(CartContext);
@@ -97,77 +36,6 @@ export const CartProvider = ({ children }) => {
 
   // Auth context - kullanıcı durumunu takip et
   const { user, isAuthenticated } = useAuth();
-
-  const isWeightBasedProductLike = (product) => {
-    if (!product) return false;
-
-    const productName = (product.name || product.Name || "").toUpperCase();
-
-    // NEDEN: İsimde sayı+birim varsa sabit paket ürünüdür — KG seçici çıkmamalı.
-    // "50 GR", "3 KG", "1 LT", "500 ML" → fixed-quantity. "DOMATES KG" → tartılı (regex eşleşmez).
-    if (/\d+\s*(GR|KG|LT|ML|CL|L)\b/.test(productName)) return false;
-    if (/\bADET\b/.test(productName)) return false;
-
-    // Mikro ERP birim bilgisi — "KG" ise kg bazlı, başka birim varsa değil
-    // unit varsa kesin karar ver, fallback'e düşme
-    const unit = (product.unit || "").toUpperCase().trim();
-    if (unit) return unit === "KG";
-    return (
-      product.isWeightBased === true ||
-      product.soldByWeight === true ||
-      product.weightUnit === "Kilogram" ||
-      product.weightUnit === 2
-    );
-  };
-
-  /**
-   * Backend şu an quantity için integer beklediğinden,
-   * kesirli miktarlarda (örn: 1.5) güvenli fallback üretir.
-   */
-  const getIntegerQuantityFallback = (quantity) => {
-    const numeric = Number(quantity);
-    if (!Number.isFinite(numeric) || numeric <= 0) return 1;
-    return Math.max(1, Math.ceil(numeric));
-  };
-
-  const isFractionalQuantity = (quantity) => {
-    const numeric = Number(quantity);
-    if (!Number.isFinite(numeric)) return false;
-    return Math.abs(numeric % 1) > 0;
-  };
-
-  const isBackendIntQuantityError = (err) => {
-    const status =
-      err?.status || err?.response?.status || err?.raw?.response?.status;
-    const payload = err?.raw?.response?.data || err?.response?.data || {};
-    const modelErrors = payload?.errors ? JSON.stringify(payload.errors) : "";
-    const backendMessage = [
-      payload?.message,
-      payload?.error,
-      payload?.title,
-      modelErrors,
-      err?.message,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const normalized = backendMessage.toLowerCase();
-
-    if (status !== 400) return false;
-
-    return (
-      normalized.includes("int32") ||
-      normalized.includes("could not be converted") ||
-      normalized.includes("json value") ||
-      normalized.includes("quantity") ||
-      normalized.includes("geçersiz")
-    );
-  };
-
-  const isBadRequestError = (err) => {
-    const status =
-      err?.status || err?.response?.status || err?.raw?.response?.status;
-    return status === 400;
-  };
 
   // ============================================================
   // SEPETİ YÜKLE - Backend'den
@@ -205,12 +73,14 @@ export const CartProvider = ({ children }) => {
         };
       }
 
-      setCartItems(applyWeightOverrides(cartData.items));
+      setCartItems(cartData.items);
       console.log("🛒 Sepet yüklendi:", cartData.items.length, "ürün");
+      return cartData.items;
     } catch (err) {
       console.error("❌ Sepet yüklenirken hata:", err);
       setError("Sepet yüklenemedi");
       setCartItems([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -296,128 +166,25 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: "Bu ürün şu an sepete eklenemiyor." };
       }
       const variantId = variantInfo?.variantId || null;
-      const fallbackQuantity = getIntegerQuantityFallback(quantity);
-      const isWeightBased = isWeightBasedProductLike(product);
-      const hasFractionalQuantity = isFractionalQuantity(quantity);
-
       try {
         if (isAuthenticated) {
-          // Kayıtlı kullanıcı
-          try {
-            await CartService.addItem(productId, quantity, variantId);
-          } catch (err) {
-            // 0.5kg gibi kesirli miktar backend'de hata verirse fallback dene
-            if (
-              isFractionalQuantity(quantity) &&
-              fallbackQuantity !== quantity &&
-              (isBackendIntQuantityError(err) || isBadRequestError(err))
-            ) {
-              await CartService.addItem(productId, fallbackQuantity, variantId);
-              await loadCart();
-              window.dispatchEvent(new Event("cart:updated"));
-              setWeightOverride(productId, variantId, quantity);
-              // Weight override'ı hemen uygula - fresh cart'a
-              setCartItems((prevItems) => applyWeightOverrides(prevItems));
-              return {
-                success: true,
-                warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak kaydedildi.`,
-              };
-            } else {
-              throw err; // Diğer hataları yukarı fırlat
-            }
-          }
+          await CartService.addItem(productId, quantity, variantId);
         } else {
-          // Misafir kullanıcı
           const result = await CartService.addToGuestCart(
             productId,
             quantity,
             variantId,
           );
           if (!result.success) {
-            // Guest senaryosunda servis throw etmediği için fallback burada denenir.
-            if (
-              isFractionalQuantity(quantity) &&
-              fallbackQuantity !== quantity
-            ) {
-              const retryResult = await CartService.addToGuestCart(
-                productId,
-                fallbackQuantity,
-                variantId,
-              );
-              if (!retryResult.success) {
-                return {
-                  success: false,
-                  error: retryResult.error || result.error,
-                };
-              }
-              await loadCart();
-              window.dispatchEvent(new Event("cart:updated"));
-              if (hasFractionalQuantity) {
-                setWeightOverride(productId, variantId, quantity);
-                // Weight override'ı hemen uygula - fresh cart'a
-                setCartItems((prevItems) => applyWeightOverrides(prevItems));
-              }
-              return {
-                success: true,
-                warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak kaydedildi.`,
-              };
-            }
-
             return { success: false, error: result.error };
           }
         }
 
-        // Sepeti yeniden yükle
         await loadCart();
-
-        // Cart updated event - diğer componentler dinleyebilir
         window.dispatchEvent(new Event("cart:updated"));
-
-        if (hasFractionalQuantity) {
-          setWeightOverride(productId, variantId, quantity);
-          // Weight override'ı hemen uygula - fresh cart'a
-          setCartItems((prevItems) => applyWeightOverrides(prevItems));
-        } else {
-          removeWeightOverride(productId, variantId);
-        }
 
         return { success: true };
       } catch (err) {
-        // Backend int quantity beklediğinde kesirli miktar için güvenli retry
-        if (
-          isFractionalQuantity(quantity) &&
-          fallbackQuantity !== quantity &&
-          (isBackendIntQuantityError(err) || isBadRequestError(err))
-        ) {
-          try {
-            if (isAuthenticated) {
-              await CartService.addItem(productId, fallbackQuantity, variantId);
-            } else {
-              const retryResult = await CartService.addToGuestCart(
-                productId,
-                fallbackQuantity,
-                variantId,
-              );
-              if (!retryResult.success) {
-                return { success: false, error: retryResult.error };
-              }
-            }
-
-            await loadCart();
-            window.dispatchEvent(new Event("cart:updated"));
-            if (hasFractionalQuantity) {
-              setWeightOverride(productId, variantId, quantity);
-            }
-
-            return {
-              success: true,
-              warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak kaydedildi.`,
-            };
-          } catch (retryErr) {
-            console.error("❌ Retry sepete ekleme hatası:", retryErr);
-          }
-        }
-
         console.error("❌ Sepete ekleme hatası:", err);
         const rawMsg = err?.response?.data?.message || "Sepete eklenemedi";
         // NEDEN: Backend "Yetersiz stok. Maksimum 0 adet." gibi teknik mesaj döner —
@@ -455,7 +222,6 @@ export const CartProvider = ({ children }) => {
         // Sepeti yeniden yükle
         await loadCart();
         window.dispatchEvent(new Event("cart:updated"));
-        removeWeightOverride(productId, variantId);
 
         return { success: true };
       } catch (err) {
@@ -476,28 +242,40 @@ export const CartProvider = ({ children }) => {
         return removeFromCart(productId, variantId);
       }
 
-      const fallbackQuantity = getIntegerQuantityFallback(quantity);
-      const existingItem = cartItems.find(
-        (i) =>
-          (i.productId || i.id) === productId &&
-          (variantId ? i.variantId === variantId : !i.variantId),
-      );
-      const isWeightBased =
-        existingItem?.isWeightBased ||
-        existingItem?.weightUnit === "Kilogram" ||
-        existingItem?.weightUnit === "Gram" ||
-        existingItem?.weightUnit === 2 ||
-        existingItem?.weightUnit === 1;
-      const hasFractionalQuantity = isFractionalQuantity(quantity);
+      const matchesCartItem = (item) => {
+        if ((item.productId || item.id) !== productId) {
+          return false;
+        }
+
+        if (variantId) {
+          return item.variantId === variantId;
+        }
+
+        return !item.variantId;
+      };
+
+      const previousCartItems = cartItems;
+
+      const applyOptimisticQuantity = (nextQuantity) => {
+        // NEDEN: Kullanıcı ilk tıklamada yeni miktarı görmeli; backend dönüşünü
+        // beklerken eski değer kalırsa buton akışı ölü hissediliyor.
+        setCartItems((prevItems) =>
+          prevItems.map((item) =>
+            matchesCartItem(item)
+              ? {
+                  ...item,
+                  quantity: nextQuantity,
+                }
+              : item,
+          ),
+        );
+      };
 
       try {
+        applyOptimisticQuantity(quantity);
+
         if (isAuthenticated) {
-          // Kayıtlı kullanıcı - cart item ID'sini bul
-          const item = cartItems.find(
-            (i) =>
-              (i.productId || i.id) === productId &&
-              (variantId ? i.variantId === variantId : !i.variantId),
-          );
+          const item = cartItems.find(matchesCartItem);
           if (item?.id) {
             await CartService.updateItem(
               item.id,
@@ -511,64 +289,12 @@ export const CartProvider = ({ children }) => {
           await CartService.updateGuestCartItem(productId, quantity, variantId);
         }
 
-        // Sepeti yeniden yükle
         await loadCart();
         window.dispatchEvent(new Event("cart:updated"));
 
-        if (hasFractionalQuantity) {
-          setWeightOverride(productId, variantId, quantity);
-        } else {
-          removeWeightOverride(productId, variantId);
-        }
-
         return { success: true };
       } catch (err) {
-        // Backend int quantity beklediğinde kesirli miktar için güvenli retry
-        if (
-          isFractionalQuantity(quantity) &&
-          fallbackQuantity !== quantity &&
-          (isBackendIntQuantityError(err) || isBadRequestError(err))
-        ) {
-          try {
-            if (isAuthenticated) {
-              const item = cartItems.find(
-                (i) =>
-                  (i.productId || i.id) === productId &&
-                  (variantId ? i.variantId === variantId : !i.variantId),
-              );
-              if (item?.id) {
-                await CartService.updateItem(
-                  item.id,
-                  productId,
-                  fallbackQuantity,
-                  variantId,
-                );
-              }
-            } else {
-              await CartService.updateGuestCartItem(
-                productId,
-                fallbackQuantity,
-                variantId,
-              );
-            }
-
-            await loadCart();
-            window.dispatchEvent(new Event("cart:updated"));
-            if (hasFractionalQuantity) {
-              setWeightOverride(productId, variantId, quantity);
-            } else {
-              removeWeightOverride(productId, variantId);
-            }
-
-            return {
-              success: true,
-              warning: `Kesirli miktar backend uyumluluğu nedeniyle ${fallbackQuantity} olarak güncellendi.`,
-            };
-          } catch (retryErr) {
-            console.error("❌ Retry miktar güncelleme hatası:", retryErr);
-          }
-        }
-
+        setCartItems(previousCartItems);
         console.error("❌ Miktar güncelleme hatası:", err);
         return { success: false, error: err?.message };
       }
@@ -677,7 +403,7 @@ export const CartProvider = ({ children }) => {
       console.error("❌ Sepet merge hatası:", err);
       return { mergedCount: 0 };
     }
-  }, [isAuthenticated, loadCart]);
+  }, [isAuthenticated, loadCart, user?.id]);
 
   // ============================================================
   // CONTEXT VALUE
@@ -723,6 +449,7 @@ function mapBackendItem(item) {
     productId: item.productId,
     variantId,
     quantity: Number(item.quantity) || 0,
+    isActive: item.isActive ?? item.product?.isActive ?? true,
     unitPrice:
       item.unitPrice || item.product?.specialPrice || item.product?.price || 0,
     // Kg bazlı ürünler için UI'nin tek kaynaktan karar verebilmesi için normalize edilir.
@@ -745,6 +472,7 @@ function mapBackendItem(item) {
       imageUrl: item.productImageUrl || item.productImage,
       price: item.unitPrice,
       specialPrice: item.unitPrice,
+      isActive: item.isActive ?? true,
       isWeightBased: item.isWeightBased === true,
       weightUnit: item.weightUnit || null,
     },

@@ -109,7 +109,7 @@ namespace ECommerce.API.Controllers
             // Varyant kontrolü (varsa)
             ProductVariant? variant = null;
             int? resolvedVariantId = request.VariantId;
-            int availableStock = product.StockQuantity;
+            decimal availableStock = product.StockQuantity;
             decimal unitPrice = product.SpecialPrice ?? product.Price;
 
             if (resolvedVariantId.HasValue)
@@ -196,7 +196,7 @@ namespace ECommerce.API.Controllers
                 }
 
                 int? resolvedVariantId = request.VariantId;
-                int availableStock = product.StockQuantity;
+                decimal availableStock = product.StockQuantity;
                 if (resolvedVariantId.HasValue)
                 {
                     var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
@@ -409,7 +409,7 @@ namespace ECommerce.API.Controllers
             }
 
             int? resolvedVariantId = dto.VariantId;
-            int availableStock = product.StockQuantity;
+            decimal availableStock = product.StockQuantity;
             if (resolvedVariantId.HasValue)
             {
                 var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
@@ -499,7 +499,7 @@ namespace ECommerce.API.Controllers
             }
 
             int? resolvedVariantId = dto.VariantId ?? item.ProductVariantId;
-            int availableStock = product.StockQuantity;
+            decimal availableStock = product.StockQuantity;
             if (resolvedVariantId.HasValue)
             {
                 var variant = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
@@ -660,7 +660,7 @@ namespace ECommerce.API.Controllers
         public string? CartToken { get; set; }
         public int ProductId { get; set; }
         public int? VariantId { get; set; }
-        public int Quantity { get; set; } = 1;
+        public decimal Quantity { get; set; } = 1;
     }
 
     /// <summary>
@@ -671,7 +671,7 @@ namespace ECommerce.API.Controllers
         public string? CartToken { get; set; }
         public int ProductId { get; set; }
         public int? VariantId { get; set; }
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
     }
 
     /// <summary>

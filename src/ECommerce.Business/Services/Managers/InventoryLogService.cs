@@ -14,7 +14,7 @@ namespace ECommerce.Business.Services.Managers
             _context = context;
         }
 
-        public Task WriteAsync(int productId, string action, int quantity, int oldStock, int newStock, string? referenceId)
+        public Task WriteAsync(int productId, string action, decimal quantity, decimal oldStock, decimal newStock, string? referenceId)
         {
             var log = new InventoryLog
             {

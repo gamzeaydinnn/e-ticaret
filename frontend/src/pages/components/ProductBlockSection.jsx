@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../../contexts/CartContext";
 import { useFavorites } from "../../contexts/FavoriteContext";
@@ -407,13 +407,40 @@ const ProductBlockSection = ({
   if (!block || !block.isActive) return null;
 
   // Ürünleri al (camelCase veya PascalCase)
-  const products = block.products || block.Products || [];
+  const rawProducts = block.products || block.Products || [];
+  const products = rawProducts.filter((item) => {
+    const product = item?.product || item?.Product || item;
+    const stock = Number(
+      product?.stockQuantity ?? product?.StockQuantity ?? product?.stock ?? 0,
+    );
+    const basePrice =
+      parseFloat(product?.price ?? product?.Price ?? 0) || 0;
+    const rawSpecialPrice =
+      product?.specialPrice ??
+      product?.SpecialPrice ??
+      product?.discountedPrice ??
+      product?.DiscountedPrice;
+    const specialPrice =
+      rawSpecialPrice === undefined || rawSpecialPrice === null
+        ? null
+        : parseFloat(rawSpecialPrice) || 0;
+    const displayPrice =
+      specialPrice !== null && specialPrice > 0 && specialPrice < basePrice
+        ? specialPrice
+        : basePrice;
+
+    return Number.isFinite(stock) && stock > 0 && displayPrice > 0;
+  });
   // BAŞLIK: title öncelikli, yoksa name kullan (eski bloklar için fallback)
   const title = block.title || block.Title || block.name || block.Name || "";
   const normalizedTitle = normalizeBlockTitle(title);
   const posterUrl = block.posterImageUrl || block.PosterImageUrl || "";
   const titleTemplate = findTitleTemplate(normalizedTitle);
   const blockEyebrow = getBlockEyebrow(normalizedTitle);
+
+  if (products.length === 0) {
+    return null;
+  }
 
   // Debug log - konsol kontrolü için
   console.log("📦 [ProductBlockSection] Block:", {
@@ -423,6 +450,7 @@ const ProductBlockSection = ({
     displayTitle: normalizedTitle,
     posterUrl: posterUrl,
     productsCount: products.length,
+    rawProductsCount: rawProducts.length,
     rawBlock: block,
   });
 

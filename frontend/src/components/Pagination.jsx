@@ -1,203 +1,138 @@
-// ============================================================================
-// Pagination.jsx - Sayfalama Bileşeni
-// ============================================================================
-// Kullanıcı listesi ve diğer tablolar için sayfalama kontrolü sağlar.
-// ============================================================================
+import "./Pagination.css";
 
-/**
- * Sayfalama bileşeni
- * @param {Object} props
- * @param {number} props.currentPage - Mevcut sayfa (1'den başlar)
- * @param {number} props.totalItems - Toplam öğe sayısı
- * @param {number} props.itemsPerPage - Sayfa başına öğe sayısı
- * @param {Function} props.onPageChange - Sayfa değişikliğinde çağrılacak callback
- * @param {number} props.maxVisiblePages - Görünür sayfa sayısı (default: 5)
- */
-const Pagination = ({
+const buildPageItems = (currentPage, totalPages) => {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set([
+    1,
+    totalPages,
+    currentPage,
+    currentPage - 1,
+    currentPage + 1,
+  ]);
+
+  const normalized = [...pages]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((left, right) => left - right);
+
+  const items = [];
+  for (let index = 0; index < normalized.length; index += 1) {
+    const page = normalized[index];
+    const previous = normalized[index - 1];
+
+    if (previous && page - previous > 1) {
+      items.push(`ellipsis-${previous}`);
+    }
+
+    items.push(page);
+  }
+
+  return items;
+};
+
+export const paginateData = (data, currentPage, itemsPerPage) => {
+  if (!Array.isArray(data) || itemsPerPage <= 0) {
+    return [];
+  }
+
+  const startIndex = (Math.max(1, currentPage) - 1) * itemsPerPage;
+  return data.slice(startIndex, startIndex + itemsPerPage);
+};
+
+export default function Pagination({
   currentPage = 1,
+  totalPages,
   totalItems = 0,
-  itemsPerPage = 20,
+  pageSize = 25,
+  itemsPerPage,
   onPageChange,
-  maxVisiblePages = 5,
-}) => {
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  onPageSizeChange,
+}) {
+  const effectivePageSize = itemsPerPage ?? pageSize;
+  const safeCurrentPage = Math.max(1, currentPage);
+  const computedTotalPages =
+    totalPages ?? (Math.ceil(totalItems / effectivePageSize) || 1);
+  const safeTotalPages = Math.max(1, computedTotalPages);
 
-  // Sayfa yoksa veya tek sayfa varsa gösterme
-  if (totalPages <= 1) return null;
+  if (safeTotalPages <= 1) {
+    return null;
+  }
 
-  // Görünür sayfa numaralarını hesapla
-  const getVisiblePages = () => {
-    const pages = [];
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-    // Başlangıç sayfasını ayarla
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-
-    return pages;
-  };
-
-  const visiblePages = getVisiblePages();
-  const startItem = (currentPage - 1) * itemsPerPage + 1;
-  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  const startItem =
+    totalItems === 0 ? 0 : (safeCurrentPage - 1) * effectivePageSize + 1;
+  const endItem =
+    totalItems === 0
+      ? 0
+      : Math.min(totalItems, safeCurrentPage * effectivePageSize);
+  const pageItems = buildPageItems(safeCurrentPage, safeTotalPages);
 
   return (
-    <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4">
-      {/* Sonuç bilgisi */}
-      <div className="text-muted small">
-        <span className="fw-medium">{startItem}</span>
-        {" - "}
-        <span className="fw-medium">{endItem}</span>
-        {" / "}
-        <span className="fw-medium">{totalItems}</span>
-        {" sonuç gösteriliyor"}
+    <div className="pagination-shell">
+      <div className="pagination-summary">
+        {`${totalItems} üründen ${startItem}-${endItem} gösteriliyor`}
       </div>
 
-      {/* Sayfalama kontrolleri */}
-      <nav aria-label="Sayfalama">
-        <ul className="pagination pagination-sm mb-0">
-          {/* İlk sayfa */}
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button
-              className="page-link"
-              onClick={() => onPageChange?.(1)}
-              disabled={currentPage === 1}
-              aria-label="İlk sayfa"
-              style={{ borderRadius: "8px 0 0 8px" }}
-            >
-              <i className="fas fa-angle-double-left"></i>
-            </button>
-          </li>
+      <div className="pagination-controls">
+        <button
+          type="button"
+          className="pagination-nav"
+          onClick={() => onPageChange?.(safeCurrentPage - 1)}
+          disabled={safeCurrentPage <= 1}
+        >
+          Önceki
+        </button>
 
-          {/* Önceki sayfa */}
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button
-              className="page-link"
-              onClick={() => onPageChange?.(currentPage - 1)}
-              disabled={currentPage === 1}
-              aria-label="Önceki sayfa"
-            >
-              <i className="fas fa-angle-left"></i>
-            </button>
-          </li>
+        <div className="pagination-number-list" aria-label="Sayfa numaraları">
+          {pageItems.map((item) => {
+            if (typeof item === "string") {
+              return (
+                <span key={item} className="pagination-ellipsis">
+                  ...
+                </span>
+              );
+            }
 
-          {/* İlk sayfa göstergesi */}
-          {visiblePages[0] > 1 && (
-            <>
-              <li className="page-item">
-                <button className="page-link" onClick={() => onPageChange?.(1)}>
-                  1
-                </button>
-              </li>
-              {visiblePages[0] > 2 && (
-                <li className="page-item disabled">
-                  <span className="page-link">...</span>
-                </li>
-              )}
-            </>
-          )}
-
-          {/* Sayfa numaraları */}
-          {visiblePages.map((page) => (
-            <li
-              key={page}
-              className={`page-item ${currentPage === page ? "active" : ""}`}
-            >
+            return (
               <button
-                className="page-link"
-                onClick={() => onPageChange?.(page)}
-                style={
-                  currentPage === page
-                    ? {
-                        background: "linear-gradient(135deg, #f97316, #fb923c)",
-                        borderColor: "#f97316",
-                        color: "white",
-                      }
-                    : {}
-                }
+                key={item}
+                type="button"
+                className={`pagination-number ${item === safeCurrentPage ? "is-active" : ""}`}
+                onClick={() => onPageChange?.(item)}
+                aria-current={item === safeCurrentPage ? "page" : undefined}
               >
-                {page}
+                {item}
               </button>
-            </li>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          className="pagination-nav"
+          onClick={() => onPageChange?.(safeCurrentPage + 1)}
+          disabled={safeCurrentPage >= safeTotalPages}
+        >
+          Sonraki
+        </button>
+      </div>
+
+      <label className="pagination-size-picker">
+        <span>Sayfa başına</span>
+        <select
+          value={effectivePageSize}
+          onChange={(event) =>
+            onPageSizeChange?.(parseInt(event.target.value, 10))
+          }
+        >
+          {[25, 50, 100].map((sizeOption) => (
+            <option key={sizeOption} value={sizeOption}>
+              {sizeOption}
+            </option>
           ))}
-
-          {/* Son sayfa göstergesi */}
-          {visiblePages[visiblePages.length - 1] < totalPages && (
-            <>
-              {visiblePages[visiblePages.length - 1] < totalPages - 1 && (
-                <li className="page-item disabled">
-                  <span className="page-link">...</span>
-                </li>
-              )}
-              <li className="page-item">
-                <button
-                  className="page-link"
-                  onClick={() => onPageChange?.(totalPages)}
-                >
-                  {totalPages}
-                </button>
-              </li>
-            </>
-          )}
-
-          {/* Sonraki sayfa */}
-          <li
-            className={`page-item ${
-              currentPage === totalPages ? "disabled" : ""
-            }`}
-          >
-            <button
-              className="page-link"
-              onClick={() => onPageChange?.(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              aria-label="Sonraki sayfa"
-            >
-              <i className="fas fa-angle-right"></i>
-            </button>
-          </li>
-
-          {/* Son sayfa */}
-          <li
-            className={`page-item ${
-              currentPage === totalPages ? "disabled" : ""
-            }`}
-          >
-            <button
-              className="page-link"
-              onClick={() => onPageChange?.(totalPages)}
-              disabled={currentPage === totalPages}
-              aria-label="Son sayfa"
-              style={{ borderRadius: "0 8px 8px 0" }}
-            >
-              <i className="fas fa-angle-double-right"></i>
-            </button>
-          </li>
-        </ul>
-      </nav>
+        </select>
+      </label>
     </div>
   );
-};
-
-/**
- * Sayfalanmış veri döndürür
- * @param {Array} data - Tüm veri
- * @param {number} currentPage - Mevcut sayfa
- * @param {number} itemsPerPage - Sayfa başına öğe
- * @returns {Array} Sayfalanmış veri
- */
-export const paginateData = (data, currentPage, itemsPerPage) => {
-  if (!data || !Array.isArray(data)) return [];
-
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-
-  return data.slice(startIndex, endIndex);
-};
-
-export default Pagination;
+}

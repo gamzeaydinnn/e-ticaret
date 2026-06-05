@@ -98,7 +98,7 @@ namespace ECommerce.Core.DTOs.Cart
         /// <summary>
         /// Adet
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
 
         /// <summary>
         /// Birim fiyat
@@ -174,7 +174,7 @@ namespace ECommerce.Core.DTOs.Cart
         /// <summary>
         /// Eklenecek adet
         /// </summary>
-        public int Quantity { get; set; } = 1;
+        public decimal Quantity { get; set; } = 1;
     }
 
     /// <summary>
@@ -186,6 +186,6 @@ namespace ECommerce.Core.DTOs.Cart
         /// Yeni adet
         /// 0 gönderilirse kalem silinir
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
     }
 }

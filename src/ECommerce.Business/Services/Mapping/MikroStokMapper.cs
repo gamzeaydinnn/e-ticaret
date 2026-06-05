@@ -1,4 +1,6 @@
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
+using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
@@ -25,6 +27,7 @@ namespace ECommerce.Business.Services.Mapping
     public class MikroStokMapper : IMikroStokMapper
     {
         private readonly ILogger<MikroStokMapper> _logger;
+        private readonly IProductAdminOverrideSettingsService? _productAdminOverrideSettingsService;
 
         // Birim eşleme tablosu
         private static readonly Dictionary<string, WeightUnit> _birimMappings = new(StringComparer.OrdinalIgnoreCase)
@@ -51,9 +54,12 @@ namespace ECommerce.Business.Services.Mapping
         // KDV oranları
         private static readonly decimal[] _kdvOranlari = { 0m, 1m, 10m, 20m };
 
-        public MikroStokMapper(ILogger<MikroStokMapper> logger)
+        public MikroStokMapper(
+            ILogger<MikroStokMapper> logger,
+            IProductAdminOverrideSettingsService? productAdminOverrideSettingsService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
         }
 
         /// <inheritdoc />
@@ -137,11 +143,24 @@ namespace ECommerce.Business.Services.Mapping
                 "[MikroStokMapper] Ürün güncelleniyor. SKU: {Sku}",
                 existingProduct.SKU);
 
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? _productAdminOverrideSettingsService.GetSettingsAsync().GetAwaiter().GetResult()
+                : new ProductAdminOverrideSettingsDto();
+
             // Temel alanları güncelle
-            existingProduct.Name = mikroStok.StoIsim?.Trim() ?? existingProduct.Name;
+            if (ProductAdminOverridePolicy.CanSyncName(existingProduct, overrideDefaults))
+            {
+                existingProduct.Name = mikroStok.StoIsim?.Trim() ?? existingProduct.Name;
+            }
             existingProduct.StockQuantity = CalculateStockQuantity(mikroStok);
-            existingProduct.Price = ExtractPrice(mikroStok.SatisFiyatlari);
-            existingProduct.IsActive = !mikroStok.StoPasifFl;
+            if (ProductAdminOverridePolicy.CanSyncPrice(existingProduct, overrideDefaults))
+            {
+                existingProduct.Price = ExtractPrice(mikroStok.SatisFiyatlari);
+            }
+            if (ProductAdminOverridePolicy.CanSyncActiveState(existingProduct))
+            {
+                existingProduct.IsActive = !mikroStok.StoPasifFl;
+            }
             existingProduct.UpdatedAt = DateTime.UtcNow;
 
             // NEDEN: Kategori güncellemesi opsiyonel — null geçilirse mevcut kategori korunur.

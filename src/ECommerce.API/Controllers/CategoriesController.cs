@@ -1,5 +1,6 @@
 // Konum: /Users/dilarasara/e-ticaret/src/ECommerce.API/Controllers/CategoriesController.cs
 
+using ECommerce.API.Data;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Category; // Oluşturduğumuz DTO'ları ekliyoruz
 using Microsoft.AspNetCore.Mvc;
@@ -28,9 +29,11 @@ namespace ECommerce.API.Controllers
         public async Task<IActionResult> GetAllCategories()
         {
             var categories = await _categoryService.GetAllAsync();
+            var storefrontCategories = categories
+                .Where(c => CategorySeeder.IsPublicStorefrontCategorySlug(c.Slug));
 
             // Entity'leri CategoryListDto'ya dönüştürüyoruz (map'liyoruz).
-            var categoryDtos = categories.Select(c => new CategoryListDto
+            var categoryDtos = storefrontCategories.Select(c => new CategoryListDto
             {
                 Id = c.Id,
                 Name = c.Name,

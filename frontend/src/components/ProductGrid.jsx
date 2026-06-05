@@ -10,6 +10,7 @@ import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
+import Pagination from "./Pagination";
 import WeightSelectionModal, {
   isWeightBasedProduct,
 } from "./WeightSelectionModal";
@@ -227,6 +228,9 @@ export default function ProductGrid({
   layout = "default", // 'default' (sadece ürünler) veya 'block' (poster + ürünler)
   // "carousel" = yatay kaydırma (varsayılan), "grid" = satır-sütun grid layout
   displayMode = "carousel",
+  initialPage = 1,
+  initialPageSize = 25,
+  onPaginationChange = null,
 } = {}) {
   const navigate = useNavigate();
 
@@ -238,6 +242,14 @@ export default function ProductGrid({
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [currentPage, setCurrentPage] = useState(
+    Math.max(1, Number(initialPage) || 1),
+  );
+  const [pageSize, setPageSize] = useState(
+    Math.max(1, Number(initialPageSize) || 25),
+  );
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [usingMockData, setUsingMockData] = useState(false);
   const [rules, setRules] = useState([]);
   // Modal state'leri artık ProductDetailModal içinde yönetiliyor
@@ -313,11 +325,60 @@ export default function ProductGrid({
   }, [checkScroll, data]);
 
   // Kategori filtresi (varsa)
+  const isPagedCategoryView =
+    Boolean(categoryId) &&
+    displayMode === "grid" &&
+    !Array.isArray(initialProducts);
+
+  useEffect(() => {
+    setCurrentPage(Math.max(1, Number(initialPage) || 1));
+  }, [initialPage]);
+
+  useEffect(() => {
+    setPageSize(Math.max(1, Number(initialPageSize) || 25));
+  }, [initialPageSize]);
+
   const filteredProducts = useMemo(() => {
     if (!categoryId) return [...data];
     const cid = Number(categoryId);
     return data.filter((p) => Number(p.categoryId) === cid);
   }, [data, categoryId]);
+
+  const syncPagination = useCallback(
+    (nextPage, nextPageSize) => {
+      if (typeof onPaginationChange === "function") {
+        onPaginationChange({ page: nextPage, pageSize: nextPageSize });
+      }
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    [onPaginationChange],
+  );
+
+  const handlePageChange = useCallback(
+    (nextPage) => {
+      if (nextPage < 1 || nextPage > totalPages || nextPage === currentPage) {
+        return;
+      }
+
+      setCurrentPage(nextPage);
+      syncPagination(nextPage, pageSize);
+    },
+    [currentPage, pageSize, syncPagination, totalPages],
+  );
+
+  const handlePageSizeChange = useCallback(
+    (nextPageSize) => {
+      if (!nextPageSize || nextPageSize === pageSize) {
+        return;
+      }
+
+      setPageSize(nextPageSize);
+      setCurrentPage(1);
+      syncPagination(1, nextPageSize);
+    },
+    [pageSize, syncPagination],
+  );
 
   // NEDEN: product objesi alır — id=0 Mikro ürünlerde id ile arama hatalı sonuç verirdi
   // NEDEN async: ctxAddToCart sonucu beklenmezse backend hatası gizlenir,
@@ -542,18 +603,30 @@ export default function ProductGrid({
 
     const loadProducts = async () => {
       try {
+        if (isMounted) {
+          setLoading(true);
+        }
+
         // Eğer dışarıdan ürün verisi verilmişse API çağrısı yapma
         if (Array.isArray(initialProducts)) {
           if (!isMounted) return;
           setData(initialProducts);
+          setTotalProducts(initialProducts.length);
+          setTotalPages(1);
           setError("");
           setUsingMockData(false);
           return;
         }
 
-        // CategoryId varsa getByCategory, yoksa list kullan
         const response = categoryId
-          ? await ProductService.getByCategory(categoryId)
+          ? isPagedCategoryView
+            ? await ProductService.getByCategory(categoryId, {
+                page: currentPage,
+                size: pageSize,
+                sort: "name",
+                direction: "asc",
+              })
+            : await ProductService.getByCategory(categoryId)
           : await ProductService.list();
 
         if (!isMounted) {
@@ -567,6 +640,14 @@ export default function ProductGrid({
             : [];
 
         setData(products);
+        setTotalProducts(
+          isPagedCategoryView
+            ? response?.total || products.length
+            : products.length,
+        );
+        setTotalPages(
+          isPagedCategoryView ? Math.max(1, response?.totalPages || 1) : 1,
+        );
         setError("");
         setUsingMockData(false);
       } catch (err) {
@@ -576,8 +657,25 @@ export default function ProductGrid({
 
         debugLog("Ürün listesi yüklenemedi, demo verilere düşülüyor", err);
 
-        // JSON Server bağlantısı başarısızsa demo verileri kullan
-        setData(DEMO_PRODUCTS);
+        const demoProducts = categoryId
+          ? DEMO_PRODUCTS.filter(
+              (product) => Number(product.categoryId) === Number(categoryId),
+            )
+          : DEMO_PRODUCTS;
+        const pagedDemoProducts = isPagedCategoryView
+          ? demoProducts.slice(
+              (currentPage - 1) * pageSize,
+              currentPage * pageSize,
+            )
+          : demoProducts;
+
+        setData(pagedDemoProducts);
+        setTotalProducts(demoProducts.length);
+        setTotalPages(
+          isPagedCategoryView
+            ? Math.max(1, Math.ceil(demoProducts.length / pageSize))
+            : 1,
+        );
         setError("");
         setUsingMockData(true);
       } finally {
@@ -601,7 +699,7 @@ export default function ProductGrid({
       unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryId, initialProducts]);
+  }, [categoryId, currentPage, initialProducts, isPagedCategoryView, pageSize]);
 
   if (loading) {
     return (
@@ -1213,6 +1311,17 @@ export default function ProductGrid({
           )}
         </div>
       </div>
+
+      {isPagedCategoryView && totalProducts > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalProducts}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
+      )}
 
       {/* Login Alert Modal */}
       {showLoginAlert && (

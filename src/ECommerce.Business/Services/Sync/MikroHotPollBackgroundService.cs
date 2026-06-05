@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
+using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Sync;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -172,7 +174,7 @@ namespace ECommerce.Business.Services.Sync
             // Mikro DB'den değişen ürünleri çek
             var changedProducts = await dbService.GetDeltaChangedProductsAsync(
                 since,
-                fiyatListesiNo: 1,
+                fiyatListesiNo: null,
                 depoNo: 0,
                 cancellationToken);
 
@@ -190,7 +192,12 @@ namespace ECommerce.Business.Services.Sync
 
             // Değişiklikleri cache ve product tablosuna uygula
             var (stockUpdated, priceUpdated, infoUpdated, changes) =
-                await ApplyChangesToDatabaseAsync(context, changedProducts, conflictCoordinator, cancellationToken);
+                await ApplyChangesToDatabaseAsync(
+                    context,
+                    serviceProvider,
+                    changedProducts,
+                    conflictCoordinator,
+                    cancellationToken);
 
             // SignalR bildirimi gönder
             if (notificationService != null && changes.Count > 0)
@@ -229,6 +236,7 @@ namespace ECommerce.Business.Services.Sync
         private async Task<(int stockUpdated, int priceUpdated, int infoUpdated, List<ProductChangeEvent> changes)>
             ApplyChangesToDatabaseAsync(
                 ECommerceDbContext context,
+                IServiceProvider serviceProvider,
                 List<MikroUnifiedProductDto> changedProducts,
                 SyncConflictCoordinator? conflictCoordinator,
                 CancellationToken cancellationToken)
@@ -271,7 +279,7 @@ namespace ECommerce.Business.Services.Sync
                     }
 
                     // Fiyat değişti mi?
-                    if (cache.SatisFiyati != mikro.Fiyat)
+                    if (mikro.Fiyat > 0 && cache.SatisFiyati != mikro.Fiyat)
                     {
                         changeEvent.OldPrice = cache.SatisFiyati;
                         changeEvent.NewPrice = mikro.Fiyat;
@@ -332,6 +340,9 @@ namespace ECommerce.Business.Services.Sync
 
                         if (changeType.HasFlag(ProductChangeType.Price))
                         {
+                            var overrideDefaults = await serviceProvider.GetRequiredService<IProductAdminOverrideSettingsService>()
+                                .GetSettingsAsync(cancellationToken);
+
                             // Fiyatta ERP-Wins: Mikro her zaman master — conflict resolver varsa log tutar
                             if (conflictCoordinator != null)
                             {
@@ -339,19 +350,28 @@ namespace ECommerce.Business.Services.Sync
                                     mikro.StokKod,
                                     mikroPrice: mikro.Fiyat,
                                     ecommercePrice: product.Price,
-                                    isAdminOverride: false);
+                                    isAdminOverride: ProductAdminOverridePolicy.ResolveOverride(
+                                        product.AdminOverridePrice,
+                                        overrideDefaults.DefaultAdminOverridePrice));
                                 product.Price = priceResult.ResolvedPrice;
                             }
-                            else
+                            else if (ProductAdminOverridePolicy.CanSyncPrice(product, overrideDefaults))
                             {
-                                product.Price = mikro.Fiyat;
+                                if (mikro.Fiyat > 0)
+                                {
+                                    product.Price = mikro.Fiyat;
+                                }
                             }
                         }
 
                         if (changeType.HasFlag(ProductChangeType.Info))
                         {
+                            var overrideDefaults = await serviceProvider.GetRequiredService<IProductAdminOverrideSettingsService>()
+                                .GetSettingsAsync(cancellationToken);
+
                             // İsim güncellemesi + slug regenerasyonu
-                            if (!string.IsNullOrWhiteSpace(mikro.StokAd))
+                            if (!string.IsNullOrWhiteSpace(mikro.StokAd) &&
+                                ProductAdminOverridePolicy.CanSyncName(product, overrideDefaults))
                             {
                                 product.Name = mikro.StokAd;
                                 product.Slug = GenerateSlug(mikro.StokAd);

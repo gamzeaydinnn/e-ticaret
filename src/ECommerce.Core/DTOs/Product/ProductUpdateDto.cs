@@ -15,6 +15,9 @@ namespace ECommerce.Core.DTOs.Product
         public string? ImageUrl { get; set; }
 
         public int? BrandId { get; set; } // Brand ilişkisi için id
+        public bool? AdminOverrideName { get; set; }
+        public bool? AdminOverridePrice { get; set; }
+        public bool? AdminOverrideCategory { get; set; }
 
         /// <summary>
         /// SKU bazlı güncelleme için — Mikro ERP ürünlerinde id=0 olduğundan

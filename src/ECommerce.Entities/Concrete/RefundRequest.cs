@@ -112,6 +112,12 @@ namespace ECommerce.Entities.Concrete
         /// </summary>
         public string? AdminNote { get; set; }
 
+        /// <summary>
+        /// Kapıda ödeme gibi banka üzerinden otomatik iade edilemeyen akışlarda
+        /// manuel iade takibi gerekip gerekmediğini belirtir.
+        /// </summary>
+        public bool ManualRefundRequired { get; set; } = false;
+
         // ═══════════════════════════════════════════════════════════════════════
         // ÖDEME İADE BİLGİLERİ (POSNET)
         // Banka tarafında gerçekleşen işlem detayları.

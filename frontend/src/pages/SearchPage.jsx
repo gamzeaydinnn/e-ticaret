@@ -1,7 +1,10 @@
 // src/pages/SearchPage.jsx
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { ProductService } from "../services/productService";
+import {
+  ProductService,
+  getProductDetailPath,
+} from "../services/productService";
 import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
@@ -12,29 +15,39 @@ const SearchPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   const urlQuery = searchParams.get("q") || "";
   const [searchQuery, setSearchQuery] = useState(urlQuery);
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "");
+  const [selectedCategory, setSelectedCategory] = useState(
+    searchParams.get("category") || "",
+  );
   const [priceMin, setPriceMin] = useState(searchParams.get("minPrice") || "");
   const [priceMax, setPriceMax] = useState(searchParams.get("maxPrice") || "");
   const [sortBy, setSortBy] = useState(searchParams.get("sort") || "default");
-  const [inStock, setInStock] = useState(searchParams.get("inStock") === "true");
+  const [inStock, setInStock] = useState(
+    searchParams.get("inStock") === "true",
+  );
   const [onSale, setOnSale] = useState(searchParams.get("onSale") === "true");
 
   const { addToCart } = useCart();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { toggleCompare, isInCompare } = useCompare();
 
-  useEffect(() => { setSearchQuery(urlQuery); }, [urlQuery]);
+  useEffect(() => {
+    setSearchQuery(urlQuery);
+  }, [urlQuery]);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const data = await ProductService.list();
+        const data = urlQuery.trim()
+          ? await ProductService.search(urlQuery.trim(), 1, 250)
+          : await ProductService.list();
         setProducts(data || []);
-        const cats = [...new Set((data || []).map(p => p.categoryName).filter(Boolean))];
+        const cats = [
+          ...new Set((data || []).map((p) => p.categoryName).filter(Boolean)),
+        ];
         setCategories(cats);
       } catch (err) {
         console.error("Ürünler yüklenirken hata:", err);
@@ -44,33 +57,68 @@ const SearchPage = () => {
       }
     };
     loadData();
-  }, []);
+  }, [urlQuery]);
 
   const filteredProducts = useMemo(() => {
     let result = [...products];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.name?.toLowerCase().includes(q) || 
-        p.description?.toLowerCase().includes(q) ||
-        p.categoryName?.toLowerCase().includes(q)
+      result = result.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(q) ||
+          p.description?.toLowerCase().includes(q) ||
+          p.categoryName?.toLowerCase().includes(q),
       );
     }
-    if (selectedCategory) result = result.filter(p => p.categoryName === selectedCategory);
-    if (priceMin) result = result.filter(p => (p.specialPrice || p.price) >= Number(priceMin));
-    if (priceMax) result = result.filter(p => (p.specialPrice || p.price) <= Number(priceMax));
-    if (inStock) result = result.filter(p => p.stockQuantity > 0);
-    if (onSale) result = result.filter(p => p.discountPercentage > 0 || (p.specialPrice && p.specialPrice < p.price));
+    if (selectedCategory)
+      result = result.filter((p) => p.categoryName === selectedCategory);
+    if (priceMin)
+      result = result.filter(
+        (p) => (p.specialPrice || p.price) >= Number(priceMin),
+      );
+    if (priceMax)
+      result = result.filter(
+        (p) => (p.specialPrice || p.price) <= Number(priceMax),
+      );
+    if (inStock) result = result.filter((p) => p.stockQuantity > 0);
+    if (onSale)
+      result = result.filter(
+        (p) =>
+          p.discountPercentage > 0 ||
+          (p.specialPrice && p.specialPrice < p.price),
+      );
 
     switch (sortBy) {
-      case "price-asc": result.sort((a, b) => (a.specialPrice || a.price) - (b.specialPrice || b.price)); break;
-      case "price-desc": result.sort((a, b) => (b.specialPrice || b.price) - (a.specialPrice || a.price)); break;
-      case "name-asc": result.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case "name-desc": result.sort((a, b) => b.name.localeCompare(a.name)); break;
-      default: break;
+      case "price-asc":
+        result.sort(
+          (a, b) => (a.specialPrice || a.price) - (b.specialPrice || b.price),
+        );
+        break;
+      case "price-desc":
+        result.sort(
+          (a, b) => (b.specialPrice || b.price) - (a.specialPrice || a.price),
+        );
+        break;
+      case "name-asc":
+        result.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "name-desc":
+        result.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      default:
+        break;
     }
     return result;
-  }, [products, searchQuery, selectedCategory, priceMin, priceMax, sortBy, inStock, onSale]);
+  }, [
+    products,
+    searchQuery,
+    selectedCategory,
+    priceMin,
+    priceMax,
+    sortBy,
+    inStock,
+    onSale,
+  ]);
 
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
@@ -83,11 +131,25 @@ const SearchPage = () => {
     if (onSale) params.set("onSale", "true");
     setSearchParams(params);
     setShowFilters(false);
-  }, [searchQuery, selectedCategory, priceMin, priceMax, sortBy, inStock, onSale, setSearchParams]);
+  }, [
+    searchQuery,
+    selectedCategory,
+    priceMin,
+    priceMax,
+    sortBy,
+    inStock,
+    onSale,
+    setSearchParams,
+  ]);
 
   const clearFilters = () => {
-    setSearchQuery(""); setSelectedCategory(""); setPriceMin(""); setPriceMax("");
-    setSortBy("default"); setInStock(false); setOnSale(false);
+    setSearchQuery("");
+    setSelectedCategory("");
+    setPriceMin("");
+    setPriceMax("");
+    setSortBy("default");
+    setInStock(false);
+    setOnSale(false);
     setSearchParams({});
   };
 
@@ -99,7 +161,10 @@ const SearchPage = () => {
   };
 
   return (
-    <div className="container-fluid py-3" style={{ backgroundColor: "#f5f5f5", minHeight: "80vh" }}>
+    <div
+      className="container-fluid py-3"
+      style={{ backgroundColor: "#f5f5f5", minHeight: "80vh" }}
+    >
       {/* Compact Header */}
       <div className="bg-white rounded-3 shadow-sm p-2 p-md-3 mb-3">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -107,10 +172,12 @@ const SearchPage = () => {
             <h5 className="mb-0 fw-bold" style={{ color: "#333" }}>
               <i className="fas fa-search me-2 text-warning"></i>Ürün Ara
             </h5>
-            <span className="badge bg-warning text-dark">{filteredProducts.length} ürün</span>
+            <span className="badge bg-warning text-dark">
+              {filteredProducts.length} ürün
+            </span>
           </div>
           <div className="d-flex align-items-center gap-2">
-            <button 
+            <button
               className="btn btn-sm btn-outline-warning d-lg-none"
               onClick={() => setShowFilters(!showFilters)}
             >
@@ -134,13 +201,19 @@ const SearchPage = () => {
 
       <div className="row g-3">
         {/* Sidebar Filters */}
-        <div className={`col-lg-3 ${showFilters ? '' : 'd-none d-lg-block'}`}>
-          <div className="bg-white rounded-3 shadow-sm p-3 sticky-top" style={{ top: "10px" }}>
+        <div className={`col-lg-3 ${showFilters ? "" : "d-none d-lg-block"}`}>
+          <div
+            className="bg-white rounded-3 shadow-sm p-3 sticky-top"
+            style={{ top: "10px" }}
+          >
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6 className="mb-0 fw-bold text-warning">
                 <i className="fas fa-sliders-h me-2"></i>Filtreler
               </h6>
-              <button className="btn btn-sm btn-link text-muted p-0" onClick={clearFilters}>
+              <button
+                className="btn btn-sm btn-link text-muted p-0"
+                onClick={clearFilters}
+              >
                 <i className="fas fa-undo me-1"></i>Temizle
               </button>
             </div>
@@ -159,10 +232,12 @@ const SearchPage = () => {
 
             {/* Category - Butonlar */}
             <div className="mb-3">
-              <label className="form-label small text-muted mb-1">Kategori</label>
+              <label className="form-label small text-muted mb-1">
+                Kategori
+              </label>
               <div className="d-flex flex-wrap gap-1">
                 <button
-                  className={`btn btn-sm ${!selectedCategory ? 'btn-warning' : 'btn-outline-secondary'}`}
+                  className={`btn btn-sm ${!selectedCategory ? "btn-warning" : "btn-outline-secondary"}`}
                   onClick={() => setSelectedCategory("")}
                   style={{ fontSize: "0.7rem", padding: "3px 8px" }}
                 >
@@ -171,7 +246,7 @@ const SearchPage = () => {
                 {categories.map((cat) => (
                   <button
                     key={cat}
-                    className={`btn btn-sm ${selectedCategory === cat ? 'btn-warning' : 'btn-outline-secondary'}`}
+                    className={`btn btn-sm ${selectedCategory === cat ? "btn-warning" : "btn-outline-secondary"}`}
                     onClick={() => setSelectedCategory(cat)}
                     style={{ fontSize: "0.7rem", padding: "3px 8px" }}
                   >
@@ -212,7 +287,9 @@ const SearchPage = () => {
                   checked={inStock}
                   onChange={(e) => setInStock(e.target.checked)}
                 />
-                <label className="form-check-label small" htmlFor="inStock">Stokta Var</label>
+                <label className="form-check-label small" htmlFor="inStock">
+                  Stokta Var
+                </label>
               </div>
               <div className="form-check form-check-inline">
                 <input
@@ -222,11 +299,16 @@ const SearchPage = () => {
                   checked={onSale}
                   onChange={(e) => setOnSale(e.target.checked)}
                 />
-                <label className="form-check-label small" htmlFor="onSale">İndirimli</label>
+                <label className="form-check-label small" htmlFor="onSale">
+                  İndirimli
+                </label>
               </div>
             </div>
 
-            <button className="btn btn-warning btn-sm w-100" onClick={applyFilters}>
+            <button
+              className="btn btn-warning btn-sm w-100"
+              onClick={applyFilters}
+            >
               <i className="fas fa-check me-1"></i>Uygula
             </button>
           </div>
@@ -243,7 +325,10 @@ const SearchPage = () => {
             <div className="bg-white rounded-3 text-center py-5">
               <i className="fas fa-search fa-3x text-muted mb-3"></i>
               <h6 className="text-muted">Ürün bulunamadı</h6>
-              <button className="btn btn-outline-warning btn-sm mt-2" onClick={clearFilters}>
+              <button
+                className="btn btn-outline-warning btn-sm mt-2"
+                onClick={clearFilters}
+              >
                 Filtreleri Temizle
               </button>
             </div>
@@ -251,65 +336,151 @@ const SearchPage = () => {
             <div className="row g-2 g-md-3">
               {filteredProducts.map((product) => (
                 <div key={product.id} className="col-6 col-md-4 col-lg-3">
-                  <div className="card h-100 border-0 shadow-sm" style={{ borderRadius: "12px", overflow: "hidden", display: "flex", flexDirection: "column", transition: "all 0.3s ease" }}>
+                  <div
+                    className="card h-100 border-0 shadow-sm"
+                    style={{
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
                     {/* Discount Badge */}
                     {product.discountPercentage > 0 && (
-                      <span className="badge bg-danger position-absolute top-0 start-0 m-2" style={{ zIndex: 2, fontSize: "0.7rem" }}>
+                      <span
+                        className="badge bg-danger position-absolute top-0 start-0 m-2"
+                        style={{ zIndex: 2, fontSize: "0.7rem" }}
+                      >
                         -%{product.discountPercentage}
                       </span>
                     )}
 
                     {/* Actions */}
-                    <div className="position-absolute top-0 end-0 m-1 d-flex flex-column gap-1" style={{ zIndex: 2 }}>
+                    <div
+                      className="position-absolute top-0 end-0 m-1 d-flex flex-column gap-1"
+                      style={{ zIndex: 2 }}
+                    >
                       <button
                         className={`btn btn-sm rounded-circle ${isFavorite(product.id) ? "btn-danger" : "btn-light"}`}
                         onClick={() => handleToggleFavorite(product.id)}
                         style={{ width: "28px", height: "28px", padding: 0 }}
                       >
-                        <i className={isFavorite(product.id) ? "fas fa-heart" : "far fa-heart"} style={{ fontSize: "0.7rem" }}></i>
+                        <i
+                          className={
+                            isFavorite(product.id)
+                              ? "fas fa-heart"
+                              : "far fa-heart"
+                          }
+                          style={{ fontSize: "0.7rem" }}
+                        ></i>
                       </button>
                       <button
                         className={`btn btn-sm rounded-circle ${isInCompare(product.id) ? "btn-info text-white" : "btn-light"}`}
                         onClick={() => handleToggleCompare(product)}
                         style={{ width: "28px", height: "28px", padding: 0 }}
                       >
-                        <i className="fas fa-balance-scale" style={{ fontSize: "0.6rem" }}></i>
+                        <i
+                          className="fas fa-balance-scale"
+                          style={{ fontSize: "0.6rem" }}
+                        ></i>
                       </button>
                     </div>
 
                     {/* Image */}
-                    <Link to={`/product/${product.id}`}>
-                      <div className="d-flex align-items-center justify-content-center bg-light" style={{ height: "140px", minHeight: "140px", padding: "10px" }}>
+                    <Link to={getProductDetailPath(product)}>
+                      <div
+                        className="d-flex align-items-center justify-content-center bg-light"
+                        style={{
+                          height: "140px",
+                          minHeight: "140px",
+                          padding: "10px",
+                        }}
+                      >
                         <img
                           src={product.imageUrl || "/images/placeholder.png"}
                           alt={product.name}
-                          style={{ maxHeight: "120px", maxWidth: "100%", objectFit: "contain" }}
+                          style={{
+                            maxHeight: "120px",
+                            maxWidth: "100%",
+                            objectFit: "contain",
+                          }}
                         />
                       </div>
                     </Link>
 
                     {/* Body */}
-                    <div className="card-body p-2 d-flex flex-column" style={{ flex: 1 }}>
-                      <small className="text-muted" style={{ fontSize: "0.65rem" }}>{product.categoryName}</small>
-                      <Link to={`/product/${product.id}`} className="text-decoration-none">
-                        <h6 className="card-title text-dark mb-1" style={{ fontSize: "0.8rem", height: "36px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: "1.3" }}>
+                    <div
+                      className="card-body p-2 d-flex flex-column"
+                      style={{ flex: 1 }}
+                    >
+                      <small
+                        className="text-muted"
+                        style={{ fontSize: "0.65rem" }}
+                      >
+                        {product.categoryName}
+                      </small>
+                      <Link
+                        to={getProductDetailPath(product)}
+                        className="text-decoration-none"
+                      >
+                        <h6
+                          className="card-title text-dark mb-1"
+                          style={{
+                            fontSize: "0.8rem",
+                            height: "36px",
+                            overflow: "hidden",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            lineHeight: "1.3",
+                          }}
+                        >
                           {product.name}
                         </h6>
                       </Link>
 
                       <div className="mt-auto">
-                        {product.discountPercentage > 0 || (product.specialPrice && product.specialPrice < product.price) ? (
+                        {product.discountPercentage > 0 ||
+                        (product.specialPrice &&
+                          product.specialPrice < product.price) ? (
                           <div className="d-flex align-items-center gap-1 flex-wrap">
-                            <span className="text-muted text-decoration-line-through" style={{ fontSize: "0.7rem" }}>₺{product.price?.toFixed(2)}</span>
-                            <span className="fw-bold" style={{ fontSize: "0.95rem", color: "#ff6b35" }}>₺{(product.specialPrice || product.price)?.toFixed(2)}</span>
+                            <span
+                              className="text-muted text-decoration-line-through"
+                              style={{ fontSize: "0.7rem" }}
+                            >
+                              ₺{product.price?.toFixed(2)}
+                            </span>
+                            <span
+                              className="fw-bold"
+                              style={{ fontSize: "0.95rem", color: "#ff6b35" }}
+                            >
+                              ₺
+                              {(product.specialPrice || product.price)?.toFixed(
+                                2,
+                              )}
+                            </span>
                           </div>
                         ) : (
-                          <span className="fw-bold" style={{ fontSize: "0.95rem", color: "#28a745" }}>₺{product.price?.toFixed(2)}</span>
+                          <span
+                            className="fw-bold"
+                            style={{ fontSize: "0.95rem", color: "#28a745" }}
+                          >
+                            ₺{product.price?.toFixed(2)}
+                          </span>
                         )}
 
                         <button
                           className="btn w-100 mt-2 text-white"
-                          style={{ fontSize: "0.78rem", padding: "8px 12px", borderRadius: "10px", background: "linear-gradient(135deg, #ff6b35, #ff8c00)", border: "none", fontWeight: "600" }}
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "8px 12px",
+                            borderRadius: "10px",
+                            background:
+                              "linear-gradient(135deg, #ff6b35, #ff8c00)",
+                            border: "none",
+                            fontWeight: "600",
+                          }}
                           onClick={() => handleAddToCart(product)}
                         >
                           <i className="fas fa-cart-plus me-1"></i>Sepete Ekle

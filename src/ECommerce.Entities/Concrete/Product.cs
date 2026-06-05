@@ -22,6 +22,10 @@ namespace ECommerce.Entities.Concrete
         public string ImageUrl { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;
         public string Currency { get; set; } = "TRY";
+        public bool? AdminOverrideName { get; set; }
+        public bool? AdminOverridePrice { get; set; }
+        public bool? AdminOverrideCategory { get; set; }
+        public bool AdminDeactivated { get; set; } = false;
 
         /// <summary>
         /// Ürün birim ağırlığı (gram)

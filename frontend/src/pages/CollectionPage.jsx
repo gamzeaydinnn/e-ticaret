@@ -13,11 +13,30 @@
  * @version 2.0.0 - Pagination eklendi
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import homeBlockService from "../services/homeBlockService";
 import ProductGrid from "../components/ProductGrid";
+import Pagination, { paginateData } from "../components/Pagination";
 import "./CollectionPage.css";
+
+const PAGE_SIZE = 24;
+
+// Satın alınabilir ürün: fiyat > 0 ve stok > 0
+const isSellable = (product) => {
+  if (!product) return false;
+  const raw = product.product || product.Product || product;
+  const stock = parseInt(raw.stockQuantity ?? raw.StockQuantity ?? raw.stock ?? 0, 10) || 0;
+  if (stock <= 0) return false;
+  const basePrice = parseFloat(raw.price ?? raw.Price ?? 0) || 0;
+  const rawSpecial = raw.specialPrice ?? raw.SpecialPrice ?? raw.discountedPrice ?? raw.DiscountedPrice;
+  const specialPrice = rawSpecial == null ? null : parseFloat(rawSpecial) || 0;
+  const displayPrice =
+    specialPrice !== null && specialPrice > 0 && specialPrice < basePrice
+      ? specialPrice
+      : basePrice;
+  return displayPrice > 0;
+};
 
 const CollectionPage = () => {
   const { slug } = useParams();
@@ -28,6 +47,7 @@ const CollectionPage = () => {
   const [block, setBlock] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // ============================================
   // VERİ ÇEKME
@@ -73,9 +93,22 @@ const CollectionPage = () => {
     }
   }, [slug]);
 
-  const products = block?.products || [];
+  // Slug değişince sayfayı sıfırla
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [slug]);
+
+  const allProducts = block?.products || [];
   const title = block?.title || block?.name || "Koleksiyon";
   const posterUrl = block?.posterImageUrl || "";
+
+  // Sadece stokta olan ve fiyatı > 0 olan ürünler
+  const sellableProducts = useMemo(() => allProducts.filter(isSellable), [allProducts]);
+  const totalPages = Math.max(1, Math.ceil(sellableProducts.length / PAGE_SIZE));
+  const pagedProducts = useMemo(
+    () => paginateData(sellableProducts, currentPage, PAGE_SIZE),
+    [sellableProducts, currentPage]
+  );
 
   // ============================================
   // RENDER - CONDITIONAL RENDER EN SONDA
@@ -133,7 +166,8 @@ const CollectionPage = () => {
                 </p>
                 <h1 className="collection-title">{title}</h1>
                 <p className="collection-count text-muted mb-0">
-                  {products.length} ürün tek listede gösteriliyor
+                  {sellableProducts.length} ürün
+                  {totalPages > 1 ? ` · Sayfa ${currentPage}/${totalPages}` : ""}
                 </p>
               </div>
             </div>
@@ -146,27 +180,12 @@ const CollectionPage = () => {
       </div>
 
       <div className="container py-4">
-        {products.length === 0 ? (
+        {sellableProducts.length === 0 ? (
           <div className="text-center py-5">
             <i className="fas fa-box-open fa-4x text-muted mb-3"></i>
-            <h4 className="text-muted">Bu koleksiyonda henüz ürün yok</h4>
-            {/* Blok tipi bilgisi - debug amaçlı */}
+            <h4 className="text-muted">Bu koleksiyonda satışa uygun ürün yok</h4>
             <p className="text-muted small mt-2">
-              <span className="badge bg-secondary me-2">
-                {block.blockType || "manual"}
-              </span>
-              {block.blockType === "discounted" && (
-                <span>
-                  İndirimli ürün bulunamadı. Ürünlere indirimli fiyat
-                  tanımlayın.
-                </span>
-              )}
-              {block.blockType === "category" && (
-                <span>Bu kategoride ürün bulunmuyor.</span>
-              )}
-              {block.blockType === "manual" && (
-                <span>Admin panelden bu bloğa ürün ekleyin.</span>
-              )}
+              Stokta olan ve fiyatı belirlenen ürünler görüntülenir.
             </p>
             <Link to="/" className="btn btn-outline-primary mt-3">
               <i className="fas fa-home me-2"></i>
@@ -174,13 +193,27 @@ const CollectionPage = () => {
             </Link>
           </div>
         ) : (
-          <ProductGrid
-            products={products}
-            title={title}
-            showTitle={false}
-            showViewAll={false}
-            displayMode="grid"
-          />
+          <>
+            <ProductGrid
+              products={pagedProducts}
+              title={title}
+              showTitle={false}
+              showViewAll={false}
+              displayMode="grid"
+            />
+            {totalPages > 1 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={sellableProducts.length}
+                pageSize={PAGE_SIZE}
+                onPageChange={(page) => {
+                  setCurrentPage(page);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

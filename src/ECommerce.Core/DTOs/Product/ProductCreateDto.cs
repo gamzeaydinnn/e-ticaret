@@ -127,6 +127,10 @@ namespace ECommerce.Core.DTOs.Product
         /// </summary>
         public bool IsActive { get; set; } = true;
 
+        public bool? AdminOverrideName { get; set; }
+        public bool? AdminOverridePrice { get; set; }
+        public bool? AdminOverrideCategory { get; set; }
+
         #endregion
     }
 }

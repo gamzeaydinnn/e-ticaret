@@ -78,7 +78,6 @@ const isWeightBasedCartItem = (item, product) => {
 const CartPage = () => {
   const {
     cartItems,
-    loading: cartLoading,
     updateQuantity,
     removeFromCart,
     clearCart,
@@ -87,7 +86,7 @@ const CartPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState({});
-  const { user } = useAuth();
+  useAuth();
   // Sepeti boşalt onay modal state'i
   const [clearCartConfirm, setClearCartConfirm] = useState(false);
   const [clearCartLoading, setClearCartLoading] = useState(false);
@@ -114,7 +113,8 @@ const CartPage = () => {
   const [appliedCoupon, setAppliedCoupon] = useState(null);
 
   // Quantity button işlem state'i - çift tıklama önlemi
-  const [updatingItems, setUpdatingItems] = useState(new Set());
+  const [updatingItems, setUpdatingItems] = useState(new Map());
+  const [removingInactiveItems, setRemovingInactiveItems] = useState(false);
 
   // =================================================================
   // ANLIK STOK TAKİBİ (SignalR StockHub)
@@ -128,7 +128,6 @@ const CartPage = () => {
   const {
     stockMap: realtimeStockMap,
     hasOutOfStockItems,
-    isConnected: stockHubConnected,
   } = useCartStockUpdates(cartProductIds);
 
   // =================================================================
@@ -346,9 +345,10 @@ const CartPage = () => {
     const isWeightBasedItem = isWeightBasedCartItem(item, product);
     const minQuantity = isWeightBasedItem ? 0.5 : 1;
     const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || "default"}`;
+    const currentQuantity = getCurrentItemQuantity(item);
+    const direction = newQuantity > currentQuantity ? "increase" : "decrease";
 
-    // Çift tıklama engelleme
-    if (updatingItems.has(itemKey)) {
+    if (updatingItems.get(itemKey) === direction) {
       return;
     }
 
@@ -358,8 +358,11 @@ const CartPage = () => {
     }
 
     try {
-      // Loading state'i ekle
-      setUpdatingItems((prev) => new Set([...prev, itemKey]));
+      setUpdatingItems((prev) => {
+        const next = new Map(prev);
+        next.set(itemKey, direction);
+        return next;
+      });
 
       const pid = item.productId || item.id;
       const variantId = item.variantId || item.productVariantId || null;
@@ -368,11 +371,14 @@ const CartPage = () => {
       console.error("Quantity update failed:", error);
       // Hata durumunda kullanıcıya feedback verilebir
     } finally {
-      // Loading state'i temizle
       setUpdatingItems((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(itemKey);
-        return newSet;
+        if (prev.get(itemKey) !== direction) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        next.delete(itemKey);
+        return next;
       });
     }
   };
@@ -610,6 +616,36 @@ const CartPage = () => {
       });
   }, [cartItems, products]);
 
+  const inactiveCartItems = useMemo(() => {
+    return cartItems.filter((item) => {
+      const product = products[item.productId || item.id] || item.product || null;
+      const isProductMarkedInactive =
+        item.isActive === false || product?.isActive === false;
+
+      return isProductMarkedInactive;
+    });
+  }, [cartItems, products]);
+
+  const handleRemoveInactiveItems = async () => {
+    if (inactiveCartItems.length === 0) {
+      return;
+    }
+
+    setRemovingInactiveItems(true);
+    try {
+      for (const item of inactiveCartItems) {
+        await removeFromCart(
+          item.productId || item.id,
+          item.variantId || item.productVariantId || null,
+        );
+      }
+    } catch (error) {
+      console.error("Pasif ürünler sepetten kaldırılırken hata oluştu:", error);
+    } finally {
+      setRemovingInactiveItems(false);
+    }
+  };
+
   // Empty Cart State
   if (!loading && cartItems.length === 0) {
     return (
@@ -777,6 +813,38 @@ const CartPage = () => {
           variant="cart"
         />
 
+        {inactiveCartItems.length > 0 && (
+          <div className="alert alert-warning d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+            <div>
+              <div className="fw-bold mb-1">
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                Sepetinizde pasife alınmış ürünler var
+              </div>
+              <div className="small mb-0">
+                {inactiveCartItems.length} ürün artık satışta değil. Ödeme öncesi bu ürünleri kaldırmanız gerekiyor.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm"
+              onClick={handleRemoveInactiveItems}
+              disabled={removingInactiveItems}
+            >
+              {removingInactiveItems ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Kaldırılıyor...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-trash-alt me-1"></i>
+                  Pasif Ürünleri Kaldır
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         <div className="cart-content">
           {/* Cart Items */}
           <div className="cart-items-section">
@@ -795,10 +863,11 @@ const CartPage = () => {
                     item,
                     product,
                   );
+                  const currentQuantity = getCurrentItemQuantity(item);
                   return (
                     <div
                       key={`${item.id || item.productId}-${item.variantId || item.productVariantId || "base"}`}
-                      className={`cart-item ${isWeightBasedItem ? "weight-based" : ""}`}
+                      className={`cart-item ${isWeightBasedItem ? "weight-based" : ""} ${inactiveCartItems.some((inactiveItem) => inactiveItem.id === item.id) ? "opacity-75" : ""}`}
                     >
                       <div className="item-image">
                         <img
@@ -819,6 +888,12 @@ const CartPage = () => {
                         <h3 className="item-name">
                           {product?.name || "Yükleniyor..."}
                         </h3>
+                        {(item.isActive === false || product?.isActive === false) && (
+                          <div className="text-danger small fw-bold mt-1">
+                            <i className="fas fa-ban me-1"></i>
+                            Bu ürün pasife alındı ve siparişe devam edemez.
+                          </div>
+                        )}
                         {(item.variantTitle || item.sku) && (
                           <div className="item-variants">
                             {item.variantTitle && (
@@ -922,7 +997,9 @@ const CartPage = () => {
                       <div className="item-quantity">
                         {(() => {
                           const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || "default"}`;
-                          const isUpdating = updatingItems.has(itemKey);
+                          const pendingDirection = updatingItems.get(itemKey);
+                          const isMinusUpdating = pendingDirection === "decrease";
+                          const isPlusUpdating = pendingDirection === "increase";
 
                           return (
                             <>
@@ -934,19 +1011,21 @@ const CartPage = () => {
                                     isWeightBasedItem
                                       ? Math.max(
                                           0.5,
-                                          getCurrentItemQuantity(item) - 0.5,
+                                          currentQuantity - 0.5,
                                         )
-                                      : getCurrentItemQuantity(item) - 1,
+                                      : currentQuantity - 1,
                                   )
                                 }
                                 disabled={
-                                  isUpdating ||
+                                  item.isActive === false ||
+                                  product?.isActive === false ||
+                                  isMinusUpdating ||
                                   (isWeightBasedItem
-                                    ? item.quantity <= 0.5
-                                    : item.quantity <= 1)
+                                    ? currentQuantity <= 0.5
+                                    : currentQuantity <= 1)
                                 }
                               >
-                                {isUpdating ? (
+                                {isMinusUpdating ? (
                                   <i className="fas fa-spinner fa-spin"></i>
                                 ) : (
                                   <i className="fas fa-minus"></i>
@@ -954,8 +1033,8 @@ const CartPage = () => {
                               </button>
                               <span className="qty-value">
                                 {isWeightBasedItem
-                                  ? item.quantity.toFixed(1)
-                                  : item.quantity}
+                                  ? currentQuantity.toFixed(1)
+                                  : currentQuantity}
                                 {isWeightBasedItem && (
                                   <span className="qty-unit"> kg</span>
                                 )}
@@ -966,13 +1045,17 @@ const CartPage = () => {
                                   await handleUpdateQuantity(
                                     item,
                                     isWeightBasedItem
-                                      ? getCurrentItemQuantity(item) + 0.5
-                                      : getCurrentItemQuantity(item) + 1,
+                                      ? currentQuantity + 0.5
+                                      : currentQuantity + 1,
                                   )
                                 }
-                                disabled={isUpdating}
+                                disabled={
+                                  item.isActive === false ||
+                                  product?.isActive === false ||
+                                  isPlusUpdating
+                                }
                               >
-                                {isUpdating ? (
+                                {isPlusUpdating ? (
                                   <i className="fas fa-spinner fa-spin"></i>
                                 ) : (
                                   <i className="fas fa-plus"></i>
@@ -1373,25 +1456,34 @@ const CartPage = () => {
                   edin.
                 </div>
               )}
+              {inactiveCartItems.length > 0 && (
+                <div className="alert alert-warning py-2 mb-2 text-center" role="alert">
+                  <i className="fas fa-ban me-1"></i>
+                  Pasif ürünler temizlenmeden ödeme adımına geçilemez.
+                </div>
+              )}
               <button
                 className="checkout-btn"
                 onClick={() => navigate("/payment")}
                 disabled={
                   cartItems.length === 0 ||
                   !isCartAmountValid ||
-                  hasOutOfStockItems
+                  hasOutOfStockItems ||
+                  inactiveCartItems.length > 0
                 }
                 style={{
                   opacity:
                     cartItems.length === 0 ||
                     !isCartAmountValid ||
-                    hasOutOfStockItems
+                    hasOutOfStockItems ||
+                    inactiveCartItems.length > 0
                       ? 0.6
                       : 1,
                   cursor:
                     cartItems.length === 0 ||
                     !isCartAmountValid ||
-                    hasOutOfStockItems
+                    hasOutOfStockItems ||
+                    inactiveCartItems.length > 0
                       ? "not-allowed"
                       : "pointer",
                 }}

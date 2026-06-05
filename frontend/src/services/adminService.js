@@ -6,6 +6,7 @@ import {
 import api from "./api";
 import categoryServiceReal from "./categoryServiceReal";
 import productServiceMock from "./productServiceMock";
+import { ProductService } from "./productService";
 
 // Kategoriler: Gerçek Backend API
 // Ürünler: JSON Server (geçici - Mikro API gelene kadar)
@@ -237,7 +238,8 @@ export const AdminService = {
     return productServiceMock.create(payload);
   },
   updateProduct: async (id, payload) => {
-    return productServiceMock.update(id, payload);
+    ensureBackend();
+    return ProductService.updateAdmin(id, payload);
   },
   deleteProduct: async (id) => {
     return productServiceMock.delete(id);

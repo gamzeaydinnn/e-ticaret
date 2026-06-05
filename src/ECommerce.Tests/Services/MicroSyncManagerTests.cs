@@ -236,6 +236,90 @@ namespace ECommerce.Tests.Services
             Assert.Equal("Success", logged.Status);
             Assert.Contains("1", logged.Message);
         }
+
+        [Fact]
+        public async Task SyncPricesFromMikroAsync_ShouldRespectAdminPriceOverride()
+        {
+            var microServiceMock = new Mock<IMicroService>();
+            var productRepositoryMock = new Mock<IProductRepository>();
+            var manager = CreateManager(microServiceMock, productRepositoryMock);
+
+            microServiceMock
+                .Setup(m => m.GetPricesAsync())
+                .ReturnsAsync(new List<MicroPriceDto>
+                {
+                    new MicroPriceDto { Sku = "SKU-1", Price = 99m }
+                });
+
+            var product = new Product
+            {
+                Id = 1,
+                SKU = "SKU-1",
+                Name = "Product 1",
+                Price = 120m,
+                AdminOverridePrice = true
+            };
+
+            productRepositoryMock
+                .Setup(r => r.GetBySkuAsync("SKU-1"))
+                .ReturnsAsync(product);
+
+            productRepositoryMock
+                .Setup(r => r.LogSyncAsync(It.IsAny<MicroSyncLog>()))
+                .Returns(Task.CompletedTask);
+
+            await manager.SyncPricesFromMikroAsync();
+
+            Assert.Equal(120m, product.Price);
+            productRepositoryMock.Verify(r => r.UpdateAsync(product), Times.Never);
+        }
+
+        [Fact]
+        public async Task SyncProductsFromMikroAsync_ShouldRespectAdminDeactivatedFlag()
+        {
+            var microServiceMock = new Mock<IMicroService>();
+            var productRepositoryMock = new Mock<IProductRepository>();
+            var manager = CreateManager(microServiceMock, productRepositoryMock);
+
+            microServiceMock
+                .Setup(m => m.GetProductsAsync())
+                .ReturnsAsync(new List<MicroProductDto>
+                {
+                    new MicroProductDto
+                    {
+                        Sku = "SKU-1",
+                        Name = "Product 1 Updated",
+                        Price = 99m,
+                        StockQuantity = 12,
+                        IsActive = true
+                    }
+                });
+
+            var product = new Product
+            {
+                Id = 1,
+                SKU = "SKU-1",
+                Name = "Product 1",
+                Price = 120m,
+                StockQuantity = 3,
+                IsActive = false,
+                AdminDeactivated = true
+            };
+
+            productRepositoryMock
+                .Setup(r => r.GetBySkuAsync("SKU-1"))
+                .ReturnsAsync(product);
+
+            productRepositoryMock
+                .Setup(r => r.LogSyncAsync(It.IsAny<MicroSyncLog>()))
+                .Returns(Task.CompletedTask);
+
+            await manager.SyncProductsFromMikroAsync();
+
+            Assert.False(product.IsActive);
+            Assert.Equal(12, product.StockQuantity);
+            productRepositoryMock.Verify(r => r.UpdateAsync(product), Times.Once);
+        }
     }
 }
 

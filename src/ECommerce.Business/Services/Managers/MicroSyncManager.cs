@@ -2,8 +2,10 @@ using System;
 using System.Linq;
 using ECommerce.Core.DTOs.Micro;
 // using ECommerce.Core.Entities.Concrete; // removed: entities live in ECommerce.Entities.Concrete
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
+using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Data.Repositories;
@@ -24,6 +26,7 @@ namespace ECommerce.Business.Services.Managers
         // NEDEN: Yeni ürün oluşturulurken CategoryCode → CategoryId resolve etmek için
         private readonly IAutoCategoryMappingEngine? _autoMappingEngine;
         private readonly ILogger<MicroSyncManager>? _logger;
+        private readonly IProductAdminOverrideSettingsService? _productAdminOverrideSettingsService;
         // Config: Mevcut ürünlerin kategorisini üzerine yaz mı?
         private readonly bool _overwriteExistingCategory;
 
@@ -32,12 +35,14 @@ namespace ECommerce.Business.Services.Managers
             IProductRepository productRepository,
             IAutoCategoryMappingEngine? autoMappingEngine = null,
             ILogger<MicroSyncManager>? logger = null,
-            IConfiguration? configuration = null)
+            IConfiguration? configuration = null,
+            IProductAdminOverrideSettingsService? productAdminOverrideSettingsService = null)
         {
             _microService = microService;
             _productRepository = productRepository;
             _autoMappingEngine = autoMappingEngine;
             _logger = logger;
+            _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
             _overwriteExistingCategory = configuration?.GetValue("CategoryMapping:OverwriteExistingCategory", false) ?? false;
         }
 
@@ -132,12 +137,21 @@ namespace ECommerce.Business.Services.Managers
         public async Task SyncPricesFromMikroAsync()
         {
             var prices = await _microService.GetPricesAsync();
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? await _productAdminOverrideSettingsService.GetSettingsAsync()
+                : new ProductAdminOverrideSettingsDto();
             int updated = 0;
             foreach (var p in prices)
             {
                 if (string.IsNullOrWhiteSpace(p.Sku)) continue;
                 var product = await _productRepository.GetBySkuAsync(p.Sku);
                 if (product == null) continue;
+
+                if (!ProductAdminOverridePolicy.CanSyncPrice(product, overrideDefaults))
+                {
+                    continue;
+                }
+
                 product.Price = p.Price;
                 await _productRepository.UpdateAsync(product);
                 updated++;
@@ -161,6 +175,9 @@ namespace ECommerce.Business.Services.Managers
         public async Task<ProductSyncResult> SyncProductsFromMikroAsync()
         {
             var result = new ProductSyncResult();
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? await _productAdminOverrideSettingsService.GetSettingsAsync()
+                : new ProductAdminOverrideSettingsDto();
 
             var mikroProducts = (await _microService.GetProductsAsync())?.ToList() ?? new List<MicroProductDto>();
             result.TotalProducts = mikroProducts.Count;
@@ -234,14 +251,27 @@ namespace ECommerce.Business.Services.Managers
                     }
                     else
                     {
-                        existing.Name = string.IsNullOrWhiteSpace(mikroProduct.Name) ? existing.Name : mikroProduct.Name.Trim();
-                        existing.Price = mikroProduct.Price;
+                        if (ProductAdminOverridePolicy.CanSyncName(existing, overrideDefaults) &&
+                            !string.IsNullOrWhiteSpace(mikroProduct.Name))
+                        {
+                            existing.Name = mikroProduct.Name.Trim();
+                        }
+
+                        if (ProductAdminOverridePolicy.CanSyncPrice(existing, overrideDefaults))
+                        {
+                            existing.Price = mikroProduct.Price;
+                        }
+
                         existing.StockQuantity = Math.Max(0, mikroProduct.StockQuantity > 0 ? mikroProduct.StockQuantity : mikroProduct.Stock);
-                        existing.IsActive = mikroProduct.IsActive;
+                        if (ProductAdminOverridePolicy.CanSyncActiveState(existing))
+                        {
+                            existing.IsActive = mikroProduct.IsActive;
+                        }
                         existing.UpdatedAt = DateTime.UtcNow;
 
                         // ADIM 8: Mevcut ürün kategori güncellemesi (config ile kontrol)
                         if (_overwriteExistingCategory &&
+                            ProductAdminOverridePolicy.CanSyncCategory(existing, overrideDefaults) &&
                             !string.IsNullOrWhiteSpace(mikroProduct.CategoryCode) &&
                             _autoMappingEngine != null)
                         {

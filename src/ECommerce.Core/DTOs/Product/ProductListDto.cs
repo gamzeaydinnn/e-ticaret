@@ -47,6 +47,12 @@ namespace ECommerce.Core.DTOs.Product
 
         public int? CategoryId { get; set; }
         public string? CategoryName { get; set; }
+        public bool? AdminOverrideName { get; set; }
+        public bool? AdminOverridePrice { get; set; }
+        public bool? AdminOverrideCategory { get; set; }
+        public bool EffectiveAdminOverrideName { get; set; }
+        public bool EffectiveAdminOverridePrice { get; set; }
+        public bool EffectiveAdminOverrideCategory { get; set; }
         
         #region Kampanya Bilgileri
         

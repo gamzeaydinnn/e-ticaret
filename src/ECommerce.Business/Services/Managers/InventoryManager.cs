@@ -179,7 +179,7 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 var reservedQuantity = await GetActiveReservedQuantityAsync(entry.ProductId, now);
-                var available = product.StockQuantity - reservedQuantity;
+                decimal available = product.StockQuantity - reservedQuantity;
                 if (available < entry.Quantity)
                 {
                     return (false, $"Yetersiz stok: {product.Name}");
@@ -248,7 +248,7 @@ namespace ECommerce.Business.Services.Managers
                     }
 
                     var reservedQuantity = await GetActiveReservedQuantityAsync(item.ProductId, now);
-                    var available = product.StockQuantity - reservedQuantity;
+                    decimal available = product.StockQuantity - reservedQuantity;
                     if (available < item.Quantity)
                     {
                         await RollbackIfNeededAsync(transaction, ownsTransaction);
@@ -345,7 +345,7 @@ namespace ECommerce.Business.Services.Managers
                     }
 
                     var reservedBefore = await GetActiveReservedQuantityAsync(item.ProductId, now);
-                    var availableBefore = product.StockQuantity - reservedBefore;
+                    decimal availableBefore = product.StockQuantity - reservedBefore;
                     var availableAfter = availableBefore + item.Quantity;
 
                     await _inventoryLogService.WriteAsync(
@@ -432,8 +432,14 @@ namespace ECommerce.Business.Services.Managers
                         throw new InvalidOperationException("Stok rezervasyonu onaylanamadı.");
                     }
 
-                    var oldStock = product.StockQuantity;
-                    product.StockQuantity -= totalQuantity;
+                    decimal oldStock = product.StockQuantity;
+                    var newStock = oldStock - totalQuantity;
+                    if (newStock != decimal.Truncate(newStock))
+                    {
+                        throw new InvalidOperationException("Kesirli stok düşümü desteklenmiyor.");
+                    }
+
+                    product.StockQuantity = decimal.ToInt32(newStock);
                     var reference = order != null
                         ? $"Order:{order.OrderNumber ?? order.Id.ToString()}"
                         : $"Client:{clientOrderId}";
@@ -442,7 +448,7 @@ namespace ECommerce.Business.Services.Managers
                         "Commit",
                         totalQuantity,
                         oldStock,
-                        product.StockQuantity,
+                        newStock,
                         reference);
                     await CheckThresholdAndNotifyAsync(product);
                 }
@@ -484,12 +490,12 @@ namespace ECommerce.Business.Services.Managers
             await strategy.ExecuteAsync(() => DoWorkAsync(true));
         }
 
-        private async Task<int> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)
+        private async Task<decimal> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)
         {
             var reserved = await _context.StockReservations
                 .Where(r => r.ProductId == productId && !r.IsReleased && r.ExpiresAt > utcNow)
-                .SumAsync(r => (int?)r.Quantity);
-            return reserved ?? 0;
+                .SumAsync(r => (decimal?)r.Quantity);
+            return reserved ?? 0m;
         }
 
         private Task EnsureProductRowLockedAsync(int productId)

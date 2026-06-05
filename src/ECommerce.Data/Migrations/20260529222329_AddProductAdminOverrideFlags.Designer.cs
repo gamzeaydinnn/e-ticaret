@@ -4,6 +4,7 @@ using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ECommerce.Data.Migrations
 {
     [DbContext(typeof(ECommerceDbContext))]
-    partial class ECommerceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260529222329_AddProductAdminOverrideFlags")]
+    partial class AddProductAdminOverrideFlags
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2491,16 +2494,13 @@ namespace ECommerce.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("AdminDeactivated")
+                    b.Property<bool>("AdminOverrideCategory")
                         .HasColumnType("bit");
 
-                    b.Property<bool?>("AdminOverrideCategory")
+                    b.Property<bool>("AdminOverrideName")
                         .HasColumnType("bit");
 
-                    b.Property<bool?>("AdminOverrideName")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("AdminOverridePrice")
+                    b.Property<bool>("AdminOverridePrice")
                         .HasColumnType("bit");
 
                     b.Property<int?>("BrandId")
@@ -2592,43 +2592,6 @@ namespace ECommerce.Data.Migrations
                         .HasDatabaseName("IX_Products_CategoryId_IsActive_Name");
 
                     b.ToTable("Products", (string)null);
-                });
-
-            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductAdminOverrideSetting", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("DefaultAdminOverrideCategory")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("DefaultAdminOverrideName")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("DefaultAdminOverridePrice")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int?>("UpdatedByUserId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UpdatedByUserName")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("ProductAdminOverrideSettings");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.ProductImage", b =>
@@ -2991,9 +2954,6 @@ namespace ECommerce.Data.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("ManualRefundRequired")
                         .HasColumnType("bit");
 
                     b.Property<int>("OrderId")

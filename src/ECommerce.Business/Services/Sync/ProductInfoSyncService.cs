@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using ECommerce.Core.Helpers;
+using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Core.Interfaces.Sync;
 using ECommerce.Data.Context;
@@ -26,6 +28,7 @@ namespace ECommerce.Business.Services.Sync
     {
         private readonly ECommerceDbContext _context;
         private readonly ILogger<ProductInfoSyncService> _logger;
+        private readonly IProductAdminOverrideSettingsService? _productAdminOverrideSettingsService;
         // NEDEN: Mapping tablosunda eşleme bulunamazsa otomatik oluşturur (lazy auto-map)
         private readonly IAutoCategoryMappingEngine? _autoMappingEngine;
 
@@ -51,11 +54,13 @@ namespace ECommerce.Business.Services.Sync
         public ProductInfoSyncService(
             ECommerceDbContext context,
             ILogger<ProductInfoSyncService> logger,
-            IAutoCategoryMappingEngine? autoMappingEngine = null)
+            IAutoCategoryMappingEngine? autoMappingEngine = null,
+            IProductAdminOverrideSettingsService? productAdminOverrideSettingsService = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _autoMappingEngine = autoMappingEngine;
+            _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
         }
 
         /// <inheritdoc />
@@ -82,7 +87,42 @@ namespace ECommerce.Business.Services.Sync
                 return ProductInfoSyncResult.Fail($"Product bulunamadı: ID={cache.LocalProductId}");
 
             var result = new ProductInfoSyncResult { Success = true, TotalProcessed = 1 };
-            ApplyInfoChanges(cache, product, result);
+
+            Dictionary<string, List<MikroCategoryMapping>>? categoryMappings = null;
+            if (!string.IsNullOrWhiteSpace(cache.AnagrupKod) || !string.IsNullOrWhiteSpace(cache.GrupKod))
+            {
+                var keys = new List<string>();
+
+                if (!string.IsNullOrWhiteSpace(cache.AnagrupKod))
+                    keys.Add(cache.AnagrupKod.Trim());
+
+                if (!string.IsNullOrWhiteSpace(cache.GrupKod))
+                    keys.Add(cache.GrupKod.Trim());
+
+                categoryMappings = await LoadCategoryMappingsAsync(
+                    keys.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+                    cancellationToken);
+
+                if (categoryMappings.Count == 0 && _autoMappingEngine != null)
+                {
+                    var resolvedCategoryId = await _autoMappingEngine.ResolveOrCreateMappingAsync(
+                        cache.AnagrupKod ?? string.Empty,
+                        cache.GrupKod,
+                        cancellationToken);
+
+                    if (product.CategoryId != resolvedCategoryId)
+                    {
+                        product.CategoryId = resolvedCategoryId;
+                        result.CategoriesUpdated++;
+                    }
+                }
+            }
+
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? await _productAdminOverrideSettingsService.GetSettingsAsync(cancellationToken)
+                : new ProductAdminOverrideSettingsDto();
+
+            ApplyInfoChanges(cache, product, result, overrideDefaults, categoryMappings);
 
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -126,8 +166,16 @@ namespace ECommerce.Business.Services.Sync
                 .ToDictionaryAsync(p => p.Id, cancellationToken);
 
             // Kategori eşlemelerini çek (batch için tek sorgu)
-            var grupKodlar = cacheRecords.Select(c => c.GrupKod).Where(g => g != null).Distinct().ToList();
-            var categoryMappings = await LoadCategoryMappingsAsync(grupKodlar!, cancellationToken);
+            var anagrupKodlar = cacheRecords
+                .Select(c => c.AnagrupKod)
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Select(k => k!.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var categoryMappings = await LoadCategoryMappingsAsync(anagrupKodlar, cancellationToken);
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? await _productAdminOverrideSettingsService.GetSettingsAsync(cancellationToken)
+                : new ProductAdminOverrideSettingsDto();
 
             var result = new ProductInfoSyncResult { Success = true };
 
@@ -141,7 +189,7 @@ namespace ECommerce.Business.Services.Sync
 
                 try
                 {
-                    ApplyInfoChanges(cache, product, result, categoryMappings);
+                    ApplyInfoChanges(cache, product, result, overrideDefaults, categoryMappings);
                     result.TotalProcessed++;
                 }
                 catch (Exception ex)
@@ -195,6 +243,9 @@ namespace ECommerce.Business.Services.Sync
                 .ToListAsync(cancellationToken);
 
             var mappingLookup = BuildCategoryMappingLookup(categoryMappings);
+            var overrideDefaults = _productAdminOverrideSettingsService != null
+                ? await _productAdminOverrideSettingsService.GetSettingsAsync(cancellationToken)
+                : new ProductAdminOverrideSettingsDto();
             var result = new ProductInfoSyncResult { Success = true };
 
             foreach (var cache in cacheRecords)
@@ -207,7 +258,7 @@ namespace ECommerce.Business.Services.Sync
 
                 try
                 {
-                    ApplyInfoChanges(cache, product, result, mappingLookup);
+                    ApplyInfoChanges(cache, product, result, overrideDefaults, mappingLookup);
                     result.TotalProcessed++;
                 }
                 catch (Exception ex)
@@ -422,12 +473,14 @@ namespace ECommerce.Business.Services.Sync
             MikroProductCache cache,
             Product product,
             ProductInfoSyncResult result,
+            ProductAdminOverrideSettingsDto overrideDefaults,
             Dictionary<string, List<MikroCategoryMapping>>? categoryMappings = null)
         {
             bool changed = false;
 
             // İsim güncelleme — boş olmadığında ve farklı olduğunda
             if (!string.IsNullOrWhiteSpace(cache.StokAd) &&
+                ProductAdminOverridePolicy.CanSyncName(product, overrideDefaults) &&
                 !string.Equals(product.Name, cache.StokAd.Trim(), StringComparison.Ordinal))
             {
                 product.Name = cache.StokAd.Trim();
@@ -459,7 +512,9 @@ namespace ECommerce.Business.Services.Sync
 
                 var mapping = FindBestCategoryMapping(lookupKey, categoryMappings)
                     ?? FindBestCategoryMapping("*", categoryMappings); // wildcard fallback
-                if (mapping != null && product.CategoryId != mapping.CategoryId)
+                if (mapping != null &&
+                    ProductAdminOverridePolicy.CanSyncCategory(product, overrideDefaults) &&
+                    product.CategoryId != mapping.CategoryId)
                 {
                     product.CategoryId = mapping.CategoryId;
                     if (mapping.BrandId.HasValue)
@@ -470,7 +525,8 @@ namespace ECommerce.Business.Services.Sync
             }
 
             // Aktif/pasif durum — cache'deki Aktif alanı ile Product.IsActive karşılaştır
-            if (product.IsActive != cache.Aktif)
+            if (ProductAdminOverridePolicy.CanSyncActiveState(product) &&
+                product.IsActive != cache.Aktif)
             {
                 product.IsActive = cache.Aktif;
                 result.StatusUpdated++;
@@ -484,15 +540,24 @@ namespace ECommerce.Business.Services.Sync
         }
 
         /// <summary>
-        /// Kategori eşleme tablosunu GrupKod bazlı lookup dict'e dönüştürür.
+        /// Kategori eşleme tablosunu AnagrupKod bazlı lookup dict'e dönüştürür.
         /// </summary>
         private async Task<Dictionary<string, List<MikroCategoryMapping>>> LoadCategoryMappingsAsync(
-            List<string> grupKodlar,
+            List<string> anagrupKodlar,
             CancellationToken cancellationToken)
         {
+            if (anagrupKodlar.Count == 0)
+            {
+                anagrupKodlar = new List<string> { "*" };
+            }
+            else if (!anagrupKodlar.Contains("*", StringComparer.OrdinalIgnoreCase))
+            {
+                anagrupKodlar.Add("*");
+            }
+
             var mappings = await _context.Set<MikroCategoryMapping>()
                 .AsNoTracking()
-                .Where(m => grupKodlar.Contains(m.MikroAnagrupKod))
+                .Where(m => anagrupKodlar.Contains(m.MikroAnagrupKod))
                 .ToListAsync(cancellationToken);
 
             return BuildCategoryMappingLookup(mappings);

@@ -6,8 +6,9 @@ import React, {
   useMemo,
 } from "react";
 import { MicroService } from "../../services/microService";
+import { ProductService } from "../../services/productService";
 import { useGlobalStockUpdates } from "../../hooks/useStockUpdates";
-import SyncHealthDashboard from "../../components/admin/SyncHealthDashboard";
+import SyncHealthDashboard from "../../components/Admin/SyncHealthDashboard";
 
 // Yardımcı fonksiyonlar
 const formatDuration = (ms) => {
@@ -51,6 +52,10 @@ export default function AdminMicro() {
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("info"); // success | danger | info | warning
   const [loading, setLoading] = useState(false);
+  const [duplicateSummary, setDuplicateSummary] = useState({
+    totalGroups: 0,
+    groups: [],
+  });
 
   // Aktif sekme: 'overview' | 'stokListesi' | 'bulkFetch' | 'settings'
   const [activeTab, setActiveTab] = useState("overview");
@@ -175,6 +180,23 @@ export default function AdminMicro() {
       setLoading(false);
     }
   };
+
+  const loadDuplicateSummary = useCallback(async () => {
+    try {
+      const result = await ProductService.getDuplicateGroups();
+      setDuplicateSummary({
+        totalGroups: Number(result?.totalGroups || 0),
+        groups: Array.isArray(result?.groups) ? result.groups : [],
+      });
+    } catch (err) {
+      console.error("Mükerrer ürün özeti alınamadı:", err);
+      setDuplicateSummary({ totalGroups: 0, groups: [] });
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDuplicateSummary();
+  }, [loadDuplicateSummary]);
 
   // ============================================================================
   // Mikro API Bağlantı Testi
@@ -324,7 +346,7 @@ export default function AdminMicro() {
       const res = await MicroService.syncProducts();
       setMessage(res?.message || "Ürünler senkronize edildi");
       setMessageType("success");
-      await fetchProducts();
+      await Promise.all([fetchProducts(), loadDuplicateSummary()]);
     } catch (err) {
       setMessage(err.message || "Ürün senkronizasyonu başarısız");
       setMessageType("danger");
@@ -773,7 +795,7 @@ export default function AdminMicro() {
         }));
 
         setMessage(
-          `SQL sayfa ${currentPage}/${Math.max(1, totalPages)} yüklendi. (${formatNumber(totalCount)} toplam ürün)`,
+          `Ürünler sayfa ${currentPage}/${Math.max(1, totalPages)} olarak yüklendi. (${formatNumber(totalCount)} toplam ürün)`,
         );
         setMessageType("success");
       } catch (error) {
@@ -824,13 +846,13 @@ export default function AdminMicro() {
       estimatedRemainingMs: 0,
     }));
 
-    setMessage("Mikro ERP'den ürünler çekiliyor...");
+    setMessage("Mikrodan ürünler çekiliyor...");
     setMessageType("info");
 
     try {
       // SSE bağlantısı oluştur
       const apiUrl = process.env.REACT_APP_API_URL || "";
-      const sseUrl = `${apiUrl}/api/admin/micro/cache/sync-stream?fiyatListesiNo=${bulkFetchConfig.fiyatListesiNo}&depoNo=${bulkFetchConfig.depoNo}&syncMode=full`;
+      const sseUrl = `${apiUrl}/api/admin/micro/cache/sync-stream?fiyatListesiNo=${bulkFetchConfig.fiyatListesiNo}&depoNo=${bulkFetchConfig.depoNo}&syncMode=${encodeURIComponent(bulkFetchConfig.syncMode || "newOnly")}`;
 
       const eventSource = new EventSource(sseUrl, { withCredentials: true });
       bulkFetchAbortRef.current = { abort: () => eventSource.close() };
@@ -883,8 +905,9 @@ export default function AdminMicro() {
                   `Değişmeyen: ${data.unchangedProducts}. Süre: ${formatDuration(elapsedMs)}`,
               );
               setMessageType("success");
+              loadDuplicateSummary();
 
-              // SQL tabanlı ilk sayfayı yükle
+              // Senkronizasyon tamamlandıktan sonra ilk liste sayfasını getir
               loadBulkSqlPage(1, { syncFirst: false });
             } else {
               setMessage(`❌ Hata: ${data.message}`);
@@ -926,142 +949,17 @@ export default function AdminMicro() {
       setMessage(error.message || "İşlem başarısız");
       setMessageType("danger");
     }
-  }, [bulkFetchConfig, bulkFetchState.isRunning, loadBulkSqlPage]);
-
-  // Eski startBulkFetch'i güncelle - tüm sayfaları sıralı çeker
-  const startBulkFetch = useCallback(async () => {
-    if (bulkFetchState.isRunning) return;
-
-    const startedAt = Date.now();
-    const pageSize = Number(bulkFetchPagination.pageSize || 50);
-
-    setBulkFetchState((prev) => ({
-      ...prev,
-      isRunning: true,
-      isComplete: false,
-      progress: 0,
-      currentPage: 0,
-      totalPages: 0,
-      fetchedCount: 0,
-      totalCount: 0,
-      error: null,
-      elapsedMs: 0,
-      estimatedRemainingMs: 0,
-    }));
-
-    setMessage("SQL'den tüm sayfalar yükleniyor...");
-    setMessageType("info");
-
-    let allProducts = [];
-    let page = 1;
-    let totalPages = 1;
-    let totalCount = 0;
-
-    try {
-      // İlk sayfayı çek, toplam sayfa sayısını öğren
-      while (page <= totalPages) {
-        const response = await MicroService.getStokListesi({
-          sayfa: page,
-          sayfaBuyuklugu: pageSize,
-          depoNo: bulkFetchConfig.depoNo,
-          fiyatListesiNo: bulkFetchConfig.fiyatListesiNo || 1,
-          stokKod: bulkFetchFilters.stokKod || undefined,
-          grupKod:
-            bulkFetchFilters.grupKod || bulkFetchConfig.grupKod || undefined,
-          sadeceAktif: true,
-          sadeceStoklu:
-            bulkFetchFilters.stokDurumu === "stokta"
-              ? true
-              : bulkFetchFilters.stokDurumu === "stoksuz"
-                ? false
-                : undefined,
-        });
-
-        if (!response?.success) {
-          throw new Error(response?.message || "Ürünler getirilemedi");
-        }
-
-        const items = Array.isArray(response.data) ? response.data : [];
-
-        if (page === 1) {
-          totalPages = Number(response.toplamSayfa || response.totalPages || 1);
-          totalCount = Number(response.toplamKayit || response.totalCount || 0);
-        }
-
-        allProducts = [...allProducts, ...items];
-        const elapsedMs = Date.now() - startedAt;
-        const progress = Math.min(
-          100,
-          Math.round((page / Math.max(1, totalPages)) * 100),
-        );
-
-        setBulkFetchState((prev) => ({
-          ...prev,
-          progress,
-          currentPage: page,
-          totalPages,
-          fetchedCount: allProducts.length,
-          totalCount,
-          elapsedMs,
-          estimatedRemainingMs:
-            page < totalPages ? (elapsedMs / page) * (totalPages - page) : 0,
-        }));
-
-        // Son sayfa veya boş yanıt → dur
-        if (items.length === 0 || page >= totalPages) break;
-        page++;
-      }
-
-      const elapsedMs = Date.now() - startedAt;
-
-      // Son sayfa ürünlerini göster, state'i tamamlandı olarak işaretle
-      setBulkFetchProducts(allProducts.slice(-pageSize));
-      setBulkFetchPagination((prev) => ({
-        ...prev,
-        currentPage: totalPages,
-        pageSize,
-      }));
-
-      setBulkFetchState((prev) => ({
-        ...prev,
-        isRunning: false,
-        isComplete: true,
-        progress: 100,
-        currentPage: totalPages,
-        totalPages,
-        fetchedCount: allProducts.length,
-        totalCount,
-        elapsedMs,
-        estimatedRemainingMs: 0,
-        error: null,
-        stats: {
-          totalRequests: totalPages,
-          successfulRequests: totalPages,
-          failedRequests: 0,
-          retryCount: 0,
-          avgResponseTimeMs: Math.round(elapsedMs / Math.max(1, totalPages)),
-        },
-      }));
-
-      setMessage(
-        `✅ Tüm sayfalar yüklendi. ${formatNumber(allProducts.length)} ürün çekildi. Süre: ${formatDuration(elapsedMs)}`,
-      );
-      setMessageType("success");
-    } catch (error) {
-      setBulkFetchState((prev) => ({
-        ...prev,
-        isRunning: false,
-        error: error.message || "İşlem başarısız",
-      }));
-      setMessage(error.message || "İşlem başarısız");
-      setMessageType("danger");
-    }
   }, [
     bulkFetchConfig,
-    bulkFetchFilters,
-    bulkFetchPagination.pageSize,
     bulkFetchState.isRunning,
+    loadBulkSqlPage,
+    loadDuplicateSummary,
   ]);
+
+  // Tek butonla aynı akışı korumak için legacy aksiyonu streaming sync'e yönlendir.
+  const startBulkFetch = useCallback(async () => {
+    await startStreamingSync();
+  }, [startStreamingSync]);
 
   // İptal fonksiyonu
   const cancelBulkFetch = useCallback(() => {
@@ -1099,16 +997,16 @@ export default function AdminMicro() {
     setBulkFetchPagination({ currentPage: 1, pageSize: 50 });
   }, [cancelBulkFetch]);
 
-  // CSV Export fonksiyonu - TÜM ürünleri SQL'den sayfa sayfa çeker ve indirir
+  // CSV Export fonksiyonu - tüm ürünleri sayfa sayfa çeker ve indirir
   const exportBulkFetchToCSV = useCallback(async () => {
     // Ürün yoksa uyar
     if (bulkFetchState.totalCount === 0 && bulkFetchProducts.length === 0) {
-      setMessage("Export edilecek ürün yok! Önce ürünleri çekin.");
+      setMessage("CSV export için ürün bulunamadı. Önce Mikrodan ürünleri çekin.");
       setMessageType("warning");
       return;
     }
 
-    setMessage("Tüm ürünler SQL'den çekiliyor, lütfen bekleyin...");
+    setMessage("CSV icin urunler hazırlanıyor, lütfen bekleyin...");
     setMessageType("info");
 
     try {
@@ -1505,6 +1403,25 @@ export default function AdminMicro() {
             className="btn-close"
             onClick={() => setMessage("")}
           ></button>
+        </div>
+      )}
+      {duplicateSummary.totalGroups > 0 && (
+        <div className="alert alert-danger py-2" role="alert">
+          <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2">
+            <div>
+              <strong>
+                <i className="fas fa-clone me-2"></i>
+                Mükerrer ürün uyarısı
+              </strong>
+              <div className="small mt-1">
+                {duplicateSummary.totalGroups} mükerrer ürün grubu tespit edildi.
+                Admin ürün ekranından pasife alma işlemini kontrol edin.
+              </div>
+            </div>
+            <span className="badge bg-light text-danger">
+              {duplicateSummary.totalGroups} grup
+            </span>
+          </div>
         </div>
       )}
 
@@ -1981,7 +1898,7 @@ export default function AdminMicro() {
                         <option value={500}>500 ürün/sayfa</option>
                       </select>
                       <small className="text-muted">
-                        Her sayfa geçişinde SQL'den okunacak ürün sayısı
+                        Her sayfada listelenecek ürün adedi
                       </small>
                     </div>
                     <div className="col-6">
@@ -2007,7 +1924,7 @@ export default function AdminMicro() {
                         </option>
                       </select>
                       <small className="text-muted">
-                        Varsayılan: yeni ürün yoksa ERP'ye toplu çekim yapma
+                        Son senkronizasyondan sonra eklenen veya değişen ürünleri çeker
                       </small>
                     </div>
 
@@ -2084,11 +2001,9 @@ export default function AdminMicro() {
                 <i className="fas fa-info-circle me-2"></i>
                 <strong>Nasıl Çalışır?</strong>
                 <ul className="mb-0 mt-1 ps-3">
-                  <li>İlk adımda ürünler cache'e senkronize edilir</li>
-                  <li>
-                    Sonrasında sadece açtığın sayfa SQL kaynağından yüklenir
-                  </li>
-                  <li>Yeni ürün yoksa tekrar toplu ERP çekimi yapılmaz</li>
+                  <li>İlk adımda ürünler Mikrodan yerel cache'e senkronize edilir</li>
+                  <li>Sonrasında sadece açtığınız sayfa hızlıca listelenir</li>
+                  <li>Yeni ürün yoksa gereksiz tam senkron tekrar çalışmaz</li>
                   <li>6000+ ürün listesi daha hızlı ve stabil açılır</li>
                 </ul>
               </div>
@@ -2096,28 +2011,16 @@ export default function AdminMicro() {
               {/* Aksiyon Butonları */}
               <div className="d-flex gap-2 flex-wrap">
                 {!bulkFetchState.isRunning && !bulkFetchState.isComplete && (
-                  <>
-                    {/* SQL'den yükle (hızlı) */}
-                    <button
-                      className="btn btn-outline-primary fw-semibold"
-                      onClick={startBulkFetch}
-                    >
-                      <i className="fas fa-database me-2"></i>
-                      SQL'den Yükle
-                    </button>
-
-                    {/* ERP'den çek (streaming ile) */}
-                    <button
-                      className="btn text-white fw-semibold"
-                      style={{
-                        background: "linear-gradient(135deg, #10b981, #059669)",
-                      }}
-                      onClick={startStreamingSync}
-                    >
-                      <i className="fas fa-cloud-download-alt me-2"></i>
-                      ERP'den Tüm Ürünleri Çek
-                    </button>
-                  </>
+                  <button
+                    className="btn text-white fw-semibold"
+                    style={{
+                      background: "linear-gradient(135deg, #10b981, #059669)",
+                    }}
+                    onClick={startBulkFetch}
+                  >
+                    <i className="fas fa-cloud-download-alt me-2"></i>
+                    Mikrodan Ürünleri Çek
+                  </button>
                 )}
 
                 {bulkFetchState.isRunning && (
@@ -2581,7 +2484,7 @@ export default function AdminMicro() {
                               >
                                 <i className="fas fa-inbox fa-3x mb-3 d-block opacity-50"></i>
                                 {bulkFetchProducts.length === 0
-                                  ? "Henüz ürün çekilmedi. Yukarıdan 'Toplu Çekmeyi Başlat' butonuna tıklayın."
+                                  ? "Henüz ürün çekilmedi. Yukarıdan 'Mikrodan Ürünleri Çek' butonuna tıklayın."
                                   : "Filtrelere uygun ürün bulunamadı."}
                               </td>
                             </tr>

@@ -22,10 +22,7 @@ Bu dosya, Mikro API's base URL'ini VPN sunucusuna işaret etmektedir:
 ## 🚀 2. Uygulamayı VPN Test Modunda Başlatma
 
 ### **Windows (PowerShell)**
-```powershell
-$env:ASPNETCORE_ENVIRONMENT = "VpnTest"
-dotnet run --project src/ECommerce.API/ECommerce.API.csproj
-```
+
 
 ### **Linux/Mac (Bash)**
 ```bash

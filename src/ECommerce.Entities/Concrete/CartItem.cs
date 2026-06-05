@@ -33,7 +33,7 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Sepetteki miktar
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
 
         /// <summary>
         /// Misafir kullanıcı token'ı

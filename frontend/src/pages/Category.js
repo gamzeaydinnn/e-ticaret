@@ -1,6 +1,6 @@
 // Kategoriye göre ürün listeleme (mevcut mimariye uygun)
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
 import categoryServiceReal, {
@@ -27,10 +27,19 @@ const createSlug = (name) => {
 
 export default function Category() {
   const { slug: rawSlug } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   // GÜVENLİK: URL parametresini sanitize et
   const slug = useMemo(
     () => normalizeCategorySlug(sanitizeUrlParam(rawSlug)),
     [rawSlug],
+  );
+  const currentPage = Math.max(
+    1,
+    parseInt(searchParams.get("page") || "1", 10) || 1,
+  );
+  const pageSize = Math.max(
+    1,
+    parseInt(searchParams.get("size") || "25", 10) || 25,
   );
 
   const [category, setCategory] = useState(null);
@@ -94,6 +103,27 @@ export default function Category() {
   useEffect(() => {
     loadCategory();
   }, [loadCategory]);
+
+  const handlePaginationChange = useCallback(
+    ({ page, pageSize: nextPageSize }) => {
+      const params = new URLSearchParams(searchParams);
+
+      if (page > 1) {
+        params.set("page", String(page));
+      } else {
+        params.delete("page");
+      }
+
+      if (nextPageSize && nextPageSize !== 25) {
+        params.set("size", String(nextPageSize));
+      } else {
+        params.delete("size");
+      }
+
+      setSearchParams(params, { replace: false });
+    },
+    [searchParams, setSearchParams],
+  );
 
   // Subscribe to category changes
   useEffect(() => {
@@ -172,7 +202,16 @@ export default function Category() {
       </div>
 
       {/* Ürün listesi — grid modda (satır-sütun) */}
-      {category && <ProductGrid categoryId={category.id} showTitle={false} displayMode="grid" />}
+      {category && (
+        <ProductGrid
+          categoryId={category.id}
+          showTitle={false}
+          displayMode="grid"
+          initialPage={currentPage}
+          initialPageSize={pageSize}
+          onPaginationChange={handlePaginationChange}
+        />
+      )}
 
       {!category && !loading && !error && (
         <div className="text-muted">Kategori bulunamadı.</div>

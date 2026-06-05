@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.HomeBlock;
+using ECommerce.Core.DTOs;
 
 namespace ECommerce.Business.Services.Interfaces
 {
@@ -31,6 +32,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// Tüm ürünleri içerir (MaxProductCount sınırı yok)
         /// </summary>
         Task<HomeProductBlockDto?> GetBlockBySlugAsync(string slug);
+        Task<PagedResult<HomeBlockProductItemDto>?> GetBlockBySlugPagedAsync(string slug, int page, int size);
 
         #endregion
 

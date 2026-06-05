@@ -91,7 +91,7 @@ namespace ECommerce.Business.Services.Managers
         /// Kayıtlı kullanıcının sepet öğesinin miktarını günceller
         /// Miktar 0 veya altına düşerse öğe silinir
         /// </summary>
-        public async Task UpdateCartItemAsync(int userId, int cartItemId, int quantity)
+        public async Task UpdateCartItemAsync(int userId, int cartItemId, decimal quantity)
         {
             var item = await _cartRepository.GetByIdAsync(cartItemId);
             
@@ -229,7 +229,7 @@ namespace ECommerce.Business.Services.Managers
         /// ProductId + VariantId ile benzersiz öğe bulunur
         /// </summary>
         public async Task UpdateCartItemByTokenAsync(
-            string cartToken, int productId, int quantity, int? variantId = null)
+            string cartToken, int productId, decimal quantity, int? variantId = null)
         {
             if (string.IsNullOrWhiteSpace(cartToken))
                 return;

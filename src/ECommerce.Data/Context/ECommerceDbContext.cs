@@ -189,6 +189,12 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<CartSetting> CartSettings { get; set; }
 
+        /// <summary>
+        /// Ürün override varsayılanlarını tutar.
+        /// Admin panelinden yönetilir, singleton pattern (tek satır).
+        /// </summary>
+        public virtual DbSet<ProductAdminOverrideSetting> ProductAdminOverrideSettings { get; set; }
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // ANA SAYFA ÜRÜN BLOK SİSTEMİ
         // Admin panelinden yönetilebilir ürün blokları (İndirimli, Süt Ürünleri vb.)
@@ -288,6 +294,8 @@ namespace ECommerce.Data.Context
                       .OnDelete(DeleteBehavior.Restrict);
 
                 entity.HasIndex(e => e.SKU).IsUnique();
+            entity.HasIndex(e => new { e.CategoryId, e.IsActive, e.Name })
+                .HasDatabaseName("IX_Products_CategoryId_IsActive_Name");
             });
 
             // Product-Discount Many-to-Many
@@ -302,6 +310,7 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.ClientOrderId)
                       .IsRequired();
                 entity.Property(e => e.Quantity)
+                    .HasPrecision(18, 2)
                       .IsRequired();
                 entity.Property(e => e.CreatedAt)
                       .HasColumnType("datetime2");
@@ -433,6 +442,7 @@ namespace ECommerce.Data.Context
             {
                 entity.ToTable("CartItems");
                 entity.HasKey(c => c.Id);
+                entity.Property(c => c.Quantity).HasPrecision(18, 2);
 
                 entity.HasOne(c => c.User)
                       .WithMany(u => u.CartItems)
@@ -455,6 +465,14 @@ namespace ECommerce.Data.Context
 
                 // Aynı kullanıcı, aynı ürün ve aynı varyant tek satır olabilir
                 entity.HasIndex(c => new { c.UserId, c.ProductId, c.ProductVariantId }).IsUnique();
+            });
+
+            modelBuilder.Entity<InventoryLog>(entity =>
+            {
+                entity.ToTable("InventoryLogs");
+                entity.Property(i => i.Quantity).HasPrecision(18, 2);
+                entity.Property(i => i.OldStock).HasPrecision(18, 2);
+                entity.Property(i => i.NewStock).HasPrecision(18, 2);
             });
 
             // ProductImage Configuration

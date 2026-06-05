@@ -1,10 +1,24 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { MemoryRouter } from "react-router-dom";
 import ProductGrid from "../components/ProductGrid";
 import { AuthProvider } from "../contexts/AuthContext";
+import { CartProvider } from "../contexts/CartContext";
+import { CompareProvider } from "../contexts/CompareContext";
+import { FavoriteProvider } from "../contexts/FavoriteContext";
 
 const renderWithAuth = (ui) => {
-  return render(<AuthProvider>{ui}</AuthProvider>);
+  return render(
+    <MemoryRouter>
+      <AuthProvider>
+        <CompareProvider>
+          <CartProvider>
+            <FavoriteProvider>{ui}</FavoriteProvider>
+          </CartProvider>
+        </CompareProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  );
 };
 
 const mockProducts = [
@@ -59,7 +73,7 @@ describe("ProductGrid Component", () => {
     };
 
     renderWithAuth(
-      <ProductGrid products={[lowStockProduct, outOfStockProduct]} />
+      <ProductGrid products={[lowStockProduct, outOfStockProduct]} />,
     );
 
     expect(screen.getByText("Az Stok")).toBeInTheDocument();
