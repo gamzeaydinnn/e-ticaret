@@ -449,8 +449,9 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.ISmsRateLimitRepository, EC
 
 // Email + FileStorage services
 builder.Services.AddSingleton<EmailSender>();
+var uploadsRootPath = UploadsPathResolver.Resolve(builder.Configuration, builder.Environment);
 builder.Services.AddSingleton<IFileStorage>(sp =>
-    new LocalFileStorage(builder.Environment.ContentRootPath));
+    new LocalFileStorage(uploadsRootPath));
 
 // CSV/Excel import sırasında harici URL'lerden görsel indirmek için kullanılan HttpClient
 builder.Services.AddHttpClient("ImageDownload", client =>
@@ -518,6 +519,7 @@ builder.Services.AddScoped<IPaymentService, PaymentManager>();
 builder.Services.AddScoped<IExtendedPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
 builder.Services.AddScoped<ICartSettingsService, CartSettingsManager>();
+builder.Services.AddScoped<IProductAdminOverrideSettingsService, ProductAdminOverrideSettingsManager>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();
 builder.Services.AddScoped<UserManager>();
@@ -1078,7 +1080,7 @@ app.UseCors("Default");
 
 // 📁 Uploads klasörü için static files desteği
 // Banner/poster resimleri /uploads/... path'inden servis edilir
-var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "uploads");
+var uploadsPath = uploadsRootPath;
 if (!Directory.Exists(uploadsPath))
 {
     Directory.CreateDirectory(uploadsPath);

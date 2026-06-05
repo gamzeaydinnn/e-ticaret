@@ -42,6 +42,21 @@ const getBackendBaseURL = () => {
   return window.location.origin;
 };
 
+const parseRequiredCategoryId = (value) => {
+  const categoryId = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    throw new Error("Geçerli bir kategori seçilmelidir");
+  }
+
+  return categoryId;
+};
+
+const normalizeNullableBoolean = (value) => {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+};
+
 // ============================================================
 // PRODUCT MAPPER
 // ============================================================
@@ -109,11 +124,18 @@ const mapProduct = (p = {}) => {
     stock,
     stockQuantity: stock,
     description: p.description || "",
+    barcode: p.barcode || p.barkod || "",
     sku: p.sku || p.SKU || "",
     unitWeightGrams: p.unitWeightGrams || p.unit_weight_grams || 0,
     isActive: p.isActive !== false,
     createdAt: p.createdAt || p.created_at || null,
     updatedAt: p.updatedAt || p.updated_at || null,
+    adminOverrideName: normalizeNullableBoolean(p.adminOverrideName),
+    adminOverridePrice: normalizeNullableBoolean(p.adminOverridePrice),
+    adminOverrideCategory: normalizeNullableBoolean(p.adminOverrideCategory),
+    effectiveAdminOverrideName: p.effectiveAdminOverrideName === true,
+    effectiveAdminOverridePrice: p.effectiveAdminOverridePrice === true,
+    effectiveAdminOverrideCategory: p.effectiveAdminOverrideCategory === true,
   };
 };
 
@@ -154,6 +176,43 @@ const extractItems = (response) => {
   return [];
 };
 
+const extractPagedData = (response, pageSize = 25) => {
+  if (Array.isArray(response)) {
+    return {
+      items: response,
+      total: response.length,
+      page: 1,
+      pageSize,
+      totalPages: 1,
+    };
+  }
+
+  const payload =
+    response?.data && typeof response.data === "object"
+      ? response.data
+      : response;
+
+  const items = Array.isArray(payload?.items)
+    ? payload.items
+    : Array.isArray(payload)
+      ? payload
+      : [];
+  const total = payload?.total ?? payload?.totalCount ?? items.length;
+  const take = payload?.take ?? payload?.pageSize ?? pageSize;
+  const skip = payload?.skip ?? 0;
+  const page = payload?.page ?? Math.floor(skip / Math.max(take, 1)) + 1;
+  const totalPages =
+    payload?.totalPages ?? Math.max(1, Math.ceil(total / Math.max(take, 1)));
+
+  return {
+    items,
+    total,
+    page,
+    pageSize: take,
+    totalPages,
+  };
+};
+
 /**
  * Subscriber'lara değişiklik bildirimi gönderir
  * @param {string} action - CRUD işlem tipi (create, update, delete)
@@ -167,6 +226,22 @@ const notifySubscribers = (action, data) => {
       console.error("Subscriber notification error:", err);
     }
   });
+};
+
+export const getProductDetailPath = (product = {}) => {
+  if (product?.id && product.id > 0) {
+    return `/product/${product.slug || product.id}`;
+  }
+
+  if (product?.slug) {
+    return `/product/${product.slug}`;
+  }
+
+  if (product?.sku) {
+    return `/product/sku/${encodeURIComponent(product.sku)}`;
+  }
+
+  return `/product/${product?.id || ""}`;
 };
 
 // ============================================================
@@ -191,9 +266,24 @@ export const ProductService = {
       const response = await api.get(endpoint);
       const items = extractItems(response);
 
-      // Sadece aktif ürünleri filtrele ve map'le
+      // Ana sayfada sadece aktif, stokta olan ve satilabilir fiyatli urunleri göster.
       return items
         .filter((p) => p.isActive !== false)
+        .filter((p) => {
+          const stock = parseInt(p.stock ?? p.stockQuantity ?? p.stock_quantity ?? 0, 10) || 0;
+          return stock > 0;
+        })
+        .filter((p) => {
+          const basePrice = parseFloat(p.price ?? p.Price ?? 0) || 0;
+          const rawSpecialPrice = p.specialPrice ?? p.SpecialPrice ?? p.discountedPrice ?? p.discountPrice;
+          const specialPrice = rawSpecialPrice === undefined || rawSpecialPrice === null
+            ? null
+            : parseFloat(rawSpecialPrice) || 0;
+          const displayPrice = specialPrice !== null && specialPrice > 0 && specialPrice < basePrice
+            ? specialPrice
+            : basePrice;
+          return displayPrice > 0;
+        })
         .map(mapProduct)
         .filter((p) => p !== null); // null değerleri temizle
     } catch (err) {
@@ -264,26 +354,73 @@ export const ProductService = {
    * @param {number} categoryId - Kategori ID
    * @returns {Promise<Array>} Ürün listesi
    */
-  getByCategory: async (categoryId) => {
+  getByCategory: async (categoryId, pageOrOptions = null, sizeArg = null) => {
     try {
       if (!categoryId) {
         console.warn("ProductService.getByCategory: categoryId gerekli");
         return [];
       }
 
-      const response = await api.get(`/api/products?categoryId=${categoryId}`);
-      const items = extractItems(response);
+      const hasPaging =
+        typeof pageOrOptions === "number" ||
+        (pageOrOptions && typeof pageOrOptions === "object");
 
-      return items
-        .filter((p) => p.isActive !== false)
-        .map(mapProduct)
-        .filter((p) => p !== null);
+      if (!hasPaging) {
+        const response = await api.get(
+          `/api/products?categoryId=${categoryId}`,
+        );
+        const items = extractItems(response);
+
+        return items
+          .filter((p) => p.isActive !== false)
+          .map(mapProduct)
+          .filter((p) => p !== null);
+      }
+
+      const options =
+        typeof pageOrOptions === "object"
+          ? pageOrOptions
+          : { page: pageOrOptions, size: sizeArg };
+
+      const page = Math.max(1, parseInt(options?.page, 10) || 1);
+      const size = Math.max(1, parseInt(options?.size, 10) || 25);
+      const sort = options?.sort || "name";
+      const direction = options?.direction || "asc";
+
+      const params = new URLSearchParams({
+        page: String(page),
+        size: String(size),
+        sort,
+        direction,
+      });
+
+      if (typeof options?.inStock === "boolean") {
+        params.set("inStock", String(options.inStock));
+      }
+
+      const response = await api.get(
+        `/api/products/category/${categoryId}/paged?${params.toString()}`,
+      );
+      const paged = extractPagedData(response, size);
+
+      return {
+        items: paged.items
+          .filter((p) => p.isActive !== false)
+          .map(mapProduct)
+          .filter((p) => p !== null),
+        total: paged.total,
+        page: paged.page,
+        pageSize: paged.pageSize,
+        totalPages: paged.totalPages,
+      };
     } catch (err) {
       console.error(
         `❌ Kategori ürünleri yüklenemedi (ID: ${categoryId}):`,
         err,
       );
-      return [];
+      return pageOrOptions
+        ? { items: [], total: 0, page: 1, pageSize: 25, totalPages: 1 }
+        : [];
     }
   },
 
@@ -296,7 +433,7 @@ export const ProductService = {
    */
   search: async (query, page = 1, size = 20) => {
     try {
-      if (!query || query.trim().length < 2) {
+      if (!query || !query.trim()) {
         return [];
       }
 
@@ -356,12 +493,27 @@ export const ProductService = {
    */
   getAll: async () => {
     try {
-      // Admin endpoint — Mikro ERP SQL tabanlı, sadece web aktif ürünler
-      const response = await api.get(
-        "/api/products/admin/all?page=1&size=5000",
-      );
-      const items = extractItems(response);
-      return items.map(mapProduct).filter((p) => p !== null);
+      const pageSize = 200;
+      let currentPage = 1;
+      let totalPages = 1;
+      const collectedItems = [];
+
+      do {
+        const response = await api.get(
+          `/api/products/admin/all?page=${currentPage}&size=${pageSize}`,
+        );
+        const paged = extractPagedData(response, pageSize);
+
+        collectedItems.push(...(paged.items || []));
+        totalPages = Math.max(1, Number(paged.totalPages) || 1);
+        currentPage += 1;
+
+        if ((paged.items || []).length === 0) {
+          break;
+        }
+      } while (currentPage <= totalPages);
+
+      return collectedItems.map(mapProduct).filter((p) => p !== null);
     } catch (err) {
       console.error("⚠️ Admin endpoint başarısız, fallback deneniyor:", err);
 
@@ -377,6 +529,55 @@ export const ProductService = {
     }
   },
 
+  getAdminPage: async ({
+    page = 1,
+    size = 24,
+    sku = "",
+    name = "",
+    status = "all",
+    stockStatus = "all",
+  } = {}) => {
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        size: String(size),
+      });
+
+      if (sku.trim()) {
+        params.set("sku", sku.trim());
+      }
+
+      if (name.trim()) {
+        params.set("name", name.trim());
+      }
+
+      if (status && status !== "all") {
+        params.set("status", status);
+      }
+
+      if (stockStatus && stockStatus !== "all") {
+        params.set("stockStatus", stockStatus);
+      }
+
+      const response = await api.get(`/api/products/admin/all?${params.toString()}`);
+      const paged = extractPagedData(response, size);
+
+      return {
+        ...paged,
+        items: paged.items.map(mapProduct).filter((product) => product !== null),
+      };
+    } catch (err) {
+      console.error("❌ Admin ürün sayfası yüklenemedi:", err);
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize: size,
+        totalPages: 1,
+      };
+    }
+  },
+
   /**
    * Yeni ürün oluşturur
    * @param {object} formData - Ürün verileri
@@ -384,18 +585,23 @@ export const ProductService = {
    */
   createAdmin: async (formData) => {
     try {
+      const categoryId = parseRequiredCategoryId(formData.categoryId);
+
       // Form verilerini API formatına dönüştür
       const payload = {
         name: formData.name?.trim() || "",
         description: formData.description?.trim() || "",
         price: parseFloat(formData.price) || 0,
         stockQuantity: parseInt(formData.stockQuantity || formData.stock) || 0,
-        categoryId: parseInt(formData.categoryId) || 1,
+        categoryId,
         imageUrl: formData.imageUrl?.trim() || null,
         specialPrice: formData.specialPrice
           ? parseFloat(formData.specialPrice)
           : null,
         isActive: formData.isActive !== false,
+        adminOverrideName: normalizeNullableBoolean(formData.adminOverrideName),
+        adminOverridePrice: normalizeNullableBoolean(formData.adminOverridePrice),
+        adminOverrideCategory: normalizeNullableBoolean(formData.adminOverrideCategory),
       };
 
       const response = await api.post("/api/products", payload);
@@ -420,18 +626,23 @@ export const ProductService = {
    */
   updateAdmin: async (id, formData) => {
     try {
+      const categoryId = parseRequiredCategoryId(formData.categoryId);
+
       // Form verilerini API formatına dönüştür
       const payload = {
         name: formData.name?.trim() || "",
         description: formData.description?.trim() || "",
         price: parseFloat(formData.price) || 0,
         stockQuantity: parseInt(formData.stockQuantity || formData.stock) || 0,
-        categoryId: parseInt(formData.categoryId) || 1,
+        categoryId,
         imageUrl: formData.imageUrl?.trim() || null,
         specialPrice: formData.specialPrice
           ? parseFloat(formData.specialPrice)
           : null,
         isActive: formData.isActive !== false,
+        adminOverrideName: normalizeNullableBoolean(formData.adminOverrideName),
+        adminOverridePrice: normalizeNullableBoolean(formData.adminOverridePrice),
+        adminOverrideCategory: normalizeNullableBoolean(formData.adminOverrideCategory),
       };
 
       let response;
@@ -481,6 +692,90 @@ export const ProductService = {
       notifySubscribers("delete", { id });
     } catch (err) {
       console.error(`❌ Ürün silme hatası (ID: ${id}):`, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Mükerrer ürün gruplarını getirir.
+   * Backend: GET /api/products/admin/duplicates
+   */
+  getDuplicateGroups: async () => {
+    try {
+      const response = await api.get("/api/products/admin/duplicates");
+      const payload = response?.data || response;
+      const groups = Array.isArray(payload?.groups) ? payload.groups : [];
+
+      return {
+        totalGroups: Number(payload?.totalGroups || groups.length || 0),
+        groups: groups.map((group) => ({
+          ...group,
+          products: Array.isArray(group?.products)
+            ? group.products
+                .map((product) => mapProduct(product))
+                .filter((product) => product !== null)
+            : [],
+        })),
+      };
+    } catch (err) {
+      console.error("❌ Mükerrer ürün grupları alınamadı:", err);
+      return { totalGroups: 0, groups: [] };
+    }
+  },
+
+  getAdminOverrideSettings: async () => {
+    const response = await api.get("/api/products/admin/override-settings");
+    const payload = response?.data || response;
+
+    return {
+      id: payload?.id || 0,
+      defaultAdminOverrideName: payload?.defaultAdminOverrideName === true,
+      defaultAdminOverridePrice: payload?.defaultAdminOverridePrice === true,
+      defaultAdminOverrideCategory: payload?.defaultAdminOverrideCategory === true,
+      updatedAt: payload?.updatedAt || null,
+      updatedByUserName: payload?.updatedByUserName || null,
+    };
+  },
+
+  updateAdminOverrideSettings: async (settings) => {
+    const payload = {
+      defaultAdminOverrideName:
+        settings?.defaultAdminOverrideName === true,
+      defaultAdminOverridePrice:
+        settings?.defaultAdminOverridePrice === true,
+      defaultAdminOverrideCategory:
+        settings?.defaultAdminOverrideCategory === true,
+    };
+
+    const response = await api.put("/api/products/admin/override-settings", payload);
+    const result = response?.data?.data || response?.data || response;
+
+    return {
+      id: result?.id || 0,
+      defaultAdminOverrideName: result?.defaultAdminOverrideName === true,
+      defaultAdminOverridePrice: result?.defaultAdminOverridePrice === true,
+      defaultAdminOverrideCategory: result?.defaultAdminOverrideCategory === true,
+      updatedAt: result?.updatedAt || null,
+      updatedByUserName: result?.updatedByUserName || null,
+    };
+  },
+
+  /**
+   * Ürünü silmeden pasife alır.
+   * Backend: PATCH /api/products/{id}/deactivate
+   */
+  deactivateAdmin: async (id) => {
+    try {
+      if (!id) {
+        throw new Error("Ürün ID gerekli");
+      }
+
+      const response = await api.patch(`/api/products/${id}/deactivate`);
+      const result = response?.data || response;
+      notifySubscribers("update", { id, isActive: false, ...result });
+      return result;
+    } catch (err) {
+      console.error(`❌ Ürün pasife alma hatası (ID: ${id}):`, err);
       throw err;
     }
   },

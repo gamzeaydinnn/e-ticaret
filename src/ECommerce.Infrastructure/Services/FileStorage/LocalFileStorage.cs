@@ -21,11 +21,10 @@ namespace ECommerce.Infrastructure.Services.FileStorage
         /// <summary>
         /// LocalFileStorage constructor
         /// </summary>
-        /// <param name="rootPath">Uygulamanın kök dizini (ContentRootPath)</param>
+        /// <param name="rootPath">Uploads klasörünün fiziksel kök dizini</param>
         public LocalFileStorage(string rootPath)
         {
-            // Ana uploads klasörü
-            _rootPath = Path.Combine(rootPath, "uploads");
+            _rootPath = Path.GetFullPath(rootPath);
             
             // uploads klasörünü oluştur (yoksa)
             EnsureDirectoryExists(_rootPath);

@@ -142,9 +142,23 @@ nano src/ECommerce.API/appsettings.Production.json
 ```bash
 cd /home/huseyinadm/ecommerce
 
+# Upload klasörünü release dizini dışında oluşturun
+sudo mkdir -p /srv/ecommerce/uploads
+sudo chown -R $USER:$USER /srv/ecommerce/uploads
+
+# İsterseniz path'i .env içinde override edin
+echo "UPLOADS_HOST_PATH=/srv/ecommerce/uploads" >> .env
+
 # Container'ları build edin ve başlatın
 docker-compose -f docker-compose.prod.yml up -d --build
 ```
+
+Notlar:
+
+- API container içinden görseller `/data/uploads` altında tutulur.
+- `docker-compose.prod.yml` bunu host üzerindeki `${UPLOADS_HOST_PATH}` klasörüne bağlar.
+- Bu klasör release dizini dışında olduğu için yeni deploy sırasında görseller silinmez.
+- `docker-compose down -v` komutu SQL volume'lerini silebilir; hosttaki upload klasörünü silmez.
 
 Bu işlem 10-15 dakika sürebilir. İşlemler:
 

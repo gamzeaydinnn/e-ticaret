@@ -80,6 +80,26 @@ namespace ECommerce.API.Controllers
             return Ok(block);
         }
 
+        [HttpGet("{slug}/products")]
+        [ProducesResponseType(typeof(ECommerce.Core.DTOs.PagedResult<HomeBlockProductItemDto>), 200)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> GetBlockProductsPaged(
+            string slug,
+            [FromQuery] int page = 1,
+            [FromQuery] int size = 24)
+        {
+            _logger.LogInformation("📄 Blok ürünleri sayfalı isteniyor: {Slug}, Page={Page}, Size={Size}", slug, page, size);
+
+            var pagedResult = await _homeBlockService.GetBlockBySlugPagedAsync(slug, page, size);
+            if (pagedResult == null)
+            {
+                _logger.LogWarning("⚠️ Sayfalı blok ürünleri için blok bulunamadı: {Slug}", slug);
+                return NotFound(new { message = $"'{slug}' bloğu bulunamadı" });
+            }
+
+            return Ok(pagedResult);
+        }
+
         /// <summary>
         /// Blok tipi önizlemesi - Admin için
         /// Belirli bir blok tipinin ürünlerini önizler

@@ -31,9 +31,9 @@ WORKDIR /app
 # Compiled app files
 COPY --from=build /app/publish .
 
-# ⚠️ NOT: uploads klasörü VOLUME ile mount edilecek (docker-compose.prod.yml)
-# COPY uploads yapmıyoruz çünkü volume mount bunu override eder
-# Görseller admin panel üzerinden yüklenecek ve host'taki ./uploads/ klasöründe saklanacak
+# ⚠️ NOT: uploads klasörü compose ile /data/uploads mount edilir
+# COPY uploads yapmıyoruz çünkü kalıcı görseller image içinde tutulmamalı
+# Production'da host üzerindeki release dışı klasör (örn. /srv/ecommerce/uploads) bağlanır
 # Bu sayede container yeniden başlatıldığında görseller kaybolmaz
 
 EXPOSE 5000

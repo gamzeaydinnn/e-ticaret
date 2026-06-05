@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using ECommerce.Core.DTOs;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.HomeBlock;
 using ECommerce.Core.Interfaces;
@@ -67,7 +68,7 @@ namespace ECommerce.Business.Services.Managers
                     var dto = MapToDto(block);
                     
                     // Blok tipine göre ürünleri doldur
-                    dto.Products = await GetProductsForBlockAsync(block);
+                    dto.Products = await GetProductsForBlockAsync(block, onlyInStock: true, onlyPositivePrice: true);
                     
                     result.Add(dto);
                 }
@@ -101,8 +102,8 @@ namespace ECommerce.Business.Services.Managers
 
                 var dto = MapToDto(block);
                 
-                // Tümünü Gör sayfası için tüm ürünleri getir (limit yok)
-                dto.Products = await GetProductsForBlockAsync(block, includeAll: true);
+                // Tümünü Gör sayfası: stokta olmayan ve fiyatı 0 olan ürünleri filtrele
+                dto.Products = await GetProductsForBlockAsync(block, includeAll: true, onlyInStock: true, onlyPositivePrice: true);
 
                 return dto;
             }
@@ -111,6 +112,26 @@ namespace ECommerce.Business.Services.Managers
                 _logger.LogError(ex, "❌ Blok getirilirken hata: {Slug}", slug);
                 throw;
             }
+        }
+
+        public async Task<PagedResult<HomeBlockProductItemDto>?> GetBlockBySlugPagedAsync(string slug, int page, int size)
+        {
+            page = page < 1 ? 1 : page;
+            size = size < 1 ? 1 : size;
+
+            var block = await GetBlockBySlugAsync(slug);
+            if (block == null)
+            {
+                return null;
+            }
+
+            var total = block.Products.Count;
+            var items = block.Products
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToList();
+
+            return new PagedResult<HomeBlockProductItemDto>(items, total, (page - 1) * size, size);
         }
 
         #endregion
@@ -135,7 +156,7 @@ namespace ECommerce.Business.Services.Managers
             if (block == null) return null;
 
             var dto = MapToDto(block);
-            dto.Products = await GetProductsForBlockAsync(block, includeAll: true);
+            dto.Products = await GetProductsForBlockAsync(block, includeAll: true, onlyInStock: false, onlyPositivePrice: false);
             
             return dto;
         }
@@ -432,7 +453,7 @@ namespace ECommerce.Business.Services.Managers
         /// Blok için ürünleri getirir - Blok tipine göre farklı kaynak kullanır
         /// </summary>
         private async Task<List<HomeBlockProductItemDto>> GetProductsForBlockAsync(
-            HomeProductBlock block, bool includeAll = false)
+            HomeProductBlock block, bool includeAll = false, bool onlyInStock = false, bool onlyPositivePrice = false)
         {
             var maxCount = includeAll ? int.MaxValue : block.MaxProductCount;
 
@@ -441,7 +462,12 @@ namespace ECommerce.Business.Services.Managers
                 case "manual":
                     // Manuel seçim - HomeBlockProduct tablosundan
                     return block.BlockProducts
-                        .Where(bp => bp.IsActive && bp.Product != null && bp.Product.IsActive)
+                        .Where(bp =>
+                            bp.IsActive &&
+                            bp.Product != null &&
+                            bp.Product.IsActive &&
+                            (!onlyInStock || bp.Product.StockQuantity > 0) &&
+                            (!onlyPositivePrice || HasPositiveDisplayPrice(bp.Product)))
                         .OrderBy(bp => bp.DisplayOrder)
                         .Take(maxCount)
                         .Select((bp, index) => MapProductToDto(bp.Product, index))
@@ -450,22 +476,22 @@ namespace ECommerce.Business.Services.Managers
                 case "category":
                     // Kategori bazlı
                     if (!block.CategoryId.HasValue) return new List<HomeBlockProductItemDto>();
-                    var categoryProducts = await GetProductsByTypeAsync("category", block.CategoryId, maxCount);
+                    var categoryProducts = await GetProductsByTypeAsync("category", block.CategoryId, maxCount, onlyInStock, onlyPositivePrice);
                     return categoryProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "discounted":
                     // İndirimli ürünler
-                    var discountedProducts = await GetProductsByTypeAsync("discounted", null, maxCount);
+                    var discountedProducts = await GetProductsByTypeAsync("discounted", null, maxCount, onlyInStock, onlyPositivePrice);
                     return discountedProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "newest":
                     // En yeni ürünler
-                    var newestProducts = await GetProductsByTypeAsync("newest", null, maxCount);
+                    var newestProducts = await GetProductsByTypeAsync("newest", null, maxCount, onlyInStock, onlyPositivePrice);
                     return newestProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "bestseller":
                     // En çok satanlar - başarılı siparişlerde satılan toplam adet bazlı
-                    var bestsellerProducts = await GetProductsByTypeAsync("bestseller", null, maxCount);
+                    var bestsellerProducts = await GetProductsByTypeAsync("bestseller", null, maxCount, onlyInStock, onlyPositivePrice);
                     return bestsellerProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 default:
@@ -477,11 +503,16 @@ namespace ECommerce.Business.Services.Managers
         /// <summary>
         /// Blok tipine göre ürünleri veritabanından çeker
         /// </summary>
-        private async Task<List<Product>> GetProductsByTypeAsync(string blockType, int? categoryId, int maxCount)
+        private async Task<List<Product>> GetProductsByTypeAsync(string blockType, int? categoryId, int maxCount, bool onlyInStock = false, bool onlyPositivePrice = false)
         {
             IQueryable<Product> query = _context.Products
                 .Include(p => p.Category)
                 .Where(p => p.IsActive);
+
+            if (onlyInStock)
+            {
+                query = query.Where(p => p.StockQuantity > 0);
+            }
 
             switch (blockType.ToLower())
             {
@@ -576,14 +607,39 @@ namespace ECommerce.Business.Services.Managers
                         orderedBestSellerProducts.AddRange(remainingProducts);
                     }
 
-                    return orderedBestSellerProducts;
+                    return onlyPositivePrice
+                        ? orderedBestSellerProducts.Where(HasPositiveDisplayPrice).Take(maxCount).ToList()
+                        : orderedBestSellerProducts;
 
                 default:
                     query = query.OrderBy(p => p.Name);
                     break;
             }
 
-            return await query.Take(maxCount).AsNoTracking().ToListAsync();
+            var products = await query.AsNoTracking().ToListAsync();
+
+            if (onlyPositivePrice)
+            {
+                products = products.Where(HasPositiveDisplayPrice).ToList();
+            }
+
+            return products.Take(maxCount).ToList();
+        }
+
+        private static bool HasPositiveDisplayPrice(Product product)
+        {
+            if (product == null)
+            {
+                return false;
+            }
+
+            var displayPrice = product.SpecialPrice.HasValue &&
+                               product.SpecialPrice.Value > 0 &&
+                               product.SpecialPrice.Value < product.Price
+                ? product.SpecialPrice.Value
+                : product.Price;
+
+            return displayPrice > 0;
         }
 
         /// <summary>

@@ -4,9 +4,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.API.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace ECommerce.API.Data
 {
@@ -29,6 +31,7 @@ namespace ECommerce.API.Data
             var context = serviceProvider.GetRequiredService<ECommerceDbContext>();
             var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
             var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
 
             try
             {
@@ -44,7 +47,7 @@ namespace ECommerce.API.Data
                 }
 
                 // Görsel dosyalarını kopyala (Docker'da başarısız olabilir, sorun değil)
-                CopyBannerImages(environment.ContentRootPath, logger);
+                CopyBannerImages(environment.ContentRootPath, UploadsPathResolver.Resolve(configuration, environment), logger);
 
                 logger.LogInformation("📝 BannerSeeder: Varsayılan banner'lar oluşturuluyor...");
                 Console.WriteLine("📝 BannerSeeder: Varsayılan banner'lar oluşturuluyor...");
@@ -76,6 +79,7 @@ namespace ECommerce.API.Data
             var context = serviceProvider.GetRequiredService<ECommerceDbContext>();
             var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
             var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+            var configuration = serviceProvider.GetRequiredService<IConfiguration>();
 
             try
             {
@@ -92,7 +96,7 @@ namespace ECommerce.API.Data
                 }
 
                 // Görsel dosyalarını kopyala
-                CopyBannerImages(environment.ContentRootPath, logger);
+                CopyBannerImages(environment.ContentRootPath, UploadsPathResolver.Resolve(configuration, environment), logger);
 
                 // Varsayılanları ekle
                 var banners = GetDefaultBanners();
@@ -116,14 +120,14 @@ namespace ECommerce.API.Data
         /// NEDEN: Seed data gerçek görselleri kullanabilmek için
         /// geliştirme ortamında frontend klasöründeki görselleri backend'e kopyalıyoruz
         /// 
-        /// Production'da bu görseller deployment sırasında zaten uploads klasörüne konulur
+        /// Production'da bu görseller konfigüre edilmiş kalıcı uploads klasörüne yazılır
         /// </summary>
-        private static void CopyBannerImages(string contentRootPath, ILogger logger)
+        private static void CopyBannerImages(string contentRootPath, string uploadsRootPath, ILogger logger)
         {
             try
             {
                 // Backend uploads/banners klasörü
-                var uploadsPath = Path.Combine(contentRootPath, "uploads", "banners");
+                var uploadsPath = Path.Combine(uploadsRootPath, "banners");
                 if (!Directory.Exists(uploadsPath))
                 {
                     Directory.CreateDirectory(uploadsPath);

@@ -2,19 +2,26 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Globalization;
 using ECommerce.Business.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using ECommerce.Core.Extensions;
+using ECommerce.Core.DTOs;
+using ECommerce.Core.DTOs.Micro;
 using ECommerce.Core.DTOs.ProductReview;
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.Constants;
 using ECommerce.Core.Interfaces;
+using ECommerce.Core.Interfaces.Mapping;
+using ECommerce.Core.Interfaces.Sync;
+using ECommerce.Core.Helpers;
 using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 
@@ -33,8 +40,60 @@ namespace ECommerce.API.Controllers
             ["sut-urunleri"] = "sut-ve-sut-urunleri",
             ["meyve-sebze"] = "meyve-ve-sebze",
             ["et-tavuk"] = "et-ve-et-urunleri",
-            ["et-tavuk-balik"] = "et-ve-et-urunleri"
+            ["et-tavuk-balik"] = "et-ve-et-urunleri",
+            ["dondurulmus-gida"] = "dondurma-ve-dondurulmus-gida",
+            ["dondurma-dondurulmus"] = "dondurma-ve-dondurulmus-gida"
         };
+
+        private static readonly Dictionary<string, string[]> ProductNameCategoryHints = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["temel-gida"] = new[] { "recel", "reçel", "pekmez", "marmelat", "bal", "tahin" },
+            ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "donmuş", "dondurulmus", "dondurulmuş", "superfresh", "super fresh" },
+            ["ev-ve-mutfak"] = new[] { "pisirme kagidi", "pişirme kağıdı", "kagit", "kağıt", "servis seti", "servis", "folyo" },
+            ["temizlik"] = new[] { "eldiven", "muayene" },
+            ["sut-ve-sut-urunleri"] = new[] { "nesquik" },
+        };
+
+        private static readonly HashSet<string> ProductHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "atistirmalik",
+            "temel-gida",
+            "sut-ve-sut-urunleri"
+        };
+
+        private const string FrozenStorefrontCategorySlug = "dondurma-ve-dondurulmus-gida";
+        private const string UncategorizedCategorySlug = "diger";
+
+        private sealed class MergedProductRow
+        {
+            public ProductListDto Product { get; init; } = new();
+            public string CategorySlug { get; init; } = string.Empty;
+            public DateTime CreatedAt { get; init; }
+            public bool IsVisible { get; init; } = true;
+        }
+
+        private sealed class DuplicateProductCandidate
+        {
+            public int Id { get; init; }
+            public string Name { get; init; } = string.Empty;
+            public string Description { get; init; } = string.Empty;
+            public string Sku { get; init; } = string.Empty;
+            public string Barcode { get; init; } = string.Empty;
+            public decimal Price { get; init; }
+            public decimal? SpecialPrice { get; init; }
+            public int StockQuantity { get; init; }
+            public bool IsActive { get; init; }
+            public int CategoryId { get; init; }
+            public string CategoryName { get; init; } = string.Empty;
+            public string ExactMatchKey { get; init; } = string.Empty;
+        }
+
+        private sealed class DuplicateGroupResponse
+        {
+            public string GroupKey { get; init; } = string.Empty;
+            public string Reason { get; init; } = string.Empty;
+            public List<object> Products { get; init; } = new();
+        }
 
         private readonly IProductService _productService;
         private readonly IWebHostEnvironment _environment;
@@ -43,6 +102,9 @@ namespace ECommerce.API.Controllers
         private readonly IMikroDbService _mikroDbService;
         private readonly IProductRepository _productRepository;
         private readonly ECommerceDbContext _dbContext;
+        private readonly IAutoCategoryMappingEngine? _autoCategoryMappingEngine;
+        private readonly IProductInfoSyncService? _productInfoSyncService;
+        private readonly IProductAdminOverrideSettingsService _productAdminOverrideSettingsService;
 
         // İzin verilen dosya türleri (güvenlik için whitelist yaklaşımı)
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".avif", ".svg" };
@@ -63,7 +125,10 @@ namespace ECommerce.API.Controllers
             IMikroDbService mikroDbService,
             IProductRepository productRepository,
             ECommerceDbContext dbContext,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IProductAdminOverrideSettingsService productAdminOverrideSettingsService,
+            IAutoCategoryMappingEngine? autoCategoryMappingEngine = null,
+            IProductInfoSyncService? productInfoSyncService = null)
         {
             _productService = productService;
             _mikroDbService = mikroDbService;
@@ -73,11 +138,70 @@ namespace ECommerce.API.Controllers
             _logger = logger;
             _dbContext = dbContext;
             _httpClientFactory = httpClientFactory;
+            _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
+            _autoCategoryMappingEngine = autoCategoryMappingEngine;
+            _productInfoSyncService = productInfoSyncService;
+        }
+
+        [HttpGet("admin/override-settings")]
+        [Authorize(Roles = Roles.AdminLike)]
+        public async Task<IActionResult> GetAdminOverrideSettings()
+        {
+            var settings = await _productAdminOverrideSettingsService.GetSettingsForAdminAsync(HttpContext.RequestAborted);
+            return Ok(settings);
+        }
+
+        [HttpPut("admin/override-settings")]
+        [Authorize(Roles = Roles.AdminLike)]
+        public async Task<IActionResult> UpdateAdminOverrideSettings([FromBody] ProductAdminOverrideSettingsUpdateDto request)
+        {
+            if (request == null)
+            {
+                return BadRequest(new { message = "Güncelleme verisi gerekli." });
+            }
+
+            var result = await _productAdminOverrideSettingsService.UpdateSettingsAsync(
+                request,
+                GetCurrentUserId(),
+                GetCurrentUserName(),
+                HttpContext.RequestAborted);
+
+            return Ok(new
+            {
+                message = "Genel Mikro bağımsızlık ayarları güncellendi.",
+                data = result
+            });
         }
 
         [HttpGet("search")]
         public async Task<IActionResult> SearchProducts([FromQuery] string query, [FromQuery] int page = 1, [FromQuery] int size = 10)
         {
+            page = Math.Max(page, 1);
+            size = Math.Min(Math.Max(size, 1), 250);
+
+            if (_mikroDbService.IsConfigured)
+            {
+                var mergedProducts = await BuildMergedPublicProductsAsync(HttpContext.RequestAborted);
+                if (mergedProducts.Count > 0)
+                {
+                    IEnumerable<MergedProductRow> filtered = mergedProducts;
+
+                    if (!string.IsNullOrWhiteSpace(query))
+                    {
+                        filtered = filtered.Where(row => MatchesSearchQuery(row.Product, query));
+                    }
+
+                    var items = filtered
+                        .OrderBy(row => row.Product.Name)
+                        .Skip((page - 1) * size)
+                        .Take(size)
+                        .Select(row => row.Product)
+                        .ToList();
+
+                    return Ok(items);
+                }
+            }
+
             if (string.IsNullOrWhiteSpace(query))
             {
                 var allProducts = await _productService.GetActiveProductsAsync(page, size);
@@ -135,13 +259,8 @@ namespace ECommerce.API.Controllers
 
                 // NEDEN: MikroCategoryMapping tablosundan AnagrupKod → CategoryId eşlemesi.
                 // Otomatik kategori sistemi (ADIM 4-10) bu tabloya yazar.
-                var anagrupMappings = await _dbContext.MikroCategoryMappings
-                    .AsNoTracking()
-                    .Where(m => m.IsActive)
-                    .ToDictionaryAsync(
-                        m => m.MikroAnagrupKod,
-                        m => m.CategoryId,
-                        StringComparer.OrdinalIgnoreCase);
+                var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
+                var overrideDefaults = await GetProductOverrideDefaultsAsync(HttpContext.RequestAborted);
 
                 var merged = unified
                     .Select(p =>
@@ -156,28 +275,20 @@ namespace ECommerce.API.Controllers
                         string catName = string.Empty;
                         string categorySlug = string.Empty;
 
-                        // Öncelik 1: AnagrupKod mapping
-                        if (!string.IsNullOrWhiteSpace(p.AnagrupKod) &&
-                            anagrupMappings.TryGetValue(p.AnagrupKod, out var mappedCatId))
-                        {
-                            catId = mappedCatId;
-                            if (idToSlug.TryGetValue(mappedCatId, out var mappedSlug))
-                            {
-                                categorySlug = NormalizeCategorySlug(mappedSlug);
-                                catName = slugToName.GetValueOrDefault(mappedSlug, string.Empty);
-                            }
-                        }
-                        else
-                        {
-                            // Öncelik 2: Keyword tabanlı anlık eşleme
-                            var matchedSlug = MatchCategorySlug(p.StokAd);
-                            categorySlug = NormalizeCategorySlug(matchedSlug);
-                            if (slugToId.TryGetValue(matchedSlug, out var resolvedId))
-                            {
-                                catId = resolvedId;
-                                catName = slugToName.GetValueOrDefault(matchedSlug, string.Empty);
-                            }
-                        }
+                        var resolvedCategory = PreferLocalCategoryOverride(
+                            hasLocal ? local : null,
+                            overrideDefaults,
+                            ResolveCategoryInfo(
+                                p.AnagrupKod,
+                                p.GrupKod,
+                                p.StokAd,
+                                categoryMappings,
+                                idToSlug,
+                                slugToName));
+
+                        catId = resolvedCategory.CategoryId;
+                        catName = resolvedCategory.CategoryName;
+                        categorySlug = resolvedCategory.CategorySlug;
 
                         return new
                         {
@@ -186,21 +297,29 @@ namespace ECommerce.API.Controllers
                                 Id = hasLocal ? local!.Id : 0,
                                 // NEDEN: SKU, Id=0 ürünlerde detay sayfasına yönlendirmek için kullanılır
                                 Sku = p.StokKod,
-                                Name = hasLocal && !string.IsNullOrEmpty(local!.Name) ? local.Name : p.StokAd,
+                                Name = ResolveDisplayName(p.StokAd, hasLocal ? local : null, overrideDefaults),
                                 Slug = hasLocal && !string.IsNullOrEmpty(local!.Slug) ? local.Slug : GenerateSlug(p.StokAd),
                                 Description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
-                                Price = hasLocal && local!.Price > 0 ? local.Price : p.Fiyat,
-                                SpecialPrice = hasLocal ? local!.SpecialPrice : null,
+                                Price = ResolveDisplayPrice(p.Fiyat, hasLocal ? local : null, overrideDefaults),
+                                SpecialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
                                 StockQuantity = (int)Math.Max(0, p.StokMiktar),
                                 ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
                                 // NEDEN: Mikro ERP birim bilgisi — KG ürünlerde frontend ağırlık seçici gösterir
                                 Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
                                 CategoryId = catId,
                                 CategoryName = catName,
+                                AdminOverrideName = hasLocal ? local!.AdminOverrideName : null,
+                                AdminOverridePrice = hasLocal ? local!.AdminOverridePrice : null,
+                                AdminOverrideCategory = hasLocal ? local!.AdminOverrideCategory : null,
+                                EffectiveAdminOverrideName = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName) : false,
+                                EffectiveAdminOverridePrice = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice) : false,
+                                EffectiveAdminOverrideCategory = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory) : false,
                             },
                             CategorySlug = categorySlug,
+                            IsVisible = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
                         };
                     })
+                    .Where(x => x.IsVisible)
                     .Where(x => x.Product.Price > 0); // Fiyatsız ürünleri gösterme
 
                 // Kategoriye göre filtrele
@@ -233,58 +352,254 @@ namespace ECommerce.API.Controllers
         // Admin panel için tüm ürünleri getir — Mikro ERP SQL tabanlı (aktif ürünler)
         [HttpGet("admin/all")]
         [Authorize(Roles = Roles.AdminLike)]
-        public async Task<IActionResult> GetAllProductsForAdmin([FromQuery] int page = 1, [FromQuery] int size = 100)
+        public async Task<IActionResult> GetAllProductsForAdmin(
+            [FromQuery] int page = 1,
+            [FromQuery] int size = 100,
+            [FromQuery] string? sku = null,
+            [FromQuery] string? name = null,
+            [FromQuery] string? status = null,
+            [FromQuery] string? stockStatus = null)
         {
+            page = Math.Max(page, 1);
+            size = Math.Clamp(size, 1, 200);
+
             if (_mikroDbService.IsConfigured)
             {
                 var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
 
                 // Yerel DB'deki ürünleri SKU bazlı eşle — yerel override katmanı
-                var localAll = (await _productRepository.GetAllAsync()).ToList();
+                var localAll = await _dbContext.Products
+                    .Include(product => product.Category)
+                    .AsNoTracking()
+                    .ToListAsync(HttpContext.RequestAborted);
                 var skuToLocal = localAll
-                    .Where(p => !string.IsNullOrEmpty(p.SKU))
-                    .GroupBy(p => p.SKU!)
-                    .ToDictionary(g => g.Key, g => g.First());
+                    .Where(p => !string.IsNullOrWhiteSpace(p.SKU))
+                    .GroupBy(p => p.SKU.Trim(), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                var unifiedSkuSet = new HashSet<string>(
+                    unified
+                        .Select(product => product.StokKod?.Trim())
+                        .Where(productSku => !string.IsNullOrWhiteSpace(productSku))
+                        .Cast<string>(),
+                    StringComparer.OrdinalIgnoreCase);
 
-                var paged = unified
-                    .Where(p => p.WebeGonderilecekFl)  // sadece web'e gönderilecek (aktif) ürünler
-                    .OrderBy(p => p.StokKod)
-                    .Skip((Math.Max(1, page) - 1) * Math.Max(1, size))
-                    .Take(Math.Max(1, size))
+                var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
+
+                var activeCategories = await _dbContext.Categories
+                    .AsNoTracking()
+                    .Where(category => category.IsActive)
+                    .ToListAsync(HttpContext.RequestAborted);
+
+                var idToSlug = activeCategories
+                    .Where(category => category.Id > 0)
+                    .GroupBy(category => category.Id)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => NormalizeCategorySlug(group.First().Slug ?? group.First().Name),
+                        EqualityComparer<int>.Default);
+
+                var slugToName = activeCategories
+                    .SelectMany(category => new[]
+                    {
+                        new KeyValuePair<string, string>(NormalizeCategorySlug(category.Slug), category.Name ?? string.Empty),
+                        new KeyValuePair<string, string>(NormalizeCategorySlug(category.Name), category.Name ?? string.Empty)
+                    })
+                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
+                    .GroupBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
+
+                var categoryLookup = activeCategories
+                    .GroupBy(category => category.Id)
+                    .ToDictionary(group => group.Key, group => group.First().Name ?? string.Empty);
+                var overrideDefaults = await GetProductOverrideDefaultsAsync(HttpContext.RequestAborted);
+
+                var mergedProducts = unified
                     .Select(p =>
                     {
                         // Yerel DB kaydı varsa override olarak kullan
-                        var hasLocal = skuToLocal.TryGetValue(p.StokKod, out var local);
+                        var normalizedSku = p.StokKod?.Trim() ?? string.Empty;
+                        var hasLocal = skuToLocal.TryGetValue(normalizedSku, out var local);
+                        var resolvedCategoryInfo = ResolveCategoryInfo(
+                            p.AnagrupKod,
+                            p.GrupKod,
+                            p.StokAd,
+                            categoryMappings,
+                            idToSlug,
+                            slugToName);
+
+                        var resolvedCategoryId = hasLocal && ProductAdminOverridePolicy.ShouldUseAdminCategory(local, overrideDefaults)
+                            ? (int?)local.CategoryId
+                            : resolvedCategoryInfo.CategoryId;
+                        var resolvedCategoryName = resolvedCategoryId.HasValue &&
+                                                   categoryLookup.TryGetValue(resolvedCategoryId.Value, out var categoryName)
+                            ? categoryName
+                            : resolvedCategoryInfo.CategoryName;
                         return new
                         {
                             id = hasLocal ? local!.Id : 0,
                             sku = p.StokKod,
-                            // Yerel DB'de isim değiştirilmişse onu göster
-                            name = hasLocal && !string.IsNullOrEmpty(local!.Name) ? local.Name : p.StokAd,
-                            // Fiyat: Mikro ERP her zaman esas kaynak — yerel DB sadece Mikro 0 ise fallback
-                            // NEDEN: Local DB eski sync verisini tutabilir; admin panelde güncel Mikro fiyatı gösterilmeli
-                            price = p.Fiyat > 0 ? p.Fiyat : (hasLocal ? local!.Price : 0m),
-                            specialPrice = hasLocal ? local!.SpecialPrice : (decimal?)null,
+                            name = ResolveDisplayName(p.StokAd, hasLocal ? local : null, overrideDefaults),
+                            price = ResolveDisplayPrice(p.Fiyat, hasLocal ? local : null, overrideDefaults),
+                            specialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
                             stockQuantity = (int)Math.Max(0, p.StokMiktar),
                             stock = (int)Math.Max(0, p.StokMiktar),
-                            isActive = p.WebeGonderilecekFl,
+                            isActive = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
                             // Kategori: yerel override varsa yerel
-                            categoryId = hasLocal && local!.CategoryId > 0 ? (int?)local.CategoryId : (int?)null,
+                            categoryId = resolvedCategoryId,
+                            categoryName = resolvedCategoryName,
+                            categorySlug = hasLocal && !string.IsNullOrWhiteSpace(local!.Category?.Slug)
+                                ? NormalizeCategorySlug(local.Category.Slug)
+                                : resolvedCategoryInfo.CategorySlug,
                             categoryCode = p.GrupKod,
                             anagrupCode = p.AnagrupKod,
                             // Açıklama: yerel override
                             description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
                             imageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                            adminOverrideName = hasLocal ? local!.AdminOverrideName : null,
+                            adminOverridePrice = hasLocal ? local!.AdminOverridePrice : null,
+                            adminOverrideCategory = hasLocal ? local!.AdminOverrideCategory : null,
+                            effectiveAdminOverrideName = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName) : false,
+                            effectiveAdminOverridePrice = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice) : false,
+                            effectiveAdminOverrideCategory = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory) : false,
                             source = "mikro-erp"
                         };
                     })
+                    .GroupBy(
+                        product => !string.IsNullOrWhiteSpace(product.sku)
+                            ? product.sku.Trim()
+                            : $"local:{product.id}",
+                        StringComparer.OrdinalIgnoreCase)
+                    .Select(group => group.First());
+
+                var localOnlyProducts = localAll
+                    .Where(product => string.IsNullOrWhiteSpace(product.SKU))
+                    .Select(product => new
+                    {
+                        id = product.Id,
+                        sku = product.SKU,
+                        name = product.Name,
+                        price = product.Price,
+                        specialPrice = product.SpecialPrice,
+                        stockQuantity = product.StockQuantity,
+                        stock = product.StockQuantity,
+                        isActive = product.IsActive,
+                        categoryId = (int?)product.CategoryId,
+                        categoryName = product.Category?.Name ?? categoryLookup.GetValueOrDefault(product.CategoryId, string.Empty),
+                        categorySlug = NormalizeCategorySlug(product.Category?.Slug ?? product.Category?.Name ?? string.Empty),
+                        categoryCode = string.Empty,
+                        anagrupCode = string.Empty,
+                        description = product.Description,
+                        imageUrl = product.ImageUrl,
+                        adminOverrideName = product.AdminOverrideName,
+                        adminOverridePrice = product.AdminOverridePrice,
+                        adminOverrideCategory = product.AdminOverrideCategory,
+                        effectiveAdminOverrideName = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName),
+                        effectiveAdminOverridePrice = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice),
+                        effectiveAdminOverrideCategory = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory),
+                        source = "local-db"
+                    });
+
+                var filtered = mergedProducts
+                    .Concat(localOnlyProducts)
+                    .Where(product =>
+                        string.IsNullOrWhiteSpace(sku) ||
+                        (!string.IsNullOrWhiteSpace(product.sku) && product.sku.Contains(sku, StringComparison.OrdinalIgnoreCase)))
+                    .Where(product =>
+                        string.IsNullOrWhiteSpace(name) ||
+                        (!string.IsNullOrWhiteSpace(product.name) && product.name.Contains(name, StringComparison.OrdinalIgnoreCase)))
+                    .Where(product => MatchesAdminStatusFilter(product.isActive, status))
+                    .Where(product => MatchesAdminStockFilter(product.stockQuantity, stockStatus));
+
+                var total = filtered.Count();
+                var paged = filtered
+                    .OrderBy(product => string.IsNullOrWhiteSpace(product.sku) ? product.name : product.sku)
+                    .ThenBy(product => product.name)
+                    .Skip((page - 1) * size)
+                    .Take(size)
                     .ToList();
 
-                return Ok(paged);
+                return Ok(new
+                {
+                    items = paged,
+                    total,
+                    page,
+                    pageSize = size,
+                    totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)size))
+                });
             }
 
-            var products = await _productService.GetAllProductsAsync(page, size);
-            return Ok(products);
+            var localProducts = await _dbContext.Products
+                .Include(product => product.Category)
+                .AsNoTracking()
+                .ToListAsync(HttpContext.RequestAborted);
+
+            var filteredLocalProducts = localProducts
+                .Where(product =>
+                    string.IsNullOrWhiteSpace(sku) ||
+                    (!string.IsNullOrWhiteSpace(product.SKU) && product.SKU.Contains(sku, StringComparison.OrdinalIgnoreCase)))
+                .Where(product =>
+                    string.IsNullOrWhiteSpace(name) ||
+                    (!string.IsNullOrWhiteSpace(product.Name) && product.Name.Contains(name, StringComparison.OrdinalIgnoreCase)))
+                .Where(product => MatchesAdminStatusFilter(product.IsActive, status))
+                .Where(product => MatchesAdminStockFilter(product.StockQuantity, stockStatus))
+                .Select(product => new
+                {
+                    id = product.Id,
+                    sku = product.SKU,
+                    name = product.Name,
+                    price = product.Price,
+                    specialPrice = product.SpecialPrice,
+                    stockQuantity = product.StockQuantity,
+                    stock = product.StockQuantity,
+                    isActive = product.IsActive,
+                    categoryId = product.CategoryId,
+                    categoryName = product.Category != null ? product.Category.Name : string.Empty,
+                    description = product.Description,
+                    imageUrl = product.ImageUrl,
+                    source = "local-db"
+                });
+
+            var totalLocal = filteredLocalProducts.Count();
+            var pagedLocal = filteredLocalProducts
+                .OrderBy(product => string.IsNullOrWhiteSpace(product.sku) ? product.name : product.sku)
+                .ThenBy(product => product.name)
+                .Skip((page - 1) * size)
+                .Take(size)
+                .ToList();
+
+            return Ok(new
+            {
+                items = pagedLocal,
+                total = totalLocal,
+                page,
+                pageSize = size,
+                totalPages = Math.Max(1, (int)Math.Ceiling(totalLocal / (double)size))
+            });
+        }
+
+        private static bool MatchesAdminStatusFilter(bool isActive, string? status)
+        {
+            return NormalizeAdminFilterValue(status) switch
+            {
+                "active" => isActive,
+                "inactive" => !isActive,
+                _ => true,
+            };
+        }
+
+        private static bool MatchesAdminStockFilter(int stockQuantity, string? stockStatus)
+        {
+            return NormalizeAdminFilterValue(stockStatus) switch
+            {
+                "in-stock" => stockQuantity > 0,
+                "out-of-stock" => stockQuantity <= 0,
+                _ => true,
+            };
+        }
+
+        private static string NormalizeAdminFilterValue(string? value)
+        {
+            return (value ?? string.Empty).Trim().ToLowerInvariant();
         }
 
         /// <summary>
@@ -303,160 +618,63 @@ namespace ECommerce.API.Controllers
             if (unified.Count == 0)
                 return Ok(new { message = "Mikro ERP'de ürün bulunamadı.", created = 0, updated = 0 });
 
-            // 1) Mevcut kategorileri al, eksik olanları oluştur
-            var existingCategories = await _dbContext.Categories.AsNoTracking().ToListAsync();
-            var catBySlug = existingCategories.ToDictionary(c => c.Slug, c => c, StringComparer.OrdinalIgnoreCase);
+            var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
 
-            // Sayfadaki 8 ana kategori — tüm ürünler bunlara dağıtılır
-            var requiredCategories = new Dictionary<string, (string Name, string Desc, int Sort)>
-            {
-                ["et-ve-et-urunleri"]     = ("Et ve Et Ürünleri",     "Taze et, tavuk, balık, şarküteri ve deniz ürünleri", 1),
-                ["sut-ve-sut-urunleri"]   = ("Süt Ürünleri",          "Süt, peynir, yoğurt, tereyağı, kahvaltılık ürünler", 2),
-                ["meyve-ve-sebze"]        = ("Meyve ve Sebze",        "Taze meyve, sebze ve yeşillikler", 3),
-                ["icecekler"]             = ("İçecekler",             "Su, meyve suyu, gazlı içecek, çay, kahve", 4),
-                ["atistirmalik"]          = ("Atıştırmalık",          "Cips, çikolata, kuruyemiş, bisküvi, dondurma", 5),
-                ["temizlik"]              = ("Temizlik",              "Ev temizlik, kişisel bakım ve bebek ürünleri", 6),
-                ["temel-gida"]            = ("Temel Gıda",           "Un, şeker, makarna, bakliyat, baharat, konserve, yağ, unlu mamüller", 7),
-                ["ev-ve-mutfak"]          = ("Ev & Mutfak Gereçleri", "Tencere, bardak, ev gereçleri, mutfak malzemeleri", 8),
-            };
-
-            var newCategories = new List<Category>();
-            foreach (var (slug, info) in requiredCategories)
-            {
-                if (!catBySlug.ContainsKey(slug))
-                {
-                    var cat = new Category
-                    {
-                        Name = info.Name,
-                        Description = info.Desc,
-                        Slug = slug,
-                        SortOrder = info.Sort,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    newCategories.Add(cat);
-                }
-            }
-
-            if (newCategories.Count > 0)
-            {
-                await _dbContext.Categories.AddRangeAsync(newCategories);
-                await _dbContext.SaveChangesAsync();
-                _logger.LogInformation("[AutoCategorize] {Count} yeni kategori oluşturuldu", newCategories.Count);
-            }
-
-            // Güncel kategori listesini tekrar çek
-            var allCategories = await _dbContext.Categories.ToListAsync();
-            var slugToId = allCategories.ToDictionary(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase);
-
-            // 2) Ürün adı anahtar kelime → 8 ana kategori eşleme kuralları
-            // Öncelik sırasına göre — ilk eşleşen kazanır
-            // NEDEN: MatchesKeyword fonksiyonu kullanılıyor — kısa keyword'ler (ET, SU, UN) için
-            // tam kelime eşleme yapılır, "ADET"→"ET" gibi yanlış eşleşmeler önlenir
-            var keywordRules = new List<(string[] Keywords, string CategorySlug)>
-            {
-                // 1) Et ve Et Ürünleri — tüm et, tavuk, balık, şarküteri
-                (new[] { "DANA", "KUZU", "KOYUN", "KÖFTE", "SUCUK", "SOSIS", "PASTIRMA", "SALAM", "JAMBON",
-                         "KAVURMA", "BUT", "PIRZOLA", "ANTRIKOT", "BIFTEK", "KUŞBAŞI", "KIYMA", "BONFILE",
-                         "TAVUK", "HINDI", "PİLİÇ", "PILIC", "KANAT", "GÖĞÜS", "BAGET", "BALIK", "SOMON", "TON BALIK",
-                         "LEVREK", "ÇUPRA", "HAMSI", "KARIDES", "MİDYE", "ALABALIK", "BANVIT" }, "et-ve-et-urunleri"),
-
-                // 2) Süt Ürünleri — süt, peynir, yoğurt + kahvaltılık
-                (new[] { "SÜT", "PEYNİR", "YOĞURT", "YOGURT", "AYRAN", "KEFIR", "KEFİR", "KREMA", "KAYMAK",
-                         "TEREYAĞ", "MARGARİN", "LABNE", "LOR", "KAŞAR", "BEYAZ PEYNİR", "TULUM",
-                         "ÇÖKELEK", "KEÇİ PEYNİR", "ERİTME", "ÇEDDİR", "MOZZARELLA",
-                         "ZEYTİN", "REÇEL", "TAHİN", "PEKMEZ", "HELVA", "NUTELLA", "FINDIK EZM",
-                         "FISTIK EZM", "KAKAOLU", "ÇOKREM", "YUMURTA" }, "sut-ve-sut-urunleri"),
-
-                // 3) Meyve ve Sebze
-                (new[] { "MARUL", "DOMATES", "BİBER", "PATLICAN", "KABAK", "SALATALIK", "SOĞAN", "PATATES",
-                         "HAVUÇ", "LAHANA", "ISPANAK", "MAYDANOZ", "DEREOTU", "NANE", "ROKA", "MEYVE",
-                         "ELMA", "ARMUT", "PORTAKAL", "MANDALİNA", "LİMON", "MUZ", "ÜZÜ", "KARPUZ",
-                         "KAVUN", "ÇİLEK", "VİŞNE", "KİRAZ", "KAYISI", "ŞEFTALİ", "ERIK", "İNCİR",
-                         "NAR", "AVOKADO", "KİVİ", "ANANAS", "TURP", "KEREVIZ", "ENGINAR", "FASULYE YEŞ",
-                         "BEZELYE", "BAMYA", "MANTAR", "BROKOLI", "KARNABAHAR", "PAZI", "SEMİZOTU",
-                         "SEBZE", "SARIMSAK", "ZENCEFİL" }, "meyve-ve-sebze"),
-
-                // 4) İçecekler
-                (new[] { "MADEN SU", "SODA", "KOLA", "FANTA", "SPRITE", "PEPSI", "MEYVE SUYU",
-                         "ÇAY", "KAHVE", "NESCAFE", "LİMONATA", "ŞALGAM", "ENERJİ",
-                         "GAZLI", "GAZOZ", "ULUDAĞ", "İÇECEK", "JUS", "ŞERBET" }, "icecekler"),
-
-                // 5) Atıştırmalık
-                (new[] { "CİPS", "ÇİKOLATA", "DRAJE", "LOKUM", "SAKIZ", "ATIŞT", "JELIBON",
-                         "BADEM", "CEVİZ", "KAJU", "AYÇEKİRDEĞİ", "KABAK ÇEKİR",
-                         "LEBLEBI", "KURUYEMİŞ",
-                         "DONDURMA", "DONMUŞ", "DONDURULMUŞ", "FROZEN", "BUZLU",
-                         "BİSKÜVİ", "GOFRET", "KRAKER", "KURABİYE", "GALETA",
-                         "WAFER" }, "atistirmalik"),
-
-                // 6) Temizlik
-                (new[] { "DETERJAN", "YUMUŞAT", "ÇAMAŞIR", "BULAŞIK", "CİF", "HİJYEN",
-                         "ÇÖP POŞET", "TUVALET KAĞ", "PEÇETE", "HAVLU KAĞIT", "MENDIL",
-                         "TEMİZLİK", "DEZENFEKTAN",
-                         "ŞAMPUAN", "SABUN", "DİŞ MACUNU", "DEODORANT", "TRAŞ", "DUŞ JEL",
-                         "SAÇKREM", "LOSYON", "PARFÜM",
-                         "BEBEK", "MAMA", "BİBERON", "ÇOCUK BEZ" }, "temizlik"),
-
-                // 7) Ev & Mutfak Gereçleri — gıda dışı ürünler
-                (new[] { "TENCERE", "TAVA", "BARDAK", "TABAK", "ÇATAL", "KAŞIK", "BIÇAK",
-                         "KASE", "SÜZGEÇ", "KEPÇE", "SPATULA", "RENDE", "TIRBUŞON",
-                         "PORSELEN", "CAM", "TERMOS", "MATARA", "ŞİŞE",
-                         "İĞNE", "ÇENGEL", "MANDAL", "SÜNGER", "FIRÇA", "PASPAS",
-                         "ÇAKMAK", "MUM", "POŞET", "STREÇ", "FOLYO", "ALÜMİNYUM",
-                         "MEZZE", "SERVİS", "TEPSI", "SAHAN", "GÜVEÇ" }, "ev-ve-mutfak"),
-
-                // 8) Temel Gıda — un, şeker, makarna, bakliyat, baharat, konserve, yağ, ekmek, börek
-                (new[] { "ŞEKER", "TUZ", "PİRİNÇ", "MAKARNA", "BULGUR", "YAYLA", "NİŞASTA",
-                         "MAYA", "İRMİK", "EKMEK UNU", "ÇORBA", "YULAF", "MÜSLI",
-                         "MERCİMEK", "NOHUT", "FASULYE KURU", "KURU FASULYE", "BARBUNYA", "BÖRÜLCE", "BAKLA",
-                         "BAHARAT", "KARABIBER", "KIMYON", "PUL BİBER", "KEKIK", "TARÇIN", "ZENCEFİL TOZ",
-                         "ZERDEÇAL", "SUMAK", "DEFNE", "SALÇA", "KETÇAP", "MAYONEZ", "HARDAL",
-                         "SOYA SOSU", "BİBER TOZ",
-                         "ZEYTİNYAĞ", "AYÇİÇEK", "SIVI YAĞ", "MISIR YAĞI", "SİRKE", "ELMA SİRKE",
-                         "ÜZÜM SİRKE", "BİTKİ YAĞI",
-                         "KONSERVE", "TURŞU",
-                         "EKMEK", "SİMİT", "POĞAÇA", "BÖREK", "PİDE", "LAVAS", "LAVAŞ", "BAZLAMA",
-                         "AÇMA", "ÇÖREK" }, "temel-gida"),
-            };
-
-            // 3) Mevcut yerel ürünleri SKU bazlı indexle
+            // 1) Mevcut yerel ürünleri SKU bazlı indexle
             var localProducts = await _dbContext.Products.ToListAsync();
             var skuToLocal = localProducts
                 .Where(p => !string.IsNullOrEmpty(p.SKU))
                 .GroupBy(p => p.SKU!)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+            var overrideDefaults = await GetProductOverrideDefaultsAsync(HttpContext.RequestAborted);
 
-            int created = 0, updated = 0, categorized = 0;
+            int created = 0, updated = 0, categorized = 0, resolvedByEngine = 0;
 
             foreach (var mikro in unified)
             {
-                // NEDEN: MatchCategorySlug ile aynı MatchesKeyword fonksiyonunu kullan
-                // Eski Contains(kw.TrimEnd()) — "ADET"→"ET" yanlış eşleşmesine neden oluyordu
-                string matchedSlug = MatchCategorySlug(mikro.StokAd);
+                var categoryId = ResolveCategoryId(mikro.AnagrupKod, mikro.GrupKod, categoryMappings);
+                if (!categoryId.HasValue && _autoCategoryMappingEngine != null)
+                {
+                    categoryId = await _autoCategoryMappingEngine.ResolveOrCreateMappingAsync(
+                        mikro.AnagrupKod ?? string.Empty,
+                        mikro.GrupKod,
+                        HttpContext.RequestAborted);
 
-                if (!slugToId.TryGetValue(matchedSlug, out var categoryId))
-                    categoryId = slugToId.GetValueOrDefault("temel-gida", 1);
+                    CacheResolvedMapping(categoryMappings, mikro.AnagrupKod, categoryId.Value);
+                    resolvedByEngine++;
+                }
+
+                categoryId ??= await GetFallbackCategoryIdAsync(HttpContext.RequestAborted);
 
                 if (skuToLocal.TryGetValue(mikro.StokKod, out var local))
                 {
-                    // Mevcut yerel ürün — kategoriyi her zaman güncelle (7 kategoriye yeniden dağıtım)
-                    local.CategoryId = categoryId;
+                    if (ProductAdminOverridePolicy.CanSyncName(local, overrideDefaults))
+                    {
+                        local.Name = mikro.StokAd;
+                    }
+
+                    if (mikro.Fiyat > 0 && ProductAdminOverridePolicy.CanSyncPrice(local, overrideDefaults))
+                    {
+                        local.Price = mikro.Fiyat;
+                    }
+                    local.StockQuantity = (int)Math.Max(0, mikro.StokMiktar);
+                    if (ProductAdminOverridePolicy.CanSyncCategory(local, overrideDefaults))
+                    {
+                        local.CategoryId = categoryId.Value;
+                    }
                     local.UpdatedAt = DateTime.UtcNow;
                     updated++;
                     categorized++;
                 }
                 else
                 {
-                    // Yeni yerel kayıt oluştur — Mikro verisi + doğru kategori
                     var newProduct = new Product
                     {
                         Name = mikro.StokAd,
                         SKU = mikro.StokKod,
                         Price = mikro.Fiyat,
                         StockQuantity = (int)Math.Max(0, mikro.StokMiktar),
-                        CategoryId = categoryId,
+                        CategoryId = categoryId.Value,
                         Description = string.Empty,
                         ImageUrl = string.Empty,
                         IsActive = mikro.WebeGonderilecekFl,
@@ -473,56 +691,26 @@ namespace ECommerce.API.Controllers
 
             await _dbContext.SaveChangesAsync();
 
-            // NEDEN: SKU'su boş olan eski ürünler skuToLocal ile yakalanamaz
-            // İkinci geçiş — tüm local ürünleri isimle yeniden kategorize et
-            var allLocalProducts = await _dbContext.Products.ToListAsync();
-            int recategorized = 0;
-            foreach (var lp in allLocalProducts)
+            // 2) Mapping tabanlı yeniden kategorileme ve yetim düzeltmesi
+            RecategorizeResult? recategorizeResult = null;
+            if (_productInfoSyncService != null)
             {
-                var correctSlug = MatchCategorySlug(lp.Name);
-                if (slugToId.TryGetValue(correctSlug, out var correctCatId) && lp.CategoryId != correctCatId)
-                {
-                    lp.CategoryId = correctCatId;
-                    lp.UpdatedAt = DateTime.UtcNow;
-                    recategorized++;
-                }
-            }
-            if (recategorized > 0)
-            {
-                await _dbContext.SaveChangesAsync();
-                _logger.LogInformation("[AutoCategorize] İkinci geçiş: {Count} SKU'suz/yanlış kategorili ürün düzeltildi", recategorized);
+                recategorizeResult = await _productInfoSyncService.RecategorizeAllProductsAsync(HttpContext.RequestAborted);
             }
 
-            // Eski kategori sisteminden kalan gereksiz kategorileri temizle
-            // NOT: "diger" artık obsolete değil — MatchCategorySlug "temel-gida" fallback kullanır
-            var obsoleteSlugs = new[] {
-                "bakliyat-ve-tahil", "baharat-ve-sos", "kahvaltilik", "dondurulmus",
-                "unlu-mamuller", "kisisel-bakim", "bebek-urunleri", "konserve-ve-hazir",
-                "yag-ve-sirkeler", "kuruyemis"
-            };
-            var obsoleteCats = await _dbContext.Categories
-                .Where(c => obsoleteSlugs.Contains(c.Slug))
-                .ToListAsync();
+            // 3) Kategori bazlı dağılım raporu
+            var categoryNameById = await _dbContext.Categories
+                .AsNoTracking()
+                .ToDictionaryAsync(c => c.Id, c => c.Name, HttpContext.RequestAborted);
 
-            // Sadece ürün bağlı olmayanları sil (ürünler zaten 7 kategoriye taşındı)
-            foreach (var obs in obsoleteCats)
-            {
-                var hasProducts = await _dbContext.Products.AnyAsync(p => p.CategoryId == obs.Id);
-                if (!hasProducts)
-                {
-                    _dbContext.Categories.Remove(obs);
-                    _logger.LogInformation("[AutoCategorize] Eski kategori silindi: {Name}", obs.Name);
-                }
-            }
-            await _dbContext.SaveChangesAsync();
-
-            // 4) Kategori bazlı dağılım raporu
             var distribution = unified
-                .GroupBy(p => MatchCategorySlug(p.StokAd))
+                .Select(p => ResolveCategoryId(p.AnagrupKod, p.GrupKod, categoryMappings) ?? 0)
+                .Where(categoryId => categoryId > 0)
+                .GroupBy(categoryId => categoryId)
                 .Select(g => new
                 {
-                    category = requiredCategories.TryGetValue(g.Key, out var info) ? info.Name : g.Key,
-                    slug = g.Key,
+                    categoryId = g.Key,
+                    category = categoryNameById.GetValueOrDefault(g.Key, "Bilinmeyen"),
                     productCount = g.Count()
                 })
                 .OrderByDescending(x => x.productCount)
@@ -539,7 +727,8 @@ namespace ECommerce.API.Controllers
                 created,
                 updated,
                 categorized,
-                newCategories = newCategories.Count,
+                resolvedByEngine,
+                recategorize = recategorizeResult,
                 distribution
             });
         }
@@ -591,119 +780,153 @@ namespace ECommerce.API.Controllers
             return !string.IsNullOrWhiteSpace(slugFromEntity) ? slugFromEntity : slugFromName;
         }
 
-        /// <summary>
-        /// Ürün adını 7 ana kategoriden birine eşler (keyword tabanlı).
-        /// Auto-categorize çalışmadan önce de anlık eşleme yapabilmek için.
-        /// </summary>
-        private static string MatchCategorySlug(string productName)
+        private static decimal ResolveDisplayPrice(decimal mikroPrice, Product? localProduct, ProductAdminOverrideSettingsDto overrideDefaults)
         {
-            var name = productName.ToUpperInvariant();
-
-            // NEDEN: Ürün adındaki kelimelere ayır — kısa keyword'ler (ET, SU, UN, BAL)
-            // substring olarak eşleşmesin. "CORNETTO" → "ET" eşleşmesi bu yüzden oluyordu.
-            var words = name.Split(
-                new[] { ' ', ',', '.', '-', '/', '(', ')', '+', '*', '&', '\t' },
-                StringSplitOptions.RemoveEmptyEntries);
-
-            // NEDEN: Öncelik sırası önemli — ev-mutfak et'ten ÖNCE kontrol edilmeli
-            // Aksi halde "BALIK TAVASI" → BALIK → et kategorisine düşer
-            // Doğru: TAVA → ev-mutfak → sonra BALIK araması et'e düşmez
-            var rules = new (string[] Keywords, string Slug)[]
-            {
-                // 1) Ev & Mutfak Gereçleri — EN ÖNCE kontrol et, gıda dışı ürünleri ayıkla
-                // NEDEN: "BALIK TAVASI", "BALIK DESENLİ HAVUZ" gibi ürünler BALIK keyword'ü ile
-                // et kategorisine düşmesin diye mutfak gereçleri önce kontrol edilir
-                (new[] { "TENCERE", "TAVA", "BARDAK", "TABAK", "ÇATAL", "KAŞIK", "BIÇAK",
-                         "KASE", "SÜZGEÇ", "KEPÇE", "SPATULA", "RENDE", "TIRBUŞON",
-                         "PORSELEN", "CAM", "TERMOS", "MATARA", "ŞİŞE",
-                         "İĞNE", "ÇENGEL", "MANDAL", "SÜNGER", "FIRÇA", "PASPAS",
-                         "ÇAKMAK", "MUM", "POŞET", "STREÇ", "FOLYO", "ALÜMİNYUM",
-                         "MEZZE", "SERVİS", "TEPSI", "SAHAN", "GÜVEÇ",
-                         "HAVUZ", "DESENLİ" }, "ev-ve-mutfak"),
-
-                // 2) Et ve Et Ürünleri — tavuk, balık, şarküteri
-                (new[] { "DANA", "KUZU", "KOYUN", "KÖFTE", "SUCUK", "SOSIS", "PASTIRMA", "SALAM", "JAMBON",
-                         "KAVURMA", "BUT", "PIRZOLA", "ANTRIKOT", "BIFTEK", "KUŞBAŞI", "KIYMA", "BONFILE",
-                         "TAVUK", "HINDI", "PİLİÇ", "PILIC", "KANAT", "GÖĞÜS", "BAGET", "BALIK", "SOMON", "TON BALIK",
-                         "LEVREK", "ÇUPRA", "HAMSI", "KARIDES", "MİDYE", "ALABALIK", "BANVIT" }, "et-ve-et-urunleri"),
-
-                // 3) Süt Ürünleri — süt, peynir, yoğurt + kahvaltılık
-                (new[] { "SÜT", "PEYNİR", "YOĞURT", "YOGURT", "AYRAN", "KEFIR", "KEFİR", "KREMA", "KAYMAK",
-                         "TEREYAĞ", "MARGARİN", "LABNE", "LOR", "KAŞAR", "BEYAZ PEYNİR", "TULUM",
-                         "ÇÖKELEK", "KEÇİ PEYNİR", "ERİTME", "ÇEDDİR", "MOZZARELLA",
-                         "ZEYTİN", "REÇEL", "TAHİN", "PEKMEZ", "HELVA", "NUTELLA", "FINDIK EZM",
-                         "FISTIK EZM", "KAKAOLU", "ÇOKREM", "YUMURTA" }, "sut-ve-sut-urunleri"),
-
-                (new[] { "MARUL", "DOMATES", "BİBER", "PATLICAN", "KABAK", "SALATALIK", "SOĞAN", "PATATES",
-                         "HAVUÇ", "LAHANA", "ISPANAK", "MAYDANOZ", "DEREOTU", "NANE", "ROKA", "MEYVE",
-                         "ELMA", "ARMUT", "PORTAKAL", "MANDALİNA", "LİMON", "MUZ", "ÜZÜ", "KARPUZ",
-                         "KAVUN", "ÇİLEK", "VİŞNE", "KİRAZ", "KAYISI", "ŞEFTALİ", "ERIK", "İNCİR",
-                         "NAR", "AVOKADO", "KİVİ", "ANANAS", "TURP", "KEREVIZ", "ENGINAR", "FASULYE YEŞ",
-                         "BEZELYE", "BAMYA", "MANTAR", "BROKOLI", "KARNABAHAR", "PAZI", "SEMİZOTU",
-                         "SEBZE", "SARIMSAK", "ZENCEFİL" }, "meyve-ve-sebze"),
-
-                (new[] { "MADEN SU", "SODA", "KOLA", "FANTA", "SPRITE", "PEPSI", "MEYVE SUYU",
-                         "ÇAY", "KAHVE", "NESCAFE", "LİMONATA", "ŞALGAM", "ENERJİ",
-                         "GAZLI", "GAZOZ", "ULUDAĞ", "İÇECEK", "JUS", "ŞERBET" }, "icecekler"),
-
-                (new[] { "CİPS", "ÇİKOLATA", "DRAJE", "LOKUM", "SAKIZ", "ATIŞT", "JELIBON",
-                         "BADEM", "CEVİZ", "KAJU", "AYÇEKİRDEĞİ", "KABAK ÇEKİR",
-                         "LEBLEBI", "KURUYEMİŞ",
-                         "DONDURMA", "DONMUŞ", "DONDURULMUŞ", "FROZEN", "BUZLU",
-                         "BİSKÜVİ", "GOFRET", "KRAKER", "KURABİYE", "GALETA",
-                         "WAFER" }, "atistirmalik"),
-
-                (new[] { "DETERJAN", "YUMUŞAT", "ÇAMAŞIR", "BULAŞIK", "CİF", "HİJYEN",
-                         "ÇÖP POŞET", "TUVALET KAĞ", "PEÇETE", "HAVLU KAĞIT", "MENDIL",
-                         "TEMİZLİK", "DEZENFEKTAN",
-                         "ŞAMPUAN", "SABUN", "DİŞ MACUNU", "DEODORANT", "TRAŞ", "DUŞ JEL",
-                         "SAÇKREM", "LOSYON", "PARFÜM",
-                         "BEBEK", "MAMA", "BİBERON", "ÇOCUK BEZ" }, "temizlik"),
-
-                (new[] { "ŞEKER", "TUZ", "PİRİNÇ", "MAKARNA", "BULGUR", "YAYLA", "NİŞASTA",
-                         "MAYA", "İRMİK", "EKMEK UNU", "ÇORBA", "YULAF", "MÜSLI",
-                         "MERCİMEK", "NOHUT", "FASULYE KURU", "KURU FASULYE", "BARBUNYA", "BÖRÜLCE", "BAKLA",
-                         "BAHARAT", "KARABIBER", "KIMYON", "PUL BİBER", "KEKIK", "TARÇIN", "ZENCEFİL TOZ",
-                         "ZERDEÇAL", "SUMAK", "DEFNE", "SALÇA", "KETÇAP", "MAYONEZ", "HARDAL",
-                         "SOYA SOSU", "BİBER TOZ",
-                         "ZEYTİNYAĞ", "AYÇİÇEK", "SIVI YAĞ", "MISIR YAĞI", "SİRKE", "ELMA SİRKE",
-                         "ÜZÜM SİRKE", "BİTKİ YAĞI",
-                         "KONSERVE", "TURŞU",
-                         "EKMEK", "SİMİT", "POĞAÇA", "BÖREK", "PİDE", "LAVAS", "LAVAŞ", "BAZLAMA",
-                         "AÇMA", "ÇÖREK" }, "temel-gida"),
-            };
-
-            foreach (var (keywords, slug) in rules)
-            {
-                if (keywords.Any(kw => MatchesKeyword(name, words, kw)))
-                    return slug;
-            }
-            // NEDEN: Eşleşmeyen ürünler "Temel Gıda"ya düşer — "diger" kategorisi silindiği için
-            return "temel-gida";
+            return ProductAdminOverridePolicy.ResolvePrice(mikroPrice, localProduct, overrideDefaults);
         }
 
-        /// <summary>
-        /// Keyword eşleme: kısa keyword'ler (≤3 karakter) tam kelime eşleme,
-        /// uzun keyword'ler substring eşleme kullanır.
-        /// NEDEN: "ET" → "CORNETTO" false-positive'ini önlemek için.
-        /// "ET" sadece bağımsız kelime olarak eşleşir: "DANA ET 500G" ✓, "CORNETTO" ✗
-        /// </summary>
-        private static bool MatchesKeyword(string fullName, string[] words, string keyword)
+        private static string ResolveDisplayName(string mikroName, Product? localProduct, ProductAdminOverrideSettingsDto overrideDefaults)
         {
-            var kw = keyword.Trim();
-            if (string.IsNullOrEmpty(kw)) return false;
+            return ProductAdminOverridePolicy.ResolveName(mikroName, localProduct, overrideDefaults);
+        }
 
-            // Çok kelimeli keyword → substring (ör: "MADEN SU", "BEYAZ PEYNİR")
-            if (kw.Contains(' '))
-                return fullName.Contains(kw, StringComparison.OrdinalIgnoreCase);
+        private static decimal? ResolveDisplaySpecialPrice(Product? localProduct, ProductAdminOverrideSettingsDto overrideDefaults)
+        {
+            return ProductAdminOverridePolicy.ResolveSpecialPrice(localProduct, overrideDefaults);
+        }
 
-            // Kısa keyword (≤3 karakter) → tam kelime eşleme
-            // "ET" → words içinde "ET" var mı? "CORNETTO" kelimesinde yok.
-            if (kw.Length <= 3)
-                return words.Any(w => w.Equals(kw, StringComparison.OrdinalIgnoreCase));
+        private static (int? CategoryId, string CategorySlug, string CategoryName) PreferLocalCategoryOverride(
+            Product? localProduct,
+            ProductAdminOverrideSettingsDto overrideDefaults,
+            (int? CategoryId, string CategorySlug, string CategoryName) resolvedCategory)
+        {
+                if (ProductAdminOverridePolicy.ShouldUseAdminCategory(localProduct, overrideDefaults))
+            {
+                return (
+                    localProduct!.CategoryId,
+                    NormalizeCategorySlug(localProduct.Category?.Slug ?? string.Empty),
+                    localProduct.Category?.Name ?? resolvedCategory.CategoryName);
+            }
 
-            // Uzun keyword (>3 karakter) → substring eşleme güvenli
-            return fullName.Contains(kw, StringComparison.OrdinalIgnoreCase);
+            return resolvedCategory;
+        }
+
+        private async Task<List<MergedProductRow>> BuildMergedPublicProductsAsync(CancellationToken cancellationToken)
+        {
+            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken);
+            if (unified.Count == 0)
+                return new List<MergedProductRow>();
+
+            var overrideDefaults = await GetProductOverrideDefaultsAsync(cancellationToken);
+
+            var localAll = await _dbContext.Products
+                .Include(p => p.Category)
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+
+            var skuToLocal = localAll
+                .Where(p => !string.IsNullOrEmpty(p.SKU))
+                .GroupBy(p => p.SKU!)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            var slugToId = await _dbContext.Categories
+                .AsNoTracking()
+                .ToDictionaryAsync(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+            var slugToName = await _dbContext.Categories
+                .AsNoTracking()
+                .ToDictionaryAsync(c => c.Slug, c => c.Name, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+            var idToSlug = slugToId.ToDictionary(kv => kv.Value, kv => kv.Key);
+            var categoryMappings = await LoadActiveCategoryMappingsAsync(cancellationToken);
+
+            return unified
+                .Select(p =>
+                {
+                    var hasLocal = skuToLocal.TryGetValue(p.StokKod, out var local);
+                    var resolvedCategory = PreferLocalCategoryOverride(
+                        hasLocal ? local : null,
+                        overrideDefaults,
+                        ResolveCategoryInfo(
+                            p.AnagrupKod,
+                            p.GrupKod,
+                            p.StokAd,
+                            categoryMappings,
+                            idToSlug,
+                            slugToName));
+
+                    return new MergedProductRow
+                    {
+                        Product = new ProductListDto
+                        {
+                            Id = hasLocal ? local!.Id : 0,
+                            Sku = p.StokKod,
+                            Name = ResolveDisplayName(p.StokAd, hasLocal ? local : null, overrideDefaults),
+                            Slug = hasLocal && !string.IsNullOrEmpty(local!.Slug) ? local.Slug : GenerateSlug(p.StokAd),
+                            Description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
+                            Price = ResolveDisplayPrice(p.Fiyat, hasLocal ? local : null, overrideDefaults),
+                            SpecialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
+                            StockQuantity = (int)Math.Max(0, p.StokMiktar),
+                            ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                            Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
+                            CategoryId = resolvedCategory.CategoryId,
+                            CategoryName = resolvedCategory.CategoryName,
+                            AdminOverrideName = hasLocal ? local!.AdminOverrideName : null,
+                            AdminOverridePrice = hasLocal ? local!.AdminOverridePrice : null,
+                            AdminOverrideCategory = hasLocal ? local!.AdminOverrideCategory : null,
+                            EffectiveAdminOverrideName = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName) : false,
+                            EffectiveAdminOverridePrice = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice) : false,
+                            EffectiveAdminOverrideCategory = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory) : false,
+                        },
+                        CategorySlug = resolvedCategory.CategorySlug,
+                        CreatedAt = hasLocal ? local!.CreatedAt : DateTime.MinValue,
+                        IsVisible = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
+                    };
+                })
+                .Where(row => row.IsVisible)
+                .Where(row => row.Product.Price > 0)
+                .ToList();
+        }
+
+        private static bool MatchesSearchQuery(ProductListDto product, string query)
+        {
+            var normalizedQuery = GenerateSlug(query);
+            if (string.IsNullOrWhiteSpace(normalizedQuery))
+                return true;
+
+            return ContainsNormalizedSearchTerm(product.Name, normalizedQuery)
+                || ContainsNormalizedSearchTerm(product.Description, normalizedQuery)
+                || ContainsNormalizedSearchTerm(product.CategoryName, normalizedQuery)
+                || ContainsNormalizedSearchTerm(product.Sku, normalizedQuery);
+        }
+
+        private static bool ContainsNormalizedSearchTerm(string? value, string normalizedQuery)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return GenerateSlug(value).Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static IEnumerable<MergedProductRow> ApplyMergedProductSort(
+            IEnumerable<MergedProductRow> products,
+            string? sort,
+            bool isDescending)
+        {
+            var normalizedSort = sort?.Trim().ToLowerInvariant();
+
+            return normalizedSort switch
+            {
+                "price" => isDescending
+                    ? products.OrderByDescending(item => item.Product.Price).ThenBy(item => item.Product.Name)
+                    : products.OrderBy(item => item.Product.Price).ThenBy(item => item.Product.Name),
+                "newest" => isDescending
+                    ? products.OrderBy(item => item.CreatedAt).ThenBy(item => item.Product.Name)
+                    : products.OrderByDescending(item => item.CreatedAt).ThenBy(item => item.Product.Name),
+                _ => isDescending
+                    ? products.OrderByDescending(item => item.Product.Name)
+                    : products.OrderBy(item => item.Product.Name)
+            };
         }
 
         /// <summary>
@@ -722,6 +945,131 @@ namespace ECommerce.API.Controllers
             page = Math.Max(page, 1);
 
             var pagedResult = await _productService.GetProductsPagedAsync(page, size);
+            return Ok(pagedResult);
+        }
+
+        [HttpGet("category/{categoryId:int}/paged")]
+        public async Task<IActionResult> GetProductsByCategoryPaged(
+            int categoryId,
+            [FromQuery] int page = 1,
+            [FromQuery] int size = 50,
+            [FromQuery] string sort = "name",
+            [FromQuery] string direction = "asc",
+            [FromQuery] bool? inStock = null)
+        {
+            page = Math.Max(page, 1);
+            size = Math.Min(Math.Max(size, 1), 100);
+
+            if (_mikroDbService.IsConfigured)
+            {
+                var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                if (unified.Count > 0)
+                {
+                    var requestedCategory = await _dbContext.Categories
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(c => c.Id == categoryId, HttpContext.RequestAborted);
+                    var requestedCategorySlug = ResolveRequestedCategorySlug(requestedCategory);
+
+                    var localAll = await _dbContext.Products
+                        .Include(p => p.Category)
+                        .AsNoTracking()
+                        .ToListAsync(HttpContext.RequestAborted);
+
+                    var skuToLocal = localAll
+                        .Where(p => !string.IsNullOrEmpty(p.SKU))
+                        .GroupBy(p => p.SKU!)
+                        .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+                    var slugToId = await _dbContext.Categories
+                        .AsNoTracking()
+                        .ToDictionaryAsync(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase);
+
+                    var slugToName = await _dbContext.Categories
+                        .AsNoTracking()
+                        .ToDictionaryAsync(c => c.Slug, c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+                    var idToSlug = slugToId.ToDictionary(kv => kv.Value, kv => kv.Key);
+                    var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
+                    var overrideDefaults = await GetProductOverrideDefaultsAsync(HttpContext.RequestAborted);
+                    var isDescending = string.Equals(direction, "desc", StringComparison.OrdinalIgnoreCase);
+
+                    IEnumerable<MergedProductRow> merged = unified
+                        .Select(p =>
+                        {
+                            var hasLocal = skuToLocal.TryGetValue(p.StokKod, out var local);
+                            var resolvedCategory = PreferLocalCategoryOverride(
+                                hasLocal ? local : null,
+                                overrideDefaults,
+                                ResolveCategoryInfo(
+                                    p.AnagrupKod,
+                                    p.GrupKod,
+                                    p.StokAd,
+                                    categoryMappings,
+                                    idToSlug,
+                                    slugToName));
+
+                            return new MergedProductRow
+                            {
+                                Product = new ProductListDto
+                                {
+                                    Id = hasLocal ? local!.Id : 0,
+                                    Sku = p.StokKod,
+                                    Name = ResolveDisplayName(p.StokAd, hasLocal ? local : null, overrideDefaults),
+                                    Slug = hasLocal && !string.IsNullOrEmpty(local!.Slug) ? local.Slug : GenerateSlug(p.StokAd),
+                                    Description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
+                                    Price = ResolveDisplayPrice(p.Fiyat, hasLocal ? local : null, overrideDefaults),
+                                    SpecialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
+                                    StockQuantity = (int)Math.Max(0, p.StokMiktar),
+                                    ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                                    Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
+                                    CategoryId = resolvedCategory.CategoryId,
+                                    CategoryName = resolvedCategory.CategoryName,
+                                    AdminOverrideName = hasLocal ? local!.AdminOverrideName : null,
+                                    AdminOverridePrice = hasLocal ? local!.AdminOverridePrice : null,
+                                    AdminOverrideCategory = hasLocal ? local!.AdminOverrideCategory : null,
+                                    EffectiveAdminOverrideName = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName) : false,
+                                    EffectiveAdminOverridePrice = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice) : false,
+                                    EffectiveAdminOverrideCategory = hasLocal ? ProductAdminOverridePolicy.ResolveOverride(local!.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory) : false,
+                                },
+                                CategorySlug = resolvedCategory.CategorySlug,
+                                CreatedAt = hasLocal ? local!.CreatedAt : DateTime.MinValue,
+                                IsVisible = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
+                            };
+                        })
+                        .Where(x => x.IsVisible)
+                        .Where(x => x.Product.Price > 0)
+                        .Where(x =>
+                            x.Product.CategoryId == categoryId ||
+                            (!string.IsNullOrWhiteSpace(requestedCategorySlug) &&
+                             string.Equals(x.CategorySlug, requestedCategorySlug, StringComparison.OrdinalIgnoreCase)));
+
+                    if (inStock.HasValue)
+                    {
+                        merged = inStock.Value
+                            ? merged.Where(x => x.Product.StockQuantity > 0)
+                            : merged.Where(x => x.Product.StockQuantity <= 0);
+                    }
+
+                    var sorted = ApplyMergedProductSort(merged, sort, isDescending).ToList();
+                    var total = sorted.Count;
+                    var items = sorted
+                        .Skip((page - 1) * size)
+                        .Take(size)
+                        .Select(x => x.Product)
+                        .ToList();
+
+                    return Ok(new PagedResult<ProductListDto>(items, total, (page - 1) * size, size));
+                }
+            }
+
+            var pagedResult = await _productService.GetProductsByCategoryPagedAsync(
+                categoryId,
+                page,
+                size,
+                sort,
+                direction,
+                inStock);
+
             return Ok(pagedResult);
         }
 
@@ -848,8 +1196,10 @@ namespace ECommerce.API.Controllers
                 .AsNoTracking()
                 .ToDictionaryAsync(c => c.Slug, c => c.Name, StringComparer.OrdinalIgnoreCase);
 
-            var matchedSlug = MatchCategorySlug(mikro.StokAd);
-            slugToId.TryGetValue(matchedSlug, out var catId);
+            var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
+            var catId = ResolveCategoryId(mikro.AnagrupKod, mikro.GrupKod, categoryMappings)
+                ?? await GetFallbackCategoryIdAsync(HttpContext.RequestAborted);
+            var categorySlug = slugToId.FirstOrDefault(item => item.Value == catId).Key;
 
             var dto = new ProductListDto
             {
@@ -863,8 +1213,8 @@ namespace ECommerce.API.Controllers
                 StockQuantity = (int)Math.Max(0, mikro.StokMiktar),
                 ImageUrl = string.Empty,
                 Unit = string.IsNullOrWhiteSpace(mikro.Birim) ? "ADET" : mikro.Birim.Trim().ToUpperInvariant(),
-                CategoryId = catId > 0 ? catId : null,
-                CategoryName = catId > 0 ? slugToName.GetValueOrDefault(matchedSlug, string.Empty) : string.Empty,
+                CategoryId = catId,
+                CategoryName = !string.IsNullOrWhiteSpace(categorySlug) ? slugToName.GetValueOrDefault(categorySlug, string.Empty) : string.Empty,
             };
 
             return Ok(dto);
@@ -901,29 +1251,19 @@ namespace ECommerce.API.Controllers
                 return NotFound(new { message = $"Ürün bulunamadı: {sku}" });
 
             // Kategori eşleme
-            var slugToId = await _dbContext.Categories
-                .AsNoTracking()
-                .ToDictionaryAsync(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase);
+            var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
+            var categoryId = ResolveCategoryId(mikro.AnagrupKod, mikro.GrupKod, categoryMappings);
 
-            // MikroCategoryMapping önce, sonra keyword fallback
-            var anagrupMappings = await _dbContext.MikroCategoryMappings
-                .AsNoTracking()
-                .ToDictionaryAsync(m => m.MikroAnagrupKod, m => m.CategoryId, StringComparer.OrdinalIgnoreCase);
-
-            int categoryId = 0;
-            var categoryCode = !string.IsNullOrWhiteSpace(mikro.AnagrupKod) ? mikro.AnagrupKod : mikro.GrupKod;
-            if (!string.IsNullOrWhiteSpace(categoryCode) && anagrupMappings.TryGetValue(categoryCode, out var mappedCatId))
-                categoryId = mappedCatId;
-
-            if (categoryId == 0)
+            if (!categoryId.HasValue && _autoCategoryMappingEngine != null)
             {
-                var matchedSlug = MatchCategorySlug(mikro.StokAd);
-                slugToId.TryGetValue(matchedSlug, out categoryId);
+                categoryId = await _autoCategoryMappingEngine.ResolveOrCreateMappingAsync(
+                    mikro.AnagrupKod ?? string.Empty,
+                    mikro.GrupKod,
+                    HttpContext.RequestAborted);
+                CacheResolvedMapping(categoryMappings, mikro.AnagrupKod, categoryId.Value);
             }
 
-            // Fallback: ilk aktif kategori
-            if (categoryId == 0)
-                categoryId = await _dbContext.Categories.Where(c => c.IsActive).Select(c => c.Id).FirstOrDefaultAsync();
+            categoryId ??= await GetFallbackCategoryIdAsync(HttpContext.RequestAborted);
 
             // Slug çakışmasını önle — aynı isimli ürün varsa sonuna SKU ekle
             var baseSlug = GenerateSlug(mikro.StokAd);
@@ -937,7 +1277,7 @@ namespace ECommerce.API.Controllers
                 SKU = mikro.StokKod,
                 Price = mikro.Fiyat,
                 StockQuantity = (int)Math.Max(0, mikro.StokMiktar),
-                CategoryId = categoryId,
+                CategoryId = categoryId.Value,
                 Description = string.Empty,
                 ImageUrl = string.Empty,
                 IsActive = true,
@@ -952,6 +1292,189 @@ namespace ECommerce.API.Controllers
             _logger.LogInformation("[EnsureLocal] Mikro ürün local DB'ye eklendi: {Sku} → Id={Id}", sku, product.Id);
 
             return Ok(new { id = product.Id, sku = product.SKU, name = product.Name });
+        }
+
+        private async Task<Dictionary<string, List<MikroCategoryMapping>>> LoadActiveCategoryMappingsAsync(CancellationToken cancellationToken)
+        {
+            var mappings = await _dbContext.MikroCategoryMappings
+                .AsNoTracking()
+                .Where(m => m.IsActive)
+                .OrderByDescending(m => m.Priority)
+                .ThenBy(m => m.Id)
+                .ToListAsync(cancellationToken);
+
+            return mappings
+                .GroupBy(m => m.MikroAnagrupKod, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.ToList(),
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static (int? CategoryId, string CategorySlug, string CategoryName) ResolveCategoryInfo(
+            string? anagrupKod,
+            string? grupKod,
+            string? productName,
+            Dictionary<string, List<MikroCategoryMapping>> mappings,
+            Dictionary<int, string> idToSlug,
+            Dictionary<string, string> slugToName)
+        {
+            var categoryId = ResolveCategoryId(anagrupKod, grupKod, mappings);
+            if (!categoryId.HasValue)
+            {
+                return TryResolveCategoryInfoFromProductName(productName, idToSlug, slugToName);
+            }
+
+            if (!idToSlug.TryGetValue(categoryId.Value, out var slug))
+                return (categoryId, string.Empty, string.Empty);
+
+            var normalizedSlug = NormalizeCategorySlug(slug);
+            if (string.Equals(normalizedSlug, UncategorizedCategorySlug, StringComparison.OrdinalIgnoreCase))
+            {
+                var fallback = TryResolveCategoryInfoFromProductName(productName, idToSlug, slugToName);
+                if (fallback.CategoryId.HasValue)
+                    return fallback;
+            }
+
+            var hintedCategory = TryResolveCategoryInfoFromProductName(productName, idToSlug, slugToName);
+            if (hintedCategory.CategoryId.HasValue &&
+                ShouldPreferHintedCategory(normalizedSlug, hintedCategory.CategorySlug))
+            {
+                return hintedCategory;
+            }
+
+            return (
+                categoryId,
+                normalizedSlug,
+                slugToName.GetValueOrDefault(slug, slugToName.GetValueOrDefault(normalizedSlug, string.Empty)));
+        }
+
+        private static int? ResolveCategoryId(
+            string? anagrupKod,
+            string? grupKod,
+            Dictionary<string, List<MikroCategoryMapping>> mappings)
+        {
+            if (!string.IsNullOrWhiteSpace(anagrupKod) &&
+                mappings.TryGetValue(anagrupKod.Trim(), out var directMappings) &&
+                directMappings.Count > 0)
+            {
+                if (!string.IsNullOrWhiteSpace(grupKod))
+                {
+                    var exactAltgrupMatch = directMappings.FirstOrDefault(mapping =>
+                        !string.IsNullOrWhiteSpace(mapping.MikroAltgrupKod) &&
+                        string.Equals(mapping.MikroAltgrupKod, grupKod.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                    if (exactAltgrupMatch != null)
+                        return exactAltgrupMatch.CategoryId;
+                }
+
+                var baseMapping = directMappings.FirstOrDefault(mapping =>
+                    string.IsNullOrWhiteSpace(mapping.MikroAltgrupKod) &&
+                    string.IsNullOrWhiteSpace(mapping.MikroMarkaKod));
+
+                return (baseMapping ?? directMappings[0]).CategoryId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(grupKod) &&
+                mappings.TryGetValue(grupKod.Trim(), out var groupMappings) &&
+                groupMappings.Count > 0)
+            {
+                return groupMappings[0].CategoryId;
+            }
+
+            if (mappings.TryGetValue("*", out var wildcardMappings) && wildcardMappings.Count > 0)
+                return wildcardMappings[0].CategoryId;
+
+            return null;
+        }
+
+        private static (int? CategoryId, string CategorySlug, string CategoryName) TryResolveCategoryInfoFromProductName(
+            string? productName,
+            Dictionary<int, string> idToSlug,
+            Dictionary<string, string> slugToName)
+        {
+            if (string.IsNullOrWhiteSpace(productName))
+                return (null, string.Empty, string.Empty);
+
+            var normalizedName = NormalizeCategorySlug(productName)
+                .Replace('-', ' ');
+
+            foreach (var (slug, hints) in ProductNameCategoryHints)
+            {
+                if (!hints.Any(hint => normalizedName.Contains(NormalizeCategorySlug(hint).Replace('-', ' '), StringComparison.OrdinalIgnoreCase)))
+                    continue;
+
+                var categoryEntry = idToSlug.FirstOrDefault(item =>
+                    string.Equals(item.Value, slug, StringComparison.OrdinalIgnoreCase));
+
+                if (categoryEntry.Key <= 0)
+                    continue;
+
+                return (
+                    categoryEntry.Key,
+                    slug,
+                    slugToName.GetValueOrDefault(slug, string.Empty));
+            }
+
+            return (null, string.Empty, string.Empty);
+        }
+
+        private static bool ShouldPreferHintedCategory(string resolvedSlug, string hintedSlug)
+        {
+            if (string.IsNullOrWhiteSpace(hintedSlug) ||
+                string.Equals(resolvedSlug, hintedSlug, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return string.Equals(hintedSlug, FrozenStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase) &&
+                   ProductHintOverridableCategorySlugs.Contains(resolvedSlug);
+        }
+
+        private void CacheResolvedMapping(
+            Dictionary<string, List<MikroCategoryMapping>> mappings,
+            string? anagrupKod,
+            int categoryId)
+        {
+            if (string.IsNullOrWhiteSpace(anagrupKod))
+                return;
+
+            if (!mappings.TryGetValue(anagrupKod, out var existing))
+            {
+                existing = new List<MikroCategoryMapping>();
+                mappings[anagrupKod] = existing;
+            }
+
+            if (existing.Any(mapping => mapping.CategoryId == categoryId))
+                return;
+
+            existing.Insert(0, new MikroCategoryMapping
+            {
+                MikroAnagrupKod = anagrupKod,
+                CategoryId = categoryId,
+                Priority = 10,
+                IsActive = true
+            });
+        }
+
+        private async Task<int> GetFallbackCategoryIdAsync(CancellationToken cancellationToken)
+        {
+            var wildcard = await _dbContext.MikroCategoryMappings
+                .AsNoTracking()
+                .Where(m => m.IsActive && m.MikroAnagrupKod == "*")
+                .OrderByDescending(m => m.Priority)
+                .Select(m => (int?)m.CategoryId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (wildcard.HasValue)
+                return wildcard.Value;
+
+            return await _dbContext.Categories
+                .AsNoTracking()
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.SortOrder)
+                .Select(c => c.Id)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
         // Yeni ürün oluştur
@@ -991,6 +1514,84 @@ namespace ECommerce.API.Controllers
             }
         }
 
+        [HttpGet("admin/duplicates")]
+        [Authorize(Roles = Roles.AdminLike)]
+        public async Task<IActionResult> GetDuplicateProducts()
+        {
+            var products = await _dbContext.Products
+                .Include(p => p.Category)
+                .AsNoTracking()
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Name,
+                    p.Description,
+                    p.SKU,
+                    p.Price,
+                    p.SpecialPrice,
+                    p.StockQuantity,
+                    p.IsActive,
+                    p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty
+                })
+                .ToListAsync(HttpContext.RequestAborted);
+
+            var cacheLookup = await _dbContext.MikroProductCaches
+                .AsNoTracking()
+                .Where(c => c.LocalProductId.HasValue)
+                .GroupBy(c => c.LocalProductId!.Value)
+                .Select(g => g.OrderByDescending(item => item.GuncellemeTarihi).First())
+                .ToDictionaryAsync(c => c.LocalProductId!.Value, c => c, HttpContext.RequestAborted);
+
+            var candidates = products
+                .Select(product =>
+                {
+                    cacheLookup.TryGetValue(product.Id, out var cache);
+                    var barcode = cache?.Barkod ?? ExtractBarcodeFromDescription(product.Description);
+                    return new DuplicateProductCandidate
+                    {
+                        Id = product.Id,
+                        Name = product.Name ?? string.Empty,
+                        Description = product.Description ?? string.Empty,
+                        Sku = product.SKU ?? string.Empty,
+                        Barcode = barcode ?? string.Empty,
+                        Price = product.Price,
+                        SpecialPrice = product.SpecialPrice,
+                        StockQuantity = product.StockQuantity,
+                        IsActive = product.IsActive,
+                        CategoryId = product.CategoryId,
+                        CategoryName = product.CategoryName ?? string.Empty,
+                            ExactMatchKey = BuildDuplicateExactMatchKey(
+                                product.Name,
+                                product.Description,
+                                product.SKU,
+                                barcode,
+                                product.Price,
+                                product.SpecialPrice,
+                                product.CategoryId)
+                    };
+                })
+                .ToList();
+
+            var groups = new List<DuplicateGroupResponse>();
+            var fingerprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var exactGroup in candidates
+                    .Where(candidate => !string.IsNullOrWhiteSpace(candidate.ExactMatchKey))
+                    .GroupBy(candidate => candidate.ExactMatchKey, StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Select(item => item.Id).Distinct().Count() > 1)
+                .OrderByDescending(group => group.Count()))
+            {
+                    AddDuplicateGroup(groups, fingerprints, $"exact:{exactGroup.Key}", "Tıpatıp aynı ürün bilgisi", exactGroup);
+            }
+
+            return Ok(new
+            {
+                totalGroups = groups.Count,
+                groups
+            });
+        }
+
         // SKU bazlı ürün güncelle/oluştur — Mikro ERP ürünlerinde id=0 olduğundan SKU ile eşleştir
         [HttpPut("by-sku/{sku}")]
         [Authorize(Roles = Roles.AdminLike)]
@@ -1025,6 +1626,42 @@ namespace ECommerce.API.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        [HttpPatch("{id}/deactivate")]
+        [Authorize(Roles = Roles.AdminLike)]
+        public async Task<IActionResult> DeactivateProduct(int id)
+        {
+            if (id <= 0)
+                return BadRequest(new { message = "Geçerli ürün ID gerekli." });
+
+            var product = await _productRepository.GetByIdAsync(id);
+            if (product == null)
+                return NotFound(new { message = "Ürün bulunamadı." });
+
+            if (!product.IsActive)
+            {
+                return Ok(new
+                {
+                    id = product.Id,
+                    isActive = false,
+                    message = "Ürün zaten pasif durumda."
+                });
+            }
+
+            // NEDEN: Duplicate düzeltmesinde ürünü silmek sipariş ve audit geçmişini bozar.
+            // Güvenli yaklaşım olarak yalnızca görünürlüğünü kapatıyoruz.
+            product.IsActive = false;
+            product.AdminDeactivated = true;
+            product.UpdatedAt = DateTime.UtcNow;
+            await _productRepository.UpdateAsync(product);
+
+            return Ok(new
+            {
+                id = product.Id,
+                isActive = false,
+                message = "Ürün pasife alındı."
+            });
         }
 
         // Stok güncelle
@@ -1306,6 +1943,135 @@ namespace ECommerce.API.Controllers
 
             // Durum 4: Sadece dosya adı — /uploads/products/ altında olduğu varsayılır
             return $"/uploads/products/{rawUrl}";
+        }
+
+        private static void AddDuplicateGroup(
+            List<DuplicateGroupResponse> groups,
+            HashSet<string> fingerprints,
+            string keyPrefix,
+            string reason,
+            IEnumerable<DuplicateProductCandidate> source)
+        {
+            var products = source
+                .GroupBy(item => item.Id)
+                .Select(group => group.First())
+                .OrderByDescending(item => item.IsActive)
+                .ThenBy(item => item.Name)
+                .ToList();
+
+            if (products.Count < 2)
+                return;
+
+            var idsFingerprint = string.Join("-", products.Select(item => item.Id).OrderBy(id => id));
+            var fingerprint = $"{reason}:{idsFingerprint}";
+            if (!fingerprints.Add(fingerprint))
+                return;
+
+            groups.Add(new DuplicateGroupResponse
+            {
+                GroupKey = keyPrefix,
+                Reason = reason,
+                Products = products
+                    .Select(item => (object)new
+                    {
+                        id = item.Id,
+                        name = item.Name,
+                        description = item.Description,
+                        sku = item.Sku,
+                        barcode = item.Barcode,
+                        price = item.Price,
+                        specialPrice = item.SpecialPrice,
+                        stockQuantity = item.StockQuantity,
+                        isActive = item.IsActive,
+                        categoryId = item.CategoryId,
+                        categoryName = item.CategoryName
+                    })
+                    .ToList()
+            });
+        }
+
+        private static string BuildDuplicateExactMatchKey(
+            string? name,
+            string? description,
+            string? sku,
+            string? barcode,
+            decimal price,
+            decimal? specialPrice,
+            int categoryId)
+        {
+            var normalizedName = NormalizeDuplicateText(name);
+            var normalizedDescription = NormalizeDuplicateText(description);
+            var normalizedSku = NormalizeDuplicateText(sku);
+            var normalizedBarcode = NormalizeDuplicateText(barcode);
+
+            if (string.IsNullOrWhiteSpace(normalizedName) &&
+                string.IsNullOrWhiteSpace(normalizedDescription) &&
+                string.IsNullOrWhiteSpace(normalizedSku) &&
+                string.IsNullOrWhiteSpace(normalizedBarcode))
+            {
+                return string.Empty;
+            }
+
+            return string.Join("|", new[]
+            {
+                normalizedName,
+                normalizedDescription,
+                normalizedSku,
+                normalizedBarcode,
+                price.ToString("0.####", CultureInfo.InvariantCulture),
+                specialPrice?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
+                categoryId.ToString(CultureInfo.InvariantCulture)
+            });
+        }
+
+        private static string NormalizeDuplicateText(string? value)
+        {
+            return string.Join(
+                " ",
+                (value ?? string.Empty)
+                    .Trim()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                .ToUpperInvariant();
+        }
+
+        private Task<ProductAdminOverrideSettingsDto> GetProductOverrideDefaultsAsync(CancellationToken cancellationToken)
+        {
+            return _productAdminOverrideSettingsService.GetSettingsAsync(cancellationToken);
+        }
+
+        private int? GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                           ?? User.FindFirst("sub")?.Value
+                           ?? User.FindFirst("userId")?.Value;
+
+            return int.TryParse(userIdClaim, out var userId) ? userId : null;
+        }
+
+        private string GetCurrentUserName()
+        {
+            return User.FindFirst(ClaimTypes.Name)?.Value
+                ?? User.FindFirst("name")?.Value
+                ?? User.FindFirst(ClaimTypes.Email)?.Value
+                ?? "Admin";
+        }
+
+        private static string? ExtractBarcodeFromDescription(string? description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+                return null;
+
+            const string marker = "[Barkod:";
+            var startIndex = description.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (startIndex < 0)
+                return null;
+
+            var valueStart = startIndex + marker.Length;
+            var endIndex = description.IndexOf(']', valueStart);
+            if (endIndex <= valueStart)
+                return null;
+
+            return description[valueStart..endIndex].Trim();
         }
 
         /// <summary>

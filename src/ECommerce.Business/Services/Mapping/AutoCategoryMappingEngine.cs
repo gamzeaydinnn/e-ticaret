@@ -4,6 +4,7 @@ using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 namespace ECommerce.Business.Services.Mapping
 {
@@ -33,10 +34,24 @@ namespace ECommerce.Business.Services.Mapping
         private readonly ILogger<AutoCategoryMappingEngine> _logger;
         private readonly bool _autoCreateCategories;
 
-        // Fuzzy match eşik değeri — bu skorun üstündeki eşleşmeler otomatik kabul edilir
-        // NEDEN: 0.4 çok düşük — "ET" gibi kısa tokenlar false-positive üretiyordu
-        // 0.65 ile sadece gerçekten benzer grup kodları eşleşir
-        private const double AutoMatchThreshold = 0.65;
+        // Fuzzy match eşik değeri — bu skorun üstündeki eşleşmeler otomatik kabul edilir.
+        // Seed ve keyword hint dışında kalan ama açıkça benzer grup kodlarını da yakalamak için daha toleranslı tutulur.
+        private const double AutoMatchThreshold = 0.5;
+
+        private static readonly CultureInfo TurkishCulture = CultureInfo.GetCultureInfo("tr-TR");
+
+        private static readonly Dictionary<string, string[]> KeywordHintMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ev-ve-mutfak"] = new[] { "tencere", "tava", "bardak", "tabak", "catal", "kasik", "bicak", "servis", "tepsi", "guvec", "suzgec", "termos" },
+            ["et-ve-et-urunleri"] = new[] { "et", "dana", "kuzu", "sarkuteri", "tavuk", "pilic", "balik", "somon", "hindi", "kofte", "kiyma", "sucuk" },
+            ["sut-ve-sut-urunleri"] = new[] { "sut", "peynir", "yogurt", "ayran", "kefir", "tereyag", "kaymak", "labne", "kasar", "kahvaltilik", "yumurta" },
+            ["meyve-ve-sebze"] = new[] { "meyve", "sebze", "yesillik", "domates", "patates", "salatalik", "marul", "elma", "muz", "limon", "avokado" },
+            ["icecekler"] = new[] { "icecek", "su", "soda", "kola", "meyve suyu", "cay", "kahve", "limonata", "enerji", "gazoz" },
+            ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "dondurulmus", "frozen", "superfresh", "super fresh" },
+            ["atistirmalik"] = new[] { "atistirmalik", "kuruyemis", "cips", "cikolata", "biskuvi", "gofret", "kraker", "lokum", "sakiz" },
+            ["temizlik"] = new[] { "temizlik", "deterjan", "bulasik", "camasir", "hijyen", "sampuan", "sabun", "dis macunu", "deodorant", "bebek" },
+            ["temel-gida"] = new[] { "temel gida", "bakliyat", "makarna", "bulgur", "pirinc", "yag", "baharat", "salca", "sirke", "ekmek", "hazir yemek" },
+        };
 
         // Türkçe karakter normalizasyon tablosu
         private static readonly Dictionary<char, char> TurkishCharMap = new()
@@ -66,8 +81,15 @@ namespace ECommerce.Business.Services.Mapping
             _mappingService = mappingService ?? throw new ArgumentNullException(nameof(mappingService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            // appsettings'den kontrol — false ise yeni kategori oluşturmaz, "Diğer"e atar
-            _autoCreateCategories = configuration.GetValue("CategoryMapping:AutoCreateCategories", true);
+            var requestedAutoCreate = configuration.GetValue("CategoryMapping:AutoCreateCategories", false);
+            if (requestedAutoCreate)
+            {
+                _logger.LogWarning(
+                    "[AutoMapping] CategoryMapping:AutoCreateCategories=true istendi ancak Mikro ve storefront kategori kümeleri ayrıldığı için yeni storefront kategorisi üretimi devre dışı bırakıldı.");
+            }
+
+            // Mikro kategori kodları storefront Category kaydı üretmemeli.
+            _autoCreateCategories = false;
         }
 
         /// <inheritdoc />
@@ -83,6 +105,10 @@ namespace ECommerce.Business.Services.Mapping
                 .AsNoTracking()
                 .Where(c => c.IsActive)
                 .ToListAsync(cancellationToken);
+
+            var hintSuggestion = TryGetKeywordHintSuggestion(anagrupKod, altgrupKod, categories);
+            if (hintSuggestion != null)
+                return new List<CategorySuggestion> { hintSuggestion };
 
             // Normalize edilmiş Mikro grup adı — karşılaştırma için hazırla
             var normalizedGroup = NormalizeTurkish(anagrupKod);
@@ -146,29 +172,36 @@ namespace ECommerce.Business.Services.Mapping
             string? altgrupKod = null,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(anagrupKod))
+            var resolvedAnagrupKod = !string.IsNullOrWhiteSpace(anagrupKod)
+                ? anagrupKod.Trim()
+                : altgrupKod?.Trim();
+            var resolvedAltgrupKod = !string.IsNullOrWhiteSpace(anagrupKod)
+                ? altgrupKod?.Trim()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(resolvedAnagrupKod))
                 return await GetDigerCategoryIdAsync(cancellationToken);
 
             // 1. Mevcut mapping var mı?
             var existing = await _mappingService.GetMappingAsync(
-                anagrupKod, altgrupKod, null, cancellationToken);
+                resolvedAnagrupKod, resolvedAltgrupKod, null, cancellationToken);
 
             if (existing != null)
                 return existing.CategoryId;
 
             // 2. Fuzzy match ile mevcut kategoriye eşleşiyor mu?
-            var suggestions = await SuggestMappingAsync(anagrupKod, altgrupKod, cancellationToken);
+            var suggestions = await SuggestMappingAsync(resolvedAnagrupKod, resolvedAltgrupKod, cancellationToken);
             var bestMatch = suggestions.FirstOrDefault();
 
             if (bestMatch != null && bestMatch.Score >= AutoMatchThreshold)
             {
                 // Otomatik mapping oluştur
-                await CreateMappingAsync(anagrupKod, altgrupKod, bestMatch.CategoryId,
+                await CreateMappingAsync(resolvedAnagrupKod, resolvedAltgrupKod, bestMatch.CategoryId,
                     $"Auto-mapped ({bestMatch.MatchType}, score={bestMatch.Score})", cancellationToken);
 
                 _logger.LogInformation(
                     "[AutoMapping] '{AnagrupKod}' → '{Category}' (score={Score}, type={Type})",
-                    anagrupKod, bestMatch.CategoryName, bestMatch.Score, bestMatch.MatchType);
+                    resolvedAnagrupKod, bestMatch.CategoryName, bestMatch.Score, bestMatch.MatchType);
 
                 return bestMatch.CategoryId;
             }
@@ -178,11 +211,11 @@ namespace ECommerce.Business.Services.Mapping
             if (_autoCreateCategories)
             {
                 var newCategoryId = await CreateHierarchicalCategoryAsync(
-                    anagrupKod, altgrupKod, cancellationToken);
+                    resolvedAnagrupKod, resolvedAltgrupKod, cancellationToken);
 
                 _logger.LogInformation(
                     "[AutoMapping] Kategori oluşturuldu: '{AnagrupKod}/{AltgrupKod}' → CategoryId={CategoryId}",
-                    anagrupKod, altgrupKod ?? "(yok)", newCategoryId);
+                    resolvedAnagrupKod, resolvedAltgrupKod ?? "(yok)", newCategoryId);
 
                 return newCategoryId;
             }
@@ -190,11 +223,11 @@ namespace ECommerce.Business.Services.Mapping
             // 4. "Diğer" kategorisine at
             var digerId = await GetDigerCategoryIdAsync(cancellationToken);
 
-            await CreateMappingAsync(anagrupKod, altgrupKod, digerId,
+            await CreateMappingAsync(resolvedAnagrupKod, resolvedAltgrupKod, digerId,
                 "Auto-mapped → Diğer (eşleşme bulunamadı, AutoCreateCategories=false)", cancellationToken);
 
             _logger.LogWarning(
-                "[AutoMapping] '{AnagrupKod}' eşlenemedi, 'Diğer' kategorisine atandı", anagrupKod);
+                "[AutoMapping] '{AnagrupKod}' eşlenemedi, 'Diğer' kategorisine atandı", resolvedAnagrupKod);
 
             return digerId;
         }
@@ -397,6 +430,54 @@ namespace ECommerce.Business.Services.Mapping
             return new string(chars);
         }
 
+        private static CategorySuggestion? TryGetKeywordHintSuggestion(
+            string anagrupKod,
+            string? altgrupKod,
+            IReadOnlyCollection<Category> categories)
+        {
+            var combined = string.Join(' ', new[] { anagrupKod, altgrupKod }
+                .Where(value => !string.IsNullOrWhiteSpace(value)));
+
+            if (string.IsNullOrWhiteSpace(combined))
+                return null;
+
+            var normalizedCombined = NormalizeTurkish(combined);
+            var tokens = Tokenize(normalizedCombined);
+
+            foreach (var (slug, hints) in KeywordHintMap)
+            {
+                if (!hints.Any(hint => MatchesHint(normalizedCombined, tokens, hint)))
+                    continue;
+
+                var category = categories.FirstOrDefault(c =>
+                    string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase));
+
+                if (category == null)
+                    continue;
+
+                return new CategorySuggestion
+                {
+                    CategoryId = category.Id,
+                    CategoryName = category.Name,
+                    CategorySlug = category.Slug,
+                    Score = 0.95,
+                    MatchType = "keyword_hint"
+                };
+            }
+
+            return null;
+        }
+
+        private static bool MatchesHint(string normalizedCombined, HashSet<string> tokens, string hint)
+        {
+            var normalizedHint = NormalizeTurkish(hint);
+
+            if (normalizedHint.Contains(' '))
+                return normalizedCombined.Contains(normalizedHint, StringComparison.OrdinalIgnoreCase);
+
+            return tokens.Contains(normalizedHint);
+        }
+
         /// <summary>
         /// Metni kelimelere ayırır, stop word'leri çıkarır.
         /// NEDEN: "Et ve Et Ürünleri" → {"et"}, "ET URUNLERI" → {"et"} → exact match!
@@ -561,19 +642,10 @@ namespace ECommerce.Business.Services.Mapping
 
             // Tire/alt çizgiyi boşluğa çevir
             var pretty = groupCode.Replace('-', ' ').Replace('_', ' ');
+            pretty = string.Join(' ', pretty.Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
-            // Her kelimenin ilk harfini büyük yap (Title Case)
-            var words = pretty.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 0; i < words.Length; i++)
-            {
-                if (words[i].Length > 0)
-                {
-                    words[i] = char.ToUpper(words[i][0]) +
-                        (words[i].Length > 1 ? words[i][1..].ToLowerInvariant() : "");
-                }
-            }
-
-            return string.Join(' ', words);
+            var lower = TurkishCulture.TextInfo.ToLower(pretty);
+            return TurkishCulture.TextInfo.ToTitleCase(lower);
         }
 
         /// <summary>

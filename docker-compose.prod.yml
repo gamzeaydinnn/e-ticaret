@@ -179,6 +179,7 @@ services:
       # Mikro ERP alt grup kodları (1001, 1002...) sayısal ve anlamsız; otomatik kategori oluşturma kapalı.
       # Eşleşmeyen ürünler 'Diğer' kategorisine atanır, admin panelinden manuel eşleme yapılabilir.
       - CategoryMapping__AutoCreateCategories=false
+      - Storage__UploadsRootPath=/data/uploads
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -190,7 +191,7 @@ services:
         condition: service_started
     volumes:
       - ./logs:/app/logs
-      - ./uploads:/app/uploads
+      - ${UPLOADS_HOST_PATH:-/srv/ecommerce/uploads}:/data/uploads
     networks:
       - ecommerce-network
 

@@ -78,10 +78,21 @@ namespace ECommerce.API.Infrastructure
                 new Category
                 {
                     Name = "Atıştırmalık",
-                    Description = "Cipsi, kraker ve atıştırmalıklar",
+                    Description = "Cips, kraker ve atıştırmalıklar",
                     ImageUrl = "/images/tahil-cipsi.jpg",
                     Slug = "atistirmalik",
                     SortOrder = 5,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                },
+                new Category
+                {
+                    Name = "Dondurma & Dondurulmuş Gıda",
+                    Description = "Dondurma ve dondurulmuş gıda ürünleri",
+                    ImageUrl = "/images/tahil-cipsi.jpg",
+                    Slug = "dondurma-ve-dondurulmus-gida",
+                    SortOrder = 6,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -92,7 +103,7 @@ namespace ECommerce.API.Infrastructure
                     Description = "Ev temizlik ürünleri",
                     ImageUrl = "/images/yeşil-cif-krem.jpg",
                     Slug = "temizlik",
-                    SortOrder = 6,
+                    SortOrder = 7,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -103,7 +114,7 @@ namespace ECommerce.API.Infrastructure
                     Description = "Temel gıda ürünleri",
                     ImageUrl = "/images/bulgur.png",
                     Slug = "temel-gida",
-                    SortOrder = 7,
+                    SortOrder = 8,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow

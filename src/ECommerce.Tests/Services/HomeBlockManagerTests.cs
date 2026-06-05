@@ -26,9 +26,9 @@ namespace ECommerce.Tests.Services
             return new ECommerceDbContext(options);
         }
 
-        private static HomeBlockManager CreateManager(ECommerceDbContext context)
+        private static HomeBlockManager CreateManager(ECommerceDbContext context, Mock<IHomeBlockRepository>? repositoryMock = null)
         {
-            var repositoryMock = new Mock<IHomeBlockRepository>();
+            repositoryMock ??= new Mock<IHomeBlockRepository>();
             var loggerMock = new Mock<ILogger<HomeBlockManager>>();
             return new HomeBlockManager(repositoryMock.Object, context, loggerMock.Object);
         }
@@ -155,6 +155,164 @@ namespace ECommerce.Tests.Services
             Assert.Equal(2, result.Count);
             Assert.Equal(newestProduct.Id, result[0].Id);
             Assert.Equal(olderProduct.Id, result[1].Id);
+        }
+
+        [Fact]
+        public async Task GetActiveBlocksForHomepageAsync_ShouldHideOutOfStockProducts_ButKeepBlockActive()
+        {
+            using var context = GetInMemoryDbContext();
+
+            var category = new Category { Name = "Kategori", Slug = "kategori", IsActive = true };
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+
+            var inStockProduct = new Product
+            {
+                Name = "Stokta Var",
+                Price = 10m,
+                CategoryId = category.Id,
+                IsActive = true,
+                StockQuantity = 5
+            };
+            var outOfStockProduct = new Product
+            {
+                Name = "Stokta Yok",
+                Price = 12m,
+                CategoryId = category.Id,
+                IsActive = true,
+                StockQuantity = 0
+            };
+
+            context.Products.AddRange(inStockProduct, outOfStockProduct);
+            await context.SaveChangesAsync();
+
+            var block = new HomeProductBlock
+            {
+                Id = 1,
+                Name = "Ana Sayfa Manuel Blok",
+                Title = "Ana Sayfa Manuel Blok",
+                Slug = "ana-sayfa-manuel-blok",
+                BlockType = "manual",
+                IsActive = true,
+                MaxProductCount = 10,
+                BlockProducts =
+                {
+                    new HomeBlockProduct
+                    {
+                        ProductId = inStockProduct.Id,
+                        Product = inStockProduct,
+                        DisplayOrder = 0,
+                        IsActive = true,
+                    },
+                    new HomeBlockProduct
+                    {
+                        ProductId = outOfStockProduct.Id,
+                        Product = outOfStockProduct,
+                        DisplayOrder = 1,
+                        IsActive = true,
+                    }
+                }
+            };
+
+            var repositoryMock = new Mock<IHomeBlockRepository>();
+            repositoryMock
+                .Setup(repository => repository.GetActiveBlocksWithProductsAsync())
+                .ReturnsAsync(new[] { block });
+
+            var manager = CreateManager(context, repositoryMock);
+
+            var result = (await manager.GetActiveBlocksForHomepageAsync()).ToList();
+
+            var mappedBlock = Assert.Single(result);
+            var mappedProduct = Assert.Single(mappedBlock.Products);
+            Assert.Equal(inStockProduct.Id, mappedProduct.Id);
+        }
+
+        [Fact]
+        public async Task GetBlockBySlugAsync_ShouldHideOutOfStockAndZeroPriceProducts_ForFullCollectionView()
+        {
+            using var context = GetInMemoryDbContext();
+
+            var category = new Category { Name = "Kategori", Slug = "kategori", IsActive = true };
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+
+            var inStockProduct = new Product
+            {
+                Name = "Stokta Var",
+                Price = 10m,
+                CategoryId = category.Id,
+                IsActive = true,
+                StockQuantity = 5
+            };
+            var outOfStockProduct = new Product
+            {
+                Name = "Stokta Yok",
+                Price = 12m,
+                CategoryId = category.Id,
+                IsActive = true,
+                StockQuantity = 0
+            };
+
+            var zeroPriceProduct = new Product
+            {
+                Name = "Fiyatı Sıfır",
+                Price = 0m,
+                CategoryId = category.Id,
+                IsActive = true,
+                StockQuantity = 7
+            };
+
+            context.Products.AddRange(inStockProduct, outOfStockProduct, zeroPriceProduct);
+            await context.SaveChangesAsync();
+
+            var block = new HomeProductBlock
+            {
+                Id = 1,
+                Name = "Manual Block",
+                Title = "Manual Block",
+                Slug = "manual-block",
+                BlockType = "manual",
+                IsActive = true,
+                MaxProductCount = 10,
+                BlockProducts =
+                {
+                    new HomeBlockProduct
+                    {
+                        ProductId = inStockProduct.Id,
+                        Product = inStockProduct,
+                        DisplayOrder = 0,
+                        IsActive = true,
+                    },
+                    new HomeBlockProduct
+                    {
+                        ProductId = outOfStockProduct.Id,
+                        Product = outOfStockProduct,
+                        DisplayOrder = 1,
+                        IsActive = true,
+                    },
+                    new HomeBlockProduct
+                    {
+                        ProductId = zeroPriceProduct.Id,
+                        Product = zeroPriceProduct,
+                        DisplayOrder = 2,
+                        IsActive = true,
+                    }
+                }
+            };
+
+            var repositoryMock = new Mock<IHomeBlockRepository>();
+            repositoryMock
+                .Setup(repository => repository.GetBySlugAsync("manual-block"))
+                .ReturnsAsync(block);
+
+            var manager = CreateManager(context, repositoryMock);
+
+            var result = await manager.GetBlockBySlugAsync("manual-block");
+
+            Assert.NotNull(result);
+            var product = Assert.Single(result!.Products);
+            Assert.Equal(inStockProduct.Id, product.Id);
         }
     }
 }

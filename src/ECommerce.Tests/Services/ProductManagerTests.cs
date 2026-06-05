@@ -3,9 +3,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
+using ECommerce.Data.Context;
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
 
@@ -18,6 +20,15 @@ namespace ECommerce.Tests.Services
             var reviewRepositoryMock = new Mock<IReviewRepository>();
             var inventoryLogMock = new Mock<IInventoryLogService>();
             return new ProductManager(productRepositoryMock.Object, reviewRepositoryMock.Object, inventoryLogMock.Object);
+        }
+
+        private static ECommerceDbContext CreateContext()
+        {
+            var options = new DbContextOptionsBuilder<ECommerceDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+
+            return new ECommerceDbContext(options);
         }
 
         [Fact]
@@ -240,6 +251,9 @@ namespace ECommerce.Tests.Services
             Assert.Equal(2, existing.CategoryId);
             Assert.Equal("new.jpg", existing.ImageUrl);
             Assert.Equal(3, existing.BrandId);
+            Assert.True(existing.AdminOverrideName);
+            Assert.True(existing.AdminOverridePrice);
+            Assert.True(existing.AdminOverrideCategory);
 
             productRepositoryMock.Verify(r => r.UpdateAsync(existing), Times.Once);
         }
@@ -314,6 +328,62 @@ namespace ECommerce.Tests.Services
 
             // Assert
             productRepositoryMock.Verify(r => r.DeleteAsync(It.IsAny<Product>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task GetProductsByCategoryPagedAsync_ShouldFilterSortAndPaginateAtDbLevel()
+        {
+            await using var context = CreateContext();
+            var category = new Category { Id = 5, Name = "Et", Slug = "et", IsActive = true };
+            context.Categories.Add(category);
+            context.Products.AddRange(
+                new Product { Id = 1, Name = "B Ürün", CategoryId = 5, Category = category, Price = 80m, StockQuantity = 3, IsActive = true, CreatedAt = DateTime.UtcNow.AddDays(-1), SKU = "A" },
+                new Product { Id = 2, Name = "A Ürün", CategoryId = 5, Category = category, Price = 120m, StockQuantity = 0, IsActive = true, CreatedAt = DateTime.UtcNow, SKU = "B" },
+                new Product { Id = 3, Name = "C Ürün", CategoryId = 5, Category = category, Price = 95m, StockQuantity = 8, IsActive = true, CreatedAt = DateTime.UtcNow.AddDays(-2), SKU = "C" },
+                new Product { Id = 4, Name = "Diğer", CategoryId = 8, Price = 50m, StockQuantity = 5, IsActive = true, CreatedAt = DateTime.UtcNow, SKU = "D" });
+            await context.SaveChangesAsync();
+
+            var productRepositoryMock = new Mock<IProductRepository>();
+            var reviewRepositoryMock = new Mock<IReviewRepository>();
+            var inventoryLogMock = new Mock<IInventoryLogService>();
+            var manager = new ProductManager(
+                productRepositoryMock.Object,
+                reviewRepositoryMock.Object,
+                new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions()),
+                inventoryLogMock.Object,
+                context);
+
+            var result = await manager.GetProductsByCategoryPagedAsync(5, page: 1, size: 2, sort: "price", direction: "desc", inStock: true);
+
+            Assert.Equal(2, result.Total);
+            Assert.Equal(0, result.Skip);
+            Assert.Equal(2, result.Take);
+            Assert.Equal(new[] { 3, 1 }, result.Items.Select(item => item.Id).ToArray());
+        }
+
+        [Fact]
+        public async Task GetProductsByCategoryPagedAsync_ShouldExcludeZeroPriceProducts()
+        {
+            using var context = CreateContext();
+
+            var category = new Category { Id = 5, Name = "Et", Slug = "et", IsActive = true };
+            context.Categories.Add(category);
+            context.Products.AddRange(
+                new Product { Id = 1, Name = "Gecerli", Price = 100m, StockQuantity = 4, CategoryId = category.Id, IsActive = true, CreatedAt = DateTime.UtcNow },
+                new Product { Id = 2, Name = "Sifir Fiyat", Price = 0m, StockQuantity = 8, CategoryId = category.Id, IsActive = true, CreatedAt = DateTime.UtcNow });
+            await context.SaveChangesAsync();
+
+            var repo = new Mock<IProductRepository>();
+            var reviewRepo = new Mock<IReviewRepository>();
+            var inventoryLog = new Mock<IInventoryLogService>();
+            var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+            var manager = new ProductManager(repo.Object, reviewRepo.Object, cache, inventoryLog.Object, context);
+
+            var result = await manager.GetProductsByCategoryPagedAsync(category.Id, 1, 10, "name", "asc", null);
+
+            var item = Assert.Single(result.Items);
+            Assert.Equal(1, item.Id);
+            Assert.Equal(1, result.Total);
         }
     }
 }

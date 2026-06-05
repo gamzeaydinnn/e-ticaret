@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/admin/XmlImportModal";
-import VariantManager from "../../components/admin/VariantManager";
+import XmlImportModal from "../../components/Admin/XmlImportModal";
+import VariantManager from "../../components/Admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -16,11 +16,22 @@ const AdminProducts = () => {
     name: "",
     categoryId: "",
     price: "",
+    specialPrice: "",
     stock: "",
     description: "",
     imageUrl: "",
     isActive: true,
+    adminOverrideName: null,
+    adminOverridePrice: null,
+    adminOverrideCategory: null,
   });
+  const [globalOverrideSettings, setGlobalOverrideSettings] = useState({
+    defaultAdminOverrideName: false,
+    defaultAdminOverridePrice: false,
+    defaultAdminOverrideCategory: false,
+  });
+  const [globalOverrideLoading, setGlobalOverrideLoading] = useState(false);
+  const [globalOverrideSaving, setGlobalOverrideSaving] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
   const [productVariants, setProductVariants] = useState([]);
 
@@ -45,6 +56,19 @@ const AdminProducts = () => {
 
   // Otomatik Kategorize State'leri
   const [categorizingLoading, setCategorizingLoading] = useState(false);
+  const [duplicateGroups, setDuplicateGroups] = useState([]);
+  const [duplicateLoading, setDuplicateLoading] = useState(false);
+  const [showDuplicatePanel, setShowDuplicatePanel] = useState(false);
+  const [searchFilters, setSearchFilters] = useState({
+    sku: "",
+    name: "",
+    status: "all",
+    stockStatus: "all",
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+  const [totalProductsCount, setTotalProductsCount] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
 
   // Resim Upload State'leri
   const [imageFile, setImageFile] = useState(null);
@@ -53,10 +77,101 @@ const AdminProducts = () => {
   const [isDragging, setIsDragging] = useState(false);
   const imageInputRef = useRef(null);
   const dropZoneRef = useRef(null);
+  const fetchProductsRef = useRef(null);
+
+  const resolveEffectiveOverride = (fieldName, explicitValue) => {
+    if (explicitValue === true || explicitValue === false) {
+      return explicitValue;
+    }
+
+    const globalFieldMap = {
+      adminOverrideName: "defaultAdminOverrideName",
+      adminOverridePrice: "defaultAdminOverridePrice",
+      adminOverrideCategory: "defaultAdminOverrideCategory",
+    };
+
+    return globalOverrideSettings[globalFieldMap[fieldName]] === true;
+  };
+
+  const fetchGlobalOverrideSettings = async () => {
+    try {
+      setGlobalOverrideLoading(true);
+      const result = await ProductService.getAdminOverrideSettings();
+      setGlobalOverrideSettings({
+        defaultAdminOverrideName: result.defaultAdminOverrideName === true,
+        defaultAdminOverridePrice: result.defaultAdminOverridePrice === true,
+        defaultAdminOverrideCategory: result.defaultAdminOverrideCategory === true,
+      });
+    } catch (err) {
+      console.error("Genel Mikro bağımsızlık ayarları yüklenemedi:", err);
+    } finally {
+      setGlobalOverrideLoading(false);
+    }
+  };
+
+  const handleSaveGlobalOverrideSettings = async () => {
+    try {
+      setGlobalOverrideSaving(true);
+      const updated = await ProductService.updateAdminOverrideSettings(
+        globalOverrideSettings,
+      );
+      setGlobalOverrideSettings({
+        defaultAdminOverrideName: updated.defaultAdminOverrideName === true,
+        defaultAdminOverridePrice: updated.defaultAdminOverridePrice === true,
+        defaultAdminOverrideCategory: updated.defaultAdminOverrideCategory === true,
+      });
+      alert("✅ Tüm ürünler için varsayılan Mikro bağımsızlık ayarları güncellendi.");
+      fetchProducts();
+    } catch (err) {
+      console.error("Genel Mikro bağımsızlık ayarları kaydedilemedi:", err);
+      alert(
+        "❌ Genel Mikro bağımsızlık ayarları kaydedilemedi: " +
+          (err.response?.data?.message || err.message),
+      );
+    } finally {
+      setGlobalOverrideSaving(false);
+    }
+  };
+
+  const handleProductOverrideModeChange = (fieldName, mode) => {
+    const nextValue = mode === "inherit" ? null : mode === "admin";
+    setFormData((prev) => ({
+      ...prev,
+      [fieldName]: nextValue,
+    }));
+  };
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await ProductService.getAdminPage({
+        page: currentPage,
+        size: pageSize,
+        sku: searchFilters.sku,
+        name: searchFilters.name,
+        status: searchFilters.status,
+        stockStatus: searchFilters.stockStatus,
+      });
+      setProducts(response.items || []);
+      setTotalProductsCount(response.total || 0);
+      setServerTotalPages(Math.max(1, response.totalPages || 1));
+    } catch (err) {
+      setError("Ürünler yüklenirken hata oluştu");
+      console.error("Ürünler yükleme hatası:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, pageSize, searchFilters]);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProductsRef.current = fetchProducts;
+  }, [fetchProducts]);
+
+  useEffect(() => {
     fetchCategories();
+    fetchDuplicateGroups();
+    fetchGlobalOverrideSettings();
 
     // ProductService subscription - CRUD değişikliklerinde otomatik refetch
     // Bu sayede başka bir yerde yapılan değişiklikler de yansır
@@ -66,7 +181,7 @@ const AdminProducts = () => {
       // Bu subscription daha çok multi-tab senkronizasyonu için
       if (event.action === "import") {
         // Excel import sonrası tam yenileme
-        fetchProducts();
+        fetchProductsRef.current?.();
       }
     });
 
@@ -76,18 +191,9 @@ const AdminProducts = () => {
     };
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const productsData = await ProductService.getAll();
-      setProducts(productsData);
-    } catch (err) {
-      setError("Ürünler yüklenirken hata oluştu");
-      console.error("Ürünler yükleme hatası:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
   const fetchCategories = async () => {
     try {
@@ -95,6 +201,19 @@ const AdminProducts = () => {
       setCategories(categoriesData);
     } catch (err) {
       console.error("Kategoriler yükleme hatası:", err);
+    }
+  };
+
+  const fetchDuplicateGroups = async () => {
+    try {
+      setDuplicateLoading(true);
+      const result = await ProductService.getDuplicateGroups();
+      setDuplicateGroups(Array.isArray(result?.groups) ? result.groups : []);
+    } catch (err) {
+      console.error("Mükerrer ürünler yükleme hatası:", err);
+      setDuplicateGroups([]);
+    } finally {
+      setDuplicateLoading(false);
     }
   };
 
@@ -118,6 +237,20 @@ const AdminProducts = () => {
       return;
     }
 
+    const specialPriceValue =
+      formData.specialPrice === "" ? null : parseFloat(formData.specialPrice);
+    if (
+      specialPriceValue !== null &&
+      (isNaN(specialPriceValue) || specialPriceValue < 0)
+    ) {
+      alert("❌ İndirimli fiyat 0 veya daha büyük bir değer olmalıdır.");
+      return;
+    }
+    if (specialPriceValue !== null && specialPriceValue >= price) {
+      alert("❌ İndirimli fiyat normal fiyattan düşük olmalıdır.");
+      return;
+    }
+
     // Stok kontrolü
     const stock = parseInt(formData.stock);
     if (isNaN(stock) || stock < 0) {
@@ -131,17 +264,27 @@ const AdminProducts = () => {
       return;
     }
 
+    const categoryId = Number.parseInt(formData.categoryId, 10);
+    if (!Number.isInteger(categoryId) || categoryId <= 0) {
+      alert("❌ Geçerli bir kategori seçin.");
+      return;
+    }
+
     try {
       // Ürün verilerini API formatına dönüştür
       const productData = {
         name: formData.name.trim(),
         description: formData.description?.trim() || "",
         price: price,
+        specialPrice: specialPriceValue,
         stockQuantity: stock, // API stockQuantity bekliyor
-        categoryId: parseInt(formData.categoryId),
+        categoryId: categoryId,
         imageUrl: formData.imageUrl?.trim() || null,
         isActive: formData.isActive !== false,
         sku: formData.sku || "", // Mikro ERP ürünlerinde SKU bazlı güncelleme için
+        adminOverrideName: formData.adminOverrideName,
+        adminOverridePrice: formData.adminOverridePrice,
+        adminOverrideCategory: formData.adminOverrideCategory,
       };
 
       if (editingProduct) {
@@ -170,10 +313,14 @@ const AdminProducts = () => {
         name: "",
         categoryId: "",
         price: "",
+        specialPrice: "",
         stock: "",
         description: "",
         imageUrl: "",
         isActive: true,
+        adminOverrideName: null,
+        adminOverridePrice: null,
+        adminOverrideCategory: null,
       });
       setEditingProduct(null);
       setEditingProductId(null);
@@ -182,6 +329,7 @@ const AdminProducts = () => {
 
       // Listeyi yenile
       fetchProducts();
+      fetchDuplicateGroups();
     } catch (err) {
       console.error("Ürün kaydetme hatası:", err);
       alert(
@@ -192,6 +340,12 @@ const AdminProducts = () => {
   };
 
   const handleEdit = (product) => {
+    const resolvedCategoryId = Number.parseInt(
+      String(product.categoryId ?? product.category?.id ?? ""),
+      10,
+    );
+    const resolvedStock = product.stock ?? product.stockQuantity ?? 0;
+
     setEditingProduct(product);
     setEditingProductId(product.id);
     setProductVariants(variantStore.getVariantsForProduct(product.id) || []);
@@ -200,13 +354,32 @@ const AdminProducts = () => {
     setImageFile(null);
     setFormData({
       name: product.name,
-      categoryId: product.categoryId || "",
+      categoryId:
+        Number.isInteger(resolvedCategoryId) && resolvedCategoryId > 0
+          ? String(resolvedCategoryId)
+          : "",
       price: product.price.toString(),
-      stock: product.stock.toString(),
+      specialPrice:
+        product.specialPrice !== null && product.specialPrice !== undefined
+          ? String(product.specialPrice)
+          : "",
+      stock: String(resolvedStock),
       description: product.description || "",
       imageUrl: product.imageUrl || "",
       isActive: product.isActive,
       sku: product.sku || "", // Mikro ERP ürünlerinde SKU üzerinden güncelleme
+      adminOverrideName:
+        product.adminOverrideName === true || product.adminOverrideName === false
+          ? product.adminOverrideName
+          : null,
+      adminOverridePrice:
+        product.adminOverridePrice === true || product.adminOverridePrice === false
+          ? product.adminOverridePrice
+          : null,
+      adminOverrideCategory:
+        product.adminOverrideCategory === true || product.adminOverrideCategory === false
+          ? product.adminOverrideCategory
+          : null,
     });
     setShowModal(true);
   };
@@ -490,6 +663,7 @@ const AdminProducts = () => {
       // Listeyi ve kategorileri yenile
       fetchProducts();
       fetchCategories();
+      fetchDuplicateGroups();
     } catch (err) {
       console.error("Otomatik kategorize hatası:", err);
       alert(
@@ -499,6 +673,195 @@ const AdminProducts = () => {
       setCategorizingLoading(false);
     }
   };
+
+  const getResolvedCategoryId = (product) => {
+    const parsedCategoryId = Number.parseInt(
+      String(product?.categoryId ?? product?.category?.id ?? ""),
+      10,
+    );
+
+    return Number.isInteger(parsedCategoryId) ? parsedCategoryId : 0;
+  };
+
+  const getResolvedCategoryName = (product) => {
+    if (product?.categoryName && String(product.categoryName).trim()) {
+      return product.categoryName;
+    }
+
+    if (typeof product?.category === "string" && product.category.trim()) {
+      return product.category;
+    }
+
+    const categoryId = getResolvedCategoryId(product);
+    if (categoryId > 0) {
+      const matchedCategory = categories.find((category) => category.id === categoryId);
+      if (matchedCategory?.name) {
+        return matchedCategory.name;
+      }
+    }
+
+    return "Kategori atanmadı";
+  };
+
+  const uncategorizedProducts = useMemo(
+    () => products.filter((product) => getResolvedCategoryId(product) <= 0),
+    [products],
+  );
+
+  const categorizedProducts = useMemo(
+    () => products.filter((product) => getResolvedCategoryId(product) > 0),
+    [products],
+  );
+
+  const visiblePageNumbers = useMemo(() => {
+    const maxButtons = 5;
+    const startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    const endPage = Math.min(serverTotalPages, startPage + maxButtons - 1);
+    const normalizedStart = Math.max(1, endPage - maxButtons + 1);
+
+    return Array.from(
+      { length: endPage - normalizedStart + 1 },
+      (_, index) => normalizedStart + index,
+    );
+  }, [currentPage, serverTotalPages]);
+
+  const handleDeactivateDuplicate = async (product) => {
+    if (!product?.id) {
+      alert("❌ Pasife alınacak ürün kimliği bulunamadı.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${product.name} ürününü pasife almak istediğinize emin misiniz?\n\nBu işlem ürünü silmez, sadece satıştan kaldırır.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await ProductService.deactivateAdmin(product.id);
+      await Promise.all([fetchProducts(), fetchDuplicateGroups()]);
+      alert("✅ Ürün pasife alındı.");
+    } catch (err) {
+      console.error("Ürün pasife alma hatası:", err);
+      alert(
+        "❌ Ürün pasife alınamadı: " +
+          (err.response?.data?.message || err.message),
+      );
+    }
+  };
+
+  const renderProductCards = (items, { emphasizeUncategorized = false } = {}) =>
+    items.map((product) => {
+      const displayedStock = product.stock ?? product.stockQuantity ?? 0;
+      const canDeleteProduct = Number(product.id) > 0;
+      const stockBadgeClass =
+        displayedStock > 10
+          ? "bg-success"
+          : displayedStock > 0
+            ? "bg-warning text-dark"
+            : "bg-danger";
+      const productKey = product.id || product.sku || product.name;
+
+      return (
+        <div key={productKey} className="col-6 col-md-4 col-lg-3">
+          <div
+            className="admin-product-card h-100"
+            style={
+              emphasizeUncategorized
+                ? {
+                    borderColor: "#fdba74",
+                    boxShadow: "0 10px 24px rgba(249, 115, 22, 0.14)",
+                  }
+                : undefined
+            }
+          >
+            <div className="admin-product-image-wrap">
+              <img
+                src={product.imageUrl || "/images/placeholder.png"}
+                alt={product.name}
+                style={{
+                  height: "80px",
+                  objectFit: "contain",
+                  width: "100%",
+                  padding: "5px",
+                }}
+                onError={(e) => {
+                  e.target.src = "/images/placeholder.png";
+                }}
+              />
+              <span
+                className={`badge position-absolute top-0 end-0 m-2 admin-product-status-badge ${
+                  product.isActive ? "bg-success" : "bg-secondary"
+                }`}
+              >
+                {product.isActive ? "Aktif" : "Pasif"}
+              </span>
+            </div>
+
+            <div className="p-2">
+              <h6
+                className="fw-bold mb-1 text-truncate"
+                style={{ fontSize: "0.9rem", color: "#1e293b" }}
+              >
+                {product.name}
+              </h6>
+              <p
+                className="text-muted mb-2 text-truncate admin-product-meta"
+                style={{ fontSize: "0.72rem" }}
+              >
+                {getResolvedCategoryName(product)}
+              </p>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <span
+                  className="fw-bold"
+                  style={{ color: "#f57c00", fontSize: "1rem" }}
+                >
+                  ₺{product.price?.toFixed(2)}
+                </span>
+                <span
+                  className={`badge admin-product-stock-badge ${stockBadgeClass}`}
+                >
+                  Stok {displayedStock}
+                </span>
+              </div>
+              <div className="admin-product-actions">
+                <button
+                  className="btn btn-outline-primary btn-sm flex-fill admin-product-action-btn"
+                  onClick={() => handleEdit(product)}
+                  title="Düzenle"
+                >
+                  <i className="fas fa-edit"></i>
+                  <span className="admin-product-action-text">Düzenle</span>
+                </button>
+                <button
+                  className="btn btn-outline-success btn-sm admin-product-action-btn"
+                  onClick={() => {
+                    setSelectedProductForVariants(product);
+                    setShowVariantManager(true);
+                  }}
+                  title="Varyantlar"
+                >
+                  <i className="fas fa-layer-group"></i>
+                  <span className="admin-product-action-text">
+                    Varyant Yönet
+                  </span>
+                </button>
+                <button
+                  className="btn btn-outline-danger btn-sm admin-product-action-btn"
+                  onClick={() => handleDelete(product.id)}
+                  title={canDeleteProduct ? "Sil" : "Mikro ürünü doğrudan silinemez"}
+                  disabled={!canDeleteProduct}
+                >
+                  <i className="fas fa-trash"></i>
+                  <span className="admin-product-action-text">Sil</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    });
 
   if (loading) {
     return (
@@ -527,12 +890,18 @@ const AdminProducts = () => {
     );
   }
 
-  const totalProducts = products.length;
+  const totalProducts = totalProductsCount;
   const activeProducts = products.filter((product) => product.isActive).length;
   const lowStockProducts = products.filter(
     (product) => (product.stock ?? product.stockQuantity ?? 0) <= 10,
   ).length;
   const totalCategories = categories.length;
+  const uncategorizedCount = uncategorizedProducts.length;
+  const hasActiveFilters =
+    searchFilters.sku.trim().length > 0 ||
+    searchFilters.name.trim().length > 0 ||
+    searchFilters.status !== "all" ||
+    searchFilters.stockStatus !== "all";
 
   return (
     <div>
@@ -715,6 +1084,35 @@ const AdminProducts = () => {
           word-break: break-word;
         }
 
+        .admin-products-pagination {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+
+        .admin-products-page-nav,
+        .admin-products-page-btn {
+          min-width: 42px;
+          height: 38px;
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          border-radius: 10px !important;
+          line-height: 1;
+          font-weight: 700;
+        }
+
+        .admin-products-page-btn {
+          padding: 0 0.8rem !important;
+        }
+
+        .admin-products-page-nav {
+          padding: 0 0.9rem !important;
+          white-space: nowrap;
+        }
+
         @media (max-width: 576px) {
           .admin-products-hero {
             padding: 0.8rem;
@@ -774,6 +1172,11 @@ const AdminProducts = () => {
             line-height: 1.05;
             letter-spacing: 0;
           }
+
+          .admin-products-pagination {
+            width: 100%;
+            gap: 0.35rem;
+          }
         }
 
         @media (min-width: 577px) and (max-width: 991.98px) {
@@ -823,25 +1226,153 @@ const AdminProducts = () => {
 
             <div className="admin-products-summary">
               <div className="admin-products-stat">
-                <span className="admin-products-stat-value">{totalProducts}</span>
+                <span className="admin-products-stat-value">
+                  {totalProducts}
+                </span>
                 <span className="admin-products-stat-label">Toplam Ürün</span>
               </div>
               <div className="admin-products-stat">
-                <span className="admin-products-stat-value">{activeProducts}</span>
+                <span className="admin-products-stat-value">
+                  {activeProducts}
+                </span>
                 <span className="admin-products-stat-label">Aktif</span>
               </div>
               <div className="admin-products-stat">
-                <span className="admin-products-stat-value">{lowStockProducts}</span>
+                <span className="admin-products-stat-value">
+                  {lowStockProducts}
+                </span>
                 <span className="admin-products-stat-label">Düşük Stok</span>
               </div>
               <div className="admin-products-stat">
-                <span className="admin-products-stat-value">{totalCategories}</span>
+                <span className="admin-products-stat-value">
+                  {totalCategories}
+                </span>
                 <span className="admin-products-stat-label">Kategori</span>
               </div>
             </div>
           </div>
 
+          <div
+            className="border-0 p-3 mb-3"
+            style={{
+              background: "rgba(15, 23, 42, 0.04)",
+              borderRadius: "16px",
+            }}
+          >
+            <div className="d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-start">
+              <div>
+                <div className="fw-semibold mb-2" style={{ color: "#1e293b" }}>
+                  Mikro'dan Bağımsız Alanlar - Tüm Ürünler İçin Varsayılan
+                </div>
+                <div className="text-muted" style={{ fontSize: "0.88rem" }}>
+                  Ürün bazında özel seçim yapılmadıysa bu varsayılanlar kullanılır.
+                  Üründe açıkça bir seçim yaptıysanız önce ürün ayarı geçerlidir.
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                {globalOverrideLoading ? (
+                  <span className="text-muted small">Yükleniyor...</span>
+                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={handleSaveGlobalOverrideSettings}
+                  disabled={globalOverrideSaving || globalOverrideLoading}
+                >
+                  {globalOverrideSaving ? "Kaydediliyor..." : "Genel Ayarı Kaydet"}
+                </button>
+              </div>
+            </div>
+
+            <div className="row g-2 mt-1">
+              <div className="col-md-4">
+                <div className="form-check form-switch">
+                  <input
+                    id="globalAdminOverrideName"
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={globalOverrideSettings.defaultAdminOverrideName === true}
+                    onChange={(e) =>
+                      setGlobalOverrideSettings((prev) => ({
+                        ...prev,
+                        defaultAdminOverrideName: e.target.checked,
+                      }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="globalAdminOverrideName">
+                    İsim Mikro'dan bağımsız
+                  </label>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="form-check form-switch">
+                  <input
+                    id="globalAdminOverridePrice"
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={globalOverrideSettings.defaultAdminOverridePrice === true}
+                    onChange={(e) =>
+                      setGlobalOverrideSettings((prev) => ({
+                        ...prev,
+                        defaultAdminOverridePrice: e.target.checked,
+                      }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="globalAdminOverridePrice">
+                    Fiyat Mikro'dan bağımsız
+                  </label>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="form-check form-switch">
+                  <input
+                    id="globalAdminOverrideCategory"
+                    className="form-check-input"
+                    type="checkbox"
+                    checked={globalOverrideSettings.defaultAdminOverrideCategory === true}
+                    onChange={(e) =>
+                      setGlobalOverrideSettings((prev) => ({
+                        ...prev,
+                        defaultAdminOverrideCategory: e.target.checked,
+                      }))
+                    }
+                  />
+                  <label className="form-check-label" htmlFor="globalAdminOverrideCategory">
+                    Kategori Mikro'dan bağımsız
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="admin-products-actions">
+            <button
+              className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
+              style={{
+                background:
+                  duplicateGroups.length > 0
+                    ? "linear-gradient(135deg, #ef4444, #f97316)"
+                    : "linear-gradient(135deg, #64748b, #94a3b8)",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+              }}
+              onClick={() => setShowDuplicatePanel((prev) => !prev)}
+              disabled={duplicateLoading && duplicateGroups.length === 0}
+            >
+              {duplicateLoading && duplicateGroups.length === 0 ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1"></span>
+                  Mükerrerler Taranıyor...
+                </>
+              ) : (
+                <>
+                  <i className="fas fa-clone me-1"></i>
+                  Mükerrer Ürünler
+                  {duplicateGroups.length > 0 ? ` (${duplicateGroups.length})` : ""}
+                </>
+              )}
+            </button>
             {/* Excel'den Yükle Butonu */}
             <button
               className="btn border-0 text-white fw-medium px-2 py-1 admin-products-action-btn"
@@ -941,10 +1472,14 @@ const AdminProducts = () => {
                   name: "",
                   categoryId: "",
                   price: "",
+                  specialPrice: "",
                   stock: "",
                   description: "",
                   imageUrl: "",
                   isActive: true,
+                  adminOverrideName: null,
+                  adminOverridePrice: null,
+                  adminOverrideCategory: null,
                 });
                 // Resim state'lerini sıfırla
                 setImageFile(null);
@@ -963,124 +1498,405 @@ const AdminProducts = () => {
               <i className="fas fa-plus me-1"></i>Ekle
             </button>
           </div>
+
+          <div
+            className="border-0 p-3 mt-3"
+            style={{
+              background: "rgba(255, 255, 255, 0.78)",
+              borderRadius: "16px",
+              border: "1px solid rgba(226, 232, 240, 0.9)",
+            }}
+          >
+            <div className="row g-3 align-items-end">
+              <div className="col-12 col-lg-4">
+                <label className="form-label fw-semibold mb-2">Ürün Kodu</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="SKU veya stok kodu ile ara"
+                  value={searchFilters.sku}
+                  onChange={(e) => {
+                    setCurrentPage(1);
+                    setSearchFilters((prev) => ({
+                      ...prev,
+                      sku: e.target.value,
+                    }));
+                  }}
+                />
+              </div>
+              <div className="col-12 col-lg-5">
+                <label className="form-label fw-semibold mb-2">Ürün İsmi</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ürün adına göre filtrele"
+                  value={searchFilters.name}
+                  onChange={(e) => {
+                    setCurrentPage(1);
+                    setSearchFilters((prev) => ({
+                      ...prev,
+                      name: e.target.value,
+                    }));
+                  }}
+                />
+              </div>
+              <div className="col-6 col-lg-2">
+                <label className="form-label fw-semibold mb-2">Sayfa Boyutu</label>
+                <select
+                  className="form-select"
+                  value={pageSize}
+                  onChange={(e) => {
+                    setCurrentPage(1);
+                    setPageSize(Number(e.target.value));
+                  }}
+                >
+                  <option value={12}>12</option>
+                  <option value={24}>24</option>
+                  <option value={48}>48</option>
+                  <option value={96}>96</option>
+                </select>
+              </div>
+              <div className="col-12 col-lg-4">
+                <div className="row g-3">
+                  <div className="col-sm-6">
+                    <label className="form-label fw-semibold mb-2">Durum</label>
+                    <select
+                      className="form-select"
+                      value={searchFilters.status}
+                      onChange={(e) => {
+                        setCurrentPage(1);
+                        setSearchFilters((prev) => ({
+                          ...prev,
+                          status: e.target.value,
+                        }));
+                      }}
+                    >
+                      <option value="all">Tümü</option>
+                      <option value="active">Aktif</option>
+                      <option value="inactive">Pasif</option>
+                    </select>
+                  </div>
+                  <div className="col-sm-6">
+                    <label className="form-label fw-semibold mb-2">Stok Durumu</label>
+                    <select
+                      className="form-select"
+                      value={searchFilters.stockStatus}
+                      onChange={(e) => {
+                        setCurrentPage(1);
+                        setSearchFilters((prev) => ({
+                          ...prev,
+                          stockStatus: e.target.value,
+                        }));
+                      }}
+                    >
+                      <option value="all">Tümü</option>
+                      <option value="in-stock">Stokta Var</option>
+                      <option value="out-of-stock">Stokta Yok</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="col-12 col-lg-1 d-grid">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    setSearchFilters({
+                      sku: "",
+                      name: "",
+                      status: "all",
+                      stockStatus: "all",
+                    });
+                    setCurrentPage(1);
+                  }}
+                  disabled={!hasActiveFilters}
+                >
+                  Temizle
+                </button>
+              </div>
+            </div>
+
+            <div className="d-flex flex-column flex-lg-row justify-content-between gap-2 mt-3 text-muted">
+              <small>
+                {totalProductsCount} sonuç bulundu.
+                {hasActiveFilters ? " Filtrelenmiş görünüm aktif." : ""}
+              </small>
+              <small>
+                Sayfa {currentPage} / {serverTotalPages}
+              </small>
+            </div>
+          </div>
         </div>
 
-        {/* Products Grid - Mobil 2'li */}
-        <div className="row g-2">
-          {products.map((product) => {
-            const displayedStock = product.stock ?? product.stockQuantity ?? 0;
-            const stockBadgeClass =
-              displayedStock > 10
-                ? "bg-success"
-                : displayedStock > 0
-                  ? "bg-warning text-dark"
-                  : "bg-danger";
+        {showDuplicatePanel && (
+          <div
+            className="alert border-0 mb-3"
+            style={{
+              background: "linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)",
+              borderRadius: "18px",
+              boxShadow: "0 10px 28px rgba(225, 29, 72, 0.12)",
+            }}
+          >
+            <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+              <div>
+                <div className="fw-bold mb-1" style={{ color: "#9f1239" }}>
+                  <i className="fas fa-clone me-2"></i>
+                  {duplicateGroups.length > 0
+                    ? "Mükerrer ürün grupları tespit edildi"
+                    : "Mükerrer ürün taraması"}
+                </div>
+                <div style={{ color: "#881337", fontSize: "0.92rem" }}>
+                  {duplicateGroups.length > 0
+                    ? `${duplicateGroups.length} grup tıpatıp aynı ürün bulundu. Pasife alma işleminden önce aktif kalacak ürünü doğrulayın.`
+                    : "Şu anda tespit edilmiş mükerrer ürün grubu bulunmuyor."}
+                </div>
+              </div>
+              <span className="badge rounded-pill text-bg-danger px-3 py-2">
+                {duplicateLoading ? "Taranıyor..." : `${duplicateGroups.length} grup`}
+              </span>
+            </div>
 
-            return (
-            <div key={product.id} className="col-6 col-md-4 col-lg-3">
+            {duplicateGroups.length > 0 ? (
+              <div className="row g-3">
+                {duplicateGroups.map((group) => (
+                  <div key={group.groupKey} className="col-12 col-xl-6">
+                    <div
+                      className="bg-white h-100"
+                      style={{
+                        borderRadius: "14px",
+                        border: "1px solid rgba(244, 63, 94, 0.16)",
+                        padding: "0.9rem",
+                      }}
+                    >
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                          <div className="fw-bold" style={{ color: "#9f1239" }}>
+                            {group.reason}
+                          </div>
+                          <small className="text-muted">{group.groupKey}</small>
+                        </div>
+                        <span className="badge text-bg-light">
+                          {group.products?.length || 0} ürün
+                        </span>
+                      </div>
+
+                      <div className="d-flex flex-column gap-2">
+                        {(group.products || []).map((product) => (
+                          <div
+                            key={`${group.groupKey}-${product.id}`}
+                            className="d-flex justify-content-between align-items-start gap-3"
+                            style={{
+                              border: "1px solid #ffe4e6",
+                              borderRadius: "12px",
+                              padding: "0.7rem 0.8rem",
+                              background: product.isActive ? "#fffafb" : "#f8fafc",
+                            }}
+                          >
+                            <div>
+                              <div className="fw-semibold" style={{ color: "#1e293b" }}>
+                                {product.name}
+                              </div>
+                              <small className="text-muted d-block">
+                                SKU: {product.sku || "-"}
+                                {product.barcode ? ` | Barkod: ${product.barcode}` : ""}
+                              </small>
+                              <small className="text-muted d-block">
+                                Kategori: {getResolvedCategoryName(product)} | Fiyat: ₺
+                                {Number(product.price || 0).toFixed(2)}
+                              </small>
+                            </div>
+
+                            <div className="text-end">
+                              <span
+                                className={`badge ${product.isActive ? "text-bg-success" : "text-bg-secondary"}`}
+                              >
+                                {product.isActive ? "Aktif" : "Pasif"}
+                              </span>
+                              {product.isActive && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger d-block mt-2"
+                                  onClick={() => handleDeactivateDuplicate(product)}
+                                >
+                                  <i className="fas fa-eye-slash me-1"></i>
+                                  Pasife Al
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
               <div
-                className="admin-product-card h-100"
+                className="bg-white"
+                style={{ borderRadius: "14px", padding: "1rem", color: "#475569" }}
               >
-                <div
-                  className="admin-product-image-wrap"
-                >
-                  <img
-                    src={product.imageUrl || "/images/placeholder.png"}
-                    alt={product.name}
-                    style={{
-                      height: "80px",
-                      objectFit: "contain",
-                      width: "100%",
-                      padding: "5px",
-                    }}
-                    onError={(e) => {
-                      e.target.src = "/images/placeholder.png";
-                    }}
-                  />
-                  <span
-                    className={`badge position-absolute top-0 end-0 m-2 admin-product-status-badge ${
-                      product.isActive ? "bg-success" : "bg-secondary"
-                    }`}
-                  >
-                    {product.isActive ? "Aktif" : "Pasif"}
+                Tespit edilen mükerrer ürün yok.
+              </div>
+            )}
+          </div>
+        )}
+
+        {uncategorizedCount > 0 && (
+          <div
+            className="alert border-0 mb-3"
+            style={{
+              background: "linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)",
+              borderRadius: "18px",
+              boxShadow: "0 10px 28px rgba(249, 115, 22, 0.12)",
+            }}
+          >
+            <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+              <div>
+                <div className="fw-bold mb-1" style={{ color: "#9a3412" }}>
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  Kategorilendirilmemiş ürünler tespit edildi
+                </div>
+                <div style={{ color: "#7c2d12", fontSize: "0.92rem" }}>
+                  {uncategorizedCount} ürün henüz kategoriye bağlı değil. Bu
+                  ürünler aşağıda ayrı bölümde gösteriliyor.
+                </div>
+              </div>
+              <button
+                className="btn text-white fw-semibold"
+                style={{
+                  background: "linear-gradient(135deg, #f97316, #ea580c)",
+                  borderRadius: "12px",
+                  minWidth: "220px",
+                }}
+                onClick={handleAutoCategorize}
+                disabled={categorizingLoading}
+              >
+                {categorizingLoading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2"></span>
+                    Kategorize ediliyor...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-magic me-2"></i>
+                    Kategorileri Otomatik Ata
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {products.length === 0 ? (
+          <div className="text-center py-5">
+            <i
+              className="fas fa-box fa-4x text-muted mb-3"
+              style={{ opacity: 0.3 }}
+            ></i>
+            <h4 className="text-muted mb-2">Henüz ürün bulunmuyor</h4>
+            <p className="text-muted">
+              İlk ürününüzü eklemek için "Yeni Ürün" butonuna tıklayın.
+            </p>
+          </div>
+        ) : totalProductsCount === 0 ? (
+          <div className="text-center py-5">
+            <i
+              className="fas fa-search fa-4x text-muted mb-3"
+              style={{ opacity: 0.25 }}
+            ></i>
+            <h4 className="text-muted mb-2">Filtreye uygun ürün bulunamadı</h4>
+            <p className="text-muted">
+              Ürün kodu veya ürün ismi filtresini değiştirip tekrar deneyin.
+            </p>
+          </div>
+        ) : (
+          <>
+            {uncategorizedProducts.length > 0 && (
+              <section className="mb-4">
+                <div className="d-flex align-items-center justify-content-between mb-2">
+                  <div>
+                    <h6 className="mb-1 fw-bold" style={{ color: "#9a3412" }}>
+                      Kategorilendirilmemiş Ürünler
+                    </h6>
+                    <p className="mb-0 text-muted" style={{ fontSize: "0.85rem" }}>
+                      Öncelikli kontrol gerektiren ürünler burada listelenir.
+                    </p>
+                  </div>
+                  <span className="badge rounded-pill text-bg-warning px-3 py-2">
+                    {uncategorizedProducts.length} ürün
                   </span>
                 </div>
-
-                <div className="p-2">
-                  <h6
-                    className="fw-bold mb-1 text-truncate"
-                    style={{ fontSize: "0.9rem", color: "#1e293b" }}
-                  >
-                    {product.name}
-                  </h6>
-                  <p
-                    className="text-muted mb-2 text-truncate admin-product-meta"
-                    style={{ fontSize: "0.72rem" }}
-                  >
-                    {product.categoryName || "-"}
-                  </p>
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span
-                      className="fw-bold"
-                      style={{ color: "#f57c00", fontSize: "1rem" }}
-                    >
-                      ₺{product.price?.toFixed(2)}
-                    </span>
-                    <span
-                      className={`badge admin-product-stock-badge ${stockBadgeClass}`}
-                    >
-                      Stok {displayedStock}
-                    </span>
-                  </div>
-                  <div className="admin-product-actions">
-                    <button
-                      className="btn btn-outline-primary btn-sm flex-fill admin-product-action-btn"
-                      onClick={() => handleEdit(product)}
-                      title="Düzenle"
-                    >
-                      <i className="fas fa-edit"></i>
-                      <span className="admin-product-action-text">Düzenle</span>
-                    </button>
-                    <button
-                      className="btn btn-outline-success btn-sm admin-product-action-btn"
-                      onClick={() => {
-                        setSelectedProductForVariants(product);
-                        setShowVariantManager(true);
-                      }}
-                      title="Varyantlar"
-                    >
-                      <i className="fas fa-layer-group"></i>
-                      <span className="admin-product-action-text">Varyant Yönet</span>
-                    </button>
-                    <button
-                      className="btn btn-outline-danger btn-sm admin-product-action-btn"
-                      onClick={() => handleDelete(product.id)}
-                      title="Sil"
-                    >
-                      <i className="fas fa-trash"></i>
-                      <span className="admin-product-action-text">Sil</span>
-                    </button>
-                  </div>
+                <div className="row g-2">
+                  {renderProductCards(uncategorizedProducts, {
+                    emphasizeUncategorized: true,
+                  })}
                 </div>
-              </div>
-            </div>
-          );})}
+              </section>
+            )}
 
-          {products.length === 0 && (
-            <div className="col-12">
-              <div className="text-center py-5">
-                <i
-                  className="fas fa-box fa-4x text-muted mb-3"
-                  style={{ opacity: 0.3 }}
-                ></i>
-                <h4 className="text-muted mb-2">Henüz ürün bulunmuyor</h4>
-                <p className="text-muted">
-                  İlk ürününüzü eklemek için "Yeni Ürün" butonuna tıklayın.
-                </p>
+            {categorizedProducts.length > 0 && (
+              <section>
+                {uncategorizedCount > 0 && (
+                  <div className="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                      <h6 className="mb-1 fw-bold" style={{ color: "#1e293b" }}>
+                        Kategorilendirilmiş Ürünler
+                      </h6>
+                      <p className="mb-0 text-muted" style={{ fontSize: "0.85rem" }}>
+                        Kategori ataması tamamlanan ürünler.
+                      </p>
+                    </div>
+                    <span className="badge rounded-pill text-bg-light px-3 py-2">
+                      {categorizedProducts.length} ürün
+                    </span>
+                  </div>
+                )}
+                <div className="row g-2">
+                  {renderProductCards(categorizedProducts)}
+                </div>
+              </section>
+            )}
+
+            <div
+              className="d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 mt-4"
+            >
+              <div className="text-muted small">
+                {totalProductsCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                -
+                {Math.min(currentPage * pageSize, totalProductsCount)} arası gösteriliyor
+              </div>
+              <div className="admin-products-pagination">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm admin-products-page-nav"
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  <i className="fas fa-chevron-left me-1"></i>Önceki
+                </button>
+                {visiblePageNumbers.map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    className={`btn btn-sm admin-products-page-btn ${pageNumber === currentPage ? "btn-primary" : "btn-outline-secondary"}`}
+                    onClick={() => setCurrentPage(pageNumber)}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm admin-products-page-nav"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, serverTotalPages))
+                  }
+                  disabled={currentPage === serverTotalPages}
+                >
+                  Sonraki<i className="fas fa-chevron-right ms-1"></i>
+                </button>
               </div>
             </div>
-          )}
-        </div>
+          </>
+        )}
 
         {/* Modal */}
         {showModal && (
@@ -1161,6 +1977,106 @@ const AdminProducts = () => {
                         </select>
                       </div>
 
+                      <div className="col-12">
+                        <div
+                          className="border-0 p-3"
+                          style={{
+                            background: "rgba(15, 23, 42, 0.04)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="fw-semibold mb-2" style={{ color: "#1e293b" }}>
+                            Mikro'dan Bağımsız Alanlar
+                          </div>
+                          <div className="text-muted mb-3" style={{ fontSize: "0.88rem" }}>
+                            Ürün ayarı önce uygulanır. "Geneli kullan" seçerseniz yukarıdaki tüm ürünler varsayılanı devreye girer.
+                          </div>
+                          <div className="row g-2">
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">İsim</label>
+                              <select
+                                id="adminOverrideName"
+                                className="form-select"
+                                value={
+                                  formData.adminOverrideName === true
+                                    ? "admin"
+                                    : formData.adminOverrideName === false
+                                      ? "mikro"
+                                      : "inherit"
+                                }
+                                onChange={(e) =>
+                                  handleProductOverrideModeChange(
+                                    "adminOverrideName",
+                                    e.target.value,
+                                  )
+                                }
+                              >
+                                <option value="inherit">Geneli kullan</option>
+                                <option value="admin">Mikro'dan bağımsız</option>
+                                <option value="mikro">Mikro güncellesin</option>
+                              </select>
+                              <small className="text-muted d-block mt-1">
+                                Etkin sonuç: {resolveEffectiveOverride("adminOverrideName", formData.adminOverrideName) ? "Admin değeri korunur" : "Mikro günceller"}
+                              </small>
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">Fiyat</label>
+                              <select
+                                id="adminOverridePrice"
+                                className="form-select"
+                                value={
+                                  formData.adminOverridePrice === true
+                                    ? "admin"
+                                    : formData.adminOverridePrice === false
+                                      ? "mikro"
+                                      : "inherit"
+                                }
+                                onChange={(e) =>
+                                  handleProductOverrideModeChange(
+                                    "adminOverridePrice",
+                                    e.target.value,
+                                  )
+                                }
+                              >
+                                <option value="inherit">Geneli kullan</option>
+                                <option value="admin">Mikro'dan bağımsız</option>
+                                <option value="mikro">Mikro güncellesin</option>
+                              </select>
+                              <small className="text-muted d-block mt-1">
+                                Etkin sonuç: {resolveEffectiveOverride("adminOverridePrice", formData.adminOverridePrice) ? "Admin fiyatı korunur" : "Mikro fiyatı günceller"}
+                              </small>
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">Kategori</label>
+                              <select
+                                id="adminOverrideCategory"
+                                className="form-select"
+                                value={
+                                  formData.adminOverrideCategory === true
+                                    ? "admin"
+                                    : formData.adminOverrideCategory === false
+                                      ? "mikro"
+                                      : "inherit"
+                                }
+                                onChange={(e) =>
+                                  handleProductOverrideModeChange(
+                                    "adminOverrideCategory",
+                                    e.target.value,
+                                  )
+                                }
+                              >
+                                <option value="inherit">Geneli kullan</option>
+                                <option value="admin">Mikro'dan bağımsız</option>
+                                <option value="mikro">Mikro güncellesin</option>
+                              </select>
+                              <small className="text-muted d-block mt-1">
+                                Etkin sonuç: {resolveEffectiveOverride("adminOverrideCategory", formData.adminOverrideCategory) ? "Admin kategorisi korunur" : "Mikro kategorisi günceller"}
+                              </small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="col-md-6">
                         <label className="form-label fw-semibold mb-2">
                           Fiyat (₺)
@@ -1179,6 +2095,30 @@ const AdminProducts = () => {
                           }
                           required
                           placeholder="0.00"
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold mb-2">
+                          İndirimli Fiyat (₺)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="form-control border-0 py-3"
+                          style={{
+                            background: "rgba(245, 124, 0, 0.05)",
+                            borderRadius: "12px",
+                          }}
+                          value={formData.specialPrice}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              specialPrice: e.target.value,
+                            })
+                          }
+                          placeholder="Boş bırakılırsa indirim uygulanmaz"
                         />
                       </div>
 

@@ -6,8 +6,14 @@ using ECommerce.Business.Services.Interfaces; // IProductService
 using ECommerce.Entities.Concrete;            // Product
 using ECommerce.Core.Interfaces;              // IProductRepository
 using ECommerce.Core.DTOs.Product;
+using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
+using ECommerce.Data.Context;
+using ECommerce.Core.Helpers;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using System.Globalization;
+using System.Text;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -17,18 +23,21 @@ namespace ECommerce.Business.Services.Managers
         private readonly IReviewRepository _reviewRepository;
         private readonly IMemoryCache _cache;
         private readonly IInventoryLogService _inventoryLogService;
+        private readonly ECommerceDbContext? _dbContext;
         private const string ProductCacheKeysKey = "products_cache_keys";
 
         public ProductManager(
             IProductRepository productRepository,
             IReviewRepository reviewRepository,
             IMemoryCache cache,
-            IInventoryLogService inventoryLogService)
+            IInventoryLogService inventoryLogService,
+            ECommerceDbContext? dbContext = null)
         {
             _productRepository = productRepository;
             _reviewRepository = reviewRepository;
             _cache = cache;
             _inventoryLogService = inventoryLogService;
+            _dbContext = dbContext;
         }
 
         // Backwards-compatible constructor for tests or callers that don't provide an IMemoryCache.
@@ -37,7 +46,7 @@ namespace ECommerce.Business.Services.Managers
             IProductRepository productRepository,
             IReviewRepository reviewRepository,
             IInventoryLogService inventoryLogService)
-            : this(productRepository, reviewRepository, new MemoryCache(new MemoryCacheOptions()), inventoryLogService)
+            : this(productRepository, reviewRepository, new MemoryCache(new MemoryCacheOptions()), inventoryLogService, null)
         {
         }
 
@@ -61,6 +70,7 @@ namespace ECommerce.Business.Services.Managers
             return pagedProducts.Select(p => new ProductListDto
             {
                 Id = p.Id,
+                Sku = p.SKU,
                 Name = p.Name,
                 Description = p.Description,
                 Price = p.Price,
@@ -69,7 +79,10 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = p.ImageUrl,
                 Brand = p.Brand?.Name ?? string.Empty,
                 CategoryId = p.CategoryId,
-                CategoryName = p.Category?.Name ?? string.Empty
+                CategoryName = p.Category?.Name ?? string.Empty,
+                AdminOverrideName = p.AdminOverrideName,
+                AdminOverridePrice = p.AdminOverridePrice,
+                AdminOverrideCategory = p.AdminOverrideCategory
             });
         }
 
@@ -94,6 +107,7 @@ namespace ECommerce.Business.Services.Managers
             return products.Select(p => new ProductListDto
             {
                 Id = p.Id,
+                Sku = p.SKU,
                 Name = p.Name,
                 Slug = p.Slug ?? string.Empty,
                 Description = p.Description ?? string.Empty,
@@ -103,7 +117,10 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = p.ImageUrl,
                 Brand = p.Brand?.Name ?? string.Empty,
                 CategoryId = p.CategoryId,
-                CategoryName = p.Category?.Name ?? string.Empty
+                CategoryName = p.Category?.Name ?? string.Empty,
+                AdminOverrideName = p.AdminOverrideName,
+                AdminOverridePrice = p.AdminOverridePrice,
+                AdminOverrideCategory = p.AdminOverrideCategory
             });
         }
 
@@ -115,6 +132,7 @@ namespace ECommerce.Business.Services.Managers
             return new ProductListDto
             {
                 Id = product.Id,
+                Sku = product.SKU,
                 Name = product.Name,
                 Slug = product.Slug ?? string.Empty,
                 Description = product.Description ?? string.Empty,
@@ -124,7 +142,10 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty
+                CategoryName = product.Category?.Name ?? string.Empty,
+                AdminOverrideName = product.AdminOverrideName,
+                AdminOverridePrice = product.AdminOverridePrice,
+                AdminOverrideCategory = product.AdminOverrideCategory
             };
         }
 
@@ -132,6 +153,7 @@ namespace ECommerce.Business.Services.Managers
         {
             // SKU otomatik oluştur: CategoryId + timestamp + random
             var sku = $"PRD{productDto.CategoryId:D2}{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
+            var resolvedSku = string.IsNullOrWhiteSpace(productDto.SKU) ? sku : productDto.SKU.Trim();
             
             var product = new Product
             {
@@ -143,7 +165,11 @@ namespace ECommerce.Business.Services.Managers
                 CategoryId = productDto.CategoryId,
                 ImageUrl = productDto.ImageUrl ?? string.Empty,
                 BrandId = productDto.BrandId,
-                SKU = string.IsNullOrWhiteSpace(productDto.SKU) ? sku : productDto.SKU
+                AdminOverrideName = productDto.AdminOverrideName,
+                AdminOverridePrice = productDto.AdminOverridePrice,
+                AdminOverrideCategory = productDto.AdminOverrideCategory,
+                SKU = resolvedSku,
+                Slug = await GenerateUniqueProductSlugAsync(productDto.Name, resolvedSku)
             };
 
             await _productRepository.AddAsync(product);
@@ -153,6 +179,7 @@ namespace ECommerce.Business.Services.Managers
             return new ProductListDto
             {
                 Id = product.Id,
+                Sku = product.SKU,
                 Name = product.Name,
                 Slug = product.Slug ?? string.Empty,
                 Description = product.Description ?? string.Empty,
@@ -162,7 +189,10 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty
+                CategoryName = product.Category?.Name ?? string.Empty,
+                AdminOverrideName = product.AdminOverrideName,
+                AdminOverridePrice = product.AdminOverridePrice,
+                AdminOverrideCategory = product.AdminOverrideCategory
             };
         }
 
@@ -180,6 +210,10 @@ namespace ECommerce.Business.Services.Managers
             product.CategoryId = productDto.CategoryId;
             product.ImageUrl = productDto.ImageUrl ?? product.ImageUrl;
             product.BrandId = productDto.BrandId;
+            product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
+            product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
+            product.AdminOverrideCategory = ResolveAdminOverride(product.AdminOverrideCategory, productDto.AdminOverrideCategory);
+            product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
             await _productRepository.UpdateAsync(product);
             if (oldStock != product.StockQuantity)
@@ -198,6 +232,7 @@ namespace ECommerce.Business.Services.Managers
             return new ProductListDto
             {
                 Id = product.Id,
+                Sku = product.SKU,
                 Name = product.Name,
                 Slug = product.Slug ?? string.Empty,
                 Description = product.Description ?? string.Empty,
@@ -207,7 +242,10 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty
+                CategoryName = product.Category?.Name ?? string.Empty,
+                AdminOverrideName = product.AdminOverrideName,
+                AdminOverridePrice = product.AdminOverridePrice,
+                AdminOverrideCategory = product.AdminOverrideCategory
             };
         }
 
@@ -240,6 +278,10 @@ namespace ECommerce.Business.Services.Managers
                 product.CategoryId = productDto.CategoryId;
                 product.ImageUrl = productDto.ImageUrl ?? product.ImageUrl;
                 product.BrandId = productDto.BrandId;
+                product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
+                product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
+                product.AdminOverrideCategory = ResolveAdminOverride(product.AdminOverrideCategory, productDto.AdminOverrideCategory);
+                product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
                 await _productRepository.UpdateAsync(product);
                 if (oldStock != product.StockQuantity)
@@ -264,7 +306,11 @@ namespace ECommerce.Business.Services.Managers
                     CategoryId = productDto.CategoryId,
                     ImageUrl = productDto.ImageUrl ?? string.Empty,
                     BrandId = productDto.BrandId,
-                    SKU = sku
+                    AdminOverrideName = productDto.AdminOverrideName,
+                    AdminOverridePrice = productDto.AdminOverridePrice,
+                    AdminOverrideCategory = productDto.AdminOverrideCategory,
+                    SKU = sku,
+                    Slug = await GenerateUniqueProductSlugAsync(productDto.Name, sku)
                 };
                 await _productRepository.AddAsync(product);
             }
@@ -274,6 +320,7 @@ namespace ECommerce.Business.Services.Managers
             return new ProductListDto
             {
                 Id = product.Id,
+                Sku = product.SKU,
                 Name = product.Name,
                 Slug = product.Slug ?? string.Empty,
                 Description = product.Description ?? string.Empty,
@@ -283,8 +330,16 @@ namespace ECommerce.Business.Services.Managers
                 ImageUrl = product.ImageUrl,
                 Brand = product.Brand?.Name ?? string.Empty,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty
+                CategoryName = product.Category?.Name ?? string.Empty,
+                AdminOverrideName = product.AdminOverrideName,
+                AdminOverridePrice = product.AdminOverridePrice,
+                AdminOverrideCategory = product.AdminOverrideCategory
             };
+        }
+
+        private static bool? ResolveAdminOverride(bool? currentValue, bool? requestedValue)
+        {
+            return requestedValue.HasValue ? requestedValue.Value : currentValue;
         }
 
         public async Task<bool> UpdateStockAsync(int id, int stock)
@@ -313,6 +368,94 @@ namespace ECommerce.Business.Services.Managers
         {
             var allProducts = await _productRepository.GetAllAsync();
             return allProducts.Count();
+        }
+
+        private async Task<string> EnsureProductSlugAsync(Product product, string? name, string? sku)
+        {
+            if (!string.IsNullOrWhiteSpace(product.Slug))
+            {
+                return product.Slug;
+            }
+
+            return await GenerateUniqueProductSlugAsync(name, sku, product.Id > 0 ? product.Id : null);
+        }
+
+        private async Task<string> GenerateUniqueProductSlugAsync(string? name, string? sku, int? excludeId = null)
+        {
+            var baseInput = !string.IsNullOrWhiteSpace(name) ? name! : sku ?? "urun";
+            var baseSlug = GenerateSlug(baseInput);
+
+            if (!string.IsNullOrWhiteSpace(sku))
+            {
+                var skuSlug = GenerateSlug(sku);
+                if (!string.IsNullOrWhiteSpace(skuSlug) &&
+                    !string.Equals(baseSlug, skuSlug, StringComparison.OrdinalIgnoreCase))
+                {
+                    baseSlug = $"{baseSlug}-{skuSlug}";
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(baseSlug))
+            {
+                baseSlug = $"urun-{DateTime.UtcNow:yyyyMMddHHmmss}";
+            }
+
+            if (_dbContext == null)
+            {
+                return baseSlug;
+            }
+
+            var candidate = baseSlug;
+            var suffix = 2;
+            while (await _dbContext.Products.AnyAsync(product =>
+                product.Slug == candidate &&
+                (!excludeId.HasValue || product.Id != excludeId.Value)))
+            {
+                candidate = $"{baseSlug}-{suffix}";
+                suffix++;
+            }
+
+            return candidate;
+        }
+
+        private static string GenerateSlug(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+            var previousDash = false;
+
+            foreach (var ch in normalized)
+            {
+                var category = CharUnicodeInfo.GetUnicodeCategory(ch);
+                if (category == UnicodeCategory.NonSpacingMark)
+                {
+                    continue;
+                }
+
+                if (char.IsLetterOrDigit(ch))
+                {
+                    builder.Append(ch);
+                    previousDash = false;
+                    continue;
+                }
+
+                if (previousDash)
+                {
+                    continue;
+                }
+
+                builder.Append('-');
+                previousDash = true;
+            }
+
+            return builder
+                .ToString()
+                .Trim('-');
         }
 
         /// <summary>
@@ -353,6 +496,130 @@ namespace ECommerce.Business.Services.Managers
                 (page - 1) * size,
                 size
             );
+        }
+
+        public async Task<PagedResult<ProductListDto>> GetProductsByCategoryPagedAsync(
+            int categoryId,
+            int page = 1,
+            int size = 50,
+            string sort = "name",
+            string direction = "asc",
+            bool? inStock = null)
+        {
+            page = Math.Max(page, 1);
+            size = Math.Clamp(size, 1, 100);
+            var isDescending = string.Equals(direction, "desc", StringComparison.OrdinalIgnoreCase);
+
+            if (_dbContext == null)
+            {
+                var products = (await _productRepository.GetAllAsync())
+                    .Where(p => p.IsActive && p.CategoryId == categoryId && GetDisplayPrice(p) > 0);
+
+                if (inStock.HasValue)
+                    products = inStock.Value
+                        ? products.Where(p => p.StockQuantity > 0)
+                        : products.Where(p => p.StockQuantity <= 0);
+
+                products = ApplySort(products, sort, isDescending);
+
+                var totalCount = products.Count();
+                var items = products
+                    .Skip((page - 1) * size)
+                    .Take(size)
+                    .Select(MapToListDto)
+                    .ToList();
+
+                return new PagedResult<ProductListDto>(items, totalCount, (page - 1) * size, size);
+            }
+
+            IQueryable<Product> query = _dbContext.Products
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Brand)
+                .Where(p => p.IsActive && p.CategoryId == categoryId && (p.SpecialPrice.HasValue && p.SpecialPrice.Value > 0 && p.SpecialPrice.Value < p.Price || p.Price > 0));
+
+            if (inStock.HasValue)
+                query = inStock.Value
+                    ? query.Where(p => p.StockQuantity > 0)
+                    : query.Where(p => p.StockQuantity <= 0);
+
+            query = ApplySort(query, sort, isDescending);
+
+            var total = await query.CountAsync();
+            var pagedItems = await query
+                .Skip((page - 1) * size)
+                .Take(size)
+                .Select(p => new ProductListDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Slug = p.Slug ?? string.Empty,
+                    Description = p.Description ?? string.Empty,
+                    Price = p.Price,
+                    SpecialPrice = p.SpecialPrice,
+                    StockQuantity = p.StockQuantity,
+                    ImageUrl = p.ImageUrl,
+                    Brand = p.Brand != null ? p.Brand.Name : string.Empty,
+                    CategoryId = p.CategoryId,
+                    CategoryName = p.Category != null ? p.Category.Name : string.Empty
+                })
+                .ToListAsync();
+
+            return new PagedResult<ProductListDto>(pagedItems, total, (page - 1) * size, size);
+        }
+
+        private static IEnumerable<Product> ApplySort(IEnumerable<Product> products, string? sort, bool isDescending)
+        {
+            var normalizedSort = sort?.Trim().ToLowerInvariant();
+
+            return normalizedSort switch
+            {
+                "price" => isDescending ? products.OrderByDescending(p => p.Price).ThenBy(p => p.Name) : products.OrderBy(p => p.Price).ThenBy(p => p.Name),
+                "newest" => isDescending ? products.OrderBy(p => p.CreatedAt).ThenBy(p => p.Name) : products.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Name),
+                _ => isDescending ? products.OrderByDescending(p => p.Name) : products.OrderBy(p => p.Name)
+            };
+        }
+
+        private static IQueryable<Product> ApplySort(IQueryable<Product> products, string? sort, bool isDescending)
+        {
+            var normalizedSort = sort?.Trim().ToLowerInvariant();
+
+            return normalizedSort switch
+            {
+                "price" => isDescending ? products.OrderByDescending(p => p.Price).ThenBy(p => p.Name) : products.OrderBy(p => p.Price).ThenBy(p => p.Name),
+                "newest" => isDescending ? products.OrderBy(p => p.CreatedAt).ThenBy(p => p.Name) : products.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Name),
+                _ => isDescending ? products.OrderByDescending(p => p.Name) : products.OrderBy(p => p.Name)
+            };
+        }
+
+        private static decimal GetDisplayPrice(Product product)
+        {
+            if (product.SpecialPrice.HasValue &&
+                product.SpecialPrice.Value > 0 &&
+                product.SpecialPrice.Value < product.Price)
+            {
+                return product.SpecialPrice.Value;
+            }
+
+            return product.Price;
+        }
+
+        private static ProductListDto MapToListDto(Product p)
+        {
+            return new ProductListDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Slug = p.Slug ?? string.Empty,
+                Description = p.Description ?? string.Empty,
+                Price = p.Price,
+                SpecialPrice = p.SpecialPrice,
+                StockQuantity = p.StockQuantity,
+                ImageUrl = p.ImageUrl,
+                Brand = p.Brand?.Name ?? string.Empty,
+                CategoryId = p.CategoryId,
+                CategoryName = p.Category?.Name ?? string.Empty
+            };
         }
 
         public async Task<IEnumerable<ProductListDto>> GetAllProductsAsync(int page = 1, int size = 10)
