@@ -359,6 +359,76 @@ namespace ECommerce.Tests.Controllers
             Assert.Equal(149.90m, product.Price);
             Assert.Equal("SP-001", product.Sku);
         }
+
+        [Fact]
+        public async Task GetProductsByCategoryPaged_ShouldExcludeOutOfStockAndZeroPriceMikroProducts()
+        {
+            await using var context = CreateContext();
+
+            var category = new Category
+            {
+                Id = 17,
+                Name = "Et Ürünleri",
+                Slug = "et-ve-et-urunleri",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(category);
+            context.MikroCategoryMappings.Add(new MikroCategoryMapping
+            {
+                MikroAnagrupKod = "ET",
+                CategoryId = category.Id,
+                Priority = 50,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var controller = CreateController(context, new List<MikroUnifiedProductDto>
+            {
+                new()
+                {
+                    StokKod = "GOOD-1",
+                    StokAd = "Dana Kuşbaşı",
+                    Fiyat = 550m,
+                    StokMiktar = 12,
+                    AnagrupKod = "ET",
+                    Birim = "KG",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "OOS-1",
+                    StokAd = "Tükenen Ürün",
+                    Fiyat = 425m,
+                    StokMiktar = 0,
+                    AnagrupKod = "ET",
+                    Birim = "KG",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "FREE-1",
+                    StokAd = "Sıfır Fiyatlı Ürün",
+                    Fiyat = 0m,
+                    StokMiktar = 9,
+                    AnagrupKod = "ET",
+                    Birim = "KG",
+                    WebeGonderilecekFl = true
+                }
+            });
+
+            var actionResult = await controller.GetProductsByCategoryPaged(category.Id, 1, 25, "name", "asc", null);
+            var okResult = Assert.IsType<OkObjectResult>(actionResult);
+            var model = Assert.IsType<ECommerce.Core.DTOs.PagedResult<ProductListDto>>(okResult.Value);
+
+            var product = Assert.Single(model.Items);
+            Assert.Equal("GOOD-1", product.Sku);
+            Assert.Equal(1, model.Total);
+        }
         [Fact]
         public async Task SearchProducts_ShouldReturnMikroBackedResults_WhenOnlyMikroHasTheProduct()
         {
@@ -409,6 +479,75 @@ namespace ECommerce.Tests.Controllers
             var product = Assert.Single(products);
             Assert.Equal("RECEL-42", product.Sku);
             Assert.Equal("Temel Gıda", product.CategoryName);
+        }
+
+        [Fact]
+        public async Task GetProducts_ShouldExcludeOutOfStockAndZeroPriceMikroProducts()
+        {
+            await using var context = CreateContext();
+
+            var category = new Category
+            {
+                Id = 18,
+                Name = "Süt Ürünleri",
+                Slug = "sut-ve-sut-urunleri",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(category);
+            context.MikroCategoryMappings.Add(new MikroCategoryMapping
+            {
+                MikroAnagrupKod = "SUT",
+                CategoryId = category.Id,
+                Priority = 50,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var controller = CreateController(context, new List<MikroUnifiedProductDto>
+            {
+                new()
+                {
+                    StokKod = "VISIBLE-1",
+                    StokAd = "Kaşar Peyniri",
+                    Fiyat = 210m,
+                    StokMiktar = 4,
+                    AnagrupKod = "SUT",
+                    Birim = "ADET",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "HIDDEN-1",
+                    StokAd = "Stoksuz Ürün",
+                    Fiyat = 180m,
+                    StokMiktar = 0,
+                    AnagrupKod = "SUT",
+                    Birim = "ADET",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "HIDDEN-2",
+                    StokAd = "Fiyatsız Ürün",
+                    Fiyat = 0m,
+                    StokMiktar = 7,
+                    AnagrupKod = "SUT",
+                    Birim = "ADET",
+                    WebeGonderilecekFl = true
+                }
+            });
+
+            var actionResult = await controller.GetProducts();
+            var okResult = Assert.IsType<OkObjectResult>(actionResult);
+            var products = Assert.IsAssignableFrom<IEnumerable<ProductListDto>>(okResult.Value).ToList();
+
+            var product = Assert.Single(products);
+            Assert.Equal("VISIBLE-1", product.Sku);
         }
 
         [Fact]

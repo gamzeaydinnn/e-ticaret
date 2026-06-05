@@ -320,7 +320,8 @@ namespace ECommerce.API.Controllers
                         };
                     })
                     .Where(x => x.IsVisible)
-                    .Where(x => x.Product.Price > 0); // Fiyatsız ürünleri gösterme
+                    .Where(x => x.Product.Price > 0)
+                    .Where(x => x.Product.StockQuantity > 0);
 
                 // Kategoriye göre filtrele
                 if (categoryId.HasValue)
@@ -885,6 +886,7 @@ namespace ECommerce.API.Controllers
                 })
                 .Where(row => row.IsVisible)
                 .Where(row => row.Product.Price > 0)
+                .Where(row => row.Product.StockQuantity > 0)
                 .ToList();
         }
 
@@ -1038,6 +1040,7 @@ namespace ECommerce.API.Controllers
                         })
                         .Where(x => x.IsVisible)
                         .Where(x => x.Product.Price > 0)
+                        .Where(x => x.Product.StockQuantity > 0)
                         .Where(x =>
                             x.Product.CategoryId == categoryId ||
                             (!string.IsNullOrWhiteSpace(requestedCategorySlug) &&
