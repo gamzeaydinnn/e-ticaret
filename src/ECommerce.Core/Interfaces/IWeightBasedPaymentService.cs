@@ -60,8 +60,8 @@ namespace ECommerce.Core.Interfaces
         /// <summary>İşlem süresi (ms)</summary>
         public long ElapsedMilliseconds { get; set; }
 
-        /// <summary>Provizyon geçerlilik süresi (varsayılan 48 saat)</summary>
-        public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddHours(48);
+        /// <summary>Provizyon geçerlilik süresi (varsayılan 168 saat / 7 gün)</summary>
+        public DateTime ExpiresAt { get; set; } = DateTime.UtcNow.AddHours(168);
 
         /// <summary>Başarılı sonuç factory</summary>
         public static PreAuthorizationResult Success(int orderId, decimal amount, string hostLogKey, string? authCode = null)
@@ -74,7 +74,7 @@ namespace ECommerce.Core.Interfaces
                 HostLogKey = hostLogKey,
                 AuthCode = authCode,
                 TransactionDate = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddHours(48)
+                ExpiresAt = DateTime.UtcNow.AddHours(168)
             };
         }
 
@@ -507,7 +507,7 @@ namespace ECommerce.Core.Interfaces
 
         /// <summary>
         /// Provizyon süresinin dolup dolmadığını kontrol eder
-        /// POSNET'te provizyon süresi genelde 7 gün, biz 48 saat kabul ediyoruz
+        /// POSNET'te provizyon süresi 7 gün kabul edilir ve buna göre doğrulama yapılır
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
         /// <param name="cancellationToken">İptal token'ı</param>

@@ -158,7 +158,7 @@ namespace ECommerce.API.Controllers
         /// <response code="200">Çıkış başarılı</response>
         /// <response code="401">Yetkisiz erişim</response>
         [HttpPost("logout")]
-        [Authorize(Roles = "Courier")]
+        [Authorize]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Logout()
@@ -167,7 +167,9 @@ namespace ECommerce.API.Controllers
             {
                 // 1. User ID'yi token'dan al
                 var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                                 ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+                                 ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                                 ?? User.FindFirst("nameid")?.Value
+                                 ?? User.FindFirst("sub")?.Value;
 
                 if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out var userId))
                 {
@@ -275,7 +277,7 @@ namespace ECommerce.API.Controllers
         /// <response code="400">Geçersiz istek veya şifre uyuşmazlığı</response>
         /// <response code="401">Yetkisiz erişim</response>
         [HttpPost("change-password")]
-        [Authorize(Roles = "Courier")]
+        [Authorize]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -294,7 +296,10 @@ namespace ECommerce.API.Controllers
                 }
 
                 // 2. User ID'yi token'dan al
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                                 ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                                 ?? User.FindFirst("nameid")?.Value
+                                 ?? User.FindFirst("sub")?.Value;
                 if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out var userId))
                 {
                     return Unauthorized(new { Success = false, Message = "Geçersiz oturum." });
@@ -331,7 +336,7 @@ namespace ECommerce.API.Controllers
         /// <response code="401">Yetkisiz erişim</response>
         /// <response code="404">Kurye bulunamadı</response>
         [HttpGet("me")]
-        [Authorize(Roles = "Courier")]
+        [Authorize]
         [ProducesResponseType(typeof(CourierInfoDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -340,7 +345,11 @@ namespace ECommerce.API.Controllers
             try
             {
                 // 1. User ID'yi token'dan al
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                                 ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                                 ?? User.FindFirst("nameid")?.Value
+                                 ?? User.FindFirst("sub")?.Value;
+                                 
                 if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out var userId))
                 {
                     return Unauthorized(new { Success = false, Message = "Geçersiz oturum." });
@@ -375,7 +384,7 @@ namespace ECommerce.API.Controllers
         /// <response code="200">Oturum geçerli</response>
         /// <response code="401">Oturum geçersiz</response>
         [HttpGet("validate")]
-        [Authorize(Roles = "Courier")]
+        [Authorize]
         [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> ValidateSession()
@@ -383,7 +392,10 @@ namespace ECommerce.API.Controllers
             try
             {
                 // 1. User ID'yi token'dan al
-                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                                 ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                                 ?? User.FindFirst("nameid")?.Value
+                                 ?? User.FindFirst("sub")?.Value;
                 if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out var userId))
                 {
                     return Unauthorized(new { Success = false, Message = "Geçersiz oturum." });

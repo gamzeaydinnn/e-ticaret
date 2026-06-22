@@ -23,6 +23,14 @@ export default function CourierLogin() {
   const navigate = useNavigate();
   const { login, isAuthenticated, loading: authLoading } = useCourierAuth();
 
+  // URL'den session_expired parametresini oku ve hata mesajı göster
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("session_expired") === "true") {
+      setError("Kurye hesabınızla giriş yapmanız gerekmektedir. Lütfen kurye bilgilerinizle giriş yapın.");
+    }
+  }, []);
+
   // Zaten giriş yapmışsa dashboard'a yönlendir
   useEffect(() => {
     if (!authLoading && isAuthenticated) {

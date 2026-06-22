@@ -241,4 +241,8 @@ export function useStoreAttendantAuth() {
   return context;
 }
 
+export function useOptionalStoreAttendantAuth() {
+  return useContext(StoreAttendantAuthContext);
+}
+
 export default StoreAttendantAuthContext;

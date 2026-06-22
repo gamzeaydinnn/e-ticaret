@@ -208,6 +208,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         /// </summary>
         public string BuildCaptXml(PosnetCaptRequest request)
         {
+            PosnetRequestValidator.ValidateAndThrow(request);
+
             var sb = new StringBuilder();
             sb.Append(XML_DECLARATION);
             sb.Append(POSNET_OPEN);
@@ -217,15 +219,21 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             // Finansallaştırma işlem bloğu - "capt" tag'i
             sb.Append("<capt>");
             
-            AppendElement(sb, "orderID", request.OrderId);
             AppendElement(sb, "amount", request.Amount.ToString());
+            AppendElement(sb, "currencyCode", GetCurrencyCode(request.CurrencyCode));
             AppendElement(sb, "installment", request.Installment);
             
-            // HostLogKey - Provizyon işleminden dönen referans
-            // Bu değer finansallaştırma için zorunlu
             if (!string.IsNullOrEmpty(request.HostLogKey))
             {
                 AppendElement(sb, "hostLogKey", request.HostLogKey);
+            }
+            else
+            {
+                AppendElement(sb, "orderID", request.OrderId);
+                if (!string.IsNullOrEmpty(request.OrderDate))
+                {
+                    AppendElement(sb, "orderDate", request.OrderDate);
+                }
             }
             
             sb.Append("</capt>");
@@ -245,6 +253,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         /// </summary>
         public string BuildReverseXml(PosnetReverseRequest request)
         {
+            PosnetRequestValidator.ValidateAndThrow(request);
+
             var sb = new StringBuilder();
             sb.Append(XML_DECLARATION);
             sb.Append(POSNET_OPEN);
@@ -253,15 +263,24 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             
             // İptal işlem bloğu - "reverse" tag'i
             sb.Append("<reverse>");
-            
-            // İptal için transaction referansı gerekli
-            // HostLogKey: Orijinal işlemden dönen referans numarası
-            AppendElement(sb, "hostLogKey", request.HostLogKey);
-            
-            // İşlem tarihi (opsiyonel) - YYMMDD formatında
-            if (!string.IsNullOrEmpty(request.TransactionDate))
+            AppendElement(sb, "transaction", request.Transaction);
+
+            if (!string.IsNullOrEmpty(request.HostLogKey))
             {
-                AppendElement(sb, "tranDate", request.TransactionDate);
+                AppendElement(sb, "hostLogKey", request.HostLogKey);
+            }
+            else
+            {
+                AppendElement(sb, "orderID", request.OrderId);
+                if (!string.IsNullOrEmpty(request.OrderDate))
+                {
+                    AppendElement(sb, "orderDate", request.OrderDate);
+                }
+            }
+
+            if (!string.IsNullOrEmpty(request.AuthCode))
+            {
+                AppendElement(sb, "authCode", request.AuthCode);
             }
             
             sb.Append("</reverse>");
@@ -281,6 +300,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         /// </summary>
         public string BuildReturnXml(PosnetReturnRequest request)
         {
+            PosnetRequestValidator.ValidateAndThrow(request);
+
             var sb = new StringBuilder();
             sb.Append(XML_DECLARATION);
             sb.Append(POSNET_OPEN);
@@ -289,18 +310,21 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             
             // İade işlem bloğu - "return" tag'i
             sb.Append("<return>");
-            
-            // İade için HostLogKey zorunlu
-            AppendElement(sb, "hostLogKey", request.HostLogKey);
-            
             // İade tutarı - Kısmi iade için orijinalden az olabilir
             AppendElement(sb, "amount", request.Amount.ToString());
-            
-            // İade işlemi için yeni sipariş numarası (opsiyonel ama önerilen)
-            // Her iade ayrı bir transaction olarak kaydedilir
-            if (!string.IsNullOrEmpty(request.RefundOrderId))
+            AppendElement(sb, "currencyCode", GetCurrencyCode(request.CurrencyCode));
+
+            if (!string.IsNullOrEmpty(request.HostLogKey))
             {
-                AppendElement(sb, "orderID", request.RefundOrderId);
+                AppendElement(sb, "hostLogKey", request.HostLogKey);
+            }
+            else
+            {
+                AppendElement(sb, "orderID", request.OrderId);
+                if (!string.IsNullOrEmpty(request.OrderDate))
+                {
+                    AppendElement(sb, "orderDate", request.OrderDate);
+                }
             }
             
             sb.Append("</return>");

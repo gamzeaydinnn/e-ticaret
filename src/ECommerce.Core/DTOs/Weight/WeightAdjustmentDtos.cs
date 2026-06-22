@@ -83,6 +83,22 @@ namespace ECommerce.Core.DTOs.Weight
     }
 
     /// <summary>
+    /// Admin veya mağaza görevlisinin hazırlık aşamasında manuel ağırlık güncellemesi için request DTO.
+    /// </summary>
+    public class ManualWeightUpdateRequest
+    {
+        /// <summary>
+        /// Sipariş kalemi ID'si.
+        /// </summary>
+        public int OrderItemId { get; set; }
+
+        /// <summary>
+        /// Gerçek ağırlık (gram cinsinden).
+        /// </summary>
+        public decimal ActualWeight { get; set; }
+    }
+
+    /// <summary>
     /// Sipariş teslim ve ödeme kesinleştirme için DTO
     /// Kurye "Teslim Edildi" butonuna bastığında kullanılır
     /// </summary>

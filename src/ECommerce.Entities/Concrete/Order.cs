@@ -36,11 +36,11 @@ namespace ECommerce.Entities.Concrete
         public string? AppliedCouponCode { get; set; }
         public string Currency { get; set; } = "TRY";
         public OrderStatus Status { get; set; } = OrderStatus.Pending;
-        
+
         // Kargo bilgileri
         public string ShippingMethod { get; set; } = "car"; // car veya motorcycle
         public decimal ShippingCost { get; set; } = 30m; // Kargo ücreti
-        
+
         // Kurye bilgileri
         public int? CourierId { get; set; }
         public string? CustomerName { get; set; }
@@ -120,8 +120,8 @@ namespace ECommerce.Entities.Concrete
 
         /// <summary>
         /// Authorize edilen tutar (TL)
-        /// Sipariş oluşturulurken %10 tolerans ile alınan provizyon tutarı
-        /// Örnek: Sipariş 100 TL ise, authorize 110 TL olur
+        /// Sipariş oluşturulurken tanımlı tolerans ile alınan provizyon tutarı
+        /// Örnek: Sipariş 100 TL ise, %20 toleransta authorize 120 TL olur
         /// </summary>
         public decimal AuthorizedAmount { get; set; } = 0m;
 
@@ -177,9 +177,9 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Tolerans yüzdesi
         /// Authorize tutarı hesaplamak için kullanılan tolerans
-        /// Varsayılan %10 (0.10)
+        /// Varsayılan %20 (0.20)
         /// </summary>
-        public decimal TolerancePercentage { get; set; } = 0.10m;
+        public decimal TolerancePercentage { get; set; } = 0.20m;
 
         #endregion
 
@@ -291,7 +291,7 @@ namespace ECommerce.Entities.Concrete
         public virtual ICollection<StockReservation> StockReservations { get; set; } = new HashSet<StockReservation>();
         public virtual ICollection<WeightReport> WeightReports { get; set; } = new HashSet<WeightReport>();
         public virtual ICollection<OrderStatusHistory> OrderStatusHistories { get; set; } = new HashSet<OrderStatusHistory>();
-        
+
         /// <summary>
         /// Bu siparişte kullanılan kuponların geçmişi
         /// Tek kupon destekli sistemde tek kayıt olur, ancak geçmiş için collection tutulur

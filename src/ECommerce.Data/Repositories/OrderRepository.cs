@@ -20,6 +20,7 @@ namespace ECommerce.Data.Repositories
             return await _dbSet
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.Category)
                 .Where(o => o.UserId == userId && o.IsActive)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
@@ -30,6 +31,7 @@ namespace ECommerce.Data.Repositories
             return await _dbSet
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.Category)
                 .Include(o => o.User)
                 .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber && o.IsActive);
         }
@@ -40,6 +42,7 @@ namespace ECommerce.Data.Repositories
                 .Include(o => o.User)
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p.Category)
                 .Where(o => o.IsActive)
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();

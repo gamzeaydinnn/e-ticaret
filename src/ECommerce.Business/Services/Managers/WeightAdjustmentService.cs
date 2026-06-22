@@ -2,36 +2,38 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ECommerce.Business.Helpers;
+using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ECommerce.Business.Services.Managers
 {
     /// <summary>
     /// AĞIRLIK BAZLI DİNAMİK ÖDEME SİSTEMİ - ANA SERVİS
-    /// 
+    ///
     /// Bu servis ağırlık bazlı ürünlerin (kg/gram satılan) tüm iş mantığını yönetir.
-    /// 
+    ///
     /// ANA AKIŞ:
     /// 1. Sipariş oluşturma → InitializeWeightBasedOrderAsync (tahmini değerler set)
     /// 2. Kurye tartımı → RecordCourierWeightEntryAsync (gerçek değerler)
     /// 3. Fark hesaplama → CalculateOrderWeightDifferenceAsync
     /// 4. Ödeme finalizasyonu → FinalizeWeightBasedPaymentAsync
-    /// 
+    ///
     /// TOLERANS YOK - HER GRAM FARK HESAPLANIR!
     /// </summary>
     public class WeightAdjustmentService : IWeightAdjustmentService
     {
-        // Dokümanla uyumlu eşikler: %20 veya 50 TL üzeri fark admin onayı gerektirir.
-        private const decimal ADMIN_APPROVAL_THRESHOLD_PERCENT = 20m;
-        private const decimal ADMIN_APPROVAL_THRESHOLD_AMOUNT = 50m;
-
-        // Dokümanla uyumlu ön provizyon marjı: %20.
+        // Doküman ve güncel banka tanımı ile uyumlu ön provizyon marjı: %20.
         private const decimal PRE_AUTH_MARGIN_PERCENT = 20m;
+        // Banka tarafından tanımlanan provizyon aşım yüzdesi: capt tutarı
+        // gerektiğinde ön provizyonun %20 üstüne kadar finansallaştırılabilir.
+        private const decimal PRE_AUTH_CAPTURE_OVERAGE_PERCENT = 20m;
 
         private readonly IWeightAdjustmentRepository _adjustmentRepository;
         private readonly IOrderRepository _orderRepository;
@@ -41,6 +43,12 @@ namespace ECommerce.Business.Services.Managers
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<WeightAdjustmentService>? _logger;
 
+        /// <summary>
+        /// IPaymentCaptureService - Kart ödemeli siparişlerde tartı sonrası POSNET capture/refund tetikler.
+        /// Circular dependency önlemek için IServiceProvider üzerinden lazy resolve edilir.
+        /// </summary>
+        private readonly IServiceProvider? _serviceProvider;
+
         public WeightAdjustmentService(
             IWeightAdjustmentRepository adjustmentRepository,
             IOrderRepository orderRepository,
@@ -48,7 +56,8 @@ namespace ECommerce.Business.Services.Managers
             IUserRepository userRepository,
             IPaymentService paymentService,
             IUnitOfWork unitOfWork,
-            ILogger<WeightAdjustmentService>? logger = null)
+            ILogger<WeightAdjustmentService>? logger = null,
+            IServiceProvider? serviceProvider = null)
         {
             _adjustmentRepository = adjustmentRepository ?? throw new ArgumentNullException(nameof(adjustmentRepository));
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
@@ -57,6 +66,7 @@ namespace ECommerce.Business.Services.Managers
             _paymentService = paymentService ?? throw new ArgumentNullException(nameof(paymentService));
             _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
             _logger = logger;
+            _serviceProvider = serviceProvider;
         }
 
         #region Kurye Ağırlık Girişi
@@ -100,8 +110,14 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                // Ağırlık bazlı ürün mü kontrol et
-                if (!orderItem.IsWeightBased)
+                var product = await _productRepository.GetByIdAsync(orderItem.ProductId);
+                if (product == null)
+                {
+                    result.ErrorMessage = "Ürün bulunamadı";
+                    return result;
+                }
+
+                if (!IsEffectivelyWeightBased(orderItem, product))
                 {
                     result.ErrorMessage = "Bu ürün ağırlık bazlı değil";
                     return result;
@@ -115,20 +131,15 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                // Ürün bilgilerini al (PricePerUnit için)
-                var product = await _productRepository.GetByIdAsync(orderItem.ProductId);
-                if (product == null)
-                {
-                    result.ErrorMessage = "Ürün bulunamadı";
-                    return result;
-                }
-
                 // Farkları hesapla
                 var estimatedWeight = orderItem.EstimatedWeight;
                 var weightDifference = actualWeight - estimatedWeight;
                 var pricePerUnit = product.PricePerUnit > 0 ? product.PricePerUnit : product.Price;
-                var priceDifference = weightDifference * pricePerUnit;
-                var actualPrice = actualWeight * pricePerUnit;
+                var estimatedPrice = orderItem.EstimatedPrice > 0
+                    ? orderItem.EstimatedPrice
+                    : CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit);
+                var actualPrice = CalculateWeightedPrice(actualWeight, pricePerUnit, product.WeightUnit);
+                var priceDifference = actualPrice - estimatedPrice;
                 var differencePercent = estimatedWeight > 0 ? (weightDifference / estimatedWeight) * 100 : 0;
 
                 // OrderItem güncelle
@@ -153,7 +164,7 @@ namespace ECommerce.Business.Services.Managers
                     WeightDifference = weightDifference,
                     DifferencePercent = differencePercent,
                     PricePerUnit = pricePerUnit,
-                    EstimatedPrice = orderItem.EstimatedPrice > 0 ? orderItem.EstimatedPrice : (estimatedWeight * pricePerUnit),
+                    EstimatedPrice = estimatedPrice,
                     ActualPrice = actualPrice,
                     PriceDifference = priceDifference,
                     Status = WeightAdjustmentStatus.Weighed,
@@ -162,29 +173,7 @@ namespace ECommerce.Business.Services.Managers
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // Fark büyükse admin onayına gönder (>%20 veya >50 TL ise)
-                var requiresAdminApproval =
-                    Math.Abs(differencePercent) > ADMIN_APPROVAL_THRESHOLD_PERCENT ||
-                    Math.Abs(priceDifference) > ADMIN_APPROVAL_THRESHOLD_AMOUNT;
-
-                if (requiresAdminApproval)
-                {
-                    adjustment.Status = WeightAdjustmentStatus.PendingAdminApproval;
-                    adjustment.RequiresAdminApproval = true;
-                    _logger?.LogWarning("[WEIGHT-SVC] Yüksek fark - admin onayı gerekli: %{Percent:F1}", differencePercent);
-                }
-                else if (priceDifference > 0)
-                {
-                    adjustment.Status = WeightAdjustmentStatus.PendingAdditionalPayment;
-                }
-                else if (priceDifference < 0)
-                {
-                    adjustment.Status = WeightAdjustmentStatus.PendingRefund;
-                }
-                else
-                {
-                    adjustment.Status = WeightAdjustmentStatus.NoDifference;
-                }
+                ApplyAdjustmentStatus(adjustment, differencePercent, priceDifference);
 
                 await _adjustmentRepository.AddAsync(adjustment);
 
@@ -276,8 +265,13 @@ namespace ECommerce.Business.Services.Managers
                 calculation.TotalEstimatedWeight += itemCalc.EstimatedWeight;
                 calculation.TotalActualWeight += itemCalc.ActualWeight;
                 calculation.TotalWeightDifference += itemCalc.WeightDifference;
-                calculation.TotalEstimatedPrice += item.EstimatedPrice > 0 ? item.EstimatedPrice : (itemCalc.EstimatedWeight * pricePerUnit);
-                calculation.TotalActualPrice += (item.ActualPrice ?? 0) > 0 ? item.ActualPrice.Value : (itemCalc.ActualWeight * pricePerUnit);
+                calculation.TotalEstimatedPrice += item.EstimatedPrice > 0
+                    ? item.EstimatedPrice
+                    : CalculateWeightedPrice(itemCalc.EstimatedWeight, pricePerUnit, item.WeightUnit);
+                var actualPrice = item.ActualPrice.GetValueOrDefault();
+                calculation.TotalActualPrice += actualPrice > 0
+                    ? actualPrice
+                    : CalculateWeightedPrice(itemCalc.ActualWeight, pricePerUnit, item.WeightUnit);
                 calculation.TotalPriceDifference += itemCalc.PriceDifference;
             }
 
@@ -325,13 +319,7 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                // Admin onayı bekleyen var mı?
                 var adjustments = await _adjustmentRepository.GetByOrderIdAsync(orderId);
-                if (adjustments.Any(a => a.Status == WeightAdjustmentStatus.PendingAdminApproval))
-                {
-                    result.ErrorMessage = "Admin onayı bekleyen kalemler var";
-                    return result;
-                }
 
                 // Fark hesapla
                 var calculation = await CalculateOrderWeightDifferenceAsync(orderId);
@@ -345,31 +333,32 @@ namespace ECommerce.Business.Services.Managers
                 if (order.PaymentMethod == "Cash" || order.PaymentMethod == "Nakit")
                 {
                     // Nakit ödeme - kurye farkı tahsil etti/iade etti olarak işaretle
-                    result.IsSuccess = await RecordCashDifferenceSettlementAsync(orderId, courierId, 
+                    result.IsSuccess = await RecordCashDifferenceSettlementAsync(orderId, courierId,
                         calculation.TotalPriceDifference, courierNotes);
                     result.TransactionReference = $"CASH-{orderId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
                 }
                 else
                 {
-                    // Kart ödemesi - POSNET entegrasyonu gerekiyor
-                    // TODO: POSNET PreAuth capture veya refund işlemi
-                    _logger?.LogWarning("[WEIGHT-SVC] Kart ödeme finalizasyonu henüz implemente edilmedi");
-                    
-                    // Şimdilik sadece order'ı güncelle
-                    order.FinalAmount = result.FinalAmount;
-                    order.TotalWeightDifference = calculation.TotalWeightDifference;
-                    order.TotalPriceDifference = calculation.TotalPriceDifference;
-                    order.DifferenceSettled = true;
-                    order.DifferenceSettledAt = DateTime.UtcNow;
-                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.Completed;
+                    // ═══════════════════════════════════════════════════════════════
+                    // KART ÖDEMESİ - POSNET CAPTURE / REFUND AKIŞI
+                    // Banka Dokümantasyonu: capt XML ile gerçek tutar çekilir.
+                    // Final <= PreAuth → capt(finalAmount) → banka kalan blokeyi kaldırır.
+                    // Final > PreAuth  → capt(preAuthAmount) + admin uyarısı (limit aşılamaz).
+                    // ═══════════════════════════════════════════════════════════════
+                    var captureResult = await ExecuteCardPaymentCaptureAsync(
+                        order, result.FinalAmount, calculation, courierId);
 
-                    await _unitOfWork.SaveChangesAsync();
+                    result.IsSuccess = captureResult.IsSuccess;
+                    result.TransactionReference = captureResult.TransactionReference;
 
-                    result.IsSuccess = true;
-                    result.TransactionReference = $"CARD-{orderId}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                    if (!captureResult.IsSuccess)
+                    {
+                        result.ErrorMessage = captureResult.ErrorMessage;
+                        return result;
+                    }
                 }
 
-                _logger?.LogInformation("[WEIGHT-SVC] Ödeme finalize edildi: Order={OrderId}, Diff={Diff:F2}TL", 
+                _logger?.LogInformation("[WEIGHT-SVC] Ödeme finalize edildi: Order={OrderId}, Diff={Diff:F2}TL",
                     orderId, calculation.TotalPriceDifference);
 
                 return result;
@@ -386,7 +375,7 @@ namespace ECommerce.Business.Services.Managers
         public async Task<bool> RecordCashDifferenceSettlementAsync(
             int orderId, int courierId, decimal collectedAmount, string? notes = null)
         {
-            _logger?.LogInformation("[WEIGHT-SVC] Nakit fark tahsilatı: Order={OrderId}, Amount={Amount:F2}TL", 
+            _logger?.LogInformation("[WEIGHT-SVC] Nakit fark tahsilatı: Order={OrderId}, Amount={Amount:F2}TL",
                 orderId, collectedAmount);
 
             try
@@ -396,7 +385,7 @@ namespace ECommerce.Business.Services.Managers
 
                 // WeightAdjustment kayıtlarını güncelle
                 var adjustments = await _adjustmentRepository.GetByOrderIdAsync(orderId);
-                foreach (var adjustment in adjustments.Where(a => 
+                foreach (var adjustment in adjustments.Where(a =>
                     a.Status == WeightAdjustmentStatus.Weighed ||
                     a.Status == WeightAdjustmentStatus.PendingAdditionalPayment ||
                     a.Status == WeightAdjustmentStatus.PendingRefund))
@@ -421,6 +410,161 @@ namespace ECommerce.Business.Services.Managers
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "[WEIGHT-SVC] Nakit tahsilat kaydı hatası: Order={OrderId}", orderId);
+                throw;
+            }
+        }
+
+        /// <inheritdoc />
+        public async Task<ManualWeightUpdateResultDto> UpdateManualWeightAsync(
+            int orderId,
+            int orderItemId,
+            decimal actualWeight,
+            int actorUserId,
+            string actorDisplayName)
+        {
+            _logger?.LogInformation(
+                "[WEIGHT-SVC] Manuel ağırlık güncellemesi: Order={OrderId}, Item={ItemId}, Weight={Weight}, Actor={ActorId}",
+                orderId, orderItemId, actualWeight, actorUserId);
+
+            var result = new ManualWeightUpdateResultDto
+            {
+                OrderId = orderId,
+                OrderItemId = orderItemId,
+                IsSuccess = false
+            };
+
+            try
+            {
+                var validation = await ValidateWeightEntryAsync(orderItemId, actualWeight);
+                if (!validation.IsValid)
+                {
+                    result.ErrorMessage = validation.ErrorMessage;
+                    return result;
+                }
+
+                var order = await _orderRepository.GetByIdAsync(orderId);
+                if (order == null)
+                {
+                    result.ErrorMessage = "Sipariş bulunamadı";
+                    return result;
+                }
+
+                // NEDEN: Hazırlık aşamasındaki manuel düzeltmeler yalnızca operasyon tamamlanmadan yapılmalı.
+                if (order.Status != OrderStatus.Pending &&
+                    order.Status != OrderStatus.Confirmed &&
+                    order.Status != OrderStatus.Preparing &&
+                    order.Status != OrderStatus.Ready)
+                {
+                    result.ErrorMessage = "Bu siparişin ağırlığı mevcut durumunda manuel güncellenemez";
+                    return result;
+                }
+
+                var orderItem = order.OrderItems?.FirstOrDefault(oi => oi.Id == orderItemId);
+                if (orderItem == null)
+                {
+                    result.ErrorMessage = "Sipariş kalemi bulunamadı";
+                    return result;
+                }
+
+                var product = await _productRepository.GetByIdAsync(orderItem.ProductId);
+                if (product == null)
+                {
+                    result.ErrorMessage = "Ürün bulunamadı";
+                    return result;
+                }
+
+                if (!IsEffectivelyWeightBased(orderItem, product))
+                {
+                    result.ErrorMessage = "Bu sipariş kalemi ağırlık bazlı değil";
+                    return result;
+                }
+
+                var pricePerUnit = orderItem.PricePerUnit > 0
+                    ? orderItem.PricePerUnit
+                    : (product.PricePerUnit > 0 ? product.PricePerUnit : product.Price);
+
+                var estimatedWeight = orderItem.EstimatedWeight;
+                var weightDifference = actualWeight - estimatedWeight;
+                var estimatedPrice = orderItem.EstimatedPrice > 0
+                    ? orderItem.EstimatedPrice
+                    : CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit);
+                var actualPrice = CalculateWeightedPrice(actualWeight, pricePerUnit, product.WeightUnit);
+                var priceDifference = actualPrice - estimatedPrice;
+                var differencePercent = estimatedWeight > 0
+                    ? (weightDifference / estimatedWeight) * 100
+                    : 0m;
+
+                orderItem.ActualWeight = actualWeight;
+                orderItem.IsWeighed = true;
+                orderItem.WeighedAt = DateTime.UtcNow;
+                // NEDEN: Bu veri kurye tarafından değil operasyon personeli tarafından girildi.
+                orderItem.WeighedByCourierId = null;
+                orderItem.WeightDifference = weightDifference;
+                orderItem.ActualPrice = actualPrice;
+                orderItem.PriceDifference = priceDifference;
+
+                var adjustment = await _adjustmentRepository.GetByOrderItemIdAsync(orderItemId);
+                if (adjustment == null)
+                {
+                    adjustment = new WeightAdjustment
+                    {
+                        OrderId = orderId,
+                        OrderItemId = orderItemId,
+                        ProductId = orderItem.ProductId,
+                        ProductName = product.Name,
+                        WeightUnit = product.WeightUnit,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    await _adjustmentRepository.AddAsync(adjustment);
+                }
+
+                adjustment.EstimatedWeight = estimatedWeight;
+                adjustment.ActualWeight = actualWeight;
+                adjustment.WeightDifference = weightDifference;
+                adjustment.DifferencePercent = differencePercent;
+                adjustment.PricePerUnit = pricePerUnit;
+                adjustment.EstimatedPrice = orderItem.EstimatedPrice > 0
+                    ? orderItem.EstimatedPrice
+                    : estimatedPrice;
+                adjustment.ActualPrice = actualPrice;
+                adjustment.PriceDifference = priceDifference;
+                adjustment.WeighedAt = DateTime.UtcNow;
+                adjustment.WeighedByCourierId = null;
+                adjustment.WeighedByCourierName = actorDisplayName;
+                adjustment.AdminReviewed = false;
+                adjustment.AdminApproved = null;
+                adjustment.AdminReviewedAt = null;
+                adjustment.AdminUserId = actorUserId;
+                adjustment.AdminUserName = actorDisplayName;
+                adjustment.AdminNote = "Hazırlık aşamasında manuel ağırlık güncellemesi yapıldı.";
+                adjustment.UpdatedAt = DateTime.UtcNow;
+
+                ApplyAdjustmentStatus(adjustment, differencePercent, priceDifference);
+
+                await UpdateOrderTotalsAsync(order);
+
+                await _unitOfWork.SaveChangesAsync();
+
+                result.IsSuccess = true;
+                result.AdjustmentId = adjustment.Id;
+                result.EstimatedWeight = estimatedWeight;
+                result.ActualWeight = actualWeight;
+                result.PriceDifference = priceDifference;
+                result.FinalAmount = order.FinalAmount;
+                result.PreAuthAmount = order.PreAuthAmount;
+                result.ExceedsPreAuthLimit = order.PreAuthAmount > 0 &&
+                    order.FinalAmount > CalculateMaxCapturableAmount(order.PreAuthAmount);
+                result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(order.PreAuthAmount);
+                result.AdjustmentStatus = adjustment.Status;
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex,
+                    "[WEIGHT-SVC] Manuel ağırlık güncelleme hatası: Order={OrderId}, Item={ItemId}",
+                    orderId, orderItemId);
                 throw;
             }
         }
@@ -456,8 +600,8 @@ namespace ECommerce.Business.Services.Managers
                 {
                     case AdminDecisionType.Approve:
                         adjustment.AdminApproved = true;
-                        adjustment.Status = adjustment.PriceDifference > 0 
-                            ? WeightAdjustmentStatus.PendingAdditionalPayment 
+                        adjustment.Status = adjustment.PriceDifference > 0
+                            ? WeightAdjustmentStatus.PendingAdditionalPayment
                             : WeightAdjustmentStatus.PendingRefund;
                         break;
 
@@ -475,8 +619,8 @@ namespace ECommerce.Business.Services.Managers
                             adjustment.AdminAdjustedPrice = overrideAmount.Value;
                             adjustment.PriceDifference = overrideAmount.Value;
                         }
-                        adjustment.Status = adjustment.PriceDifference > 0 
-                            ? WeightAdjustmentStatus.PendingAdditionalPayment 
+                        adjustment.Status = adjustment.PriceDifference > 0
+                            ? WeightAdjustmentStatus.PendingAdditionalPayment
                             : WeightAdjustmentStatus.PendingRefund;
                         break;
 
@@ -515,24 +659,32 @@ namespace ECommerce.Business.Services.Managers
         /// <inheritdoc />
         public async Task<bool> RequestAdminReviewAsync(int orderId, string reason)
         {
-            _logger?.LogInformation("[WEIGHT-SVC] Admin onayı talep ediliyor: Order={OrderId}, Reason={Reason}", orderId, reason);
+            _logger?.LogInformation("[WEIGHT-SVC] Manuel inceleme işaretleniyor: Order={OrderId}, Reason={Reason}", orderId, reason);
 
             try
             {
                 var adjustments = await _adjustmentRepository.GetByOrderIdAsync(orderId);
-                foreach (var adjustment in adjustments.Where(a => 
+                foreach (var adjustment in adjustments.Where(a =>
                     a.Status == WeightAdjustmentStatus.Weighed ||
                     a.Status == WeightAdjustmentStatus.PendingWeighing))
                 {
-                    adjustment.Status = WeightAdjustmentStatus.PendingAdminApproval;
-                    adjustment.RequiresAdminApproval = true;
+                    adjustment.Status = adjustment.PriceDifference > 0
+                        ? WeightAdjustmentStatus.PendingAdditionalPayment
+                        : adjustment.PriceDifference < 0
+                            ? WeightAdjustmentStatus.PendingRefund
+                            : WeightAdjustmentStatus.NoDifference;
+                    adjustment.RequiresAdminApproval = false;
                     adjustment.UpdatedAt = DateTime.UtcNow;
                 }
 
                 var order = await _orderRepository.GetByIdAsync(orderId);
                 if (order != null)
                 {
-                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingAdminApproval;
+                    order.WeightAdjustmentStatus = adjustments.Any(a => a.Status == WeightAdjustmentStatus.PendingAdditionalPayment)
+                        ? WeightAdjustmentStatus.PendingAdditionalPayment
+                        : adjustments.Any(a => a.Status == WeightAdjustmentStatus.PendingRefund)
+                            ? WeightAdjustmentStatus.PendingRefund
+                            : WeightAdjustmentStatus.NoDifference;
                 }
 
                 await _unitOfWork.SaveChangesAsync();
@@ -562,7 +714,7 @@ namespace ECommerce.Business.Services.Managers
                 var product = await _productRepository.GetByIdAsync(item.ProductId);
                 if (product == null) continue;
 
-                if (product.IsWeightBased)
+                if (IsEffectivelyWeightBased(item, product))
                 {
                     hasWeightBasedItems = true;
                     item.IsWeightBased = true;
@@ -576,7 +728,10 @@ namespace ECommerce.Business.Services.Managers
                         item.EstimatedWeight = item.Quantity * 1000; // 1 adet = 1kg varsayımı
                     }
 
-                    item.EstimatedPrice = item.EstimatedWeight * item.PricePerUnit;
+                    item.EstimatedPrice = CalculateWeightedPrice(
+                        item.EstimatedWeight,
+                        item.PricePerUnit,
+                        item.WeightUnit);
                     totalEstimatedPrice += item.EstimatedPrice;
                 }
             }
@@ -602,10 +757,53 @@ namespace ECommerce.Business.Services.Managers
 
         private decimal CalculatePreAuthAmountInternal(decimal estimatedTotal)
         {
-            // PreAuth = Tahmini toplam + %20 güvenlik marjı (dokümanla uyumlu)
-            // %20'nin üzerindeki farklar admin onayına düşer.
+            // PreAuth = Tahmini toplam + %20 güvenlik marjı
+            // Bu marjı aşan durumlar admin müdahalesine düşer.
             var preAuthAmount = estimatedTotal * (1 + (PRE_AUTH_MARGIN_PERCENT / 100m));
             return Math.Round(preAuthAmount, 2);
+        }
+
+        private static decimal CalculateMaxCapturableAmount(decimal preAuthAmount)
+        {
+            if (preAuthAmount <= 0)
+            {
+                return 0m;
+            }
+
+            return Math.Round(
+                preAuthAmount * (1 + (PRE_AUTH_CAPTURE_OVERAGE_PERCENT / 100m)),
+                2,
+                MidpointRounding.AwayFromZero);
+        }
+
+        private static decimal CalculateWeightedPrice(decimal weightInBaseUnit, decimal pricePerUnit, WeightUnit weightUnit)
+        {
+            var pricingQuantity = weightUnit switch
+            {
+                WeightUnit.Kilogram or WeightUnit.Liter => weightInBaseUnit / 1000m,
+                WeightUnit.Gram or WeightUnit.Milliliter => weightInBaseUnit,
+                _ => weightInBaseUnit
+            };
+
+            return Math.Round(pricingQuantity * pricePerUnit, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private static bool IsEffectivelyWeightBased(OrderItem? orderItem, Product? product)
+        {
+            if (orderItem == null)
+            {
+                return false;
+            }
+
+            if (product == null)
+            {
+                return orderItem.IsWeightBased;
+            }
+
+            return WeightBasedProductRules.IsVariableWeightKgProduct(
+                product.Name,
+                orderItem.WeightUnit != default ? orderItem.WeightUnit : product.WeightUnit,
+                product.Category?.Name);
         }
 
         #endregion
@@ -630,8 +828,8 @@ namespace ECommerce.Business.Services.Managers
                 EstimatedTotal = adjustments.Sum(a => a.EstimatedPrice),
                 ActualTotal = adjustments.Sum(a => a.ActualPrice),
                 TotalDifference = adjustments.Sum(a => a.PriceDifference),
-                DifferencePercent = adjustments.Sum(a => a.EstimatedPrice) > 0 
-                    ? (adjustments.Sum(a => a.PriceDifference) / adjustments.Sum(a => a.EstimatedPrice)) * 100 
+                DifferencePercent = adjustments.Sum(a => a.EstimatedPrice) > 0
+                    ? (adjustments.Sum(a => a.PriceDifference) / adjustments.Sum(a => a.EstimatedPrice)) * 100
                     : 0,
                 OverallStatus = order?.WeightAdjustmentStatus ?? WeightAdjustmentStatus.PendingWeighing,
                 HasPendingAdminApproval = adjustments.Any(a => a.Status == WeightAdjustmentStatus.PendingAdminApproval),
@@ -651,13 +849,61 @@ namespace ECommerce.Business.Services.Managers
         {
             _logger?.LogInformation("[WEIGHT-SVC] Kurye bekleyen tartım listesi: Courier={CourierId}", courierId);
 
-            // TODO: Kuryeye atanmış siparişleri filtrele
-            // Şimdilik tüm bekleyen ağırlık bazlı siparişleri getir
-            var result = new List<PendingWeightOrderDto>();
+            var orders = await _orderRepository.GetAllAsync();
 
-            // Bu metod için özel bir repository sorgusu gerekiyor
-            // Şimdilik boş liste dön
-            return await Task.FromResult(result);
+            var pendingOrders = orders
+                .Where(order =>
+                    order.IsActive &&
+                    order.CourierId == courierId &&
+                    order.HasWeightBasedItems &&
+                    order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing &&
+                    order.Status != OrderStatus.Cancelled &&
+                    order.Status != OrderStatus.Refunded &&
+                    order.Status != OrderStatus.Delivered)
+                .OrderByDescending(order => order.OrderDate)
+                .Select(order =>
+                {
+                    var pendingItems = (order.OrderItems ?? Enumerable.Empty<OrderItem>())
+                        .Where(item =>
+                            !item.IsWeighed &&
+                            IsEffectivelyWeightBased(item, item.Product))
+                        .Select(item => new PendingWeightItemDto
+                        {
+                            OrderItemId = item.Id,
+                            ProductName = item.Product?.Name ?? "Ürün",
+                            ProductImageUrl = item.Product?.ImageUrl,
+                            EstimatedWeight = item.EstimatedWeight,
+                            WeightUnit = GetWeightUnitDisplay(item.WeightUnit),
+                            PricePerUnit = item.PricePerUnit > 0 ? item.PricePerUnit : item.UnitPrice,
+                            EstimatedPrice = item.EstimatedPrice > 0
+                                ? item.EstimatedPrice
+                                : CalculateWeightedPrice(
+                                    item.EstimatedWeight,
+                                    item.PricePerUnit > 0 ? item.PricePerUnit : item.UnitPrice,
+                                    item.WeightUnit),
+                            IsWeighed = item.IsWeighed,
+                            ActualWeight = item.ActualWeight
+                        })
+                        .ToList();
+
+                    return new PendingWeightOrderDto
+                    {
+                        OrderId = order.Id,
+                        OrderNumber = order.OrderNumber ?? $"#{order.Id}",
+                        CustomerName = order.CustomerName ?? "Misafir",
+                        CustomerAddress = order.ShippingAddress,
+                        CustomerPhone = order.CustomerPhone ?? string.Empty,
+                        OrderDate = order.OrderDate,
+                        EstimatedTotal = pendingItems.Sum(item => item.EstimatedPrice),
+                        PendingItemCount = pendingItems.Count,
+                        WeighedItemCount = (order.OrderItems ?? Enumerable.Empty<OrderItem>()).Count(item => item.IsWeighed),
+                        Items = pendingItems
+                    };
+                })
+                .Where(order => order.PendingItemCount > 0)
+                .ToList();
+
+            return pendingOrders;
         }
 
         /// <inheritdoc />
@@ -773,6 +1019,215 @@ namespace ECommerce.Business.Services.Managers
 
         #region Private Yardımcı Metodlar
 
+        /// <summary>
+        /// Kart ödemeli ağırlık bazlı sipariş için POSNET capture işlemini yürütür.
+        ///
+        /// SENARYOLAR:
+        /// 1. FinalAmount &lt;= PreAuthAmount → capt(FinalAmount): Banka gerçek tutarı çeker, kalan blokeyi kaldırır.
+        /// 2. FinalAmount &gt; PreAuthAmount → capt(PreAuthAmount): Limit aşılamaz! Admin uyarısı oluşturulur, fark el ile çözülür.
+        /// 3. PreAuthHostLogKey yoksa → WeightAdjustmentStatus.Failed set edilir, admin müdahalesi beklenir.
+        ///
+        /// Banka Dokümantasyonu:
+        ///   "Finansallaştırma tutarı provizyon tutarını geçemez."
+        /// </summary>
+        private async Task<CardCaptureResult> ExecuteCardPaymentCaptureAsync(
+            Order order, decimal finalAmount, WeightDifferenceCalculationDto calculation, int courierId)
+        {
+            var captureResult = new CardCaptureResult { IsSuccess = false };
+
+            // HostLogKey zorunlu - provizyonu tanımlamak için gerekli
+            if (string.IsNullOrWhiteSpace(order.PreAuthHostLogKey))
+            {
+                _logger?.LogError(
+                    "[WEIGHT-SVC] POSNET capture yapılamıyor: PreAuthHostLogKey eksik. OrderId={OrderId}",
+                    order.Id);
+
+                // Siparişi hata durumuna al - admin müdahalesi gerekli
+                order.WeightAdjustmentStatus = WeightAdjustmentStatus.Failed;
+                await _unitOfWork.SaveChangesAsync();
+
+                captureResult.ErrorMessage =
+                    "Provizyon anahtarı (HostLogKey) eksik. Admin müdahalesi gerekli.";
+                return captureResult;
+            }
+
+            // Capture tutarı belirleme: banka kuralı gereği final tutar provizyonun
+            // tanımlı aşım yüzdesi içinde kalıyorsa doğrudan çekilebilir.
+            var maxCapturableAmount = CalculateMaxCapturableAmount(order.PreAuthAmount);
+            decimal captureAmount;
+            bool preAuthExceeded = false;
+
+            if (finalAmount <= maxCapturableAmount)
+            {
+                // ✅ Normal senaryo: banka tarafından izin verilen limit dahilinde gerçek tutar ile capture
+                captureAmount = finalAmount;
+                _logger?.LogInformation(
+                    "[WEIGHT-SVC] Capture tutarı: {CaptureAmount:F2} TL (Final={Final:F2}, PreAuth={PreAuth:F2}, MaxCapturable={MaxCapturable:F2}). OrderId={OrderId}",
+                    captureAmount, finalAmount, order.PreAuthAmount, maxCapturableAmount, order.Id);
+            }
+            else
+            {
+                // ⚠️ Final tutar banka tarafından tanımlanan aşım limitini de aşıyor.
+                // Mevcut provizyondan çekilebilecek maksimum tutarı al, kalan farkı admin çözsün.
+                captureAmount = maxCapturableAmount;
+                preAuthExceeded = true;
+                _logger?.LogWarning(
+                    "[WEIGHT-SVC] UYARI: FinalAmount ({Final:F2}) > MaxCapturable ({MaxCapturable:F2})! " +
+                    "Capture {Capture:F2} TL ile yapılıyor. Kalan fark={Diff:F2} TL. OrderId={OrderId}",
+                    finalAmount, maxCapturableAmount, captureAmount,
+                    finalAmount - captureAmount, order.Id);
+            }
+
+            try
+            {
+                // IPaymentCaptureService lazy resolve (circular dependency önlemi)
+                IPaymentCaptureService? captureService = null;
+                if (_serviceProvider != null)
+                {
+                    captureService = _serviceProvider.GetService<IPaymentCaptureService>();
+                }
+
+                if (captureService == null)
+                {
+                    // Fallback: IPaymentService üzerinden genel ödeme akışı
+                    _logger?.LogWarning(
+                        "[WEIGHT-SVC] IPaymentCaptureService bulunamadı, fallback akışına geçildi. OrderId={OrderId}",
+                        order.Id);
+
+                    // Order bilgilerini güncelle ve başarı döndür (capture dış sistemde yapılacak)
+                    await UpdateOrderAfterCaptureAsync(order, finalAmount, captureAmount, calculation,
+                        $"CARD-FALLBACK-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}", preAuthExceeded);
+
+                    captureResult.IsSuccess = true;
+                    captureResult.TransactionReference =
+                        $"CARD-FALLBACK-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                    captureResult.CapturedAmount = captureAmount;
+                    return captureResult;
+                }
+
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                // POSNET CAPT XML → Bankaya gönder
+                // capt işlemi: hostLogKey (provizyondan dönen) + gerçek tutar
+                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                _logger?.LogInformation(
+                    "[WEIGHT-SVC] POSNET capt başlatılıyor. OrderId={OrderId}, HostLogKey={Key}, Amount={Amount:F2} TL",
+                    order.Id, order.PreAuthHostLogKey, captureAmount);
+
+                var posnetCaptureResult = await captureService.CapturePaymentAsync(
+                    order.Id,
+                    captureAmount);
+
+                if (!posnetCaptureResult.Success)
+                {
+                    _logger?.LogError(
+                        "[WEIGHT-SVC] POSNET capture BAŞARISIZ. OrderId={OrderId}, Error={Error}",
+                        order.Id, posnetCaptureResult.Message);
+
+                    // WeightAdjustment kayıtlarını hata durumuna al
+                    var adjustments = await _adjustmentRepository.GetByOrderIdAsync(order.Id);
+                    foreach (var adj in adjustments)
+                    {
+                        adj.Status = WeightAdjustmentStatus.Failed;
+                        adj.UpdatedAt = DateTime.UtcNow;
+                    }
+                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.Failed;
+                    await _unitOfWork.SaveChangesAsync();
+
+                    captureResult.ErrorMessage =
+                        $"POSNET capture hatası: {posnetCaptureResult.Message}";
+                    return captureResult;
+                }
+
+                // ✅ Capture başarılı - Order ve WeightAdjustment kayıtlarını güncelle
+                var transactionRef = posnetCaptureResult.CaptureReference
+                    ?? $"CAPT-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+
+                await UpdateOrderAfterCaptureAsync(order, finalAmount, captureAmount, calculation,
+                    transactionRef, preAuthExceeded);
+
+                _logger?.LogInformation(
+                    "[WEIGHT-SVC] ✅ POSNET capture başarılı. OrderId={OrderId}, CapturedAmount={Amount:F2} TL, " +
+                    "TransactionRef={Ref}, PreAuthExceeded={Exceeded}",
+                    order.Id, captureAmount, transactionRef, preAuthExceeded);
+
+                captureResult.IsSuccess = true;
+                captureResult.TransactionReference = transactionRef;
+                captureResult.CapturedAmount = captureAmount;
+                captureResult.PreAuthExceeded = preAuthExceeded;
+                return captureResult;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex,
+                    "[WEIGHT-SVC] Kart capture işlemi sırasında beklenmeyen hata. OrderId={OrderId}",
+                    order.Id);
+
+                order.WeightAdjustmentStatus = WeightAdjustmentStatus.Failed;
+                await _unitOfWork.SaveChangesAsync();
+
+                captureResult.ErrorMessage = $"Capture işlemi hatası: {ex.Message}";
+                return captureResult;
+            }
+        }
+
+        /// <summary>
+        /// Başarılı POSNET capture sonrası Order ve WeightAdjustment kayıtlarını günceller.
+        /// </summary>
+        private async Task UpdateOrderAfterCaptureAsync(
+            Order order,
+            decimal finalAmount,
+            decimal capturedAmount,
+            WeightDifferenceCalculationDto calculation,
+            string transactionRef,
+            bool preAuthExceeded)
+        {
+            // Order finans alanlarını güncelle
+            order.FinalAmount = finalAmount;
+            order.CapturedAmount = capturedAmount;
+            order.CaptureStatus = CaptureStatus.Success;
+            order.CapturedAt = DateTime.UtcNow;
+            order.TotalWeightDifference = calculation.TotalWeightDifference;
+            order.TotalPriceDifference = calculation.TotalPriceDifference;
+            order.TotalPrice = finalAmount;
+            order.DifferenceSettled = !preAuthExceeded;
+            order.DifferenceSettledAt = preAuthExceeded ? null : DateTime.UtcNow;
+
+            // PreAuth aşıldıysa fark ayrıca tahsil edilmelidir, yoksa tamamlandı
+            order.WeightAdjustmentStatus = preAuthExceeded
+                ? WeightAdjustmentStatus.PendingAdditionalPayment
+                : WeightAdjustmentStatus.Completed;
+
+            // WeightAdjustment kayıtlarını tamamlandı olarak işaretle
+            var adjustments = await _adjustmentRepository.GetByOrderIdAsync(order.Id);
+            foreach (var adj in adjustments.Where(a =>
+                a.Status == WeightAdjustmentStatus.Weighed ||
+                a.Status == WeightAdjustmentStatus.PendingAdditionalPayment ||
+                a.Status == WeightAdjustmentStatus.PendingRefund))
+            {
+                adj.Status = preAuthExceeded
+                    ? WeightAdjustmentStatus.PendingAdditionalPayment
+                    : WeightAdjustmentStatus.Completed;
+                adj.IsSettled = !preAuthExceeded;
+                adj.SettledAt = preAuthExceeded ? null : DateTime.UtcNow;
+                adj.PaymentTransactionId = transactionRef;
+                adj.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _unitOfWork.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Kart capture işlemi sonuç modeli (internal).
+        /// </summary>
+        private sealed class CardCaptureResult
+        {
+            public bool IsSuccess { get; set; }
+            public string? ErrorMessage { get; set; }
+            public string? TransactionReference { get; set; }
+            public decimal CapturedAmount { get; set; }
+            public bool PreAuthExceeded { get; set; }
+        }
+
         private async Task UpdateOrderTotalsAsync(Order order)
         {
             if (order?.OrderItems == null) return;
@@ -800,6 +1255,11 @@ namespace ECommerce.Business.Services.Managers
             order.TotalPriceDifference = totalPriceDiff;
             order.AllItemsWeighed = allWeighed;
             order.FinalAmount = order.TotalPrice + totalPriceDiff;
+            order.WeightInGrams = weightBasedItems.Any()
+                ? (int?)Math.Round(
+                    weightBasedItems.Sum(item => item.ActualWeight ?? item.EstimatedWeight),
+                    MidpointRounding.AwayFromZero)
+                : order.WeightInGrams;
 
             if (allWeighed && order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing)
             {
@@ -807,6 +1267,23 @@ namespace ECommerce.Business.Services.Managers
             }
 
             await Task.CompletedTask;
+        }
+
+        private void ApplyAdjustmentStatus(
+            WeightAdjustment adjustment,
+            decimal differencePercent,
+            decimal priceDifference)
+        {
+            adjustment.RequiresAdminApproval = false;
+            adjustment.AdminReviewed = false;
+            adjustment.AdminApproved = null;
+
+            adjustment.Status = priceDifference switch
+            {
+                > 0 => WeightAdjustmentStatus.PendingAdditionalPayment,
+                < 0 => WeightAdjustmentStatus.PendingRefund,
+                _ => WeightAdjustmentStatus.NoDifference
+            };
         }
 
         private WeightAdjustmentDto MapToDto(WeightAdjustment adjustment)
@@ -820,7 +1297,7 @@ namespace ECommerce.Business.Services.Managers
                 ProductId = adjustment.ProductId,
                 ProductName = adjustment.ProductName,
                 ProductImageUrl = adjustment.Product?.ImageUrl,
-                
+
                 // Ağırlık bilgileri
                 WeightUnit = adjustment.WeightUnit,
                 WeightUnitDisplay = GetWeightUnitDisplay(adjustment.WeightUnit),
@@ -829,29 +1306,29 @@ namespace ECommerce.Business.Services.Managers
                 WeightDifference = adjustment.WeightDifference,
                 DifferencePercent = adjustment.DifferencePercent,
                 WeightDifferenceDisplay = $"{adjustment.WeightDifference:F2} {GetWeightUnitDisplay(adjustment.WeightUnit)}",
-                
+
                 // Fiyat bilgileri
                 PricePerUnit = adjustment.PricePerUnit,
                 EstimatedPrice = adjustment.EstimatedPrice,
                 ActualPrice = adjustment.ActualPrice,
                 PriceDifference = adjustment.PriceDifference,
                 PriceDifferenceDisplay = $"{adjustment.PriceDifference:F2} TL",
-                
+
                 // Durum bilgileri
                 Status = adjustment.Status,
                 StatusDisplay = GetStatusDisplay(adjustment.Status),
                 StatusColor = GetStatusColor(adjustment.Status),
-                
+
                 // Tartı bilgileri
                 WeighedAt = adjustment.WeighedAt,
                 WeighedByCourierId = adjustment.WeighedByCourierId,
                 WeighedByCourierName = adjustment.WeighedByCourierName,
-                
+
                 // Ödeme bilgileri
                 IsSettled = adjustment.IsSettled,
                 SettledAt = adjustment.SettledAt,
                 PaymentTransactionId = adjustment.PaymentTransactionId,
-                
+
                 // Admin bilgileri
                 RequiresAdminApproval = adjustment.RequiresAdminApproval,
                 AdminReviewed = adjustment.AdminReviewed,
@@ -860,11 +1337,11 @@ namespace ECommerce.Business.Services.Managers
                 AdminNote = adjustment.AdminNote,
                 AdminReviewedAt = adjustment.AdminReviewedAt,
                 AdminUserName = adjustment.AdminUserName,
-                
+
                 // Müşteri bilgilendirme
                 CustomerNotified = adjustment.CustomerNotified,
                 CustomerNotifiedAt = adjustment.CustomerNotifiedAt,
-                
+
                 // Zaman damgaları
                 CreatedAt = adjustment.CreatedAt,
                 UpdatedAt = adjustment.UpdatedAt

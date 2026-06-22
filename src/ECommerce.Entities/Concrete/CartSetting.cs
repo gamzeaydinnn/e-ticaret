@@ -42,6 +42,14 @@ namespace ECommerce.Entities.Concrete
         /// </summary>
         public string MinimumCartAmountMessage { get; set; } = "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.";
 
+        /// <summary>
+        /// Misafir kullanıcı sepete ürün eklediğinde gösterilecek promosyon mesajı.
+        /// Boş string ise frontend tarafında banner hiç gösterilmez.
+        /// NEDEN: Kampanya dönemine göre admin panelinden tamamen kaldırılabilmeli
+        /// veya farklı bir pazarlama metni ile değiştirilebilmelidir.
+        /// </summary>
+        public string GuestFirstOrderShippingMessage { get; set; } = "Hesap oluştur, ilk alışverişinde kargo bedava!";
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // AUDIT ALANLARI
         // ═══════════════════════════════════════════════════════════════════════════════

@@ -312,6 +312,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         [Range(1, 999999999)]
         public int Amount { get; init; }
 
+        public string CurrencyCode { get; init; } = "TL";
+
         /// <summary>
         /// Taksit sayısı - Provizyondaki ile aynı olmalı
         /// </summary>
@@ -323,6 +325,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         /// İlk provizyon işleminden dönen değer
         /// </summary>
         public string? HostLogKey { get; init; }
+
+        public string? OrderDate { get; init; }
     }
 
     #endregion
@@ -338,6 +342,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
     {
         public override PosnetTransactionType TransactionType => PosnetTransactionType.Reverse;
 
+        [Required(ErrorMessage = "Transaction tipi zorunludur")]
+        public string Transaction { get; init; } = "sale";
+
         /// <summary>
         /// İptal edilecek işlemin sipariş numarası
         /// </summary>
@@ -349,22 +356,14 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         /// İptal edilecek işlemin HostLogKey değeri
         /// Satış işleminden dönen referans numarası
         /// </summary>
-        [Required(ErrorMessage = "HostLogKey iptal işlemi için zorunludur")]
-        public string HostLogKey { get; init; } = string.Empty;
+        public string? HostLogKey { get; init; }
 
         /// <summary>
-        /// İşlem tarihi (POSNET formatı: YYMMDD)
-        /// İptal edilecek işlemin tarihi
+        /// Orijinal işlem tarihi (POSNET formatı: YYYYMMDD)
         /// </summary>
-        public string? TransactionDate { get; init; }
+        public string? OrderDate { get; init; }
 
-        /// <summary>
-        /// Bugünün tarihini POSNET formatında döndürür
-        /// </summary>
-        public static string GetTodayAsPosnetDate()
-        {
-            return DateTime.Now.ToString("yyMMdd");
-        }
+        public string? AuthCode { get; init; }
     }
 
     #endregion
@@ -395,18 +394,16 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         [Range(1, 999999999)]
         public int Amount { get; init; }
 
+        public string CurrencyCode { get; init; } = "TL";
+
         /// <summary>
         /// İade edilecek işlemin HostLogKey değeri
         /// Orijinal satış işleminden dönen referans
         /// </summary>
-        [Required(ErrorMessage = "HostLogKey iade işlemi için zorunludur")]
-        public string HostLogKey { get; init; } = string.Empty;
+        public string? HostLogKey { get; init; }
 
         /// <summary>
-        /// İade işlemi için yeni sipariş numarası
-        /// İade işlemi ayrı bir transaction olduğu için unique olmalı
-        /// </summary>
-        public string? RefundOrderId { get; init; }
+        public string? OrderDate { get; init; }
     }
 
     #endregion

@@ -30,6 +30,9 @@ namespace ECommerce.Core.DTOs.Order
         public string ShippingMethod { get; set; } = "car"; // car veya motorcycle
         public decimal ShippingCost { get; set; } = 30m; // Kargo ücreti
 
+        // Ödeme yöntemi
+        public string PaymentMethod { get; set; } = "cash";
+
         // Teslimat notu/slot bilgisi (opsiyonel)
         public string? DeliveryNotes { get; set; }
     }

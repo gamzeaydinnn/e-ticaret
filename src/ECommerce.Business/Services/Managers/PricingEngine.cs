@@ -282,7 +282,7 @@ namespace ECommerce.Business.Services.Managers
                 // Kupon indirimini hesapla
                 var couponAmount = ComputeDiscountAmount(
                     eligibleBase, 
-                    coupon.IsPercentage, 
+                    coupon.Type == CouponType.Percentage, 
                     coupon.Value,
                     coupon.MaxDiscountAmount);
 

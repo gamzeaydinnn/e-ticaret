@@ -21,24 +21,30 @@ namespace ECommerce.Core.DTOs.Order
         // NEDEN: Admin ve panel filtreleri "ödendi" bilgisini doğrudan ister.
         public string PaymentStatus { get; set; } = string.Empty;
         public bool IsPaid { get; set; }
+        public string PaymentMethod { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
-    public int TotalItems { get; set; } // Toplam ürün sayısı
+        public int TotalItems { get; set; } // Toplam ürün sayısı
 
-    // Detaylar
-    public string ShippingMethod { get; set; } = string.Empty;
-    public decimal ShippingCost { get; set; }
-    public string ShippingAddress { get; set; } = string.Empty;
+        // Detaylar
+        public string ShippingMethod { get; set; } = string.Empty;
+        public decimal ShippingCost { get; set; }
+        public string ShippingAddress { get; set; } = string.Empty;
         public string? TrackingNumber { get; set; }
-    public string CustomerName { get; set; } = string.Empty;
-    public string CustomerPhone { get; set; } = string.Empty;
-    // Misafir sipariş sorgulaması için email alanı eklendi
-    public string? CustomerEmail { get; set; }
-    public string DeliveryNotes { get; set; } = string.Empty;
-    public List<OrderItemDto> OrderItems { get; set; } = new();
+        public string CustomerName { get; set; } = string.Empty;
+        public string CustomerPhone { get; set; } = string.Empty;
+        // Misafir sipariş sorgulaması için email alanı eklendi
+        public string? CustomerEmail { get; set; }
+        public string DeliveryNotes { get; set; } = string.Empty;
+        public decimal PreAuthAmount { get; set; }
+        public decimal FinalAmount { get; set; }
+        public decimal CapturedAmount { get; set; }
+        public decimal TotalPriceDifference { get; set; }
+        public DateTime? AssignedAt { get; set; }
+        public List<OrderItemDto> OrderItems { get; set; } = new();
 
-    // Kurye bilgileri - müşterinin siparişini kimin teslim ettiğini görmesi için
-    public int? CourierId { get; set; }
-    public string? CourierName { get; set; }
-    public string? CourierPhone { get; set; }
+        // Kurye bilgileri - müşterinin siparişini kimin teslim ettiğini görmesi için
+        public int? CourierId { get; set; }
+        public string? CourierName { get; set; }
+        public string? CourierPhone { get; set; }
     }
 }

@@ -9,69 +9,15 @@ import shippingService from "../services/shippingService";
 import cartSettingsService from "../services/cartSettingsService";
 import { WeightBasedProductAlert, WeightEstimateIndicator } from "./weight";
 import { useCartStockUpdates } from "../hooks/useStockUpdates";
+import {
+  isStrictVariableWeightProduct,
+  toWeightBasedProductCandidate,
+} from "../utils/weightBasedProduct";
 import "./CartPage.css";
 
-// Kg bazlı ürün anahtar kelimeleri - backend alanı eksik olsa da UI'da doğru birim gösterimi için.
-const WEIGHT_KEYWORDS = [
-  "kg",
-  "kilogram",
-  "gram",
-  "meyve",
-  "sebze",
-  "manav",
-  "domates",
-  "salatal",
-  "elma",
-  "armut",
-  "portakal",
-  "muz",
-  "üzüm",
-  "kiraz",
-  "çilek",
-  "patates",
-  "soğan",
-  "biber",
-  "havuç",
-  "et",
-  "kuşbaşı",
-  "kıyma",
-  "biftek",
-  "pirzola",
-  "balık",
-  "levrek",
-  "somon",
-  "hamsi",
-  "peynir",
-  "zeytin",
-];
-
 const isWeightBasedCartItem = (item, product) => {
-  if (!item && !product) return false;
-
-  const weightUnit = item?.weightUnit ?? product?.weightUnit;
-  const explicitWeightBased =
-    item?.isWeightBased ||
-    product?.isWeightBased ||
-    product?.soldByWeight ||
-    weightUnit === "Kilogram" ||
-    weightUnit === "Gram" ||
-    weightUnit === 2 ||
-    weightUnit === 1;
-
-  if (explicitWeightBased) return true;
-
-  const nameText = String(
-    product?.name || item?.productName || item?.product?.name || "",
-  ).toLowerCase();
-  const categoryText = String(
-    product?.categoryName ||
-      product?.category?.name ||
-      item?.categoryName ||
-      "",
-  ).toLowerCase();
-
-  return WEIGHT_KEYWORDS.some(
-    (keyword) => nameText.includes(keyword) || categoryText.includes(keyword),
+  return isStrictVariableWeightProduct(
+    toWeightBasedProductCandidate(item, product),
   );
 };
 
@@ -343,7 +289,7 @@ const CartPage = () => {
   const handleUpdateQuantity = async (item, newQuantity) => {
     const product = products[item.productId || item.id] || item.product || null;
     const isWeightBasedItem = isWeightBasedCartItem(item, product);
-    const minQuantity = isWeightBasedItem ? 0.5 : 1;
+    const minQuantity = isWeightBasedItem ? 0.25 : 1;
     const itemKey = `${item.productId || item.id}-${item.variantId || item.productVariantId || "default"}`;
     const currentQuantity = getCurrentItemQuantity(item);
     const direction = newQuantity > currentQuantity ? "increase" : "decrease";
@@ -1010,8 +956,8 @@ const CartPage = () => {
                                     item,
                                     isWeightBasedItem
                                       ? Math.max(
-                                          0.5,
-                                          currentQuantity - 0.5,
+                                          0.25,
+                                          currentQuantity - 0.25,
                                         )
                                       : currentQuantity - 1,
                                   )
@@ -1021,7 +967,7 @@ const CartPage = () => {
                                   product?.isActive === false ||
                                   isMinusUpdating ||
                                   (isWeightBasedItem
-                                    ? currentQuantity <= 0.5
+                                    ? currentQuantity <= 0.25
                                     : currentQuantity <= 1)
                                 }
                               >
@@ -1033,7 +979,7 @@ const CartPage = () => {
                               </button>
                               <span className="qty-value">
                                 {isWeightBasedItem
-                                  ? currentQuantity.toFixed(1)
+                                  ? currentQuantity.toFixed(2)
                                   : currentQuantity}
                                 {isWeightBasedItem && (
                                   <span className="qty-unit"> kg</span>
@@ -1045,7 +991,7 @@ const CartPage = () => {
                                   await handleUpdateQuantity(
                                     item,
                                     isWeightBasedItem
-                                      ? currentQuantity + 0.5
+                                      ? currentQuantity + 0.25
                                       : currentQuantity + 1,
                                   )
                                 }

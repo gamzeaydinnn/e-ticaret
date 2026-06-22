@@ -140,30 +140,20 @@ builder.Services.AddCors(options =>
     });
 });
 
-// DbContext ekle - SQL Server (varsayılan) veya SQLite (dev) kullan
+// DbContext ekle - SQL Server kullan
 var sqlConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-var forceSqlite = builder.Configuration.GetValue<bool>("Database:UseSqlite");
-var useSqlite = forceSqlite || (string.IsNullOrWhiteSpace(sqlConnectionString) && builder.Environment.IsDevelopment());
+if (string.IsNullOrWhiteSpace(sqlConnectionString))
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is missing. Provide a SQL Server connection string.");
 
-if (!useSqlite && string.IsNullOrWhiteSpace(sqlConnectionString))
-    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is missing. Provide a SQL Server connection string or enable Database:UseSqlite for development.");
 builder.Services.AddDbContext<ECommerceDbContext>(options =>
 {
-    if (useSqlite)
+    // Enable transient error resiliency for SQL Server connections to reduce 500s
+    // caused by transient network errors (e.g. pre-login handshake failures).
+    options.UseSqlServer(sqlConnectionString, sqlOptions =>
     {
-        var dbPath = builder.Configuration["Database:SqlitePath"] ?? "app.db";
-        options.UseSqlite($"Data Source={dbPath}");
-    }
-    else
-    {
-        // Enable transient error resiliency for SQL Server connections to reduce 500s
-        // caused by transient network errors (e.g. pre-login handshake failures).
-        options.UseSqlServer(sqlConnectionString, sqlOptions =>
-        {
-                // stronger retry policy: retry up to 8 times with a larger max delay (helps absorb transient pre-login handshake errors)
-                sqlOptions.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
-        });
-    }
+        // stronger retry policy: retry up to 8 times with a larger max delay (helps absorb transient pre-login handshake errors)
+        sqlOptions.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null);
+    });
     
     // Suppress pending model changes warning (migrations are properly managed)
     options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
@@ -275,11 +265,18 @@ builder.Services.AddAuthentication(options =>
             {
                 var logger = ctx.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
                 var authHeader = ctx.Request.Headers["Authorization"].ToString();
-                
-                // GÜVENLİK: Önce httpOnly cookie'den token almayı dene
-                // Bu, XSS saldırılarına karşı koruma sağlar
-                if (string.IsNullOrEmpty(ctx.Token))
+                var requestPath = ctx.Request.Path.Value ?? "";
+
+                // GÜVENLİK: Kurye endpoint'leri için access_token cookie'sini HİÇBİR ZAMAN okuma!
+                // Neden: Admin başka bir pencerede/sekmede açıkken tarayıcı access_token
+                // cookie'sini tüm isteklerde gönderir. Kurye endpoint'lerinde yalnızca
+                // Authorization Bearer header (courierToken) geçerli olmalı.
+                // Cookie karıştığında admin token'ı kurye endpoint'ine girer → 401/403.
+                bool isCourierEndpoint = requestPath.StartsWith("/api/courier", StringComparison.OrdinalIgnoreCase);
+
+                if (!isCourierEndpoint && string.IsNullOrEmpty(ctx.Token))
                 {
+                    // Kurye OLMAYAN endpoint'ler için cookie'den token al (XSS koruması)
                     var cookieToken = ctx.Request.Cookies["access_token"];
                     if (!string.IsNullOrEmpty(cookieToken))
                     {
@@ -289,7 +286,6 @@ builder.Services.AddAuthentication(options =>
                 }
                 
                 // SignalR WebSocket bağlantıları için query string'den token al
-                // WebSocket'ler HTTP header göndermediğinden token query param olarak gönderilir
                 var path = ctx.Request.Path;
                 if (path.StartsWithSegments("/hubs"))
                 {
@@ -301,8 +297,8 @@ builder.Services.AddAuthentication(options =>
                     }
                 }
                 
-                logger.LogInformation("🔵 JWT OnMessageReceived: Path={Path}, HasAuth={HasAuth}", 
-                    ctx.Request.Path, !string.IsNullOrEmpty(authHeader));
+                logger.LogInformation("🔵 JWT OnMessageReceived: Path={Path}, HasAuth={HasAuth}, IsCourierEndpoint={IsCourier}", 
+                    ctx.Request.Path, !string.IsNullOrEmpty(authHeader), isCourierEndpoint);
                 return Task.CompletedTask;
             },
             OnAuthenticationFailed = ctx =>

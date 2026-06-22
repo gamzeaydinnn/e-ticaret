@@ -213,21 +213,6 @@ namespace ECommerce.API.Controllers
                         20, // Admin onay eşiği %20
                         cancellationToken);
 
-                    // Admin onayı gerekiyorsa beklet
-                    if (cashDifference.RequiresAdminApproval)
-                    {
-                        await _adjustmentService.RequestAdminReviewAsync(orderId, 
-                            $"Yüksek ağırlık farkı: %{cashDifference.DifferencePercent:F1}");
-
-                        return Ok(new {
-                            success = true,
-                            message = "Yüksek fark tespit edildi. Admin onayı bekleniyor.",
-                            requiresAdminApproval = true,
-                            paymentType = "cash",
-                            data = cashDifference
-                        });
-                    }
-
                     // Teslimatı tamamla
                     var finalizeResult = await _adjustmentService.FinalizeWeightBasedPaymentAsync(
                         orderId, courierId.Value, request?.CourierNotes);
@@ -443,7 +428,7 @@ namespace ECommerce.API.Controllers
         /// Süresi dolan provizyonları iptal et
         /// 
         /// Bu endpoint scheduled job veya admin tarafından manuel çağrılabilir.
-        /// 48 saati geçen ve finalize edilmemiş provizyonlar iptal edilir.
+        /// 7 günü geçen ve finalize edilmemiş provizyonlar iptal edilir.
         /// </summary>
         [HttpPost("admin/cancel-expired")]
         [Authorize(Roles = "Admin")]
@@ -490,7 +475,7 @@ namespace ECommerce.API.Controllers
                         orderId,
                         isValid,
                         preAuthDate = status.PreAuthorizationDate,
-                        expiresAt = status.PreAuthorizationDate?.AddHours(48),
+                        expiresAt = status.PreAuthorizationDate?.AddHours(168),
                         preAuthAmount = status.PreAuthorizationAmount
                     }
                 });

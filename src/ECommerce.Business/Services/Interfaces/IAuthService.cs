@@ -11,8 +11,8 @@ namespace ECommerce.Business.Services.Interfaces
         Task<(string accessToken, string refreshToken)> LoginAsync(LoginDto dto);
 
         // JWT'den userId çekip kullanıcıyı döndürmek için
-        Task<UserLoginDto> GetUserByIdAsync(int userId);
-        Task<UserLoginDto> GetUserByEmailAsync(string email);
+        Task<UserLoginDto?> GetUserByIdAsync(int userId);
+        Task<UserLoginDto?> GetUserByEmailAsync(string email);
 
         // Refresh token ve revoke token işlemleri
         // Returns a new access token and a new refresh token (rotation)

@@ -8,7 +8,7 @@
 // - Toplam tahmini vs gerçek ağırlık karşılaştırması
 // - Fark tutarı ve yüzdesi
 // - Ödeme tipine göre farklı mesajlar (kart/nakit)
-// - Admin onayı gerekip gerekmediği bilgisi
+// - Fark tutarı ve tahsilat yönü bilgisi
 // ==========================================================================
 
 import React, { useMemo } from 'react';
@@ -231,7 +231,7 @@ export default function WeightDifferenceSummary({
         </div>
       </div>
 
-      {/* Admin Onay Uyarısı */}
+      {/* Provizyon/Uygulama Uyarısı */}
       {summary.hasAdminPendingApproval && (
         <div 
           className="alert alert-info d-flex align-items-center mt-3 mb-0 py-2"
@@ -239,7 +239,7 @@ export default function WeightDifferenceSummary({
         >
           <i className="fas fa-user-shield me-2"></i>
           <span>
-            <strong>Admin onayı bekleniyor.</strong> Yüksek fark nedeniyle teslimat admin tarafından onaylanmalı.
+            <strong>Provizyon sınırı aşıldı.</strong> Bu siparişte ek kart tahsilatı için checkout/provizyon akışı yeniden ele alınmalı.
           </span>
         </div>
       )}

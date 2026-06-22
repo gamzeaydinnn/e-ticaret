@@ -4,6 +4,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+using ECommerce.Business.Helpers;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.Business.Services.Mapping
@@ -364,11 +365,11 @@ namespace ECommerce.Business.Services.Mapping
                     birimAd);
             }
 
-            // Ağırlık bazlı mı?
-            product.IsWeightBased = product.WeightUnit == WeightUnit.Kilogram 
-                || product.WeightUnit == WeightUnit.Gram
-                || product.WeightUnit == WeightUnit.Liter
-                || product.WeightUnit == WeightUnit.Milliliter;
+            // Sadece meyve/sebze/manav kategorisinde ve sabit miktar içermeyen KG ürünler tartılıdır.
+            product.IsWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+                product.Name,
+                product.WeightUnit,
+                mikroStok.StoAnagrupKod);
 
             // Birim ağırlık
             if (mikroStok.StoBrutAgirlik.HasValue && mikroStok.StoBrutAgirlik > 0)

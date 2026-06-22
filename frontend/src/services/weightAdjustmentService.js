@@ -164,6 +164,32 @@ export const WeightAdjustmentService = {
     }
   },
 
+  /**
+   * Admin/mağaza görevlisi için manuel sipariş kalemi ağırlık güncellemesi
+   * @param {number} orderId - Sipariş ID
+   * @param {number} orderItemId - Sipariş kalemi ID
+   * @param {number} actualWeight - Yeni ağırlık (gram)
+   * @returns {Promise} Güncel hesaplama sonucu
+   */
+  updateManualWeight: async (orderId, orderItemId, actualWeight) => {
+    try {
+      const response = await api.patch(
+        `${WEIGHT_ADJUSTMENT_BASE}/admin/orders/${orderId}/items/${orderItemId}/manual-weight`,
+        {
+          orderItemId,
+          actualWeight,
+        },
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        "[WeightAdjustmentService] updateManualWeight error:",
+        error,
+      );
+      throw error;
+    }
+  },
+
   // =========================================================================
   // ADMIN İŞLEMLERİ
   // =========================================================================

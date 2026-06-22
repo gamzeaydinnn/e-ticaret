@@ -104,6 +104,12 @@ namespace ECommerce.Business.Services.Interfaces
         /// <param name="reason">İade sebebi</param>
         /// <returns>İşlem sonucu</returns>
         Task<RefundRequestResult> AdminRefundOrderAsync(int orderId, int adminUserId, string reason);
+
+        /// <summary>
+        /// Admin sipariş kalemi bazlı kısmi iade uygular.
+        /// İade tutarı seçilen kalemlerden hesaplanır ve banka akışı buna göre işletilir.
+        /// </summary>
+        Task<RefundRequestResult> AdminRefundOrderItemsAsync(int orderId, int adminUserId, AdminItemRefundRequestDto dto);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

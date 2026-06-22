@@ -27,18 +27,18 @@ namespace ECommerce.Business.Services.Managers
 {
     /// <summary>
     /// Ağırlık Bazlı Dinamik Ödeme Servisi Implementasyonu
-    /// 
+    ///
     /// Bu servis, ağırlık bazlı satılan ürünler için Pre-Auth → Post-Auth → Refund
     /// akışını yönetir. POSNET API ile entegre çalışır.
-    /// 
+    ///
     /// AKIŞ DETAYI:
-    /// 
+    ///
     /// KART ÖDEMELERİ:
-    /// 1. Sipariş → Tahmini tutar + %15 güvenlik marjı ile Pre-Auth
+    /// 1. Sipariş → Tahmini tutar + %20 güvenlik marjı ile Pre-Auth
     /// 2. Kurye tartım → Gerçek tutar hesaplanır
     /// 3. Teslimat → Post-Auth (kesin çekim) gerçek tutar üzerinden
     /// 4. Fark varsa → Kısmi iade veya admin onaylı ek tahsilat
-    /// 
+    ///
     /// NAKİT ÖDEMELERİ:
     /// 1. Sipariş → Tahmini tutar kaydedilir
     /// 2. Kurye tartım → Gerçek tutar hesaplanır
@@ -61,15 +61,11 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>Varsayılan güvenlik marjı yüzdesi (dokümanla uyumlu)</summary>
         private const decimal DEFAULT_SECURITY_MARGIN_PERCENT = 20m;
+        /// <summary>Bankada tanımlı provizyon aşım yüzdesi</summary>
+        private const decimal CAPTURE_OVERAGE_PERCENT = 20m;
 
         /// <summary>Provizyon geçerlilik süresi (saat)</summary>
-        private const int PRE_AUTH_VALIDITY_HOURS = 48;
-
-        /// <summary>Admin onayı gerektiren fark eşiği (%)</summary>
-        private const decimal ADMIN_APPROVAL_THRESHOLD_PERCENT = 20m;
-
-        /// <summary>Admin onayı gerektiren minimum fark tutarı (TL)</summary>
-        private const decimal ADMIN_APPROVAL_THRESHOLD_AMOUNT = 50m;
+        private const int PRE_AUTH_VALIDITY_HOURS = 168;
 
         // ═══════════════════════════════════════════════════════════════════════
         // CONSTRUCTOR
@@ -140,7 +136,7 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // Güvenlik marjı ile bloke tutarı hesapla
-                // Örnek: 100 TL tahmini + %15 margin = 115 TL bloke
+                // Örnek: 100 TL tahmini + %20 margin = 120 TL bloke
                 var marginMultiplier = 1 + (securityMarginPercent / 100);
                 var blockAmount = Math.Round(estimatedAmount * marginMultiplier, 2);
 
@@ -262,6 +258,7 @@ namespace ECommerce.Business.Services.Managers
                     cardNumber,
                     expireDate,
                     cvv,
+                    blockAmount,
                     0, // Taksit yok
                     cancellationToken);
 
@@ -363,7 +360,7 @@ namespace ECommerce.Business.Services.Managers
 
                     // Farkı hesapla ve kaydet
                     var difference = preAuthAmount - actualAmount;
-                    
+
                     order.FinalAmount = actualAmount;
                     order.WeightDifference = difference;
                     order.WeightAdjustmentStatus = WeightAdjustmentStatus.Completed;
@@ -374,18 +371,17 @@ namespace ECommerce.Business.Services.Managers
                     return PostAuthorizationResult.Success(orderId, preAuthAmount, actualAmount);
                 }
 
-                // Gerçek tutar, bloke tutarından büyükse ek işlem gerekir
-                if (actualAmount > preAuthAmount)
+                var maxCapturableAmount = CalculateMaxCapturableAmount(preAuthAmount);
+
+                // Gerçek tutar, bankadaki tanımlı aşım limitini geçiyorsa kalan fark için manuel müdahale gerekir.
+                if (actualAmount > maxCapturableAmount)
                 {
                     _logger?.LogWarning(
-                        "[WEIGHT-PAYMENT] Gerçek tutar bloke tutarı aşıyor! " +
-                        "OrderId: {OrderId}, PreAuth: {PreAuth}, Actual: {Actual}",
-                        orderId, preAuthAmount, actualAmount);
-
-                    // Bu durumda admin onayı gerekir
-                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingAdminApproval;
+                        "[WEIGHT-PAYMENT] Gerçek tutar bankadaki provizyon aşım limitini aşıyor! " +
+                        "OrderId: {OrderId}, PreAuth: {PreAuth}, MaxCapturable: {MaxCapturable}, Actual: {Actual}",
+                        orderId, preAuthAmount, maxCapturableAmount, actualAmount);
                     order.FinalAmount = actualAmount;
-                    order.WeightDifference = preAuthAmount - actualAmount;
+                    order.WeightDifference = maxCapturableAmount - actualAmount;
                     await _db.SaveChangesAsync(cancellationToken);
 
                     stopwatch.Stop();
@@ -395,8 +391,8 @@ namespace ECommerce.Business.Services.Managers
                         OrderId = orderId,
                         OriginalBlockedAmount = preAuthAmount,
                         CapturedAmount = 0,
-                        DifferenceAmount = actualAmount - preAuthAmount,
-                        ErrorMessage = "Gerçek tutar bloke tutarı aşıyor. Admin onayı gerekiyor.",
+                        DifferenceAmount = actualAmount - maxCapturableAmount,
+                        ErrorMessage = "Gerçek tutar, bankadaki provizyon + %20 aşım limitini aşıyor. Ek tahsilat için admin müdahalesi gerekiyor.",
                         ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
                     };
                 }
@@ -427,8 +423,8 @@ namespace ECommerce.Business.Services.Managers
                 order.FinalAmount = actualAmount;
                 order.WeightDifference = differenceAmount;
                 order.TotalPrice = actualAmount;
-                order.WeightAdjustmentStatus = differenceAmount == 0 
-                    ? WeightAdjustmentStatus.NoDifference 
+                order.WeightAdjustmentStatus = differenceAmount == 0
+                    ? WeightAdjustmentStatus.NoDifference
                     : WeightAdjustmentStatus.Completed;
 
                 await _db.SaveChangesAsync(cancellationToken);
@@ -483,30 +479,6 @@ namespace ECommerce.Business.Services.Managers
                     return PostAuthorizationResult.Failure(orderId, "Sipariş bulunamadı");
                 }
 
-                // Dokümanla uyumlu kontrol: %20 veya 50 TL üzeri fark admin onayı gerektirir.
-                var baseAmount = order.TotalPrice > 0 ? order.TotalPrice : order.PreAuthAmount;
-                var differencePercent = baseAmount > 0
-                    ? Math.Abs(differenceAmount / baseAmount * 100)
-                    : 0;
-
-                if (Math.Abs(differenceAmount) > ADMIN_APPROVAL_THRESHOLD_AMOUNT ||
-                    differencePercent > ADMIN_APPROVAL_THRESHOLD_PERCENT)
-                {
-                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingAdminApproval;
-                    await _db.SaveChangesAsync(cancellationToken);
-
-                    stopwatch.Stop();
-                    return new PostAuthorizationResult
-                    {
-                        IsSuccess = false,
-                        OrderId = orderId,
-                        OriginalBlockedAmount = order.PreAuthAmount,
-                        DifferenceAmount = differenceAmount,
-                        ErrorMessage = "Fark tutarı/yüzdesi eşikleri aştı. Admin onayı gerekiyor.",
-                        ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
-                    };
-                }
-
                 // Fark pozitif = Müşteriye iade, Negatif = Müşteriden tahsilat
                 if (differenceAmount > 0)
                 {
@@ -540,12 +512,11 @@ namespace ECommerce.Business.Services.Managers
                 }
                 else if (differenceAmount < 0)
                 {
-                    // Ek tahsilat - bu durumda admin onayı gerekir
+                    // Ek tahsilat - bu akışta ek kart tahsilatı için ayrıca ödeme başlatmak gerekir.
                     _logger?.LogWarning(
                         "[WEIGHT-PAYMENT] Ek tahsilat gerekiyor. OrderId: {OrderId}, Amount: {Amount}",
                         orderId, Math.Abs(differenceAmount));
-
-                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingAdminApproval;
+                    order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingAdditionalPayment;
                     await _db.SaveChangesAsync(cancellationToken);
 
                     stopwatch.Stop();
@@ -555,7 +526,7 @@ namespace ECommerce.Business.Services.Managers
                         OrderId = orderId,
                         OriginalBlockedAmount = order.PreAuthAmount,
                         DifferenceAmount = differenceAmount,
-                        ErrorMessage = "Ek tahsilat için admin onayı gerekiyor",
+                        ErrorMessage = "Ek tahsilat gerekiyor. Mevcut provizyon akışı yalnızca blokeli tutarı çekebilir.",
                         ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
                     };
                 }
@@ -615,8 +586,8 @@ namespace ECommerce.Business.Services.Managers
 
                     stopwatch.Stop();
                     return PartialRefundResult.Success(
-                        orderId, 
-                        refundAmount, 
+                        orderId,
+                        refundAmount,
                         order.TotalPrice,
                         $"SIMULATED_REFUND_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}");
                 }
@@ -678,7 +649,7 @@ namespace ECommerce.Business.Services.Managers
             int orderId,
             decimal estimatedAmount,
             decimal actualAmount,
-            decimal adminApprovalThresholdPercent = ADMIN_APPROVAL_THRESHOLD_PERCENT,
+            decimal adminApprovalThresholdPercent = 20,
             CancellationToken cancellationToken = default)
         {
             _logger?.LogInformation(
@@ -688,8 +659,8 @@ namespace ECommerce.Business.Services.Managers
 
             // Fark hesapla
             var differenceAmount = actualAmount - estimatedAmount;
-            var differencePercent = estimatedAmount > 0 
-                ? Math.Abs(differenceAmount / estimatedAmount * 100) 
+            var differencePercent = estimatedAmount > 0
+                ? Math.Abs(differenceAmount / estimatedAmount * 100)
                 : 0;
 
             // Yön belirle
@@ -712,19 +683,6 @@ namespace ECommerce.Business.Services.Managers
                 description = $"Müşteriye {Math.Abs(differenceAmount):C2} para üstü verilecek.";
             }
 
-            // Admin onayı gerekiyor mu?
-            var requiresApproval = differencePercent > adminApprovalThresholdPercent 
-                                   || Math.Abs(differenceAmount) > ADMIN_APPROVAL_THRESHOLD_AMOUNT;
-
-            if (requiresApproval)
-            {
-                description += " (Yüksek fark - Admin onayı gerekiyor)";
-                _logger?.LogWarning(
-                    "[WEIGHT-PAYMENT] Yüksek fark tespit edildi. OrderId: {OrderId}, " +
-                    "DiffPercent: {Percent}%, DiffAmount: {Amount}",
-                    orderId, differencePercent, differenceAmount);
-            }
-
             var result = new CashPaymentDifferenceResult
             {
                 IsSuccess = true,
@@ -734,7 +692,7 @@ namespace ECommerce.Business.Services.Managers
                 DifferenceAmount = differenceAmount,
                 Direction = direction,
                 DifferencePercent = differencePercent,
-                RequiresAdminApproval = requiresApproval,
+                RequiresAdminApproval = false,
                 DifferenceDescription = description
             };
 
@@ -824,7 +782,7 @@ namespace ECommerce.Business.Services.Managers
             }
 
             var isCardPayment = order.PaymentMethod?.Contains("Card", StringComparison.OrdinalIgnoreCase) ?? false;
-            var preAuthExpired = order.PreAuthDate.HasValue && 
+            var preAuthExpired = order.PreAuthDate.HasValue &&
                                  DateTime.UtcNow > order.PreAuthDate.Value.AddHours(PRE_AUTH_VALIDITY_HOURS);
 
             // Durum açıklaması oluştur
@@ -857,13 +815,13 @@ namespace ECommerce.Business.Services.Managers
                 PostAuthorizationAmount = order.FinalAmount,
                 DifferenceProcessed = order.WeightAdjustmentStatus == WeightAdjustmentStatus.Completed,
                 DifferenceAmount = order.WeightDifference,
-                DifferenceDirection = order.WeightDifference > 0 
+                DifferenceDirection = order.WeightDifference > 0
                     ? PaymentDifferenceDirection.RefundToCustomer
-                    : order.WeightDifference < 0 
-                        ? PaymentDifferenceDirection.ChargeFromCustomer 
+                    : order.WeightDifference < 0
+                        ? PaymentDifferenceDirection.ChargeFromCustomer
                         : PaymentDifferenceDirection.NoDifference,
                 PendingAdminApproval = order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingAdminApproval,
-                IsCompleted = order.WeightAdjustmentStatus == WeightAdjustmentStatus.Completed 
+                IsCompleted = order.WeightAdjustmentStatus == WeightAdjustmentStatus.Completed
                               || order.WeightAdjustmentStatus == WeightAdjustmentStatus.NoDifference,
                 StatusDescription = statusDesc
             };
@@ -888,7 +846,7 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <inheritdoc />
-        public async Task<int> CancelExpiredPreAuthorizationsAsync(
+    public async Task<int> CancelExpiredPreAuthorizationsAsync(
             CancellationToken cancellationToken = default)
         {
             _logger?.LogInformation("[WEIGHT-PAYMENT] Süresi dolan provizyonlar iptal ediliyor...");
@@ -897,7 +855,7 @@ namespace ECommerce.Business.Services.Managers
 
             // Süresi dolan ve henüz tamamlanmamış provizyonları bul
             var expiredOrders = await _db.Orders
-                .Where(o => o.PreAuthDate.HasValue 
+                .Where(o => o.PreAuthDate.HasValue
                             && o.PreAuthDate < expiryThreshold
                             && !string.IsNullOrEmpty(o.PreAuthHostLogKey)
                             && o.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing)
@@ -957,6 +915,19 @@ namespace ECommerce.Business.Services.Managers
                 cancelledCount);
 
             return cancelledCount;
+        }
+
+        private static decimal CalculateMaxCapturableAmount(decimal preAuthAmount)
+        {
+            if (preAuthAmount <= 0)
+            {
+                return 0m;
+            }
+
+            return Math.Round(
+                preAuthAmount * (1 + (CAPTURE_OVERAGE_PERCENT / 100m)),
+                2,
+                MidpointRounding.AwayFromZero);
         }
     }
 }

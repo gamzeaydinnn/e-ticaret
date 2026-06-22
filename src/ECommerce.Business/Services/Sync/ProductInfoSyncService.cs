@@ -3,6 +3,7 @@ using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Core.Interfaces.Sync;
+using ECommerce.Business.Helpers;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
@@ -43,12 +44,6 @@ namespace ECommerce.Business.Services.Sync
             ["PAKET"] = WeightUnit.Piece, ["KUTU"] = WeightUnit.Piece,
             ["ŞİŞE"] = WeightUnit.Piece, ["SISE"] = WeightUnit.Piece,
             ["DEMET"] = WeightUnit.Piece
-        };
-
-        // Ağırlık bazlı birimler — bu birimlerdeki ürünler IsWeightBased=true olur
-        private static readonly HashSet<WeightUnit> WeightBasedUnits = new()
-        {
-            WeightUnit.Kilogram, WeightUnit.Gram, WeightUnit.Liter, WeightUnit.Milliliter
         };
 
         public ProductInfoSyncService(
@@ -496,7 +491,6 @@ namespace ECommerce.Business.Services.Sync
                 if (product.WeightUnit != newUnit)
                 {
                     product.WeightUnit = newUnit;
-                    product.IsWeightBased = WeightBasedUnits.Contains(newUnit);
                     result.WeightInfoUpdated++;
                     changed = true;
                 }
@@ -522,6 +516,24 @@ namespace ECommerce.Business.Services.Sync
                     result.CategoriesUpdated++;
                     changed = true;
                 }
+            }
+
+            var categoryName = _context.Categories
+                .AsNoTracking()
+                .Where(c => c.Id == product.CategoryId)
+                .Select(c => c.Name)
+                .FirstOrDefault();
+
+            var shouldBeWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+                product.Name,
+                product.WeightUnit,
+                categoryName ?? cache.AnagrupKod ?? cache.GrupKod);
+
+            if (product.IsWeightBased != shouldBeWeightBased)
+            {
+                product.IsWeightBased = shouldBeWeightBased;
+                result.WeightInfoUpdated++;
+                changed = true;
             }
 
             // Aktif/pasif durum — cache'deki Aktif alanı ile Product.IsActive karşılaştır

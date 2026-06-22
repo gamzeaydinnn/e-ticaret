@@ -29,6 +29,7 @@ namespace ECommerce.Core.Helpers
                 new Claim(ClaimTypes.Email, email),
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Role, role),
+                new Claim("role", role), // Explicit role claim to fix mapping issues
                 new Claim(JwtRegisteredClaimNames.Jti, jwtId)
             };
 

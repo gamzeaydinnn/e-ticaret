@@ -35,16 +35,16 @@ namespace ECommerce.Business.Services.Managers
     {
         /// <summary>POSNET 3D Secure ödeme başlatma</summary>
         Task<PaymentInitResult> Initiate3DSecureAsync(PaymentCreateDto dto, CancellationToken cancellationToken = default);
-        
+
         /// <summary>POSNET direkt satış (2D)</summary>
         Task<PaymentInitResult> ProcessDirectSaleAsync(PaymentCreateDto dto, CancellationToken cancellationToken = default);
-        
+
         /// <summary>Ödeme iptali (gün içi)</summary>
         Task<bool> CancelPaymentAsync(int paymentId, string? reason = null);
-        
+
         /// <summary>Kısmi iade işlemi</summary>
         Task<bool> PartialRefundAsync(int paymentId, decimal amount);
-        
+
         /// <summary>World Puan sorgulama (POSNET)</summary>
         Task<WorldPointsResult?> QueryWorldPointsAsync(string cardNumber, string expireDate, string cvv);
     }
@@ -69,7 +69,7 @@ namespace ECommerce.Business.Services.Managers
         // ═══════════════════════════════════════════════════════════════════════════
         // DEPENDENCY INJECTION
         // ═══════════════════════════════════════════════════════════════════════════
-        
+
         private readonly StripePaymentService? _stripe;
         private readonly IyzicoPaymentService _iyzico;
         private readonly PayPalPaymentService? _paypal;
@@ -83,7 +83,7 @@ namespace ECommerce.Business.Services.Managers
         // ═══════════════════════════════════════════════════════════════════════════
         // CONSTRUCTOR
         // ═══════════════════════════════════════════════════════════════════════════
-        
+
         /// <summary>
         /// PaymentManager constructor
         /// POSNET opsiyonel olarak inject edilir (null olabilir)
@@ -106,10 +106,10 @@ namespace ECommerce.Business.Services.Managers
             _stripe = stripe;
             _paypal = paypal;
             _configuration = configuration;
-            
+
             // Varsayılan provider'ı configuration'dan al
             _defaultProvider = configuration["Payment:Provider"]?.ToLowerInvariant() ?? "stripe";
-            
+
             _logger?.LogInformation(
                 "PaymentManager initialized. DefaultProvider: {Provider}, POSNETEnabled: {PosnetEnabled}",
                 _defaultProvider,
@@ -119,7 +119,7 @@ namespace ECommerce.Business.Services.Managers
         // ═══════════════════════════════════════════════════════════════════════════
         // PROVIDER RESOLUTION - Strategy Pattern
         // ═══════════════════════════════════════════════════════════════════════════
-        
+
         /// <summary>
         /// POSNET provider mı kontrol eder
         /// </summary>
@@ -183,7 +183,7 @@ namespace ECommerce.Business.Services.Managers
             {
                 return (_posnet, "posnet");
             }
-            
+
             // Aksi halde varsayılan provider'a dön
             return ResolveDefaultProvider();
         }
@@ -195,13 +195,13 @@ namespace ECommerce.Business.Services.Managers
         private (IPaymentService service, string providerKey) ResolveDefaultProvider()
         {
             var key = _defaultProvider;
-            
+
             // POSNET varsayılan provider olarak ayarlandıysa
             if (IsPosnetKey(key) && _posnet != null)
             {
                 return (_posnet, "posnet");
             }
-            
+
             return key switch
             {
                 "iyzico" or "iyzipay" => (_iyzico, "iyzico"),
@@ -255,6 +255,129 @@ namespace ECommerce.Business.Services.Managers
 
             var resolved = ResolveProviderByMethod(payment.Provider);
             return (payment, resolved.service, resolved.providerKey);
+        }
+
+        private async Task<Order?> GetOrderForPaymentAsync(int orderId)
+        {
+            return await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+        }
+
+        private async Task<Payments?> GetLatestPosnetAuthPaymentAsync(int orderId)
+        {
+            return await _db.Payments
+                .Where(p => p.OrderId == orderId &&
+                       p.TransactionType == "auth" &&
+                       (p.Status == "Authorized" || p.Status == "Paid" || p.Status == "Success"))
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        private static string? ResolvePosnetReference(Payments? payment)
+        {
+            if (!string.IsNullOrWhiteSpace(payment?.HostLogKey))
+            {
+                return payment.HostLogKey;
+            }
+
+            if (!string.IsNullOrWhiteSpace(payment?.ProviderPaymentId))
+            {
+                return payment.ProviderPaymentId;
+            }
+
+            return null;
+        }
+
+        private static DateTime ConvertUtcToTurkey(DateTime utcDateTime)
+        {
+            var normalizedUtc = utcDateTime.Kind == DateTimeKind.Utc
+                ? utcDateTime
+                : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+
+            foreach (var timeZoneId in new[] { "Turkey Standard Time", "Europe/Istanbul" })
+            {
+                try
+                {
+                    var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+                    return TimeZoneInfo.ConvertTimeFromUtc(normalizedUtc, timeZone);
+                }
+                catch (TimeZoneNotFoundException)
+                {
+                }
+                catch (InvalidTimeZoneException)
+                {
+                }
+            }
+
+            return normalizedUtc;
+        }
+
+        private static bool IsSameBusinessDay(DateTime utcDateTime)
+        {
+            return ConvertUtcToTurkey(utcDateTime).Date == ConvertUtcToTurkey(DateTime.UtcNow).Date;
+        }
+
+        private static bool ShouldUsePosnetSameDayReverse(
+            Payments payment,
+            decimal refundAmount,
+            decimal remainingRefundableAmount)
+        {
+            return (payment.TransactionType == "auth" ||
+                    payment.TransactionType == "capt" ||
+                    payment.TransactionType == "sale") &&
+                refundAmount >= remainingRefundableAmount - 0.01m &&
+                IsSameBusinessDay(payment.CreatedAt);
+        }
+
+        private async Task<bool> ReverseLinkedPosnetAuthAsync(Order? order, int orderId, string? reason)
+        {
+            if (_posnet == null)
+            {
+                return false;
+            }
+
+            var authPayment = await GetLatestPosnetAuthPaymentAsync(orderId);
+            var authHostLogKey = order?.PreAuthHostLogKey;
+            if (string.IsNullOrWhiteSpace(authHostLogKey))
+            {
+                authHostLogKey = ResolvePosnetReference(authPayment);
+            }
+
+            if (string.IsNullOrWhiteSpace(authHostLogKey))
+            {
+                _logger?.LogWarning(
+                    "POSNET capt iptali sonrası auth reverse yapılamadı: auth referansı bulunamadı. OrderId: {OrderId}, Reason: {Reason}",
+                    orderId, reason);
+                return false;
+            }
+
+            var reverseAuthResult = await _posnet.ProcessReverseAsync(orderId, authHostLogKey);
+            if (!reverseAuthResult.IsSuccess)
+            {
+                _logger?.LogError(
+                    "POSNET auth reverse başarısız. OrderId: {OrderId}, HostLogKey: {HostLogKey}, Error: {Error}",
+                    orderId, authHostLogKey, reverseAuthResult.Error);
+                return false;
+            }
+
+            if (order != null)
+            {
+                order.PreAuthHostLogKey = null;
+                order.PreAuthAmount = 0m;
+                order.PreAuthDate = null;
+            }
+
+            if (authPayment != null)
+            {
+                authPayment.Status = "Cancelled";
+                authPayment.RefundedAmount = authPayment.Amount;
+                authPayment.RefundedAt = DateTime.UtcNow;
+                authPayment.UpdatedAt = DateTime.UtcNow;
+            }
+
+            _logger?.LogInformation(
+                "POSNET auth reverse başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}",
+                orderId, authHostLogKey);
+            return true;
         }
 
         private async Task LogFailureAsync(
@@ -386,9 +509,24 @@ namespace ECommerce.Business.Services.Managers
                 // POSNET provider ve kart bilgisi varsa özel akış
                 if (providerKey == "posnet" && _posnet != null && dto.HasCardInfo)
                 {
-                    return await InitiatePosnetPaymentAsync(dto);
+                    var order = await _db.Orders
+                        .Include(o => o.OrderItems)
+                        .FirstOrDefaultAsync(o => o.Id == dto.OrderId, CancellationToken.None);
+
+                    if (order == null)
+                    {
+                        return new PaymentInitResult
+                        {
+                            Success = false,
+                            Error = "Sipariş bulunamadı",
+                            ErrorCode = "ORDER_NOT_FOUND"
+                        };
+                    }
+
+                    await StampOrderPaymentMethodAsync(order, dto.PaymentMethod, providerKey);
+                    return await InitiatePosnetPaymentAsync(dto, order);
                 }
-                
+
                 var result = await service.InitiateAsync(dto.OrderId, dto.Amount, dto.Currency ?? "TRY");
                 return result;
             }
@@ -406,7 +544,7 @@ namespace ECommerce.Business.Services.Managers
         /// <summary>
         /// POSNET ödeme akışını başlatır (3D veya 2D)
         /// </summary>
-        private async Task<PaymentInitResult> InitiatePosnetPaymentAsync(PaymentCreateDto dto)
+        private async Task<PaymentInitResult> InitiatePosnetPaymentAsync(PaymentCreateDto dto, Order order)
         {
             if (_posnet == null)
             {
@@ -421,6 +559,12 @@ namespace ECommerce.Business.Services.Managers
                 "Initiating POSNET payment. OrderId: {OrderId}, Amount: {Amount}, Use3D: {Use3D}",
                 dto.OrderId, dto.Amount, dto.Use3DSecure);
 
+            var hasWeightBasedItems = order.HasWeightBasedItems || (order.OrderItems?.Any(oi => oi.IsWeightBased) == true);
+            if (hasWeightBasedItems)
+            {
+                return await ProcessWeightBasedPosnetAuthorizationAsync(dto, order);
+            }
+
             // 3D Secure akışı
             if (dto.Use3DSecure)
             {
@@ -429,6 +573,165 @@ namespace ECommerce.Business.Services.Managers
 
             // Direkt satış (2D)
             return await ProcessDirectSaleAsync(dto);
+        }
+
+        private async Task<PaymentInitResult> ProcessWeightBasedPosnetAuthorizationAsync(PaymentCreateDto dto, Order order)
+        {
+            if (_posnet == null)
+            {
+                return new PaymentInitResult
+                {
+                    Success = false,
+                    Error = "POSNET servisi aktif değil"
+                };
+            }
+
+            // NEDEN: Tartılı siparişte capture öncesi bankaya doğrudan sale gönderilemez.
+            // Bu yüzden tahmini tutar + marj üzerinden auth alınır.
+            const decimal preAuthMarginPercentage = 0.20m;
+            var estimatedAmount = dto.Amount > 0 ? dto.Amount : order.FinalPrice;
+            var preAuthAmount = order.PreAuthAmount > 0
+                ? order.PreAuthAmount
+                : Math.Round(estimatedAmount * (1 + preAuthMarginPercentage), 2, MidpointRounding.AwayFromZero);
+
+            try
+            {
+                // NEDEN: Tartılı ürünlerde 3D açık ise akışı direkt auth ile başlatmamız gerekir.
+                // Aksi halde callback sonunda finansal satış oluşur ve capture akışı anlamsız hale gelir.
+                if (dto.Use3DSecure)
+                {
+                    order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
+                    order.PreAuthAmount = preAuthAmount;
+                    order.TolerancePercentage = preAuthMarginPercentage;
+                    order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
+                        ? WeightAdjustmentStatus.PendingWeighing
+                        : order.WeightAdjustmentStatus;
+
+                    await _db.SaveChangesAsync();
+
+                    var threeDsResult = await _posnet.Initiate3DSecureAsync(
+                        dto.OrderId,
+                        dto.CardNumber!,
+                        dto.ExpireDate!,
+                        dto.Cvv!,
+                        preAuthAmount,
+                        "Auth",
+                        dto.GetNormalizedInstallment(),
+                        CancellationToken.None);
+
+                    if (!threeDsResult.IsSuccess || threeDsResult.Data == null)
+                    {
+                        await LogFailureAsync(
+                            dto.OrderId,
+                            preAuthAmount,
+                            "posnet",
+                            "WEIGHT_BASED_3DS_AUTH",
+                            threeDsResult.Error ?? "3D provizyon başlatılamadı");
+
+                        return new PaymentInitResult
+                        {
+                            Success = false,
+                            Error = threeDsResult.Error ?? "3D provizyon başlatılamadı",
+                            ErrorCode = threeDsResult.ErrorCode.ToString(),
+                            OrderId = dto.OrderId,
+                            Amount = preAuthAmount,
+                            Provider = "posnet"
+                        };
+                    }
+
+                    return new PaymentInitResult
+                    {
+                        Success = true,
+                        RedirectUrl = threeDsResult.Data.RedirectUrl,
+                        PaymentId = threeDsResult.Data.OrderId ?? dto.OrderId.ToString(),
+                        RequiresRedirect = threeDsResult.Data.RequiresRedirect,
+                        ThreeDSecureHtml = threeDsResult.Data.GenerateAutoSubmitForm(
+                            threeDsResult.Data.RedirectUrl ?? string.Empty,
+                            _configuration["Payment:PosnetMerchantId"] ?? string.Empty,
+                            _configuration["Payment:PosnetId"] ?? string.Empty,
+                            _configuration["Payment:PosnetCallbackUrl"] ?? dto.SuccessUrl ?? string.Empty),
+                        Is3DSecure = true,
+                        Provider = "posnet",
+                        Amount = preAuthAmount,
+                        OrderId = dto.OrderId
+                    };
+                }
+
+                var authResult = await _posnet.ProcessAuthAsync(
+                    dto.OrderId,
+                    dto.CardNumber!,
+                    dto.ExpireDate!,
+                    dto.Cvv!,
+                    preAuthAmount,
+                    dto.GetNormalizedInstallment(),
+                    CancellationToken.None);
+
+                if (!authResult.IsSuccess || authResult.Data == null)
+                {
+                    await LogFailureAsync(
+                        dto.OrderId,
+                        preAuthAmount,
+                        "posnet",
+                        "WEIGHT_BASED_AUTH",
+                        authResult.Error ?? "Provizyon başlatılamadı");
+
+                    return new PaymentInitResult
+                    {
+                        Success = false,
+                        Error = authResult.Error ?? "Provizyon başlatılamadı",
+                        ErrorCode = authResult.ErrorCode.ToString(),
+                        OrderId = dto.OrderId,
+                        Amount = preAuthAmount,
+                        Provider = "posnet"
+                    };
+                }
+
+                order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
+                order.PreAuthAmount = preAuthAmount;
+                order.AuthorizedAmount = preAuthAmount;
+                order.TolerancePercentage = preAuthMarginPercentage;
+                order.PreAuthDate = DateTime.UtcNow;
+                order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
+                    ? WeightAdjustmentStatus.PendingWeighing
+                    : order.WeightAdjustmentStatus;
+
+                await _db.SaveChangesAsync();
+
+                return new PaymentInitResult
+                {
+                    Success = true,
+                    PaymentId = authResult.Data.HostLogKey,
+                    HostLogKey = authResult.Data.HostLogKey,
+                    AuthCode = authResult.Data.AuthCode,
+                    Provider = "posnet",
+                    Amount = preAuthAmount,
+                    OrderId = dto.OrderId
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex,
+                    "POSNET weight-based authorization failed. OrderId: {OrderId}",
+                    dto.OrderId);
+                await LogFailureAsync(dto.OrderId, preAuthAmount, "posnet", "WEIGHT_BASED_AUTH_EXCEPTION", ex.Message, ex);
+                throw;
+            }
+        }
+
+        private async Task StampOrderPaymentMethodAsync(Order order, string? paymentMethod, string providerKey)
+        {
+            var normalizedMethod = string.IsNullOrWhiteSpace(paymentMethod)
+                ? providerKey
+                : paymentMethod.Trim();
+
+            if (order.PaymentMethod == normalizedMethod)
+            {
+                return;
+            }
+
+            // NEDEN: İade/capture akışları ödeme türünü Order üzerinden okuyor.
+            order.PaymentMethod = normalizedMethod;
+            await _db.SaveChangesAsync();
         }
 
         /// <summary>
@@ -462,6 +765,8 @@ namespace ECommerce.Business.Services.Managers
                     dto.CardNumber!,
                     dto.ExpireDate!,
                     dto.Cvv!,
+                    dto.Amount,
+                    "Sale",
                     dto.GetNormalizedInstallment(),
                     cancellationToken);
 
@@ -488,7 +793,7 @@ namespace ECommerce.Business.Services.Managers
                 }
                 else
                 {
-                    await LogFailureAsync(dto.OrderId, dto.Amount, "posnet", "3DS_INIT", 
+                    await LogFailureAsync(dto.OrderId, dto.Amount, "posnet", "3DS_INIT",
                         result.Error ?? "3D Secure başlatılamadı");
 
                     return new PaymentInitResult
@@ -559,7 +864,7 @@ namespace ECommerce.Business.Services.Managers
                 }
                 else
                 {
-                    await LogFailureAsync(dto.OrderId, dto.Amount, "posnet", "DIRECT_SALE", 
+                    await LogFailureAsync(dto.OrderId, dto.Amount, "posnet", "DIRECT_SALE",
                         result.Error ?? "Direkt satış başarısız");
 
                     return new PaymentInitResult
@@ -585,7 +890,7 @@ namespace ECommerce.Business.Services.Managers
         public async Task<bool> CancelPaymentAsync(int paymentId, string? reason = null)
         {
             var (payment, service, providerKey) = await ResolvePaymentAndProviderAsync(paymentId);
-            
+
             if (payment == null)
             {
                 _logger?.LogWarning("Cancel failed: Payment not found. Id: {PaymentId}", paymentId);
@@ -604,13 +909,7 @@ namespace ECommerce.Business.Services.Managers
                         return false;
                     }
 
-                    var hostLogKey = payment.HostLogKey;
-                    // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
-                    if (string.IsNullOrEmpty(hostLogKey))
-                    {
-                        hostLogKey = payment.ProviderPaymentId;
-                        _logger?.LogWarning("Cancel: HostLogKey boş, ProviderPaymentId fallback. Id: {PaymentId}, Key: {Key}", paymentId, hostLogKey);
-                    }
+                    var hostLogKey = ResolvePosnetReference(payment);
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
                         _logger?.LogError("POSNET para iadesi başarısız: HostLogKey ve ProviderPaymentId boş. PaymentId: {PaymentId}. Banka işlem referans numarası bulunamadı.", paymentId);
@@ -618,20 +917,36 @@ namespace ECommerce.Business.Services.Managers
                     }
 
                     var result = await _posnet.ProcessReverseAsync(payment.OrderId, hostLogKey);
-                    
+
                     if (result.IsSuccess)
                     {
+                        var order = await GetOrderForPaymentAsync(payment.OrderId);
+                        if (string.Equals(payment.TransactionType, "capt", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var authReverseOk = await ReverseLinkedPosnetAuthAsync(order, payment.OrderId, reason);
+                            if (!authReverseOk)
+                            {
+                                _logger?.LogCritical(
+                                    "POSNET capt reverse başarılı ancak bağlı auth reverse başarısız. OrderId: {OrderId}, PaymentId: {PaymentId}",
+                                    payment.OrderId, paymentId);
+                                payment.Status = "ReversePendingAuthReverse";
+                                payment.UpdatedAt = DateTime.UtcNow;
+                                await _db.SaveChangesAsync();
+                                return false;
+                            }
+                        }
+
                         payment.Status = "Cancelled";
                         payment.RefundedAmount = payment.Amount;
                         payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
-                        
-                        var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
+
                         if (order != null)
                         {
                             order.Status = OrderStatus.Cancelled;
+                            order.CaptureStatus = CaptureStatus.Voided;
                         }
-                        
+
                         await _db.SaveChangesAsync();
 
                         _logService.Audit(
@@ -658,7 +973,7 @@ namespace ECommerce.Business.Services.Managers
                     payment.Status = "Cancelled";
                     payment.UpdatedAt = DateTime.UtcNow;
                     await _db.SaveChangesAsync();
-                    
+
                     _logger?.LogInformation("Ödeme iptal edildi (para iadesi gerekmez). PaymentId: {PaymentId}, Provider: {Provider}", paymentId, providerKey ?? "unknown");
                     return true;
                 }
@@ -681,16 +996,20 @@ namespace ECommerce.Business.Services.Managers
         public async Task<bool> PartialRefundAsync(int paymentId, decimal amount)
         {
             var (payment, service, providerKey) = await ResolvePaymentAndProviderAsync(paymentId);
-            
+
             if (payment == null)
             {
                 _logger?.LogWarning("Partial refund failed: Payment not found. Id: {PaymentId}", paymentId);
                 return false;
             }
 
-            if (amount <= 0 || amount > payment.Amount)
+            var alreadyRefundedAmount = payment.RefundedAmount ?? 0m;
+            var remainingRefundableAmount = payment.Amount - alreadyRefundedAmount;
+            if (amount <= 0 || amount > remainingRefundableAmount)
             {
-                _logger?.LogWarning("Partial refund failed: Invalid amount. Id: {PaymentId}, Amount: {Amount}", paymentId, amount);
+                _logger?.LogWarning(
+                    "Partial refund failed: Invalid amount. Id: {PaymentId}, Amount: {Amount}, RemainingRefundable: {RemainingRefundable}",
+                    paymentId, amount, remainingRefundableAmount);
                 return false;
             }
 
@@ -706,28 +1025,30 @@ namespace ECommerce.Business.Services.Managers
                         return false;
                     }
 
-                    var hostLogKey = payment.HostLogKey;
-                    // HostLogKey boşsa ProviderPaymentId'den al (3DS callback'de HostLogKey kayıp olabilir)
-                    if (string.IsNullOrEmpty(hostLogKey))
-                    {
-                        hostLogKey = payment.ProviderPaymentId;
-                        _logger?.LogWarning("Refund: HostLogKey boş, ProviderPaymentId fallback. Id: {PaymentId}, Key: {Key}", paymentId, hostLogKey);
-                    }
+                    var hostLogKey = ResolvePosnetReference(payment);
                     if (string.IsNullOrEmpty(hostLogKey))
                     {
                         _logger?.LogError("POSNET kısmi iade başarısız: HostLogKey ve ProviderPaymentId boş. PaymentId: {PaymentId}. Banka işlem referans numarası bulunamadı.", paymentId);
                         return false;
                     }
 
+                    if (ShouldUsePosnetSameDayReverse(payment, amount, remainingRefundableAmount))
+                    {
+                        _logger?.LogInformation(
+                            "POSNET aynı gün tam iade için reverse akışı kullanılıyor. PaymentId: {PaymentId}, Amount: {Amount}",
+                            paymentId, amount);
+                        return await CancelPaymentAsync(paymentId, "Aynı gün tam iade - reverse");
+                    }
+
                     var result = await _posnet.ProcessRefundAsync(payment.OrderId, hostLogKey, amount);
-                    
+
                     if (result.IsSuccess)
                     {
                         // Kısmi iade kaydı
                         payment.RefundedAmount = (payment.RefundedAmount ?? 0) + amount;
                         payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
-                        
+
                         // Tam iade olduysa status güncelle
                         if (payment.RefundedAmount >= payment.Amount)
                         {
@@ -742,7 +1063,7 @@ namespace ECommerce.Business.Services.Managers
                         {
                             payment.Status = "PartiallyRefunded";
                         }
-                        
+
                         await _db.SaveChangesAsync();
 
                         _logService.Audit(
@@ -766,6 +1087,12 @@ namespace ECommerce.Business.Services.Managers
                 // Stripe için
                 if (providerKey == "stripe")
                 {
+                    if (_stripe == null)
+                    {
+                        _logger?.LogWarning("Stripe refund requested but Stripe service is not registered. PaymentId: {PaymentId}", paymentId);
+                        return false;
+                    }
+
                     var ok = await _stripe.StripeRefundAsync(payment.ProviderPaymentId, amount);
                     if (ok)
                     {
@@ -829,7 +1156,7 @@ namespace ECommerce.Business.Services.Managers
             try
             {
                 var result = await _posnet.QueryPointsAsync(cardNumber, expireDate, cvv);
-                
+
                 if (result.IsSuccess && result.Data != null)
                 {
                     return new WorldPointsResult
@@ -839,7 +1166,7 @@ namespace ECommerce.Business.Services.Managers
                         PointsAsTL = result.Data.PointInfo?.PointAsTL ?? 0
                     };
                 }
-                
+
                 return new WorldPointsResult
                 {
                     Success = false,
@@ -872,7 +1199,7 @@ namespace ECommerce.Business.Services.Managers
             var refundAmount = dto.Amount ?? payment.Amount;
 
             var provider = payment.Provider?.ToLowerInvariant() ?? string.Empty;
-            
+
             try
             {
                 // POSNET için return işlemi
@@ -886,17 +1213,26 @@ namespace ECommerce.Business.Services.Managers
                         hostLogKey = payment.ProviderPaymentId;
                     }
 
+                    var remainingRefundableAmount = payment.Amount - (payment.RefundedAmount ?? 0m);
+                    if (ShouldUsePosnetSameDayReverse(payment, refundAmount, remainingRefundableAmount))
+                    {
+                        _logger?.LogInformation(
+                            "POSNET tam iade aynı gün reverse ile gerçekleştiriliyor. PaymentId: {PaymentId}, Amount: {Amount}",
+                            dto.PaymentId, refundAmount);
+                        return await CancelPaymentAsync(payment.Id, "Aynı gün tam iade - reverse");
+                    }
+
                     var result = await _posnet.ProcessRefundAsync(payment.OrderId, hostLogKey, refundAmount);
-                    
+
                     if (result.IsSuccess)
                     {
                         payment.Status = "Refunded";
                         payment.RefundedAmount = refundAmount;
                         payment.UpdatedAt = DateTime.UtcNow;
-                        
+
                         var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
                         if (order != null) order.Status = OrderStatus.Refunded;
-                        
+
                         await _db.SaveChangesAsync();
 
                         _logService.Audit(
@@ -916,10 +1252,16 @@ namespace ECommerce.Business.Services.Managers
                         return false;
                     }
                 }
-                
+
                 // Stripe için iade
                 if (provider == "stripe")
                 {
+                    if (_stripe == null)
+                    {
+                        _logger?.LogWarning("Stripe refund requested but Stripe service is not registered. PaymentId: {PaymentId}", dto.PaymentId);
+                        return false;
+                    }
+
                     var ok = await _stripe.StripeRefundAsync(payment.ProviderPaymentId, refundAmount);
                     if (ok)
                     {

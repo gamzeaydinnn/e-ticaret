@@ -13,6 +13,56 @@ import api from "./api";
 // ═══════════════════════════════════════════════════════════════════════════════
 let settingsCache = { data: null, timestamp: null };
 const CACHE_TTL = 5 * 60 * 1000; // 5 dakika
+const CART_SETTINGS_UPDATED_EVENT = "cart-settings-updated";
+
+const DEFAULT_CART_SETTINGS = {
+  id: 0,
+  minimumCartAmount: 0,
+  isMinimumCartAmountActive: false,
+  minimumCartAmountMessage:
+    "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.",
+  guestFirstOrderShippingMessage:
+    "Hesap oluştur, ilk alışverişinde kargo bedava!",
+  isActive: true,
+  updatedAt: null,
+  updatedByUserName: null,
+};
+
+const hasCartSettingsShape = (value) =>
+  Boolean(value) &&
+  typeof value === "object" &&
+  [
+    "minimumCartAmount",
+    "isMinimumCartAmountActive",
+    "minimumCartAmountMessage",
+    "guestFirstOrderShippingMessage",
+  ].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+
+const normalizeCartSettings = (payload) => {
+  const data = hasCartSettingsShape(payload?.data)
+    ? payload.data
+    : hasCartSettingsShape(payload?.settings)
+      ? payload.settings
+      : hasCartSettingsShape(payload)
+        ? payload
+        : null;
+  if (!data || typeof data !== "object") {
+    return { ...DEFAULT_CART_SETTINGS };
+  }
+
+  return {
+    ...DEFAULT_CART_SETTINGS,
+    ...data,
+    minimumCartAmount: Number(data.minimumCartAmount ?? 0),
+    isMinimumCartAmountActive: Boolean(data.isMinimumCartAmountActive),
+    minimumCartAmountMessage:
+      data.minimumCartAmountMessage ??
+      DEFAULT_CART_SETTINGS.minimumCartAmountMessage,
+    guestFirstOrderShippingMessage:
+      data.guestFirstOrderShippingMessage ??
+      DEFAULT_CART_SETTINGS.guestFirstOrderShippingMessage,
+  };
+};
 
 const isCacheValid = () => {
   return (
@@ -41,8 +91,7 @@ export const getCartSettings = async (forceRefresh = false) => {
 
   try {
     const response = await api.get("/api/CartSettings/settings");
-    // api.js interceptor'ı zaten res.data döndürür, tekrar .data yapmaya gerek yok
-    const data = response?.data || response;
+    const data = normalizeCartSettings(response);
 
     // Cache'e kaydet
     settingsCache = { data, timestamp: Date.now() };
@@ -51,16 +100,7 @@ export const getCartSettings = async (forceRefresh = false) => {
   } catch (error) {
     console.warn("[CartSettings] Ayarlar yüklenemedi:", error.message);
     // Hata durumunda güvenli varsayılan döndür (minimum tutar pasif)
-    return {
-      id: 0,
-      minimumCartAmount: 0,
-      isMinimumCartAmountActive: false,
-      minimumCartAmountMessage:
-        "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.",
-      isActive: true,
-      updatedAt: null,
-      updatedByUserName: null,
-    };
+    return { ...DEFAULT_CART_SETTINGS };
   }
 };
 
@@ -75,7 +115,7 @@ export const getCartSettings = async (forceRefresh = false) => {
  */
 export const getCartSettingsAdmin = async () => {
   const response = await api.get("/api/CartSettings/admin/settings");
-  return response?.data || response;
+  return normalizeCartSettings(response);
 };
 
 /**
@@ -85,15 +125,26 @@ export const getCartSettingsAdmin = async () => {
  * @param {number} [updateData.minimumCartAmount] - Minimum sepet tutarı (TL)
  * @param {boolean} [updateData.isMinimumCartAmountActive] - Aktif/pasif durumu
  * @param {string} [updateData.minimumCartAmountMessage] - Uyarı mesajı
+ * @param {string} [updateData.guestFirstOrderShippingMessage] - Misafir promosyon mesajı
  * @returns {Promise<Object>} Güncelleme sonucu ve güncel ayarlar
  */
 export const updateCartSettings = async (updateData) => {
   const response = await api.put("/api/CartSettings/admin/settings", updateData);
+  const normalizedResponse = normalizeCartSettings(response);
+  const normalized = {
+    ...(settingsCache.data || DEFAULT_CART_SETTINGS),
+    ...normalizedResponse,
+    ...(updateData || {}),
+  };
 
-  // Güncelleme sonrası cache'i temizle
-  clearCartSettingsCache();
+  settingsCache = { data: normalized, timestamp: Date.now() };
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(CART_SETTINGS_UPDATED_EVENT, { detail: normalized }),
+    );
+  }
 
-  return response?.data || response;
+  return normalized;
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -107,6 +158,8 @@ export const updateCartSettings = async (updateData) => {
 export const clearCartSettingsCache = () => {
   settingsCache = { data: null, timestamp: null };
 };
+
+export const CART_SETTINGS_EVENT = CART_SETTINGS_UPDATED_EVENT;
 
 /**
  * TL para birimi formatı.

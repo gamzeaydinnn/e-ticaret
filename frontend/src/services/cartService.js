@@ -130,9 +130,8 @@ const clearGuestToken = () => {
 };
 
 /**
- * Backend bazı endpoint'lerde quantity alanını int bekliyor.
- * Sepet ekranında 0.5/1.5 gibi değerler kullanılsa da kampanya/kupon hesapları
- * için güvenli bir tam sayı gönderilir.
+ * Tartılı ürünlerde ondalıklı kg miktarı korunur.
+ * Aşırı hassasiyet yerine 2 basamak yeterlidir.
  */
 const normalizeBackendQuantity = (quantity) => {
   const parsedQuantity = Number(quantity);
@@ -141,11 +140,7 @@ const normalizeBackendQuantity = (quantity) => {
     return 1;
   }
 
-  if (Number.isInteger(parsedQuantity)) {
-    return parsedQuantity;
-  }
-
-  return Math.max(1, Math.ceil(parsedQuantity));
+  return Math.max(0.25, Math.round(parsedQuantity * 100) / 100);
 };
 
 const normalizePricingPayloadItems = (items) => {

@@ -8,6 +8,7 @@ import {
 import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
+import AddToCartModal from "../components/AddToCartModal";
 
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -15,6 +16,8 @@ const SearchPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [addedProduct, setAddedProduct] = useState(null);
 
   const urlQuery = searchParams.get("q") || "";
   const [searchQuery, setSearchQuery] = useState(urlQuery);
@@ -153,7 +156,15 @@ const SearchPage = () => {
     setSearchParams({});
   };
 
-  const handleAddToCart = (product) => addToCart(product, 1);
+  const handleAddToCart = async (product) => {
+    const result = await addToCart(product, 1);
+    if (result && result.success === false) {
+      return;
+    }
+
+    setAddedProduct(product);
+    setCartModalOpen(true);
+  };
   const handleToggleFavorite = (productId) => toggleFavorite(productId);
   const handleToggleCompare = (product) => {
     const r = toggleCompare(product);
@@ -165,6 +176,12 @@ const SearchPage = () => {
       className="container-fluid py-3"
       style={{ backgroundColor: "#f5f5f5", minHeight: "80vh" }}
     >
+      <AddToCartModal
+        isOpen={cartModalOpen}
+        onClose={() => setCartModalOpen(false)}
+        product={addedProduct}
+      />
+
       {/* Compact Header */}
       <div className="bg-white rounded-3 shadow-sm p-2 p-md-3 mb-3">
         <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">

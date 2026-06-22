@@ -486,7 +486,7 @@ namespace ECommerce.Business.Services.Managers
             var accessToken = JwtTokenHelper.GenerateToken(
                 user.Id,
                 user.Email ?? string.Empty,
-                user.Role ?? COURIER_ROLE,
+                COURIER_ROLE, // Her zaman doğru casing'i kullan (user.Role veritabanında küçük harf olabilir)
                 key,
                 issuer,
                 audience,

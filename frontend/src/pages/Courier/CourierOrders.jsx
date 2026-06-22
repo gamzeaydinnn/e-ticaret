@@ -18,34 +18,38 @@ export default function CourierOrders() {
   const { courier, isAuthenticated, loading: authLoading } = useCourierAuth();
 
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    // Auth yüklenene kadar bekle
+    if (authLoading) return;
+
+    // Kurye girişi yapılmamışsa login'e yönlendir
+    if (!isAuthenticated || !courier?.id) {
       navigate("/courier/login");
       return;
     }
-    if (courier?.id) {
+
+    // Kurye giriş yapmış, siparişleri yükle
+    loadOrders();
+
+    // 15 saniyede bir otomatik yenileme - yeni atamalar ve durum değişiklikleri için
+    const interval = setInterval(() => {
       loadOrders();
+    }, 15000);
 
-      // 15 saniyede bir otomatik yenileme - yeni atamalar ve durum değişiklikleri için
-      const interval = setInterval(() => {
-        loadOrders();
-      }, 15000);
+    // SignalR üzerinden gelen anlık bildirimlerde siparişleri yenile
+    const handleTaskAssigned = () => loadOrders();
+    const handleTaskUpdated = () => loadOrders();
+    const handleTaskCancelled = () => loadOrders();
 
-      // SignalR üzerinden gelen anlık bildirimlerde siparişleri yenile
-      const handleTaskAssigned = () => loadOrders();
-      const handleTaskUpdated = () => loadOrders();
-      const handleTaskCancelled = () => loadOrders();
+    window.addEventListener("courierTaskAssigned", handleTaskAssigned);
+    window.addEventListener("courierTaskUpdated", handleTaskUpdated);
+    window.addEventListener("courierTaskCancelled", handleTaskCancelled);
 
-      window.addEventListener("courierTaskAssigned", handleTaskAssigned);
-      window.addEventListener("courierTaskUpdated", handleTaskUpdated);
-      window.addEventListener("courierTaskCancelled", handleTaskCancelled);
-
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener("courierTaskAssigned", handleTaskAssigned);
-        window.removeEventListener("courierTaskUpdated", handleTaskUpdated);
-        window.removeEventListener("courierTaskCancelled", handleTaskCancelled);
-      };
-    }
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("courierTaskAssigned", handleTaskAssigned);
+      window.removeEventListener("courierTaskUpdated", handleTaskUpdated);
+      window.removeEventListener("courierTaskCancelled", handleTaskCancelled);
+    };
   }, [navigate, authLoading, isAuthenticated, courier?.id]);
 
   const loadOrders = async () => {
@@ -78,6 +82,8 @@ export default function CourierOrders() {
       }
       setWeightReports(reportsMap);
     } catch (error) {
+      // Auth hatası ise sessizce geç (kullanıcı zaten login'e yönlendiriliyor)
+      if (error?.isCourierAuthError) return;
       console.error("Sipariş yükleme hatası:", error);
     } finally {
       setLoading(false);

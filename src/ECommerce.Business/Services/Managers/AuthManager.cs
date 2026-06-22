@@ -111,7 +111,7 @@ namespace ECommerce.Business.Services.Managers
             return await IssueTokensForUserAsync(user, GetClientIpAddress());
         }
 
-        public async Task<UserLoginDto> GetUserByIdAsync(int userId)
+        public async Task<UserLoginDto?> GetUserByIdAsync(int userId)
         {
             var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
@@ -122,21 +122,21 @@ namespace ECommerce.Business.Services.Managers
             return new UserLoginDto
             {
                 Id = user.Id,
-                Email = user.Email,
+                Email = user.Email ?? string.Empty,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Role = user.Role,
             };
         }
 
-        public async Task<UserLoginDto> GetUserByEmailAsync(string email)
+        public async Task<UserLoginDto?> GetUserByEmailAsync(string email)
         {
             var user = await _userManager.FindByEmailAsync(email);
             if (user == null) return null;
             return new UserLoginDto
             {
                 Id = user.Id,
-                Email = user.Email,
+                Email = user.Email ?? string.Empty,
                 FirstName = user.FirstName,
                 LastName = user.LastName,
                 Role = user.Role

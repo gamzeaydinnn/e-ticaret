@@ -18,6 +18,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { CartService } from "../services/cartService";
+import {
+  isStrictVariableWeightProduct,
+  toWeightBasedProductCandidate,
+} from "../utils/weightBasedProduct";
 import { CampaignService } from "../services/campaignService";
 import LoginModal from "../components/LoginModal";
 import PosnetCreditCardForm from "../components/payment/PosnetCreditCardForm";
@@ -92,6 +96,15 @@ export default function Checkout() {
   const location = useLocation();
   const { user } = useAuth();
   const { cartItems, getCartTotal, clearCart } = useCart();
+  const payableTotal = useMemo(() => {
+    if (
+      typeof pricing?.grandTotal === "number" &&
+      Number.isFinite(pricing.grandTotal)
+    ) {
+      return pricing.grandTotal;
+    }
+    return getCartTotal() + shippingCost;
+  }, [pricing?.grandTotal, getCartTotal, shippingCost]);
 
   // ============================================================================
   // SAYFA TERK ETME KORUMASI (beforeunload + popstate)
@@ -369,19 +382,11 @@ export default function Checkout() {
   // ============================================================================
   const weightBasedItems = useMemo(() => {
     return cartItems
-      .filter((item) => {
-        // Product bilgisi varsa oradan, yoksa item'dan kontrol et
-        return (
-          item.isWeightBased ||
-          item.product?.isWeightBased ||
-          item.weightUnit === "Kilogram" ||
-          item.weightUnit === "Gram" ||
-          item.weightUnit === 2 ||
-          item.weightUnit === 1 ||
-          item.product?.weightUnit === "Kilogram" ||
-          item.product?.weightUnit === "Gram"
-        );
-      })
+      .filter((item) =>
+        isStrictVariableWeightProduct(
+          toWeightBasedProductCandidate(item, item.product),
+        ),
+      )
       .map((item) => ({
         ...item,
         name: item.productName || item.product?.name || "Ürün",
@@ -461,7 +466,7 @@ export default function Checkout() {
         // Sipariş detayları
         items: orderItems,
         subtotal: getCartTotal(),
-        totalPrice: getCartTotal() + shippingCost,
+        totalPrice: payableTotal,
 
         // Tekrar sipariş engelleme
         clientOrderId,
@@ -876,17 +881,7 @@ export default function Checkout() {
               <span>Toplam</span>
               <span>
                 ₺
-                {Math.max(
-                  0,
-                  getCartTotal() +
-                    shippingCost -
-                    (campaignDiscountTotal ||
-                      pricing?.campaignDiscountTotal ||
-                      0) -
-                    (pricing?.couponDiscountTotal ||
-                      appliedCoupon?.discountAmount ||
-                      0),
-                ).toFixed(2)}
+                {payableTotal.toFixed(2)}
               </span>
             </div>
           </div>
@@ -896,7 +891,7 @@ export default function Checkout() {
         {paymentMethod === "credit_card" && showCardForm && pendingOrderId && (
           <div className="mb-4">
             <PosnetCreditCardForm
-              amount={getCartTotal() + shippingCost}
+              amount={payableTotal}
               orderId={pendingOrderId}
               showInstallments={true}
               onSuccess={(result) => {
@@ -917,7 +912,7 @@ export default function Checkout() {
                       orderNumber: result.orderNumber || pendingOrderId,
                       orderId: result.orderId || pendingOrderId,
                       email: form.email?.trim(),
-                      totalPrice: getCartTotal() + shippingCost,
+                      totalPrice: payableTotal,
                       createdAt: new Date().toISOString(),
                       status: "paid",
                       transactionId: result.transactionId,
@@ -1007,7 +1002,7 @@ export default function Checkout() {
           ) : (
             <>
               <i className="fas fa-check-circle me-2"></i>
-              Siparişi Onayla (₺{(getCartTotal() + shippingCost).toFixed(2)})
+              Siparişi Onayla (₺{payableTotal.toFixed(2)})
             </>
           )}
         </button>

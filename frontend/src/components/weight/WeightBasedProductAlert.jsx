@@ -103,7 +103,7 @@ export default function WeightBasedProductAlert({
               <div key={index} className="weight-alert-minimal-item">
                 <span>{item.name || item.productName}</span>
                 <span>
-                  {Number(item.quantity || 0).toFixed(1)}{" "}
+                  {Number(item.quantity || 0).toFixed(2)}{" "}
                   {formatWeightUnit(item.weightUnit || item.unit)}
                 </span>
               </div>
@@ -215,8 +215,8 @@ export default function WeightBasedProductAlert({
             <div className="guarantee-message">
               <i className="fas fa-shield-alt"></i>
               <span>
-                %20'den fazla fark olursa admin onayı gerekir ve sizinle
-                iletişime geçilir.
+                Tartılı siparişlerde tahmini tutarın %15 fazlası kadar bloke
+                konur. Kesin tutar teslimatta çekilir, kalan bloke çözülür.
               </span>
             </div>
           </div>
@@ -229,9 +229,9 @@ export default function WeightBasedProductAlert({
           <div className="checkout-note">
             <i className="fas fa-credit-card"></i>
             <span>
-              Kredi kartı ödemelerinde, tahmini tutar üzerinden{" "}
-              <strong>ön provizyon</strong> alınır. Teslimat sonrası kesin tutar
-              çekilir.
+              Kredi kartı ödemelerinde tahmini tutar üzerinden{" "}
+              <strong>%15 marjlı ön provizyon</strong> alınır. Teslimat sonrası
+              sadece kesin tutar çekilir.
             </span>
           </div>
         </div>

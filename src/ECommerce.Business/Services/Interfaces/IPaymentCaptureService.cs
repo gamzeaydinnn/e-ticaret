@@ -2,7 +2,7 @@
 // IPaymentCaptureService.cs - Ödeme Provizyon/Capture Interface
 // ==========================================================================
 // Authorize → Capture akışını yöneten servis interface'i.
-// %10 tolerans ile provizyon alır, teslim anında final tutarı çeker.
+// %20 tolerans ile provizyon alır, teslim anında final tutarı çeker.
 // ==========================================================================
 
 using System;
@@ -17,14 +17,14 @@ namespace ECommerce.Business.Services.Interfaces
     {
         /// <summary>
         /// Sipariş için provizyon (authorize) işlemi yapar.
-        /// Sipariş tutarının %10 tolerans fazlası kadar provizyon alır.
+        /// Sipariş tutarının %20 tolerans fazlası kadar provizyon alır.
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
         /// <param name="orderAmount">Sipariş tutarı (TL)</param>
-        /// <param name="tolerancePercentage">Tolerans yüzdesi (varsayılan 0.10)</param>
+        /// <param name="tolerancePercentage">Tolerans yüzdesi (varsayılan 0.20)</param>
         /// <returns>Provizyon sonucu</returns>
-        Task<PaymentAuthorizationResult> AuthorizePaymentAsync(int orderId, decimal orderAmount, 
-            decimal tolerancePercentage = 0.10m);
+        Task<PaymentAuthorizationResult> AuthorizePaymentAsync(int orderId, decimal orderAmount,
+            decimal tolerancePercentage = 0.20m);
 
         /// <summary>
         /// Teslim anında ödemeyi çeker (capture).
@@ -80,33 +80,33 @@ namespace ECommerce.Business.Services.Interfaces
         public bool Success { get; set; }
         public string? Message { get; set; }
         public string? ErrorCode { get; set; }
-        
+
         /// <summary>
         /// Authorize edilen tutar (tolerans dahil).
         /// </summary>
         public decimal AuthorizedAmount { get; set; }
-        
+
         /// <summary>
         /// Orijinal sipariş tutarı.
         /// </summary>
         public decimal OrderAmount { get; set; }
-        
+
         /// <summary>
         /// Uygulanan tolerans yüzdesi.
         /// </summary>
         public decimal TolerancePercentage { get; set; }
-        
+
         /// <summary>
         /// Provizyon referans ID'si (ödeme sağlayıcıdan).
         /// </summary>
         public string? AuthorizationReference { get; set; }
-        
+
         /// <summary>
         /// Provizyon geçerlilik süresi.
         /// </summary>
         public DateTime? ExpiresAt { get; set; }
 
-        public static PaymentAuthorizationResult Succeeded(decimal authorizedAmount, decimal orderAmount, 
+        public static PaymentAuthorizationResult Succeeded(decimal authorizedAmount, decimal orderAmount,
             decimal tolerancePercentage, string? authRef = null, DateTime? expiresAt = null)
         {
             return new PaymentAuthorizationResult
@@ -140,22 +140,22 @@ namespace ECommerce.Business.Services.Interfaces
         public bool Success { get; set; }
         public string? Message { get; set; }
         public string? ErrorCode { get; set; }
-        
+
         /// <summary>
         /// Çekilen tutar.
         /// </summary>
         public decimal CapturedAmount { get; set; }
-        
+
         /// <summary>
         /// İade edilen tutar (authorize - capture farkı).
         /// </summary>
         public decimal ReleasedAmount { get; set; }
-        
+
         /// <summary>
         /// Capture işlem referansı.
         /// </summary>
         public string? CaptureReference { get; set; }
-        
+
         /// <summary>
         /// İşlem zamanı.
         /// </summary>
@@ -167,7 +167,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// </summary>
         public bool ExceededAuthorization { get; set; }
 
-        public static PaymentCaptureResult Succeeded(decimal capturedAmount, decimal releasedAmount, 
+        public static PaymentCaptureResult Succeeded(decimal capturedAmount, decimal releasedAmount,
             string? captureRef = null)
         {
             return new PaymentCaptureResult
@@ -212,12 +212,12 @@ namespace ECommerce.Business.Services.Interfaces
         public bool Success { get; set; }
         public string? Message { get; set; }
         public string? ErrorCode { get; set; }
-        
+
         /// <summary>
         /// İptal edilen tutar.
         /// </summary>
         public decimal VoidedAmount { get; set; }
-        
+
         /// <summary>
         /// Void referans ID'si.
         /// </summary>
@@ -253,23 +253,23 @@ namespace ECommerce.Business.Services.Interfaces
         public bool Success { get; set; }
         public string? Message { get; set; }
         public string? ErrorCode { get; set; }
-        
+
         /// <summary>
         /// İade edilen tutar.
         /// </summary>
         public decimal RefundedAmount { get; set; }
-        
+
         /// <summary>
         /// Kalan tutar (kısmi iade sonrası).
         /// </summary>
         public decimal RemainingAmount { get; set; }
-        
+
         /// <summary>
         /// Refund referans ID'si.
         /// </summary>
         public string? RefundReference { get; set; }
 
-        public static PaymentRefundResult Succeeded(decimal refundedAmount, decimal remainingAmount, 
+        public static PaymentRefundResult Succeeded(decimal refundedAmount, decimal remainingAmount,
             string? refundRef = null)
         {
             return new PaymentRefundResult
@@ -300,47 +300,47 @@ namespace ECommerce.Business.Services.Interfaces
     {
         public int OrderId { get; set; }
         public string OrderNumber { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// Ödeme yöntemi (credit_card, cash_on_delivery, etc.).
         /// </summary>
         public string PaymentMethod { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// Provizyon var mı?
         /// </summary>
         public bool HasAuthorization { get; set; }
-        
+
         /// <summary>
         /// Authorize edilen tutar.
         /// </summary>
         public decimal AuthorizedAmount { get; set; }
-        
+
         /// <summary>
         /// Capture edildi mi?
         /// </summary>
         public bool IsCaptured { get; set; }
-        
+
         /// <summary>
         /// Capture edilen tutar.
         /// </summary>
         public decimal CapturedAmount { get; set; }
-        
+
         /// <summary>
         /// Tolerans yüzdesi.
         /// </summary>
         public decimal TolerancePercentage { get; set; }
-        
+
         /// <summary>
         /// Provizyon geçerlilik süresi.
         /// </summary>
         public DateTime? AuthorizationExpiresAt { get; set; }
-        
+
         /// <summary>
         /// Provizyon süresi doldu mu?
         /// </summary>
         public bool IsAuthorizationExpired { get; set; }
-        
+
         /// <summary>
         /// Capture durumu.
         /// </summary>

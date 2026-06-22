@@ -31,10 +31,11 @@ export default function CourierDeliveryList() {
   // AUTH CHECK
   // =========================================================================
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (authLoading) return;
+    if (!isAuthenticated || !courier?.id) {
       navigate("/courier/login");
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, courier?.id, authLoading, navigate]);
 
   // =========================================================================
   // VERİ YÜKLEME

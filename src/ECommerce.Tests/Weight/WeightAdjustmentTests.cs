@@ -7,6 +7,7 @@
 
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+using ECommerce.Business.Helpers;
 using System;
 using Xunit;
 
@@ -17,6 +18,28 @@ namespace ECommerce.Tests.Weight
     /// </summary>
     public class WeightAdjustmentTests
     {
+        [Fact]
+        public void IsVariableWeightKgProduct_ShouldReturnTrue_ForStandaloneKgSuffix()
+        {
+            var result = WeightBasedProductRules.IsVariableWeightKgProduct(
+                "ATILLA ACIK KLASIK BEYAZ PEYNIR KG.",
+                WeightUnit.Kilogram,
+                "Süt Ürünleri");
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void IsVariableWeightKgProduct_ShouldReturnFalse_ForFixedKgAmount()
+        {
+            var result = WeightBasedProductRules.IsVariableWeightKgProduct(
+                "ATILLA ACIK KLASIK BEYAZ PEYNIR 1 KG",
+                WeightUnit.Kilogram,
+                "Süt Ürünleri");
+
+            Assert.False(result);
+        }
+
         #region Entity Property Tests
 
         /// <summary>
@@ -351,14 +374,14 @@ namespace ECommerce.Tests.Weight
         #region Pre-Auth Expiry Tests
 
         /// <summary>
-        /// 48 saat ön provizyon süresi - süre dolmamış
+        /// 7 gün ön provizyon süresi - süre dolmamış
         /// </summary>
         [Fact]
-        public void PreAuthExpiry_Within48Hours_IsNotExpired()
+        public void PreAuthExpiry_Within168Hours_IsNotExpired()
         {
             // Arrange
-            var preAuthTime = DateTime.UtcNow.AddHours(-47);
-            var expiryDuration = TimeSpan.FromHours(48);
+            var preAuthTime = DateTime.UtcNow.AddHours(-167);
+            var expiryDuration = TimeSpan.FromHours(168);
 
             // Act
             var isExpired = DateTime.UtcNow > preAuthTime.Add(expiryDuration);
@@ -368,14 +391,14 @@ namespace ECommerce.Tests.Weight
         }
 
         /// <summary>
-        /// 48 saat ön provizyon süresi - süre dolmuş
+        /// 7 gün ön provizyon süresi - süre dolmuş
         /// </summary>
         [Fact]
-        public void PreAuthExpiry_After48Hours_IsExpired()
+        public void PreAuthExpiry_After168Hours_IsExpired()
         {
             // Arrange
-            var preAuthTime = DateTime.UtcNow.AddHours(-49);
-            var expiryDuration = TimeSpan.FromHours(48);
+            var preAuthTime = DateTime.UtcNow.AddHours(-169);
+            var expiryDuration = TimeSpan.FromHours(168);
 
             // Act
             var isExpired = DateTime.UtcNow > preAuthTime.Add(expiryDuration);

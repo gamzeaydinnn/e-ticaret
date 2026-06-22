@@ -11,7 +11,7 @@ const normalizeCourier = (courier) => {
   const lastName = courier.lastName || fullName.split(" ").slice(1).join(" ");
 
   return {
-    id: courier.courierId || courier.id,
+    id: courier.courierId ?? courier.id,
     userId: courier.userId,
     name: fullName || `${firstName} ${lastName}`.trim(),
     email: courier.email,
@@ -24,6 +24,14 @@ const normalizeCourier = (courier) => {
     completedToday: courier.completedToday,
     isOnline: courier.status === "active" || courier.status === "online",
   };
+};
+
+const normalizeCourierList = (payload) => {
+  const list = Array.isArray(payload)
+    ? payload
+    : payload?.couriers || payload?.data?.couriers || payload?.data || [];
+
+  return list.map(normalizeCourier).filter(Boolean);
 };
 
 const parseCoordinates = (coordinates) => {
@@ -122,7 +130,10 @@ const mapFailureReasonToEnum = (reasonCode) => {
 
 export const CourierService = {
   // Admin - Tüm kuryeleri listele
-  getAll: () => api.get(COURIER_BASE),
+  getAll: async () => {
+    const res = await api.get(COURIER_BASE);
+    return normalizeCourierList(res);
+  },
 
   // ============================================================
   // KURYE AUTH İŞLEMLERİ
@@ -202,13 +213,13 @@ export const CourierService = {
   // Kurye siparişlerini listele
   getAssignedOrders: async () => {
     const res = await api.get(ORDERS_BASE);
-    const orders = (res?.orders || [])
+    const orders = (res?.orders || res?.data?.orders || res?.Orders || [])
       .map(normalizeOrderListItem)
       .filter(Boolean);
     return {
       orders,
-      summary: res?.summary,
-      totalCount: res?.totalCount,
+      summary: res?.summary || res?.data?.summary || res?.Summary,
+      totalCount: res?.totalCount ?? res?.data?.totalCount ?? res?.TotalCount,
     };
   },
 

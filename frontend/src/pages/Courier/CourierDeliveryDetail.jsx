@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import { useCourierSignalR } from "../../contexts/CourierSignalRContext";
+import { isStrictVariableWeightProduct } from "../../utils/weightBasedProduct";
 import { CourierService } from "../../services/courierService";
 import {
   WeightAdjustmentService,
@@ -45,10 +46,11 @@ export default function CourierDeliveryDetail() {
   // AUTH CHECK
   // =========================================================================
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (authLoading) return;
+    if (!isAuthenticated || !courier?.id) {
       navigate("/courier/login");
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, courier?.id, authLoading, navigate]);
 
   // =========================================================================
   // VERİ YÜKLEME
@@ -108,9 +110,13 @@ export default function CourierDeliveryDetail() {
           // Task'tan weight-based ürünleri filtrele
           const weightBasedItems = task.items.filter(
             (item) =>
-              item.isWeightBased ||
-              item.weightUnit === "Gram" ||
-              item.weightUnit === "Kilogram",
+              isStrictVariableWeightProduct({
+                ...item,
+                name: item.productName || item.name || item.product?.name,
+                categoryName: item.categoryName || item.product?.category?.name || "",
+                unit: item.unit || item.product?.unit || "",
+                weightUnit: item.weightUnit || item.product?.weightUnit || null,
+              }),
           );
           setWeightItems(weightBasedItems);
         }
@@ -206,8 +212,6 @@ export default function CourierDeliveryDetail() {
         alert("Teslimat başarıyla tamamlandı!");
         setTask((prev) => ({ ...prev, status: "Delivered" }));
         setTimeout(() => navigate("/courier/orders"), 500);
-      } else if (result.requiresAdminApproval) {
-        alert("Yüksek fark tespit edildi. Admin onayı bekleniyor.");
       } else {
         alert(result.message || "Teslimat tamamlanamadı");
       }
@@ -229,9 +233,13 @@ export default function CourierDeliveryDetail() {
     if (task?.items) {
       return task.items.some(
         (item) =>
-          item.isWeightBased ||
-          item.weightUnit === "Gram" ||
-          item.weightUnit === "Kilogram",
+          isStrictVariableWeightProduct({
+            ...item,
+            name: item.productName || item.name || item.product?.name,
+            categoryName: item.categoryName || item.product?.category?.name || "",
+            unit: item.unit || item.product?.unit || "",
+            weightUnit: item.weightUnit || item.product?.weightUnit || null,
+          }),
       );
     }
     return false;

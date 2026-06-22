@@ -5,6 +5,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Sync;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Business.Helpers;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.EntityFrameworkCore;
@@ -377,16 +378,25 @@ namespace ECommerce.Business.Services.Sync
                                 product.Slug = GenerateSlug(mikro.StokAd);
                             }
 
-                            // Birim → WeightUnit eşlemesi (ağırlık bazlı satış kontrolü)
+                            // Birim → WeightUnit eşlemesi
                             if (!string.IsNullOrWhiteSpace(mikro.Birim))
                             {
                                 var newUnit = MapBirimToWeightUnit(mikro.Birim);
                                 if (product.WeightUnit != newUnit)
                                 {
                                     product.WeightUnit = newUnit;
-                                    product.IsWeightBased = IsWeightBasedUnit(newUnit);
                                 }
                             }
+
+                            var categoryName = await context.Categories
+                                .Where(c => c.Id == product.CategoryId)
+                                .Select(c => c.Name)
+                                .FirstOrDefaultAsync(cancellationToken);
+
+                            product.IsWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+                                product.Name,
+                                product.WeightUnit,
+                                categoryName ?? mikro.AnagrupKod ?? mikro.GrupKod);
 
                             product.UpdatedAt = DateTime.UtcNow;
                         }
@@ -450,12 +460,6 @@ namespace ECommerce.Business.Services.Sync
 
         private static Entities.Enums.WeightUnit MapBirimToWeightUnit(string birim)
             => _birimMap.TryGetValue(birim.Trim(), out var unit) ? unit : Entities.Enums.WeightUnit.Piece;
-
-        private static bool IsWeightBasedUnit(Entities.Enums.WeightUnit unit)
-            => unit is Entities.Enums.WeightUnit.Kilogram
-                   or Entities.Enums.WeightUnit.Gram
-                   or Entities.Enums.WeightUnit.Liter
-                   or Entities.Enums.WeightUnit.Milliliter;
 
         /// <summary>
         /// URL-dostu slug oluşturur — Türkçe karakter desteği ile.

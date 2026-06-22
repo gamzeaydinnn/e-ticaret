@@ -5,84 +5,14 @@
  * miktar seçimi yapılmasını sağlayan profesyonel modal komponenti.
  *
  * Özellikler:
- * - Minimum 0.5 kg ile başlar
- * - 0.5 kg artış/azalış adımları
+ * - Minimum 0.25 kg ile başlar
+ * - 0.25 kg artış/azalış adımları
  * - Slider ve buton kontrolü
  * - Mobil uyumlu tasarım
  */
 import React, { useState, useCallback, useEffect } from "react";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 import "./WeightSelectionModal.css";
-
-// Kg bazlı satılabilecek kategori isimleri/anahtar kelimeleri
-const WEIGHT_BASED_CATEGORIES = [
-  "meyve",
-  "sebze",
-  "manav",
-  "et",
-  "tavuk",
-  "balık",
-  "balik",
-  "kuruyemiş",
-  "kuruyemis",
-  "şarküteri",
-  "sarkuteri",
-  "peynir",
-  "zeytin",
-];
-
-// Kg bazlı satılabilecek ürün isimleri/anahtar kelimeleri
-const WEIGHT_BASED_KEYWORDS = [
-  "domates",
-  "patates",
-  "soğan",
-  "sogan",
-  "biber",
-  "patlıcan",
-  "patlican",
-  "salatalık",
-  "salatalik",
-  "kabak",
-  "havuç",
-  "havuc",
-  "elma",
-  "armut",
-  "portakal",
-  "mandalina",
-  "muz",
-  "üzüm",
-  "uzum",
-  "kiraz",
-  "çilek",
-  "cilek",
-  "karpuz",
-  "kavun",
-  "şeftali",
-  "seftali",
-  "erik",
-  "kayısı",
-  "kayisi",
-  "limon",
-  "kıyma",
-  "kiyma",
-  "kuşbaşı",
-  "kusbasi",
-  "pirzola",
-  "bonfile",
-  "biftek",
-  "somon",
-  "levrek",
-  "çupra",
-  "cupra",
-  "hamsi",
-  "karides",
-  "badem",
-  "fındık",
-  "findik",
-  "ceviz",
-  "fıstık",
-  "fistik",
-  "kaju",
-];
 
 /**
  * Ürünün kg bazlı satılıp satılmayacağını kontrol et
@@ -90,47 +20,7 @@ const WEIGHT_BASED_KEYWORDS = [
  * @returns {boolean} - Kg bazlı mı?
  */
 export const isWeightBasedProduct = (product) => {
-  if (!product) return false;
-
-  const productName = (product.name || product.Name || "").toUpperCase();
-
-  // NEDEN: İsim kontrolü HER şeyden önce gelir — backend isWeightBased=true demiş olsa bile
-  // "3 KG", "1 LT", "50 GR" gibi sabit paket ürünler weight modal açmamalı.
-  // "DOMATES KG" (sayısız) → regex eşleşmez → devam eder. ✓
-  if (/\d+\s*(GR|KG|LT|ML|CL|L)\b/.test(productName)) return false;
-  if (/\bADET\b/.test(productName)) return false;
-
-  // Backend'den gelen isWeightBased veya weightUnit kontrolü
-  if (product.isWeightBased === true) return true;
-  if (product.soldByWeight === true) return true;
-  if (product.weightUnit === "Kilogram" || product.weightUnit === 2) {
-    return true;
-  }
-
-  // NEDEN: Mikro ERP'den gelen birim bilgisi — "KG" ise kg bazlı, değilse değil.
-  // unit alanı varsa kesin karar ver, keyword fallback'e düşme.
-  // "ANANAS ADET" (unit=ADET) → false, "DOMATES KG" (unit=KG) → true
-  const unit = (product.unit || "").toUpperCase().trim();
-  if (unit) return unit === "KG";
-
-  // unit alanı yoksa (eski ürünler / local DB) → kategori/keyword fallback
-  const categoryName = (
-    product.categoryName ||
-    product.category?.name ||
-    ""
-  ).toLowerCase();
-  if (WEIGHT_BASED_CATEGORIES.some((cat) => categoryName.includes(cat))) {
-    return true;
-  }
-
-  const productNameLower = productName.toLowerCase();
-  if (
-    WEIGHT_BASED_KEYWORDS.some((keyword) => productNameLower.includes(keyword))
-  ) {
-    return true;
-  }
-
-  return false;
+  return isStrictVariableWeightProduct(product);
 };
 
 /**
@@ -141,14 +31,15 @@ export default function WeightSelectionModal({
   onClose,
   product,
   onConfirm,
-  minWeight = 0.5,
+  minWeight = 0.25,
   maxWeight = 10,
-  step = 0.5,
+  step = 0.25,
 }) {
   // State: Seçilen ağırlık
   const [selectedWeight, setSelectedWeight] = useState(minWeight);
   // Animasyon için state
   const [isClosing, setIsClosing] = useState(false);
+  const formatWeight = (value) => Number(value).toFixed(2);
 
   // Modal açıldığında varsayılan değeri ayarla
   useEffect(() => {
@@ -287,7 +178,7 @@ export default function WeightSelectionModal({
             </button>
 
             <div className="weight-display">
-              <span className="weight-value">{selectedWeight.toFixed(1)}</span>
+              <span className="weight-value">{formatWeight(selectedWeight)}</span>
               <span className="weight-unit">kg</span>
             </div>
 
@@ -312,21 +203,21 @@ export default function WeightSelectionModal({
               className="weight-slider"
             />
             <div className="slider-labels">
-              <span>{minWeight} kg</span>
-              <span>{maxWeight} kg</span>
+              <span>{formatWeight(minWeight)} kg</span>
+              <span>{formatWeight(maxWeight)} kg</span>
             </div>
           </div>
 
           {/* Hızlı Seçim Butonları */}
           <div className="quick-select-buttons">
-            {[0.5, 1, 1.5, 2, 3, 5].map((weight) => (
+            {[0.25, 0.5, 0.75, 1, 1.5, 2].map((weight) => (
               <button
                 key={weight}
                 className={`quick-btn ${selectedWeight === weight ? "active" : ""}`}
                 onClick={() => setSelectedWeight(weight)}
                 disabled={weight > maxWeight}
               >
-                {weight} kg
+                {formatWeight(weight)} kg
               </button>
             ))}
           </div>
@@ -337,7 +228,7 @@ export default function WeightSelectionModal({
           <div className="summary-row">
             <span>Seçilen Miktar:</span>
             <span className="summary-value">
-              {selectedWeight.toFixed(1)} kg
+              {formatWeight(selectedWeight)} kg
             </span>
           </div>
           {originalTotal && (

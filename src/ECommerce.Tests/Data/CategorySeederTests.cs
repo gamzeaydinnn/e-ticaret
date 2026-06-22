@@ -129,5 +129,142 @@ namespace ECommerce.Tests.Data
 
             Assert.Equal(frozenCategory.Id, product.CategoryId);
         }
+
+        [Fact]
+        public async Task SeedAsync_ShouldMoveAlgidaProducts_FromMilkCategory_ToFrozenCategory()
+        {
+            await using var context = CreateContext();
+
+            var sutKategori = new Category
+            {
+                Id = 61,
+                Name = "Süt Ürünleri",
+                Slug = "sut-ve-sut-urunleri",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(sutKategori);
+            context.Products.Add(new Product
+            {
+                Id = 62,
+                Name = "Algida Cornetto Classico 110 ML",
+                SKU = "ALG-001",
+                CategoryId = sutKategori.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            context.MikroProductCaches.Add(new MikroProductCache
+            {
+                LocalProductId = 62,
+                StokKod = "ALG-001",
+                StokAd = "ALGIDA CORNETTO CLASSICO 110 ML",
+                AnagrupKod = "800",
+                Aktif = true,
+                GuncellemeTarihi = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            await CategorySeeder.SeedAsync(context);
+
+            var frozenCategory = await context.Categories.SingleAsync(category => category.Slug == "dondurma-ve-dondurulmus-gida");
+            var product = await context.Products.SingleAsync(item => item.Id == 62);
+            var legacyMapping = await context.MikroCategoryMappings.SingleAsync(mapping => mapping.MikroAnagrupKod == "800");
+
+            Assert.Equal(frozenCategory.Id, product.CategoryId);
+            Assert.Equal(frozenCategory.Id, legacyMapping.CategoryId);
+        }
+
+        [Fact]
+        public async Task SeedAsync_ShouldMoveSucukProducts_FromMilkCategory_ToMeatCategory()
+        {
+            await using var context = CreateContext();
+
+            var sutKategori = new Category
+            {
+                Id = 71,
+                Name = "Süt Ürünleri",
+                Slug = "sut-ve-sut-urunleri",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(sutKategori);
+            context.Products.Add(new Product
+            {
+                Id = 72,
+                Name = "Dana Sucuk 250 GR",
+                SKU = "ET-001",
+                CategoryId = sutKategori.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            context.MikroProductCaches.Add(new MikroProductCache
+            {
+                LocalProductId = 72,
+                StokKod = "ET-001",
+                StokAd = "DANA SUCUK 250 GR",
+                AnagrupKod = "SUT URUNLERI",
+                Aktif = true,
+                GuncellemeTarihi = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            await CategorySeeder.SeedAsync(context);
+
+            var etKategori = await context.Categories.SingleAsync(category => category.Slug == "et-ve-et-urunleri");
+            var product = await context.Products.SingleAsync(item => item.Id == 72);
+
+            Assert.Equal(etKategori.Id, product.CategoryId);
+        }
+
+        [Fact]
+        public async Task SeedAsync_ShouldMoveMilkNamedProducts_FromBeverageCategory_ToMilkCategory()
+        {
+            await using var context = CreateContext();
+
+            var icecekKategori = new Category
+            {
+                Id = 81,
+                Name = "İçecekler",
+                Slug = "icecekler",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(icecekKategori);
+            context.Products.Add(new Product
+            {
+                Id = 82,
+                Name = "Hindistan Cevizi Sütü 1 LT",
+                SKU = "SUT-002",
+                CategoryId = icecekKategori.Id,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            context.MikroProductCaches.Add(new MikroProductCache
+            {
+                LocalProductId = 82,
+                StokKod = "SUT-002",
+                StokAd = "HINDISTAN CEVIZI SUTU 1 LT",
+                AnagrupKod = "ICECEKLER",
+                Aktif = true,
+                GuncellemeTarihi = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            await CategorySeeder.SeedAsync(context);
+
+            var sutKategori = await context.Categories.SingleAsync(category => category.Slug == "sut-ve-sut-urunleri");
+            var product = await context.Products.SingleAsync(item => item.Id == 82);
+
+            Assert.Equal(sutKategori.Id, product.CategoryId);
+        }
     }
 }

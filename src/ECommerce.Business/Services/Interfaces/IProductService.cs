@@ -21,7 +21,7 @@ namespace ECommerce.Business.Services.Interfaces
 
         Task<ProductListDto?> GetByIdAsync(int id);
         Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto);
-        Task<ProductListDto> UpdateProductAsync(int id, ProductUpdateDto productDto);
+        Task<ProductListDto?> UpdateProductAsync(int id, ProductUpdateDto productDto);
         /// <summary>
         /// SKU bazlı ürün güncelleme — Mikro ERP ürünlerinde id olmadığında kullanılır.
         /// Yerel DB'de SKU varsa günceller, yoksa yeni ürün oluşturur (upsert).

@@ -17,6 +17,10 @@ import {
 } from "react";
 import { CartService } from "../services/cartService";
 import { useAuth } from "./AuthContext";
+import {
+  isStrictVariableWeightProduct,
+  toWeightBasedProductCandidate,
+} from "../utils/weightBasedProduct";
 
 const CartContext = createContext();
 
@@ -165,14 +169,60 @@ export const CartProvider = ({ children }) => {
         );
         return { success: false, error: "Bu ürün şu an sepete eklenemiyor." };
       }
+
+      const normalizedQuantity = Math.max(
+        0.25,
+        Math.round(Number(quantity || 1) * 100) / 100,
+      );
       const variantId = variantInfo?.variantId || null;
+      const isWeightBasedProduct = isStrictVariableWeightProduct(
+        toWeightBasedProductCandidate(null, product),
+      );
+
       try {
+        if (isWeightBasedProduct) {
+          const existingItem = cartItems.find((item) => {
+            if ((item.productId || item.id) !== productId) {
+              return false;
+            }
+
+            if (variantId) {
+              return item.variantId === variantId;
+            }
+
+            return !item.variantId;
+          });
+
+          if (existingItem) {
+            if (isAuthenticated) {
+              if (existingItem.id) {
+                await CartService.updateItem(
+                  existingItem.id,
+                  productId,
+                  normalizedQuantity,
+                  variantId,
+                );
+              }
+            } else {
+              await CartService.updateGuestCartItem(
+                productId,
+                normalizedQuantity,
+                variantId,
+              );
+            }
+
+            await loadCart();
+            window.dispatchEvent(new Event("cart:updated"));
+            return { success: true };
+          }
+        }
+
         if (isAuthenticated) {
-          await CartService.addItem(productId, quantity, variantId);
+          await CartService.addItem(productId, normalizedQuantity, variantId);
         } else {
           const result = await CartService.addToGuestCart(
             productId,
-            quantity,
+            normalizedQuantity,
             variantId,
           );
           if (!result.success) {
@@ -195,7 +245,7 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: errorMsg };
       }
     },
-    [isAuthenticated, loadCart],
+    [cartItems, isAuthenticated, loadCart],
   );
 
   // ============================================================
@@ -438,11 +488,6 @@ export const CartProvider = ({ children }) => {
 function mapBackendItem(item) {
   const product = item.product || {};
   const variantId = item.productVariantId || item.variantId || null;
-  const hasWeightUnit =
-    product.weightUnit === "Kilogram" ||
-    product.weightUnit === "Gram" ||
-    product.weightUnit === 2 ||
-    product.weightUnit === 1;
 
   return {
     id: item.id,
@@ -453,11 +498,9 @@ function mapBackendItem(item) {
     unitPrice:
       item.unitPrice || item.product?.specialPrice || item.product?.price || 0,
     // Kg bazlı ürünler için UI'nin tek kaynaktan karar verebilmesi için normalize edilir.
-    isWeightBased:
-      item.isWeightBased === true ||
-      product.isWeightBased === true ||
-      product.soldByWeight === true ||
-      hasWeightUnit,
+    isWeightBased: isStrictVariableWeightProduct(
+      toWeightBasedProductCandidate(item, product),
+    ),
     weightUnit: item.weightUnit || product.weightUnit || null,
     // Ürün bilgileri (backend'den gelirse)
     productName: item.productName || item.product?.name,
@@ -474,6 +517,7 @@ function mapBackendItem(item) {
       specialPrice: item.unitPrice,
       isActive: item.isActive ?? true,
       isWeightBased: item.isWeightBased === true,
+      categoryName: item.categoryName,
       weightUnit: item.weightUnit || null,
     },
   };

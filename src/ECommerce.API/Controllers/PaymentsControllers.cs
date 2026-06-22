@@ -473,6 +473,23 @@ namespace ECommerce.API.Controllers
 
                 // ExpireDate formatı: YYMM
                 var expireDate = $"{request.ExpireYear}{request.ExpireMonth}";
+                var order = await _db.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.Id == request.OrderId);
+
+                if (order == null)
+                {
+                    return NotFound(new { message = "Sipariş bulunamadı" });
+                }
+
+                var hasWeightBasedItems = order.HasWeightBasedItems ||
+                    (order.OrderItems?.Any(oi => oi.IsWeightBased) == true);
+                var bankAmount = hasWeightBasedItems
+                    ? (order.PreAuthAmount > 0
+                        ? order.PreAuthAmount
+                        : Math.Round(request.Amount * 1.15m, 2, MidpointRounding.AwayFromZero))
+                    : request.Amount;
+                var txnType = hasWeightBasedItems ? "Auth" : "Sale";
 
                 // 3D Secure başlat
                 var result = await _posnetService.Initiate3DSecureAsync(
@@ -480,6 +497,8 @@ namespace ECommerce.API.Controllers
                     cardNumber: request.CardNumber,
                     expireDate: expireDate,
                     cvv: request.Cvv,
+                    amount: bankAmount,
+                    txnType: txnType,
                     installment: request.InstallmentCount);
 
                 if (!result.IsSuccess)
@@ -505,10 +524,10 @@ namespace ECommerce.API.Controllers
                     MerchantId = settings.PosnetMerchantId,
                     PosnetId = settings.PosnetId,
                     Xid = oosData?.OrderId ?? request.OrderId.ToString(),
-                    Amount = ((int)(request.Amount * 100)).ToString(), // YKr formatı
+                    Amount = ((int)(bankAmount * 100)).ToString(), // YKr formatı
                     Currency = "TL", // 3D Secure dokümanı: TL/US/EU
                     InstallmentCount = request.InstallmentCount > 1 ? request.InstallmentCount.ToString("D2") : "00",
-                    TranType = "Sale",
+                    TranType = txnType,
                     ReturnUrl = settings.PosnetCallbackUrl ?? $"{Request.Scheme}://{Request.Host}/api/payments/posnet/3dsecure/callback",
                     OpenNewWindow = "0",
                     // OOS response'dan gelen kritik veriler - Banka formu için gerekli

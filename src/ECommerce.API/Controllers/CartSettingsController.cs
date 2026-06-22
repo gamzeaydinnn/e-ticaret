@@ -131,7 +131,8 @@ namespace ECommerce.API.Controllers
                 {
                     MinimumCartAmount = request.MinimumCartAmount,
                     IsMinimumCartAmountActive = request.IsMinimumCartAmountActive,
-                    MinimumCartAmountMessage = request.MinimumCartAmountMessage
+                    MinimumCartAmountMessage = request.MinimumCartAmountMessage,
+                    GuestFirstOrderShippingMessage = request.GuestFirstOrderShippingMessage
                 };
 
                 var result = await _cartSettingsService.UpdateSettingsAsync(updateDto, userId.Value, userName);
@@ -145,8 +146,19 @@ namespace ECommerce.API.Controllers
                     "[ADMIN] Sepet ayarları güncellendi. MinAmount: {Amount}, Active: {Active}, Admin: {UserName}",
                     request.MinimumCartAmount, request.IsMinimumCartAmountActive, userName);
 
-                // Güncellenmiş ayarları döndür
-                var updatedSettings = await _cartSettingsService.GetSettingsForAdminAsync();
+                CartSettingsDto? updatedSettings = null;
+                try
+                {
+                    // NEDEN: Kayıt başarılı olduktan sonra response için yapılan ek okuma,
+                    // legacy şema / cache / kolon senaryolarında ayrı patlayabiliyor.
+                    // Bu durumda update'i 500'e çevirmek yerine başarı yanıtı dönelim.
+                    updatedSettings = await _cartSettingsService.GetSettingsForAdminAsync();
+                }
+                catch (Exception readEx)
+                {
+                    _logger.LogWarning(readEx, "[ADMIN] Sepet ayarları güncellendi ancak güncel kayıt response için tekrar okunamadı.");
+                }
+
                 return Ok(new
                 {
                     message = "Sepet ayarları başarıyla güncellendi",
@@ -218,5 +230,10 @@ namespace ECommerce.API.Controllers
         /// Müşteriye gösterilecek uyarı mesajı - null ise değişmez
         /// </summary>
         public string? MinimumCartAmountMessage { get; set; }
+
+        /// <summary>
+        /// Misafir kullanıcı promosyon mesajı - null ise değişmez, boş string ise gizlenir
+        /// </summary>
+        public string? GuestFirstOrderShippingMessage { get; set; }
     }
 }

@@ -15,6 +15,7 @@ using ECommerce.Core.DTOs.Pricing;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Entities.Enums;
+using ECommerce.Business.Helpers;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -39,7 +40,7 @@ namespace ECommerce.Business.Services.Managers
                 // ═══════════════════════════════════════════════════════════════════════════════
                 // YENİ SİPARİŞ AKIŞI (Ana akış)
                 // ═══════════════════════════════════════════════════════════════════════════════
-                
+
                 // New → Confirmed (Admin onayı) veya Assigned (kurye atama) veya Cancelled
                 [OrderStatus.New] = new HashSet<OrderStatus>
                 {
@@ -63,7 +64,7 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
-                
+
                 // Ready → Assigned (Dispatcher kurye atadı) veya Cancelled
                 // ⚠️ DÜZELTME: OutForDelivery kısa yolu KALDIRILDI - akış kilitlendi
                 [OrderStatus.Ready] = new HashSet<OrderStatus>
@@ -72,7 +73,7 @@ namespace ECommerce.Business.Services.Managers
                     // OrderStatus.OutForDelivery, // KALDIRILDI: Assigned olmadan geçiş yapılamaz
                     OrderStatus.Cancelled
                 },
-                
+
                 // Assigned → PickedUp (Kurye teslim aldı), OutForDelivery veya Cancelled
                 [OrderStatus.Assigned] = new HashSet<OrderStatus>
                 {
@@ -81,7 +82,7 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Ready, // Kurye değişikliği için geri alınabilir
                     OrderStatus.Cancelled
                 },
-                
+
                 // PickedUp → OutForDelivery (Kurye yola çıktı)
                 [OrderStatus.PickedUp] = new HashSet<OrderStatus>
                 {
@@ -89,14 +90,14 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Delivered,
                     OrderStatus.DeliveryFailed
                 },
-                
+
                 // OutForDelivery → Delivered veya DeliveryFailed
                 [OrderStatus.OutForDelivery] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Delivered,
                     OrderStatus.DeliveryFailed
                 },
-                
+
                 // DeliveryFailed → Assigned (yeniden kurye atama) veya Cancelled
                 [OrderStatus.DeliveryFailed] = new HashSet<OrderStatus>
                 {
@@ -104,11 +105,11 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Ready,
                     OrderStatus.Cancelled
                 },
-                
+
                 // ═══════════════════════════════════════════════════════════════════════════════
                 // ESKİ/ALTERNATİF AKIŞLAR (Geriye uyumluluk için - KISITLANMIŞ)
                 // ═══════════════════════════════════════════════════════════════════════════════
-                
+
                 // Pending → Confirmed (Admin onayı gerekli) veya Assigned veya Cancelled
                 [OrderStatus.Pending] = new HashSet<OrderStatus>
                 {
@@ -127,18 +128,18 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Assigned,
                     OrderStatus.Cancelled
                 },
-                
+
                 // Shipped → OutForDelivery veya Delivered (eski kargo akışı için)
                 [OrderStatus.Shipped] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Delivered,
                     OrderStatus.OutForDelivery
                 },
-                
+
                 // ═══════════════════════════════════════════════════════════════════════════════
                 // TERMİNAL DURUMLAR
                 // ═══════════════════════════════════════════════════════════════════════════════
-                
+
                 [OrderStatus.Delivered] = new HashSet<OrderStatus>
                 {
                     OrderStatus.Refunded
@@ -153,7 +154,7 @@ namespace ECommerce.Business.Services.Managers
                 },
                 [OrderStatus.Refunded] = new HashSet<OrderStatus>(),
                 [OrderStatus.PaymentFailed] = new HashSet<OrderStatus>(),
-                
+
                 // Eski Processing durumu
                 [OrderStatus.Processing] = new HashSet<OrderStatus>
                 {
@@ -185,12 +186,25 @@ namespace ECommerce.Business.Services.Managers
             _shippingService = shippingService;
         }
 
+        private static string NormalizeCheckoutPaymentMethod(string? paymentMethod)
+        {
+            var normalized = paymentMethod?.Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "credit_card" or "creditcard" or "card" or "posnet" => "posnet",
+                "cash" or "cash_card" or "cash_on_delivery" or "kapida_odeme" or "kapıda ödeme" => "cash_on_delivery",
+                "bank_transfer" or "havale" or "eft" => "bank_transfer",
+                _ => "cash_on_delivery"
+            };
+        }
+
         // Siparişin tam detayını getir (fatura için)
         public async Task<OrderDetailDto?> GetDetailByIdAsync(int id)
         {
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .FirstOrDefaultAsync(o => o.Id == id);
             if (order == null) return null;
             return new OrderDetailDto
@@ -212,10 +226,18 @@ namespace ECommerce.Business.Services.Managers
                 IsPaid = order.PaymentStatus == PaymentStatus.Paid,
                 OrderDate = order.OrderDate,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
+                    Id = oi.Id,
                     ProductId = oi.ProductId,
                     ProductName = oi.Product?.Name ?? "",
                     Quantity = oi.Quantity,
-                    UnitPrice = oi.UnitPrice
+                    UnitPrice = oi.UnitPrice,
+                    IsWeightBased = IsEffectivelyWeightBased(oi),
+                    WeightUnit = oi.WeightUnit.ToString(),
+                    EstimatedWeight = oi.EstimatedWeight,
+                    ActualWeight = oi.ActualWeight,
+                    EstimatedPrice = oi.EstimatedPrice,
+                    ActualPrice = oi.ActualPrice,
+                    PriceDifference = oi.PriceDifference
                 }).ToList() ?? new List<OrderItemDto>()
             };
         }
@@ -246,6 +268,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.Id == id);
@@ -257,6 +280,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.ClientOrderId == clientOrderId);
@@ -283,6 +307,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
                 .FirstOrDefaultAsync(o => o.OrderNumber == orderNumber.Trim());
@@ -314,6 +339,7 @@ namespace ECommerce.Business.Services.Managers
                 .AsNoTracking()
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
                 .Where(o => o.IsGuestOrder && o.CustomerPhone != null)
@@ -394,9 +420,15 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task UpdateAsync(int id, OrderUpdateDto dto)
         {
-            var order = await _context.Orders.FindAsync(id);
-            if (order == null) return;
-            if (Enum.TryParse<OrderStatus>(dto.Status, out var statusEnum))
+            var order = await _context.Orders
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+            if (order == null || dto == null) return;
+
+            if (!string.IsNullOrWhiteSpace(dto.Status) &&
+                Enum.TryParse<OrderStatus>(dto.Status, out var statusEnum))
             {
                 var previous = order.Status;
                 if (previous != statusEnum)
@@ -406,7 +438,65 @@ namespace ECommerce.Business.Services.Managers
                     AddStatusHistory(order, previous, statusEnum);
                 }
             }
-            order.TotalPrice = dto.TotalPrice;
+
+            if (dto.CustomerName != null) order.CustomerName = dto.CustomerName.Trim();
+            if (dto.CustomerPhone != null) order.CustomerPhone = dto.CustomerPhone.Trim();
+            if (dto.CustomerEmail != null) order.CustomerEmail = dto.CustomerEmail.Trim();
+            if (dto.ShippingAddress != null) order.ShippingAddress = dto.ShippingAddress.Trim();
+            if (dto.DeliveryNotes != null) order.DeliveryNotes = dto.DeliveryNotes.Trim();
+            if (dto.TrackingNumber != null) order.TrackingNumber = dto.TrackingNumber.Trim();
+
+            if (dto.OrderItems.Count > 0)
+            {
+                var updateMap = dto.OrderItems
+                    .Where(x => x.OrderItemId > 0)
+                    .GroupBy(x => x.OrderItemId)
+                    .ToDictionary(g => g.Key, g => g.Last().Quantity);
+
+                foreach (var item in order.OrderItems.ToList())
+                {
+                    if (!updateMap.TryGetValue(item.Id, out var quantity))
+                    {
+                        continue;
+                    }
+
+                    if (item.IsWeightBased)
+                    {
+                        continue;
+                    }
+
+                    if (quantity <= 0)
+                    {
+                        _context.OrderItems.Remove(item);
+                        continue;
+                    }
+
+                    item.Quantity = quantity;
+                }
+
+                var activeItems = order.OrderItems
+                    .Where(oi => _context.Entry(oi).State != EntityState.Deleted)
+                    .ToList();
+
+                if (activeItems.Count == 0)
+                {
+                    throw new InvalidOperationException("Siparişte en az bir ürün kalmalıdır.");
+                }
+
+                var itemSubtotal = activeItems.Sum(CalculateOrderItemLineTotal);
+                var finalPrice = Math.Max(0m, itemSubtotal - order.DiscountAmount + order.ShippingCost);
+
+                order.TotalPrice = itemSubtotal + order.ShippingCost;
+                order.FinalPrice = finalPrice;
+                order.VatAmount = Math.Max(
+                    0m,
+                    Math.Round(finalPrice - (finalPrice / (1 + VatRate)), 2, MidpointRounding.AwayFromZero));
+            }
+            else if (dto.TotalPrice.HasValue)
+            {
+                order.TotalPrice = dto.TotalPrice.Value;
+            }
+
             await _context.SaveChangesAsync();
         }
 
@@ -602,7 +692,7 @@ namespace ECommerce.Business.Services.Managers
 
             // ExecutionStrategy kullanarak transaction yönetimi
             var strategy = _context.Database.CreateExecutionStrategy();
-            
+
             var createdOrderId = await strategy.ExecuteAsync(async () =>
             {
                 using var transaction = await _context.Database.BeginTransactionAsync();
@@ -610,21 +700,43 @@ namespace ECommerce.Business.Services.Managers
                 {
                     var effectiveUserId = dto.UserId is > 0 ? dto.UserId : null;
                     decimal itemsTotal = 0m;
+                    var hasWeightBasedItems = false;
                     var items = new List<OrderItem>();
                     foreach (var item in dto.OrderItems)
                     {
-                        var product = await _context.Products.FindAsync(item.ProductId);
+                        var product = await _context.Products
+                            .Include(p => p.Category)
+                            .FirstOrDefaultAsync(p => p.Id == item.ProductId);
                         if (product == null)
                             throw new Exception($"Ürün bulunamadı: {item.ProductId}");
                         var unitPrice = product.SpecialPrice ?? product.Price;
+                        var isWeightBasedProduct = WeightBasedProductRules.IsVariableWeightKgProduct(
+                            product.Name,
+                            product.WeightUnit,
+                            product.Category?.Name);
+                        var expectedWeightGrams = product.UnitWeightGrams * item.Quantity;
+                        var estimatedWeight = isWeightBasedProduct
+                            ? (expectedWeightGrams > 0 ? expectedWeightGrams : item.Quantity * 1000m)
+                            : 0m;
+                        var pricePerUnit = product.PricePerUnit > 0 ? product.PricePerUnit : unitPrice;
+
                         itemsTotal += unitPrice * item.Quantity;
                         items.Add(new OrderItem
                         {
                             ProductId = product.Id,
                             Quantity = item.Quantity,
                             UnitPrice = unitPrice,
-                            ExpectedWeightGrams = product.UnitWeightGrams * item.Quantity
+                            ExpectedWeightGrams = expectedWeightGrams,
+                            IsWeightBased = isWeightBasedProduct,
+                            WeightUnit = product.WeightUnit,
+                            EstimatedWeight = estimatedWeight,
+                            PricePerUnit = pricePerUnit,
+                            EstimatedPrice = isWeightBasedProduct
+                                ? CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit)
+                                : unitPrice * item.Quantity
                         });
+
+                        hasWeightBasedItems |= isWeightBasedProduct;
                     }
                 // Compute shipping server-side (whitelist + fixed costs)
                 var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
@@ -665,9 +777,11 @@ namespace ECommerce.Business.Services.Managers
                 var grandTotalBeforeVat = pricingResult.Subtotal - discountTotal + shippingCost;
                 pricingResult.GrandTotal = grandTotalBeforeVat < 0m ? 0m : grandTotalBeforeVat;
 
-                var vatAmount = Math.Round(pricingResult.Subtotal * VatRate, 2, MidpointRounding.AwayFromZero);
-                var totalPrice = pricingResult.Subtotal + shippingCost + vatAmount;
-                var finalPrice = pricingResult.GrandTotal + vatAmount;
+                // Frontend ve ürün liste fiyatları KDV dahil gösteriliyor.
+                // Checkout'ta aynı KDV'yi ikinci kez eklemek 3D ödeme ekranında tutar şişmesine yol açıyordu.
+                var totalPrice = pricingResult.Subtotal + shippingCost;
+                var finalPrice = pricingResult.GrandTotal;
+                var vatAmount = Math.Max(0m, Math.Round(finalPrice - (finalPrice / (1 + VatRate)), 2, MidpointRounding.AwayFromZero));
 
                 var order = new Order
                 {
@@ -690,9 +804,19 @@ namespace ECommerce.Business.Services.Managers
                     CustomerPhone = dto.CustomerPhone,
                     CustomerEmail = dto.CustomerEmail,
                     DeliveryNotes = dto.DeliveryNotes,
+                    PaymentMethod = NormalizeCheckoutPaymentMethod(dto.PaymentMethod),
                     OrderItems = items,
                     ShippingMethod = shippingMethod,
-                    ShippingCost = shippingCost
+                    ShippingCost = shippingCost,
+                    HasWeightBasedItems = hasWeightBasedItems,
+                    WeightAdjustmentStatus = hasWeightBasedItems
+                        ? WeightAdjustmentStatus.PendingWeighing
+                        : WeightAdjustmentStatus.NotApplicable,
+                    AllItemsWeighed = !hasWeightBasedItems,
+                    PreAuthAmount = hasWeightBasedItems
+                        ? Math.Round(finalPrice * 1.20m, 2, MidpointRounding.AwayFromZero)
+                        : 0m,
+                    TolerancePercentage = hasWeightBasedItems ? 0.20m : 0.10m
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();
@@ -797,7 +921,7 @@ namespace ECommerce.Business.Services.Managers
         /// Müşteri sipariş iptali - MARKET KURALLARI:
         /// 1. Sadece kendi siparişini iptal edebilir
         /// 2. Sadece aynı gün içinde iptal edilebilir
-        /// 3. Sadece hazırlanmadan önce (New, Pending, Confirmed) iptal edilebilir
+        /// 3. Sadece hazırlanıyor aşaması ve öncesinde (New, Pending, Confirmed, Paid, Preparing) iptal edilebilir
         /// Aksi halde müşteri hizmetleriyle iletişime geçilmeli
         /// </summary>
         public async Task<(bool Success, string? ErrorMessage)> CancelOrderAsync(int orderId, int userId)
@@ -805,11 +929,11 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
-            
+
             // Sipariş bulunamadı veya başka kullanıcıya ait
             if (order == null || order.UserId != userId)
                 return (false, "Sipariş bulunamadı veya bu siparişi iptal etme yetkiniz yok.");
-            
+
             // MARKET KURALI: Sadece aynı gün içinde iptal edilebilir
             // Gün kontrolü - sipariş tarihi ile bugünün tarihi karşılaştırılır
             var orderDate = order.CreatedAt.Date;
@@ -818,9 +942,16 @@ namespace ECommerce.Business.Services.Managers
             {
                 return (false, "Sipariş sadece aynı gün içinde iptal edilebilir. İptal için müşteri hizmetleriyle iletişime geçiniz.");
             }
-            
-            // Durum kontrolü - sadece hazırlanmadan önceki durumlar iptal edilebilir
-            var cancellableStatuses = new[] { OrderStatus.New, OrderStatus.Pending, OrderStatus.Confirmed };
+
+            // Durum kontrolü - sadece hazırlanıyor aşaması ve öncesi iptal edilebilir
+            var cancellableStatuses = new[]
+            {
+                OrderStatus.New,
+                OrderStatus.Pending,
+                OrderStatus.Confirmed,
+                OrderStatus.Paid,
+                OrderStatus.Preparing
+            };
             if (!cancellableStatuses.Contains(order.Status))
             {
                 var statusMessage = order.Status switch
@@ -835,11 +966,11 @@ namespace ECommerce.Business.Services.Managers
                 };
                 return (false, $"{statusMessage}. Bu aşamada iptal için müşteri hizmetleriyle iletişime geçiniz.");
             }
-            
+
             // İptal işlemini gerçekleştir
             var result = await CancelOrderInternalAsync(order);
-            return result 
-                ? (true, null) 
+            return result
+                ? (true, null)
                 : (false, "Sipariş iptal edilemedi. Lütfen müşteri hizmetleriyle iletişime geçiniz.");
         }
 
@@ -1114,6 +1245,7 @@ namespace ECommerce.Business.Services.Managers
                 // Admin panelindeki "Ödendi/Ödeme Bekliyor" filtreleri bu alanlara bağlı
                 PaymentStatus = order.PaymentStatus.ToString(),
                 IsPaid = order.PaymentStatus == ECommerce.Entities.Enums.PaymentStatus.Paid,
+                PaymentMethod = order.PaymentMethod ?? string.Empty,
                 OrderDate = order.OrderDate,
                 TotalItems = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
                 ShippingMethod = order.ShippingMethod,
@@ -1124,11 +1256,32 @@ namespace ECommerce.Business.Services.Managers
                 // Misafir sipariş sorgulaması için CustomerEmail maplendi
                 CustomerEmail = order.CustomerEmail,
                 DeliveryNotes = order.DeliveryNotes ?? string.Empty,
+                PreAuthAmount = order.PreAuthAmount,
+                FinalAmount = order.FinalAmount,
+                CapturedAmount = order.CapturedAmount,
+                TotalPriceDifference = order.TotalPriceDifference,
+                AssignedAt = order.AssignedAt,
                 OrderItems = order.OrderItems?.Select(oi => new OrderItemDto {
+                    Id = oi.Id,
                     ProductId = oi.ProductId,
                     ProductName = oi.Product?.Name ?? "",
+                    ProductImageUrl = oi.Product?.ImageUrl,
+                    CategoryName = oi.Product?.Category?.Name,
+                    ProductVariantId = oi.ProductVariantId,
+                    VariantTitle = oi.VariantTitle,
+                    VariantSku = oi.VariantSku,
                     Quantity = oi.Quantity,
-                    UnitPrice = oi.UnitPrice
+                    UnitPrice = oi.UnitPrice,
+                    IsWeightBased = IsEffectivelyWeightBased(oi),
+                    WeightUnit = oi.WeightUnit.ToString(),
+                    EstimatedWeight = oi.EstimatedWeight,
+                    ActualWeight = oi.ActualWeight,
+                    EstimatedPrice = oi.EstimatedPrice,
+                    ActualPrice = oi.ActualPrice,
+                    PriceDifference = oi.PriceDifference,
+                    LineTotal = CalculateOrderItemLineTotal(oi),
+                    RemainingRefundableQuantity = oi.Quantity,
+                    RemainingRefundableAmount = CalculateOrderItemLineTotal(oi)
                 }).ToList() ?? new List<OrderItemDto>(),
                 // Kurye bilgileri
                 CourierId = order.CourierId,
@@ -1233,6 +1386,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.User)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
@@ -1300,6 +1454,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null)
@@ -1316,9 +1471,9 @@ namespace ECommerce.Business.Services.Managers
             var previousStatus = order.Status;
             order.Status = OrderStatus.Confirmed;
             order.ConfirmedAt = DateTime.UtcNow;
-            
+
             AddStatusHistory(order, previousStatus, OrderStatus.Confirmed, $"Admin tarafından onaylandı: {confirmedBy}");
-            
+
             await _context.SaveChangesAsync();
 
             return MapToDto(order);
@@ -1331,6 +1486,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null)
@@ -1349,9 +1505,9 @@ namespace ECommerce.Business.Services.Managers
             order.Status = OrderStatus.Preparing;
             order.PreparingStartedAt = DateTime.UtcNow;
             order.PreparedBy = preparedBy;
-            
+
             AddStatusHistory(order, previousStatus, OrderStatus.Preparing, $"Hazırlanmaya başlandı: {preparedBy}");
-            
+
             await _context.SaveChangesAsync();
 
             return MapToDto(order);
@@ -1364,6 +1520,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null)
@@ -1380,21 +1537,21 @@ namespace ECommerce.Business.Services.Managers
             var previousStatus = order.Status;
             order.Status = OrderStatus.Ready;
             order.ReadyAt = DateTime.UtcNow;
-            
+
             // Ağırlık bilgisi varsa kaydet
             if (weightInGrams.HasValue)
             {
                 order.WeightInGrams = weightInGrams.Value;
             }
-            
+
             var note = $"Hazır: {readyBy}";
             if (weightInGrams.HasValue)
             {
                 note += $" (Ağırlık: {weightInGrams.Value}g)";
             }
-            
+
             AddStatusHistory(order, previousStatus, OrderStatus.Ready, note);
-            
+
             await _context.SaveChangesAsync();
 
             return MapToDto(order);
@@ -1404,7 +1561,7 @@ namespace ECommerce.Business.Services.Managers
         public async Task<StoreAttendantOrderListResponseDto> GetOrdersForStoreAttendantAsync(StoreAttendantOrderFilterDto? filter)
         {
             filter ??= new StoreAttendantOrderFilterDto();
-            
+
             // Sayfa boyutu sınırlaması
             if (filter.PageSize > 100) filter.PageSize = 100;
             if (filter.PageSize < 1) filter.PageSize = 20;
@@ -1414,11 +1571,11 @@ namespace ECommerce.Business.Services.Managers
             // DÜZELTME: Pending durumu eklendi - yeni siparişler Pending ile başlar
             // NEDEN: Sipariş oluşturulduğunda Status=Pending olarak set ediliyor,
             // bu yüzden mağaza görevlisi bu siparişleri göremiyordu
-            var allowedStatuses = new List<OrderStatus> 
-            { 
+            var allowedStatuses = new List<OrderStatus>
+            {
                 OrderStatus.Pending,    // Yeni oluşturulan siparişler (varsayılan durum)
-                OrderStatus.Confirmed, 
-                OrderStatus.Preparing, 
+                OrderStatus.Confirmed,
+                OrderStatus.Preparing,
                 OrderStatus.Ready,
                 OrderStatus.Assigned,
                 OrderStatus.PickedUp,
@@ -1443,6 +1600,7 @@ namespace ECommerce.Business.Services.Managers
             var query = _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Where(o => allowedStatuses.Contains(o.Status))
                 .AsQueryable();
 
@@ -1458,8 +1616,8 @@ namespace ECommerce.Business.Services.Managers
                     // "pending" = Pending + Confirmed + Paid + New (TÜM BEKLEYEN SİPARİŞLER)
                     // DÜZELTME: OrderStatus.Pending eklendi - yeni siparişler bu durumla başlar
                     query = query.Where(o => o.Status == OrderStatus.Pending ||
-                                             o.Status == OrderStatus.Confirmed || 
-                                             o.Status == OrderStatus.Paid || 
+                                             o.Status == OrderStatus.Confirmed ||
+                                             o.Status == OrderStatus.Paid ||
                                              o.Status == OrderStatus.New);
                 }
             }
@@ -1468,8 +1626,8 @@ namespace ECommerce.Business.Services.Managers
             var totalCount = await query.CountAsync();
 
             // Sıralama
-            query = filter.SortOrder?.ToLower() == "asc" 
-                ? query.OrderBy(o => o.OrderDate) 
+            query = filter.SortOrder?.ToLower() == "asc"
+                ? query.OrderBy(o => o.OrderDate)
                 : query.OrderByDescending(o => o.OrderDate);
 
             // Sayfalama
@@ -1503,8 +1661,8 @@ namespace ECommerce.Business.Services.Managers
             // DÜZELTME: OrderStatus.Pending eklendi - yeni siparişler bu durumla başlar
             var pendingCount = await _context.Orders
                 .CountAsync(o => o.Status == OrderStatus.Pending ||
-                                 o.Status == OrderStatus.Confirmed || 
-                                 o.Status == OrderStatus.New || 
+                                 o.Status == OrderStatus.Confirmed ||
+                                 o.Status == OrderStatus.New ||
                                  o.Status == OrderStatus.Paid);
 
             var preparingCount = await _context.Orders
@@ -1515,7 +1673,7 @@ namespace ECommerce.Business.Services.Managers
 
             // Bugün tamamlanan (Ready, Assigned, OutForDelivery, Delivered olan)
             var completedTodayCount = await _context.Orders
-                .CountAsync(o => o.ReadyAt.HasValue && 
+                .CountAsync(o => o.ReadyAt.HasValue &&
                                  o.ReadyAt.Value.Date == today);
 
             var todayTotalAmount = await _context.Orders
@@ -1550,17 +1708,17 @@ namespace ECommerce.Business.Services.Managers
         public async Task<DispatcherOrderListResponseDto> GetOrdersForDispatcherAsync(DispatcherOrderFilterDto? filter)
         {
             filter ??= new DispatcherOrderFilterDto();
-            
+
             // Sayfa boyutu sınırlaması
             if (filter.PageSize > 100) filter.PageSize = 100;
             if (filter.PageSize < 1) filter.PageSize = 20;
             if (filter.Page < 1) filter.Page = 1;
 
             // Sevkiyat görevlisi için gösterilecek durumlar
-            var allowedStatuses = new List<OrderStatus> 
-            { 
-                OrderStatus.Ready, 
-                OrderStatus.Assigned, 
+            var allowedStatuses = new List<OrderStatus>
+            {
+                OrderStatus.Ready,
+                OrderStatus.Assigned,
                 OrderStatus.PickedUp,
                 OrderStatus.OutForDelivery,
                 OrderStatus.DeliveryFailed
@@ -1569,6 +1727,7 @@ namespace ECommerce.Business.Services.Managers
             var query = _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .ThenInclude(c => c!.User)
                 .Where(o => allowedStatuses.Contains(o.Status))
@@ -1583,7 +1742,7 @@ namespace ECommerce.Business.Services.Managers
                 }
                 else if (filter.Status.ToLower() == "out_for_delivery")
                 {
-                    query = query.Where(o => o.Status == OrderStatus.OutForDelivery || 
+                    query = query.Where(o => o.Status == OrderStatus.OutForDelivery ||
                                              o.Status == OrderStatus.PickedUp);
                 }
             }
@@ -1598,8 +1757,8 @@ namespace ECommerce.Business.Services.Managers
             if (filter.UrgentOnly == true)
             {
                 var urgentThreshold = DateTime.UtcNow.AddMinutes(-30);
-                query = query.Where(o => o.Status == OrderStatus.Ready && 
-                                         o.ReadyAt.HasValue && 
+                query = query.Where(o => o.Status == OrderStatus.Ready &&
+                                         o.ReadyAt.HasValue &&
                                          o.ReadyAt.Value < urgentThreshold);
             }
 
@@ -1609,14 +1768,14 @@ namespace ECommerce.Business.Services.Managers
             // Sıralama (varsayılan: en eski hazır olan önce)
             if (filter.SortBy?.ToLower() == "totalamount")
             {
-                query = filter.SortOrder?.ToLower() == "desc" 
-                    ? query.OrderByDescending(o => o.FinalPrice) 
+                query = filter.SortOrder?.ToLower() == "desc"
+                    ? query.OrderByDescending(o => o.FinalPrice)
                     : query.OrderBy(o => o.FinalPrice);
             }
             else
             {
-                query = filter.SortOrder?.ToLower() == "desc" 
-                    ? query.OrderByDescending(o => o.ReadyAt ?? o.OrderDate) 
+                query = filter.SortOrder?.ToLower() == "desc"
+                    ? query.OrderByDescending(o => o.ReadyAt ?? o.OrderDate)
                     : query.OrderBy(o => o.ReadyAt ?? o.OrderDate);
             }
 
@@ -1655,21 +1814,21 @@ namespace ECommerce.Business.Services.Managers
                 .CountAsync(o => o.Status == OrderStatus.Assigned);
 
             var outForDeliveryCount = await _context.Orders
-                .CountAsync(o => o.Status == OrderStatus.OutForDelivery || 
+                .CountAsync(o => o.Status == OrderStatus.OutForDelivery ||
                                  o.Status == OrderStatus.PickedUp);
 
             var deliveredTodayCount = await _context.Orders
-                .CountAsync(o => o.Status == OrderStatus.Delivered && 
-                                 o.DeliveredAt.HasValue && 
+                .CountAsync(o => o.Status == OrderStatus.Delivered &&
+                                 o.DeliveredAt.HasValue &&
                                  o.DeliveredAt.Value.Date == today);
 
             var failedTodayCount = await _context.Orders
-                .CountAsync(o => o.Status == OrderStatus.DeliveryFailed && 
+                .CountAsync(o => o.Status == OrderStatus.DeliveryFailed &&
                                  o.OrderDate.Date == today);
 
             var urgentCount = await _context.Orders
-                .CountAsync(o => o.Status == OrderStatus.Ready && 
-                                 o.ReadyAt.HasValue && 
+                .CountAsync(o => o.Status == OrderStatus.Ready &&
+                                 o.ReadyAt.HasValue &&
                                  o.ReadyAt.Value < urgentThreshold);
 
             // Online kuryeler
@@ -1680,9 +1839,9 @@ namespace ECommerce.Business.Services.Managers
             var availableCouriersCount = await _context.Couriers
                 .Where(c => c.IsActive && c.IsOnline)
                 .CountAsync(c => !_context.Orders
-                    .Any(o => o.CourierId == c.Id && 
-                             (o.Status == OrderStatus.Assigned || 
-                              o.Status == OrderStatus.PickedUp || 
+                    .Any(o => o.CourierId == c.Id &&
+                             (o.Status == OrderStatus.Assigned ||
+                              o.Status == OrderStatus.PickedUp ||
                               o.Status == OrderStatus.OutForDelivery)));
 
             // Ortalama bekleme süresi
@@ -1693,8 +1852,8 @@ namespace ECommerce.Business.Services.Managers
 
             // Bugünkü toplam teslimat tutarı
             var todayTotalDelivered = await _context.Orders
-                .Where(o => o.Status == OrderStatus.Delivered && 
-                           o.DeliveredAt.HasValue && 
+                .Where(o => o.Status == OrderStatus.Delivered &&
+                           o.DeliveredAt.HasValue &&
                            o.DeliveredAt.Value.Date == today)
                 .SumAsync(o => o.FinalPrice);
 
@@ -1721,6 +1880,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
             if (order == null)
@@ -1769,15 +1929,15 @@ namespace ECommerce.Business.Services.Managers
             order.Status = OrderStatus.Assigned;
             order.CourierId = courierId;
             order.AssignedAt = DateTime.UtcNow;
-            
+
             var historyNote = $"Kurye atandı: {courier.User?.FullName ?? $"#{courierId}"} - Atayan: {assignedBy}";
             if (!string.IsNullOrWhiteSpace(notes))
             {
                 historyNote += $" - Not: {notes}";
             }
-            
+
             AddStatusHistory(order, previousStatus, OrderStatus.Assigned, historyNote);
-            
+
             await _context.SaveChangesAsync();
 
             return new AssignCourierResponseDto
@@ -1796,6 +1956,7 @@ namespace ECommerce.Business.Services.Managers
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
                 .Include(o => o.Courier)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
@@ -1844,17 +2005,17 @@ namespace ECommerce.Business.Services.Managers
 
             var oldCourierId = order.CourierId;
             var oldCourierName = order.Courier?.User?.FullName ?? $"#{oldCourierId}";
-            
+
             var previousStatus = order.Status;
             order.CourierId = newCourierId;
             order.AssignedAt = DateTime.UtcNow;
             order.Status = OrderStatus.Assigned; // Yeniden Assigned durumuna al
-            
+
             var historyNote = $"Kurye değiştirildi: {oldCourierName} → {newCourier.User?.FullName ?? $"#{newCourierId}"} - " +
                              $"Neden: {reason} - Değiştiren: {reassignedBy}";
-            
+
             AddStatusHistory(order, previousStatus, OrderStatus.Assigned, historyNote);
-            
+
             await _context.SaveChangesAsync();
 
             return new AssignCourierResponseDto
@@ -1879,15 +2040,15 @@ namespace ECommerce.Business.Services.Managers
             foreach (var courier in couriers)
             {
                 var activeOrderCount = await _context.Orders
-                    .CountAsync(o => o.CourierId == courier.Id && 
-                                    (o.Status == OrderStatus.Assigned || 
-                                     o.Status == OrderStatus.PickedUp || 
+                    .CountAsync(o => o.CourierId == courier.Id &&
+                                    (o.Status == OrderStatus.Assigned ||
+                                     o.Status == OrderStatus.PickedUp ||
                                      o.Status == OrderStatus.OutForDelivery));
 
                 var deliveredTodayCount = await _context.Orders
-                    .CountAsync(o => o.CourierId == courier.Id && 
-                                    o.Status == OrderStatus.Delivered && 
-                                    o.DeliveredAt.HasValue && 
+                    .CountAsync(o => o.CourierId == courier.Id &&
+                                    o.Status == OrderStatus.Delivered &&
+                                    o.DeliveredAt.HasValue &&
                                     o.DeliveredAt.Value.Date == DateTime.UtcNow.Date);
 
                 courierDtos.Add(new DispatcherCourierDto
@@ -1939,14 +2100,13 @@ namespace ECommerce.Business.Services.Managers
                 CustomerPhone = order.CustomerPhone,
                 Status = order.Status.ToString(),
                 StatusText = GetStatusText(order.Status),
-                TotalAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice,
                 ItemCount = order.OrderItems?.Sum(oi => oi.Quantity) ?? 0,
                 CreatedAt = order.OrderDate,
                 ConfirmedAt = order.ConfirmedAt,
                 PreparingStartedAt = order.PreparingStartedAt,
                 ReadyAt = order.ReadyAt,
                 PaymentMethod = order.PaymentMethod ?? "card",
-                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true || 
+                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true ||
                                    order.PaymentMethod?.ToLower().Contains("kapida") == true,
                 OrderNotes = order.DeliveryNotes,
                 DeliveryAddress = order.ShippingAddress,
@@ -1956,13 +2116,63 @@ namespace ECommerce.Business.Services.Managers
                     ProductName = oi.Product?.Name ?? "Ürün",
                     Quantity = oi.Quantity,
                     UnitPrice = oi.UnitPrice,
-                    ImageUrl = oi.Product?.ImageUrl
+                    ImageUrl = oi.Product?.ImageUrl,
+                    IsWeightBased = IsEffectivelyWeightBased(oi),
+                    Unit = IsEffectivelyWeightBased(oi)
+                        ? oi.WeightUnit.ToString().ToLowerInvariant()
+                        : "adet"
                 }).ToList() ?? new List<StoreOrderItemSummaryDto>(),
                 PreparedBy = order.PreparedBy,
                 TimeAgo = timeAgo,
                 WeightInGrams = order.WeightInGrams,
-                HasWeightBasedItems = order.OrderItems?.Any(oi => oi.Product?.IsWeightBased == true) ?? false
+                TotalAmount = order.FinalAmount > 0
+                    ? order.FinalAmount
+                    : order.FinalPrice > 0
+                        ? order.FinalPrice
+                        : order.TotalPrice,
+                HasWeightBasedItems = order.HasWeightBasedItems
+                    || (order.OrderItems?.Any(IsEffectivelyWeightBased) ?? false)
             };
+        }
+
+        private static bool IsEffectivelyWeightBased(OrderItem orderItem)
+        {
+            if (orderItem?.Product == null)
+            {
+                return orderItem?.IsWeightBased == true;
+            }
+
+            return WeightBasedProductRules.IsVariableWeightKgProduct(
+                orderItem.Product.Name,
+                orderItem.WeightUnit,
+                orderItem.Product.Category?.Name);
+        }
+
+        private static decimal CalculateOrderItemLineTotal(OrderItem orderItem)
+        {
+            if (orderItem.ActualPrice.HasValue && orderItem.ActualPrice.Value > 0)
+            {
+                return orderItem.ActualPrice.Value;
+            }
+
+            if (orderItem.EstimatedPrice > 0)
+            {
+                return orderItem.EstimatedPrice;
+            }
+
+            return Math.Round(orderItem.Quantity * orderItem.UnitPrice, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private static decimal CalculateWeightedPrice(decimal weightInBaseUnit, decimal pricePerUnit, WeightUnit weightUnit)
+        {
+            var pricingQuantity = weightUnit switch
+            {
+                WeightUnit.Kilogram or WeightUnit.Liter => weightInBaseUnit / 1000m,
+                WeightUnit.Gram or WeightUnit.Milliliter => weightInBaseUnit,
+                _ => weightInBaseUnit
+            };
+
+            return Math.Round(pricingQuantity * pricePerUnit, 2, MidpointRounding.AwayFromZero);
         }
 
         /// <summary>
@@ -1988,7 +2198,7 @@ namespace ECommerce.Business.Services.Managers
                 DeliveryAddress = order.ShippingAddress ?? string.Empty,
                 DeliveryNotes = order.DeliveryNotes,
                 PaymentMethod = order.PaymentMethod ?? "card",
-                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true || 
+                IsCashOnDelivery = order.PaymentMethod?.ToLower().Contains("cash") == true ||
                                    order.PaymentMethod?.ToLower().Contains("kapida") == true,
                 ReadyAt = order.ReadyAt,
                 AssignedAt = order.AssignedAt,
@@ -2080,14 +2290,14 @@ namespace ECommerce.Business.Services.Managers
         private static string CalculateTimeAgo(DateTime past, DateTime now)
         {
             var diff = now - past;
-            
+
             if (diff.TotalMinutes < 1)
                 return "Az önce";
             if (diff.TotalMinutes < 60)
                 return $"{(int)diff.TotalMinutes} dk önce";
             if (diff.TotalHours < 24)
                 return $"{(int)diff.TotalHours} saat önce";
-            
+
             return $"{(int)diff.TotalDays} gün önce";
         }
 

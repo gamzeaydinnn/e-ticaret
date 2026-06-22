@@ -7,6 +7,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using System.Threading.Tasks;
 using System.Security.Claims;
+using System.Linq;
 using ECommerce.API.Authorization;
 using Microsoft.Extensions.Logging;
 using ECommerce.Entities.Enums;
@@ -22,6 +23,16 @@ namespace ECommerce.API.Controllers.Admin
     [Route("api/admin/orders")]
     public class AdminOrdersController : ControllerBase
     {
+        public sealed class BulkDeleteOrdersRequest
+        {
+            /// <summary>
+            /// Kalıcı olarak silinecek sipariş ID listesi.
+            /// Neden: Tek tek HTTP çağrısı yerine tek transaction akışında yönetmek için
+            /// istemciden toplu seçim verisi alınır.
+            /// </summary>
+            public List<int> OrderIds { get; set; } = new();
+        }
+
         private readonly IOrderService _orderService;
         private readonly IRefundService _refundService;
         private readonly IAuditLogService _auditLogService;
@@ -70,6 +81,72 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(orders);
         }
 
+        [HttpPost("bulk-delete")]
+        [HasPermission(Permissions.Orders.Cancel)]
+        public async Task<IActionResult> BulkDeleteOrders([FromBody] BulkDeleteOrdersRequest? request)
+        {
+            var uniqueOrderIds = request?.OrderIds?
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+
+            if (uniqueOrderIds == null || uniqueOrderIds.Count == 0)
+            {
+                return BadRequest(new { message = "Silinecek en az bir sipariş seçilmelidir." });
+            }
+
+            var deletedOrderIds = new List<int>();
+            var notFoundOrderIds = new List<int>();
+            var failedOrders = new List<object>();
+
+            foreach (var orderId in uniqueOrderIds)
+            {
+                var existing = await _orderService.GetByIdAsync(orderId);
+                if (existing == null)
+                {
+                    notFoundOrderIds.Add(orderId);
+                    continue;
+                }
+
+                try
+                {
+                    await _orderService.DeleteAsync(orderId);
+                    deletedOrderIds.Add(orderId);
+
+                    await _auditLogService.WriteAsync(
+                        GetAdminUserId(),
+                        "OrderBulkDeleted",
+                        "Order",
+                        orderId.ToString(),
+                        new
+                        {
+                            existing.Status,
+                            existing.TotalPrice,
+                            existing.OrderNumber
+                        },
+                        null);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Toplu sipariş silme hatası. OrderId={OrderId}", orderId);
+                    failedOrders.Add(new
+                    {
+                        orderId,
+                        error = ex.Message
+                    });
+                }
+            }
+
+            return Ok(new
+            {
+                requestedCount = uniqueOrderIds.Count,
+                deletedCount = deletedOrderIds.Count,
+                deletedOrderIds,
+                notFoundOrderIds,
+                failedOrders
+            });
+        }
+
         [HttpDelete("{id}")]
         [HasPermission(Permissions.Orders.Cancel)]
         public async Task<IActionResult> DeleteOrder(int id)
@@ -109,6 +186,35 @@ namespace ECommerce.API.Controllers.Admin
             var order = await _orderService.GetByIdAsync(id);
             if (order == null) return NotFound();
             return Ok(order);
+        }
+
+        [HttpPut("{id}")]
+        [HasPermission(Permissions.Orders.UpdateStatus)]
+        public async Task<IActionResult> UpdateOrder(int id, [FromBody] OrderUpdateDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { message = "Geçersiz sipariş güncelleme isteği." });
+            }
+
+            var existing = await _orderService.GetByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { message = "Sipariş bulunamadı." });
+            }
+
+            await _orderService.UpdateAsync(id, dto);
+            var updated = await _orderService.GetByIdAsync(id);
+
+            await _auditLogService.WriteAsync(
+                GetAdminUserId(),
+                "OrderUpdated",
+                "Order",
+                id.ToString(),
+                existing,
+                updated);
+
+            return Ok(updated);
         }
 
         [HttpPost]
@@ -330,6 +436,50 @@ namespace ECommerce.API.Controllers.Admin
             });
         }
 
+        [HttpPost("{id:int}/item-refund")]
+        [HasPermission(Permissions.Orders.ProcessRefund)]
+        public async Task<IActionResult> RefundOrderItems(int id, [FromBody] AdminItemRefundRequestDto dto)
+        {
+            if (dto == null)
+            {
+                return BadRequest(new { success = false, message = "Geçersiz iade isteği." });
+            }
+
+            var adminUserId = GetAdminUserId();
+            var result = await _refundService.AdminRefundOrderItemsAsync(id, adminUserId, dto);
+
+            if (!result.Success)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = result.Message,
+                    errorCode = result.ErrorCode
+                });
+            }
+
+            await _auditLogService.WriteAsync(
+                adminUserId,
+                "OrderItemRefunded",
+                "Order",
+                id.ToString(),
+                null,
+                new
+                {
+                    dto.Reason,
+                    dto.AdminNote,
+                    itemCount = dto.Items?.Count ?? 0,
+                    refundAmount = result.RefundRequest?.RefundAmount
+                });
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message,
+                refundRequest = result.RefundRequest
+            });
+        }
+
         [HttpGet("recent")]
         public async Task<IActionResult> GetRecentOrders([FromQuery] int count = 5)
         {
@@ -366,7 +516,7 @@ namespace ECommerce.API.Controllers.Admin
 
                 // Kurye atamasını gerçekleştir
                 var updatedOrder = await _orderService.AssignCourierAsync(id, dto.CourierId);
-                
+
                 if (updatedOrder == null)
                 {
                     return NotFound(new { message = "Sipariş güncellenemedi." });
@@ -411,8 +561,8 @@ namespace ECommerce.API.Controllers.Admin
                 {
                     // Bildirim hatası kurye atamasını engellemez
                     // Sadece loglama yapılır
-                    _logger.LogWarning(notifyEx, 
-                        "Kurye bildirimi gönderilemedi. OrderId={OrderId}, CourierId={CourierId}", 
+                    _logger.LogWarning(notifyEx,
+                        "Kurye bildirimi gönderilemedi. OrderId={OrderId}, CourierId={CourierId}",
                         id, dto.CourierId);
                 }
 

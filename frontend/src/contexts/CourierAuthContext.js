@@ -43,6 +43,26 @@ const REFRESH_TOKEN_KEY = "courierRefreshToken";
 const COURIER_DATA_KEY = "courierData";
 const REMEMBER_ME_KEY = "courierRememberMe";
 
+const normalizeStoredCourier = (courierData) => {
+  if (!courierData) return null;
+
+  const fullName = courierData.name || courierData.fullName || "";
+  const firstName = courierData.firstName || fullName.split(" ")[0] || "";
+  const lastName =
+    courierData.lastName || fullName.split(" ").slice(1).join(" ");
+
+  return {
+    ...courierData,
+    id: courierData.id ?? courierData.courierId,
+    courierId: courierData.courierId ?? courierData.id,
+    name: courierData.name || fullName || `${firstName} ${lastName}`.trim(),
+    fullName:
+      courierData.fullName || courierData.name || `${firstName} ${lastName}`.trim(),
+    firstName,
+    lastName,
+  };
+};
+
 export function CourierAuthProvider({ children }) {
   // State tanımları
   const [courier, setCourier] = useState(null);
@@ -123,10 +143,11 @@ export function CourierAuthProvider({ children }) {
   // =========================================================================
   const login = async (email, password, rememberMe = false) => {
     try {
-      const result = await CourierService.login(email, password);
+      const result = await CourierService.login(email, password, rememberMe);
 
       if (result.success) {
         const storage = rememberMe ? localStorage : sessionStorage;
+        const normalizedCourier = normalizeStoredCourier(result.courier);
 
         // Token'ları kaydet
         storage.setItem(TOKEN_KEY, result.token);
@@ -134,24 +155,24 @@ export function CourierAuthProvider({ children }) {
           storage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
           setRefreshToken(result.refreshToken);
         }
-        storage.setItem(COURIER_DATA_KEY, JSON.stringify(result.courier));
+        storage.setItem(COURIER_DATA_KEY, JSON.stringify(normalizedCourier));
 
         // Remember me tercihini kaydet
         localStorage.setItem(REMEMBER_ME_KEY, rememberMe.toString());
 
         // State'leri güncelle
         setToken(result.token);
-        setCourier(result.courier);
+        setCourier(normalizedCourier);
         setIsAuthenticated(true);
 
         // Event dispatch (SignalR bağlantısı için)
         window.dispatchEvent(
           new CustomEvent("courierLogin", {
-            detail: { courierId: result.courier.id },
+            detail: { courierId: normalizedCourier?.id },
           }),
         );
 
-        return { success: true, courier: result.courier };
+        return { success: true, courier: normalizedCourier };
       }
 
       return { success: false, error: result.message || "Giriş başarısız" };
@@ -224,7 +245,7 @@ export function CourierAuthProvider({ children }) {
   // =========================================================================
   const updateCourierData = (data) => {
     setCourier((prev) => {
-      const updated = { ...prev, ...data };
+      const updated = normalizeStoredCourier({ ...prev, ...data });
       // Storage'ı güncelle
       const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === "true";
       const storage = rememberMe ? localStorage : sessionStorage;
@@ -272,7 +293,24 @@ export function CourierAuthProvider({ children }) {
         }
 
         // Kurye verilerini parse et
-        const courierData = JSON.parse(savedCourier);
+        let courierData = normalizeStoredCourier(JSON.parse(savedCourier));
+
+        // Eski local/session data bozuk veya eksikse backend'den taze kurye bilgisini çek
+        if (!courierData?.id) {
+          const me = await CourierService.getMe();
+          if (me?.success && me.courier) {
+            courierData = normalizeStoredCourier(me.courier);
+            const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === "true";
+            const storage = rememberMe ? localStorage : sessionStorage;
+            storage.setItem(COURIER_DATA_KEY, JSON.stringify(courierData));
+          }
+        }
+
+        if (!courierData?.id) {
+          logout();
+          setLoading(false);
+          return;
+        }
 
         setToken(savedToken);
         setRefreshToken(savedRefreshToken);

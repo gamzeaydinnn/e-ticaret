@@ -14,6 +14,7 @@
 // ==========================================================================
 
 import React, { useState, useEffect, useCallback } from "react";
+import { isStrictVariableWeightProduct } from "../../utils/weightBasedProduct";
 import { useParams, useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import WeightEntryCard from "./components/WeightEntryCard";
@@ -94,9 +95,13 @@ export default function CourierWeightEntry({
           // Prop'tan gelen siparişten weight-based ürünleri al
           const weightBasedItems = propOrder.items.filter(
             (item) =>
-              item.isWeightBased ||
-              item.weightUnit === "Gram" ||
-              item.weightUnit === "Kilogram",
+              isStrictVariableWeightProduct({
+                ...item,
+                name: item.productName || item.name || item.product?.name,
+                categoryName: item.categoryName || item.product?.category?.name || "",
+                unit: item.unit || item.product?.unit || "",
+                weightUnit: item.weightUnit || item.product?.weightUnit || null,
+              }),
           );
           setWeightItems(weightBasedItems);
         }
@@ -195,17 +200,7 @@ export default function CourierWeightEntry({
           }, 1500);
         }
       } else {
-        // Admin onayı gerekiyorsa
-        if (result.requiresAdminApproval) {
-          setSuccessMessage(
-            "Yüksek fark tespit edildi. Admin onayı bekleniyor.",
-          );
-          if (onComplete) {
-            onComplete(result);
-          }
-        } else {
-          setError(result.message || "Teslimat tamamlanamadı");
-        }
+        setError(result.message || "Teslimat tamamlanamadı");
       }
     } catch (err) {
       console.error("[CourierWeightEntry] handleFinalizeDelivery error:", err);

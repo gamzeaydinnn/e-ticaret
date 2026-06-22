@@ -29,7 +29,7 @@ namespace ECommerce.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/courier/orders")]
-    [Authorize(Roles = "Courier")]
+    [Authorize(Roles = "Courier")] // Sadece Courier rolündeki token'lar kabul edilir - Admin/SuperAdmin token'ları reddedilir
     [Produces("application/json")]
     public class CourierOrderController : ControllerBase
     {
@@ -66,8 +66,10 @@ namespace ECommerce.API.Controllers
             var courierId = await GetCurrentCourierIdAsync();
             if (courierId == null)
             {
-                _logger.LogWarning("Kurye ID bulunamadı. UserId: {UserId}", GetCurrentUserId());
-                return Unauthorized(new { message = "Kurye hesabınız aktif değil veya yetkilendirilmemiş." });
+                var debugUserId = GetCurrentUserId();
+                var claims = string.Join(", ", User.Claims.Select(c => c.Type + "=" + c.Value));
+                _logger.LogWarning("Kurye ID bulunamadı. UserId: {UserId}, Claims: {Claims}", debugUserId, claims);
+                return Unauthorized(new { message = $"Kurye hesabınız aktif değil veya yetkilendirilmemiş. (Debug UserId: {debugUserId}, Claims: {claims})" });
             }
 
             var result = await _courierOrderService.GetAssignedOrdersAsync(courierId.Value, filter);
@@ -400,10 +402,30 @@ namespace ECommerce.API.Controllers
 
         /// <summary>
         /// Geçerli kullanıcının User ID'sini JWT'den alır.
+        /// Ek güvenlik: Courier rolü claim kontrolü yapılır.
         /// </summary>
         private int? GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // Güvenlik: Sadece Courier rolündeki token'lar geçerlidir
+            // Admin/SuperAdmin token'larının cookie üzerinden bu endpoint'lere erişimi engellenir
+            var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value
+                         ?? User.FindFirst("role")?.Value
+                         ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+
+            if (!string.Equals(roleClaim, "Courier", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "Kurye endpoint'ine yetkisiz erişim girişimi. Rol: {Role}, UserId: {UserId}",
+                    roleClaim ?? "null",
+                    User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown");
+                return null;
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                           ?? User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value
+                           ?? User.FindFirst("nameid")?.Value
+                           ?? User.FindFirst("sub")?.Value;
+                           
             if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
             {
                 return null;
@@ -413,6 +435,7 @@ namespace ECommerce.API.Controllers
 
         /// <summary>
         /// Geçerli kullanıcının Courier ID'sini bulur.
+        /// Önce Courier rolü kontrolü yapar, sonra DB'den Courier kaydını getirir.
         /// </summary>
         private async Task<int?> GetCurrentCourierIdAsync()
         {

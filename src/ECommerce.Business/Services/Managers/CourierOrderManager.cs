@@ -422,7 +422,9 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // 3. Final tutarı hesapla (tartı farkı dahil)
-                var finalAmount = await CalculateFinalAmountAsync(order, dto.WeightAdjustmentGrams);
+                var finalAmount = await CalculateFinalAmountAsync(order!, dto.WeightAdjustmentGrams);
+                // NEDEN: Capture ve bildirim akışlarının tamamı aynı kesin tutarı görmeli.
+                order.FinalAmount = finalAmount;
 
                 // 4. Payment capture işlemi (Kredi kartı ödemelerinde)
                 PaymentCaptureInfo? paymentInfo = null;
@@ -469,6 +471,24 @@ namespace ECommerce.Business.Services.Managers
                             OrderId = orderId,
                             NewStatus = OrderStatus.DeliveryPaymentPending.ToString(),
                             NewStatusText = _orderStateMachine.GetStatusDescription(OrderStatus.DeliveryPaymentPending),
+                            ActionTime = DateTime.UtcNow,
+                            PaymentInfo = paymentInfo
+                        };
+                    }
+
+                    if (!paymentInfo.CaptureSuccess)
+                    {
+                        _logger.LogError(
+                            "Sipariş #{OrderId}: ödeme capture başarısız olduğu için teslimat tamamlanamadı. Message={Message}",
+                            orderId, paymentInfo.CaptureMessage);
+
+                        return new CourierOrderActionResponseDto
+                        {
+                            Success = false,
+                            Message = paymentInfo.CaptureMessage ?? "Ödeme çekilemedi. Teslimat tamamlanamadı.",
+                            OrderId = orderId,
+                            NewStatus = previousStatus.ToString(),
+                            NewStatusText = _orderStateMachine.GetStatusDescription(previousStatus),
                             ActionTime = DateTime.UtcNow,
                             PaymentInfo = paymentInfo
                         };

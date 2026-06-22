@@ -69,6 +69,30 @@ namespace ECommerce.Core.DTOs.Order
         public decimal? RefundAmount { get; set; }
     }
 
+    /// <summary>
+    /// Admin'in sipariş kalemi bazlı iade isteği.
+    /// Backend tutarı satırlardan hesaplar.
+    /// </summary>
+    public class AdminItemRefundRequestDto
+    {
+        public string Reason { get; set; } = string.Empty;
+        public string? AdminNote { get; set; }
+        public List<RefundRequestItemDto> Items { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Ürün bazlı iade satırı.
+    /// </summary>
+    public class RefundRequestItemDto
+    {
+        public int OrderItemId { get; set; }
+        public int Quantity { get; set; }
+        public string? ProductName { get; set; }
+        public string? VariantTitle { get; set; }
+        public decimal UnitAmount { get; set; }
+        public decimal LineAmount { get; set; }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // İADE TALEBİ LİSTELEME DTO
     // Admin paneli ve müşteri sipariş detayı için
@@ -112,5 +136,6 @@ namespace ECommerce.Core.DTOs.Order
         // Sipariş özet bilgileri (admin listesi için)
         public decimal OrderTotalPrice { get; set; }
         public string? OrderStatus { get; set; }
+        public List<RefundRequestItemDto> Items { get; set; } = new();
     }
 }

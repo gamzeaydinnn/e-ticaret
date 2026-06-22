@@ -130,19 +130,20 @@ export default function CourierDashboard() {
   // AUTH KONTROLÜ
   // =========================================================================
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
+    if (authLoading) return; // Yükleniyor, bekle
+    if (!isAuthenticated || !courier?.id) {
       navigate("/courier/login");
     }
-  }, [authLoading, isAuthenticated, navigate]);
+  }, [authLoading, isAuthenticated, courier?.id, navigate]);
 
   // =========================================================================
   // İLK YÜKLEME
   // =========================================================================
   useEffect(() => {
-    if (courier?.id) {
+    if (!authLoading && isAuthenticated && courier?.id) {
       loadOrders();
     }
-  }, [courier?.id, loadOrders]);
+  }, [authLoading, isAuthenticated, courier?.id, loadOrders]);
 
   // =========================================================================
   // SIGNALR ENTEGRASYONU

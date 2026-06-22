@@ -214,6 +214,8 @@ namespace ECommerce.Business.Services.Sync
                 "[SiparisSyncService] Onaylanan siparişler Mikro'ya gönderiliyor. Tarih: {Since}",
                 since);
 
+            await Task.CompletedTask;
+
             try
             {
                 // NOT: Bu metodun düzgün çalışması için IOrderRepository'e

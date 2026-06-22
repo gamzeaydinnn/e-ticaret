@@ -12,6 +12,15 @@ const initialForm = {
   isActive: true,
 };
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 export default function CouponManagement() {
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -63,9 +72,7 @@ export default function CouponManagement() {
       code: coupon.code || "",
       isPercentage: !!coupon.isPercentage,
       value: coupon.value?.toString?.() ?? "",
-      expirationDate: coupon.expirationDate
-        ? coupon.expirationDate.slice(0, 10)
-        : "",
+      expirationDate: toInputDate(coupon.expirationDate),
       minOrderAmount: coupon.minOrderAmount?.toString?.() ?? "",
       usageLimit: coupon.usageLimit ?? 1,
       isActive: coupon.isActive,
@@ -94,7 +101,7 @@ export default function CouponManagement() {
       isPercentage: !!form.isPercentage,
       value: form.value === "" ? 0 : parseFloat(form.value),
       expirationDate: form.expirationDate
-        ? new Date(form.expirationDate + "T00:00:00")
+        ? new Date(form.expirationDate + "T23:59:59")
         : null,
       minOrderAmount:
         form.minOrderAmount === "" || form.minOrderAmount === null

@@ -33,8 +33,25 @@ const THEME = {
 const initialEditForm = {
   minimumCartAmount: "",
   minimumCartAmountMessage: "",
+  guestFirstOrderShippingMessage: "",
   isMinimumCartAmountActive: false,
 };
+
+const initialSettings = {
+  minimumCartAmount: 0,
+  minimumCartAmountMessage:
+    "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.",
+  guestFirstOrderShippingMessage:
+    "Hesap oluştur, ilk alışverişinde kargo bedava!",
+  isMinimumCartAmountActive: false,
+  updatedAt: null,
+  updatedByUserName: null,
+};
+
+const normalizeSettingsPayload = (payload) => ({
+  ...initialSettings,
+  ...(payload?.data || payload || {}),
+});
 
 // ============================================
 // ANA COMPONENT
@@ -63,7 +80,7 @@ export default function AdminCartSettings() {
     try {
       setLoading(true);
       setError("");
-      const data = await getCartSettingsAdmin();
+      const data = normalizeSettingsPayload(await getCartSettingsAdmin());
       setSettings(data);
     } catch (err) {
       console.error("Sepet ayarları yüklenemedi:", err);
@@ -99,6 +116,8 @@ export default function AdminCartSettings() {
     setEditForm({
       minimumCartAmount: settings?.minimumCartAmount?.toString() || "0",
       minimumCartAmountMessage: settings?.minimumCartAmountMessage || "",
+      guestFirstOrderShippingMessage:
+        settings?.guestFirstOrderShippingMessage || "",
       isMinimumCartAmountActive: settings?.isMinimumCartAmountActive || false,
     });
   };
@@ -140,7 +159,9 @@ export default function AdminCartSettings() {
         minimumCartAmount: amount,
         isMinimumCartAmountActive: editForm.isMinimumCartAmountActive,
         minimumCartAmountMessage:
-          editForm.minimumCartAmountMessage.trim() || undefined,
+          editForm.minimumCartAmountMessage.trim(),
+        guestFirstOrderShippingMessage:
+          editForm.guestFirstOrderShippingMessage.trim(),
       });
 
       showMessage("Sepet ayarları başarıyla güncellendi!", "success");
@@ -448,13 +469,35 @@ export default function AdminCartSettings() {
                       className="form-control"
                       value={editForm.minimumCartAmountMessage}
                       onChange={handleFormChange}
+                      maxLength={500}
                       rows="3"
                       placeholder="Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır."
                       style={{ borderRadius: "10px", resize: "none" }}
                     />
                     <small className="text-muted mt-1 d-block">
                       <code>{"{amount}"}</code> yazdığınız yere minimum tutar
-                      otomatik yerleştirilir
+                      otomatik yerleştirilir. En fazla 500 karakter.
+                    </small>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="form-label fw-semibold">
+                      <i className="fas fa-gift me-1 text-muted"></i>
+                      Misafir Kampanya Mesajı
+                    </label>
+                    <textarea
+                      name="guestFirstOrderShippingMessage"
+                      className="form-control"
+                      value={editForm.guestFirstOrderShippingMessage}
+                      onChange={handleFormChange}
+                      maxLength={500}
+                      rows="3"
+                      placeholder="Hesap oluştur, ilk alışverişinde kargo bedava!"
+                      style={{ borderRadius: "10px", resize: "none" }}
+                    />
+                    <small className="text-muted mt-1 d-block">
+                      Bu mesaj misafir kullanıcı ürün sepete eklediğinde görünür.
+                      Alanı boş bırakırsanız hiç gösterilmez. En fazla 500 karakter.
                     </small>
                   </div>
 
@@ -557,6 +600,33 @@ export default function AdminCartSettings() {
                                 }),
                               )
                             : "Belirtilmemiş"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="d-flex align-items-start mb-2">
+                      <div
+                        className="d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                        style={{
+                          width: "36px",
+                          height: "36px",
+                          backgroundColor: THEME.bgColor,
+                          borderRadius: "10px",
+                        }}
+                      >
+                        <i
+                          className="fas fa-gift"
+                          style={{ color: THEME.primaryColor }}
+                        ></i>
+                      </div>
+                      <div>
+                        <small className="text-muted d-block">
+                          Misafir Sepet Pop-up Mesajı
+                        </small>
+                        <span className="text-secondary small">
+                          {settings?.guestFirstOrderShippingMessage?.trim()
+                            ? settings.guestFirstOrderShippingMessage
+                            : "Gösterilmiyor"}
                         </span>
                       </div>
                     </div>

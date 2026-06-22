@@ -310,6 +310,69 @@ namespace ECommerce.API.Controllers
         #region Admin İşlevleri
 
         /// <summary>
+        /// Admin/Store Attendant - Hazırlık aşamasında manuel ağırlık güncellemesi
+        /// PATCH /api/weight-adjustment/admin/orders/{orderId}/items/{orderItemId}/manual-weight
+        /// </summary>
+        [HttpPatch("admin/orders/{orderId}/items/{orderItemId}/manual-weight")]
+        [Authorize(Roles = "Admin,StoreAttendant")]
+        public async Task<IActionResult> UpdateManualWeight(
+            int orderId,
+            int orderItemId,
+            [FromBody] ManualWeightUpdateRequest request)
+        {
+            try
+            {
+                if (request == null || request.ActualWeight <= 0)
+                {
+                    return BadRequest(new { success = false, message = "Geçerli bir ağırlık değeri gönderilmelidir." });
+                }
+
+                if (request.OrderItemId > 0 && request.OrderItemId != orderItemId)
+                {
+                    return BadRequest(new { success = false, message = "Route ve body içindeki sipariş kalemi ID eşleşmiyor." });
+                }
+
+                var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrWhiteSpace(userIdStr) || !int.TryParse(userIdStr, out var actorUserId))
+                {
+                    return Unauthorized(new { success = false, message = "Kullanıcı kimliği bulunamadı" });
+                }
+
+                var actorDisplayName =
+                    User.Identity?.Name ??
+                    User.FindFirstValue(ClaimTypes.GivenName) ??
+                    User.FindFirstValue(ClaimTypes.Email) ??
+                    $"User#{actorUserId}";
+
+                var result = await _weightAdjustmentService.UpdateManualWeightAsync(
+                    orderId,
+                    orderItemId,
+                    request.ActualWeight,
+                    actorUserId,
+                    actorDisplayName);
+
+                if (!result.IsSuccess)
+                {
+                    return BadRequest(new { success = false, message = result.ErrorMessage, data = result });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    message = "Manuel ağırlık güncellemesi kaydedildi.",
+                    data = result
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex,
+                    "[WEIGHT-API] Manuel ağırlık güncelleme hatası: Order={OrderId}, Item={ItemId}",
+                    orderId, orderItemId);
+                return StatusCode(500, new { success = false, message = "Bir hata oluştu", error = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// Admin - Onay bekleyen ağırlık ayarlamaları
         /// GET /api/weight-adjustment/admin/pending
         /// </summary>

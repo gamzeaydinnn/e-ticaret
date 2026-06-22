@@ -32,7 +32,6 @@ namespace ECommerce.Business.Services.Managers
         private readonly IPaymentCaptureService _paymentCaptureService;
         private readonly ILogger<WeightService> _logger;
         private readonly IConfiguration _configuration;
-        private readonly int _autoApproveThresholdGrams;
 
         public WeightService(
             IWeightReportRepository weightReportRepository,
@@ -49,8 +48,6 @@ namespace ECommerce.Business.Services.Managers
             _logger = logger;
             _configuration = configuration;
 
-            // Otomatik onay eşik değeri: 0 (her fazlalık için manuel onay gerekli)
-            _autoApproveThresholdGrams = 0;
         }
 
         public async Task<WeightReport> ProcessReportAsync(MicroWeightReportDto dto)

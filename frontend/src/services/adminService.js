@@ -253,11 +253,14 @@ export const AdminService = {
     return api.get(`/api/admin/orders?page=${page}&size=${size}`);
   },
   getOrder: (id) => api.get(`/api/admin/orders/${id}`),
+  updateOrder: (id, payload) => api.put(`/api/admin/orders/${id}`, payload),
   updateOrderStatus: (id, status) =>
     api.put(`/api/admin/orders/${id}/status`, { status }),
   getRecentOrders: () => api.get("/api/admin/orders/recent"),
   // NEDEN: Admin panelinde sipariş silme aksiyonu gerekir.
   deleteOrder: (id) => api.delete(`/api/admin/orders/${id}`),
+  bulkDeleteOrders: (orderIds) =>
+    api.post("/api/admin/orders/bulk-delete", { orderIds }),
 
   // ============================================================
   // SİPARİŞ İPTAL + PARA İADESİ
@@ -276,6 +279,11 @@ export const AdminService = {
   cancelOrder: async (orderId) => {
     ensureBackend();
     return api.post(`/api/admin/orders/${orderId}/cancel`);
+  },
+
+  refundOrderItems: async (orderId, payload) => {
+    ensureBackend();
+    return api.post(`/api/admin/orders/${orderId}/item-refund`, payload);
   },
 
   // ============================================================

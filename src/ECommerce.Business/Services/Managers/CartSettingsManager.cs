@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Data.Common;
 using System.Threading.Tasks;
 
 namespace ECommerce.Business.Services.Managers
@@ -24,6 +25,11 @@ namespace ECommerce.Business.Services.Managers
     /// </summary>
     public class CartSettingsManager : ICartSettingsService
     {
+        private const string DefaultMinimumCartAmountMessage = "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.";
+        private const string DefaultGuestFirstOrderShippingMessage = "Hesap oluştur, ilk alışverişinde kargo bedava!";
+        private const int MaxMessageLength = 500;
+        private const int MaxUpdatedByUserNameLength = 200;
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // BAĞIMLILIKLAR
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -86,6 +92,12 @@ namespace ECommerce.Business.Services.Managers
             }
             catch (Exception ex)
             {
+                if (IsMissingGuestMessageColumnException(ex))
+                {
+                    _logger.LogWarning(ex, "CartSettings tablosunda GuestFirstOrderShippingMessage kolonu bulunamadı. Legacy fallback kullanılacak.");
+                    return await GetLegacySettingsAsync();
+                }
+
                 _logger.LogError(ex, "Sepet ayarları yüklenirken hata oluştu");
                 // Hata durumunda güvenli varsayılan döndür (minimum tutar pasif)
                 return GetDefaultSettings();
@@ -128,6 +140,12 @@ namespace ECommerce.Business.Services.Managers
             }
             catch (Exception ex)
             {
+                if (IsMissingGuestMessageColumnException(ex))
+                {
+                    _logger.LogWarning(ex, "Admin CartSettings sorgusunda GuestFirstOrderShippingMessage kolonu eksik. Legacy fallback kullanılacak.");
+                    return await GetLegacySettingsAsync();
+                }
+
                 _logger.LogError(ex, "Admin sepet ayarları getirilirken hata oluştu");
                 throw;
             }
@@ -177,13 +195,24 @@ namespace ECommerce.Business.Services.Managers
                 if (updateDto.IsMinimumCartAmountActive.HasValue)
                     setting.IsMinimumCartAmountActive = updateDto.IsMinimumCartAmountActive.Value;
 
-                if (!string.IsNullOrWhiteSpace(updateDto.MinimumCartAmountMessage))
-                    setting.MinimumCartAmountMessage = updateDto.MinimumCartAmountMessage.Trim();
+                // NEDEN: Admin mesajı boş gönderirse sistem varsayılanına dönülmeli.
+                // null ise alan hiç değiştirilmez; boş string ise reset anlamına gelir.
+                if (updateDto.MinimumCartAmountMessage != null)
+                {
+                    setting.MinimumCartAmountMessage = string.IsNullOrWhiteSpace(updateDto.MinimumCartAmountMessage)
+                        ? DefaultMinimumCartAmountMessage
+                        : Truncate(updateDto.MinimumCartAmountMessage.Trim(), MaxMessageLength);
+                }
+
+                // NEDEN: Admin alanı bilinçli olarak boş bırakırsa banner tamamen gizlenebilmelidir.
+                // Bu yüzden burada null "değiştirme", boş string ise "temizle" anlamına gelir.
+                if (updateDto.GuestFirstOrderShippingMessage != null)
+                    setting.GuestFirstOrderShippingMessage = Truncate(updateDto.GuestFirstOrderShippingMessage.Trim(), MaxMessageLength);
 
                 // Audit bilgileri
                 setting.UpdatedAt = DateTime.UtcNow;
                 setting.UpdatedByUserId = updatedByUserId;
-                setting.UpdatedByUserName = updatedByUserName;
+                setting.UpdatedByUserName = Truncate(updatedByUserName, MaxUpdatedByUserNameLength);
 
                 await _context.SaveChangesAsync();
 
@@ -198,6 +227,12 @@ namespace ECommerce.Business.Services.Managers
             }
             catch (Exception ex)
             {
+                if (IsMissingGuestMessageColumnException(ex))
+                {
+                    _logger.LogWarning(ex, "CartSettings legacy şemada güncelleniyor. GuestFirstOrderShippingMessage kolonu atlanacak.");
+                    return await UpdateLegacySettingsAsync(updateDto, updatedByUserId, updatedByUserName);
+                }
+
                 _logger.LogError(ex, "Sepet ayarları güncellenirken hata oluştu");
                 throw;
             }
@@ -218,6 +253,7 @@ namespace ECommerce.Business.Services.Managers
                 MinimumCartAmount = entity.MinimumCartAmount,
                 IsMinimumCartAmountActive = entity.IsMinimumCartAmountActive,
                 MinimumCartAmountMessage = entity.MinimumCartAmountMessage,
+                GuestFirstOrderShippingMessage = entity.GuestFirstOrderShippingMessage,
                 IsActive = entity.IsActive,
                 UpdatedAt = entity.UpdatedAt,
                 UpdatedByUserName = entity.UpdatedByUserName
@@ -235,7 +271,8 @@ namespace ECommerce.Business.Services.Managers
                 Id = 0,
                 MinimumCartAmount = 0,
                 IsMinimumCartAmountActive = false,
-                MinimumCartAmountMessage = "Sipariş verebilmek için sepet tutarınız en az {amount} TL olmalıdır.",
+                MinimumCartAmountMessage = DefaultMinimumCartAmountMessage,
+                GuestFirstOrderShippingMessage = DefaultGuestFirstOrderShippingMessage,
                 IsActive = true,
                 UpdatedAt = null,
                 UpdatedByUserName = null
@@ -250,6 +287,165 @@ namespace ECommerce.Business.Services.Managers
         {
             _cache.Remove(CACHE_KEY);
             _logger.LogDebug("Sepet ayarları cache'i temizlendi");
+        }
+
+        private static bool IsMissingGuestMessageColumnException(Exception ex)
+        {
+            return ex.ToString().Contains("GuestFirstOrderShippingMessage", StringComparison.OrdinalIgnoreCase)
+                && ex.ToString().Contains("Invalid column name", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<CartSettingsDto> GetLegacySettingsAsync()
+        {
+            var connection = _context.Database.GetDbConnection();
+            var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
+            if (shouldCloseConnection)
+            {
+                await connection.OpenAsync();
+            }
+
+            try
+            {
+                return await ReadLegacySettingsAsync(connection);
+            }
+            finally
+            {
+                if (shouldCloseConnection)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+        }
+
+        private static async Task<CartSettingsDto> ReadLegacySettingsAsync(DbConnection connection)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = @"
+                SELECT TOP 1
+                    Id,
+                    MinimumCartAmount,
+                    IsMinimumCartAmountActive,
+                    MinimumCartAmountMessage,
+                    IsActive,
+                    UpdatedAt,
+                    UpdatedByUserName
+                FROM CartSettings
+                WHERE IsActive = 1
+                ORDER BY Id";
+
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                return GetDefaultSettings();
+            }
+
+            return new CartSettingsDto
+            {
+                Id = reader.GetInt32(reader.GetOrdinal("Id")),
+                MinimumCartAmount = reader.GetDecimal(reader.GetOrdinal("MinimumCartAmount")),
+                IsMinimumCartAmountActive = reader.GetBoolean(reader.GetOrdinal("IsMinimumCartAmountActive")),
+                MinimumCartAmountMessage = reader["MinimumCartAmountMessage"]?.ToString() ?? DefaultMinimumCartAmountMessage,
+                GuestFirstOrderShippingMessage = DefaultGuestFirstOrderShippingMessage,
+                IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                UpdatedAt = reader.IsDBNull(reader.GetOrdinal("UpdatedAt"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("UpdatedAt")),
+                UpdatedByUserName = reader["UpdatedByUserName"]?.ToString()
+            };
+        }
+
+        private async Task<bool> UpdateLegacySettingsAsync(
+            CartSettingsUpdateDto updateDto,
+            int updatedByUserId,
+            string updatedByUserName)
+        {
+            await using var connection = _context.Database.GetDbConnection();
+            if (connection.State != System.Data.ConnectionState.Open)
+            {
+                await connection.OpenAsync();
+            }
+
+            await using var selectCommand = connection.CreateCommand();
+            selectCommand.CommandText = "SELECT TOP 1 Id FROM CartSettings WHERE IsActive = 1 ORDER BY Id";
+            var existingId = await selectCommand.ExecuteScalarAsync();
+
+            if (existingId == null || existingId == DBNull.Value)
+            {
+                await using var insertCommand = connection.CreateCommand();
+                insertCommand.CommandText = @"
+                    INSERT INTO CartSettings
+                    (MinimumCartAmount, IsMinimumCartAmountActive, MinimumCartAmountMessage, UpdatedByUserId, UpdatedByUserName, IsActive, CreatedAt, UpdatedAt)
+                    VALUES
+                    (@MinimumCartAmount, @IsMinimumCartAmountActive, @MinimumCartAmountMessage, @UpdatedByUserId, @UpdatedByUserName, 1, @CreatedAt, @UpdatedAt)";
+
+                AddParameter(insertCommand, "@MinimumCartAmount", updateDto.MinimumCartAmount ?? 0m);
+                AddParameter(insertCommand, "@IsMinimumCartAmountActive", updateDto.IsMinimumCartAmountActive ?? false);
+                AddParameter(
+                    insertCommand,
+                    "@MinimumCartAmountMessage",
+                    updateDto.MinimumCartAmountMessage != null && !string.IsNullOrWhiteSpace(updateDto.MinimumCartAmountMessage)
+                        ? Truncate(updateDto.MinimumCartAmountMessage.Trim(), MaxMessageLength)
+                        : DefaultMinimumCartAmountMessage);
+                AddParameter(insertCommand, "@UpdatedByUserId", updatedByUserId);
+                AddParameter(insertCommand, "@UpdatedByUserName", Truncate(updatedByUserName, MaxUpdatedByUserNameLength));
+                AddParameter(insertCommand, "@CreatedAt", DateTime.UtcNow);
+                AddParameter(insertCommand, "@UpdatedAt", DateTime.UtcNow);
+
+                await insertCommand.ExecuteNonQueryAsync();
+            }
+            else
+            {
+                await using var updateCommand = connection.CreateCommand();
+                updateCommand.CommandText = @"
+                    UPDATE CartSettings
+                    SET
+                        MinimumCartAmount = @MinimumCartAmount,
+                        IsMinimumCartAmountActive = @IsMinimumCartAmountActive,
+                        MinimumCartAmountMessage = @MinimumCartAmountMessage,
+                        UpdatedByUserId = @UpdatedByUserId,
+                        UpdatedByUserName = @UpdatedByUserName,
+                        UpdatedAt = @UpdatedAt
+                    WHERE Id = @Id";
+
+                var current = await ReadLegacySettingsAsync(connection);
+                AddParameter(updateCommand, "@Id", Convert.ToInt32(existingId));
+                AddParameter(updateCommand, "@MinimumCartAmount", updateDto.MinimumCartAmount ?? current.MinimumCartAmount);
+                AddParameter(updateCommand, "@IsMinimumCartAmountActive", updateDto.IsMinimumCartAmountActive ?? current.IsMinimumCartAmountActive);
+                AddParameter(
+                    updateCommand,
+                    "@MinimumCartAmountMessage",
+                    updateDto.MinimumCartAmountMessage == null
+                        ? current.MinimumCartAmountMessage
+                        : string.IsNullOrWhiteSpace(updateDto.MinimumCartAmountMessage)
+                            ? DefaultMinimumCartAmountMessage
+                            : Truncate(updateDto.MinimumCartAmountMessage.Trim(), MaxMessageLength));
+                AddParameter(updateCommand, "@UpdatedByUserId", updatedByUserId);
+                AddParameter(updateCommand, "@UpdatedByUserName", Truncate(updatedByUserName, MaxUpdatedByUserNameLength));
+                AddParameter(updateCommand, "@UpdatedAt", DateTime.UtcNow);
+
+                await updateCommand.ExecuteNonQueryAsync();
+            }
+
+            InvalidateCache();
+            return true;
+        }
+
+        private static void AddParameter(DbCommand command, string name, object? value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value ?? DBNull.Value;
+            command.Parameters.Add(parameter);
+        }
+
+        private static string Truncate(string value, int maxLength)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            return value[..maxLength];
         }
     }
 }

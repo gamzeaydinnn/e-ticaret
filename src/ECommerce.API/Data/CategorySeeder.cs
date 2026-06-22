@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace ECommerce.API.Data
@@ -34,6 +35,14 @@ namespace ECommerce.API.Data
 
         private static readonly string[] FrozenCategoryNameHints =
         {
+            "ALGIDA",
+            "MAGNUM",
+            "CORNETTO",
+            "CALIPPO",
+            "CLASSICS",
+            "CARTE D OR",
+            "CARTE D'OR",
+            "BOOM BOOM",
             "SUPERFRESH",
             "SUPER FRESH",
             "DONDURMA",
@@ -81,7 +90,9 @@ namespace ECommerce.API.Data
             ("PEYNİR", "sut-ve-sut-urunleri", 3, "Peynir ana grubu"),
             ("KAHVALTILIK", "sut-ve-sut-urunleri", 4, "Kahvaltılık ana grubu"),
             ("500", "sut-ve-sut-urunleri", 10, "Legacy numeric süt kodu"),
-            ("800", "sut-ve-sut-urunleri", 11, "Legacy numeric süt/dondurma kodu"),
+            // NEDEN: Legacy 800 kodu sahada Algida/dondurma ürünleri için kullanılıyor.
+            // Süt ürünlerine map edildiğinde storefront'ta yanlış raf oluşuyor.
+            ("800", "dondurma-ve-dondurulmus-gida", 11, "Legacy numeric dondurma kodu"),
 
             ("MEYVE VE SEBZE", "meyve-ve-sebze", 1, "Meyve ve sebze ana grubu"),
             ("MEYVE-SEBZE", "meyve-ve-sebze", 1, "Meyve ve sebze ana grubu"),
@@ -147,6 +158,20 @@ namespace ECommerce.API.Data
             ("500", "506", "temel-gida", 100, "Reçel, pekmez ve benzeri kahvaltılık şekerli ürünler"),
         };
 
+        private static readonly string[] MeatCategoryNameHints =
+        {
+            "SUCUK", "SALAM", "SOSIS", "SOSİS", "PASTIRMA", "PASTİRMA", "KAVURMA",
+            "JAMBON", "FUME ET", "FÜME ET", "DANA", "KUZU", "KOFTE", "KÖFTE",
+            "KIYMA", "KIYMA", "ANTRIKOT", "BONFILE", "BIFTEK", "TAVUK", "HINDI", "HİNDİ"
+        };
+
+        private static readonly string[] MilkCategoryNameHints =
+        {
+            " SUT", " SÜT", "YOGURT", "YOĞURT", "AYRAN", "KEFIR", "KEFİR", "PEYNIR", "PEYNİR",
+            "KASAR", "KAŞAR", "LABNE", "TEREYAG", "TEREYAĞ", "KREMA", "KAYMAK",
+            "HINDISTAN CEVIZI SUTU", "HİNDİSTAN CEVİZİ SÜTÜ", "BITKISEL SUT", "BİTKİSEL SÜT"
+        };
+
         public static async Task SeedAsync(ECommerceDbContext context)
         {
             try
@@ -167,6 +192,12 @@ namespace ECommerce.API.Data
 
                 // 2.2 Yeni donmuş kategoriye ait mevcut ürünleri güvenli biçimde taşı.
                 await ReassignFrozenCategoryProductsAsync(context, storefrontCategories);
+
+                // 2.3 Et ürünleri yanlış raflara düşmüşse isim ve ERP ipuçlarıyla düzelt.
+                await ReassignMeatCategoryProductsAsync(context, storefrontCategories);
+
+                // 2.4 Süt geçen ürünleri içecek/diğer raflarından süt ürünlerine çek.
+                await ReassignMilkCategoryProductsAsync(context, storefrontCategories);
 
                 // 3. Wildcard (*) mapping'i garanti et — tüm eşlenemeyen ürünler "Diğer"e düşer
                 await EnsureWildcardMappingAsync(context, digerCategory.Id);
@@ -551,9 +582,143 @@ namespace ECommerce.API.Data
             }
         }
 
+        private static async Task ReassignMeatCategoryProductsAsync(
+            ECommerceDbContext context,
+            IReadOnlyDictionary<string, Category> storefrontCategories)
+        {
+            var meatCategory = await context.Categories
+                .FirstOrDefaultAsync(category => category.Slug == "et-ve-et-urunleri");
+            if (meatCategory == null)
+                return;
+
+            var broadCategoryIds = await context.Categories
+                .Where(category =>
+                    category.Slug == "sut-ve-sut-urunleri" ||
+                    category.Slug == "temel-gida" ||
+                    category.Slug == "atistirmalik" ||
+                    category.Slug == UncategorizedSlug)
+                .Select(category => category.Id)
+                .ToHashSetAsync();
+
+            var cacheItems = await context.MikroProductCaches
+                .AsNoTracking()
+                .Where(item => item.LocalProductId.HasValue)
+                .Select(item => new { ProductId = item.LocalProductId!.Value, item.AnagrupKod, item.StokAd })
+                .ToListAsync();
+
+            var meatProductIds = cacheItems
+                .Where(item => IsMeatCategoryMatch(item.AnagrupKod, item.StokAd))
+                .Select(item => item.ProductId)
+                .ToHashSet();
+
+            var products = await context.Products
+                .Where(product => product.Name != null)
+                .ToListAsync();
+
+            var movedCount = 0;
+            var now = DateTime.UtcNow;
+
+            foreach (var product in products)
+            {
+                var shouldMove = meatProductIds.Contains(product.Id) ||
+                                 (broadCategoryIds.Contains(product.CategoryId) && IsMeatCategoryMatch(null, product.Name));
+
+                if (!shouldMove || product.CategoryId == meatCategory.Id)
+                    continue;
+
+                product.CategoryId = meatCategory.Id;
+                product.UpdatedAt = now;
+                movedCount++;
+            }
+
+            if (movedCount > 0)
+            {
+                await context.SaveChangesAsync();
+                Console.WriteLine($"[CategorySeeder] 🔄 {movedCount} ürün '{meatCategory.Name}' kategorisine taşındı");
+            }
+        }
+
+        private static async Task ReassignMilkCategoryProductsAsync(
+            ECommerceDbContext context,
+            IReadOnlyDictionary<string, Category> storefrontCategories)
+        {
+            var milkCategory = await context.Categories
+                .FirstOrDefaultAsync(category => category.Slug == "sut-ve-sut-urunleri");
+            if (milkCategory == null)
+                return;
+
+            var broadCategoryIds = await context.Categories
+                .Where(category =>
+                    category.Slug == "icecekler" ||
+                    category.Slug == "temel-gida" ||
+                    category.Slug == "atistirmalik" ||
+                    category.Slug == UncategorizedSlug)
+                .Select(category => category.Id)
+                .ToHashSetAsync();
+
+            var cacheItems = await context.MikroProductCaches
+                .AsNoTracking()
+                .Where(item => item.LocalProductId.HasValue)
+                .Select(item => new { ProductId = item.LocalProductId!.Value, item.AnagrupKod, item.StokAd })
+                .ToListAsync();
+
+            var milkProductIds = cacheItems
+                .Where(item => IsMilkCategoryMatch(item.AnagrupKod, item.StokAd))
+                .Select(item => item.ProductId)
+                .ToHashSet();
+
+            var products = await context.Products
+                .Where(product => product.Name != null)
+                .ToListAsync();
+
+            var movedCount = 0;
+            var now = DateTime.UtcNow;
+
+            foreach (var product in products)
+            {
+                if (IsMeatCategoryMatch(null, product.Name))
+                    continue;
+
+                var shouldMove = milkProductIds.Contains(product.Id) ||
+                                 (broadCategoryIds.Contains(product.CategoryId) && IsMilkCategoryMatch(null, product.Name));
+
+                if (!shouldMove || product.CategoryId == milkCategory.Id)
+                    continue;
+
+                product.CategoryId = milkCategory.Id;
+                product.UpdatedAt = now;
+                movedCount++;
+            }
+
+            if (movedCount > 0)
+            {
+                await context.SaveChangesAsync();
+                Console.WriteLine($"[CategorySeeder] 🔄 {movedCount} ürün '{milkCategory.Name}' kategorisine taşındı");
+            }
+        }
+
         private static string NormalizeSeedKey(string mikroAnagrupKod)
         {
             return mikroAnagrupKod.Trim().ToUpperInvariant();
+        }
+
+        private static string NormalizeHintText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var normalized = Regex.Replace(value.ToUpperInvariant(), @"[^\p{L}\p{Nd}]+", " ");
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+            return $" {normalized} ";
+        }
+
+        private static bool ContainsHint(string? value, IEnumerable<string> hints)
+        {
+            var normalizedValue = NormalizeHintText(value);
+            if (string.IsNullOrWhiteSpace(normalizedValue))
+                return false;
+
+            return hints.Any(hint => normalizedValue.Contains(NormalizeHintText(hint), StringComparison.Ordinal));
         }
 
         private static bool IsFrozenCategoryMatch(string? anagrupKod, string? productName)
@@ -567,8 +732,53 @@ namespace ECommerce.API.Data
             if (string.IsNullOrWhiteSpace(productName))
                 return false;
 
-            return FrozenCategoryNameHints.Any(hint =>
-                productName.Contains(hint, StringComparison.OrdinalIgnoreCase));
+            return ContainsHint(productName, FrozenCategoryNameHints);
+        }
+
+        private static bool IsMeatCategoryMatch(string? anagrupKod, string? productName)
+        {
+            if (!string.IsNullOrWhiteSpace(anagrupKod))
+            {
+                var normalizedGroup = NormalizeSeedKey(anagrupKod);
+                if (normalizedGroup.Contains("ET") ||
+                    normalizedGroup.Contains("SARKUTERI") ||
+                    normalizedGroup.Contains("ŞARKÜTERİ") ||
+                    normalizedGroup.Contains("TAVUK") ||
+                    normalizedGroup.Contains("PILIC") ||
+                    normalizedGroup.Contains("PİLİÇ") ||
+                    normalizedGroup.Contains("BALIK"))
+                {
+                    return true;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(productName))
+                return false;
+
+            return ContainsHint(productName, MeatCategoryNameHints);
+        }
+
+        private static bool IsMilkCategoryMatch(string? anagrupKod, string? productName)
+        {
+            if (!string.IsNullOrWhiteSpace(anagrupKod))
+            {
+                var normalizedGroup = NormalizeSeedKey(anagrupKod);
+                if (normalizedGroup.Contains("SUT") ||
+                    normalizedGroup.Contains("SÜT") ||
+                    normalizedGroup.Contains("PEYNIR") ||
+                    normalizedGroup.Contains("PEYNİR") ||
+                    normalizedGroup.Contains("YOGURT") ||
+                    normalizedGroup.Contains("YOĞURT") ||
+                    normalizedGroup.Contains("KAHVALTILIK"))
+                {
+                    return true;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(productName))
+                return false;
+
+            return ContainsHint(productName, MilkCategoryNameHints);
         }
 
         /// <summary>

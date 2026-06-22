@@ -187,6 +187,7 @@ namespace ECommerce.Tests.Services
             Assert.Equal(dto.CategoryId, addedProduct.CategoryId);
             Assert.Equal(string.Empty, addedProduct.ImageUrl);
             Assert.Equal(dto.BrandId, addedProduct.BrandId);
+            Assert.True(addedProduct.AdminOverrideCategory);
 
             productRepositoryMock.Verify(r => r.AddAsync(It.IsAny<Product>()), Times.Once);
 
@@ -236,7 +237,9 @@ namespace ECommerce.Tests.Services
                 StockQuantity = 5,
                 CategoryId = 2,
                 ImageUrl = "new.jpg",
-                BrandId = 3
+                BrandId = 3,
+                AdminOverrideName = true,
+                AdminOverridePrice = true
             };
 
             // Act
@@ -251,6 +254,7 @@ namespace ECommerce.Tests.Services
             Assert.Equal(2, existing.CategoryId);
             Assert.Equal("new.jpg", existing.ImageUrl);
             Assert.Equal(3, existing.BrandId);
+            Assert.True(existing.AdminOverrideCategory);
             Assert.True(existing.AdminOverrideName);
             Assert.True(existing.AdminOverridePrice);
             Assert.True(existing.AdminOverrideCategory);

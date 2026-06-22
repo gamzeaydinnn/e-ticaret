@@ -324,12 +324,12 @@ export default function Home() {
         return;
       }
 
-      // Quantity güvenlik normalize: minimum 0.5 (kg senaryosu), step hassasiyeti korunur.
+      // Quantity güvenlik normalize: minimum 0.25 (kg senaryosu), step hassasiyeti korunur.
       const numericQty = Number(quantity);
       if (!Number.isFinite(numericQty) || numericQty <= 0) {
         quantity = 1;
       } else {
-        quantity = Math.max(0.5, Math.round(numericQty * 100) / 100);
+        quantity = Math.max(0.25, Math.round(numericQty * 100) / 100);
       }
 
       // Çağrıda variantInfo gelmediyse üründen türet

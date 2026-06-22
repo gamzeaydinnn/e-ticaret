@@ -62,12 +62,43 @@ api.interceptors.request.use(
       localStorage.getItem("storeAttendantToken") ||
       sessionStorage.getItem("storeAttendantToken");
 
-    const token =
-      (isCourierRequest ? courierToken : null) ||
-      localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("adminToken") ||
-      storeAttendantToken;
+    let token = null;
+
+    if (isCourierRequest) {
+      // Kurye isteklerinde SADECE kurye token'ı kullanılmalı, kesinlikle admin token'ına fallback YAPILMAMALI
+      token = courierToken;
+
+      // KRİTİK: courierToken yoksa isteği HİÇ GÖNDERME!
+      // Admin'in access_token cookie'sinin backend'e ulaşmasını engelle.
+      // Kurye auth endpoint'leri hariç (login/refresh için token gerekmez)
+      const isCourierAuthEndpoint =
+        url.includes("/api/courier/auth/login") ||
+        url.includes("/api/courier/auth/refresh") ||
+        url.includes("/api/courier/auth/password-reset");
+
+      if (!token && !isCourierAuthEndpoint) {
+        // Token yok ve auth endpoint'i değil → isteği iptal et, kurye login'e yönlendir
+        if (
+          window.location.pathname.startsWith("/courier") &&
+          !window.location.pathname.startsWith("/courier/login")
+        ) {
+          window.location.href = "/courier/login";
+        }
+        return Promise.reject(
+          Object.assign(new Error("Kurye oturumu bulunamadı. Lütfen giriş yapın."), {
+            status: 401,
+            isCourierAuthError: true,
+          })
+        );
+      }
+    } else {
+      // Diğer isteklerde genel token'lara bak
+      token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("adminToken") ||
+        storeAttendantToken;
+    }
 
     // Token sadece geçerliyse ekle (boş string veya null değil)
     if (token && token.trim().length > 0) {
@@ -207,10 +238,18 @@ api.interceptors.response.use(
             window.location.href = "/courier/login?session_expired=true";
           }
         } else {
+          // courierToken yok - Admin/SuperAdmin cookie'si ile erişilmeye çalışıldığında buraya gelir
+          // Kurye login sayfasına yönlendir
           localStorage.removeItem("courierToken");
           localStorage.removeItem("courierRefreshToken");
+          localStorage.removeItem("courierData");
           sessionStorage.removeItem("courierToken");
           sessionStorage.removeItem("courierRefreshToken");
+          sessionStorage.removeItem("courierData");
+          // Sadece kurye panelindeyse yönlendir, başka sayfadaysa yapma
+          if (window.location.pathname.startsWith("/courier")) {
+            window.location.href = "/courier/login?session_expired=true";
+          }
         }
       } else {
         const refreshToken = localStorage.getItem("refreshToken");
@@ -258,6 +297,17 @@ api.interceptors.response.use(
       }
     }
 
+    // 403 Forbidden - Kurye isteği için rol hatası (örn. admin cookie ile kurye endpoint'ine erişim)
+    if (status === 403 && isCourierRequest) {
+      // Kurye panelindeyse login'e yönlendir
+      if (
+        window.location.pathname.startsWith("/courier") &&
+        !window.location.pathname.startsWith("/courier/login")
+      ) {
+        window.location.href = "/courier/login";
+      }
+    }
+
     const normalizedError = new Error(message);
     normalizedError.status = status;
     normalizedError.raw = error;
@@ -270,6 +320,34 @@ api.interceptors.response.use(
           method: error.config?.method,
           hasAuthHeader: !!error.config?.headers?.Authorization,
           message: message,
+        });
+      } else if (status === 403) {
+        // Daha fazla debug bilgisi: 403 Forbidden durumunda istek başlıklarını ve sunucu cevabını göster
+        let authHeader = null;
+        try {
+          authHeader = error.config?.headers?.Authorization || null;
+        } catch (e) {
+          authHeader = null;
+        }
+
+        let storedCourierToken = null;
+        try {
+          storedCourierToken =
+            localStorage.getItem("courierToken") ||
+            sessionStorage.getItem("courierToken");
+        } catch (e) {
+          storedCourierToken = null;
+        }
+
+        console.error(`[API] ❌ 403 Forbidden:`, {
+          url: error.config?.url,
+          method: error.config?.method,
+          // Authorization header (string) - may be null
+          authorizationHeader: authHeader,
+          // Courier token stored in local/session storage (string or null)
+          storedCourierToken,
+          response: error.response?.data,
+          message,
         });
       } else {
         console.error(`[API] ❌ ${status}:`, message);

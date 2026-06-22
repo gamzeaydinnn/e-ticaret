@@ -88,7 +88,10 @@ const toInputDate = (value) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const formatDate = (value) => {
@@ -639,7 +642,7 @@ export default function AdminCampaigns() {
         : null,
 
       // Tarihler
-      startDate: new Date(`${form.startDate}T00:00:00`),
+      startDate: new Date(`${form.startDate}T12:00:00`),
       endDate: new Date(`${form.endDate}T23:59:59`),
       isActive: !!form.isActive,
 

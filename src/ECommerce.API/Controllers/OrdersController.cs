@@ -9,6 +9,7 @@ using ECommerce.Core.Extensions;
 using ECommerce.API.Infrastructure;
 using ECommerce.Core.Interfaces;
 using Microsoft.Extensions.Logging;
+using ECommerce.Entities.Enums;
 
 namespace ECommerce.API.Controllers
 {
@@ -271,7 +272,7 @@ namespace ECommerce.API.Controllers
         /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
         /// MARKET KURALLARI:
         /// - Sadece aynı gün içinde iptal edilebilir
-        /// - Sadece hazırlanmadan önce (New, Pending, Confirmed) iptal edilebilir
+        /// - Sadece hazırlanıyor aşaması ve öncesinde iptal edilebilir
         /// - Aksi halde müşteri hizmetleriyle iletişime geçilmeli
         /// </summary>
         [HttpPost("{orderId}/cancel")]
@@ -279,14 +280,63 @@ namespace ECommerce.API.Controllers
         public async Task<IActionResult> CancelOrder(int orderId)
         {
             var userId = User.GetUserId(); // extension ile alınıyor
-            var (success, errorMessage) = await _orderService.CancelOrderAsync(orderId, userId);
-            
-            if (!success)
+            if (userId <= 0)
             {
-                return BadRequest(new { 
-                    success = false, 
-                    message = errorMessage ?? "Sipariş iptal edilemedi.",
-                    // Müşteri hizmetleri iletişim bilgileri
+                return Unauthorized(new { success = false, message = "Giriş yapmanız gerekiyor." });
+            }
+
+            var order = await _orderService.GetByIdAsync(orderId);
+            if (order == null)
+            {
+                return NotFound(new { success = false, message = "Sipariş bulunamadı." });
+            }
+
+            if (order.UserId != userId)
+            {
+                return Forbid();
+            }
+
+            var currentBusinessDate = GetTurkeyNow().Date;
+            if (ConvertUtcToTurkey(order.OrderDate).Date != currentBusinessDate)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Sipariş iptali yalnızca siparişin verildiği gün yapılabilir.",
+                    errorCode = "SAME_DAY_CANCEL_ONLY"
+                });
+            }
+
+            if (!Enum.TryParse<OrderStatus>(order.Status, true, out var orderStatus) ||
+                (orderStatus != OrderStatus.New &&
+                 orderStatus != OrderStatus.Pending &&
+                 orderStatus != OrderStatus.Confirmed &&
+                 orderStatus != OrderStatus.Paid &&
+                 orderStatus != OrderStatus.Preparing))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Bu sipariş mevcut durumunda doğrudan iptal edilemez. Müşteri hizmetleriyle iletişime geçin.",
+                    errorCode = "ORDER_NOT_CANCELLABLE"
+                });
+            }
+
+            var result = await _refundService.CreateRefundRequestAsync(
+                orderId,
+                userId,
+                new CreateRefundRequestDto
+                {
+                    Reason = "Müşteri tarafından aynı gün iptal edildi",
+                    RefundType = "full"
+                });
+
+            if (!result.Success)
+            {
+                return BadRequest(new {
+                    success = false,
+                    message = result.Message ?? "Sipariş iptal edilemedi.",
+                    errorCode = result.ErrorCode,
                     contactInfo = new {
                         whatsapp = "+905334783072",
                         phone = "+90 533 478 30 72",
@@ -294,8 +344,43 @@ namespace ECommerce.API.Controllers
                     }
                 });
             }
-            
-            return Ok(new { success = true, message = "Sipariş başarıyla iptal edildi." });
+
+            return Ok(new
+            {
+                success = true,
+                message = result.Message ?? "Sipariş iptal edildi ve iade süreci başlatıldı.",
+                autoCancelled = result.AutoCancelled
+            });
+        }
+
+        private static DateTime GetTurkeyNow()
+        {
+            var utcNow = DateTime.UtcNow;
+            return ConvertUtcToTurkey(utcNow);
+        }
+
+        private static DateTime ConvertUtcToTurkey(DateTime utcDateTime)
+        {
+            var normalizedUtc = utcDateTime.Kind == DateTimeKind.Utc
+                ? utcDateTime
+                : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
+
+            foreach (var timeZoneId in new[] { "Turkey Standard Time", "Europe/Istanbul" })
+            {
+                try
+                {
+                    var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+                    return TimeZoneInfo.ConvertTimeFromUtc(normalizedUtc, timeZone);
+                }
+                catch (TimeZoneNotFoundException)
+                {
+                }
+                catch (InvalidTimeZoneException)
+                {
+                }
+            }
+
+            return normalizedUtc;
         }
 
         // ============================================================================

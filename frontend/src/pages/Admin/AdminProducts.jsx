@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/admin/XmlImportModal";
-import VariantManager from "../../components/admin/VariantManager";
+import XmlImportModal from "../../components/Admin/XmlImportModal";
+import VariantManager from "../../components/Admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -64,6 +64,10 @@ const AdminProducts = () => {
     name: "",
     status: "all",
     stockStatus: "all",
+  });
+  const [draftSearchFilters, setDraftSearchFilters] = useState({
+    sku: "",
+    name: "",
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
@@ -167,6 +171,30 @@ const AdminProducts = () => {
   useEffect(() => {
     fetchProductsRef.current = fetchProducts;
   }, [fetchProducts]);
+
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => {
+      setSearchFilters((prev) => {
+        const nextSku = draftSearchFilters.sku.trimStart();
+        const nextName = draftSearchFilters.name.trimStart();
+
+        if (prev.sku === nextSku && prev.name === nextName) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          sku: nextSku,
+          name: nextName,
+        };
+      });
+      setCurrentPage(1);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(debounceTimer);
+    };
+  }, [draftSearchFilters]);
 
   useEffect(() => {
     fetchCategories();
@@ -902,6 +930,10 @@ const AdminProducts = () => {
     searchFilters.name.trim().length > 0 ||
     searchFilters.status !== "all" ||
     searchFilters.stockStatus !== "all";
+  const hasPendingTextFilters =
+    draftSearchFilters.sku.trim().length > 0 ||
+    draftSearchFilters.name.trim().length > 0;
+  const hasAnyActiveFilters = hasActiveFilters || hasPendingTextFilters;
 
   return (
     <div>
@@ -1514,10 +1546,9 @@ const AdminProducts = () => {
                   type="text"
                   className="form-control"
                   placeholder="SKU veya stok kodu ile ara"
-                  value={searchFilters.sku}
+                  value={draftSearchFilters.sku}
                   onChange={(e) => {
-                    setCurrentPage(1);
-                    setSearchFilters((prev) => ({
+                    setDraftSearchFilters((prev) => ({
                       ...prev,
                       sku: e.target.value,
                     }));
@@ -1530,10 +1561,9 @@ const AdminProducts = () => {
                   type="text"
                   className="form-control"
                   placeholder="Ürün adına göre filtrele"
-                  value={searchFilters.name}
+                  value={draftSearchFilters.name}
                   onChange={(e) => {
-                    setCurrentPage(1);
-                    setSearchFilters((prev) => ({
+                    setDraftSearchFilters((prev) => ({
                       ...prev,
                       name: e.target.value,
                     }));
@@ -1601,6 +1631,10 @@ const AdminProducts = () => {
                   type="button"
                   className="btn btn-outline-secondary"
                   onClick={() => {
+                    setDraftSearchFilters({
+                      sku: "",
+                      name: "",
+                    });
                     setSearchFilters({
                       sku: "",
                       name: "",
@@ -1609,7 +1643,7 @@ const AdminProducts = () => {
                     });
                     setCurrentPage(1);
                   }}
-                  disabled={!hasActiveFilters}
+                  disabled={!hasAnyActiveFilters}
                 >
                   Temizle
                 </button>
@@ -1619,7 +1653,7 @@ const AdminProducts = () => {
             <div className="d-flex flex-column flex-lg-row justify-content-between gap-2 mt-3 text-muted">
               <small>
                 {totalProductsCount} sonuç bulundu.
-                {hasActiveFilters ? " Filtrelenmiş görünüm aktif." : ""}
+                {hasAnyActiveFilters ? " Filtrelenmiş görünüm aktif." : ""}
               </small>
               <small>
                 Sayfa {currentPage} / {serverTotalPages}

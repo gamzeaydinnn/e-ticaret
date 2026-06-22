@@ -1,8 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../../contexts/CartContext";
 import { useFavorites } from "../../contexts/FavoriteContext";
 import { useAuth } from "../../contexts/AuthContext";
+import cartSettingsService from "../../services/cartSettingsService";
+import { CART_SETTINGS_EVENT } from "../../services/cartSettingsService";
 import WeightSelectionModal, {
   isWeightBasedProduct,
 } from "../../components/WeightSelectionModal";
@@ -278,6 +280,8 @@ const ProductBlockSection = ({
 
   // Toast bildirimi için state
   const [cartNotification, setCartNotification] = useState(null);
+  const [guestFirstOrderShippingMessage, setGuestFirstOrderShippingMessage] =
+    useState("");
 
   // Kg seçici modal için state
   const [weightModalOpen, setWeightModalOpen] = useState(false);
@@ -287,6 +291,51 @@ const ProductBlockSection = ({
   const { addToCart } = useCart();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { user } = useAuth();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applyCartSettings = (settings) => {
+      if (!mounted) {
+        return;
+      }
+
+      setGuestFirstOrderShippingMessage(
+        settings?.guestFirstOrderShippingMessage ?? "",
+      );
+    };
+
+    const loadCartSettings = async (forceRefresh = false) => {
+      try {
+        const settings = await cartSettingsService.getCartSettings(forceRefresh);
+        applyCartSettings(settings);
+      } catch {
+        if (mounted) {
+          setGuestFirstOrderShippingMessage("");
+        }
+      }
+    };
+
+    loadCartSettings();
+
+    const handleCartSettingsUpdated = (event) => {
+      if (event?.detail) {
+        applyCartSettings(event.detail);
+        return;
+      }
+
+      loadCartSettings(true);
+    };
+
+    window.addEventListener(CART_SETTINGS_EVENT, handleCartSettingsUpdated);
+    return () => {
+      mounted = false;
+      window.removeEventListener(
+        CART_SETTINGS_EVENT,
+        handleCartSettingsUpdated,
+      );
+    };
+  }, []);
 
   const shouldUseWeightModal = (product) => {
     if (!product) return false;
@@ -1310,7 +1359,8 @@ const ProductBlockSection = ({
                         )}
                       </div>
 
-                      {cartNotification.userType === "guest" && (
+                      {cartNotification.userType === "guest" &&
+                        guestFirstOrderShippingMessage.trim() && (
                         <div
                           className="alert border-0 p-3 mb-3"
                           style={{
@@ -1340,10 +1390,12 @@ const ProductBlockSection = ({
                               </div>
                               <div
                                 className="text-dark"
-                                style={{ fontSize: "0.75rem" }}
+                                style={{
+                                  fontSize: "0.75rem",
+                                  whiteSpace: "pre-line",
+                                }}
                               >
-                                Hesap oluştur,{" "}
-                                <strong>ilk alışverişinde kargo bedava!</strong>
+                                {guestFirstOrderShippingMessage}
                               </div>
                             </div>
                           </div>
@@ -1428,9 +1480,9 @@ const ProductBlockSection = ({
         }}
         product={weightModalProduct}
         onConfirm={handleWeightConfirm}
-        minWeight={0.5}
+        minWeight={0.25}
         maxWeight={10}
-        step={0.5}
+        step={0.25}
       />
     </section>
   );

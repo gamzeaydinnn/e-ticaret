@@ -505,7 +505,7 @@ const OrderTracking = () => {
   // =========================================================================
   // SİPARİŞ İPTAL FONKSİYONU - MARKET KURALLARI
   // 1. Sadece aynı gün içinde iptal edilebilir
-  // 2. Sadece hazırlanmadan önce (new, pending, confirmed) iptal edilebilir
+  // 2. Sadece kurye teslim süreci başlamadan önce iptal edilebilir
   // 3. Diğer durumlarda müşteri hizmetleriyle iletişime yönlendirilir
   // =========================================================================
   const handleCancelOrder = useCallback(
@@ -517,7 +517,13 @@ const OrderTracking = () => {
       const orderDate = new Date(order.orderDate || order.createdAt);
       const today = new Date();
       const isSameDay = orderDate.toDateString() === today.toDateString();
-      const cancellableStatuses = ["new", "pending", "confirmed"];
+      const cancellableStatuses = [
+        "new",
+        "pending",
+        "confirmed",
+        "paid",
+        "preparing",
+      ];
       const status = (order.status || "").toLowerCase();
       const isCancellableStatus = cancellableStatuses.includes(status);
 
@@ -525,7 +531,7 @@ const OrderTracking = () => {
       if (!isSameDay || !isCancellableStatus) {
         const reason = !isSameDay
           ? "Sipariş sadece aynı gün içinde iptal edilebilir."
-          : "Siparişiniz hazırlanmaya başladı.";
+          : "Siparişiniz bu aşamada online olarak iptal edilemiyor.";
 
         setNotification({
           type: "warning",
@@ -1529,7 +1535,7 @@ const MiniStepper = ({ status }) => {
  * Sipariş Detay Kartı (Modal gibi)
  * MARKET SİPARİŞ İPTAL KURALLARI:
  * - Sadece aynı gün içinde iptal edilebilir
- * - Sadece hazırlanmadan önce (new, pending, confirmed) iptal edilebilir
+ * - Sadece kurye teslim süreci başlamadan önce iptal edilebilir
  * - Diğer durumlarda WhatsApp ile müşteri hizmetlerine yönlendirilir
  */
 const OrderDetailCard = ({
@@ -1552,7 +1558,13 @@ const OrderDetailCard = ({
   const orderDate = new Date(order.orderDate || order.createdAt);
   const today = new Date();
   const isSameDay = orderDate.toDateString() === today.toDateString();
-  const cancellableStatuses = ["new", "pending", "confirmed"];
+  const cancellableStatuses = [
+    "new",
+    "pending",
+    "confirmed",
+    "paid",
+    "preparing",
+  ];
   const status = (order.status || "").toLowerCase();
   const isCancellableStatus = cancellableStatuses.includes(status);
   const canCancel = isSameDay && isCancellableStatus && !isCancelled;

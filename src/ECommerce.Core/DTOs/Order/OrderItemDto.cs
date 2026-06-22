@@ -11,6 +11,11 @@ namespace ECommerce.Core.DTOs.Order
     /// </summary>
     public class OrderItemDto
     {
+        /// <summary>
+        /// Sipariş kalemi ID
+        /// </summary>
+        public int Id { get; set; }
+
         #region Ürün Bilgileri
 
         /// <summary>
@@ -27,6 +32,12 @@ namespace ECommerce.Core.DTOs.Order
         /// Ürün görseli URL (opsiyonel)
         /// </summary>
         public string? ProductImageUrl { get; set; }
+
+        /// <summary>
+        /// Ürünün kategori adı.
+        /// Admin ekranında satır bağlamı göstermek için kullanılır.
+        /// </summary>
+        public string? CategoryName { get; set; }
 
         #endregion
 
@@ -77,6 +88,63 @@ namespace ECommerce.Core.DTOs.Order
         public decimal UnitPrice { get; set; }
 
         /// <summary>
+        /// Ağırlık bazlı ürün mü?
+        /// </summary>
+        public bool IsWeightBased { get; set; }
+
+        /// <summary>
+        /// Ağırlık birimi
+        /// </summary>
+        public string? WeightUnit { get; set; }
+
+        /// <summary>
+        /// Müşterinin sipariş ettiği tahmini ağırlık (gram)
+        /// </summary>
+        public decimal EstimatedWeight { get; set; }
+
+        /// <summary>
+        /// Tartılan gerçek ağırlık (gram)
+        /// </summary>
+        public decimal? ActualWeight { get; set; }
+
+        /// <summary>
+        /// Tahmini fiyat
+        /// </summary>
+        public decimal EstimatedPrice { get; set; }
+
+        /// <summary>
+        /// Tartı sonrası güncel fiyat
+        /// </summary>
+        public decimal? ActualPrice { get; set; }
+
+        /// <summary>
+        /// Tartı sonrası fiyat farkı
+        /// </summary>
+        public decimal? PriceDifference { get; set; }
+
+        /// <summary>
+        /// Satır toplamı.
+        /// Tartılı ürünlerde mümkünse kesin/tahmini satır toplamı döner.
+        /// </summary>
+        public decimal LineTotal { get; set; }
+
+        /// <summary>
+        /// Bu kalem için daha önce iade edilmiş adet.
+        /// Admin ürün bazlı iade ekranında gösterilir.
+        /// </summary>
+        public int RefundedQuantity { get; set; }
+
+        /// <summary>
+        /// Halen iade edilebilir adet.
+        /// </summary>
+        public int RemainingRefundableQuantity { get; set; }
+
+        /// <summary>
+        /// Halen iade edilebilir parasal tutar.
+        /// </summary>
+        public decimal RemainingRefundableAmount { get; set; }
+
+        /// <summary>
         /// Toplam fiyat (Quantity * UnitPrice)
         /// </summary>
         public decimal TotalPrice => Quantity * UnitPrice;
@@ -89,8 +157,8 @@ namespace ECommerce.Core.DTOs.Order
         /// Gösterilecek başlık
         /// Varyant varsa varyant başlığı, yoksa ürün adı
         /// </summary>
-        public string DisplayTitle => !string.IsNullOrEmpty(VariantTitle) 
-            ? VariantTitle 
+        public string DisplayTitle => !string.IsNullOrEmpty(VariantTitle)
+            ? VariantTitle
             : ProductName;
 
         /// <summary>

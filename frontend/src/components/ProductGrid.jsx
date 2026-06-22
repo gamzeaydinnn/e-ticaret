@@ -8,9 +8,12 @@ import { useCompare } from "../contexts/CompareContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { ProductService } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
+import cartSettingsService from "../services/cartSettingsService";
+import { CART_SETTINGS_EVENT } from "../services/cartSettingsService";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 import Pagination from "./Pagination";
+import AddToCartModal from "./AddToCartModal";
 import WeightSelectionModal, {
   isWeightBasedProduct,
 } from "./WeightSelectionModal";
@@ -265,6 +268,10 @@ export default function ProductGrid({
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
   const [cartNotification, setCartNotification] = useState(null);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [addedProduct, setAddedProduct] = useState(null);
+  const [guestFirstOrderShippingMessage, setGuestFirstOrderShippingMessage] =
+    useState("");
   // NEDEN: Backend 400 "Yetersiz stok" döndüğünde ürünü anlık out-of-stock işaretle
   // — sayfa yenilenmeden buton devre dışı kalır, kullanıcı tekrar deneyemez.
   const [outOfStockIds, setOutOfStockIds] = useState(new Set());
@@ -337,6 +344,51 @@ export default function ProductGrid({
   useEffect(() => {
     setPageSize(Math.max(1, Number(initialPageSize) || 25));
   }, [initialPageSize]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const applyCartSettings = (settings) => {
+      if (!mounted) {
+        return;
+      }
+
+      setGuestFirstOrderShippingMessage(
+        settings?.guestFirstOrderShippingMessage ?? "",
+      );
+    };
+
+    const loadCartSettings = async (forceRefresh = false) => {
+      try {
+        const settings = await cartSettingsService.getCartSettings(forceRefresh);
+        applyCartSettings(settings);
+      } catch {
+        if (mounted) {
+          setGuestFirstOrderShippingMessage("");
+        }
+      }
+    };
+
+    loadCartSettings();
+
+    const handleCartSettingsUpdated = (event) => {
+      if (event?.detail) {
+        applyCartSettings(event.detail);
+        return;
+      }
+
+      loadCartSettings(true);
+    };
+
+    window.addEventListener(CART_SETTINGS_EVENT, handleCartSettingsUpdated);
+    return () => {
+      mounted = false;
+      window.removeEventListener(
+        CART_SETTINGS_EVENT,
+        handleCartSettingsUpdated,
+      );
+    };
+  }, []);
 
   const filteredProducts = useMemo(() => {
     if (!categoryId) return [...data];
@@ -564,6 +616,8 @@ export default function ProductGrid({
   };
 
   const showCartNotification = (product, userType) => {
+    setAddedProduct(product);
+    setCartModalOpen(true);
     setCartNotification({
       type: "success",
       product: product,
@@ -1624,6 +1678,12 @@ export default function ProductGrid({
         </div>
       )}
 
+      <AddToCartModal
+        isOpen={cartModalOpen}
+        onClose={() => setCartModalOpen(false)}
+        product={addedProduct}
+      />
+
       {/* Premium Cart Notification Toast */}
       {cartNotification && (
         <div
@@ -1758,7 +1818,8 @@ export default function ProductGrid({
                         )}
                       </div>
 
-                      {cartNotification.userType === "guest" && (
+                      {cartNotification.userType === "guest" &&
+                        guestFirstOrderShippingMessage.trim() && (
                         <div
                           className="alert border-0 p-3 mb-3"
                           style={{
@@ -1788,10 +1849,12 @@ export default function ProductGrid({
                               </div>
                               <div
                                 className="text-dark"
-                                style={{ fontSize: "0.75rem" }}
+                                style={{
+                                  fontSize: "0.75rem",
+                                  whiteSpace: "pre-line",
+                                }}
                               >
-                                Hesap oluştur,{" "}
-                                <strong>ilk alışverişinde kargo bedava!</strong>
+                                {guestFirstOrderShippingMessage}
                               </div>
                             </div>
                           </div>
@@ -1910,9 +1973,9 @@ export default function ProductGrid({
         }}
         product={weightModalProduct}
         onConfirm={handleWeightConfirm}
-        minWeight={0.5}
+        minWeight={0.25}
         maxWeight={10}
-        step={0.5}
+        step={0.25}
       />
     </section>
   );

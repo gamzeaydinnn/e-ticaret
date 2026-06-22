@@ -33,7 +33,9 @@ namespace ECommerce.Data.Repositories
         }
         public override async Task<Product?> GetByIdAsync(int id)
         {
-            return await _context.Products.FindAsync(id);
+            return await _context.Products
+                .Include(p => p.Category)
+                .FirstOrDefaultAsync(p => p.Id == id);
         }
         public new async Task<List<Product>> GetAllAsync()
         {

@@ -67,6 +67,7 @@ namespace ECommerce.Core.Interfaces
         public decimal MinimumCartAmount { get; set; }
         public bool IsMinimumCartAmountActive { get; set; }
         public string MinimumCartAmountMessage { get; set; } = string.Empty;
+        public string GuestFirstOrderShippingMessage { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public string? UpdatedByUserName { get; set; }
@@ -93,5 +94,10 @@ namespace ECommerce.Core.Interfaces
         /// Müşteriye gösterilecek mesaj (null ise değişmez)
         /// </summary>
         public string? MinimumCartAmountMessage { get; set; }
+
+        /// <summary>
+        /// Misafir kullanıcı promosyon mesajı (null ise değişmez, boş string ise temizlenir)
+        /// </summary>
+        public string? GuestFirstOrderShippingMessage { get; set; }
     }
 }

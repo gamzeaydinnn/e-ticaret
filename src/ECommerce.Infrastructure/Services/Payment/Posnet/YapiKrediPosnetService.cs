@@ -46,6 +46,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         Task<PosnetResult<PosnetOosResponse>> Initiate3DSecureAsync(
             int orderId,
             string cardNumber, string expireDate, string cvv,
+            decimal? amount = null,
+            string txnType = "Sale",
             int installment = 0,
             CancellationToken cancellationToken = default);
 
@@ -59,6 +61,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         Task<PosnetResult<PosnetAuthResponse>> ProcessAuthAsync(
             int orderId,
             string cardNumber, string expireDate, string cvv,
+            decimal? amount = null,
             int installment = 0,
             CancellationToken cancellationToken = default);
 
@@ -159,6 +162,82 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
         /// <summary>OrderID prefix - POSNET'te unique olması için</summary>
         private const string ORDER_ID_PREFIX = "YKB";
+
+        private static string NormalizeCurrencyCode(string? currency)
+        {
+            var normalized = currency?.Trim().ToUpperInvariant();
+            return normalized switch
+            {
+                "TRY" or "TL" or null => "TL",
+                "USD" or "US" => "US",
+                "EUR" or "EU" => "EU",
+                _ => "TL"
+            };
+        }
+
+        private static bool IsPosnetOrderId(string? value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   value.StartsWith(ORDER_ID_PREFIX, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private async Task<string> GetOrCreatePosnetOrderIdAsync(Order order, CancellationToken cancellationToken)
+        {
+            if (!string.IsNullOrWhiteSpace(order.PosnetTransactionId))
+            {
+                return order.PosnetTransactionId;
+            }
+
+            order.PosnetTransactionId = GeneratePosnetOrderId(order.Id);
+            await _db.SaveChangesAsync(cancellationToken);
+            return order.PosnetTransactionId;
+        }
+
+        private async Task<string?> ResolveOriginalPosnetOrderIdAsync(int orderId, CancellationToken cancellationToken)
+        {
+            var order = await _db.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(order?.PosnetTransactionId))
+            {
+                return order.PosnetTransactionId;
+            }
+
+            return await _db.Payments
+                .Where(p => p.OrderId == orderId &&
+                    (p.TransactionType == "auth" || p.TransactionType == "sale" || p.TransactionType == "capt") &&
+                    (!string.IsNullOrWhiteSpace(p.TransactionId) || IsPosnetOrderId(p.ProviderPaymentId)))
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => !string.IsNullOrWhiteSpace(p.TransactionId) ? p.TransactionId : p.ProviderPaymentId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        private async Task<int?> ResolveOrderIdByPosnetOrderIdAsync(string? posnetOrderId, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(posnetOrderId))
+            {
+                return null;
+            }
+
+            var orderId = await _db.Orders
+                .AsNoTracking()
+                .Where(o => o.PosnetTransactionId == posnetOrderId)
+                .Select(o => (int?)o.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (orderId.HasValue)
+            {
+                return orderId;
+            }
+
+            return await _db.Payments
+                .AsNoTracking()
+                .Where(p => p.TransactionId == posnetOrderId || p.ProviderPaymentId == posnetOrderId)
+                .OrderByDescending(p => p.CreatedAt)
+                .Select(p => (int?)p.OrderId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
 
         public YapiKrediPosnetService(
             IOptions<PaymentSettings> settings,
@@ -365,11 +444,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
-            var posnetOrderId = GeneratePosnetOrderId(orderId);
-
             _logger.LogInformation(
-                "[POSNET] Direkt satış başlatılıyor. OrderId: {OrderId}, PosnetOrderId: {PosnetOrderId}, Installment: {Installment}",
-                orderId, posnetOrderId, installment);
+                "[POSNET] Direkt satış başlatılıyor. OrderId: {OrderId}, Installment: {Installment}",
+                orderId, installment);
 
             try
             {
@@ -382,8 +459,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         PosnetErrorCode.InvalidOrderId);
                 }
 
-                // Tutar kuruşa çevir
-                var amountInKurus = PosnetSaleRequest.ConvertToKurus(order.TotalPrice);
+                var posnetOrderId = await GetOrCreatePosnetOrderIdAsync(order, cancellationToken);
 
                 // Sale request oluştur
                 var request = PosnetSaleRequest.Create(
@@ -425,9 +501,13 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     orderId,
                     saleResponse.HostLogKey ?? posnetOrderId,
                     order.TotalPrice,
-                    saleResponse.IsSuccess ? "Success" : "Failed",
+                    saleResponse.IsSuccess ? "Paid" : "Failed",
                     httpResponse.ResponseXml,
-                    cancellationToken);
+                    cancellationToken,
+                    hostLogKey: saleResponse.HostLogKey,
+                    authCode: saleResponse.AuthCode,
+                    transactionType: "sale",
+                    transactionId: posnetOrderId);
 
                 if (saleResponse.IsSuccess)
                 {
@@ -437,6 +517,25 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
                     // Sipariş durumunu güncelle
                     await UpdateOrderPaymentStatusAsync(orderId, PaymentStatus.Paid, cancellationToken);
+
+                    // MADDE 9: Satış'tan dönen HostLogKey'i Order üzerine de kaydet
+                    try
+                    {
+                        var saleOrder = await _db.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+                        if (saleOrder != null && !string.IsNullOrWhiteSpace(saleResponse.HostLogKey))
+                        {
+                            saleOrder.PosnetTransactionId = posnetOrderId;
+                            // Direkt satışta PreAuthHostLogKey = Sale HostLogKey (iade için kullanılır)
+                            saleOrder.PreAuthHostLogKey = saleResponse.HostLogKey;
+                            await _db.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    catch (Exception saleOrderEx)
+                    {
+                        _logger.LogError(saleOrderEx,
+                            "[POSNET] Sale sonrası Order.PreAuthHostLogKey kaydedilemedi. OrderId={OrderId}",
+                            orderId);
+                    }
                 }
                 else
                 {
@@ -478,15 +577,15 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         public virtual async Task<PosnetResult<PosnetOosResponse>> Initiate3DSecureAsync(
             int orderId,
             string cardNumber, string expireDate, string cvv,
+            decimal? amount = null,
+            string txnType = "Sale",
             int installment = 0,
             CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
-            var posnetOrderId = GeneratePosnetOrderId(orderId);
-
             _logger.LogInformation(
-                "[POSNET] 3D Secure başlatılıyor. OrderId: {OrderId}, PosnetOrderId: {PosnetOrderId}",
-                orderId, posnetOrderId);
+                "[POSNET] 3D Secure başlatılıyor. OrderId: {OrderId}",
+                orderId);
 
             try
             {
@@ -502,6 +601,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         PosnetErrorCode.InvalidOrderId);
                 }
 
+                var posnetOrderId = await GetOrCreatePosnetOrderIdAsync(order, cancellationToken);
+
                 // OOS request oluştur
                 var request = new PosnetOosRequest
                 {
@@ -516,10 +617,10 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         CardHolderName = order.User?.FullName ?? order.CustomerName ?? "GUEST USER"
                     },
                     OrderId = posnetOrderId,
-                    Amount = PosnetSaleRequest.ConvertToKurus(order.TotalPrice),
+                    Amount = PosnetSaleRequest.ConvertToKurus(amount ?? order.TotalPrice),
                     Installment = installment.ToString("D2"),
-                    CurrencyCode = order.Currency ?? "TL",
-                    TxnType = "Sale",
+                    CurrencyCode = NormalizeCurrencyCode(order.Currency),
+                    TxnType = string.IsNullOrWhiteSpace(txnType) ? "Sale" : txnType.Trim(),
                     ReturnUrl = _settings.PosnetCallbackUrl
                 };
 
@@ -565,10 +666,15 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 await SavePaymentRecordAsync(
                     orderId,
                     posnetOrderId,
-                    order.TotalPrice,
+                    amount ?? order.TotalPrice,
                     "Pending",
                     httpResponse.ResponseXml,
-                    cancellationToken);
+                    cancellationToken,
+                    transactionType: request.TxnType,
+                    authorizedAmount: request.TxnType.Equals("Auth", StringComparison.OrdinalIgnoreCase)
+                        ? amount ?? order.TotalPrice
+                        : null,
+                    transactionId: posnetOrderId);
 
                 if (oosResponse.IsSuccess && oosResponse.RequiresRedirect)
                 {
@@ -701,8 +807,17 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         elapsedMs: stopwatch.ElapsedMilliseconds);
                 }
 
-                // Tutarı YKR (kuruş) cinsine çevir
-                var amountInKurus = (int)(order.TotalPrice * 100);
+                var latestPayment = await _db.Payments
+                    .Where(p => p.OrderId == numericOrderId &&
+                        (p.Provider == PROVIDER_NAME || p.Provider == "YapiKredi"))
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                // NEDEN: 3D başlatılırken bankaya hangi tutar gönderildiyse callback doğrulamasında da
+                // aynı tutar kullanılmalı. order.TotalPrice/finalPrice fallback only.
+                var expectedAmount = latestPayment?.Amount
+                    ?? (order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice);
+                var amountInKurus = PosnetSaleRequest.ConvertToKurus(expectedAmount);
 
                 // ═══════════════════════════════════════════════════════════════
                 // ADIM 3: OOS RESOLVE MERCHANT DATA - Şifreli Verileri Çöz
@@ -941,11 +1056,11 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         public virtual async Task<PosnetResult<PosnetAuthResponse>> ProcessAuthAsync(
             int orderId,
             string cardNumber, string expireDate, string cvv,
+            decimal? amount = null,
             int installment = 0,
             CancellationToken cancellationToken = default)
         {
             var stopwatch = Stopwatch.StartNew();
-            var posnetOrderId = GeneratePosnetOrderId(orderId);
 
             _logger.LogInformation(
                 "[POSNET] Provizyon başlatılıyor. OrderId: {OrderId}",
@@ -961,6 +1076,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         PosnetErrorCode.InvalidOrderId);
                 }
 
+                var posnetOrderId = await GetOrCreatePosnetOrderIdAsync(order, cancellationToken);
+
                 var request = new PosnetAuthRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
@@ -972,7 +1089,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         Cvv = cvv
                     },
                     OrderId = posnetOrderId,
-                    Amount = PosnetSaleRequest.ConvertToKurus(order.TotalPrice),
+                    // NEDEN: Tartılı siparişlerde auth tutarı sipariş toplamından farklı olabilir.
+                    // amount verilmişse provizyon blokesi o tutar üzerinden alınır.
+                    Amount = PosnetSaleRequest.ConvertToKurus(amount ?? order.TotalPrice),
                     Installment = installment.ToString("D2")
                 };
 
@@ -994,16 +1113,52 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 await SavePaymentRecordAsync(
                     orderId,
                     authResponse.HostLogKey ?? posnetOrderId,
-                    order.TotalPrice,
+                    amount ?? order.TotalPrice,
                     authResponse.IsSuccess ? "Authorized" : "Failed",
                     httpResponse.ResponseXml,
-                    cancellationToken);
+                    cancellationToken,
+                    hostLogKey: authResponse.HostLogKey,
+                    authCode: authResponse.AuthCode,
+                    transactionType: "auth",
+                    authorizedAmount: amount ?? order.TotalPrice,
+                    transactionId: posnetOrderId);
 
                 if (authResponse.IsSuccess)
                 {
                     _logger.LogInformation(
-                        "[POSNET] Provizyon başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}",
-                        orderId, authResponse.HostLogKey);
+                        "[POSNET] Provizyon başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}, AuthCode: {AuthCode}",
+                        orderId, authResponse.HostLogKey, authResponse.AuthCode);
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // MADDE 9 DÜZELTMESİ: Auth başarısında Order.PreAuthHostLogKey
+                    // ve Order.AuthorizedAmount kaydedilmesi zorunlu.
+                    // Banka dokümantasyonu: capt ve reverse işlemlerinde
+                    // bu key kullanılır.
+                    // ═══════════════════════════════════════════════════════════════
+                    try
+                    {
+                        var orderToUpdate = await _db.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+                        if (orderToUpdate != null)
+                        {
+                            orderToUpdate.PreAuthHostLogKey = authResponse.HostLogKey;
+                            orderToUpdate.AuthorizedAmount = amount ?? order.TotalPrice;
+                            orderToUpdate.PreAuthDate = DateTime.UtcNow;
+                            orderToUpdate.PosnetTransactionId = posnetOrderId;
+                            await _db.SaveChangesAsync(cancellationToken);
+
+                            _logger.LogInformation(
+                                "[POSNET] Order.PreAuthHostLogKey güncellendi. OrderId={OrderId}, HostLogKey={Key}",
+                                orderId, authResponse.HostLogKey);
+                        }
+                    }
+                    catch (Exception orderEx)
+                    {
+                        // Auth kaydedildi ama order güncellenemedi - kritik log
+                        _logger.LogError(orderEx,
+                            "[POSNET] KRITIK: Auth başarılı ama Order.PreAuthHostLogKey kaydedilemedi! " +
+                            "OrderId={OrderId}, HostLogKey={Key}. Manuel müdahale gerekli!",
+                            orderId, authResponse.HostLogKey);
+                    }
                 }
 
                 return PosnetResult<PosnetAuthResponse>.FromResponse(authResponse, stopwatch.ElapsedMilliseconds);
@@ -1048,15 +1203,20 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 }
 
                 var captureAmount = amount ?? order.TotalPrice;
+                var originalPosnetOrderId = await ResolveOriginalPosnetOrderIdAsync(orderId, cancellationToken)
+                    ?? order.PosnetTransactionId
+                    ?? GeneratePosnetOrderId(orderId);
 
                 var request = new PosnetCaptRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
                     TerminalId = _settings.PosnetTerminalId,
-                    OrderId = GeneratePosnetOrderId(orderId),
+                    OrderId = originalPosnetOrderId,
                     Amount = PosnetSaleRequest.ConvertToKurus(captureAmount),
+                    CurrencyCode = NormalizeCurrencyCode(order.Currency),
                     Installment = "00",
-                    HostLogKey = hostLogKey
+                    HostLogKey = hostLogKey,
+                    OrderDate = order.OrderDate.ToString("yyyyMMdd")
                 };
 
                 var xml = _xmlBuilder.BuildCaptXml(request);
@@ -1074,13 +1234,53 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var captResponse = _xmlParser.ParseCaptResponse(httpResponse.ResponseXml!);
                 stopwatch.Stop();
 
+                // Capt sonucu Payments tablosuna yaz (iade için gerekli)
+                await SavePaymentRecordAsync(
+                    orderId,
+                    captResponse.HostLogKey ?? hostLogKey,
+                    captureAmount,
+                    captResponse.IsSuccess ? "Paid" : "Failed",
+                    httpResponse.ResponseXml,
+                    cancellationToken,
+                    hostLogKey: captResponse.HostLogKey ?? hostLogKey,
+                    authCode: captResponse.AuthCode,
+                    transactionType: "capt",
+                    transactionId: originalPosnetOrderId);
+
                 if (captResponse.IsSuccess)
                 {
                     _logger.LogInformation(
-                        "[POSNET] Finansallaştırma başarılı. OrderId: {OrderId}",
-                        orderId);
+                        "[POSNET] Finansallaştırma başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}, AuthCode: {AuthCode}",
+                        orderId, captResponse.HostLogKey, captResponse.AuthCode);
 
                     await UpdateOrderPaymentStatusAsync(orderId, PaymentStatus.Paid, cancellationToken);
+
+                    // ═══════════════════════════════════════════════════════════════
+                    // MADDE 9 DÜZELTMESİ: Capture'dan dönen yeni HostLogKey
+                    // Order üzerinde de saklanır. İade işlemi bu key ile yapılır.
+                    // Banka dok: "iade işleminde orijinal işlemin bilgileriyle gelinmesi
+                    // gerekmektedir" → Capture HostLogKey iade için kullanılır.
+                    // ═══════════════════════════════════════════════════════════════
+                    try
+                    {
+                        var capturedOrder = await _db.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+                        if (capturedOrder != null && !string.IsNullOrWhiteSpace(captResponse.HostLogKey))
+                        {
+                            // Capture HostLogKey'i sakla (iade işlemlerinde bu key kullanılır)
+                            // PreAuthHostLogKey'i koruyarak ayrı bir alana yazabiliriz,
+                            // ancak Payment tablosundaki 'capt' kaydı üzerinden bulunabilir.
+                            capturedOrder.CapturedAmount = captureAmount;
+                            capturedOrder.CaptureStatus = CaptureStatus.Success;
+                            capturedOrder.CapturedAt = DateTime.UtcNow;
+                            await _db.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    catch (Exception captOrderEx)
+                    {
+                        _logger.LogError(captOrderEx,
+                            "[POSNET] Capture sonrası Order güncellenemedi. OrderId={OrderId}",
+                            orderId);
+                    }
                 }
 
                 return PosnetResult<PosnetCaptResponse>.FromResponse(captResponse, stopwatch.ElapsedMilliseconds);
@@ -1115,13 +1315,35 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
             try
             {
+                var order = await _db.Orders
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+                var originalPosnetOrderId = await ResolveOriginalPosnetOrderIdAsync(orderId, cancellationToken)
+                    ?? order?.PosnetTransactionId
+                    ?? GeneratePosnetOrderId(orderId);
+                var relatedPayment = await _db.Payments
+                    .AsNoTracking()
+                    .Where(p => p.OrderId == orderId &&
+                        (p.HostLogKey == hostLogKey || p.ProviderPaymentId == hostLogKey))
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+                var reverseTransaction = relatedPayment?.TransactionType?.ToLowerInvariant() switch
+                {
+                    "auth" => "auth",
+                    "capt" => "capt",
+                    "return" => "return",
+                    _ => "sale"
+                };
+
                 var request = new PosnetReverseRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
                     TerminalId = _settings.PosnetTerminalId,
-                    OrderId = GeneratePosnetOrderId(orderId),
+                    Transaction = reverseTransaction,
+                    OrderId = originalPosnetOrderId,
                     HostLogKey = hostLogKey,
-                    TransactionDate = PosnetReverseRequest.GetTodayAsPosnetDate()
+                    OrderDate = order?.OrderDate.ToString("yyyyMMdd"),
+                    AuthCode = relatedPayment?.AuthCode
                 };
 
                 var xml = _xmlBuilder.BuildReverseXml(request);
@@ -1182,14 +1404,22 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
             try
             {
+                var order = await _db.Orders
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+                var originalPosnetOrderId = await ResolveOriginalPosnetOrderIdAsync(orderId, cancellationToken)
+                    ?? order?.PosnetTransactionId
+                    ?? GeneratePosnetOrderId(orderId);
+
                 var request = new PosnetReturnRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
                     TerminalId = _settings.PosnetTerminalId,
-                    OrderId = GeneratePosnetOrderId(orderId),
+                    OrderId = originalPosnetOrderId,
                     Amount = PosnetSaleRequest.ConvertToKurus(amount),
                     HostLogKey = hostLogKey,
-                    RefundOrderId = $"R{GeneratePosnetOrderId(orderId)}"
+                    CurrencyCode = NormalizeCurrencyCode(order?.Currency),
+                    OrderDate = order?.OrderDate.ToString("yyyyMMdd")
                 };
 
                 var xml = _xmlBuilder.BuildReturnXml(request);
@@ -1207,15 +1437,38 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var returnResponse = _xmlParser.ParseReturnResponse(httpResponse.ResponseXml!);
                 stopwatch.Stop();
 
+                // İade sonucu Payments tablosuna ayrı kayıt olarak yaz
+                // OriginalPaymentId: iade edilen orijinal ödeme kaydına bağlantı
+                var originalPayment = await _db.Payments
+                    .Where(p => p.OrderId == orderId &&
+                           (p.TransactionType == "capt" || p.TransactionType == "sale") &&
+                           p.Status == "Paid")
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                await SavePaymentRecordAsync(
+                    orderId,
+                    returnResponse.HostLogKey ?? hostLogKey,
+                    amount,
+                    returnResponse.IsSuccess ? "Refunded" : "Failed",
+                    httpResponse.ResponseXml,
+                    cancellationToken,
+                    hostLogKey: returnResponse.HostLogKey ?? hostLogKey,
+                    authCode: returnResponse.AuthCode,
+                    transactionType: "return",
+                    originalPaymentId: originalPayment?.Id,
+                    transactionId: originalPosnetOrderId);
+
                 if (returnResponse.IsSuccess)
                 {
                     _logger.LogInformation(
-                        "[POSNET] İade başarılı. OrderId: {OrderId}, RefundedAmount: {Amount}",
-                        orderId, amount);
+                        "[POSNET] İade başarılı. OrderId: {OrderId}, RefundedAmount: {Amount}, " +
+                        "HostLogKey: {HostLogKey}",
+                        orderId, amount, returnResponse.HostLogKey);
 
                     // Tam iade mi kısmi iade mi kontrol et
-                    var order = await _db.Orders.FindAsync(new object[] { orderId }, cancellationToken);
-                    if (order != null && amount >= order.TotalPrice)
+                    var orderToUpdate = await _db.Orders.FindAsync(new object[] { orderId }, cancellationToken);
+                    if (orderToUpdate != null && amount >= orderToUpdate.TotalPrice)
                     {
                         await UpdateOrderPaymentStatusAsync(orderId, PaymentStatus.Refunded, cancellationToken);
                     }
@@ -1384,13 +1637,23 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         /// <summary>
         /// Ödeme kaydı oluşturur veya günceller
         /// </summary>
+        /// <summary>
+        /// Ödeme kaydı oluşturur.
+        /// Banka dokümantasyonu: HostLogKey, AuthCode sonraki işlemlerde kullanılmak üzere saklanmalıdır.
+        /// </summary>
         private async Task SavePaymentRecordAsync(
             int orderId,
             string providerPaymentId,
             decimal amount,
             string status,
             string? rawResponse,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? hostLogKey = null,
+            string? authCode = null,
+            string? transactionType = null,
+            int? originalPaymentId = null,
+            decimal? authorizedAmount = null,
+            string? transactionId = null)
         {
             try
             {
@@ -1402,21 +1665,36 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     Amount = amount,
                     Status = status,
                     CreatedAt = DateTime.UtcNow,
-                    PaidAt = status == "Success" ? DateTime.UtcNow : null,
-                    RawResponse = rawResponse
+                    PaidAt = (status == "Success" || status == "Paid") ? DateTime.UtcNow : null,
+                    RawResponse = rawResponse,
+                    // ═══════════════════════════════════════════════════════════
+                    // MADDE 9 DÜZELTMESİ: HostLogKey ve AuthCode artık her zaman
+                    // Payments tablosuna yazılıyor. İade/iptal işlemlerinde
+                    // bu kayıt üzerinden orijinal HostLogKey bulunabilir.
+                    // ═══════════════════════════════════════════════════════════
+                    HostLogKey = hostLogKey,
+                    AuthCode = authCode,
+                    TransactionType = transactionType,
+                    TransactionId = transactionId,
+                    OriginalPaymentId = originalPaymentId,
+                    // Auth (provizyon) için AuthorizationReference ve AuthorizedAmount
+                    AuthorizationReference = hostLogKey,  // POSNET'te HostLogKey = AuthRef
+                    AuthorizedAmount = authorizedAmount ?? amount,
+                    AuthorizedAt = (status == "Authorized") ? DateTime.UtcNow : null
                 };
 
                 _db.Payments.Add(payment);
                 await _db.SaveChangesAsync(cancellationToken);
 
                 _logger.LogDebug(
-                    "[POSNET] Ödeme kaydı oluşturuldu. OrderId: {OrderId}, Status: {Status}",
-                    orderId, status);
+                    "[POSNET] Ödeme kaydı oluşturuldu. OrderId: {OrderId}, Status: {Status}, " +
+                    "HostLogKey: {HostLogKey}, AuthCode: {AuthCode}, TxType: {TxType}",
+                    orderId, status, hostLogKey ?? "-", authCode ?? "-", transactionType ?? "-");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, 
-                    "[POSNET] Ödeme kaydı oluşturma hatası. OrderId: {OrderId}", 
+                _logger.LogError(ex,
+                    "[POSNET] Ödeme kaydı oluşturma hatası. OrderId: {OrderId}",
                     orderId);
                 // Ana işlemi etkilememesi için exception yutulur
             }
@@ -1803,17 +2081,17 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         "ErrorCode: {ErrorCode} - {ErrorMessage}",
                         correlationId, response.RawErrorCode, response.ErrorMessage);
 
-                    // Ödeme kaydını güncelle
-                    if (!string.IsNullOrWhiteSpace(request.OrderId) && 
-                        int.TryParse(request.OrderId, out var orderId))
+                    var failedOrderId = await ResolveOrderIdByPosnetOrderIdAsync(request.OrderId, cancellationToken);
+                    if (failedOrderId.HasValue)
                     {
                         await SavePaymentRecordAsync(
-                            orderId,
+                            failedOrderId.Value,
                             $"FAILED_{correlationId}",
                             request.Amount ?? 0,
                             "Failed_Finalization",
                             httpResponse.ResponseXml,
-                            cancellationToken);
+                            cancellationToken,
+                            transactionId: request.OrderId);
                     }
 
                     return PosnetResult<PosnetOosTranDataResponse>.FromResponse(
@@ -1830,21 +2108,23 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     "HostLogKey: {HostLogKey}, AuthCode: {AuthCode}, Approved: {Approved}",
                     correlationId, response.HostLogKey, response.AuthCode, response.ApprovedCode);
 
-                // Ödeme kaydını kaydet
-                if (!string.IsNullOrWhiteSpace(request.OrderId) && 
-                    int.TryParse(request.OrderId, out var successOrderId))
+                var successOrderId = await ResolveOrderIdByPosnetOrderIdAsync(request.OrderId, cancellationToken);
+                if (successOrderId.HasValue)
                 {
                     await SavePaymentRecordAsync(
-                        successOrderId,
+                        successOrderId.Value,
                         response.HostLogKey,
                         request.Amount ?? 0,
                         response.IsAlreadyProcessed ? "AlreadyProcessed" : "Success",
                         httpResponse.ResponseXml,
-                        cancellationToken);
+                        cancellationToken,
+                        hostLogKey: response.HostLogKey,
+                        authCode: response.AuthCode,
+                        transactionId: request.OrderId);
 
                     // Sipariş durumunu güncelle
                     await UpdateOrderPaymentStatusAsync(
-                        successOrderId,
+                        successOrderId.Value,
                         PaymentStatus.Paid,
                         cancellationToken);
                 }

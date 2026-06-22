@@ -8,11 +8,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useStoreAttendantAuth } from "../../contexts/StoreAttendantAuthContext";
+import { useOptionalStoreAttendantAuth } from "../../contexts/StoreAttendantAuthContext";
+import { useAuth } from "../../contexts/AuthContext";
+import { isStrictVariableWeightProduct } from "../../utils/weightBasedProduct";
 import storeAttendantService from "../../services/storeAttendantService";
 import { AdminService } from "../../services/adminService";
 import { getCouriers, assignCourier } from "../../services/dispatcherService";
 import { signalRService, SignalREvents } from "../../services/signalRService";
+import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 
 // Ses dosyaları - Mixkit ücretsiz sesler
 const SOUNDS = {
@@ -21,14 +24,20 @@ const SOUNDS = {
   alert: "/sounds/mixkit-bell-notification-933.wav",
 };
 
-export default function StoreAttendantDashboard() {
+export default function StoreAttendantDashboard({
+  mode = "store",
+  weightOnly = false,
+}) {
   const navigate = useNavigate();
-  const {
-    attendant,
-    logout,
-    isAuthenticated,
-    loading: authLoading,
-  } = useStoreAttendantAuth();
+  const storeAuth = useOptionalStoreAttendantAuth();
+  const { user: adminUser, logout: adminLogout } = useAuth();
+  const isAdminMode = mode === "admin";
+  const attendant = isAdminMode ? adminUser : storeAuth?.attendant;
+  const logout = isAdminMode ? adminLogout : storeAuth?.logout;
+  const isAuthenticated = isAdminMode
+    ? !!adminUser
+    : !!storeAuth?.isAuthenticated;
+  const authLoading = isAdminMode ? false : (storeAuth?.loading ?? false);
 
   // =========================================================================
   // STATE TANIMLARI
@@ -56,7 +65,7 @@ export default function StoreAttendantDashboard() {
   // Tartı modal
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [weightValue, setWeightValue] = useState("");
+  const [weightItems, setWeightItems] = useState([]);
   const [weightLoading, setWeightLoading] = useState(false);
 
   // Kurye atama
@@ -128,9 +137,41 @@ export default function StoreAttendantDashboard() {
         if (ordersRes.success) {
           const payload = ordersRes.data || {};
           const list = payload.orders || payload.Orders || [];
-          setOrders(list);
+          const filteredList = weightOnly
+            ? list.filter((order) => {
+                const items = order.items || order.Items || [];
+                return (
+                  order.hasWeightBasedItems ||
+                  order.HasWeightBasedItems ||
+                  items.some((item) => {
+                    const unit = (item.unit || item.Unit || "")
+                      .toString()
+                      .toLowerCase();
+
+                    return isStrictVariableWeightProduct({
+                      ...item,
+                      name: item.productName || item.ProductName || item.name || item.Name,
+                      categoryName:
+                        item.categoryName ||
+                        item.CategoryName ||
+                        item.category?.name ||
+                        item.Category?.Name ||
+                        "",
+                      unit,
+                      weightUnit: item.weightUnit || item.WeightUnit || null,
+                    });
+                  })
+                );
+              })
+            : list;
+
+          setOrders(filteredList);
           setTotalPages(payload.totalPages || payload.TotalPages || 1);
-          setTotalCount(payload.totalCount || payload.TotalCount || 0);
+          setTotalCount(
+            weightOnly
+              ? filteredList.length
+              : payload.totalCount || payload.TotalCount || 0,
+          );
           setPage(payload.currentPage || payload.CurrentPage || page);
         }
 
@@ -356,14 +397,69 @@ export default function StoreAttendantDashboard() {
   };
 
   // Hazır İşaretle
-  const handleMarkReady = (order) => {
-    // Tartı gerekli mi kontrol et
-    if (order.requiresWeight && !order.finalWeight) {
-      setSelectedOrder(order);
-      setWeightValue("");
-      setShowWeightModal(true);
-    } else {
+  const handleMarkReady = async (order) => {
+    if (!order?.hasWeightBasedItems && !order?.HasWeightBasedItems) {
       updateOrderStatus(order.id, "Ready");
+      return;
+    }
+
+    setWeightLoading(true);
+    try {
+      const result = await storeAttendantService.getOrderDetail(order.id);
+      if (!result.success) {
+        alert(result.error || "Sipariş detayı yüklenemedi");
+        return;
+      }
+
+      const detail = result.data;
+      const orderItems = detail?.orderItems || detail?.OrderItems || [];
+      const editableWeightItems = orderItems
+        .filter((item) => {
+          const weightUnit = (
+            item.weightUnit ||
+            item.WeightUnit ||
+            ""
+          ).toString().toLowerCase();
+
+          return isStrictVariableWeightProduct({
+            ...item,
+            name: item.productName || item.ProductName || item.name || item.Name,
+            categoryName:
+              item.categoryName ||
+              item.CategoryName ||
+              item.category?.name ||
+              item.Category?.Name ||
+              "",
+            unit: item.unit || item.Unit || "",
+            weightUnit: item.weightUnit || item.WeightUnit || weightUnit,
+          });
+        })
+        .map((item) => ({
+          id: item.id || item.Id,
+          productName: item.productName || item.ProductName || "Ürün",
+          estimatedWeight:
+            item.estimatedWeight ?? item.EstimatedWeight ?? 0,
+          actualWeight:
+            item.actualWeight ?? item.ActualWeight ?? item.estimatedWeight ?? item.EstimatedWeight ?? 0,
+          estimatedPrice:
+            item.estimatedPrice ?? item.EstimatedPrice ?? 0,
+          actualPrice: item.actualPrice ?? item.ActualPrice ?? null,
+          priceDifference: item.priceDifference ?? item.PriceDifference ?? null,
+        }));
+
+      if (editableWeightItems.length === 0) {
+        updateOrderStatus(order.id, "Ready");
+        return;
+      }
+
+      setSelectedOrder(order);
+      setWeightItems(editableWeightItems);
+      setShowWeightModal(true);
+    } catch (err) {
+      console.error("[StoreAttendant] Sipariş detayı yükleme hatası:", err);
+      alert("Sipariş detayı yüklenemedi");
+    } finally {
+      setWeightLoading(false);
     }
   };
 
@@ -371,27 +467,74 @@ export default function StoreAttendantDashboard() {
   // TARTI GİRİŞİ
   // =========================================================================
   const handleWeightSubmit = async () => {
-    if (!selectedOrder || !weightValue) return;
+    if (!selectedOrder || weightItems.length === 0) return;
 
     setWeightLoading(true);
     try {
-      const result = await storeAttendantService.submitWeight(
-        selectedOrder.id,
-        parseFloat(weightValue),
-      );
+      let latestWeightUpdate = null;
 
-      if (result.success) {
-        // NEDEN: Ağırlık + hazır işaretleme tek istekte tamamlanır.
-        fetchData(true);
-        setShowWeightModal(false);
-        setSelectedOrder(null);
-        setWeightValue("");
-      } else {
-        alert(result.error || "Tartı girişi başarısız");
+      const currentStatus = normalizeStatus(selectedOrder.status);
+      if (["new", "pending", "paid"].includes(currentStatus)) {
+        const confirmResult = await storeAttendantService.confirmOrder(
+          selectedOrder.id,
+        );
+
+        if (!confirmResult.success) {
+          alert(confirmResult.error || "Sipariş onaylanamadı");
+          return;
+        }
+      }
+
+      if (["new", "pending", "paid", "confirmed"].includes(currentStatus)) {
+        const preparingResult = await storeAttendantService.startPreparing(
+          selectedOrder.id,
+        );
+
+        if (!preparingResult.success) {
+          alert(
+            preparingResult.error || "Sipariş hazırlanıyor durumuna alınamadı",
+          );
+          return;
+        }
+      }
+
+      for (const item of weightItems) {
+        const actualWeight = Number(item.actualWeight);
+        if (!actualWeight || actualWeight <= 0) {
+          alert(`${item.productName} için geçerli bir ağırlık girin`);
+          return;
+        }
+
+        const updateResponse = await WeightAdjustmentService.updateManualWeight(
+          selectedOrder.id,
+          item.id,
+          actualWeight,
+        );
+        latestWeightUpdate = updateResponse?.data?.data ?? null;
+      }
+
+      const result = await storeAttendantService.markAsReady(selectedOrder.id);
+      if (!result.success) {
+        alert(result.error || "Sipariş hazır işaretlenemedi");
+        return;
+      }
+
+      fetchData(true);
+      setShowWeightModal(false);
+      setSelectedOrder(null);
+      setWeightItems([]);
+
+      if (latestWeightUpdate?.exceedsPreAuthLimit) {
+        alert(
+          `Sipariş yeni tutarı ${Number(latestWeightUpdate.finalAmount || 0).toFixed(2)} TL oldu. Mevcut provizyondan banka limitiyle en fazla ${Number(latestWeightUpdate.maxCaptureAmountFromPreAuth || 0).toFixed(2)} TL çekilebildiği için teslimatta ek tahsilat gerekecek.`,
+        );
       }
     } catch (err) {
       console.error("[StoreAttendant] Tartı girişi hatası:", err);
-      alert("Tartı girişi sırasında bir hata oluştu");
+      alert(
+        err?.response?.data?.message ||
+          "Ağırlık düzenlenirken bir hata oluştu",
+      );
     } finally {
       setWeightLoading(false);
     }
@@ -482,8 +625,10 @@ export default function StoreAttendantDashboard() {
   // LOGOUT
   // =========================================================================
   const handleLogout = () => {
-    logout();
-    navigate("/store/login");
+    if (typeof logout === "function") {
+      logout();
+    }
+    navigate(isAdminMode ? "/admin/login" : "/store/login");
   };
 
   // =========================================================================
@@ -603,7 +748,7 @@ export default function StoreAttendantDashboard() {
   }
 
   if (!isAuthenticated) {
-    navigate("/store/login");
+    navigate(isAdminMode ? "/admin/login" : "/store/login");
     return null;
   }
 
@@ -619,14 +764,14 @@ export default function StoreAttendantDashboard() {
           50% { box-shadow: 0 0 0 15px rgba(46, 125, 50, 0); }
         }
         .new-order-pulse { animation: newOrderPulse 1s infinite; }
-        
+
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
           20%, 40%, 60%, 80% { transform: translateX(2px); }
         }
         .shake-animation { animation: shake 0.5s ease-in-out; }
-        
+
         .order-card {
           transition: all 0.2s ease;
           border-radius: 16px !important;
@@ -635,11 +780,11 @@ export default function StoreAttendantDashboard() {
           transform: translateY(-2px);
           box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;
         }
-        
+
         .status-confirmed { border-left: 4px solid #0d6efd !important; }
         .status-preparing { border-left: 4px solid #fd7e14 !important; }
         .status-ready { border-left: 4px solid #198754 !important; }
-        
+
         /* Mobil optimizasyonlar */
         @media (max-width: 768px) {
           .mobile-action-btn {
@@ -664,7 +809,7 @@ export default function StoreAttendantDashboard() {
             box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
           }
         }
-        
+
         /* Bottom Navigation - Mobil */
         .mobile-bottom-nav {
           position: fixed;
@@ -679,7 +824,7 @@ export default function StoreAttendantDashboard() {
         @media (min-width: 769px) {
           .mobile-bottom-nav { display: none !important; }
         }
-        
+
         .bottom-nav-item {
           flex: 1;
           display: flex;
@@ -716,8 +861,12 @@ export default function StoreAttendantDashboard() {
             {/* Sol - Logo */}
             <span className="navbar-brand d-flex align-items-center">
               <i className="fas fa-store me-2"></i>
-              <span className="d-none d-sm-inline">Hazırlama Paneli</span>
-              <span className="d-sm-none">Hazırlama</span>
+              <span className="d-none d-sm-inline">
+                {isAdminMode ? "Sipariş Hazırlama ve Tartı" : "Hazırlama Paneli"}
+              </span>
+              <span className="d-sm-none">
+                {isAdminMode ? "Tartı" : "Hazırlama"}
+              </span>
             </span>
 
             {/* Sağ - Butonlar */}
@@ -995,28 +1144,56 @@ export default function StoreAttendantDashboard() {
                         {/* New/Pending → Confirmed (Onayla) */}
                         {(() => {
                           const status = normalizeStatus(order.status);
-                          return status === "new" || status === "pending";
+                          return (
+                            status === "new" ||
+                            status === "pending" ||
+                            status === "paid"
+                          );
                         })() && (
-                          <button
-                            className="btn btn-info mobile-action-btn fw-semibold"
-                            onClick={() =>
-                              updateOrderStatus(order.id, "Confirmed")
-                            }
-                          >
-                            <i className="fas fa-check me-2"></i>
-                            Onayla
-                          </button>
+                          <>
+                            <button
+                              className="btn btn-info mobile-action-btn fw-semibold"
+                              onClick={() =>
+                                updateOrderStatus(order.id, "Confirmed")
+                              }
+                            >
+                              <i className="fas fa-check me-2"></i>
+                              Onayla
+                            </button>
+                            {(order.hasWeightBasedItems ||
+                              order.HasWeightBasedItems) && (
+                              <button
+                                className="btn btn-outline-success mobile-action-btn fw-semibold"
+                                onClick={() => handleMarkReady(order)}
+                              >
+                                <i className="fas fa-weight me-2"></i>
+                                Tartı Düzenle
+                              </button>
+                            )}
+                          </>
                         )}
 
-                        {/* Confirmed → Preparing */}
+                        {/* Confirmed → Preparing / Weight Edit */}
                         {normalizeStatus(order.status) === "confirmed" && (
-                          <button
-                            className="btn btn-warning mobile-action-btn fw-semibold"
-                            onClick={() => handleStartPreparing(order)}
-                          >
-                            <i className="fas fa-play me-2"></i>
-                            Hazırlamaya Başla
-                          </button>
+                          <>
+                            <button
+                              className="btn btn-warning mobile-action-btn fw-semibold"
+                              onClick={() => handleStartPreparing(order)}
+                            >
+                              <i className="fas fa-play me-2"></i>
+                              Hazırlamaya Başla
+                            </button>
+                            {(order.hasWeightBasedItems ||
+                              order.HasWeightBasedItems) && (
+                              <button
+                                className="btn btn-outline-success mobile-action-btn fw-semibold"
+                                onClick={() => handleMarkReady(order)}
+                              >
+                                <i className="fas fa-weight me-2"></i>
+                                Tartı Düzenle
+                              </button>
+                            )}
+                          </>
                         )}
 
                         {/* Preparing → Ready */}
@@ -1027,10 +1204,11 @@ export default function StoreAttendantDashboard() {
                           >
                             <i className="fas fa-check me-2"></i>
                             Hazır
-                            {order.requiresWeight && !order.finalWeight && (
+                            {(order.hasWeightBasedItems ||
+                              order.HasWeightBasedItems) && (
                               <span className="badge bg-light text-dark ms-2">
                                 <i className="fas fa-weight me-1"></i>
-                                Tartı
+                                Düzenle
                               </span>
                             )}
                           </button>
@@ -1229,7 +1407,12 @@ export default function StoreAttendantDashboard() {
           <div
             className="modal fade show d-block"
             style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-            onClick={() => setShowWeightModal(false)}
+            onClick={() => {
+              if (weightLoading) return;
+              setShowWeightModal(false);
+              setSelectedOrder(null);
+              setWeightItems([]);
+            }}
           >
             <div
               className="modal-dialog modal-dialog-centered"
@@ -1239,53 +1422,84 @@ export default function StoreAttendantDashboard() {
                 <div className="modal-header border-0 pb-0">
                   <h5 className="modal-title fw-bold">
                     <i className="fas fa-weight text-success me-2"></i>
-                    Tartı Girişi
+                    Ağırlık Düzenleme
                   </h5>
                   <button
                     type="button"
                     className="btn-close"
-                    onClick={() => setShowWeightModal(false)}
+                    onClick={() => {
+                      setShowWeightModal(false);
+                      setSelectedOrder(null);
+                      setWeightItems([]);
+                    }}
                   ></button>
                 </div>
                 <div className="modal-body">
                   <p className="text-muted mb-3">
                     <strong>#{selectedOrder.orderNumber}</strong> siparişi için
-                    tartı değerini girin.
+                    tartılı ürünlerin yeni gramajını girin. Sistem siparişi buna
+                    göre tekrar hesaplayacak.
                   </p>
-
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Toplam Ağırlık (kg)
-                    </label>
-                    <div className="input-group input-group-lg">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        className="form-control text-center"
-                        placeholder="0.00"
-                        value={weightValue}
-                        onChange={(e) => setWeightValue(e.target.value)}
-                        autoFocus
-                        style={{
-                          fontSize: "1.5rem",
-                          borderRadius: "12px 0 0 12px",
-                        }}
-                      />
-                      <span
-                        className="input-group-text fw-bold"
-                        style={{ borderRadius: "0 12px 12px 0" }}
+                  <div className="d-flex flex-column gap-3">
+                    {weightItems.map((item, index) => (
+                      <div
+                        key={item.id}
+                        className="border rounded-4 p-3"
+                        style={{ backgroundColor: "#f8f9fa" }}
                       >
-                        kg
-                      </span>
-                    </div>
+                        <div className="d-flex justify-content-between align-items-start gap-3 mb-2">
+                          <div>
+                            <div className="fw-semibold">{item.productName}</div>
+                            <small className="text-muted">
+                              Müşteri: {(Number(item.estimatedWeight) / 1000).toFixed(2)} kg
+                              {" · "}
+                              Tahmini Tutar: {Number(item.estimatedPrice || 0).toFixed(2)} ₺
+                            </small>
+                          </div>
+                          <span className="badge bg-light text-dark border">
+                            Kalem #{index + 1}
+                          </span>
+                        </div>
+
+                        <div className="input-group">
+                          <input
+                            type="number"
+                            step="1"
+                            min="1"
+                            className="form-control"
+                            value={item.actualWeight}
+                            onChange={(e) =>
+                              setWeightItems((prev) =>
+                                prev.map((current) =>
+                                  current.id === item.id
+                                    ? {
+                                        ...current,
+                                        actualWeight: e.target.value,
+                                      }
+                                    : current,
+                                ),
+                              )
+                            }
+                          />
+                          <span className="input-group-text">gr</span>
+                        </div>
+
+                        <small className="text-muted d-block mt-2">
+                          Yeni giriş: {(Number(item.actualWeight || 0) / 1000).toFixed(2)} kg
+                        </small>
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="modal-footer border-0 pt-0">
                   <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setShowWeightModal(false)}
+                    onClick={() => {
+                      setShowWeightModal(false);
+                      setSelectedOrder(null);
+                      setWeightItems([]);
+                    }}
                     disabled={weightLoading}
                   >
                     İptal
@@ -1294,7 +1508,7 @@ export default function StoreAttendantDashboard() {
                     type="button"
                     className="btn btn-success px-4"
                     onClick={handleWeightSubmit}
-                    disabled={!weightValue || weightLoading}
+                    disabled={weightLoading || weightItems.length === 0}
                     style={{ borderRadius: "10px" }}
                   >
                     {weightLoading ? (
@@ -1305,7 +1519,7 @@ export default function StoreAttendantDashboard() {
                     ) : (
                       <>
                         <i className="fas fa-check me-2"></i>
-                        Kaydet ve Hazır İşaretle
+                        Siparişi Güncelle ve Hazır İşaretle
                       </>
                     )}
                   </button>

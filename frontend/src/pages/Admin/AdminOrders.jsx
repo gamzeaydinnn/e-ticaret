@@ -3,11 +3,11 @@ import { AdminService } from "../../services/adminService";
 import { CourierService } from "../../services/courierService";
 import storeAttendantService from "../../services/storeAttendantService";
 import {
-  assignCourier as dispatcherAssignCourier,
   getCouriers as dispatcherGetCouriers,
 } from "../../services/dispatcherService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
+import { usePermission } from "../../hooks/usePermission";
 
 // ============================================================
 // ADMIN ORDERS - Sipariş Yönetimi
@@ -23,8 +23,10 @@ const POLLING_INTERVAL = 15000;
 export default function AdminOrders() {
   // Kullanıcı rolü kontrolü
   const { user } = useAuth();
+  const { orderPermissions } = usePermission();
   const userRole = user?.role || "";
   const isStoreAttendant = userRole === "StoreAttendant";
+  const canDeleteOrders = !isStoreAttendant && orderPermissions.canCancel;
 
   // Merkezi SignalR bağlantısı — AdminSignalRProvider tarafından yönetilir
   const { isConnected: signalRConnected } = useAdminSignalR();
@@ -33,7 +35,19 @@ export default function AdminOrders() {
   const [couriers, setCouriers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedOrderRefunds, setSelectedOrderRefunds] = useState([]);
+  const [loadingOrderDetail, setLoadingOrderDetail] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [processingItemRefund, setProcessingItemRefund] = useState(false);
+  const [orderEditForm, setOrderEditForm] = useState(null);
+  const [itemRefundForm, setItemRefundForm] = useState({
+    reason: "",
+    adminNote: "",
+    quantities: {},
+  });
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [assigningCourier, setAssigningCourier] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // ============================================================
   // ANLIK GÜNCELLEME (POLLING ve SignalR) STATELERİ
@@ -440,6 +454,95 @@ export default function AdminOrders() {
     return Number(fallback) || 0;
   };
 
+  const getSelectedOrderItems = (order) => {
+    if (!order) return [];
+    if (Array.isArray(order.orderItems)) return order.orderItems;
+    if (Array.isArray(order.items)) return order.items;
+    return [];
+  };
+
+  const getItemDisplayName = (item) => {
+    const baseName = item?.productName || item?.name || "Ürün";
+    return item?.variantTitle ? `${baseName} / ${item.variantTitle}` : baseName;
+  };
+
+  const refreshSelectedOrderData = useCallback(async (orderId) => {
+    if (!orderId) return;
+
+    setLoadingOrderDetail(true);
+    try {
+      const [orderResponse, refundsResponse] = await Promise.all([
+        AdminService.getOrder(orderId),
+        AdminService.getOrderRefundRequests(orderId),
+      ]);
+
+      const orderData = orderResponse?.data || orderResponse;
+      const refundData = refundsResponse?.data?.data || refundsResponse?.data || [];
+
+      setSelectedOrder(orderData || null);
+      setSelectedOrderRefunds(Array.isArray(refundData) ? refundData : []);
+    } catch (error) {
+      console.error("Sipariş detayları yüklenemedi:", error);
+      setActionFeedback({
+        type: "danger",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Sipariş detayları yüklenemedi.",
+      });
+    } finally {
+      setLoadingOrderDetail(false);
+    }
+  }, []);
+
+  const openOrderDetail = async (order) => {
+    setSelectedOrder(order);
+    setSelectedOrderRefunds([]);
+    await refreshSelectedOrderData(order.id);
+  };
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setOrderEditForm(null);
+      setItemRefundForm({ reason: "", adminNote: "", quantities: {} });
+      return;
+    }
+
+    const items = getSelectedOrderItems(selectedOrder);
+    const refundedQtyMap = selectedOrderRefunds.reduce((acc, refundRequest) => {
+      (refundRequest?.items || []).forEach((item) => {
+        acc[item.orderItemId] = (acc[item.orderItemId] || 0) + (item.quantity || 0);
+      });
+      return acc;
+    }, {});
+
+    setOrderEditForm({
+      customerName: selectedOrder.customerName || "",
+      customerPhone: selectedOrder.customerPhone || "",
+      customerEmail: selectedOrder.customerEmail || "",
+      shippingAddress:
+        selectedOrder.shippingAddress || selectedOrder.address || "",
+      deliveryNotes: selectedOrder.deliveryNotes || "",
+      trackingNumber: selectedOrder.trackingNumber || "",
+      items: items.map((item) => ({
+        orderItemId: item.id,
+        quantity: Number(item.quantity || 0),
+        isWeightBased: !!item.isWeightBased,
+      })),
+    });
+
+    setItemRefundForm({
+      reason: "",
+      adminNote: "",
+      quantities: items.reduce((acc, item) => {
+        const refundedQty = refundedQtyMap[item.id] || 0;
+        const remainingQty = Math.max(0, Number(item.quantity || 0) - refundedQty);
+        acc[item.id] = remainingQty > 0 ? 0 : 0;
+        return acc;
+      }, {}),
+    });
+  }, [selectedOrder, selectedOrderRefunds]);
+
   // Filtrelenmiş siparişler
   const filteredOrders = orders.filter((order) => {
     const normalizedStatus = normalizeStatus(order.status);
@@ -467,10 +570,24 @@ export default function AdminOrders() {
     (page - 1) * pageSize,
     page * pageSize,
   );
+  const pagedOrderIds = pagedOrders.map((order) => order.id);
+  const selectedOrderIdSet = new Set(selectedOrderIds);
+  const selectedCount = selectedOrderIds.length;
+  const selectedFilteredCount = filteredOrders.filter((order) =>
+    selectedOrderIdSet.has(order.id),
+  ).length;
+  const areAllVisibleOrdersSelected =
+    pagedOrderIds.length > 0 &&
+    pagedOrderIds.every((orderId) => selectedOrderIdSet.has(orderId));
 
   useEffect(() => {
     setPage(1);
   }, [statusFilter, paymentFilter, pageSize]);
+
+  useEffect(() => {
+    const validOrderIds = new Set(orders.map((order) => order.id));
+    setSelectedOrderIds((prev) => prev.filter((orderId) => validOrderIds.has(orderId)));
+  }, [orders]);
 
   // ============================================================
   // SİPARİŞ İŞLEMLERİ
@@ -504,9 +621,7 @@ export default function AdminOrders() {
 
       // Seçili sipariş varsa onu da güncelle
       if (selectedOrder && selectedOrder.id === orderId) {
-        setSelectedOrder((prev) =>
-          prev ? { ...prev, status: newStatus } : null,
-        );
+        await refreshSelectedOrderData(orderId);
       }
 
       // Başarı bildirimi (opsiyonel - toast eklenebilir)
@@ -524,11 +639,18 @@ export default function AdminOrders() {
   // ============================================================
   // SİPARİŞ SİLME (ADMIN)
   // ============================================================
-  const deleteOrder = async (orderId) => {
+  const deleteOrder = async (orderOrId) => {
     try {
+      const order =
+        typeof orderOrId === "object" && orderOrId !== null ? orderOrId : null;
+      const orderId = order?.id ?? orderOrId;
+      const orderLabel = order?.orderNumber
+        ? `${order.orderNumber} / #${orderId}`
+        : `#${orderId}`;
+
       if (
         !window.confirm(
-          "Bu siparişi kalıcı olarak silmek istiyor musunuz?\nBu işlem geri alınamaz!",
+          `${orderLabel} numaralı siparişi kalıcı olarak silmek istiyor musunuz?\nBu işlem geri alınamaz.`,
         )
       ) {
         return;
@@ -551,6 +673,98 @@ export default function AdminOrders() {
         error?.message ||
         "Bilinmeyen hata";
       alert(`Sipariş silinemedi: ${msg}`);
+    }
+  };
+
+  const toggleOrderSelection = (orderId) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(orderId)
+        ? prev.filter((id) => id !== orderId)
+        : [...prev, orderId],
+    );
+  };
+
+  const toggleVisibleOrdersSelection = () => {
+    if (pagedOrderIds.length === 0) {
+      return;
+    }
+
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      const shouldSelectAllVisible = !pagedOrderIds.every((id) => next.has(id));
+
+      pagedOrderIds.forEach((id) => {
+        if (shouldSelectAllVisible) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+
+      return Array.from(next);
+    });
+  };
+
+  const clearOrderSelection = () => {
+    setSelectedOrderIds([]);
+  };
+
+  const bulkDeleteOrders = async () => {
+    if (selectedOrderIds.length === 0) {
+      return;
+    }
+
+    const confirmationMessage =
+      `${selectedOrderIds.length} adet siparişi kalıcı olarak silmek istiyor musunuz?\n` +
+      "Bu işlem geri alınamaz.";
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const response = await AdminService.bulkDeleteOrders(selectedOrderIds);
+      const deletedOrderIds = response?.deletedOrderIds || [];
+      const failedOrders = response?.failedOrders || [];
+      const notFoundOrderIds = response?.notFoundOrderIds || [];
+
+      const deletedIdSet = new Set(deletedOrderIds);
+
+      setOrders((prev) => prev.filter((order) => !deletedIdSet.has(order.id)));
+      setSelectedOrderIds((prev) => prev.filter((id) => !deletedIdSet.has(id)));
+
+      if (selectedOrder && deletedIdSet.has(selectedOrder.id)) {
+        setSelectedOrder(null);
+      }
+
+      const summaryParts = [
+        `${deletedOrderIds.length} sipariş silindi.`,
+      ];
+
+      if (notFoundOrderIds.length > 0) {
+        summaryParts.push(`${notFoundOrderIds.length} sipariş sistemde bulunamadı.`);
+      }
+
+      if (failedOrders.length > 0) {
+        summaryParts.push(`${failedOrders.length} sipariş silinemedi.`);
+      }
+
+      alert(summaryParts.join(" "));
+
+      if (failedOrders.length > 0 || notFoundOrderIds.length > 0) {
+        await loadData(false);
+      }
+    } catch (error) {
+      console.error("Toplu sipariş silme hatası:", error);
+      const msg =
+        error?.response?.data?.message ||
+        error?.response?.data?.detail ||
+        error?.message ||
+        "Bilinmeyen hata";
+      alert(`Toplu silme başarısız: ${msg}`);
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -592,11 +806,8 @@ export default function AdminOrders() {
       await AdminService.cancelOrderWithRefund(cancelDialogOrder.id, trimmedReason);
       await loadData(false);
       await loadRefundRequests();
-
-      const refreshedOrderResponse = await AdminService.getOrder(cancelDialogOrder.id);
-      const refreshedOrder = refreshedOrderResponse?.data || refreshedOrderResponse;
-      if (selectedOrder?.id === cancelDialogOrder.id && refreshedOrder) {
-        setSelectedOrder(refreshedOrder);
+      if (selectedOrder?.id === cancelDialogOrder.id) {
+        await refreshSelectedOrderData(cancelDialogOrder.id);
       }
 
       setActionFeedback({
@@ -613,6 +824,121 @@ export default function AdminOrders() {
       });
     } finally {
       setCancelProcessing(false);
+    }
+  };
+
+  const handleEditOrderItemQuantityChange = (orderItemId, quantity) => {
+    setOrderEditForm((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((item) =>
+          item.orderItemId === orderItemId
+            ? { ...item, quantity: Number(quantity) || 0 }
+            : item,
+        ),
+      };
+    });
+  };
+
+  const handleSaveOrder = async () => {
+    if (!selectedOrder || !orderEditForm) return;
+
+    setSavingOrder(true);
+    try {
+      const payload = {
+        customerName: orderEditForm.customerName,
+        customerPhone: orderEditForm.customerPhone,
+        customerEmail: orderEditForm.customerEmail,
+        shippingAddress: orderEditForm.shippingAddress,
+        deliveryNotes: orderEditForm.deliveryNotes,
+        trackingNumber: orderEditForm.trackingNumber,
+        orderItems: orderEditForm.items.map((item) => ({
+          orderItemId: item.orderItemId,
+          quantity: Number(item.quantity || 0),
+        })),
+      };
+
+      await AdminService.updateOrder(selectedOrder.id, payload);
+      await loadData(false);
+      await refreshSelectedOrderData(selectedOrder.id);
+      setActionFeedback({
+        type: "success",
+        message: "Sipariş detayları güncellendi.",
+      });
+    } catch (error) {
+      setActionFeedback({
+        type: "danger",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Sipariş güncellenemedi.",
+      });
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
+  const handleRefundQuantityChange = (orderItemId, quantity) => {
+    setItemRefundForm((prev) => ({
+      ...prev,
+      quantities: {
+        ...prev.quantities,
+        [orderItemId]: Math.max(0, Number(quantity) || 0),
+      },
+    }));
+  };
+
+  const handleItemRefund = async () => {
+    if (!selectedOrder) return;
+
+    const items = getSelectedOrderItems(selectedOrder)
+      .map((item) => ({
+        orderItemId: item.id,
+        quantity: Number(itemRefundForm.quantities[item.id] || 0),
+      }))
+      .filter((item) => item.quantity > 0);
+
+    if (!itemRefundForm.reason.trim()) {
+      setActionFeedback({
+        type: "danger",
+        message: "Kısmi iade için sebep girişi zorunludur.",
+      });
+      return;
+    }
+
+    if (items.length === 0) {
+      setActionFeedback({
+        type: "danger",
+        message: "İade edilecek en az bir ürün seçmelisiniz.",
+      });
+      return;
+    }
+
+    setProcessingItemRefund(true);
+    try {
+      await AdminService.refundOrderItems(selectedOrder.id, {
+        reason: itemRefundForm.reason.trim(),
+        adminNote: itemRefundForm.adminNote?.trim() || null,
+        items,
+      });
+
+      await loadData(false);
+      await refreshSelectedOrderData(selectedOrder.id);
+      setActionFeedback({
+        type: "success",
+        message: "Ürün bazlı kısmi iade tamamlandı.",
+      });
+    } catch (error) {
+      setActionFeedback({
+        type: "danger",
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Ürün bazlı iade başarısız oldu.",
+      });
+    } finally {
+      setProcessingItemRefund(false);
     }
   };
 
@@ -651,9 +977,8 @@ export default function AdminOrders() {
         setOrders(orderList);
 
         // Seçili siparişi de güncelle (kurye bilgisi hemen görünsün)
-        const refreshedOrder = orderList.find((o) => o.id === orderId);
-        if (refreshedOrder) {
-          setSelectedOrder(refreshedOrder);
+        if (selectedOrder?.id === orderId) {
+          await refreshSelectedOrderData(orderId);
         }
 
         alert("Kurye başarıyla atandı!");
@@ -759,6 +1084,51 @@ export default function AdminOrders() {
     // Status'u küçük harfe çevir ve eşle
     const normalized = (status || "").toLowerCase();
     return statusMap[normalized] || status;
+  };
+
+  const getNextActionHint = (status) => {
+    const normalizedStatus = String(status || "").toLowerCase();
+
+    if (
+      normalizedStatus === "new" ||
+      normalizedStatus === "pending" ||
+      normalizedStatus === "paid"
+    ) {
+      return "Önce siparişi onaylayın, ardından hazırlık sürecini başlatın.";
+    }
+
+    if (normalizedStatus === "confirmed") {
+      return "Sipariş onaylandı. Şimdi ürünleri toplamaya başlamak için hazırlamaya alın.";
+    }
+
+    if (normalizedStatus === "preparing") {
+      return "Hazırlık bittiğinde siparişi hazır durumuna çekin.";
+    }
+
+    if (normalizedStatus === "ready") {
+      return "Sipariş hazır. Bu aşamada kurye atayıp teslim sürecini başlatın.";
+    }
+
+    if (
+      normalizedStatus === "assigned" ||
+      normalizedStatus === "picked_up" ||
+      normalizedStatus === "pickedup"
+    ) {
+      return "Sipariş kuryede. Dağıtıma çıkarıldıktan sonra teslim edildi olarak tamamlanır.";
+    }
+
+    if (
+      normalizedStatus === "out_for_delivery" ||
+      normalizedStatus === "outfordelivery"
+    ) {
+      return "Sipariş müşteriye gidiyor. Teslim tamamlanınca teslim edildi butonunu kullanın.";
+    }
+
+    if (normalizedStatus === "delivered") {
+      return "Sipariş tamamlandı. Gerekirse bu ekrandan iade veya kayıt inceleme işlemi yapabilirsiniz.";
+    }
+
+    return "Bu sipariş için uygun aksiyonları aşağıdaki butonlardan seçebilirsiniz.";
   };
 
   // =========================================================================
@@ -1505,10 +1875,44 @@ export default function AdminOrders() {
         style={{ borderRadius: "10px" }}
       >
         <div className="card-header bg-white border-0 py-2 px-2 px-md-3">
-          <h6 className="fw-bold mb-0" style={{ fontSize: "0.85rem" }}>
-            <i className="fas fa-list-alt me-2 text-primary"></i>
-            Siparişler ({filteredOrders.length}/{orders.length})
-          </h6>
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h6 className="fw-bold mb-0" style={{ fontSize: "0.85rem" }}>
+              <i className="fas fa-list-alt me-2 text-primary"></i>
+              Siparişler ({filteredOrders.length}/{orders.length})
+            </h6>
+
+            {canDeleteOrders && (
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                <span className="text-muted" style={{ fontSize: "0.68rem" }}>
+                  {selectedCount === 0
+                    ? "Toplu silme için sipariş seçin"
+                    : `${selectedCount} sipariş seçildi`}
+                  {selectedFilteredCount > 0
+                    ? ` • Filtrede: ${selectedFilteredCount}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  style={{ fontSize: "0.68rem" }}
+                  onClick={clearOrderSelection}
+                  disabled={selectedCount === 0 || bulkDeleting}
+                >
+                  Seçimi Temizle
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-dark btn-sm"
+                  style={{ fontSize: "0.68rem" }}
+                  onClick={bulkDeleteOrders}
+                  disabled={selectedCount === 0 || bulkDeleting}
+                >
+                  <i className={`fas fa-trash me-1 ${bulkDeleting ? "fa-spin" : ""}`}></i>
+                  Seçilenleri Sil
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="card-body p-0">
           <div className="table-responsive" style={{ margin: "0" }}>
@@ -1518,6 +1922,18 @@ export default function AdminOrders() {
             >
               <thead className="bg-light">
                 <tr>
+                  {canDeleteOrders && (
+                    <th className="px-1 py-2" style={{ width: "36px" }}>
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        checked={areAllVisibleOrdersSelected}
+                        onChange={toggleVisibleOrdersSelection}
+                        aria-label="Sayfadaki siparişlerin tümünü seç"
+                        disabled={pagedOrderIds.length === 0 || bulkDeleting}
+                      />
+                    </th>
+                  )}
                   <th className="px-1 py-2">Sipariş</th>
                   <th className="px-1 py-2 d-none d-md-table-cell">Müşteri</th>
                   <th className="px-1 py-2">Tutar</th>
@@ -1530,7 +1946,7 @@ export default function AdminOrders() {
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="text-center py-4 text-muted">
+                    <td colSpan={canDeleteOrders ? 8 : 7} className="text-center py-4 text-muted">
                       <i className="fas fa-inbox fa-2x mb-2 d-block"></i>
                       {orders.length === 0
                         ? "Henüz sipariş bulunmuyor"
@@ -1543,6 +1959,18 @@ export default function AdminOrders() {
                     const amount = getOrderAmount(order);
                     return (
                       <tr key={order.id}>
+                        {canDeleteOrders && (
+                          <td className="px-1 py-2 align-middle">
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={selectedOrderIdSet.has(order.id)}
+                              onChange={() => toggleOrderSelection(order.id)}
+                              aria-label={`#${order.id} siparişini seç`}
+                              disabled={bulkDeleting}
+                            />
+                          </td>
+                        )}
                         <td className="px-1 py-2">
                           <span className="fw-bold">#{order.id}</span>
                           <br />
@@ -1631,12 +2059,13 @@ export default function AdminOrders() {
                           <div className="d-flex gap-1 flex-wrap">
                             {/* Detay Butonu */}
                             <button
-                              onClick={() => setSelectedOrder(order)}
-                              className="btn btn-outline-secondary p-1"
-                              style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                              onClick={() => openOrderDetail(order)}
+                              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1"
+                              style={{ fontSize: "0.65rem", lineHeight: 1 }}
                               title="Sipariş Detayı"
                             >
                               <i className="fas fa-eye"></i>
+                              <span>Detay</span>
                             </button>
 
                             {/* ================================================================
@@ -1652,14 +2081,15 @@ export default function AdminOrders() {
                                 onClick={() =>
                                   updateOrderStatus(order.id, "confirmed")
                                 }
-                                className="btn btn-info p-1"
+                                className="btn btn-info btn-sm d-inline-flex align-items-center gap-1"
                                 style={{
-                                  fontSize: "0.6rem",
+                                  fontSize: "0.65rem",
                                   lineHeight: 1,
                                 }}
                                 title="✅ Onayla"
                               >
                                 <i className="fas fa-check"></i>
+                                <span>Onayla</span>
                               </button>
                             )}
 
@@ -1670,9 +2100,9 @@ export default function AdminOrders() {
                                 onClick={() =>
                                   updateOrderStatus(order.id, "preparing")
                                 }
-                                className="btn p-1"
+                                className="btn btn-sm d-inline-flex align-items-center gap-1"
                                 style={{
-                                  fontSize: "0.6rem",
+                                  fontSize: "0.65rem",
                                   lineHeight: 1,
                                   backgroundColor: "#fd7e14",
                                   borderColor: "#fd7e14",
@@ -1681,6 +2111,7 @@ export default function AdminOrders() {
                                 title="🍳 Hazırlanıyor Yap"
                               >
                                 <i className="fas fa-fire"></i>
+                                <span>Hazırla</span>
                               </button>
                             )}
 
@@ -1690,23 +2121,25 @@ export default function AdminOrders() {
                                 onClick={() =>
                                   updateOrderStatus(order.id, "ready")
                                 }
-                                className="btn btn-success p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                className="btn btn-success btn-sm d-inline-flex align-items-center gap-1"
+                                style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                 title="📦 Hazır Yap"
                               >
                                 <i className="fas fa-box-open"></i>
+                                <span>Hazır</span>
                               </button>
                             )}
 
                             {/* 🚴 KURYE ATA - Hazır sipariş için */}
                             {normalizedStatus === "ready" && (
                               <button
-                                onClick={() => setSelectedOrder(order)}
-                                className="btn btn-primary p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                onClick={() => openOrderDetail(order)}
+                                className="btn btn-primary btn-sm d-inline-flex align-items-center gap-1"
+                                style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                 title="🚴 Kuryeye Ata"
                               >
                                 <i className="fas fa-motorcycle"></i>
+                                <span>Kurye Ata</span>
                               </button>
                             )}
 
@@ -1721,9 +2154,9 @@ export default function AdminOrders() {
                                     "out_for_delivery",
                                   )
                                 }
-                                className="btn p-1"
+                                className="btn btn-sm d-inline-flex align-items-center gap-1"
                                 style={{
-                                  fontSize: "0.6rem",
+                                  fontSize: "0.65rem",
                                   lineHeight: 1,
                                   backgroundColor: "#6f42c1",
                                   borderColor: "#6f42c1",
@@ -1732,6 +2165,7 @@ export default function AdminOrders() {
                                 title="🛵 Dağıtıma Çıktı"
                               >
                                 <i className="fas fa-shipping-fast"></i>
+                                <span>Dağıtım</span>
                               </button>
                             )}
 
@@ -1742,22 +2176,24 @@ export default function AdminOrders() {
                                 onClick={() =>
                                   updateOrderStatus(order.id, "delivered")
                                 }
-                                className="btn btn-dark p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                className="btn btn-dark btn-sm d-inline-flex align-items-center gap-1"
+                                style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                 title="✅ Teslim Edildi"
                               >
                                 <i className="fas fa-check-double"></i>
+                                <span>Teslim</span>
                               </button>
                             )}
 
                             {normalizedStatus === "delivered" && (
                               <button
                                 onClick={() => openCancelDialog(order)}
-                                className="btn btn-outline-warning p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                className="btn btn-outline-warning btn-sm d-inline-flex align-items-center gap-1"
+                                style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                 title="↩️ Tam İade Yap"
                               >
                                 <i className="fas fa-undo-alt"></i>
+                                <span>İade</span>
                               </button>
                             )}
 
@@ -1766,23 +2202,25 @@ export default function AdminOrders() {
                             {canCancelWithRefund(order.status) && (
                                 <button
                                   onClick={() => openCancelDialog(order)}
-                                  className="btn btn-outline-danger p-1"
-                                  style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                  className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+                                  style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                   title="🚫 İptal Et + Para İadesi"
                                 >
                                   <i className="fas fa-times"></i>
+                                  <span>İptal</span>
                                 </button>
                               )}
 
                             {/* 🗑️ SİL - Sadece Admin */}
-                            {!isStoreAttendant && (
+                            {canDeleteOrders && (
                               <button
-                                onClick={() => deleteOrder(order.id)}
-                                className="btn btn-outline-dark p-1"
-                                style={{ fontSize: "0.6rem", lineHeight: 1 }}
+                                onClick={() => deleteOrder(order)}
+                                className="btn btn-outline-dark btn-sm d-inline-flex align-items-center gap-1"
+                                style={{ fontSize: "0.65rem", lineHeight: 1 }}
                                 title="🗑️ Siparişi Sil"
                               >
                                 <i className="fas fa-trash"></i>
+                                <span>Sil</span>
                               </button>
                             )}
                           </div>
@@ -1839,6 +2277,38 @@ export default function AdminOrders() {
         (() => {
           // Status'u normalize et (backend büyük harfle gönderebilir)
           const normalizedStatus = normalizeStatus(selectedOrder.status);
+          const orderItems = getSelectedOrderItems(selectedOrder);
+          const refundedQtyMap = selectedOrderRefunds.reduce((acc, refundRequest) => {
+            (refundRequest?.items || []).forEach((item) => {
+              acc[item.orderItemId] = (acc[item.orderItemId] || 0) + (item.quantity || 0);
+            });
+            return acc;
+          }, {});
+          const enrichedItems = orderItems.map((item) => {
+            const refundedQuantity = refundedQtyMap[item.id] || item.refundedQuantity || 0;
+            const quantity = Number(item.quantity || 0);
+            const remainingRefundableQuantity = Math.max(0, quantity - refundedQuantity);
+            const lineTotal = Number(
+              item.lineTotal ??
+                item.actualPrice ??
+                item.estimatedPrice ??
+                quantity * (item.unitPrice || item.price || 0) ??
+                0,
+            );
+
+            return {
+              ...item,
+              refundedQuantity,
+              remainingRefundableQuantity,
+              lineTotal,
+            };
+          });
+          const selectedRefundAmount = enrichedItems.reduce((sum, item) => {
+            const selectedQty = Number(itemRefundForm.quantities[item.id] || 0);
+            if (selectedQty <= 0) return sum;
+            const unitAmount = item.quantity > 0 ? item.lineTotal / item.quantity : item.lineTotal;
+            return sum + unitAmount * selectedQty;
+          }, 0);
 
           return (
             <div
@@ -1851,8 +2321,8 @@ export default function AdminOrders() {
               }}
             >
               <div
-                className="modal-dialog modal-dialog-centered"
-                style={{ maxWidth: "500px", margin: "auto" }}
+                className="modal-dialog modal-dialog-centered modal-xl"
+                style={{ maxWidth: "1100px", margin: "auto" }}
               >
                 <div className="modal-content" style={{ borderRadius: "12px" }}>
                   <div className="modal-header py-2 px-3">
@@ -1886,6 +2356,11 @@ export default function AdminOrders() {
                       overflowY: "auto",
                     }}
                   >
+                    {loadingOrderDetail && (
+                      <div className="alert alert-info py-2">
+                        Sipariş detayları ve iade geçmişi yükleniyor...
+                      </div>
+                    )}
                     <div className="row g-2">
                       <div className="col-12 col-md-6">
                         <h6
@@ -2013,53 +2488,44 @@ export default function AdminOrders() {
                         <thead className="bg-light">
                           <tr>
                             <th className="px-1">Ürün</th>
-                            <th className="px-1 d-none d-sm-table-cell">SKU</th>
+                            <th className="px-1 d-none d-md-table-cell">SKU</th>
                             <th className="px-1 text-center">Adet</th>
-                            <th className="px-1 text-end">Fiyat</th>
+                            <th className="px-1 text-center d-none d-md-table-cell">İade</th>
+                            <th className="px-1 text-end">Tutar</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {(Array.isArray(selectedOrder.orderItems)
-                            ? selectedOrder.orderItems
-                            : Array.isArray(selectedOrder.items)
-                              ? selectedOrder.items
-                              : []
-                          ).map((item, index) => (
-                            <tr key={index}>
+                          {enrichedItems.map((item) => (
+                            <tr key={item.id}>
                               <td className="px-1">
                                 <div className="d-flex flex-column">
-                                  <span
-                                    className="text-truncate fw-semibold"
-                                    style={{ maxWidth: "120px" }}
-                                  >
-                                    {item.name || item.productName || "Ürün"}
+                                  <span className="fw-semibold">
+                                    {getItemDisplayName(item)}
                                   </span>
-                                  {/* Varyant bilgisi varsa göster */}
-                                  {item.variantTitle && (
-                                    <span
-                                      className="badge mt-1"
-                                      style={{
-                                        background:
-                                          "linear-gradient(135deg, #10b981, #059669)",
-                                        color: "white",
-                                        fontSize: "0.55rem",
-                                        padding: "2px 6px",
-                                        borderRadius: "4px",
-                                        width: "fit-content",
-                                      }}
-                                    >
-                                      {item.variantTitle}
-                                    </span>
+                                  <small className="text-muted">
+                                    Kalem #{item.id}
+                                    {item.categoryName ? ` • ${item.categoryName}` : ""}
+                                  </small>
+                                  {item.isWeightBased && (
+                                    <small className="text-warning-emphasis">
+                                      Tartılı ürün
+                                      {item.estimatedWeight
+                                        ? ` • Tahmini ${Number(item.estimatedWeight).toFixed(0)} ${item.weightUnit || "gr"}`
+                                        : ""}
+                                      {item.actualWeight
+                                        ? ` • Gerçek ${Number(item.actualWeight).toFixed(0)} ${item.weightUnit || "gr"}`
+                                        : ""}
+                                    </small>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-1 d-none d-sm-table-cell">
-                                {item.sku ? (
+                              <td className="px-1 d-none d-md-table-cell">
+                                {item.variantSku ? (
                                   <span
                                     className="badge bg-secondary"
                                     style={{ fontSize: "0.55rem" }}
                                   >
-                                    {item.sku}
+                                    {item.variantSku}
                                   </span>
                                 ) : (
                                   <span className="text-muted">-</span>
@@ -2070,14 +2536,27 @@ export default function AdminOrders() {
                                   {item.quantity}
                                 </span>
                               </td>
+                              <td className="px-1 text-center d-none d-md-table-cell">
+                                <div className="d-flex flex-column align-items-center">
+                                  <span className="badge bg-light text-dark">
+                                    {item.refundedQuantity || 0} iade
+                                  </span>
+                                  <small className="text-muted">
+                                    Kalan: {item.remainingRefundableQuantity}
+                                  </small>
+                                </div>
+                              </td>
                               <td className="px-1 text-end">
-                                <span className="fw-bold text-success">
-                                  {(
-                                    (item.quantity ?? 0) *
-                                    (item.price ?? item.unitPrice ?? 0)
-                                  ).toFixed(0)}
+                                <div className="fw-bold text-success">
+                                  {Number(item.lineTotal || 0).toFixed(2)} ₺
+                                </div>
+                                <small className="text-muted">
+                                  Birim:{" "}
+                                  {item.quantity > 0
+                                    ? (Number(item.lineTotal || 0) / Number(item.quantity || 1)).toFixed(2)
+                                    : Number(item.unitPrice || 0).toFixed(2)}{" "}
                                   ₺
-                                </span>
+                                </small>
                               </td>
                             </tr>
                           ))}
@@ -2085,7 +2564,7 @@ export default function AdminOrders() {
                         {/* Toplam satırı */}
                         <tfoot className="bg-light">
                           <tr>
-                            <td colSpan="3" className="px-1 text-end fw-bold">
+                            <td colSpan="4" className="px-1 text-end fw-bold">
                               Toplam:
                             </td>
                             <td className="px-1 text-end">
@@ -2093,7 +2572,7 @@ export default function AdminOrders() {
                                 className="fw-bold text-success"
                                 style={{ fontSize: "0.8rem" }}
                               >
-                                {(selectedOrder.totalAmount ?? 0).toFixed(2)} ₺
+                                {getOrderAmount(selectedOrder).toFixed(2)} ₺
                               </span>
                             </td>
                           </tr>
@@ -2102,7 +2581,7 @@ export default function AdminOrders() {
                             selectedOrder.weightDifference !== 0 && (
                               <tr className="bg-warning bg-opacity-25">
                                 <td
-                                  colSpan="3"
+                                  colSpan="4"
                                   className="px-1 text-end fw-bold"
                                 >
                                   <i className="fas fa-balance-scale me-1"></i>
@@ -2130,7 +2609,7 @@ export default function AdminOrders() {
                               selectedOrder.totalAmount && (
                               <tr className="bg-success bg-opacity-25">
                                 <td
-                                  colSpan="3"
+                                  colSpan="4"
                                   className="px-1 text-end fw-bold"
                                 >
                                   <i className="fas fa-calculator me-1"></i>
@@ -2152,6 +2631,294 @@ export default function AdminOrders() {
                         </tfoot>
                       </table>
                     </div>
+
+                    <div className="row g-3 mt-1">
+                      <div className="col-12 col-lg-6">
+                        <div className="card border-0 shadow-sm h-100">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <h6 className="fw-bold mb-0" style={{ fontSize: "0.82rem" }}>
+                                <i className="fas fa-pen me-1 text-primary"></i>
+                                Siparişi Düzenle
+                              </h6>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={handleSaveOrder}
+                                disabled={savingOrder || !orderEditForm}
+                              >
+                                {savingOrder ? "Kaydediliyor..." : "Kaydet"}
+                              </button>
+                            </div>
+
+                            {orderEditForm && (
+                              <div className="row g-2">
+                                <div className="col-12">
+                                  <label className="form-label mb-1">Müşteri Adı</label>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={orderEditForm.customerName}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        customerName: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-6">
+                                  <label className="form-label mb-1">Telefon</label>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={orderEditForm.customerPhone}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        customerPhone: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-6">
+                                  <label className="form-label mb-1">E-posta</label>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={orderEditForm.customerEmail}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        customerEmail: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-12">
+                                  <label className="form-label mb-1">Adres</label>
+                                  <textarea
+                                    className="form-control form-control-sm"
+                                    rows="2"
+                                    value={orderEditForm.shippingAddress}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        shippingAddress: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-6">
+                                  <label className="form-label mb-1">Takip No</label>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={orderEditForm.trackingNumber}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        trackingNumber: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-6">
+                                  <label className="form-label mb-1">Teslimat Notu</label>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={orderEditForm.deliveryNotes}
+                                    onChange={(e) =>
+                                      setOrderEditForm((prev) => ({
+                                        ...prev,
+                                        deliveryNotes: e.target.value,
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <div className="col-12">
+                                  <div className="border rounded p-2">
+                                    <div className="fw-semibold mb-2">Kalem Miktarları</div>
+                                    <div className="d-flex flex-column gap-2">
+                                      {enrichedItems.map((item) => {
+                                        const editableItem = orderEditForm.items.find(
+                                          (entry) => entry.orderItemId === item.id,
+                                        );
+                                        return (
+                                          <div
+                                            key={`edit-${item.id}`}
+                                            className="d-flex justify-content-between align-items-center gap-2"
+                                          >
+                                            <div className="flex-grow-1">
+                                              <div className="fw-semibold">{getItemDisplayName(item)}</div>
+                                              {item.isWeightBased && (
+                                                <small className="text-muted">
+                                                  Tartılı ürünler miktar yerine ağırlık ekranından düzenlenir.
+                                                </small>
+                                              )}
+                                            </div>
+                                            <input
+                                              type="number"
+                                              min="0"
+                                              className="form-control form-control-sm"
+                                              style={{ width: "90px" }}
+                                              value={editableItem?.quantity ?? item.quantity}
+                                              disabled={item.isWeightBased}
+                                              onChange={(e) =>
+                                                handleEditOrderItemQuantityChange(item.id, e.target.value)
+                                              }
+                                            />
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12 col-lg-6">
+                        <div className="card border-0 shadow-sm h-100">
+                          <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center mb-2">
+                              <h6 className="fw-bold mb-0" style={{ fontSize: "0.82rem" }}>
+                                <i className="fas fa-undo me-1 text-warning"></i>
+                                Ürün Bazlı Kısmi İade
+                              </h6>
+                              <button
+                                type="button"
+                                className="btn btn-warning btn-sm"
+                                onClick={handleItemRefund}
+                                disabled={processingItemRefund}
+                              >
+                                {processingItemRefund ? "İade İşleniyor..." : "İadeyi Uygula"}
+                              </button>
+                            </div>
+
+                            <div className="mb-2">
+                              <label className="form-label mb-1">İade Sebebi</label>
+                              <input
+                                className="form-control form-control-sm"
+                                value={itemRefundForm.reason}
+                                onChange={(e) =>
+                                  setItemRefundForm((prev) => ({
+                                    ...prev,
+                                    reason: e.target.value,
+                                  }))
+                                }
+                                placeholder="Hasarlı ürün, eksik teslimat, müşteri memnuniyeti..."
+                              />
+                            </div>
+                            <div className="mb-2">
+                              <label className="form-label mb-1">Admin Notu</label>
+                              <textarea
+                                className="form-control form-control-sm"
+                                rows="2"
+                                value={itemRefundForm.adminNote}
+                                onChange={(e) =>
+                                  setItemRefundForm((prev) => ({
+                                    ...prev,
+                                    adminNote: e.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+
+                            <div className="border rounded p-2">
+                              <div className="fw-semibold mb-2">İade Edilecek Kalemler</div>
+                              <div className="d-flex flex-column gap-2">
+                                {enrichedItems.map((item) => {
+                                  const unitAmount =
+                                    item.quantity > 0
+                                      ? Number(item.lineTotal || 0) / Number(item.quantity || 1)
+                                      : Number(item.lineTotal || 0);
+                                  return (
+                                    <div
+                                      key={`refund-${item.id}`}
+                                      className="d-flex justify-content-between align-items-center gap-2"
+                                    >
+                                      <div className="flex-grow-1">
+                                        <div className="fw-semibold">{getItemDisplayName(item)}</div>
+                                        <small className="text-muted">
+                                          Kalan iade adedi: {item.remainingRefundableQuantity} • Birim iade:{" "}
+                                          {unitAmount.toFixed(2)} ₺
+                                        </small>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max={item.remainingRefundableQuantity}
+                                        className="form-control form-control-sm"
+                                        style={{ width: "90px" }}
+                                        value={itemRefundForm.quantities[item.id] ?? 0}
+                                        disabled={item.remainingRefundableQuantity <= 0}
+                                        onChange={(e) =>
+                                          handleRefundQuantityChange(item.id, e.target.value)
+                                        }
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="alert alert-light border mt-2 mb-0 py-2">
+                              <div className="d-flex justify-content-between">
+                                <span>Seçilen iade toplamı</span>
+                                <strong>{selectedRefundAmount.toFixed(2)} ₺</strong>
+                              </div>
+                              <small className="text-muted">
+                                POSNET dokümanına göre aynı gün tam iade gerekirse sistem `reverse`,
+                                kısmi veya sonraki günlerde `return` akışını kullanır.
+                              </small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedOrderRefunds.length > 0 && (
+                      <div className="mt-3">
+                        <h6 className="fw-bold mb-2" style={{ fontSize: "0.8rem" }}>
+                          <i className="fas fa-history me-1 text-secondary"></i>
+                          İade Geçmişi
+                        </h6>
+                        <div className="d-flex flex-column gap-2">
+                          {selectedOrderRefunds.map((refund) => (
+                            <div key={refund.id} className="border rounded p-2 bg-light">
+                              <div className="d-flex justify-content-between align-items-start gap-2">
+                                <div>
+                                  <div className="fw-semibold">
+                                    {refund.statusText} • {Number(refund.refundAmount || 0).toFixed(2)} ₺
+                                  </div>
+                                  <small className="text-muted">
+                                    {refund.transactionType || "manual"} •{" "}
+                                    {refund.requestedAt
+                                      ? new Date(refund.requestedAt).toLocaleString("tr-TR")
+                                      : "-"}
+                                  </small>
+                                </div>
+                                <span className="badge bg-secondary">{refund.refundType}</span>
+                              </div>
+                              {refund.items?.length > 0 && (
+                                <div className="mt-2">
+                                  {refund.items.map((item) => (
+                                    <div key={`${refund.id}-${item.orderItemId}`} className="small text-muted">
+                                      {item.productName || "Ürün"} • {item.quantity} adet •{" "}
+                                      {Number(item.lineAmount || 0).toFixed(2)} ₺
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {refund.adminNote && (
+                                <div className="small mt-1">
+                                  <strong>Not:</strong> {refund.adminNote}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* ================================================================
                     TARTI FARKI BİLGİSİ - Tartı onayı bekleyenler için
@@ -2811,6 +3578,18 @@ export default function AdminOrders() {
                         <i className="fas fa-bolt me-1 text-warning"></i>
                         Hızlı Aksiyonlar
                       </h6>
+                      <div
+                        className="mb-2 px-2 py-2 rounded"
+                        style={{
+                          background: "#fff8e6",
+                          border: "1px solid rgba(255, 193, 7, 0.35)",
+                          fontSize: "0.72rem",
+                          color: "#7a5b00",
+                        }}
+                      >
+                        <strong>Sıradaki işlem:</strong>{" "}
+                        {getNextActionHint(selectedOrder.status)}
+                      </div>
                       <div className="d-flex gap-2 flex-wrap">
                         {/* Onayla butonu - Yeni/Bekleyen siparişler için */}
                         {(normalizedStatus === "new" ||
@@ -2968,6 +3747,25 @@ export default function AdminOrders() {
                             </button>
                           </div>
                         </div>
+
+                        {canDeleteOrders && (
+                          <div className="mt-2 pt-2 border-top">
+                            <button
+                              className="btn btn-outline-dark btn-sm w-100"
+                              style={{ fontSize: "0.72rem" }}
+                              onClick={() => deleteOrder(selectedOrder)}
+                            >
+                              <i className="fas fa-trash me-1"></i>
+                              Siparişi Kalıcı Olarak Sil
+                            </button>
+                            <div
+                              className="text-muted mt-1"
+                              style={{ fontSize: "0.65rem" }}
+                            >
+                              Bu işlem siparişi ve ilişkili kayıtlarını veritabanından kalıcı olarak kaldırır.
+                            </div>
+                          </div>
+                        )}
                       </div>
                     }
                   </div>

@@ -12,12 +12,14 @@ namespace ECommerce.Business.Services.Managers
     {
         public async Task<IEnumerable<MicroProductDto>> GetProductsAsync()
         {
+            await Task.CompletedTask;
             // Mikro ERP'den ürünleri çek (örnek)
             return new List<MicroProductDto>();
         }
 
         public async Task<IEnumerable<MicroStockDto>> GetStocksAsync()
         {
+            await Task.CompletedTask;
             // Mikro ERP'den stokları çek (örnek)
             return new List<MicroStockDto>();
         }

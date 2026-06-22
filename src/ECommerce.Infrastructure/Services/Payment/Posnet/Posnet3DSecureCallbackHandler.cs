@@ -241,9 +241,15 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     .AsNoTracking()
                     .FirstOrDefaultAsync(o => o.Id == orderId.Value);
 
-                var originalAmount = originalOrder != null 
-                    ? (int)(originalOrder.TotalPrice * 100) // TL -> Kuruş çevrimi
-                    : (int?)null;
+                var latestPosnetPayment = await GetLatestPosnetPaymentAsync(orderId.Value);
+
+                var originalAmount = latestPosnetPayment != null
+                    ? (int)Math.Round(latestPosnetPayment.Amount * 100m, MidpointRounding.AwayFromZero)
+                    : originalOrder != null
+                        ? (int)Math.Round(
+                            (originalOrder.FinalPrice > 0 ? originalOrder.FinalPrice : originalOrder.TotalPrice) * 100m,
+                            MidpointRounding.AwayFromZero)
+                        : (int?)null;
 
                 // MAC hesapla - POSNET Dokümanı sayfa 11
                 // firstHash = HASH(encKey + ';' + terminalID)
@@ -251,7 +257,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var xidForMac = !string.IsNullOrWhiteSpace(callbackRequest.Xid)
                     ? callbackRequest.Xid
                     : orderId.Value.ToString();
-                var amountForMac = NormalizeAmountForMac(callbackRequest.Amount) ?? originalAmount?.ToString() ?? "0";
+                var amountForMac = NormalizeAmountForMac(callbackRequest.Amount)
+                    ?? originalAmount?.ToString()
+                    ?? "0";
                 var currencyForMac = NormalizeCurrencyForMac(callbackRequest.Currency) ?? "TL";
 
                 var calculatedMac = CalculateMacForTranData(
@@ -409,6 +417,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var authCode = tranDataResponse.AuthCode;
                 var transactionId = resolveResponse.Xid ?? callbackRequest.Xid;
                 var amount = resolveResponse.Amount;
+                var isAuthorizationOnly = await IsAuthorizationOnlyFlowAsync(orderId.Value);
 
                 // ═══════════════════════════════════════════════════════════════
                 // ADIM 6: SİPARİŞ DURUMU GÜNCELLE
@@ -419,7 +428,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     hostLogKey,
                     authCode,
                     transactionId,
-                    resolveResponse.MdStatus ?? "1");
+                    resolveResponse.MdStatus ?? "1",
+                    amount,
+                    isAuthorizationOnly);
 
                 _logger.LogInformation("[POSNET-3DS-CALLBACK] {CorrelationId} - ✅ Ödeme başarılı! " +
                     "OrderId: {OrderId}, HostLogKey: {HostLogKey}, AuthCode: {AuthCode}",
@@ -551,14 +562,21 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         {
             try
             {
-                var payment = await _dbContext.Payments
-                    .FirstOrDefaultAsync(p => p.OrderId == orderId && p.Provider == "YapiKredi");
+                var payment = await GetLatestPosnetPaymentAsync(orderId);
 
                 if (payment != null)
                 {
                     payment.Status = status;
+                    payment.UpdatedAt = DateTime.UtcNow;
                     payment.RawResponse = (payment.RawResponse ?? "") + 
                         $"\n[3DS-Callback-{DateTime.UtcNow:HH:mm:ss}] {rawResponse}";
+
+                    var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                    if (order != null && status.Contains("FAILED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        order.PaymentStatus = PaymentStatus.Failed;
+                        order.Status = OrderStatus.PaymentFailed;
+                    }
                     
                     await _dbContext.SaveChangesAsync();
                 }
@@ -577,24 +595,47 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             string? hostLogKey, 
             string? authCode,
             string? transactionId,
-            string mdStatus)
+            string mdStatus,
+            int amountInKurus,
+            bool isAuthorizationOnly)
         {
             try
             {
+                var processedAmount = amountInKurus / 100m;
+
                 // Payment güncelle
-                var payment = await _dbContext.Payments
-                    .FirstOrDefaultAsync(p => p.OrderId == orderId && p.Provider == "YapiKredi");
+                var payment = await GetLatestPosnetPaymentAsync(orderId);
 
                 if (payment != null)
                 {
-                    payment.Status = "Success";
+                    payment.Status = isAuthorizationOnly ? "Authorized" : "Success";
                     payment.ProviderPaymentId = hostLogKey ?? transactionId;
                     // KRİTİK: HostLogKey mutlaka set edilmeli - iade/iptal işlemleri buna bağlı
                     payment.HostLogKey = hostLogKey;
                     payment.AuthCode = authCode;
-                    payment.PaidAt = DateTime.UtcNow;
+                    payment.TransactionId = transactionId;
+                    payment.MdStatus = mdStatus;
+                    payment.UpdatedAt = DateTime.UtcNow;
+                    payment.TransactionType = isAuthorizationOnly ? "Auth" : "Sale";
+                    payment.Amount = processedAmount;
                     payment.RawResponse = (payment.RawResponse ?? "") +
-                        $"\n[3DS-Success] HostLogKey: {hostLogKey}, AuthCode: {authCode}, MdStatus: {mdStatus}";
+                        $"\n[3DS-Success] Flow: {(isAuthorizationOnly ? "Auth" : "Sale")}, HostLogKey: {hostLogKey}, AuthCode: {authCode}, MdStatus: {mdStatus}";
+
+                    if (isAuthorizationOnly)
+                    {
+                        payment.AuthorizationReference = hostLogKey;
+                        payment.AuthorizedAmount = processedAmount;
+                        payment.AuthorizedAt = DateTime.UtcNow;
+                        payment.CaptureStatus = CaptureStatus.Pending;
+                        payment.PaidAt = null;
+                    }
+                    else
+                    {
+                        payment.PaidAt = DateTime.UtcNow;
+                        payment.CapturedAmount = processedAmount;
+                        payment.CapturedAt = DateTime.UtcNow;
+                        payment.CaptureStatus = CaptureStatus.Success;
+                    }
                 }
 
                 // Order güncelle
@@ -602,30 +643,88 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 if (order != null)
                 {
                     var previousStatus = order.Status;
-                    order.Status = OrderStatus.Paid;
+                    order.PreAuthHostLogKey = hostLogKey ?? order.PreAuthHostLogKey;
 
-                    // Status history ekle
-                    _dbContext.OrderStatusHistories.Add(new OrderStatusHistory
+                    if (isAuthorizationOnly)
                     {
-                        OrderId = orderId,
-                        PreviousStatus = previousStatus,
-                        NewStatus = OrderStatus.Paid,
-                        ChangedAt = DateTime.UtcNow,
-                        ChangedBy = "POSNET-3DSecure",
-                        Reason = $"3D Secure ödeme başarılı - AuthCode: {authCode}"
-                    });
+                        order.PaymentStatus = PaymentStatus.Authorized;
+                        order.PreAuthAmount = processedAmount;
+                        order.AuthorizedAmount = processedAmount;
+                        order.PreAuthDate = DateTime.UtcNow;
+                        order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
+                            ? WeightAdjustmentStatus.PendingWeighing
+                            : order.WeightAdjustmentStatus;
+                    }
+                    else
+                    {
+                        order.Status = OrderStatus.Paid;
+                        order.PaymentStatus = PaymentStatus.Paid;
+                        order.CapturedAmount = processedAmount;
+                        order.CapturedAt = DateTime.UtcNow;
+
+                        // NEDEN: 3D sale işleminde de iade/reverse için bankanın orijinal referansı saklanmalı.
+                        order.PreAuthHostLogKey = hostLogKey ?? order.PreAuthHostLogKey;
+
+                        if (previousStatus != OrderStatus.Paid)
+                        {
+                            _dbContext.OrderStatusHistories.Add(new OrderStatusHistory
+                            {
+                                OrderId = orderId,
+                                PreviousStatus = previousStatus,
+                                NewStatus = OrderStatus.Paid,
+                                ChangedAt = DateTime.UtcNow,
+                                ChangedBy = "POSNET-3DSecure",
+                                Reason = $"3D Secure ödeme başarılı - AuthCode: {authCode}"
+                            });
+                        }
+                    }
                 }
 
                 await _dbContext.SaveChangesAsync();
 
-                _logger.LogInformation("[POSNET-3DS] Sipariş durumu güncellendi - OrderId: {OrderId}, Status: Paid",
-                    orderId);
+                _logger.LogInformation(
+                    "[POSNET-3DS] Sipariş durumu güncellendi - OrderId: {OrderId}, Flow: {Flow}",
+                    orderId,
+                    isAuthorizationOnly ? "Authorized" : "Paid");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[POSNET-3DS] Sipariş güncelleme hatası - OrderId: {OrderId}", orderId);
                 throw; // Kritik hata - yukarı fırlat
             }
+        }
+
+        /// <summary>
+        /// Callback'in auth-only mi yoksa sale mi olduğunu pending ödeme kaydından tespit eder.
+        /// NEDEN: Ağırlık bazlı 3D akışta callback sonrasında ödeme çekilmiş gibi davranmak capture sürecini bozar.
+        /// </summary>
+        private async Task<bool> IsAuthorizationOnlyFlowAsync(int orderId)
+        {
+            var payment = await GetLatestPosnetPaymentAsync(orderId);
+            if (payment?.TransactionType != null &&
+                payment.TransactionType.Equals("Auth", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var order = await _dbContext.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            return order?.HasWeightBasedItems == true;
+        }
+
+        /// <summary>
+        /// POSNET callback akışında aynı siparişe ait en güncel ödeme kaydını getirir.
+        /// Eski verilerde provider adı farklı yazılmış olabileceği için geriye uyum korunur.
+        /// </summary>
+        private Task<Payments?> GetLatestPosnetPaymentAsync(int orderId)
+        {
+            return _dbContext.Payments
+                .Where(p => p.OrderId == orderId &&
+                    (p.Provider == YapiKrediPosnetService.PROVIDER_NAME || p.Provider == "YapiKredi"))
+                .OrderByDescending(p => p.CreatedAt)
+                .FirstOrDefaultAsync();
         }
 
         #region Helper Methods for oosResolveMerchantData Flow

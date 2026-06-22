@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./OrderDetailModal.css";
 import signalRService from "../services/signalRService";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 
 /**
  * Durum badge'ini render et
@@ -327,7 +328,14 @@ export default function OrderDetailModal({ show, onHide, order, onOrderUpdate })
   const weightAdjustment = localOrder.weightAdjustment || localOrder.weightReport;
   const hasWeightAdjustment = !!weightAdjustment;
   const hasWeightBasedItems = (localOrder.orderItems || []).some(
-    (item) => item.isWeightBased || item.weightUnit,
+    (item) =>
+      isStrictVariableWeightProduct({
+        ...item,
+        name: item.productName || item.name || item.product?.name,
+        categoryName: item.categoryName || item.product?.category?.name || "",
+        unit: item.unit || item.product?.unit || "",
+        weightUnit: item.weightUnit || item.product?.weightUnit || null,
+      }),
   );
 
   return (

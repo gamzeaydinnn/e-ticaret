@@ -674,6 +674,92 @@ namespace ECommerce.Tests.Controllers
         }
 
         [Fact]
+        public async Task GetProducts_ShouldPromoteMilkNamedProducts_ToMilkCategoryFromBeverageMapping()
+        {
+            await using var context = CreateContext();
+
+            var icecekKategori = new Category { Id = 501, Name = "İçecekler", Slug = "icecekler", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+            var sutKategori = new Category { Id = 502, Name = "Süt Ürünleri", Slug = "sut-ve-sut-urunleri", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+            context.Categories.AddRange(icecekKategori, sutKategori);
+            context.MikroCategoryMappings.Add(new MikroCategoryMapping
+            {
+                MikroAnagrupKod = "ICECEKLER",
+                CategoryId = icecekKategori.Id,
+                Priority = 10,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var controller = CreateController(context, new List<MikroUnifiedProductDto>
+            {
+                new()
+                {
+                    StokKod = "SUT-1",
+                    StokAd = "HINDISTAN CEVIZI SUTU 1 LT",
+                    Fiyat = 99m,
+                    StokMiktar = 6,
+                    AnagrupKod = "ICECEKLER",
+                    GrupKod = string.Empty,
+                    Birim = "ADET",
+                    WebeGonderilecekFl = true
+                }
+            });
+
+            var actionResult = await controller.GetProducts();
+            var okResult = Assert.IsType<OkObjectResult>(actionResult);
+            var products = Assert.IsAssignableFrom<IEnumerable<ProductListDto>>(okResult.Value).ToList();
+
+            var product = Assert.Single(products);
+            Assert.Equal(sutKategori.Id, product.CategoryId);
+            Assert.Equal("Süt Ürünleri", product.CategoryName);
+        }
+
+        [Fact]
+        public async Task GetProducts_ShouldPromoteSucukProducts_ToMeatCategoryFromMilkMapping()
+        {
+            await using var context = CreateContext();
+
+            var etKategori = new Category { Id = 401, Name = "Et ve Et Ürünleri", Slug = "et-ve-et-urunleri", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+            var sutKategori = new Category { Id = 402, Name = "Süt Ürünleri", Slug = "sut-ve-sut-urunleri", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+            context.Categories.AddRange(etKategori, sutKategori);
+            context.MikroCategoryMappings.Add(new MikroCategoryMapping
+            {
+                MikroAnagrupKod = "500",
+                CategoryId = sutKategori.Id,
+                Priority = 10,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var controller = CreateController(context, new List<MikroUnifiedProductDto>
+            {
+                new()
+                {
+                    StokKod = "SUCUK-1",
+                    StokAd = "DANA SUCUK 250 GR",
+                    Fiyat = 199m,
+                    StokMiktar = 6,
+                    AnagrupKod = "500",
+                    GrupKod = string.Empty,
+                    Birim = "ADET",
+                    WebeGonderilecekFl = true
+                }
+            });
+
+            var actionResult = await controller.GetProducts();
+            var okResult = Assert.IsType<OkObjectResult>(actionResult);
+            var products = Assert.IsAssignableFrom<IEnumerable<ProductListDto>>(okResult.Value).ToList();
+
+            var product = Assert.Single(products);
+            Assert.Equal(etKategori.Id, product.CategoryId);
+            Assert.Equal("Et ve Et Ürünleri", product.CategoryName);
+        }
+
+        [Fact]
         public async Task GetAllProductsForAdmin_ShouldIncludeMikroOnlyProducts_AndExcludeStaleLocalSkuRows()
         {
             await using var context = CreateContext();
@@ -718,7 +804,7 @@ namespace ECommerce.Tests.Controllers
                 {
                     Id = 703,
                     Name = "Elle Eklenen Yerel Ürün",
-                    SKU = null,
+                    SKU = string.Empty,
                     CategoryId = category.Id,
                     Price = 30m,
                     StockQuantity = 4,
@@ -763,7 +849,8 @@ namespace ECommerce.Tests.Controllers
 
             var actionResult = await controller.GetAllProductsForAdmin(page: 1, size: 50);
             var okResult = Assert.IsType<OkObjectResult>(actionResult);
-            var payload = Assert.NotNull(okResult.Value);
+            Assert.NotNull(okResult.Value);
+            var payload = okResult.Value;
 
             var itemsProperty = payload.GetType().GetProperty("items", BindingFlags.Public | BindingFlags.Instance);
             var totalProperty = payload.GetType().GetProperty("total", BindingFlags.Public | BindingFlags.Instance);

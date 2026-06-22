@@ -167,7 +167,8 @@ namespace ECommerce.Business.Services.Managers
                 BrandId = productDto.BrandId,
                 AdminOverrideName = productDto.AdminOverrideName,
                 AdminOverridePrice = productDto.AdminOverridePrice,
-                AdminOverrideCategory = productDto.AdminOverrideCategory,
+                // Admin panelinden kaydedilen kategori, sonraki Mikro sync'lerinde ezilmemelidir.
+                AdminOverrideCategory = true,
                 SKU = resolvedSku,
                 Slug = await GenerateUniqueProductSlugAsync(productDto.Name, resolvedSku)
             };
@@ -196,7 +197,7 @@ namespace ECommerce.Business.Services.Managers
             };
         }
 
-        public async Task<ProductListDto> UpdateProductAsync(int id, ProductUpdateDto productDto)
+        public async Task<ProductListDto?> UpdateProductAsync(int id, ProductUpdateDto productDto)
         {
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return null;
@@ -212,7 +213,8 @@ namespace ECommerce.Business.Services.Managers
             product.BrandId = productDto.BrandId;
             product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
             product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
-            product.AdminOverrideCategory = ResolveAdminOverride(product.AdminOverrideCategory, productDto.AdminOverrideCategory);
+            // Admin'in seçtiği kategori son karar olmalı; sync bunu tekrar yazmamalı.
+            product.AdminOverrideCategory = true;
             product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
             await _productRepository.UpdateAsync(product);
@@ -280,7 +282,7 @@ namespace ECommerce.Business.Services.Managers
                 product.BrandId = productDto.BrandId;
                 product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
                 product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
-                product.AdminOverrideCategory = ResolveAdminOverride(product.AdminOverrideCategory, productDto.AdminOverrideCategory);
+                product.AdminOverrideCategory = true;
                 product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
                 await _productRepository.UpdateAsync(product);
@@ -308,7 +310,7 @@ namespace ECommerce.Business.Services.Managers
                     BrandId = productDto.BrandId,
                     AdminOverrideName = productDto.AdminOverrideName,
                     AdminOverridePrice = productDto.AdminOverridePrice,
-                    AdminOverrideCategory = productDto.AdminOverrideCategory,
+                    AdminOverrideCategory = true,
                     SKU = sku,
                     Slug = await GenerateUniqueProductSlugAsync(productDto.Name, sku)
                 };

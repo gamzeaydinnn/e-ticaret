@@ -339,10 +339,10 @@ namespace ECommerce.Business.Services.Managers
                     Quantity = i.Quantity,
                     UnitPrice = unitPrice,
                     // Ek bilgiler (frontend için)
-                    ProductName = i.Product?.Name,
-                    ProductImage = i.Product?.ImageUrl,
-                    VariantTitle = i.ProductVariant?.Title,
-                    Sku = i.ProductVariant?.SKU
+                    ProductName = i.Product?.Name ?? string.Empty,
+                    ProductImage = i.Product?.ImageUrl ?? string.Empty,
+                    VariantTitle = i.ProductVariant?.Title ?? string.Empty,
+                    Sku = i.ProductVariant?.SKU ?? string.Empty
                 };
             }).ToList();
 

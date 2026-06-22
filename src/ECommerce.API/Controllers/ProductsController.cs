@@ -22,6 +22,7 @@ using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
 
@@ -47,21 +48,50 @@ namespace ECommerce.API.Controllers
 
         private static readonly Dictionary<string, string[]> ProductNameCategoryHints = new(StringComparer.OrdinalIgnoreCase)
         {
+            ["et-ve-et-urunleri"] = new[]
+            {
+                "sucuk", "salam", "sosis", "pastirma", "pastırma", "kavurma",
+                "jambon", "füme et", "fume et", "dana", "kuzu", "köfte", "kofte",
+                "kıyma", "kiyma", "antrikot", "bonfile", "biftek", "tavuk", "hindi"
+            },
             ["temel-gida"] = new[] { "recel", "reçel", "pekmez", "marmelat", "bal", "tahin" },
             ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "donmuş", "dondurulmus", "dondurulmuş", "superfresh", "super fresh" },
             ["ev-ve-mutfak"] = new[] { "pisirme kagidi", "pişirme kağıdı", "kagit", "kağıt", "servis seti", "servis", "folyo" },
             ["temizlik"] = new[] { "eldiven", "muayene" },
-            ["sut-ve-sut-urunleri"] = new[] { "nesquik" },
+            ["sut-ve-sut-urunleri"] = new[]
+            {
+                "nesquik", "süt", "sut", "yoğurt", "yogurt", "ayran", "kefir",
+                "peynir", "kaşar", "kasar", "labne", "tereyağ", "tereyag",
+                "krema", "kaymak", "hindistan cevizi sütü", "hindistan cevizi sutu",
+                "bitkisel süt", "bitkisel sut"
+            },
         };
 
-        private static readonly HashSet<string> ProductHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> FrozenHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
         {
             "atistirmalik",
             "temel-gida",
             "sut-ve-sut-urunleri"
         };
 
+        private static readonly HashSet<string> MilkHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "icecekler",
+            "temel-gida",
+            "atistirmalik",
+            "diger"
+        };
+
+        private static readonly HashSet<string> MeatHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "sut-ve-sut-urunleri",
+            "temel-gida",
+            "atistirmalik",
+            "diger"
+        };
+
         private const string FrozenStorefrontCategorySlug = "dondurma-ve-dondurulmus-gida";
+        private const string MeatStorefrontCategorySlug = "et-ve-et-urunleri";
         private const string UncategorizedCategorySlug = "diger";
 
         private sealed class MergedProductRow
@@ -1399,12 +1429,11 @@ namespace ECommerce.API.Controllers
             if (string.IsNullOrWhiteSpace(productName))
                 return (null, string.Empty, string.Empty);
 
-            var normalizedName = NormalizeCategorySlug(productName)
-                .Replace('-', ' ');
+            var normalizedName = NormalizeHintText(productName);
 
             foreach (var (slug, hints) in ProductNameCategoryHints)
             {
-                if (!hints.Any(hint => normalizedName.Contains(NormalizeCategorySlug(hint).Replace('-', ' '), StringComparison.OrdinalIgnoreCase)))
+                if (!hints.Any(hint => normalizedName.Contains(NormalizeHintText(hint), StringComparison.Ordinal)))
                     continue;
 
                 var categoryEntry = idToSlug.FirstOrDefault(item =>
@@ -1422,6 +1451,16 @@ namespace ECommerce.API.Controllers
             return (null, string.Empty, string.Empty);
         }
 
+        private static string NormalizeHintText(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            var normalized = Regex.Replace(value.ToLowerInvariant(), @"[^\p{L}\p{Nd}]+", " ");
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+            return $" {normalized} ";
+        }
+
         private static bool ShouldPreferHintedCategory(string resolvedSlug, string hintedSlug)
         {
             if (string.IsNullOrWhiteSpace(hintedSlug) ||
@@ -1430,8 +1469,22 @@ namespace ECommerce.API.Controllers
                 return false;
             }
 
-            return string.Equals(hintedSlug, FrozenStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase) &&
-                   ProductHintOverridableCategorySlugs.Contains(resolvedSlug);
+            if (string.Equals(hintedSlug, FrozenStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase))
+            {
+                return FrozenHintOverridableCategorySlugs.Contains(resolvedSlug);
+            }
+
+            if (string.Equals(hintedSlug, "sut-ve-sut-urunleri", StringComparison.OrdinalIgnoreCase))
+            {
+                return MilkHintOverridableCategorySlugs.Contains(resolvedSlug);
+            }
+
+            if (string.Equals(hintedSlug, MeatStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase))
+            {
+                return MeatHintOverridableCategorySlugs.Contains(resolvedSlug);
+            }
+
+            return false;
         }
 
         private void CacheResolvedMapping(

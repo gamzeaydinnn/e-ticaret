@@ -3,24 +3,25 @@ using System.Threading.Tasks;
 using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 
 namespace ECommerce.Core.Interfaces
 {
     /// <summary>
     /// Ağırlık Bazlı Dinamik Ödeme Sistemi - İş Mantığı Servisi
-    /// 
+    ///
     /// Bu servis tüm ağırlık ayarlama süreçlerinin merkezi yönetim noktasıdır.
     /// Kurye ağırlık girişinden, ödeme farklarının tahsilata kadar tüm akışı yönetir.
-    /// 
+    ///
     /// ANA İŞ AKIŞI:
     /// 1. Müşteri sipariş verir → tahmini fiyat hesaplanır → PreAuth tutulur
     /// 2. Kurye tartımı yapar → RecordCourierWeightEntryAsync çağrılır
     /// 3. Fark hesaplanır → CalculatePriceDifferenceAsync
-    /// 4. Fark varsa: 
+    /// 4. Fark varsa:
     ///    a) Nakit: Kurye farkı tahsil eder/iade eder
     ///    b) Kart: FinalizeWeightBasedPaymentAsync ile karttan çekilir/iade edilir
     /// 5. Admin müdahalesi gerekirse: ProcessAdminDecisionAsync
-    /// 
+    ///
     /// Tolere edilmiş ağırlık farkı YOKTUR. Her gram fark hesaplanır.
     /// </summary>
     public interface IWeightAdjustmentService
@@ -29,13 +30,13 @@ namespace ECommerce.Core.Interfaces
 
         /// <summary>
         /// Kuryenin girdiği gerçek ağırlık değerini kaydeder.
-        /// 
+        ///
         /// Bu metod şunları yapar:
         /// 1. OrderItem'ın ActualWeight, IsWeighed, WeighedAt, WeighedByCourierId alanlarını günceller
         /// 2. WeightAdjustment kaydı oluşturur (fark varsa)
         /// 3. Fiyat farkını hesaplar (PricePerUnit * WeightDifference)
         /// 4. Order'ın tüm item'ları tartıldıysa AllItemsWeighed=true yapar
-        /// 
+        ///
         /// DÖNÜŞ: Hesaplanan fiyat farkı (pozitif = müşteri ödeyecek, negatif = iade)
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
@@ -58,7 +59,7 @@ namespace ECommerce.Core.Interfaces
         /// <summary>
         /// Siparişteki toplam ağırlık ve fiyat farkını hesaplar.
         /// Bu metod sadece hesaplama yapar, veritabanı değiştirmez.
-        /// 
+        ///
         /// Dashboard ve önizleme için kullanılır.
         /// </summary>
         Task<WeightDifferenceCalculationDto> CalculateOrderWeightDifferenceAsync(int orderId);
@@ -74,16 +75,16 @@ namespace ECommerce.Core.Interfaces
 
         /// <summary>
         /// Ağırlık bazlı siparişin ödeme farklarını finalize eder.
-        /// 
+        ///
         /// NAKİT ÖDEME İÇİN:
         /// - Kurye farkı müşteriden tahsil etti/iade etti olarak işaretler
         /// - WeightAdjustment.SettledAt, SettledByCourierId güncellenir
-        /// 
+        ///
         /// KART ÖDEME İÇİN:
         /// - PreAuth tutarı serbest bırakılır
         /// - FinalAmount kadar gerçek çekim yapılır
         /// - Veya iade işlemi başlatılır (müşteri lehine fark varsa)
-        /// 
+        ///
         /// NOT: 2-3 günlük PreAuth süresi dolmadan bu işlem yapılmalıdır!
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
@@ -104,7 +105,7 @@ namespace ECommerce.Core.Interfaces
 
         /// <summary>
         /// Admin tarafından ağırlık ayarlamasına müdahale.
-        /// 
+        ///
         /// Admin şunları yapabilir:
         /// - Farkı onayla (ApprovedByAdmin)
         /// - Farkı reddet / iptal et (RejectedByAdmin)
@@ -116,7 +117,7 @@ namespace ECommerce.Core.Interfaces
         /// <param name="decision">Admin kararı (Approve/Reject/Override)</param>
         /// <param name="overrideAmount">Manuel tutar (override durumunda)</param>
         /// <param name="adminNotes">Admin notları</param>
-        Task<bool> ProcessAdminDecisionAsync(int adjustmentId, int adminId, AdminDecisionType decision, 
+        Task<bool> ProcessAdminDecisionAsync(int adjustmentId, int adminId, AdminDecisionType decision,
             decimal? overrideAmount = null, string? adminNotes = null);
 
         /// <summary>
@@ -125,6 +126,22 @@ namespace ECommerce.Core.Interfaces
         /// </summary>
         Task<bool> RequestAdminReviewAsync(int orderId, string reason);
 
+        /// <summary>
+        /// Admin veya mağaza görevlisi hazırlık aşamasında sipariş kaleminin gerçek ağırlığını manuel günceller.
+        ///
+        /// Bu metod:
+        /// - OrderItem.ActualWeight ve fiyat fark alanlarını günceller
+        /// - Varsa mevcut WeightAdjustment kaydını revize eder, yoksa oluşturur
+        /// - Siparişin FinalAmount değerini yeniden hesaplar
+        /// - FinalAmount > PreAuthAmount ise admin onayı gerekip gerekmediğini netleştirir
+        /// </summary>
+        Task<ManualWeightUpdateResultDto> UpdateManualWeightAsync(
+            int orderId,
+            int orderItemId,
+            decimal actualWeight,
+            int actorUserId,
+            string actorDisplayName);
+
         #endregion
 
         #region Sipariş Oluşturma Entegrasyonu
@@ -132,7 +149,7 @@ namespace ECommerce.Core.Interfaces
         /// <summary>
         /// Yeni sipariş oluşturulurken çağrılır.
         /// Ağırlık bazlı ürünler için tahmini değerleri hesaplar ve set eder.
-        /// 
+        ///
         /// Bu metod:
         /// - HasWeightBasedItems = true yapar (eğer ağırlık bazlı ürün varsa)
         /// - Her OrderItem için EstimatedWeight ve EstimatedPrice hesaplar
@@ -271,11 +288,31 @@ namespace ECommerce.Core.Interfaces
         public decimal PriceDifference { get; set; }
         public bool IsSuccess { get; set; }
         public string? ErrorMessage { get; set; }
-        
+
         /// <summary>
         /// Oluşturulan WeightAdjustment kaydının ID'si (fark varsa)
         /// </summary>
         public int? AdjustmentId { get; set; }
+    }
+
+    /// <summary>
+    /// Hazırlık aşamasındaki manuel ağırlık güncelleme sonucu.
+    /// </summary>
+    public class ManualWeightUpdateResultDto
+    {
+        public bool IsSuccess { get; set; }
+        public string? ErrorMessage { get; set; }
+        public int OrderId { get; set; }
+        public int OrderItemId { get; set; }
+        public int? AdjustmentId { get; set; }
+        public decimal EstimatedWeight { get; set; }
+        public decimal ActualWeight { get; set; }
+        public decimal PriceDifference { get; set; }
+        public decimal FinalAmount { get; set; }
+        public decimal PreAuthAmount { get; set; }
+        public decimal MaxCaptureAmountFromPreAuth { get; set; }
+        public bool ExceedsPreAuthLimit { get; set; }
+        public WeightAdjustmentStatus AdjustmentStatus { get; set; }
     }
 
     /// <summary>
@@ -290,12 +327,12 @@ namespace ECommerce.Core.Interfaces
         public decimal TotalEstimatedPrice { get; set; }
         public decimal TotalActualPrice { get; set; }
         public decimal TotalPriceDifference { get; set; }
-        
+
         /// <summary>
         /// Pozitif = müşteri ödeyecek, Negatif = müşteriye iade
         /// </summary>
         public bool CustomerOwes => TotalPriceDifference > 0;
-        
+
         public List<ItemWeightDifferenceDto> Items { get; set; } = new();
     }
 
@@ -320,27 +357,27 @@ namespace ECommerce.Core.Interfaces
     {
         public bool IsSuccess { get; set; }
         public string? ErrorMessage { get; set; }
-        
+
         /// <summary>
         /// Orijinal PreAuth tutarı
         /// </summary>
         public decimal PreAuthAmount { get; set; }
-        
+
         /// <summary>
         /// Final çekilen tutar
         /// </summary>
         public decimal FinalAmount { get; set; }
-        
+
         /// <summary>
         /// Fark tutarı
         /// </summary>
         public decimal DifferenceAmount { get; set; }
-        
+
         /// <summary>
         /// Ödeme yöntemi (Kart/Nakit)
         /// </summary>
         public string PaymentMethod { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// İşlem referans numarası
         /// </summary>
@@ -359,17 +396,17 @@ namespace ECommerce.Core.Interfaces
         public string CustomerPhone { get; set; } = string.Empty;
         public DateTime OrderDate { get; set; }
         public decimal EstimatedTotal { get; set; }
-        
+
         /// <summary>
         /// Tartılması gereken kalem sayısı
         /// </summary>
         public int PendingItemCount { get; set; }
-        
+
         /// <summary>
         /// Tartılmış kalem sayısı
         /// </summary>
         public int WeighedItemCount { get; set; }
-        
+
         public List<PendingWeightItemDto> Items { get; set; } = new();
     }
 
@@ -407,32 +444,32 @@ namespace ECommerce.Core.Interfaces
     {
         public int CourierId { get; set; }
         public string CourierName { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// Toplam tartım sayısı
         /// </summary>
         public int TotalWeighings { get; set; }
-        
+
         /// <summary>
         /// Ortalama ağırlık farkı (gram)
         /// </summary>
         public decimal AverageWeightDifference { get; set; }
-        
+
         /// <summary>
         /// Ortalama fiyat farkı (TL)
         /// </summary>
         public decimal AveragePriceDifference { get; set; }
-        
+
         /// <summary>
         /// Müşteri lehine toplam fark
         /// </summary>
         public decimal TotalCustomerFavorDifference { get; set; }
-        
+
         /// <summary>
         /// Mağaza lehine toplam fark
         /// </summary>
         public decimal TotalStoreFavorDifference { get; set; }
-        
+
         /// <summary>
         /// Başarılı tahsilat oranı (%)
         /// </summary>
