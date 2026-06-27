@@ -151,6 +151,11 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             // İşlem tipi - H = Host (Internet)
             AppendElement(sb, "tranType", request.TranType);
             
+            // ── MADDE 16: tranDateRequired ───────────────────────────────
+            // POSNET dokümanı: "tranDateRequired = 1 gönderilmesi destek süreçlerini hızlandırır."
+            // Satış, provizyon ve finansallaştırma XML'lerinde bu alan bulunmalı.
+            AppendElement(sb, "tranDateRequired", "1");
+
             sb.Append("</sale>");
             sb.Append(POSNET_CLOSE);
 
@@ -191,7 +196,10 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             {
                 AppendElement(sb, "mailorderflag", "Y");
             }
-            
+
+            // ── MADDE 16: tranDateRequired ───────────────────────────────
+            AppendElement(sb, "tranDateRequired", "1");
+
             sb.Append("</auth>");
             sb.Append(POSNET_CLOSE);
 
@@ -235,6 +243,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     AppendElement(sb, "orderDate", request.OrderDate);
                 }
             }
+
+            // ── MADDE 16: tranDateRequired ───────────────────────────────
+            AppendElement(sb, "tranDateRequired", "1");
             
             sb.Append("</capt>");
             sb.Append(POSNET_CLOSE);

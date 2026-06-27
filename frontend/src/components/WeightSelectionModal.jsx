@@ -12,6 +12,7 @@
  */
 import React, { useState, useCallback, useEffect } from "react";
 import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
+import { getEffectiveUnitPrice } from "../utils/weightPricing";
 import "./WeightSelectionModal.css";
 
 /**
@@ -107,17 +108,20 @@ export default function WeightSelectionModal({
   if (!isOpen || !product) return null;
 
   // Fiyat hesaplamaları
-  const basePrice = Number(product.price || product.Price || 0);
+  const originalPrice = Number(
+    product.originalPrice || product.OriginalPrice || product.Price || 0,
+  );
   const specialPrice = Number(
     product.specialPrice ||
       product.discountedPrice ||
       product.DiscountedPrice ||
       0,
   );
-  const hasDiscount = specialPrice > 0 && specialPrice < basePrice;
-  const pricePerKg = hasDiscount ? specialPrice : basePrice;
+  const pricePerKg = getEffectiveUnitPrice(null, product);
+  const hasDiscount =
+    specialPrice > 0 && originalPrice > 0 && specialPrice < originalPrice;
   const totalPrice = pricePerKg * selectedWeight;
-  const originalTotal = hasDiscount ? basePrice * selectedWeight : null;
+  const originalTotal = hasDiscount ? originalPrice * selectedWeight : null;
 
   // Resim URL'i
   const imageUrl =
@@ -157,7 +161,7 @@ export default function WeightSelectionModal({
             <div className="price-per-kg">
               {hasDiscount && (
                 <span className="original-price">
-                  ₺{basePrice.toFixed(2)}/kg
+                  ₺{originalPrice.toFixed(2)}/kg
                 </span>
               )}
               <span className="current-price">₺{pricePerKg.toFixed(2)}/kg</span>

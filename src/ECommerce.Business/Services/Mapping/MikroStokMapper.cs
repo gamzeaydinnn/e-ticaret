@@ -365,8 +365,10 @@ namespace ECommerce.Business.Services.Mapping
                     birimAd);
             }
 
-            // Sadece meyve/sebze/manav kategorisinde ve sabit miktar içermeyen KG ürünler tartılıdır.
-            product.IsWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+            // IsWeightBased'i Mikro yapısal verisinden (birim + isim + kategori) TÜRET.
+            // NEDEN: Birim KG ise (WeightUnit=Kilogram) ürün adında "KG" geçmese bile tartılıdır;
+            // eski isim-heuristiği bu ürünleri yanlışlıkla adet sayıyordu.
+            product.IsWeightBased = WeightBasedProductRules.DeriveIsWeightBasedForSync(
                 product.Name,
                 product.WeightUnit,
                 mikroStok.StoAnagrupKod);

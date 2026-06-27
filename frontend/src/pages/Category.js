@@ -1,8 +1,9 @@
 // Kategoriye göre ürün listeleme (mevcut mimariye uygun)
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import ProductGrid from "../components/ProductGrid";
+import CategoryTile from "./components/CategoryTile";
 import categoryServiceReal, {
   matchesCategorySlug,
   normalizeCategorySlug,
@@ -43,6 +44,8 @@ export default function Category() {
   );
 
   const [category, setCategory] = useState(null);
+  const [subCategories, setSubCategories] = useState([]);
+  const [breadcrumb, setBreadcrumb] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -89,6 +92,28 @@ export default function Category() {
 
       if (foundCat) {
         setCategory(foundCat);
+
+        // ✨ YENİ: Alt kategorileri yükle
+        if (foundCat.id) {
+          try {
+            const subs = await categoryServiceReal.getSubCategories(
+              foundCat.id,
+            );
+            setSubCategories(subs.filter((c) => c.isActive !== false));
+          } catch (err) {
+            console.error("Alt kategoriler yüklenemedi:", err);
+            setSubCategories([]);
+          }
+
+          // ✨ YENİ: Breadcrumb yolunu yükle
+          try {
+            const path = await categoryServiceReal.getCategoryPath(foundCat.id);
+            setBreadcrumb(path || []);
+          } catch (err) {
+            console.error("Kategori yolu yüklenemedi:", err);
+            setBreadcrumb([]);
+          }
+        }
       } else {
         setError("Kategori bulunamadı.");
       }
@@ -177,6 +202,43 @@ export default function Category() {
 
       {/* Başlık - ProductGrid ile aynı hizada */}
       <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 60px" }}>
+        {/* ✨ YENİ: Breadcrumb navigasyon */}
+        {breadcrumb.length > 0 && (
+          <nav className="mb-3" aria-label="breadcrumb">
+            <ol className="breadcrumb" style={{ fontSize: "0.9rem" }}>
+              <li className="breadcrumb-item">
+                <Link
+                  to="/"
+                  style={{ color: "#f57c00", textDecoration: "none" }}
+                >
+                  <i className="fas fa-home me-1"></i>
+                  Ana Sayfa
+                </Link>
+              </li>
+              {breadcrumb.map((cat, index) => (
+                <li
+                  key={cat.id}
+                  className={`breadcrumb-item ${index === breadcrumb.length - 1 ? "active" : ""}`}
+                  aria-current={
+                    index === breadcrumb.length - 1 ? "page" : undefined
+                  }
+                >
+                  {index === breadcrumb.length - 1 ? (
+                    cat.name
+                  ) : (
+                    <Link
+                      to={`/kategoriler/${cat.slug || createSlug(cat.name)}`}
+                      style={{ color: "#f57c00", textDecoration: "none" }}
+                    >
+                      {cat.name}
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </nav>
+        )}
+
         <div className="d-flex align-items-center justify-content-between mb-4">
           <div>
             <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
@@ -198,6 +260,30 @@ export default function Category() {
           <div className="alert alert-danger" role="alert">
             {error}
           </div>
+        )}
+
+        {/* ✨ YENİ: Alt Kategoriler Gösterimi */}
+        {subCategories.length > 0 && (
+          <section className="mb-4">
+            <h2 className="h5 fw-semibold mb-3" style={{ color: "#2d3748" }}>
+              <i
+                className="fas fa-sitemap me-2"
+                style={{ color: "#10b981" }}
+              ></i>
+              Alt Kategoriler
+            </h2>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                gap: 12,
+              }}
+            >
+              {subCategories.map((subCat) => (
+                <CategoryTile key={subCat.id} category={subCat} />
+              ))}
+            </div>
+          </section>
         )}
       </div>
 

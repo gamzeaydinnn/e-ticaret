@@ -243,13 +243,30 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
                 var latestPosnetPayment = await GetLatestPosnetPaymentAsync(orderId.Value);
 
-                var originalAmount = latestPosnetPayment != null
-                    ? (int)Math.Round(latestPosnetPayment.Amount * 100m, MidpointRounding.AwayFromZero)
-                    : originalOrder != null
-                        ? (int)Math.Round(
-                            (originalOrder.FinalPrice > 0 ? originalOrder.FinalPrice : originalOrder.TotalPrice) * 100m,
-                            MidpointRounding.AwayFromZero)
-                        : (int?)null;
+                // MADDE 5: originalAmount öncelik sırası:
+                //   1. KGL sipariş → order.PreAuthAmount (bankaya gönderilen gerçek provizyon tutarı)
+                //   2. Payment kaydındaki Amount (MADDE 9 ile buraya PreAuthAmount yazılıyor)
+                //   3. Son çare: FinalPrice > 0 ? FinalPrice : TotalPrice
+                // Bu sıra, MAC hesabının bankaya gönderilen tutarla eşleşmesini garantiler.
+                int? originalAmount = null;
+
+                if (originalOrder?.HasWeightBasedItems == true && originalOrder.PreAuthAmount > 0)
+                {
+                    // KGL sipariş — MADDE 1/9 ile set edilen provizyon tutarı
+                    originalAmount = (int)Math.Round(originalOrder.PreAuthAmount * 100m, MidpointRounding.AwayFromZero);
+                    _logger.LogInformation(
+                        "[POSNET-3DS-CALLBACK] {CorrelationId} - KGL sipariş, originalAmount=PreAuthAmount: {Amount}",
+                        correlationId, originalAmount);
+                }
+                else if (latestPosnetPayment != null)
+                {
+                    originalAmount = (int)Math.Round(latestPosnetPayment.Amount * 100m, MidpointRounding.AwayFromZero);
+                }
+                else if (originalOrder != null)
+                {
+                    var orderTotal = originalOrder.FinalPrice > 0 ? originalOrder.FinalPrice : originalOrder.TotalPrice;
+                    originalAmount = (int)Math.Round(orderTotal * 100m, MidpointRounding.AwayFromZero);
+                }
 
                 // MAC hesapla - POSNET Dokümanı sayfa 11
                 // firstHash = HASH(encKey + ';' + terminalID)
@@ -482,35 +499,33 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 return orderId;
             }
 
-            // XID'den çıkarmayı dene (format: YKB{OrderId:D5}{MMddHHmmss}{Random:XX})
+            // XID'den çıkarmayı dene
+            // Yeni format (MADDE 14): YKB{OrderId:D7}{MMddHHmm}{RR} = 20 karakter
+            // Eski format          : YKB{OrderId:D5}{MMddHHmmss}{RR} = 20 karakter
             var xid = callbackRequest.Xid;
-            if (!string.IsNullOrWhiteSpace(xid) && xid.StartsWith("YKB") && xid.Length >= 8)
+            if (!string.IsNullOrWhiteSpace(xid) && xid.StartsWith("YKB") && xid.Length >= 10)
             {
-                var orderIdPart = xid.Substring(3, 5);
-                if (int.TryParse(orderIdPart, out var xidOrderId))
+                // ÖNCE yeni D7 formatı dene
+                var orderIdPart7 = xid.Substring(3, Math.Min(7, xid.Length - 3));
+                if (int.TryParse(orderIdPart7, out var xidOrderId7) && xidOrderId7 > 0)
                 {
-                    return xidOrderId;
+                    return xidOrderId7;
                 }
-            }
 
-            // Fallback: eski D6 format (YKB{OrderId:D6}{...})
-            if (!string.IsNullOrWhiteSpace(xid) && xid.StartsWith("YKB") && xid.Length >= 9)
-            {
-                var orderIdPart = xid.Substring(3, 6);
-                if (int.TryParse(orderIdPart, out var xidOrderId))
+                // Eski D5 formatı dene
+                if (xid.Length >= 8)
                 {
-                    return xidOrderId;
+                    var orderIdPart5 = xid.Substring(3, 5);
+                    if (int.TryParse(orderIdPart5, out var xidOrderId5) && xidOrderId5 > 0)
+                        return xidOrderId5;
                 }
-            }
 
-            // Fallback: eski format
-            if (!string.IsNullOrWhiteSpace(xid) && xid.Length >= 13)
-            {
-                // YYYYMMDD (8) + OrderId (5)
-                var orderIdPart = xid.Substring(8, 5);
-                if (int.TryParse(orderIdPart, out var xidOrderId))
+                // Eski D6 formatı dene
+                if (xid.Length >= 9)
                 {
-                    return xidOrderId;
+                    var orderIdPart6 = xid.Substring(3, 6);
+                    if (int.TryParse(orderIdPart6, out var xidOrderId6) && xidOrderId6 > 0)
+                        return xidOrderId6;
                 }
             }
 
@@ -643,10 +658,18 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 if (order != null)
                 {
                     var previousStatus = order.Status;
-                    order.PreAuthHostLogKey = hostLogKey ?? order.PreAuthHostLogKey;
+
+                    // MADDE 4: PreAuthHostLogKey her zaman set edilmeli (null değer mevcut değeri silmemeli)
+                    if (!string.IsNullOrWhiteSpace(hostLogKey))
+                    {
+                        order.PreAuthHostLogKey = hostLogKey;
+                    }
 
                     if (isAuthorizationOnly)
                     {
+                        // KGL sipariş: 3D Secure + Auth başarılı → "PreAuthorized"
+                        // MADDE 17: Kart bloke edildi, tartım + Post-Auth (Capt) bekleniyor.
+                        // Paid YAPILMAZ — WeightPending → Paid geçişi Post-Auth sonrası olur.
                         order.PaymentStatus = PaymentStatus.Authorized;
                         order.PreAuthAmount = processedAmount;
                         order.AuthorizedAmount = processedAmount;
@@ -654,6 +677,21 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                             ? WeightAdjustmentStatus.PendingWeighing
                             : order.WeightAdjustmentStatus;
+
+                        // MADDE 17: OrderStatus geçişi — provizyon alındı → PreAuthorized
+                        if (previousStatus != OrderStatus.PreAuthorized)
+                        {
+                            order.Status = OrderStatus.PreAuthorized;
+                            _dbContext.OrderStatusHistories.Add(new OrderStatusHistory
+                            {
+                                OrderId = orderId,
+                                PreviousStatus = previousStatus,
+                                NewStatus = OrderStatus.PreAuthorized,
+                                ChangedAt = DateTime.UtcNow,
+                                ChangedBy = "POSNET-3DSecure",
+                                Reason = $"KGL 3D Secure provizyon başarılı (Auth) - AuthCode: {authCode}, PreAuthAmount: {processedAmount:F2} TL"
+                            });
+                        }
                     }
                     else
                     {
@@ -663,7 +701,10 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         order.CapturedAt = DateTime.UtcNow;
 
                         // NEDEN: 3D sale işleminde de iade/reverse için bankanın orijinal referansı saklanmalı.
-                        order.PreAuthHostLogKey = hostLogKey ?? order.PreAuthHostLogKey;
+                        if (!string.IsNullOrWhiteSpace(hostLogKey))
+                        {
+                            order.PreAuthHostLogKey = hostLogKey;
+                        }
 
                         if (previousStatus != OrderStatus.Paid)
                         {
@@ -674,7 +715,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                                 NewStatus = OrderStatus.Paid,
                                 ChangedAt = DateTime.UtcNow,
                                 ChangedBy = "POSNET-3DSecure",
-                                Reason = $"3D Secure ödeme başarılı - AuthCode: {authCode}"
+                                Reason = $"3D Secure ödeme başarılı (Sale) - AuthCode: {authCode}"
                             });
                         }
                     }
@@ -683,9 +724,10 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 await _dbContext.SaveChangesAsync();
 
                 _logger.LogInformation(
-                    "[POSNET-3DS] Sipariş durumu güncellendi - OrderId: {OrderId}, Flow: {Flow}",
+                    "[POSNET-3DS] Sipariş durumu güncellendi - OrderId: {OrderId}, Flow: {Flow}, Status: {Status}",
                     orderId,
-                    isAuthorizationOnly ? "Authorized" : "Paid");
+                    isAuthorizationOnly ? "Auth/KGL" : "Sale/Normal",
+                    isAuthorizationOnly ? "New (provizyon alındı)" : "Paid");
             }
             catch (Exception ex)
             {

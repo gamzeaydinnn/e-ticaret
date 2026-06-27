@@ -14,6 +14,7 @@ using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.DTOs.Pricing;
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using ECommerce.Entities.Enums;
 using ECommerce.Business.Helpers;
 
@@ -30,6 +31,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly ECommerce.Business.Services.Interfaces.ISmsService? _smsService;
         private readonly IHttpContextAccessor? _httpContextAccessor;
         private readonly IShippingService? _shippingService;
+        private readonly ILogger<OrderManager> _logger;
         private const decimal VatRate = 0.18m;
 
         // Sipariş durumu lifecycle geçiş kuralları
@@ -173,7 +175,8 @@ namespace ECommerce.Business.Services.Managers
             ECommerce.Business.Services.Interfaces.IPushService? pushService = null,
             ECommerce.Business.Services.Interfaces.ISmsService? smsService = null,
             IHttpContextAccessor? httpContextAccessor = null,
-            IShippingService? shippingService = null)
+            IShippingService? shippingService = null,
+            ILogger<OrderManager>? logger = null)
         {
             _context = context;
             _inventoryService = inventoryService;
@@ -184,6 +187,7 @@ namespace ECommerce.Business.Services.Managers
             _smsService = smsService;
             _httpContextAccessor = httpContextAccessor;
             _shippingService = shippingService;
+            _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OrderManager>.Instance;
         }
 
         private static string NormalizeCheckoutPaymentMethod(string? paymentMethod)
@@ -237,7 +241,10 @@ namespace ECommerce.Business.Services.Managers
                     ActualWeight = oi.ActualWeight,
                     EstimatedPrice = oi.EstimatedPrice,
                     ActualPrice = oi.ActualPrice,
-                    PriceDifference = oi.PriceDifference
+                    PriceDifference = oi.PriceDifference,
+                    // NEDEN: Kg ürünlerde Quantity=1 olduğundan satır toplamı tek doğru kaynaktan
+                    // (gerçek/tahmini fiyat) türetilmeli; "Quantity × UnitPrice" kg'da yanlıştır.
+                    LineTotal = CalculateOrderItemLineTotal(oi)
                 }).ToList() ?? new List<OrderItemDto>()
             };
         }
@@ -377,13 +384,14 @@ namespace ECommerce.Business.Services.Managers
                 var product = await _context.Products.FindAsync(i.ProductId)
                     ?? throw new Exception($"Ürün bulunamadı: {i.ProductId}");
                 var unitPrice = product.SpecialPrice ?? product.Price;
+                var storedQuantity = Math.Max(1, (int)Math.Round(i.Quantity, MidpointRounding.AwayFromZero));
                 total += unitPrice * i.Quantity;
                 items.Add(new OrderItem
                 {
                     ProductId = product.Id,
-                    Quantity = i.Quantity,
+                    Quantity = storedQuantity,
                     UnitPrice = unitPrice,
-                    ExpectedWeightGrams = product.UnitWeightGrams * i.Quantity
+                    ExpectedWeightGrams = (int)Math.Round(product.UnitWeightGrams * i.Quantity, MidpointRounding.AwayFromZero)
                 });
             }
             var normalizedShipping = NormalizeShippingMethod(dto.ShippingMethod);
@@ -667,7 +675,34 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<OrderListDto> CheckoutAsync(OrderCreateDto dto)
         {
-            var stockCheck = await _inventoryService.ValidateStockForOrderAsync(dto.OrderItems);
+            var productIds = dto.OrderItems
+                .Select(i => i.ProductId)
+                .Distinct()
+                .ToList();
+            var checkoutProducts = await _context.Products
+                .Include(p => p.Category)
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+            var inventoryItems = dto.OrderItems
+                .Select(item =>
+                {
+                    checkoutProducts.TryGetValue(item.ProductId, out var product);
+                    // ✅ Tek doğruluk kaynağı (null ürün güvenli biçimde false döner).
+                    var isWeightBasedProduct = WeightBasedProductResolver.ResolveIsWeightBased(product);
+
+                    return new OrderItemDto
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = isWeightBasedProduct ? 1m : item.Quantity,
+                        UnitPrice = item.UnitPrice,
+                        EstimatedWeight = item.EstimatedWeight,
+                        IsWeightBased = isWeightBasedProduct
+                    };
+                })
+                .ToList();
+
+            var stockCheck = await _inventoryService.ValidateStockForOrderAsync(inventoryItems);
             if (!stockCheck.Success)
             {
                 throw new Exception(stockCheck.ErrorMessage ?? "Stok doğrulaması başarısız");
@@ -676,7 +711,7 @@ namespace ECommerce.Business.Services.Managers
             var clientOrderId = dto.ClientOrderId ?? Guid.NewGuid();
             dto.ClientOrderId = clientOrderId;
 
-            var reservationItems = dto.OrderItems
+            var reservationItems = inventoryItems
                 .Select(i => new CartItemDto
                 {
                     ProductId = i.ProductId,
@@ -704,36 +739,57 @@ namespace ECommerce.Business.Services.Managers
                     var items = new List<OrderItem>();
                     foreach (var item in dto.OrderItems)
                     {
-                        var product = await _context.Products
-                            .Include(p => p.Category)
-                            .FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                        checkoutProducts.TryGetValue(item.ProductId, out var product);
                         if (product == null)
                             throw new Exception($"Ürün bulunamadı: {item.ProductId}");
-                        var unitPrice = product.SpecialPrice ?? product.Price;
-                        var isWeightBasedProduct = WeightBasedProductRules.IsVariableWeightKgProduct(
-                            product.Name,
-                            product.WeightUnit,
-                            product.Category?.Name);
-                        var expectedWeightGrams = product.UnitWeightGrams * item.Quantity;
+                        
+                        // ✅ Tek doğruluk kaynağı: kg tespiti ve birim fiyat resolver'dan gelir.
+                        // Sepet (CartManager/PricingEngine) ile birebir aynı kuralı kullandığından
+                        // sipariş toplamı ve 3DS tutarı sepetle tutarlı olur.
+                        var (isWeightBasedProduct, unitPrice) = WeightBasedProductResolver.Resolve(product);
+                        
+                        var requestedQuantity = item.Quantity;
                         var estimatedWeight = isWeightBasedProduct
-                            ? (expectedWeightGrams > 0 ? expectedWeightGrams : item.Quantity * 1000m)
+                            ? (item.EstimatedWeight > 0
+                                ? item.EstimatedWeight
+                                : requestedQuantity * 1000m)
                             : 0m;
-                        var pricePerUnit = product.PricePerUnit > 0 ? product.PricePerUnit : unitPrice;
+                        var expectedWeightGrams = isWeightBasedProduct
+                            ? (int)Math.Round(estimatedWeight, MidpointRounding.AwayFromZero)
+                            : (int)Math.Round(product.UnitWeightGrams * requestedQuantity, MidpointRounding.AwayFromZero);
+                        
+                        // KG bazlı ürünlerde unitPrice zaten PricePerUnit, normal ürünlerde de doğru
+                        var pricePerUnit = unitPrice;
+                        
+                        var lineTotal = isWeightBasedProduct
+                            ? CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit)
+                            : unitPrice * requestedQuantity;
+                        
+                        // KG bazlı ürünlerde "adet" kavramı yoktur: gerçek miktar EstimatedWeight (gram)
+                        // ve parasal karşılığı EstimatedPrice alanlarında tutulur. Bu yüzden Quantity HER ZAMAN 1'dir.
+                        // NEDEN: Eski kod (int)Math.Round(requestedQuantity) kullanıyordu; 0.25 kg → 0 → Max(1,0)=1
+                        // şans eseri doğruydu, ancak 1.5 kg → 2, 2.75 kg → 3 gibi değerler Quantity'yi şişiriyor ve
+                        // "Quantity × UnitPrice" ile satır toplamı hesaplayan tüm tüketicilerde (admin paneli, raporlar,
+                        // 3DS özetleri) HATALI tutar üretiyordu. Sabit 1 hem entity dokümantasyonuyla hem de
+                        // stok rezervasyonuyla (kg ürünlerde 1 birim rezerve edilir) tam uyumludur.
+                        var storedQuantity = isWeightBasedProduct
+                            ? 1
+                            : Math.Max(1, (int)Math.Round(requestedQuantity, MidpointRounding.AwayFromZero));
 
-                        itemsTotal += unitPrice * item.Quantity;
+                        itemsTotal += lineTotal;
                         items.Add(new OrderItem
                         {
                             ProductId = product.Id,
-                            Quantity = item.Quantity,
+                            Quantity = storedQuantity,  // KG bazlı ürünlerde bu değer kg cinsinden quantity olacak
                             UnitPrice = unitPrice,
                             ExpectedWeightGrams = expectedWeightGrams,
                             IsWeightBased = isWeightBasedProduct,
                             WeightUnit = product.WeightUnit,
-                            EstimatedWeight = estimatedWeight,
+                            EstimatedWeight = estimatedWeight,  // Gram cinsinden gerçek ağırlık
                             PricePerUnit = pricePerUnit,
                             EstimatedPrice = isWeightBasedProduct
                                 ? CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit)
-                                : unitPrice * item.Quantity
+                                : unitPrice * requestedQuantity
                         });
 
                         hasWeightBasedItems |= isWeightBasedProduct;
@@ -783,6 +839,13 @@ namespace ECommerce.Business.Services.Managers
                 var finalPrice = pricingResult.GrandTotal;
                 var vatAmount = Math.Max(0m, Math.Round(finalPrice - (finalPrice / (1 + VatRate)), 2, MidpointRounding.AwayFromZero));
 
+                _logger.LogInformation(
+                    "[CheckoutAsync] Sipariş tutarları hesaplandı - " +
+                    "Subtotal: {Subtotal}, CampaignDiscount: {CampaignDiscount}, CouponDiscount: {CouponDiscount}, " +
+                    "ShippingCost: {ShippingCost}, TotalDiscount: {TotalDiscount}, FinalPrice: {FinalPrice}, VatAmount: {VatAmount}",
+                    pricingResult.Subtotal, pricingResult.CampaignDiscountTotal, pricingResult.CouponDiscountTotal,
+                    shippingCost, discountTotal, finalPrice, vatAmount);
+
                 var order = new Order
                 {
                     ClientOrderId = dto.ClientOrderId,
@@ -813,8 +876,10 @@ namespace ECommerce.Business.Services.Managers
                         ? WeightAdjustmentStatus.PendingWeighing
                         : WeightAdjustmentStatus.NotApplicable,
                     AllItemsWeighed = !hasWeightBasedItems,
+                    // 3D Secure ekranında müşteriye gösterilen tutar ile sipariş toplamı aynı kalmalı.
+                    // Tartı sonrası olası fark için tolerans ayrı tutulur; başlangıç provizyonu şişirmiyoruz.
                     PreAuthAmount = hasWeightBasedItems
-                        ? Math.Round(finalPrice * 1.20m, 2, MidpointRounding.AwayFromZero)
+                        ? Math.Round(finalPrice, 2, MidpointRounding.AwayFromZero)
                         : 0m,
                     TolerancePercentage = hasWeightBasedItems ? 0.20m : 0.10m
                 };
@@ -2137,15 +2202,20 @@ namespace ECommerce.Business.Services.Managers
 
         private static bool IsEffectivelyWeightBased(OrderItem orderItem)
         {
-            if (orderItem?.Product == null)
+            if (orderItem is null)
             {
-                return orderItem?.IsWeightBased == true;
+                return false;
             }
 
-            return WeightBasedProductRules.IsVariableWeightKgProduct(
-                orderItem.Product.Name,
-                orderItem.WeightUnit,
-                orderItem.Product.Category?.Name);
+            // Sipariş oluşturulurken resolver ile hesaplanıp kalıcılaştırılan bayrak önceliklidir;
+            // tarihsel/tutarlı veri için en güvenilir kaynak budur.
+            if (orderItem.IsWeightBased)
+            {
+                return true;
+            }
+
+            // Bayrak set değilse ve ürün yüklüyse tek doğruluk kaynağına danış (null güvenli).
+            return WeightBasedProductResolver.ResolveIsWeightBased(orderItem.Product);
         }
 
         private static decimal CalculateOrderItemLineTotal(OrderItem orderItem)

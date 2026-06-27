@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ECommerce.Business.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -61,11 +62,12 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>Varsayılan güvenlik marjı yüzdesi (dokümanla uyumlu)</summary>
         private const decimal DEFAULT_SECURITY_MARGIN_PERCENT = 20m;
-        /// <summary>Bankada tanımlı provizyon aşım yüzdesi</summary>
-        private const decimal CAPTURE_OVERAGE_PERCENT = 20m;
 
-        /// <summary>Provizyon geçerlilik süresi (saat)</summary>
-        private const int PRE_AUTH_VALIDITY_HOURS = 168;
+        /// <summary>
+        /// Provizyon geçerlilik süresi (saat) — tek doğruluk kaynağı: WeightBasedCapturePolicy.
+        /// Banka süresi teyit edilince yalnız politika güncellenir, tüm akışlar uyumlanır.
+        /// </summary>
+        private const int PRE_AUTH_VALIDITY_HOURS = WeightBasedCapturePolicy.PreAuthValidityHours;
 
         // ═══════════════════════════════════════════════════════════════════════
         // CONSTRUCTOR
@@ -342,14 +344,50 @@ namespace ECommerce.Business.Services.Managers
                     return PostAuthorizationResult.Failure(orderId, "Sipariş bulunamadı");
                 }
 
-                // Pre-Auth kontrolü
-                if (string.IsNullOrEmpty(order.PreAuthHostLogKey) && string.IsNullOrEmpty(hostLogKey))
+                // ── İDEMPOTENCY: Çift çekim koruması ───────────────────────────────────
+                // NEDEN: Bu yol POSNET'i doğrudan çağırıyor (PaymentCaptureService guard'ını atlar).
+                // Sipariş zaten başarıyla capture edilmişse bankaya tekrar istek göndermeyiz;
+                // mevcut sonucu (fark=0 → controller'da tekrar iade tetiklenmez) idempotent döneriz.
+                if (order.CaptureStatus == CaptureStatus.Success)
                 {
-                    return PostAuthorizationResult.Failure(orderId, "Ön provizyon kaydı bulunamadı");
+                    _logger?.LogWarning(
+                        "[WEIGHT-PAYMENT] Tekrar Post-Auth çağrısı yok sayıldı; sipariş zaten capture edilmiş. " +
+                        "OrderId: {OrderId}, CapturedAmount: {Captured}",
+                        orderId, order.CapturedAmount);
+
+                    return new PostAuthorizationResult
+                    {
+                        IsSuccess = true,
+                        OrderId = orderId,
+                        OriginalBlockedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order),
+                        CapturedAmount = order.CapturedAmount,
+                        DifferenceAmount = 0m,
+                        TransactionDate = DateTime.UtcNow
+                    };
                 }
 
-                var preAuthHostLogKey = hostLogKey ?? order.PreAuthHostLogKey!;
-                var preAuthAmount = order.PreAuthAmount;
+                // ── MADDE 7: PreAuthHostLogKey boş kontrolü ────────────────────────────
+                // Her iki kaynak da boşsa Post-Auth başlatılamaz; bankaya boş key göndermek
+                // hata üretir. Açıklayıcı mesajla erken çıkış sağlanıyor.
+                var resolvedHostLogKey = !string.IsNullOrWhiteSpace(hostLogKey)
+                    ? hostLogKey
+                    : order.PreAuthHostLogKey;
+
+                if (string.IsNullOrWhiteSpace(resolvedHostLogKey))
+                {
+                    _logger?.LogError(
+                        "[WEIGHT-PAYMENT] Post-Auth başlatılamadı: PreAuthHostLogKey bulunamadı. " +
+                        "3D Secure callback tamamlandı mı? OrderId: {OrderId}",
+                        orderId);
+                    return PostAuthorizationResult.Failure(
+                        orderId,
+                        "Ön provizyon referansı (PreAuthHostLogKey) bulunamadı. " +
+                        "3D Secure callback başarıyla tamamlanmış olmalı.");
+                }
+
+                var preAuthHostLogKey = resolvedHostLogKey;
+                // Provizyon tutarı için tek doğruluk kaynağı (AuthorizedAmount veya PreAuthAmount).
+                var preAuthAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
 
                 // POSNET servisi yoksa simüle et
                 if (_posnetService == null)
@@ -426,6 +464,13 @@ namespace ECommerce.Business.Services.Managers
                 order.WeightAdjustmentStatus = differenceAmount == 0
                     ? WeightAdjustmentStatus.NoDifference
                     : WeightAdjustmentStatus.Completed;
+
+                // ── MADDE 17: Post-Auth (Capt) başarılı → sipariş Paid olarak işaretle ─
+                // WeightPending (tartım bitti, capt bekleniyor) → Paid (finansallaştırma tamam)
+                if (order.Status == OrderStatus.WeightPending || order.Status == OrderStatus.PreAuthorized)
+                {
+                    order.Status = OrderStatus.Paid;
+                }
 
                 await _db.SaveChangesAsync(cancellationToken);
 
@@ -917,17 +962,8 @@ namespace ECommerce.Business.Services.Managers
             return cancelledCount;
         }
 
+        // Tek doğruluk kaynağı: banka aşım sınırı (Auth × 1.20) WeightBasedCapturePolicy'de hesaplanır.
         private static decimal CalculateMaxCapturableAmount(decimal preAuthAmount)
-        {
-            if (preAuthAmount <= 0)
-            {
-                return 0m;
-            }
-
-            return Math.Round(
-                preAuthAmount * (1 + (CAPTURE_OVERAGE_PERCENT / 100m)),
-                2,
-                MidpointRounding.AwayFromZero);
-        }
+            => WeightBasedCapturePolicy.CalculateMaxCapturableAmount(preAuthAmount);
     }
 }

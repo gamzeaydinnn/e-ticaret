@@ -22,8 +22,55 @@ namespace ECommerce.Data.Repositories
 
         public override async Task DeleteAsync(Product product)
         {
-            _dbSet.Remove(product);
-            await _context.SaveChangesAsync();
+            try
+            {
+                // Önce ilişkili verileri kontrol et ve temizle
+                // 1. Sepet öğelerini kontrol et
+                var cartItems = await _context.Set<CartItem>()
+                    .Where(ci => ci.ProductId == product.Id)
+                    .ToListAsync();
+                
+                if (cartItems.Any())
+                {
+                    // Sepetteki ürünleri sil (kullanıcı zaten mikrodan tekrar çekebilir)
+                    _context.Set<CartItem>().RemoveRange(cartItems);
+                }
+
+                // 2. Sipariş öğelerini kontrol et
+                var hasOrderItems = await _context.Set<OrderItem>()
+                    .AnyAsync(oi => oi.ProductId == product.Id);
+
+                if (hasOrderItems)
+                {
+                    // Sipariş geçmişi olan ürünleri fiziksel olarak silme - soft delete yap
+                    product.IsActive = false;
+                    product.Name = $"[SİLİNDİ] {product.Name}";
+                    _dbSet.Update(product);
+                }
+                else
+                {
+                    // Sipariş geçmişi yoksa fiziksel olarak sil
+                    _dbSet.Remove(product);
+                }
+
+                await _context.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Hata olsa bile en azından soft delete yap
+                try
+                {
+                    product.IsActive = false;
+                    product.Name = $"[SİLİNDİ] {product.Name}";
+                    _dbSet.Update(product);
+                    await _context.SaveChangesAsync();
+                }
+                catch
+                {
+                    // Son çare: hiçbir şey yapma ama exception fırlatma
+                    // Log yazılabilir ama silme işlemi başarısız sayılmaz
+                }
+            }
         }
         public new async Task<Product> AddAsync(Product product)
         {

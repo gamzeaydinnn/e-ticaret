@@ -191,6 +191,8 @@ services:
         condition: service_started
     volumes:
       - ./logs:/app/logs
+      # Uploads host path deploy dizininden bagimsiz tutulur.
+      # Temiz rebuild veya release klasoru degisimi durumunda urun/banner dosyalari korunur.
       - ${UPLOADS_HOST_PATH:-/srv/ecommerce/uploads}:/data/uploads
     networks:
       - ecommerce-network

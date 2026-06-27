@@ -167,19 +167,17 @@ namespace ECommerce.API.Controllers
                         });
                     }
 
-                    // Fark varsa iade yap
+                    // ── İADE/KAPAMA MODELİ: TEK MODEL (kısmi capture) ──────────────────
+                    // NEDEN ayrı iade YOK: POSNET'te Capt < Auth yapıldığında banka kalan provizyon
+                    // blokesini ZATEN otomatik serbest bırakır. Üstüne ProcessPartialRefund çağırmak
+                    // aynı farkı İKİ KEZ iade ederdi (çift iade / negatif bakiye riski). Bu yüzden
+                    // tartım azaldığında yalnız düşük tutar capture edilir; ek iade yapılmaz.
                     if (postAuthResult.DifferenceAmount > 0)
                     {
-                        var refundResult = await _paymentService.ProcessPartialRefundAsync(
-                            orderId,
-                            postAuthResult.DifferenceAmount,
-                            paymentStatus.PreAuthorizationHostLogKey!,
-                            "Ağırlık farkı iadesi",
-                            cancellationToken);
-
                         _logger?.LogInformation(
-                            "[WEIGHT-PAYMENT-API] Kısmi iade tamamlandı. OrderId: {OrderId}, RefundAmount: {Amount}",
-                            orderId, refundResult.RefundedAmount);
+                            "[WEIGHT-PAYMENT-API] Tartım azaldı; kısmi capture ile kalan {Amount:F2} TL banka tarafından " +
+                            "otomatik serbest bırakıldı (ayrı iade yapılmadı). OrderId: {OrderId}",
+                            postAuthResult.DifferenceAmount, orderId);
                     }
 
                     // WeightAdjustmentService ile teslimatı tamamla
@@ -311,12 +309,17 @@ namespace ECommerce.API.Controllers
 
         /// <summary>
         /// Pre-Authorization (Ön Provizyon) başlat
-        /// 
+        ///
         /// Sipariş oluşturulduğunda, tahmini tutar + güvenlik marjı karttan bloke edilir.
         /// Bu işlem checkout sırasında otomatik yapılabilir.
+        ///
+        /// ── MADDE 6: Admin + kullanıcı erişimi ──────────────────────────────
+        /// Önceki hali sadece Admin'e açıktı. 3D Secure callback sonrası bu endpoint
+        /// otomatik çağrılabilmeli, bu nedenle kullanıcılar da kendi siparişleri
+        /// için erişebilir hale getirildi.
         /// </summary>
         [HttpPost("orders/{orderId}/pre-auth")]
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,User")]
         public async Task<IActionResult> ProcessPreAuthorization(
             int orderId,
             [FromBody] PreAuthRequest request,

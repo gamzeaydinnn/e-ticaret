@@ -13,11 +13,28 @@ import {
   isStrictVariableWeightProduct,
   toWeightBasedProductCandidate,
 } from "../utils/weightBasedProduct";
+import {
+  getEffectiveUnitPrice,
+  isResolvedWeightBasedProduct,
+  normalizeWeightStepQuantity,
+} from "../utils/weightPricing";
 import "./CartPage.css";
 
+// Sepet kaleminin miktarı kesirli mi? (örn. 0.25, 1.75)
+// NEDEN: Adet bazlı ürünler her zaman tam sayı miktar taşır. Kesirli bir miktar yalnızca
+// kg/ağırlık bazlı bir üründe oluşabilir. Bu, backend "isWeightBased" bayrağı bir şekilde
+// kaybolsa/yanlış gelse bile kg ürününü doğru tanımak için savunmacı bir güvenlik ağıdır.
+const hasFractionalQuantity = (quantity) => {
+  const numeric = Number(quantity);
+  return Number.isFinite(numeric) && Math.abs(numeric - Math.round(numeric)) > 1e-9;
+};
+
 const isWeightBasedCartItem = (item, product) => {
-  return isStrictVariableWeightProduct(
-    toWeightBasedProductCandidate(item, product),
+  return (
+    isResolvedWeightBasedProduct(item, product) ||
+    isStrictVariableWeightProduct(toWeightBasedProductCandidate(item, product)) ||
+    // Tek doğruluk kaynağı bayrakları gelmese bile kesirli miktar kg ürününe işaret eder.
+    hasFractionalQuantity(item?.quantity)
   );
 };
 
@@ -250,17 +267,17 @@ const CartPage = () => {
   }, [cartItems, appliedCoupon?.code, shippingMethod]);
 
   const getItemUnitPrice = (item) => {
-    if (
-      item?.unitPrice !== undefined &&
-      item?.unitPrice !== null &&
-      !Number.isNaN(Number(item.unitPrice))
-    ) {
-      return Number(item.unitPrice);
-    }
     const pid = item.productId || item.id;
     const product = products[pid] || item.product;
-    const fallback = (product && (product.specialPrice || product.price)) || 0;
-    return Number(fallback) || 0;
+    return getEffectiveUnitPrice(item, product);
+  };
+
+  const getItemLineTotal = (item) => {
+    return getItemUnitPrice(item) * (Number(item.quantity) || 0);
+  };
+
+  const getItemUnitLabel = (item, product) => {
+    return isWeightBasedCartItem(item, product) ? "/kg" : "";
   };
 
   // ================================================================
@@ -312,7 +329,11 @@ const CartPage = () => {
 
       const pid = item.productId || item.id;
       const variantId = item.variantId || item.productVariantId || null;
-      await updateQuantity(pid, newQuantity, variantId);
+      await updateQuantity(
+        pid,
+        isWeightBasedItem ? normalizeWeightStepQuantity(newQuantity) : newQuantity,
+        variantId,
+      );
     } catch (error) {
       console.error("Quantity update failed:", error);
       // Hata durumunda kullanıcıya feedback verilebir
@@ -936,7 +957,19 @@ const CartPage = () => {
                           return null;
                         })()}
                         <div className="item-price-mobile">
-                          ₺{getItemUnitPrice(item).toFixed(2)}
+                          ₺{getItemLineTotal(item).toFixed(2)}
+                          <small
+                            style={{
+                              display: "block",
+                              fontSize: "0.75rem",
+                              color: "#6c757d",
+                              fontWeight: "500",
+                              marginTop: "2px",
+                            }}
+                          >
+                            ₺{getItemUnitPrice(item).toFixed(2)}
+                            {getItemUnitLabel(item, product)}
+                          </small>
                         </div>
                       </div>
 
@@ -1014,7 +1047,7 @@ const CartPage = () => {
 
                       <div className="item-total">
                         <span className="price">
-                          ₺{(getItemUnitPrice(item) * item.quantity).toFixed(2)}
+                          ₺{getItemLineTotal(item).toFixed(2)}
                         </span>
                         <button
                           className="remove-btn"

@@ -5,6 +5,8 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.API.Authorization;
 using System.Threading.Tasks;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -26,7 +28,26 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllAdminAsync();
-            return Ok(categories);
+            // productCount her kategori için ayrı sorgu (N kategorisi için)
+            // Admin paneli için yeterli — production'da cache eklenebilir
+            var result = new List<object>();
+            foreach (var c in categories)
+            {
+                var productCount = await _categoryService.GetProductCountAsync(c.Id);
+                result.Add(new
+                {
+                    c.Id,
+                    c.Name,
+                    c.Slug,
+                    c.Description,
+                    c.ImageUrl,
+                    c.ParentId,
+                    c.SortOrder,
+                    c.IsActive,
+                    productCount
+                });
+            }
+            return Ok(result);
         }
 
         // GET /api/admin/categories/{id}
@@ -90,10 +111,52 @@ namespace ECommerce.API.Controllers.Admin
             var category = await _categoryService.GetByIdAsync(id);
             if (category == null) return NotFound();
 
-            // Soft delete: IsActive=false
-            category.IsActive = false;
-            await _categoryService.UpdateAsync(category);
-            return NoContent();
+            try
+            {
+                // Hard delete: Kategoriyı tamamen sil
+                await _categoryService.DeleteAsync(category);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        // ✨ YENİ: GET /api/admin/categories/tree - Hiyerarşik kategori ağacı
+        [HttpGet("tree")]
+        [HasPermission(Permissions.Categories.View)]
+        public async Task<IActionResult> GetCategoryTree()
+        {
+            var tree = await _categoryService.GetCategoryTreeAsync();
+            return Ok(tree);
+        }
+
+        // ✨ YENİ: GET /api/admin/categories/root - Ana kategoriler
+        [HttpGet("root")]
+        [HasPermission(Permissions.Categories.View)]
+        public async Task<IActionResult> GetRootCategories()
+        {
+            var categories = await _categoryService.GetRootCategoriesAsync();
+            return Ok(categories);
+        }
+
+        // ✨ YENİ: GET /api/admin/categories/{id}/subcategories - Alt kategoriler
+        [HttpGet("{id}/subcategories")]
+        [HasPermission(Permissions.Categories.View)]
+        public async Task<IActionResult> GetSubCategories(int id)
+        {
+            var subCategories = await _categoryService.GetSubCategoriesAsync(id);
+            return Ok(subCategories);
+        }
+
+        // ✨ YENİ: GET /api/admin/categories/{id}/path - Kategori yolu (breadcrumb)
+        [HttpGet("{id}/path")]
+        [HasPermission(Permissions.Categories.View)]
+        public async Task<IActionResult> GetCategoryPath(int id)
+        {
+            var path = await _categoryService.GetCategoryPathAsync(id);
+            return Ok(path);
         }
     }
 }

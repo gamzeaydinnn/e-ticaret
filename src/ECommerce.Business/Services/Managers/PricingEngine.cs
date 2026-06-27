@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ECommerce.Business.Helpers;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Pricing;
 using ECommerce.Core.DTOs.Promotions;
@@ -97,11 +98,45 @@ namespace ECommerce.Business.Services.Managers
                         continue;
                     }
 
-                    // Birim fiyat: özel fiyat varsa onu kullan
-                    var unitPrice = product.SpecialPrice ?? product.Price;
+                    // Ürün bazlı ayrıntı log'u: yüksek hacimli olduğundan Debug seviyesinde tutulur
+                    // (prod'da gürültü ve I/O maliyeti yaratmaması için).
+                    _logger?.LogDebug(
+                        "[PricingEngine] Ürün işleniyor - ProductId: {ProductId}, Name: {ProductName}, " +
+                        "Quantity: {Quantity}, WeightUnit: {WeightUnit}, IsWeightBased: {IsWeightBasedDB}, " +
+                        "Category: {Category}, Price: {Price}, PricePerUnit: {PricePerUnit}",
+                        product.Id, product.Name, line.Quantity, product.WeightUnit, product.IsWeightBased,
+                        product.Category?.Name ?? "NULL", product.Price, product.PricePerUnit);
+
+                    // ✅ Tek doğruluk kaynağı: kg tespiti ve birim fiyatı WeightBasedProductResolver
+                    // üzerinden belirlenir. Böylece sepet, sipariş ve 3DS aynı kararı kullanır.
+                    var (isWeightBased, unitPrice) = WeightBasedProductResolver.Resolve(product);
+
+                    _logger?.LogDebug(
+                        "[PricingEngine] ResolveIsWeightBased sonucu: {IsKG}, UnitPrice: {UnitPrice} (ProductId: {ProductId})",
+                        isWeightBased, unitPrice, product.Id);
+
+                    // Negatif fiyat güvenlik kalkanı (veri kirliliğine karşı).
                     if (unitPrice < 0) unitPrice = 0;
 
+                    if (isWeightBased)
+                    {
+                        _logger?.LogDebug(
+                            "[PricingEngine] KG ÜRÜN - ProductId: {ProductId}, Name: {ProductName}, " +
+                            "PricePerUnit: {PricePerUnit} TL/kg, Quantity: {Quantity} kg, " +
+                            "LineBase hesaplanıyor: {PricePerUnit} × {Quantity}",
+                            product.Id, product.Name, unitPrice, line.Quantity, unitPrice, line.Quantity);
+                    }
+
                     var lineBase = unitPrice * line.Quantity;
+
+                    if (isWeightBased)
+                    {
+                        _logger?.LogDebug(
+                            "[PricingEngine] KG ÜRÜN - LineBase hesaplandı: {LineBase} TL " +
+                            "(PricePerUnit: {PricePerUnit} × Quantity: {Quantity})",
+                            lineBase, unitPrice, line.Quantity);
+                    }
+
                     var lineProductDiscount = 0m;
 
                     // Ürün bazlı indirimler (discount tablosundan)
@@ -176,11 +211,14 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // 7. Genel toplam hesapla
+                result.CampaignDiscountTotal = Math.Max(0m, result.CampaignDiscountTotal);
+                result.CouponDiscountTotal = Math.Max(0m, result.CouponDiscountTotal);
+
                 var totalDiscount = result.CampaignDiscountTotal + result.CouponDiscountTotal;
                 var grand = result.Subtotal - totalDiscount + result.DeliveryFee;
                 result.GrandTotal = Math.Max(0, grand);
 
-                _logger?.LogInformation(
+                _logger?.LogDebug(
                     "Sepet fiyatlandırması tamamlandı. " +
                     "Subtotal: {Subtotal}, Kampanya: {CampaignDiscount}, Kupon: {CouponDiscount}, " +
                     "Kargo: {Delivery}, Toplam: {GrandTotal}, FreeShipping: {FreeShipping}",

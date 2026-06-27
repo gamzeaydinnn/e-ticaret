@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Constants;
@@ -8,6 +11,7 @@ using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Extensions;
 using ECommerce.API.Infrastructure;
 using ECommerce.Core.Interfaces;
+using FluentValidation;
 using Microsoft.Extensions.Logging;
 using ECommerce.Entities.Enums;
 
@@ -112,33 +116,39 @@ namespace ECommerce.API.Controllers
         /// </summary>
         [HttpPost("checkout")]
         [AllowAnonymous]
-        public async Task<IActionResult> Checkout([FromBody] OrderCreateDto dto)
+        public async Task<IActionResult> Checkout()
         {
+            var dto = await ReadCheckoutPayloadAsync();
             if (dto == null)
-                return BadRequest(new { message = "Geçersiz istek gövdesi" });
-
-            // Validation handled by FluentValidation
-            if (!ModelState.IsValid)
             {
-                var errors = ModelState.Values
-                    .SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-                
-                var errorMessage = string.Join("; ", errors);
-                
-                // Log validation errors
-                var logger = HttpContext.RequestServices.GetService(typeof(ILogger<OrdersController>)) as ILogger<OrdersController>;
-                logger?.LogError("[CHECKOUT] Validation hatası: {Errors}", errorMessage);
-                
-                return BadRequest(new 
-                { 
-                    message = "Validation hatası",
-                    errors = ModelState.ToDictionary(
-                        x => x.Key, 
-                        x => x.Value.Errors.Select(e => e.ErrorMessage).ToArray()
-                    )
+                return BadRequest(new
+                {
+                    message = "Geçersiz istek gövdesi",
+                    errors = new { dto = new[] { "The dto field is required." } }
                 });
+            }
+
+            var validator = HttpContext.RequestServices.GetService(typeof(IValidator<OrderCreateDto>)) as IValidator<OrderCreateDto>;
+            if (validator != null)
+            {
+                var validationResult = await validator.ValidateAsync(dto);
+                if (!validationResult.IsValid)
+                {
+                    var errors = validationResult.Errors
+                        .GroupBy(e => e.PropertyName)
+                        .ToDictionary(
+                            group => group.Key,
+                            group => group.Select(e => e.ErrorMessage).ToArray());
+
+                    var errorMessage = string.Join("; ", validationResult.Errors.Select(e => e.ErrorMessage));
+                    _logger.LogError("[CHECKOUT] Validation hatası: {Errors}", errorMessage);
+
+                    return BadRequest(new
+                    {
+                        message = "Validation hatası",
+                        errors
+                    });
+                }
             }
 
             if (dto.ClientOrderId.HasValue)
@@ -227,14 +237,160 @@ namespace ECommerce.API.Controllers
             }
             catch (System.Exception ex)
             {
-                _logger.LogError(ex, "[CHECKOUT] Sipariş oluşturma hatası");
+                _logger.LogError(ex, "[CHECKOUT] Sipariş oluşturma hatası. PaymentMethod={PaymentMethod}, ItemCount={ItemCount}",
+                    dto.PaymentMethod, dto.OrderItems?.Count ?? 0);
                 // Sadece business/validation exception mesajlarını kullanıcıya göster
                 var userMessage = (ex is ECommerce.Core.Exceptions.BusinessException
                                 || ex is ECommerce.Core.Exceptions.ValidationException)
                     ? ex.Message
-                    : "Sipariş oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.";
+                    : ex.Message;
                 return BadRequest(new { message = userMessage });
             }
+        }
+
+        private async Task<OrderCreateDto?> ReadCheckoutPayloadAsync()
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+
+            using var reader = new StreamReader(Request.Body, leaveOpen: true);
+            var rawBody = await reader.ReadToEndAsync();
+            Request.Body.Position = 0;
+
+            if (string.IsNullOrWhiteSpace(rawBody))
+            {
+                _logger.LogWarning("[CHECKOUT] Boş request body alındı.");
+                return null;
+            }
+
+            try
+            {
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                using var document = JsonDocument.Parse(rawBody);
+                var root = document.RootElement;
+                var normalizedBody = NormalizeCheckoutPayload(root).GetRawText();
+
+                var dto = JsonSerializer.Deserialize<OrderCreateDto>(normalizedBody, options);
+                if (dto == null)
+                {
+                    return null;
+                }
+
+                if (dto.OrderItems != null && dto.OrderItems.Count > 0)
+                {
+                    return dto;
+                }
+
+                // Legacy checkout payload still posts `items`; map it for compatibility.
+                if (root.ValueKind == JsonValueKind.Object &&
+                    root.TryGetProperty("items", out var itemsElement) &&
+                    itemsElement.ValueKind == JsonValueKind.Array)
+                {
+                    var normalizedItems = NormalizeOrderItems(itemsElement);
+                    dto.OrderItems = JsonSerializer.Deserialize<System.Collections.Generic.List<OrderItemDto>>(
+                        normalizedItems.GetRawText(),
+                        options) ?? new System.Collections.Generic.List<OrderItemDto>();
+                }
+
+                return dto;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "[CHECKOUT] Request body parse edilemedi.");
+                return null;
+            }
+        }
+
+        private static JsonElement NormalizeCheckoutPayload(JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return root.Clone();
+            }
+
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                writer.WriteStartObject();
+                foreach (var property in root.EnumerateObject())
+                {
+                    if ((property.NameEquals("orderItems") || property.NameEquals("items")) &&
+                        property.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        writer.WritePropertyName(property.Name);
+                        NormalizeOrderItems(property.Value, writer);
+                        continue;
+                    }
+
+                    property.WriteTo(writer);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            return JsonDocument.Parse(stream.ToArray()).RootElement.Clone();
+        }
+
+        private static JsonElement NormalizeOrderItems(JsonElement itemsElement)
+        {
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                NormalizeOrderItems(itemsElement, writer);
+            }
+
+            return JsonDocument.Parse(stream.ToArray()).RootElement.Clone();
+        }
+
+        private static void NormalizeOrderItems(JsonElement itemsElement, Utf8JsonWriter writer)
+        {
+            writer.WriteStartArray();
+
+            foreach (var item in itemsElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    item.WriteTo(writer);
+                    continue;
+                }
+
+                var estimatedWeight = item.TryGetProperty("estimatedWeight", out var estimatedWeightElement) &&
+                    estimatedWeightElement.ValueKind == JsonValueKind.Number &&
+                    estimatedWeightElement.TryGetDecimal(out var estimatedWeightValue)
+                        ? estimatedWeightValue
+                        : 0m;
+
+                var rawQuantity = item.TryGetProperty("quantity", out var quantityElement) &&
+                    quantityElement.ValueKind == JsonValueKind.Number &&
+                    quantityElement.TryGetDecimal(out var quantityValue)
+                        ? quantityValue
+                        : 0m;
+
+                var normalizedQuantity = estimatedWeight > 0m
+                    ? 1
+                    : Math.Max(
+                        1,
+                        (int)Math.Round(rawQuantity <= 0m ? 1m : rawQuantity, MidpointRounding.AwayFromZero));
+
+                writer.WriteStartObject();
+                foreach (var property in item.EnumerateObject())
+                {
+                    if (property.NameEquals("quantity"))
+                    {
+                        writer.WriteNumber("quantity", normalizedQuantity);
+                        continue;
+                    }
+
+                    property.WriteTo(writer);
+                }
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
         }
 
         private async Task NotifyNewOrderAsync(OrderListDto order)

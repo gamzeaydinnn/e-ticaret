@@ -29,11 +29,8 @@ namespace ECommerce.Business.Services.Managers
     /// </summary>
     public class WeightAdjustmentService : IWeightAdjustmentService
     {
-        // Doküman ve güncel banka tanımı ile uyumlu ön provizyon marjı: %20.
-        private const decimal PRE_AUTH_MARGIN_PERCENT = 20m;
-        // Banka tarafından tanımlanan provizyon aşım yüzdesi: capt tutarı
-        // gerektiğinde ön provizyonun %20 üstüne kadar finansallaştırılabilir.
-        private const decimal PRE_AUTH_CAPTURE_OVERAGE_PERCENT = 20m;
+        // NOT: Provizyon aşım yüzdesi (%20) ve maksimum çekilebilir tutar hesabı artık tek doğruluk
+        // kaynağı olan WeightBasedCapturePolicy'de tutulur (kural çoğaltması/spagetti önlemi).
 
         private readonly IWeightAdjustmentRepository _adjustmentRepository;
         private readonly IOrderRepository _orderRepository;
@@ -551,11 +548,13 @@ namespace ECommerce.Business.Services.Managers
                 result.EstimatedWeight = estimatedWeight;
                 result.ActualWeight = actualWeight;
                 result.PriceDifference = priceDifference;
+                // Provizyon tutarı için tek doğruluk kaynağı (AuthorizedAmount veya PreAuthAmount).
+                var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
                 result.FinalAmount = order.FinalAmount;
-                result.PreAuthAmount = order.PreAuthAmount;
-                result.ExceedsPreAuthLimit = order.PreAuthAmount > 0 &&
-                    order.FinalAmount > CalculateMaxCapturableAmount(order.PreAuthAmount);
-                result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(order.PreAuthAmount);
+                result.PreAuthAmount = authorizedAmount;
+                result.ExceedsPreAuthLimit = authorizedAmount > 0 &&
+                    order.FinalAmount > CalculateMaxCapturableAmount(authorizedAmount);
+                result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(authorizedAmount);
                 result.AdjustmentStatus = adjustment.Status;
 
                 return result;
@@ -757,24 +756,14 @@ namespace ECommerce.Business.Services.Managers
 
         private decimal CalculatePreAuthAmountInternal(decimal estimatedTotal)
         {
-            // PreAuth = Tahmini toplam + %20 güvenlik marjı
-            // Bu marjı aşan durumlar admin müdahalesine düşer.
-            var preAuthAmount = estimatedTotal * (1 + (PRE_AUTH_MARGIN_PERCENT / 100m));
-            return Math.Round(preAuthAmount, 2);
+            // İlk tahsilatta müşteriye tahmini sepet tutarı gösterilip aynı tutar işleniyor.
+            // Tartım farkı sonradan operasyonel akışta ele alınır.
+            return Math.Round(estimatedTotal, 2);
         }
 
+        // Tek doğruluk kaynağı: banka aşım sınırı (Auth × 1.20) WeightBasedCapturePolicy'de hesaplanır.
         private static decimal CalculateMaxCapturableAmount(decimal preAuthAmount)
-        {
-            if (preAuthAmount <= 0)
-            {
-                return 0m;
-            }
-
-            return Math.Round(
-                preAuthAmount * (1 + (PRE_AUTH_CAPTURE_OVERAGE_PERCENT / 100m)),
-                2,
-                MidpointRounding.AwayFromZero);
-        }
+            => WeightBasedCapturePolicy.CalculateMaxCapturableAmount(preAuthAmount);
 
         private static decimal CalculateWeightedPrice(decimal weightInBaseUnit, decimal pricePerUnit, WeightUnit weightUnit)
         {
@@ -795,15 +784,14 @@ namespace ECommerce.Business.Services.Managers
                 return false;
             }
 
-            if (product == null)
+            // Sipariş anında kalıcılaşan bayrak önceliklidir (en güvenilir tarihsel kaynak).
+            if (orderItem.IsWeightBased)
             {
-                return orderItem.IsWeightBased;
+                return true;
             }
 
-            return WeightBasedProductRules.IsVariableWeightKgProduct(
-                product.Name,
-                orderItem.WeightUnit != default ? orderItem.WeightUnit : product.WeightUnit,
-                product.Category?.Name);
+            // Bayrak set değilse tek doğruluk kaynağına danış (null güvenli).
+            return WeightBasedProductResolver.ResolveIsWeightBased(product);
         }
 
         #endregion
@@ -1051,26 +1039,25 @@ namespace ECommerce.Business.Services.Managers
                 return captureResult;
             }
 
-            // Capture tutarı belirleme: banka kuralı gereği final tutar provizyonun
-            // tanımlı aşım yüzdesi içinde kalıyorsa doğrudan çekilebilir.
-            var maxCapturableAmount = CalculateMaxCapturableAmount(order.PreAuthAmount);
-            decimal captureAmount;
-            bool preAuthExceeded = false;
+            // Capture kararı için tek doğruluk kaynağı: final tutarı banka aşım sınırına (Auth × 1.20)
+            // kırp. Provizyon tutarı da tek kaynaktan (AuthorizedAmount veya PreAuthAmount) çözülür.
+            var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
+            var maxCapturableAmount = WeightBasedCapturePolicy.CalculateMaxCapturableAmount(authorizedAmount);
+            var captureDecision = WeightBasedCapturePolicy.ClampToCaptureLimit(authorizedAmount, finalAmount);
+            var captureAmount = captureDecision.CaptureAmount;
+            var preAuthExceeded = captureDecision.ExceedsLimit;
 
-            if (finalAmount <= maxCapturableAmount)
+            if (!preAuthExceeded)
             {
                 // ✅ Normal senaryo: banka tarafından izin verilen limit dahilinde gerçek tutar ile capture
-                captureAmount = finalAmount;
                 _logger?.LogInformation(
                     "[WEIGHT-SVC] Capture tutarı: {CaptureAmount:F2} TL (Final={Final:F2}, PreAuth={PreAuth:F2}, MaxCapturable={MaxCapturable:F2}). OrderId={OrderId}",
-                    captureAmount, finalAmount, order.PreAuthAmount, maxCapturableAmount, order.Id);
+                    captureAmount, finalAmount, authorizedAmount, maxCapturableAmount, order.Id);
             }
             else
             {
                 // ⚠️ Final tutar banka tarafından tanımlanan aşım limitini de aşıyor.
-                // Mevcut provizyondan çekilebilecek maksimum tutarı al, kalan farkı admin çözsün.
-                captureAmount = maxCapturableAmount;
-                preAuthExceeded = true;
+                // Mevcut provizyondan çekilebilecek maksimum tutar otomatik çekilir, kalan farkı admin çözer.
                 _logger?.LogWarning(
                     "[WEIGHT-SVC] UYARI: FinalAmount ({Final:F2}) > MaxCapturable ({MaxCapturable:F2})! " +
                     "Capture {Capture:F2} TL ile yapılıyor. Kalan fark={Diff:F2} TL. OrderId={OrderId}",

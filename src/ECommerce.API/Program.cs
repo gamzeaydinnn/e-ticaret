@@ -1010,10 +1010,43 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("🔍🔍🔍 Database initialization başlıyor...");
         
         // Apply migrations (production-safe: works with existing databases)
-        Console.WriteLine("🔍 Database.Migrate() çağrılıyor...");
-        db.Database.Migrate();
-        logger.LogInformation("✅ Database migrations uygulandı");
-        Console.WriteLine("✅ Database migrations uygulandı");
+        Console.WriteLine("🔍 Database existence kontrol ediliyor...");
+        try
+        {
+            // Veritabanı mevcutsa, sadece pending migrations'ları uygula
+            if (db.Database.CanConnect())
+            {
+                Console.WriteLine("✅ Veritabanı zaten mevcut, pending migrations uygulanıyor...");
+                db.Database.Migrate();
+            }
+            else
+            {
+                Console.WriteLine("⚠️ Veritabanına bağlanılamadı, yeniden denenecek...");
+                db.Database.Migrate();
+            }
+            logger.LogInformation("✅ Database migrations uygulandı");
+            Console.WriteLine("✅ Database migrations uygulandı");
+        }
+        catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 1801)
+        {
+            // Database already exists - this is expected, continue with pending migrations
+            Console.WriteLine("⚠️ Veritabanı zaten mevcut, pending migrations uygulanıyor...");
+            logger.LogWarning("Database already exists, applying any pending migrations");
+            
+            // SqlClient'ı open/close etmek migration'ları yenilemek için gerekli
+            try
+            {
+                db.Database.Migrate();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError($"Migration error after database exists check: {ex.Message}");
+                throw;
+            }
+            
+            logger.LogInformation("✅ Database migrations uygulandı");
+            Console.WriteLine("✅ Database migrations uygulandı");
+        }
 
         logger.LogInformation("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
         Console.WriteLine("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");

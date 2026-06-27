@@ -424,7 +424,11 @@ namespace ECommerce.Business.Services.Managers
                     }
 
                     var (bestCampaign, discount) = await CalculateBestCampaignForItemInternalAsync(
-                        lineCampaigns, item.ProductId, item.CategoryId, item.UnitPrice, item.Quantity);
+                        lineCampaigns,
+                        item.ProductId,
+                        item.CategoryId,
+                        item.UnitPrice,
+                        Math.Max(1, (int)Math.Round(item.Quantity, MidpointRounding.AwayFromZero)));
 
                     if (bestCampaign != null && discount > 0)
                     {
@@ -613,7 +617,9 @@ namespace ECommerce.Business.Services.Managers
             // Tüm ürünleri birim bazında listele (adet kadar tekrarla)
             // Örn: 2 adet 100 TL'lik ürün -> [100, 100]
             var allUnits = itemsList
-                .SelectMany(item => Enumerable.Repeat(item.UnitPrice, item.Quantity))
+                .SelectMany(item => Enumerable.Repeat(
+                    item.UnitPrice,
+                    Math.Max(1, (int)Math.Round(item.Quantity, MidpointRounding.AwayFromZero))))
                 .OrderBy(price => price) // Ucuzdan pahalıya
                 .ToList();
 

@@ -106,6 +106,7 @@ const mapProduct = (p = {}) => {
     originalPrice,
     discountPrice: special,
     specialPrice: special,
+    pricePerUnit: parseFloat(p.pricePerUnit ?? p.PricePerUnit ?? 0) || 0,
     discountPercentage,
     // Backend'den gelen imageUrl'i API base URL ile birleştir (eğer relative path ise)
     imageUrl: (() => {
@@ -126,6 +127,9 @@ const mapProduct = (p = {}) => {
     description: p.description || "",
     barcode: p.barcode || p.barkod || "",
     sku: p.sku || p.SKU || "",
+    unit: p.unit || p.Unit || "",
+    isWeightBased: p.isWeightBased === true || p.IsWeightBased === true,
+    weightUnit: p.weightUnit ?? p.WeightUnit ?? null,
     unitWeightGrams: p.unitWeightGrams || p.unit_weight_grams || 0,
     isActive: p.isActive !== false,
     createdAt: p.createdAt || p.created_at || null,

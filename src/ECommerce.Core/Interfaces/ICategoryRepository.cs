@@ -20,5 +20,30 @@ namespace ECommerce.Core.Interfaces
         // Eksik metodlar eklendi
         new Task UpdateAsync(Category category);
         new Task DeleteAsync(Category category);
+
+        /// <summary>
+        /// Kategori yolu (breadcrumb) için üst kategorileri döndürür
+        /// </summary>
+        Task<IEnumerable<Category>> GetCategoryPathAsync(int categoryId);
+
+        /// <summary>
+        /// Kategorinin alt kategorisi olup olmadığını kontrol eder
+        /// </summary>
+        Task<bool> HasSubCategoriesAsync(int categoryId);
+
+        /// <summary>
+        /// Kategoriye bağlı ürün sayısını döndürür
+        /// </summary>
+        Task<int> GetProductCountAsync(int categoryId);
+
+        /// <summary>
+        /// Tüm kategorileri Parent ve SubCategories ilişkileri ile birlikte döndürür (sadece aktif)
+        /// </summary>
+        Task<IEnumerable<Category>> GetAllWithRelationsAsync();
+
+        /// <summary>
+        /// Tüm kategorileri Parent ve SubCategories ilişkileri ile birlikte döndürür (pasifler dahil - admin için)
+        /// </summary>
+        Task<IEnumerable<Category>> GetAllWithRelationsIncludingInactiveAsync();
     }
 }

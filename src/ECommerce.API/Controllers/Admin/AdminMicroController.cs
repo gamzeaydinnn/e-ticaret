@@ -328,22 +328,13 @@ namespace ECommerce.API.Controllers.Admin
 
                 if (products == null || products.Count == 0)
                 {
-                    _logger.LogWarning("[AdminMicroController] SQL sorgusu boş sonuç döndü");
-                    var emptyResponse = new
-                    {
-                        success = true,
-                        sayfa = sayfa,
-                        sayfaBuyuklugu = sayfaBuyuklugu,
-                        toplamKayit = 0,
-                        toplamSayfa = 0,
-                        kayitSayisi = 0,
-                        depoNo = depoNo,
-                        fiyatListesiNo = fiyatListesiNo,
-                        data = new List<object>()
-                    };
+                    _logger.LogWarning(
+                        "[AdminMicroController] SQL sorgusu boş sonuç döndü. " +
+                        "Bu durum Mikro SQL bağlantı problemi veya ERP tarafında boş sonuç anlamına gelebilir. " +
+                        "Veritabanı fallback devreye alınacak.");
 
-                    _memoryCache.Set(cacheKey, emptyResponse, AdminReadCacheTtl);
-                    return Ok(emptyResponse);
+                    throw new InvalidOperationException(
+                        "Mikro SQL sorgusu ürün döndürmedi. Veritabanı fallback kullanılacak.");
                 }
 
                 // Arama filtresi uygula (stok kodu, ürün adı veya grup kodu içinde)
@@ -632,16 +623,22 @@ namespace ECommerce.API.Controllers.Admin
                         timestamp = DateTime.UtcNow
                     });
                 }
-                else
+
+                _logger.LogWarning(
+                    "[AdminMicroController] Bağlantı testi SQL tarafında 0 ürün döndürdü. " +
+                    "Offline DB fallback bilgisi döndürülüyor.");
+
+                var dbFallbackCount = (await _productRepository.GetAllAsync()).Count();
+                return Ok(new
                 {
-                    return Ok(new
-                    {
-                        success = false,
-                        message = "Mikro bağlantısı kuruldu ama ürün bulunamadı.",
-                        toplamUrunSayisi = 0,
-                        timestamp = DateTime.UtcNow
-                    });
-                }
+                    isConnected = false,
+                    mikroApiOnline = false,
+                    databaseOnline = true,
+                    message = "Mikro SQL erişilemiyor. Veritabanındaki ürünler gösteriliyor.",
+                    veritabaniUrunSayisi = dbFallbackCount,
+                    toplamUrunSayisi = dbFallbackCount,
+                    timestamp = DateTime.UtcNow
+                });
             }
             catch (Exception ex)
             {

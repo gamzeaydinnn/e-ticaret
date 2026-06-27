@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using ECommerce.Core.DTOs.Cart;
 using ECommerce.Core.Validators;
 using ECommerce.Core.Interfaces;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Business.Helpers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
@@ -110,7 +112,10 @@ namespace ECommerce.API.Controllers
             ProductVariant? variant = null;
             int? resolvedVariantId = request.VariantId;
             decimal availableStock = product.StockQuantity;
-            decimal unitPrice = product.SpecialPrice ?? product.Price;
+            var isWeightBasedProduct = IsWeightBasedProduct(product);
+            decimal unitPrice = isWeightBasedProduct
+                ? (product.PricePerUnit > 0 ? product.PricePerUnit : (product.SpecialPrice ?? product.Price))
+                : (product.SpecialPrice ?? product.Price);
 
             if (resolvedVariantId.HasValue)
             {
@@ -154,6 +159,8 @@ namespace ECommerce.API.Controllers
                 VariantId = resolvedVariantId,
                 Quantity = request.Quantity,
                 UnitPrice = unitPrice,
+                IsWeightBased = isWeightBasedProduct,
+                WeightUnit = product.WeightUnit,
                 ProductName = product.Name,
                 ProductImage = product.ImageUrl
             });
@@ -330,9 +337,16 @@ namespace ECommerce.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetCartItems()
         {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { message = "Kullanıcı doğrulanamadı." });
+            }
+
             var items = await _context.CartItems
                 .Include(c => c.Product)
-                .Where(c => c.IsActive)
+                    .ThenInclude(p => p.Category)
+                .Where(c => c.IsActive && c.UserId == userId.Value)
                 .ToListAsync();
 
             // DTO'ya çevir - JSON cycle hatasını önlemek için
@@ -345,12 +359,19 @@ namespace ECommerce.API.Controllers
                 c.IsActive,
                 c.CreatedAt,
                 c.UpdatedAt,
+                IsWeightBased = IsWeightBasedProduct(c.Product),
+                WeightUnit = c.Product != null ? c.Product.WeightUnit : (WeightUnit?)null,
                 Product = c.Product == null ? null : new
                 {
                     c.Product.Id,
                     c.Product.Name,
                     c.Product.Description,
                     c.Product.Price,
+                    c.Product.SpecialPrice,
+                    c.Product.PricePerUnit,
+                    c.Product.WeightUnit,
+                    c.Product.IsWeightBased,
+                    CategoryName = c.Product.Category != null ? c.Product.Category.Name : null,
                     c.Product.StockQuantity,
                     c.Product.ImageUrl,
                     c.Product.IsActive
@@ -363,9 +384,16 @@ namespace ECommerce.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetCartItem(int id)
         {
+            var userId = GetCurrentUserId();
+            if (!userId.HasValue)
+            {
+                return Unauthorized(new { message = "Kullanıcı doğrulanamadı." });
+            }
+
             var item = await _context.CartItems
                 .Include(c => c.Product)
-                .FirstOrDefaultAsync(c => c.Id == id && c.IsActive);
+                    .ThenInclude(p => p.Category)
+                .FirstOrDefaultAsync(c => c.Id == id && c.IsActive && c.UserId == userId.Value);
             
             if (item == null) return NotFound();
 
@@ -379,12 +407,19 @@ namespace ECommerce.API.Controllers
                 item.IsActive,
                 item.CreatedAt,
                 item.UpdatedAt,
+                IsWeightBased = IsWeightBasedProduct(item.Product),
+                WeightUnit = item.Product != null ? item.Product.WeightUnit : (WeightUnit?)null,
                 Product = item.Product == null ? null : new
                 {
                     item.Product.Id,
                     item.Product.Name,
                     item.Product.Description,
                     item.Product.Price,
+                    item.Product.SpecialPrice,
+                    item.Product.PricePerUnit,
+                    item.Product.WeightUnit,
+                    item.Product.IsWeightBased,
+                    CategoryName = item.Product.Category != null ? item.Product.Category.Name : null,
                     item.Product.StockQuantity,
                     item.Product.ImageUrl,
                     item.Product.IsActive
@@ -599,6 +634,12 @@ namespace ECommerce.API.Controllers
                 // GrandTotal'ı kargo ücreti ile yeniden hesapla
                 var totalDiscount = pricingResult.CampaignDiscountTotal + pricingResult.CouponDiscountTotal;
                 pricingResult.GrandTotal = Math.Max(0, pricingResult.Subtotal - totalDiscount + pricingResult.DeliveryFee);
+                
+                _logger.LogInformation(
+                    "[PricePreview] GrandTotal hesaplandı - Subtotal: {Subtotal}, CampaignDiscount: {CampaignDiscount}, " +
+                    "CouponDiscount: {CouponDiscount}, DeliveryFee: {DeliveryFee}, GrandTotal: {GrandTotal}",
+                    pricingResult.Subtotal, pricingResult.CampaignDiscountTotal, pricingResult.CouponDiscountTotal,
+                    pricingResult.DeliveryFee, pricingResult.GrandTotal);
             }
             else if (pricingResult.IsFreeShipping)
             {
@@ -645,6 +686,13 @@ namespace ECommerce.API.Controllers
             }
 
             return null;
+        }
+
+        private static bool IsWeightBasedProduct(Product? product)
+        {
+            // ✅ Tek doğruluk kaynağı: tespit WeightBasedProductResolver üzerinden yapılır
+            // (null güvenli). Daha önce buradaki "geniş" kural diğer katmanlardan farklıydı.
+            return WeightBasedProductResolver.ResolveIsWeightBased(product);
         }
 
         #endregion

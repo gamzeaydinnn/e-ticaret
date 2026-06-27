@@ -1,9 +1,11 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap/dist/js/bootstrap.bundle.min.js";
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import {
   Link,
+  Navigate,
   Route,
   BrowserRouter as Router,
   Routes,
@@ -93,9 +95,8 @@ import Addresses from "./pages/Addresses";
 import CampaignDetail from "./pages/CampaignDetail.jsx";
 import Campaigns from "./pages/Campaigns.jsx";
 import Career from "./pages/Career.jsx";
-import Cart from "./pages/Cart";
 import Category from "./pages/Category";
-import Checkout from "./pages/Checkout";
+import CategoryDetail from "./pages/CategoryDetail"; // ✨ YENİ: Hiyerarşik kategori detay sayfası
 import CollectionPage from "./pages/CollectionPage"; // Koleksiyon/Blok Ürün Sayfası
 import ComparePage from "./pages/ComparePage";
 import Contact from "./pages/Contact.jsx";
@@ -161,38 +162,49 @@ function Header() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [hoveredCat, setHoveredCat] = useState(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const navRef = React.useRef(null);
+  const closeTimerRef = React.useRef(null); // kapanma gecikmesi — gap'te gelinince kapanmamasın
+
+  // Dropdown'u geçikmeyle kapat (mouse gap'ten geçerken iptal edebiliriz)
+  const scheduleClose = () => {
+    closeTimerRef.current = setTimeout(() => setHoveredCat(null), 120);
+  };
+  const cancelClose = (catId) => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    if (catId !== undefined) setHoveredCat(catId);
+  };
 
   // ============================================================
-  // KATEGORİLERİ YÜKLE - Backend API'den
-  // Bu effect component mount olduğunda çalışır ve kategorileri çeker
+  // KATEGORİLERİ YÜKLE - Backend API'den (tree yapısında)
   // ============================================================
   React.useEffect(() => {
-    // Kategorileri API'den çekip state'e kaydet
     const loadCategories = async () => {
       try {
-        const cats = await categoryServiceReal.getActive();
-        const normalizedCategories = Array.isArray(cats)
-          ? cats.filter(Boolean)
+        // getCategoryTree: her kategori subCategories dizisiyle gelir
+        const tree = await categoryServiceReal.getCategoryTree();
+        const rootCats = Array.isArray(tree)
+          ? tree.filter((c) => c.isActive !== false)
           : [];
         setCategories(
-          normalizedCategories.length > 0
-            ? normalizedCategories
-            : HEADER_FALLBACK_CATEGORIES,
+          rootCats.length > 0 ? rootCats : HEADER_FALLBACK_CATEGORIES,
         );
       } catch (err) {
-        // Hata durumunda boş header yerine güvenli fallback kategori seti göster.
         console.error("[Header] Kategoriler yüklenemedi:", err.message);
-        setCategories(HEADER_FALLBACK_CATEGORIES);
+        // Fallback: düz liste
+        try {
+          const cats = await categoryServiceReal.getActive();
+          const rootOnly = (cats || []).filter((c) => !c.parentId);
+          setCategories(rootOnly.length > 0 ? rootOnly : HEADER_FALLBACK_CATEGORIES);
+        } catch {
+          setCategories(HEADER_FALLBACK_CATEGORIES);
+        }
       }
     };
 
-    // İlk yükleme
     loadCategories();
-
-    // Admin panelden kategori güncellenirse yeniden yükle
     const unsubscribe = categoryServiceReal.subscribe(loadCategories);
-
-    // Cleanup: component unmount olduğunda subscription'ı kaldır
     return () => unsubscribe && unsubscribe();
   }, []);
 
@@ -252,7 +264,10 @@ function Header() {
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center logo-stack brand-logo-shell">
                   <div className="logo-container brand-logo-main">
-                    <div className="main-logo brand-logo-crop" aria-label="Gölköy Gurme">
+                    <div
+                      className="main-logo brand-logo-crop"
+                      aria-label="Gölköy Gurme"
+                    >
                       <img
                         className="brand-logo-image"
                         src="/images/golkoy-logo-new.png"
@@ -652,8 +667,8 @@ function Header() {
         </div>
       </header>
 
-      {/* Professional Single Line Category Navigation - Mobilde gizli (bottom nav'da var) */}
-      <nav className="single-line-categories d-none d-md-block">
+      {/* Kategori Navbar */}
+      <nav ref={navRef} className="single-line-categories d-none d-md-block">
         <div className="container-fluid">
           <div className="category-scroll-container">
             <button
@@ -665,22 +680,116 @@ function Header() {
             >
               KATEGORİLER
             </button>
+
             {categories.map((cat) => {
-              const slug = normalizeCategorySlug(cat.slug || createSlug(cat.name));
-              const isActive = location.pathname.startsWith(
-                `/category/${slug}`,
+              const slug = normalizeCategorySlug(
+                cat.slug || createSlug(cat.name),
               );
+              const isActive = location.pathname.startsWith(`/category/${slug}`);
+              const subs = cat.subCategories || cat.children || [];
+              const hasSubCats = subs.length > 0;
+
               return (
-                <button
+                <div
                   key={cat.id}
-                  className={"category-btn" + (isActive ? " active" : "")}
-                  type="button"
-                  onClick={() => navigate(`/category/${slug}`)}
+                  style={{ position: "relative", display: "inline-flex" }}
+                  onMouseEnter={(e) => {
+                    cancelClose();
+                    if (!hasSubCats) return;
+                    const navRect = navRef.current?.getBoundingClientRect();
+                    const btnRect = e.currentTarget.getBoundingClientRect();
+                    setDropdownPos({
+                      top: navRect ? navRect.bottom + 2 : btnRect.bottom + 2,
+                      left: btnRect.left,
+                    });
+                    setHoveredCat(cat.id);
+                  }}
+                  onMouseLeave={() => scheduleClose()}
                 >
-                  {cat.name.toUpperCase()}
-                </button>
+                  {/* Ana kategori butonu */}
+                  <button
+                    className={"category-btn" + (isActive ? " active" : "")}
+                    type="button"
+                    onClick={() => navigate(`/category/${slug}`)}
+                    style={hasSubCats ? { paddingRight: "20px" } : {}}
+                  >
+                    {cat.name.toUpperCase()}
+                    {hasSubCats && (
+                      <i
+                        className="fas fa-chevron-down"
+                        style={{
+                          fontSize: "0.55rem",
+                          marginLeft: "4px",
+                          opacity: 0.7,
+                          transition: "transform 0.2s",
+                          transform: hoveredCat === cat.id ? "rotate(180deg)" : "rotate(0deg)",
+                        }}
+                      />
+                    )}
+                  </button>
+
+                  {hasSubCats && hoveredCat === cat.id && createPortal(
+                    <div
+                      style={{
+                        position: "fixed",
+                        top: dropdownPos.top,
+                        left: dropdownPos.left,
+                        zIndex: 999999,
+                        background: "#fff",
+                        borderRadius: "10px",
+                        boxShadow: "0 8px 30px rgba(255,107,53,0.18)",
+                        minWidth: "190px",
+                        padding: "6px 0",
+                        border: "1px solid rgba(255,107,53,0.2)",
+                        pointerEvents: "auto",
+                      }}
+                      onMouseEnter={() => cancelClose(cat.id)}
+                      onMouseLeave={() => scheduleClose()}
+                    >
+                      {/* Üst kategori: Tümü linki */}
+                      <button
+                        style={{
+                          display: "block", width: "100%", padding: "9px 16px",
+                          background: "none", border: "none", textAlign: "left",
+                          fontSize: "0.8rem", fontWeight: "700",
+                          color: "#ff6b35", cursor: "pointer",
+                          borderBottom: "1px solid #fff3eb", marginBottom: "4px",
+                        }}
+                        onClick={() => { cancelClose(); setHoveredCat(null); navigate(`/category/${slug}`); }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "#fff3eb"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                      >
+                        <i className="fas fa-th-large me-2" style={{ fontSize: "0.7rem" }}></i>
+                        Tümü — {cat.name}
+                      </button>
+                      {/* Alt kategoriler */}
+                      {subs.map((sub) => {
+                        const subSlug = normalizeCategorySlug(sub.slug || createSlug(sub.name));
+                        return (
+                          <button
+                            key={sub.id}
+                            style={{
+                              display: "block", width: "100%", padding: "8px 16px",
+                              background: "none", border: "none", textAlign: "left",
+                              fontSize: "0.82rem", color: "#333",
+                              cursor: "pointer", transition: "background 0.12s",
+                            }}
+                            onClick={() => { cancelClose(); setHoveredCat(null); navigate(`/category/${subSlug}`); }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fff3eb"; e.currentTarget.style.color = "#ff6b35"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#333"; }}
+                          >
+                            <i className="fas fa-chevron-right me-2" style={{ fontSize: "0.6rem", color: "#ff6b35" }}></i>
+                            {sub.name}
+                          </button>
+                        );
+                      })}
+                    </div>,
+                    document.body
+                  )}
+                </div>
               );
             })}
+
             <button
               className="category-btn"
               type="button"
@@ -744,16 +853,20 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         {/* Ana site rotaları */}
         <Route path="/pages/home" element={<Home />} />
-        <Route path="/pages/cart" element={<Cart />} />
+        {/* Eski/yinelenen sepet rotası kanonik /cart'a yönlendirilir (spagetti temizliği). */}
+        <Route path="/pages/cart" element={<Navigate to="/cart" replace />} />
         <Route path="/category/:slug" element={<Category />} />
         <Route path="/kategori/:slug" element={<Category />} />
+        <Route path="/kategoriler/:slug" element={<CategoryDetail />} />{" "}
+        {/* ✨ YENİ: Hiyerarşik kategori detay */}
         <Route path="/collection/:slug" element={<CollectionPage />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:slug" element={<CampaignDetail />} />
         <Route path="/product/:id" element={<Product />} />
         {/* Mikro-only ürünler için SKU bazlı detay rotası */}
         <Route path="/product/sku/:sku" element={<Product />} />
-        <Route path="/checkout" element={<Checkout />} />
+        {/* Eski /checkout akışı kanonik /payment sayfasına yönlendirilir (tek ödeme akışı). */}
+        <Route path="/checkout" element={<Navigate to="/payment" replace />} />
         {/* 3D Secure Ödeme Callback Sayfaları */}
         <Route path="/checkout/success" element={<PaymentSuccessPage />} />
         <Route path="/checkout/fail" element={<PaymentFailurePage />} />
@@ -764,11 +877,9 @@ function App() {
         />
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
-
         {/* Şef Tavsiyesi / Yemek Tarifi Sayfası */}
         <Route path="/tarif" element={<RecipePage />} />
         <Route path="/tarif/:id" element={<RecipePage />} />
-
         {/* Destek / Bilgi sayfaları */}
         <Route path="/yardim" element={<HelpCenter />} />
         <Route path="/iletisim" element={<Contact />} />
@@ -788,12 +899,10 @@ function App() {
         <Route path="/kullanim-sartlari" element={<TermsOfUse />} />
         <Route path="/kvkk" element={<KVKKPolicy />} />
         <Route path="/cerez-politikasi" element={<CookiePolicy />} />
-
         {/* Admin giriş noktası */}
         <Route path="/admin" element={<AdminIndex />} />
         {/* Eski admin (geçici) */}
         <Route path="/admin/legacy" element={<AdminPanel />} />
-
         {/* Yeni Admin Panel Rotaları */}
         <Route
           path="/admin/login"
@@ -1060,7 +1169,6 @@ function App() {
             </AdminGuard>
           }
         />
-
         {/* Rol ve İzin Yönetimi */}
         <Route
           path="/admin/access-denied"
@@ -1072,7 +1180,6 @@ function App() {
             </AdminGuard>
           }
         />
-
         {/* Kurye Panel Rotaları */}
         <Route path="/courier/login" element={<CourierLogin />} />
         <Route path="/courier/dashboard" element={<CourierDashboard />} />
@@ -1085,7 +1192,6 @@ function App() {
           path="/courier/orders/:orderId/weight"
           element={<CourierWeightEntry />}
         />
-
         {/* Dispatcher (Sevkiyat Görevlisi) Panel Rotaları */}
         <Route
           path="/dispatch/login"
@@ -1111,7 +1217,6 @@ function App() {
             </DispatcherGuard>
           }
         />
-
         {/* Store Attendant (Market Görevlisi) Panel Rotaları */}
         <Route
           path="/store/login"
@@ -1137,7 +1242,6 @@ function App() {
             </StoreAttendantGuard>
           }
         />
-
         {/* Catch-all route - Tanımlanmamış tüm URL'ler için 404 sayfası */}
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -2122,7 +2226,10 @@ function HomePage() {
                   </a>
                 </li>
                 <li>
-                  <a href="/category/sut-ve-sut-urunleri" className="footer-link">
+                  <a
+                    href="/category/sut-ve-sut-urunleri"
+                    className="footer-link"
+                  >
                     Süt Ürünleri
                   </a>
                 </li>

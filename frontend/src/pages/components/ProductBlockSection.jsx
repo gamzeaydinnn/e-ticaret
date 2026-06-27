@@ -44,6 +44,8 @@ const WEIGHT_FALLBACK_KEYWORDS = [
   "cilek",
 ];
 
+const PLACEHOLDER_PRODUCT_IMAGE = "/images/placeholder.png";
+
 // Başlık şablonları - başlığa göre ikon eşleştirmesi için
 const TITLE_TEMPLATES = [
   {
@@ -619,12 +621,7 @@ const ProductBlockSection = ({
         product.productName ||
         product.ProductName ||
         "",
-      price:
-        product.specialPrice ||
-        product.discountedPrice ||
-        product.price ||
-        product.Price ||
-        0,
+      price: product.price || product.Price || 0,
       imageUrl: product.imageUrl || product.ImageUrl || product.image || "",
       stockQuantity: Number.isFinite(resolvedStockQuantity)
         ? resolvedStockQuantity
@@ -632,6 +629,8 @@ const ProductBlockSection = ({
       // Toast bildirimi için orijinal fiyatı da ekle
       originalPrice: product.price || product.Price || 0,
       specialPrice: product.specialPrice || product.discountedPrice || null,
+      pricePerUnit: product.pricePerUnit || product.PricePerUnit || 0,
+      unit: product.unit || product.Unit || "",
       // Kategori ve weight bilgisi
       categoryName:
         product.categoryName ||
@@ -1084,7 +1083,8 @@ const ProductBlockSection = ({
                               transition: "all 0.3s ease",
                             }}
                             onError={(e) => {
-                              e.target.src = "/placeholder-product.png";
+                              e.target.onerror = null;
+                              e.target.src = PLACEHOLDER_PRODUCT_IMAGE;
                             }}
                           />
                         ) : (

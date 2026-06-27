@@ -524,7 +524,8 @@ namespace ECommerce.Business.Services.Sync
                 .Select(c => c.Name)
                 .FirstOrDefault();
 
-            var shouldBeWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+            // Tek doğruluk kaynağı popülasyonu: birim KG/Gram ise isimde "KG" olmasa dahi tartılı.
+            var shouldBeWeightBased = WeightBasedProductRules.DeriveIsWeightBasedForSync(
                 product.Name,
                 product.WeightUnit,
                 categoryName ?? cache.AnagrupKod ?? cache.GrupKod);

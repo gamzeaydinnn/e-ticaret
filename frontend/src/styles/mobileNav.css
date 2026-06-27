@@ -219,10 +219,18 @@
    Mobilde bottom nav ile çakışmayı önler
    ============================================ */
 @media (max-width: 768px) {
+  /* Tüm sayfa içeriklerinin alt nav ile çakışmaması için body'e padding */
+  body {
+    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
   /* Ana içerik alanına padding ekle */
   .App > main,
   .page-content,
-  .main-content {
+  .main-content,
+  .App > .container,
+  .App > .container-fluid,
+  .App > section {
     padding-bottom: calc(var(--mobile-nav-height) + 16px) !important;
   }
 

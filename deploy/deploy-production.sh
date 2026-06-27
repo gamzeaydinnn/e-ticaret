@@ -1,87 +1,47 @@
 #!/bin/bash
 
-# ============================================================
-# E-TİCARET SUNUCU DEPLOYMENT SCRIPT
-# Son Güncelleme: 13 Ocak 2026
-# RBAC Sistemi ve JWT Fix Deployment
-# ============================================================
+set -euo pipefail
 
-echo "🚀 SUNUCU DEPLOYMENT BAŞLANIYOR..."
-echo ""
+echo "Production clean deploy basliyor..."
 
-# 1. Proje dizinine git
-cd /var/www/ecommerce || exit 1
-echo "✅ Proje dizini: $(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# 2. Git'ten güncel kodu çek
-echo ""
-echo "📥 Git'ten kodlar çekiliyor..."
-git pull origin main
-if [ $? -ne 0 ]; then
-    echo "❌ Git pull başarısız!"
-    exit 1
-fi
-echo "✅ Kodlar güncellendi"
+cd "${PROJECT_ROOT}"
+echo "Deploy dizini: ${PROJECT_ROOT}"
 
-# 3. Container'ları durdur
-echo ""
-echo "🛑 Container'lar durduruluyor..."
-docker-compose -f docker-compose.prod.yml down
-echo "✅ Container'lar durduruldu"
+mkdir -p logs
+mkdir -p "${UPLOADS_HOST_PATH:-/srv/ecommerce/uploads}"
 
-# 4. Image'ları rebuild et
-echo ""
-echo "🔨 Docker image'ları rebuild ediliyor (bu 2-3 dakika sürebilir)..."
-docker-compose -f docker-compose.prod.yml build --no-cache
-if [ $? -ne 0 ]; then
-    echo "❌ Build başarısız!"
-    exit 1
-fi
-echo "✅ Image'lar hazır"
+echo "Git durumu:"
+git status --short || true
 
-# 5. Container'ları başlat
-echo ""
-echo "▶️  Container'lar başlatılıyor..."
-docker-compose -f docker-compose.prod.yml up -d
-if [ $? -ne 0 ]; then
-    echo "❌ Container başlatılamadı!"
-    exit 1
-fi
-echo "✅ Container'lar başlatıldı"
+echo "Eski dangling image'lar temizleniyor..."
+docker image prune -f >/dev/null 2>&1 || true
 
-# 6. Başlatılmayı bekleme
-echo ""
-echo "⏳ Servisler başlatılıyor (30 saniye bekleniyor)..."
+echo "Image'lar rebuild ediliyor..."
+docker-compose -f docker-compose.prod.yml build
+
+echo "Container'lar temiz sekilde yeniden kuruluyor..."
+docker-compose -f docker-compose.prod.yml down --remove-orphans
+docker-compose -f docker-compose.prod.yml up -d --force-recreate
+
+echo "Servislerin ayaga kalkmasi bekleniyor..."
 sleep 30
 
-# 7. Container durumunu kontrol et
-echo ""
-echo "📊 Container Durumları:"
-docker ps
+echo "Container durumlari:"
+docker-compose -f docker-compose.prod.yml ps
 
-# 8. Backend loglarını kontrol et
-echo ""
-echo "📋 Backend Logları (son 50 satır):"
+echo "API health kontrolu:"
+curl -fsS http://localhost:5000/health || true
+
+echo "Ornek uploads kontrolu:"
+find "${UPLOADS_HOST_PATH:-/srv/ecommerce/uploads}" -maxdepth 2 -type f | head -n 10 || true
+
+echo "Backend loglari:"
 docker logs ecommerce-api-prod --tail 50
 
-# 9. Frontend loglarını kontrol et
-echo ""
-echo "📋 Frontend Logları (son 20 satır):"
+echo "Frontend loglari:"
 docker logs ecommerce-frontend-prod --tail 20
 
-# 10. Veritabanı seed kontrolü
-echo ""
-echo "🗄️  Veritabanı Kontrol Ediliyor..."
-docker exec ecommerce-db-prod /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P 'ECom1234' -C \
-  -Q "SELECT COUNT(*) as RoleCount FROM Roles; SELECT COUNT(*) as PermissionCount FROM Permissions;" 2>/dev/null
-
-echo ""
-echo "✅ DEPLOYMENT TAMAMLANDI!"
-echo ""
-echo "🔗 Erişim Bilgileri:"
-echo "   Frontend: http://31.186.24.78:3000"
-echo "   Backend: http://31.186.24.78:5000"
-echo "   Admin Email: admin@admin.com"
-echo "   Admin Şifre: admin123"
-echo ""
+echo "Production clean deploy tamamlandi."

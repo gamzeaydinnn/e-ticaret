@@ -603,6 +603,41 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
                 var posnetOrderId = await GetOrCreatePosnetOrderIdAsync(order, cancellationToken);
 
+                // ── KG ÜRÜN FIX: Amount hesaplama mantığı ─────────────────────────────
+                // Öncelik sırası:
+                // 1. Method parametresi (amount) - Üst katmandan hesaplanmış (PreAuthAmount gibi)
+                // 2. KG ürün ise Order.PreAuthAmount (tartı öncesi hesaplanan provizyon tutarı)
+                // 3. Normal ürün ise Order.FinalPrice (indirim/kupon uygulanmış)
+                // 4. Son çare Order.TotalPrice
+                decimal effectiveAmount;
+                
+                if (amount.HasValue && amount.Value > 0)
+                {
+                    // Üst katmandan gelen tutar (KG ürünlerde PreAuthAmount olabilir)
+                    effectiveAmount = amount.Value;
+                    _logger.LogInformation(
+                        "[POSNET-3DS] Parametre amount kullanılıyor: {Amount} TL, OrderId: {OrderId}",
+                        effectiveAmount, orderId);
+                }
+                else if (order.HasWeightBasedItems && order.PreAuthAmount > 0)
+                {
+                    // KG ürün VE PreAuthAmount hesaplanmış
+                    effectiveAmount = order.PreAuthAmount;
+                    _logger.LogInformation(
+                        "[POSNET-3DS] KG ürün - PreAuthAmount kullanılıyor: {PreAuthAmount} TL, " +
+                        "OrderId: {OrderId} (FinalPrice: {FinalPrice} TL, TotalPrice: {TotalPrice} TL)",
+                        effectiveAmount, orderId, order.FinalPrice, order.TotalPrice);
+                }
+                else
+                {
+                    // Normal ürün - FinalPrice veya TotalPrice
+                    effectiveAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice;
+                    _logger.LogInformation(
+                        "[POSNET-3DS] Normal ürün - FinalPrice/TotalPrice kullanılıyor: {Amount} TL, " +
+                        "OrderId: {OrderId}",
+                        effectiveAmount, orderId);
+                }
+
                 // OOS request oluştur
                 var request = new PosnetOosRequest
                 {
@@ -617,7 +652,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         CardHolderName = order.User?.FullName ?? order.CustomerName ?? "GUEST USER"
                     },
                     OrderId = posnetOrderId,
-                    Amount = PosnetSaleRequest.ConvertToKurus(amount ?? order.TotalPrice),
+                    Amount = PosnetSaleRequest.ConvertToKurus(effectiveAmount),
                     Installment = installment.ToString("D2"),
                     CurrencyCode = NormalizeCurrencyCode(order.Currency),
                     TxnType = string.IsNullOrWhiteSpace(txnType) ? "Sale" : txnType.Trim(),
@@ -1216,7 +1251,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     CurrencyCode = NormalizeCurrencyCode(order.Currency),
                     Installment = "00",
                     HostLogKey = hostLogKey,
-                    OrderDate = order.OrderDate.ToString("yyyyMMdd")
+                    // ── MADDE 8: OrderDate UTC→TR saat dilimi ───────────────────────────
+                    // UTC ve TR (UTC+3) gün sınırında uyumsuz tarih gönderilmesini önler.
+                    OrderDate = ToTurkeyDateString(order.OrderDate)
                 };
 
                 var xml = _xmlBuilder.BuildCaptXml(request);
@@ -1342,7 +1379,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     Transaction = reverseTransaction,
                     OrderId = originalPosnetOrderId,
                     HostLogKey = hostLogKey,
-                    OrderDate = order?.OrderDate.ToString("yyyyMMdd"),
+                    // ── MADDE 8: OrderDate UTC→TR saat dilimi ───────────────────────────
+                    OrderDate = order != null ? ToTurkeyDateString(order.OrderDate) : null,
                     AuthCode = relatedPayment?.AuthCode
                 };
 
@@ -1411,15 +1449,51 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     ?? order?.PosnetTransactionId
                     ?? GeneratePosnetOrderId(orderId);
 
+                // ── MADDE 15: KGL siparişlerde iade için doğru HostLogKey seçimi ──────────
+                // POSNET dok: "Finansallaştırma (Capt) sonrası iade için Capture HostLogKey
+                // kullanılmalıdır." KGL ürün için önce 'capt' kaydı aranir; yoksa
+                // orijinal 'auth'/'sale' kaydına fallback yapılır.
+                var isWeightBasedOrder = order?.HasWeightBasedItems == true;
+                string effectiveHostLogKey = hostLogKey;
+
+                if (isWeightBasedOrder)
+                {
+                    var captPayment = await _db.Payments
+                        .AsNoTracking()
+                        .Where(p => p.OrderId == orderId &&
+                                    p.TransactionType == "capt" &&
+                                    p.Status == "Paid" &&
+                                    !string.IsNullOrWhiteSpace(p.HostLogKey))
+                        .OrderByDescending(p => p.CreatedAt)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (captPayment != null && !string.IsNullOrWhiteSpace(captPayment.HostLogKey))
+                    {
+                        effectiveHostLogKey = captPayment.HostLogKey!;
+                        _logger.LogInformation(
+                            "[POSNET] KGL iade: Capture HostLogKey kullanılıyor. " +
+                            "OrderId: {OrderId}, CaptHostLogKey: {Key}",
+                            orderId, effectiveHostLogKey);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "[POSNET] KGL iade: Capture HostLogKey bulunamadı, parametre olarak gelen key kullanılıyor. " +
+                            "OrderId: {OrderId}, FallbackKey: {Key}",
+                            orderId, effectiveHostLogKey);
+                    }
+                }
+
                 var request = new PosnetReturnRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
                     TerminalId = _settings.PosnetTerminalId,
                     OrderId = originalPosnetOrderId,
                     Amount = PosnetSaleRequest.ConvertToKurus(amount),
-                    HostLogKey = hostLogKey,
+                    HostLogKey = effectiveHostLogKey,
                     CurrencyCode = NormalizeCurrencyCode(order?.Currency),
-                    OrderDate = order?.OrderDate.ToString("yyyyMMdd")
+                    // ── MADDE 8: OrderDate UTC→TR saat dilimi ───────────────────────────
+                    OrderDate = order != null ? ToTurkeyDateString(order.OrderDate) : null
                 };
 
                 var xml = _xmlBuilder.BuildReturnXml(request);
@@ -1499,16 +1573,12 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         {
             var stopwatch = Stopwatch.StartNew();
 
-            _logger.LogInformation("[POSNET] Puan sorgulama başlatılıyor");
-
             try
             {
-                if (!_settings.PosnetWorldPointEnabled)
-                {
-                    return PosnetResult<PosnetPointInquiryResponse>.Failure(
-                        "World Puan entegrasyonu aktif değil",
-                        PosnetErrorCode.MerchantNotAuthorized);
-                }
+                _logger.LogInformation("[POSNET] Puan sorgulama. Kart maskelenmiş: {Card}",
+                    (cardNumber ?? string.Empty).Replace(" ", "").Length >= 4
+                        ? $"****{cardNumber.Replace(" ", "")[^4..]}"
+                        : cardNumber);
 
                 var request = new PosnetPointInquiryRequest
                 {
@@ -1537,10 +1607,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var pointResponse = _xmlParser.ParsePointInquiryResponse(httpResponse.ResponseXml!);
                 stopwatch.Stop();
 
-                if (pointResponse.IsSuccess)
+                if (pointResponse.IsEnrolled)
                 {
-                    _logger.LogInformation(
-                        "[POSNET] Puan sorgulama başarılı. TotalPoint: {TotalPoint}",
+                    _logger.LogInformation("[POSNET] Puan sorgulama başarılı. TotalPoint: {TotalPoint}",
                         pointResponse.PointInfo?.TotalPoint ?? 0);
                 }
 
@@ -1623,15 +1692,48 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         /// <summary>
         /// POSNET için benzersiz sipariş numarası oluşturur
         /// POSNET XID alanı max 20 karakter kabul ediyor
-        /// Format: YKB + OrderId(5) + MMddHHmmss(10) + RR(2) = 20 karakter
+        /// 
+        /// ── MADDE 14: OrderId > 99999 sınırı düzeltmesi ────────────────────────
+        /// Eski format: YKB(3) + D5(5) + MMddHHmmss(10) + RR(2) = 20 karakter
+        ///              orderId > 99999 ise D5 → 6 hane → TOPLAM 21 → POSNET HATA!
+        /// Yeni format: YKB(3) + D7(7) + MMddHHmm(8) + RR(2) = 20 karakter
+        ///              orderId 9,999,999'a kadar desteklenir.
         /// </summary>
         private static string GeneratePosnetOrderId(int orderId)
         {
             // POSNET XID max 20 karakter, sadece alfanumerik
-            // Format: YKB{OrderId:D5}{MMddHHmmss}{Random:XX} = 3 + 5 + 10 + 2 = 20 karakter
-            var timestamp = DateTime.UtcNow.ToString("MMddHHmmss");
-            var random = Random.Shared.Next(10, 99).ToString();
-            return $"{ORDER_ID_PREFIX}{orderId:D5}{timestamp}{random}";
+            // Format: YKB{OrderId:D7}{MMddHHmm}{Random:XX} = 3 + 7 + 8 + 2 = 20 karakter
+            // MADDE 14: timestamp 10→8 hane kısaltıldı, orderId 5→7 hane genişletildi.
+            var timestamp = DateTime.UtcNow.ToString("MMddHHmm"); // 8 hane
+            var random = Random.Shared.Next(10, 99).ToString();   // 2 hane
+            return $"{ORDER_ID_PREFIX}{orderId:D7}{timestamp}{random}";
+        }
+
+        /// <summary>
+        /// UTC DateTime'ı Türkiye saat dilimine (UTC+3) çevirerek yyyyMMdd formatında döndürür.
+        /// ── MADDE 8: Gün sınırında UTC/TR uyuşmazlığını önler ──────────────────
+        /// POSNET Capt/Return XML'de orderDate orijinal işlem tarihi (TR saati) olmalı.
+        /// Örnek: 23:30 UTC = 02:30+3 TR → farklı gün → banka "sipariş tarihi uyuşmuyor" der.
+        /// </summary>
+        private static string ToTurkeyDateString(DateTime utcDate)
+        {
+            try
+            {
+                // Windows: "Turkey Standard Time", Linux/Docker: "Europe/Istanbul"
+                TimeZoneInfo turkeyTz;
+                try { turkeyTz = TimeZoneInfo.FindSystemTimeZoneById("Turkey Standard Time"); }
+                catch { turkeyTz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul"); }
+
+                var trDate = TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(utcDate, DateTimeKind.Utc),
+                    turkeyTz);
+                return trDate.ToString("yyyyMMdd");
+            }
+            catch
+            {
+                // Saat dilimi bulunamazsa UTC+3 manuel offset uygula
+                return utcDate.AddHours(3).ToString("yyyyMMdd");
+            }
         }
 
         /// <summary>

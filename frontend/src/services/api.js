@@ -48,8 +48,14 @@ api.interceptors.request.use(
   (config) => {
     const url = config.url || "";
     // NEDEN: Checkout akışında login varsa token gönderilmeli; böylece sipariş kullanıcıya bağlanır.
+    const isCourierAuthRequest = url.includes("/api/courier/auth");
+    const isCourierSelfServiceRequest =
+      url.includes("/api/courier/orders") ||
+      url.includes("/api/courier/summary") ||
+      url.includes("/api/courier/deliveries");
     const isCourierRequest =
-      url.includes("/api/courier") ||
+      isCourierAuthRequest ||
+      isCourierSelfServiceRequest ||
       url.includes("/weight-adjustment") ||
       url.includes("/weight-payment");
 
@@ -145,7 +151,10 @@ api.interceptors.response.use(
     const data = error?.response?.data;
     const url = error?.config?.url || "";
     const isCourierRequest =
-      url.includes("/api/courier") ||
+      url.includes("/api/courier/auth") ||
+      url.includes("/api/courier/orders") ||
+      url.includes("/api/courier/summary") ||
+      url.includes("/api/courier/deliveries") ||
       url.includes("/weight-adjustment") ||
       url.includes("/weight-payment");
 

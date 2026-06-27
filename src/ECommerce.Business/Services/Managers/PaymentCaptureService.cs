@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using ECommerce.Business.Helpers;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -35,12 +36,12 @@ namespace ECommerce.Business.Services.Managers
         // Infrastructure katmanında tanımlı olduğu için null olabilir (DI'da kayıtlı değilse)
         private readonly IPosnetPaymentService? _posnetService;
 
-        // Varsayılan tolerans yüzdesi
+        // Varsayılan tolerans yüzdesi (ilk provizyon tutarı için)
         private const decimal DefaultTolerancePercentage = 0.20m;
-        private const decimal ProviderCaptureOveragePercentage = 0.20m;
 
-        // Provizyon geçerlilik süresi (saat)
-        private const int AuthorizationExpiryHours = 168;
+        // Provizyon geçerlilik süresi (saat) — tek doğruluk kaynağı: WeightBasedCapturePolicy.
+        // NEDEN buradan referans: Sayı tek noktada tutulur; banka süresi teyit edilince yalnız politika güncellenir.
+        private const int AuthorizationExpiryHours = WeightBasedCapturePolicy.PreAuthValidityHours;
 
         public PaymentCaptureService(
             ECommerceDbContext context,
@@ -196,15 +197,18 @@ namespace ECommerce.Business.Services.Managers
                     return PaymentCaptureResult.Failed("Sipariş bulunamadı.", "ORDER_NOT_FOUND");
                 }
 
+                // Provizyon tutarı için tek doğruluk kaynağı (AuthorizedAmount veya PreAuthAmount).
+                var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
+
                 // Provizyon kontrolü
-                if (order.AuthorizedAmount == 0)
+                if (authorizedAmount <= 0m)
                 {
                     return PaymentCaptureResult.Failed(
                         "Bu sipariş için provizyon bulunmuyor.",
                         "NO_AUTHORIZATION");
                 }
 
-                // Zaten capture edilmiş mi?
+                // Zaten capture edilmiş mi? (idempotency — çift çekimi engeller)
                 if (order.CaptureStatus == CaptureStatus.Success)
                 {
                     return PaymentCaptureResult.Failed(
@@ -212,14 +216,14 @@ namespace ECommerce.Business.Services.Managers
                         "ALREADY_CAPTURED");
                 }
 
-                // Final tutar kontrolü
-                var maxCapturableAmount = CalculateMaxCapturableAmount(order.AuthorizedAmount);
+                // Final tutar kontrolü: banka aşım sınırı (Auth × 1.20) içinde mi?
+                var maxCapturableAmount = CalculateMaxCapturableAmount(authorizedAmount);
                 if (finalAmount > maxCapturableAmount)
                 {
                     _logger.LogWarning(
                         "⚠️ Final tutar authorize edilen tutar + banka aşım limitini aşıyor. " +
                         "OrderId={OrderId}, FinalAmount={FinalAmount}, AuthorizedAmount={AuthorizedAmount}, MaxCapturable={MaxCapturableAmount}",
-                        orderId, finalAmount, order.AuthorizedAmount, maxCapturableAmount);
+                        orderId, finalAmount, authorizedAmount, maxCapturableAmount);
 
                     // Sipariş durumunu güncelle - admin müdahalesi gerekli
                     order.CaptureStatus = CaptureStatus.Failed;
@@ -570,13 +574,9 @@ namespace ECommerce.Business.Services.Managers
             return Math.Round(orderAmount * (1 + tolerancePercentage), 2);
         }
 
-        private decimal CalculateMaxCapturableAmount(decimal authorizedAmount)
-        {
-            return Math.Round(
-                authorizedAmount * (1 + ProviderCaptureOveragePercentage),
-                2,
-                MidpointRounding.AwayFromZero);
-        }
+        // Tek doğruluk kaynağı: banka aşım sınırı (Auth × 1.20) WeightBasedCapturePolicy'de hesaplanır.
+        private static decimal CalculateMaxCapturableAmount(decimal authorizedAmount)
+            => WeightBasedCapturePolicy.CalculateMaxCapturableAmount(authorizedAmount);
 
         /// <summary>
         /// Kapıda ödeme mi kontrol eder.

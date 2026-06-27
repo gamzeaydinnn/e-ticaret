@@ -66,69 +66,41 @@ namespace ECommerce.Business.Services.Jobs
             try
             {
                 // ═══════════════════════════════════════════════════════
-                // ADIM 1: STOK SENKRONİZASYONU (Tüm Stoklar)
+                // ADIM 1: TAM SENKRONİZASYON (Orkestratör tüm alt adımları yürütür)
                 // ═══════════════════════════════════════════════════════
-                _logger.LogInformation("[{JobName}] ADIM 1/3: Stok senkronizasyonu...", JobName);
+                _logger.LogInformation("[{JobName}] ADIM 1/2: Tam senkronizasyon...", JobName);
 
                 try
                 {
-                    var stokResult = await _stokSyncService.SyncAllFromMikroAsync(cancellationToken);
-                    totalProcessed += stokResult.ProcessedCount;
-                    totalSuccess += stokResult.ProcessedCount - stokResult.Errors.Count;
-                    totalError += stokResult.Errors.Count;
+                    var syncResult = await _syncService.RunFullSyncAsync(cancellationToken);
+                    totalProcessed += syncResult.ProcessedCount;
+                    totalSuccess += syncResult.ProcessedCount - syncResult.Errors.Count;
+                    totalError += syncResult.Errors.Count;
 
-                    if (!stokResult.IsSuccess)
+                    if (!syncResult.IsSuccess)
                     {
-                        errors.AddRange(stokResult.Errors.Select(e => $"[Stok] {e.Message}"));
+                        errors.AddRange(syncResult.Errors.Select(e => $"[Tam Sync] {e.Message}"));
                     }
 
                     _logger.LogInformation(
-                        "[{JobName}] Stok sync tamamlandı: {Success}/{Total}",
-                        JobName, stokResult.ProcessedCount - stokResult.Errors.Count, stokResult.ProcessedCount);
+                        "[{JobName}] Tam sync tamamlandı: İşlenen: {Processed}, Başarısız: {Failed}",
+                        JobName,
+                        syncResult.ProcessedCount,
+                        syncResult.Errors.Count);
                 }
                 catch (Exception ex)
                 {
-                    errors.Add($"[Stok] {ex.Message}");
-                    _logger.LogError(ex, "[{JobName}] Stok senkronizasyonunda hata", JobName);
+                    errors.Add($"[Tam Sync] {ex.Message}");
+                    _logger.LogError(ex, "[{JobName}] Tam senkronizasyonda hata", JobName);
                 }
 
                 // İptal kontrolü
                 cancellationToken.ThrowIfCancellationRequested();
 
                 // ═══════════════════════════════════════════════════════
-                // ADIM 2: FİYAT SENKRONİZASYONU (Tüm Fiyatlar)
+                // ADIM 4: DURUM RAPORU OLUŞTUR
                 // ═══════════════════════════════════════════════════════
-                _logger.LogInformation("[{JobName}] ADIM 2/3: Fiyat senkronizasyonu...", JobName);
-
-                try
-                {
-                    var fiyatResult = await _fiyatSyncService.SyncAllFromMikroAsync(cancellationToken);
-                    totalProcessed += fiyatResult.ProcessedCount;
-                    totalSuccess += fiyatResult.ProcessedCount - fiyatResult.Errors.Count;
-                    totalError += fiyatResult.Errors.Count;
-
-                    if (!fiyatResult.IsSuccess)
-                    {
-                        errors.AddRange(fiyatResult.Errors.Select(e => $"[Fiyat] {e.Message}"));
-                    }
-
-                    _logger.LogInformation(
-                        "[{JobName}] Fiyat sync tamamlandı: {Success}/{Total}",
-                        JobName, fiyatResult.ProcessedCount - fiyatResult.Errors.Count, fiyatResult.ProcessedCount);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"[Fiyat] {ex.Message}");
-                    _logger.LogError(ex, "[{JobName}] Fiyat senkronizasyonunda hata", JobName);
-                }
-
-                // İptal kontrolü
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // ═══════════════════════════════════════════════════════
-                // ADIM 3: DURUM RAPORU OLUŞTUR
-                // ═══════════════════════════════════════════════════════
-                _logger.LogInformation("[{JobName}] ADIM 3/3: Durum raporu oluşturuluyor...", JobName);
+                _logger.LogInformation("[{JobName}] ADIM 2/2: Durum raporu oluşturuluyor...", JobName);
 
                 try
                 {

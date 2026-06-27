@@ -30,7 +30,7 @@ namespace ECommerce.API.Controllers
         {
             var categories = await _categoryService.GetAllAsync();
             var storefrontCategories = categories
-                .Where(c => CategorySeeder.IsPublicStorefrontCategorySlug(c.Slug));
+                .Where(c => c.IsActive && c.Slug != CategorySeeder.UncategorizedSlug);
 
             // Entity'leri CategoryListDto'ya dönüştürüyoruz (map'liyoruz).
             var categoryDtos = storefrontCategories.Select(c => new CategoryListDto
@@ -84,6 +84,47 @@ namespace ECommerce.API.Controllers
             };
 
             return Ok(categoryDetailDto);
+        }
+
+        // ✨ YENİ: GET /api/categories/tree - Hiyerarşik kategori ağacı (sadece aktif)
+        [HttpGet("tree")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> GetCategoryTree()
+        {
+            var tree = await _categoryService.GetCategoryTreeAsync();
+            // Sadece aktif kategorileri filtrele
+            var activeTree = tree.Where(c => c.IsActive).ToList();
+            return Ok(activeTree);
+        }
+
+        // ✨ YENİ: GET /api/categories/root - Ana kategoriler (sadece aktif)
+        [HttpGet("root")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> GetRootCategories()
+        {
+            var categories = await _categoryService.GetRootCategoriesAsync();
+            return Ok(categories);
+        }
+
+        // ✨ YENİ: GET /api/categories/{id}/subcategories - Belirli kategorinin alt kategorileri
+        [HttpGet("{id}/subcategories")]
+        [ProducesResponseType(typeof(IEnumerable<CategoryListDto>), 200)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> GetSubCategories(int id)
+        {
+            var subCategories = await _categoryService.GetSubCategoriesAsync(id);
+            
+            var subCategoryDtos = subCategories.Select(c => new CategoryListDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Slug = c.Slug,
+                ImageUrl = c.ImageUrl,
+                ParentId = c.ParentId,
+                IsActive = c.IsActive
+            });
+
+            return Ok(subCategoryDtos);
         }
     }
 }

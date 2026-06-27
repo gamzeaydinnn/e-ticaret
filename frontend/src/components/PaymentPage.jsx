@@ -8,6 +8,14 @@ import { PaymentService } from "../services/paymentService";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
 import shippingService from "../services/shippingService";
+import {
+  isStrictVariableWeightProduct,
+  toWeightBasedProductCandidate,
+} from "../utils/weightBasedProduct";
+import {
+  getEffectiveUnitPrice,
+  isResolvedWeightBasedProduct,
+} from "../utils/weightPricing";
 import LoginModal from "./LoginModal";
 import { CreditCardPreview } from "./payment";
 import { sanitize3DSecureHtml, safeRedirect } from "../utils/securityHelpers";
@@ -75,6 +83,21 @@ const PaymentPage = () => {
   const [pricing, setPricing] = useState(null);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState("");
+
+  const isWeightBasedCartItem = useCallback(
+    (item) =>
+      isResolvedWeightBasedProduct(
+        item,
+        products[item.productId || item.id] || item.product,
+      ) ||
+      isStrictVariableWeightProduct(
+        toWeightBasedProductCandidate(
+          item,
+          products[item.productId || item.id] || item.product,
+        ),
+      ),
+    [products],
+  );
 
   // Form verileri
   const [formData, setFormData] = useState({
@@ -163,7 +186,9 @@ const PaymentPage = () => {
         const result = await CartService.previewPrice({
           items: cartItems.map((item) => ({
             productId: item.productId || item.id,
-            quantity: item.quantity,
+            quantity: isWeightBasedCartItem(item)
+              ? Number(item.quantity) || 1
+              : Math.max(1, Math.round(Number(item.quantity) || 1)),
           })),
           couponCode: appliedCoupon?.code || undefined,
           shippingMethod: shippingMethod,
@@ -233,9 +258,7 @@ const PaymentPage = () => {
     (item) => {
       const pid = item.productId || item.id;
       const product = products[pid] || item.product;
-      if (item.unitPrice) return Number(item.unitPrice);
-      if (product) return Number(product.specialPrice || product.price || 0);
-      return 0;
+      return getEffectiveUnitPrice(item, product);
     },
     [products],
   );
@@ -272,14 +295,36 @@ const PaymentPage = () => {
   };
 
   const getDiscount = () => {
-    return appliedCoupon?.discountAmount || pricing?.couponDiscountTotal || 0;
+    return Math.max(
+      0,
+      Number(appliedCoupon?.discountAmount || pricing?.couponDiscountTotal || 0),
+    );
+  };
+
+  const getPreviewShippingCost = () => {
+    if (typeof pricing?.deliveryFee === "number") {
+      return pricing.deliveryFee;
+    }
+    return getShippingCost();
   };
 
   const getTotal = () => {
     const subtotal = getSubtotal();
-    const shipping = getShippingCost();
+    const shipping = getPreviewShippingCost();
     const discount = getDiscount();
-    return Math.max(0, subtotal + shipping - discount);
+    const fallbackTotal = Math.max(0, subtotal + shipping - discount);
+    const backendGrandTotal = Number(pricing?.grandTotal);
+    const maxAllowedTotal = Math.max(0, subtotal + shipping);
+
+    if (
+      Number.isFinite(backendGrandTotal) &&
+      backendGrandTotal >= 0 &&
+      backendGrandTotal <= maxAllowedTotal + 0.01
+    ) {
+      return backendGrandTotal;
+    }
+
+    return fallbackTotal;
   };
 
   // Kupon uygula
@@ -311,7 +356,7 @@ const PaymentPage = () => {
           products[item.productId || item.id]?.category?.id ||
           item.categoryId,
       }));
-      const shippingCost = getShippingCost();
+      const shippingCost = getPreviewShippingCost();
 
       const result = await CartService.validateCoupon(
         code,
@@ -448,10 +493,17 @@ const PaymentPage = () => {
       const orderItems = cartItems.map((ci) => {
         const pid = ci.productId || ci.id;
         const unitPrice = getItemPrice(ci);
+        const requestedQuantity = Number(ci.quantity) || 0;
+        const isWeightBasedItem = isWeightBasedCartItem(ci);
         return {
           productId: pid,
-          quantity: ci.quantity,
+          quantity: isWeightBasedItem
+            ? requestedQuantity
+            : Math.max(1, Math.round(requestedQuantity || 1)),
           unitPrice: unitPrice,
+          estimatedWeight: isWeightBasedItem
+            ? Math.round(requestedQuantity * 1000 * 100) / 100
+            : 0,
         };
       });
 
@@ -1167,10 +1219,12 @@ const PaymentPage = () => {
 
                   <div className="summary-row">
                     <span>Kargo</span>
-                    <span className={getShippingCost() === 0 ? "free" : ""}>
-                      {getShippingCost() === 0
+                    <span
+                      className={getPreviewShippingCost() === 0 ? "free" : ""}
+                    >
+                      {getPreviewShippingCost() === 0
                         ? "Ücretsiz"
-                        : `₺${getShippingCost().toFixed(2)}`}
+                        : `₺${getPreviewShippingCost().toFixed(2)}`}
                     </span>
                   </div>
                   {getDiscount() > 0 && (
@@ -1187,15 +1241,7 @@ const PaymentPage = () => {
                   )}
                   <div className="summary-row total">
                     <span>Toplam</span>
-                    <span>
-                      ₺
-                      {(
-                        getTotal() -
-                        (campaignDiscountTotal ||
-                          pricing?.campaignDiscountTotal ||
-                          0)
-                      ).toFixed(2)}
-                    </span>
+                    <span>₺{getTotal().toFixed(2)}</span>
                   </div>
                 </div>
 

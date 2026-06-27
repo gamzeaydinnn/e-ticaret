@@ -760,13 +760,45 @@ namespace ECommerce.Business.Services.Managers
 
             try
             {
+                // ── KG ÜRÜN FIX: PreAuthAmount kontrolü ────────────────────────────
+                // KG bazlı ürünlerde Order.PreAuthAmount kullan (121 TL gibi hesaplanmış tutar)
+                // Normal ürünlerde dto.Amount veya Order.FinalPrice kullan
+                var order = await _db.Orders
+                    .Include(o => o.OrderItems)
+                    .FirstOrDefaultAsync(o => o.Id == dto.OrderId, cancellationToken);
+                
+                decimal effectiveAmount;
+                string txnType = "Sale";
+                
+                if (order != null && order.HasWeightBasedItems && order.PreAuthAmount > 0)
+                {
+                    // KG ürün var VE PreAuthAmount hesaplanmış → Auth işlemi yap
+                    effectiveAmount = order.PreAuthAmount;
+                    txnType = "Auth"; // KG ürünlerde provizyon, tartı sonrası capture
+                    
+                    _logger?.LogInformation(
+                        "[PAYMENT] KG ürün 3DS başlatılıyor. OrderId: {OrderId}, " +
+                        "PreAuthAmount: {PreAuthAmount} TL (dto.Amount: {DtoAmount} TL)",
+                        dto.OrderId, effectiveAmount, dto.Amount);
+                }
+                else
+                {
+                    // Normal ürün → dto.Amount veya FinalPrice kullan
+                    effectiveAmount = dto.Amount > 0 ? dto.Amount : (order?.FinalPrice ?? order?.TotalPrice ?? dto.Amount);
+                    
+                    _logger?.LogInformation(
+                        "[PAYMENT] Normal ürün 3DS başlatılıyor. OrderId: {OrderId}, " +
+                        "Amount: {Amount} TL",
+                        dto.OrderId, effectiveAmount);
+                }
+                
                 var result = await _posnet.Initiate3DSecureAsync(
                     dto.OrderId,
                     dto.CardNumber!,
                     dto.ExpireDate!,
                     dto.Cvv!,
-                    dto.Amount,
-                    "Sale",
+                    effectiveAmount,
+                    txnType,
                     dto.GetNormalizedInstallment(),
                     cancellationToken);
 

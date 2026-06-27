@@ -539,13 +539,24 @@ namespace ECommerce.Business.Services.Managers
                 // Orijinal sipariş tutarı
                 var baseAmount = order.TotalPrice;
 
-                // Onaylanan tartı farkı tutarlarını topla
-                var approvedOverageAmount = await GetTotalWeightDifferenceAmountAsync(orderId);
+                // ── TEK FİNAL TUTAR KAYNAĞI (tartım farkı) ─────────────────────────────
+                // NEDEN: İki ayrı tartım yolu var:
+                //  1) Manuel/kurye tartımı → OrderItem.ActualPrice farkları UpdateOrderTotalsAsync ile
+                //     order.TotalPriceDifference'a yazılır.
+                //  2) Tartı raporu (cihaz/webhook) → WeightReport.OverageAmount (onaylı raporlar).
+                // Mağaza görevlisi manuel tartınca (1) doldurulur; kurye teslimde aynı tutarı çekebilmek
+                // için item-seviyesi fark OTORİTER kabul edilir. Yalnız bu fark yoksa (yani item-seviyesi
+                // tartım yapılmamışsa) (2)'deki onaylı rapor overage'ına düşülür. Böylece İKİ kaynağın
+                // toplanıp çift sayılması engellenir.
+                var itemLevelDifference = order.TotalPriceDifference;
+                var overageAmount = itemLevelDifference != 0m
+                    ? itemLevelDifference
+                    : await GetTotalWeightDifferenceAmountAsync(orderId);
 
-                var finalAmount = baseAmount + approvedOverageAmount;
+                var finalAmount = baseAmount + overageAmount;
 
                 _logger.LogDebug("Final tutar hesaplandı: OrderId={OrderId}, Base={Base}, Overage={Overage}, Final={Final}",
-                    orderId, baseAmount, approvedOverageAmount, finalAmount);
+                    orderId, baseAmount, overageAmount, finalAmount);
 
                 return Math.Max(0, finalAmount);
             }

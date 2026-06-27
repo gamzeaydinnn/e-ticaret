@@ -65,9 +65,6 @@ export default function AdminOrders() {
       try {
         if (showLoading) setIsRefreshing(true);
 
-        const couriersData = isStoreAttendant
-          ? await dispatcherGetCouriers()
-          : await CourierService.getAll();
         // Gerçek siparişleri backend'den çek
         const ordersData = await AdminService.getOrders();
         let filteredOrders = Array.isArray(ordersData) ? ordersData : [];
@@ -88,28 +85,37 @@ export default function AdminOrders() {
 
         setOrders(filteredOrders);
 
-        // Kurye listesini set et
-        let courierList = [];
-        if (isStoreAttendant) {
-          // dispatcherGetCouriers { success, data: { couriers: [...] } } döner
-          const result = couriersData;
-          console.log(
-            "🚴 [AdminOrders] StoreAttendant kurye API yanıtı:",
-            result,
-          );
-          if (result?.success && result?.data) {
-            courierList = result.data.couriers || result.data || [];
+        try {
+          const couriersData = isStoreAttendant
+            ? await dispatcherGetCouriers()
+            : await CourierService.getAll();
+
+          // Kurye listesini set et
+          let courierList = [];
+          if (isStoreAttendant) {
+            // dispatcherGetCouriers { success, data: { couriers: [...] } } döner
+            const result = couriersData;
+            console.log(
+              "🚴 [AdminOrders] StoreAttendant kurye API yanıtı:",
+              result,
+            );
+            if (result?.success && result?.data) {
+              courierList = result.data.couriers || result.data || [];
+            } else {
+              courierList = result?.couriers || [];
+            }
           } else {
-            courierList = result?.couriers || [];
+            // CourierService.getAll() direkt array döner
+            courierList = Array.isArray(couriersData)
+              ? couriersData
+              : couriersData?.data || [];
           }
-        } else {
-          // CourierService.getAll() direkt array döner
-          courierList = Array.isArray(couriersData)
-            ? couriersData
-            : couriersData?.data || [];
+          console.log("🚴 [AdminOrders] Final kurye listesi:", courierList);
+          setCouriers(Array.isArray(courierList) ? courierList : []);
+        } catch (courierError) {
+          console.error("[AdminOrders] Kurye listesi yüklenemedi:", courierError);
+          setCouriers([]);
         }
-        console.log("🚴 [AdminOrders] Final kurye listesi:", courierList);
-        setCouriers(Array.isArray(courierList) ? courierList : []);
 
         setLastUpdate(new Date());
       } catch (error) {

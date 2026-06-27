@@ -393,7 +393,9 @@ namespace ECommerce.Business.Services.Sync
                                 .Select(c => c.Name)
                                 .FirstOrDefaultAsync(cancellationToken);
 
-                            product.IsWeightBased = WeightBasedProductRules.IsVariableWeightKgProduct(
+                            // Tek doğruluk kaynağı popülasyonu: birim KG/Gram ise isimde "KG" olmasa
+                            // dahi tartılı işaretlenir (eski isim-heuristiği bunu kaçırıyordu).
+                            product.IsWeightBased = WeightBasedProductRules.DeriveIsWeightBasedForSync(
                                 product.Name,
                                 product.WeightUnit,
                                 categoryName ?? mikro.AnagrupKod ?? mikro.GrupKod);

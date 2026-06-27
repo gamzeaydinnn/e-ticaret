@@ -40,6 +40,28 @@ namespace ECommerce.Tests.Weight
             Assert.False(result);
         }
 
+        [Fact]
+        public void IsVariableWeightKgProduct_ShouldReturnTrue_ForPieceUnitInEligibleCategory()
+        {
+            var result = WeightBasedProductRules.IsVariableWeightKgProduct(
+                "ARMUT DEVECI KG",
+                WeightUnit.Piece,
+                "Meyve");
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void IsVariableWeightKgProduct_ShouldReturnFalse_ForPieceUnitOutsideEligibleCategory()
+        {
+            var result = WeightBasedProductRules.IsVariableWeightKgProduct(
+                "SUPERFRESH MANTI KG",
+                WeightUnit.Piece,
+                "Dondurulmuş Gıda");
+
+            Assert.False(result);
+        }
+
         #region Entity Property Tests
 
         /// <summary>

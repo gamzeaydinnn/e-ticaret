@@ -2,6 +2,7 @@
 // Varyant desteği eklendi - hangi varyantın sepete eklendiği izlenir.
 
 using System;
+using ECommerce.Entities.Enums;
 
 namespace ECommerce.Core.DTOs.Cart
 {
@@ -104,6 +105,16 @@ namespace ECommerce.Core.DTOs.Cart
         /// Birim fiyat
         /// </summary>
         public decimal UnitPrice { get; set; }
+
+        /// <summary>
+        /// Ürün ağırlık bazlı mı satılıyor?
+        /// </summary>
+        public bool IsWeightBased { get; set; }
+
+        /// <summary>
+        /// Ağırlık birimi.
+        /// </summary>
+        public WeightUnit? WeightUnit { get; set; }
 
         /// <summary>
         /// Toplam fiyat

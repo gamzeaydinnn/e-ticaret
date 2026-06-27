@@ -80,7 +80,7 @@ namespace ECommerce.Core.DTOs.Order
         /// <summary>
         /// Adet
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
 
         /// <summary>
         /// Birim fiyat (sipariş anındaki fiyat)
@@ -145,9 +145,17 @@ namespace ECommerce.Core.DTOs.Order
         public decimal RemainingRefundableAmount { get; set; }
 
         /// <summary>
-        /// Toplam fiyat (Quantity * UnitPrice)
+        /// Satır toplam fiyatı.
+        /// Kg bazlı ürünlerde "adet" kavramı olmadığı (Quantity her zaman 1) için tutar,
+        /// tartı sonrası gerçek fiyat (ActualPrice) ya da tahmini fiyat (EstimatedPrice) üzerinden döner.
+        /// NEDEN: Kg ürünlerde "Quantity × UnitPrice" = "1 × TL/kg" yanlış sonuç verir; doğru tutar
+        /// EstimatedPrice/ActualPrice alanlarında saklanır. Adet bazlı ürünlerde klasik çarpım kullanılır.
         /// </summary>
-        public decimal TotalPrice => Quantity * UnitPrice;
+        public decimal TotalPrice => IsWeightBased
+            ? (ActualPrice.HasValue && ActualPrice.Value > 0
+                ? ActualPrice.Value
+                : (EstimatedPrice > 0 ? EstimatedPrice : Quantity * UnitPrice))
+            : Quantity * UnitPrice;
 
         #endregion
 
@@ -162,10 +170,13 @@ namespace ECommerce.Core.DTOs.Order
             : ProductName;
 
         /// <summary>
-        /// Detay satırı
-        /// Örn: "2 x ₺15,99 = ₺31,98"
+        /// Detay satırı.
+        /// Adet bazlı: "2 x ₺15,99 = ₺31,98".
+        /// Kg bazlı: "0,25 kg x ₺120,00/kg = ₺30,00" (miktar EstimatedWeight'ten kg'a çevrilir).
         /// </summary>
-        public string DisplayDetail => $"{Quantity} x ₺{UnitPrice:N2} = ₺{TotalPrice:N2}";
+        public string DisplayDetail => IsWeightBased
+            ? $"{(EstimatedWeight / 1000m):N2} kg x ₺{UnitPrice:N2}/kg = ₺{TotalPrice:N2}"
+            : $"{Quantity} x ₺{UnitPrice:N2} = ₺{TotalPrice:N2}";
 
         #endregion
     }
@@ -189,6 +200,6 @@ namespace ECommerce.Core.DTOs.Order
         /// <summary>
         /// Adet
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
     }
 }

@@ -27,7 +27,7 @@ namespace ECommerce.Core.DTOs.Pricing
         /// <summary>
         /// Ürün adedi
         /// </summary>
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         
         /// <summary>
         /// Birim fiyat

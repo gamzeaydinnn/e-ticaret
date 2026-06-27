@@ -226,7 +226,7 @@ namespace ECommerce.Core.DTOs.Promotions
         public int CategoryId { get; set; }
         public string ProductName { get; set; } = string.Empty;
         public decimal UnitPrice { get; set; }
-        public int Quantity { get; set; }
+        public decimal Quantity { get; set; }
         public decimal LineTotal => UnitPrice * Quantity;
     }
 }

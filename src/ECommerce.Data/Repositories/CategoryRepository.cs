@@ -93,5 +93,77 @@ namespace ECommerce.Data.Repositories
                 .ToListAsync();
         }
 
+        /// <summary>
+        /// Kategori yolu (breadcrumb) için üst kategorileri döndürür
+        /// Verilen kategoriden başlayarak root'a kadar tüm üst kategorileri getirir
+        /// </summary>
+        public async Task<IEnumerable<Category>> GetCategoryPathAsync(int categoryId)
+        {
+            var path = new List<Category>();
+            var currentCategory = await _dbSet
+                .Include(c => c.Parent)
+                .FirstOrDefaultAsync(c => c.Id == categoryId);
+
+            while (currentCategory != null)
+            {
+                path.Insert(0, currentCategory); // Başa ekle (root → child sırası)
+                if (currentCategory.ParentId.HasValue)
+                {
+                    currentCategory = await _dbSet
+                        .Include(c => c.Parent)
+                        .FirstOrDefaultAsync(c => c.Id == currentCategory.ParentId.Value);
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return path;
+        }
+
+        /// <summary>
+        /// Kategorinin alt kategorisi olup olmadığını kontrol eder
+        /// </summary>
+        public async Task<bool> HasSubCategoriesAsync(int categoryId)
+        {
+            return await _dbSet.AnyAsync(c => c.ParentId == categoryId);
+        }
+
+        /// <summary>
+        /// Kategoriye bağlı ürün sayısını döndürür (sadece aktif ürünler)
+        /// </summary>
+        public async Task<int> GetProductCountAsync(int categoryId)
+        {
+            return await _context.Products
+                .Where(p => p.CategoryId == categoryId && p.IsActive)
+                .CountAsync();
+        }
+
+        /// <summary>
+        /// Tüm kategorileri Parent ve SubCategories ilişkileri ile birlikte döndürür (sadece aktif)
+        /// </summary>
+        public async Task<IEnumerable<Category>> GetAllWithRelationsAsync()
+        {
+            return await _dbSet
+                .Include(c => c.Parent)
+                .Include(c => c.SubCategories)
+                .Where(c => c.IsActive)
+                .OrderBy(c => c.SortOrder)
+                .ToListAsync();
+        }
+
+        /// <summary>
+        /// Tüm kategorileri Parent ve SubCategories ilişkileri ile birlikte döndürür (pasifler dahil - admin için)
+        /// </summary>
+        public async Task<IEnumerable<Category>> GetAllWithRelationsIncludingInactiveAsync()
+        {
+            return await _dbSet
+                .Include(c => c.Parent)
+                .Include(c => c.SubCategories)
+                .OrderBy(c => c.SortOrder)
+                .ToListAsync();
+        }
+
     }
 }

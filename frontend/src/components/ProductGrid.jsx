@@ -19,6 +19,8 @@ import WeightSelectionModal, {
 } from "./WeightSelectionModal";
 import "./ProductGrid.css";
 
+const PLACEHOLDER_PRODUCT_IMAGE = "/images/placeholder.png";
+
 const DEMO_PRODUCTS = [
   // Et ve Et Ürünleri (categoryId: 1)
   {
@@ -1153,21 +1155,25 @@ export default function ProductGrid({
                                     "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
                                   transition: "all 0.3s ease",
                                 }}
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = PLACEHOLDER_PRODUCT_IMAGE;
+                                }}
                               />
                             ) : (
-                              <div
-                                className="d-flex align-items-center justify-content-center"
+                              <img
+                                src={PLACEHOLDER_PRODUCT_IMAGE}
+                                alt={p.name || "Ürün görseli"}
+                                className="product-image"
                                 style={{
-                                  width: "80px",
-                                  height: "80px",
-                                  background: "#ffffff",
-                                  borderRadius: "12px",
-                                  fontSize: "2rem",
-                                  border: "1px solid #e9ecef",
+                                  maxHeight: "100px",
+                                  maxWidth: "100px",
+                                  objectFit: "contain",
+                                  filter:
+                                    "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
+                                  transition: "all 0.3s ease",
                                 }}
-                              >
-                                🛒
-                              </div>
+                              />
                             )}
                           </div>
                         </div>

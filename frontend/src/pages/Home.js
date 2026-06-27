@@ -37,6 +37,32 @@ import AddToCartModal from "../components/AddToCartModal";
 // GÜVENLİK: Production'da debug log'ları kapalı
 const DEBUG = process.env.NODE_ENV === "development";
 
+// ============================================
+// CACHE YÖNETİMİ — localStorage TTL cache
+// ============================================
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 dakika
+
+function cacheSet(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() }));
+  } catch { /* storage dolu olabilir, yoksay */ }
+}
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL_MS) {
+      localStorage.removeItem(key); // süresi dolmuş
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   // ============================================
   // STATE YÖNETİMİ
@@ -87,30 +113,55 @@ export default function Home() {
   // VERİ YÜKLEME FONKSİYONU
   // ============================================
 
-  const loadData = useCallback(async () => {
-    // Kategorileri yükle
+  const loadData = useCallback(async (forceRefresh = false) => {
+    // ─── KATEGORİLER ───────────────────────────────────────────
     setCategoriesLoading(true);
+    const cachedCats = !forceRefresh && cacheGet("home_categories");
+    if (cachedCats) {
+      setCategories(cachedCats);
+      setCategoriesLoading(false);
+    }
     try {
-      const cats = await categoryServiceReal.getActive();
-      DEBUG && console.log("[Home] Categories from API:", cats?.length || 0);
-      setCategories(cats || []);
+      const tree = await categoryServiceReal.getCategoryTree();
+      DEBUG && console.log("[Home] Category tree from API:", tree?.length || 0);
+      const rootCats = (tree || []).filter((cat) => cat.isActive !== false);
+      setCategories(rootCats);
+      cacheSet("home_categories", rootCats);
     } catch (err) {
       console.error("[Home] Categories error:", err.message);
-      setCategories([]);
+      if (!cachedCats) {
+        try {
+          const all = await categoryServiceReal.getActive();
+          setCategories((all || []).filter((c) => !c.parentId));
+        } catch {
+          setCategories([]);
+        }
+      }
     } finally {
       setCategoriesLoading(false);
     }
 
-    // Ürünleri yükle
-    setProductLoading(true);
+    // ─── ÜRÜNLER ──────────────────────────────────────────────
+    const cachedProducts = !forceRefresh && cacheGet("home_products");
+    if (cachedProducts) {
+      // Cache'den anında göster — spinner kaldır
+      setFeatured(cachedProducts);
+      setProductLoading(false);
+      setProductError(null);
+    } else {
+      setProductLoading(true);
+    }
     try {
       const items = await ProductService.list();
       setFeatured(items || []);
       setProductError(null);
+      cacheSet("home_products", items || []);
     } catch (err) {
       console.error("[Home] Products error:", err.message);
-      setProductError(err?.message || "Ürünler yüklenemedi");
-      setFeatured([]);
+      if (!cachedProducts) {
+        setProductError(err?.message || "Ürünler yüklenemedi");
+        setFeatured([]);
+      }
     } finally {
       setProductLoading(false);
     }

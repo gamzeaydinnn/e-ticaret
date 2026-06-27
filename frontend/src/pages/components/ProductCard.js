@@ -1,5 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import {
+  isStrictVariableWeightProduct,
+  toWeightBasedProductCandidate,
+} from "../../utils/weightBasedProduct";
 
 /**
  * Ürünleri listelerde göstermek için kullanılan modern ve yeniden kullanılabilir kart bileşeni.
@@ -91,6 +95,10 @@ export default function ProductCard({
   };
 
   const campaignBadge = getCampaignBadgeInfo();
+  const isWeightBasedProduct = isStrictVariableWeightProduct(
+    toWeightBasedProductCandidate(null, product),
+  );
+  const priceSuffix = isWeightBasedProduct ? " /kg" : "";
 
   // Buton tıklamalarının Link'i tetiklemesini engellemek için.
   const handleFavoriteClick = (e) => {
@@ -118,7 +126,7 @@ export default function ProductCard({
     e.preventDefault();
     const url = `${window.location.origin}/product/${product.id}`;
     const title = product.name;
-    const text = `${product.name} - ${Number(product.price).toFixed(2)} TL`;
+    const text = `${product.name} - ${Number(product.price).toFixed(2)} TL${priceSuffix}`;
     try {
       if (navigator.share) {
         await navigator.share({ title, text, url });
@@ -177,7 +185,7 @@ export default function ProductCard({
         {/* Badge - Sol Üst (Normal veya Kampanya) */}
         {(product.badge || campaignBadge) && (
           <div
-            className="position-absolute top-0 start-0 p-2"
+            className="position-absolute top-0 start-0 p-1"
             style={{ zIndex: 3 }}
           >
             {/* Kampanya badge'i öncelikli */}
@@ -187,19 +195,19 @@ export default function ProductCard({
                 style={{
                   background: campaignBadge.color,
                   color: "white",
-                  padding: "4px 10px",
-                  borderRadius: "12px",
-                  fontSize: "0.65rem",
+                  padding: "3px 8px",
+                  borderRadius: "10px",
+                  fontSize: "0.55rem",
                   fontWeight: "700",
                   boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "3px",
                 }}
               >
                 <i
                   className={`fas ${campaignBadge.icon}`}
-                  style={{ fontSize: "0.6rem" }}
+                  style={{ fontSize: "0.5rem" }}
                 ></i>
                 {campaignBadge.text}
               </span>
@@ -215,9 +223,9 @@ export default function ProductCard({
                           ? "linear-gradient(135deg, #28a745, #20c997)"
                           : "linear-gradient(135deg, #ffc107, #fd7e14)",
                     color: "white",
-                    padding: "3px 10px",
-                    borderRadius: "12px",
-                    fontSize: "0.65rem",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                    fontSize: "0.55rem",
                     fontWeight: "700",
                     boxShadow: "0 2px 6px rgba(255, 107, 53, 0.3)",
                   }}
@@ -233,8 +241,8 @@ export default function ProductCard({
         <div
           className="product-image-container"
           style={{
-            height: "160px",
-            minHeight: "160px",
+            height: "120px",
+            minHeight: "120px",
             background: "#ffffff",
             position: "relative",
             overflow: "hidden",
@@ -245,7 +253,7 @@ export default function ProductCard({
             style={{
               transition: "transform 0.4s ease",
               position: "relative",
-              padding: "12px",
+              padding: "8px",
             }}
           >
             <img
@@ -253,8 +261,8 @@ export default function ProductCard({
               alt={product.name}
               className="product-image"
               style={{
-                maxHeight: "130px",
-                maxWidth: "130px",
+                maxHeight: "100px",
+                maxWidth: "100px",
                 objectFit: "contain",
                 filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.1))",
               }}
@@ -264,7 +272,7 @@ export default function ProductCard({
 
         {/* Kart Gövdesi */}
         <div
-          className="card-body p-3 d-flex flex-column"
+          className="card-body p-2 d-flex flex-column"
           style={{
             background: "#ffffff",
             flexGrow: 1,
@@ -272,17 +280,17 @@ export default function ProductCard({
         >
           {/* Puanlama */}
           {product.rating && (
-            <div className="d-flex align-items-center mb-2">
-              <div className="star-rating me-2">
+            <div className="d-flex align-items-center mb-1">
+              <div className="star-rating me-1">
                 {[...Array(5)].map((_, i) => (
                   <i
                     key={i}
                     className={`fas fa-star ${i < Math.floor(product.rating) ? "text-warning" : "text-muted"}`}
-                    style={{ fontSize: "0.65rem" }}
+                    style={{ fontSize: "0.55rem" }}
                   ></i>
                 ))}
               </div>
-              <small className="text-muted" style={{ fontSize: "0.7rem" }}>
+              <small className="text-muted" style={{ fontSize: "0.6rem" }}>
                 ({product.reviewCount})
               </small>
             </div>
@@ -292,15 +300,15 @@ export default function ProductCard({
           <h6
             className="product-title mb-2"
             style={{
-              height: "42px",
-              fontSize: "0.875rem",
+              height: "36px",
+              fontSize: "0.75rem",
               fontWeight: "600",
               color: "#2c3e50",
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",
               overflow: "hidden",
-              lineHeight: "1.4",
+              lineHeight: "1.3",
             }}
           >
             {product.name}
@@ -313,14 +321,14 @@ export default function ProductCard({
                 <div>
                   <div className="d-flex align-items-center mb-1">
                     <span
-                      className="old-price me-2"
+                      className="old-price me-1"
                       style={{
-                        fontSize: "0.75rem",
+                        fontSize: "0.65rem",
                         textDecoration: "line-through",
                         color: "#6c757d",
                       }}
                     >
-                      {product.originalPrice.toFixed(2)} TL
+                      {product.originalPrice.toFixed(2)} TL{priceSuffix}
                     </span>
                     {product.discountPercentage > 0 && (
                       <span
@@ -329,9 +337,9 @@ export default function ProductCard({
                           background:
                             "linear-gradient(135deg, #dc3545, #c82333)",
                           color: "white",
-                          padding: "2px 6px",
-                          borderRadius: "10px",
-                          fontSize: "0.65rem",
+                          padding: "1px 4px",
+                          borderRadius: "8px",
+                          fontSize: "0.55rem",
                           fontWeight: "700",
                         }}
                       >
@@ -342,7 +350,7 @@ export default function ProductCard({
                   <div
                     className="current-price"
                     style={{
-                      fontSize: "1.25rem",
+                      fontSize: "1rem",
                       fontWeight: "800",
                       background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
                       backgroundClip: "text",
@@ -350,14 +358,14 @@ export default function ProductCard({
                       WebkitTextFillColor: "transparent",
                     }}
                   >
-                    {product.price.toFixed(2)} TL
+                    {product.price.toFixed(2)} TL{priceSuffix}
                   </div>
                 </div>
               ) : (
                 <div
                   className="current-price"
                   style={{
-                    fontSize: "1.25rem",
+                    fontSize: "1rem",
                     fontWeight: "800",
                     background: "linear-gradient(135deg, #28a745, #20c997)",
                     backgroundClip: "text",
@@ -365,7 +373,7 @@ export default function ProductCard({
                     WebkitTextFillColor: "transparent",
                   }}
                 >
-                  {product.price.toFixed(2)} TL
+                  {product.price.toFixed(2)} TL{priceSuffix}
                 </div>
               )}
             </div>
@@ -386,8 +394,8 @@ export default function ProductCard({
               : "rgba(255, 255, 255, 0.9)",
             border: "none",
             borderRadius: "50%",
-            width: "32px",
-            height: "32px",
+            width: "28px",
+            height: "28px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -396,7 +404,7 @@ export default function ProductCard({
             boxShadow: isFavorite
               ? "0 3px 12px rgba(255, 107, 53, 0.4)"
               : "none",
-            fontSize: "0.8rem",
+            fontSize: "0.7rem",
           }}
         >
           <i className={isFavorite ? "fas fa-heart" : "far fa-heart"}></i>
@@ -405,7 +413,7 @@ export default function ProductCard({
 
       {/* Sepete Ekle Butonu - Kartın en altında */}
       <div
-        className="action-buttons p-3 pt-0"
+        className="action-buttons p-2 pt-0"
         style={{ marginTop: "auto", position: "relative", zIndex: 10 }}
       >
         <button
@@ -415,9 +423,9 @@ export default function ProductCard({
           style={{
             background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
             border: "none",
-            borderRadius: "20px",
-            padding: "10px 20px",
-            fontSize: "0.825rem",
+            borderRadius: "16px",
+            padding: "8px 14px",
+            fontSize: "0.7rem",
             fontWeight: "700",
             color: "white",
             transition: "all 0.3s ease",
@@ -429,7 +437,7 @@ export default function ProductCard({
         >
           <i
             className="fas fa-shopping-cart me-1"
-            style={{ fontSize: "0.75rem" }}
+            style={{ fontSize: "0.65rem" }}
           ></i>
           Sepete Ekle
         </button>
@@ -438,17 +446,17 @@ export default function ProductCard({
             className="btn w-100 mt-2"
             onClick={handleShare}
             style={{
-              borderRadius: "20px",
+              borderRadius: "16px",
               border: "1px solid rgba(0,0,0,0.1)",
               background: "#fff",
               fontWeight: "600",
-              padding: "8px 16px",
-              fontSize: "0.75rem",
+              padding: "6px 12px",
+              fontSize: "0.65rem",
             }}
           >
             <i
               className="fas fa-share-alt me-1"
-              style={{ fontSize: "0.7rem" }}
+              style={{ fontSize: "0.6rem" }}
             ></i>
             Paylaş
           </button>

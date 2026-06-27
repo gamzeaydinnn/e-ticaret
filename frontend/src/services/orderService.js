@@ -140,8 +140,14 @@ export const OrderService = {
         : null,
     };
 
+    const requestBody = JSON.stringify(finalPayload);
+
     try {
-      return await api.post(`${base}/checkout`, finalPayload);
+      return await api.post(`${base}/checkout`, requestBody, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
     } catch (error) {
       if (error.status === 409 && error.raw?.response?.data) {
         // Idempotent sipariş: mevcut order yanıtını döndür

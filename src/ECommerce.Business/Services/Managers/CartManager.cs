@@ -5,8 +5,10 @@ using System;
 using Microsoft.Extensions.Logging;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.DTOs.Cart;
+using ECommerce.Business.Helpers;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -325,11 +327,16 @@ namespace ECommerce.Business.Services.Managers
         {
             var cartItems = items.Select(i =>
             {
-                // Fiyat hesaplama: Önce varyant fiyatı, sonra ürün özel fiyatı, en son normal fiyat
-                var unitPrice = i.ProductVariant?.Price 
-                    ?? i.Product?.SpecialPrice 
-                    ?? i.Product?.Price 
-                    ?? 0m;
+                // ✅ Tek doğruluk kaynağı: kg tespiti WeightBasedProductResolver ile yapılır.
+                // NEDEN: Daha önce buradaki "geniş" kural (IsWeightBased || PricePerUnit>0 || ...)
+                // PricingEngine'in "dar" kuralından farklıydı; sepette görünen tutar ile siparişte/3DS'te
+                // hesaplanan tutar uyuşmuyordu. Artık her iki katman da aynı kararı kullanır.
+                var isWeightBased = WeightBasedProductResolver.ResolveIsWeightBased(i.Product);
+
+                // Fiyat hesaplama: Varyant fiyatı her zaman önceliklidir; yoksa resolver'ın
+                // (kg ise PricePerUnit, değilse SpecialPrice/Price) belirlediği birim fiyat kullanılır.
+                var unitPrice = i.ProductVariant?.Price
+                    ?? WeightBasedProductResolver.ResolveUnitPrice(i.Product, isWeightBased);
 
                 return new CartItemDto
                 {
@@ -338,6 +345,8 @@ namespace ECommerce.Business.Services.Managers
                     VariantId = i.ProductVariantId,
                     Quantity = i.Quantity,
                     UnitPrice = unitPrice,
+                    IsWeightBased = isWeightBased,
+                    WeightUnit = i.Product?.WeightUnit,
                     // Ek bilgiler (frontend için)
                     ProductName = i.Product?.Name ?? string.Empty,
                     ProductImage = i.Product?.ImageUrl ?? string.Empty,

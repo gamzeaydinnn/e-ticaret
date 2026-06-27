@@ -21,6 +21,11 @@ import {
   isStrictVariableWeightProduct,
   toWeightBasedProductCandidate,
 } from "../utils/weightBasedProduct";
+import {
+  getEffectiveUnitPrice,
+  isResolvedWeightBasedProduct,
+  normalizeWeightStepQuantity,
+} from "../utils/weightPricing";
 
 const CartContext = createContext();
 
@@ -170,14 +175,19 @@ export const CartProvider = ({ children }) => {
         return { success: false, error: "Bu ürün şu an sepete eklenemiyor." };
       }
 
-      const normalizedQuantity = Math.max(
-        0.25,
-        Math.round(Number(quantity || 1) * 100) / 100,
-      );
       const variantId = variantInfo?.variantId || null;
       const isWeightBasedProduct = isStrictVariableWeightProduct(
         toWeightBasedProductCandidate(null, product),
       );
+
+      // NEDEN: Miktar normalizasyonu ürün tipine göre AYRIŞMALI.
+      // - Kg/ağırlık bazlı ürün: minimum 0.25 kg, 0.25 kg adımlarına yuvarla.
+      // - Adet bazlı ürün: kesirli adet anlamsızdır; en az 1, tam sayıya yuvarla.
+      // Eski kod tüm ürünlere min 0.25 uyguluyordu; bu, adet ürünlerde 0.25 gibi geçersiz
+      // miktarlara ve sepet/3DS tutar tutarsızlıklarına yol açabiliyordu.
+      const normalizedQuantity = isWeightBasedProduct
+        ? normalizeWeightStepQuantity(quantity)
+        : Math.max(1, Math.round(Number(quantity) || 1));
 
       try {
         if (isWeightBasedProduct) {
@@ -305,6 +315,23 @@ export const CartProvider = ({ children }) => {
       };
 
       const previousCartItems = cartItems;
+      const existingItem = cartItems.find(matchesCartItem);
+
+      // Ağırlık bazlı tespiti: backend bayrağı + savunmacı kesirli miktar kontrolü.
+      // NEDEN: Mevcut ya da hedeflenen miktar kesirli ise (örn. 0.25, 0.75) bu yalnızca
+      // kg ürününde mümkündür; bayrak gelmese bile doğru adımlama yapılır.
+      const isFractional = (value) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) && Math.abs(numeric - Math.round(numeric)) > 1e-9;
+      };
+      const isWeightBasedItem =
+        isResolvedWeightBasedProduct(existingItem, existingItem?.product) ||
+        isFractional(existingItem?.quantity) ||
+        isFractional(quantity);
+
+      const normalizedQuantity = isWeightBasedItem
+        ? normalizeWeightStepQuantity(quantity)
+        : Math.max(1, Math.round(Number(quantity) || 1));
 
       const applyOptimisticQuantity = (nextQuantity) => {
         // NEDEN: Kullanıcı ilk tıklamada yeni miktarı görmeli; backend dönüşünü
@@ -322,21 +349,25 @@ export const CartProvider = ({ children }) => {
       };
 
       try {
-        applyOptimisticQuantity(quantity);
+        applyOptimisticQuantity(normalizedQuantity);
 
         if (isAuthenticated) {
-          const item = cartItems.find(matchesCartItem);
+          const item = existingItem;
           if (item?.id) {
             await CartService.updateItem(
               item.id,
               productId,
-              quantity,
+              normalizedQuantity,
               variantId,
             );
           }
         } else {
           // Misafir kullanıcı
-          await CartService.updateGuestCartItem(productId, quantity, variantId);
+          await CartService.updateGuestCartItem(
+            productId,
+            normalizedQuantity,
+            variantId,
+          );
         }
 
         await loadCart();
@@ -381,11 +412,7 @@ export const CartProvider = ({ children }) => {
   // ============================================================
   const getCartTotal = useCallback(() => {
     return cartItems.reduce((total, item) => {
-      const price =
-        item.unitPrice ||
-        item.product?.specialPrice ||
-        item.product?.price ||
-        0;
+      const price = getEffectiveUnitPrice(item, item.product);
       return total + price * (item.quantity || 0);
     }, 0);
   }, [cartItems]);
@@ -488,6 +515,15 @@ export const CartProvider = ({ children }) => {
 function mapBackendItem(item) {
   const product = item.product || {};
   const variantId = item.productVariantId || item.variantId || null;
+  const isWeightBased = isResolvedWeightBasedProduct(item, product);
+  const unitPrice = getEffectiveUnitPrice(item, product);
+  const pricePerUnit = Number(
+    item.pricePerUnit ??
+      item.PricePerUnit ??
+      product.pricePerUnit ??
+      product.PricePerUnit ??
+      0,
+  ) || 0;
 
   return {
     id: item.id,
@@ -495,12 +531,10 @@ function mapBackendItem(item) {
     variantId,
     quantity: Number(item.quantity) || 0,
     isActive: item.isActive ?? item.product?.isActive ?? true,
-    unitPrice:
-      item.unitPrice || item.product?.specialPrice || item.product?.price || 0,
+    unitPrice,
+    pricePerUnit,
     // Kg bazlı ürünler için UI'nin tek kaynaktan karar verebilmesi için normalize edilir.
-    isWeightBased: isStrictVariableWeightProduct(
-      toWeightBasedProductCandidate(item, product),
-    ),
+    isWeightBased,
     weightUnit: item.weightUnit || product.weightUnit || null,
     // Ürün bilgileri (backend'den gelirse)
     productName: item.productName || item.product?.name,
@@ -513,10 +547,11 @@ function mapBackendItem(item) {
       id: item.productId,
       name: item.productName,
       imageUrl: item.productImageUrl || item.productImage,
-      price: item.unitPrice,
-      specialPrice: item.unitPrice,
+      price: unitPrice,
+      specialPrice: unitPrice,
+      pricePerUnit,
       isActive: item.isActive ?? true,
-      isWeightBased: item.isWeightBased === true,
+      isWeightBased,
       categoryName: item.categoryName,
       weightUnit: item.weightUnit || null,
     },

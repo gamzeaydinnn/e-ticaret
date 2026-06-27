@@ -266,14 +266,14 @@ namespace ECommerce.API.Controllers.VpnTest
     /// </summary>
     public class ConfigResponse
     {
-        public string ApiUrl { get; set; }
-        public string FirmaKodu { get; set; }
-        public string KullaniciKodu { get; set; }
-        public string CalismaYili { get; set; }
+        public string ApiUrl { get; set; } = string.Empty;
+        public string FirmaKodu { get; set; } = string.Empty;
+        public string KullaniciKodu { get; set; } = string.Empty;
+        public string CalismaYili { get; set; } = string.Empty;
         public int DefaultDepoNo { get; set; }
         public int RequestTimeoutSeconds { get; set; }
         public bool IsVpnTest { get; set; }
-        public string Message { get; set; }
+        public string Message { get; set; } = string.Empty;
     }
 
     /// <summary>
@@ -282,9 +282,9 @@ namespace ECommerce.API.Controllers.VpnTest
     public class HealthCheckResponse
     {
         public DateTime Timestamp { get; set; }
-        public string Status { get; set; }
-        public string Message { get; set; }
-        public string ApiUrl { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string ApiUrl { get; set; } = string.Empty;
         public bool IsVpnTest { get; set; }
         public bool IsConnected { get; set; }
     }

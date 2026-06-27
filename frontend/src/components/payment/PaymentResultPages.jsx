@@ -567,7 +567,7 @@ export const ThreeDSecureCallbackPage = () => {
           <p>{error}</p>
           <div className="result-actions">
             <button
-              onClick={() => navigate("/checkout")}
+              onClick={() => navigate("/payment")}
               className="primary-btn"
             >
               Ödemeyi Tekrarla
