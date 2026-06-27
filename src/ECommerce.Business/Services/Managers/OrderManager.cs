@@ -798,10 +798,16 @@ namespace ECommerce.Business.Services.Managers
                 var shippingMethod = NormalizeShippingMethod(dto.ShippingMethod);
                 var shippingCost = await ComputeShippingCostAsync(shippingMethod);
 
-                var cartInputs = dto.OrderItems.Select(i => new CartItemInputDto
+                var cartInputs = dto.OrderItems.Select(i =>
                 {
-                    ProductId = i.ProductId,
-                    Quantity = i.Quantity
+                    checkoutProducts.TryGetValue(i.ProductId, out var product);
+                    var isWeightBased = WeightBasedProductResolver.ResolveIsWeightBased(product);
+
+                    return new CartItemInputDto
+                    {
+                        ProductId = i.ProductId,
+                        Quantity = BuildPricingQuantity(i, product, isWeightBased)
+                    };
                 }).ToList();
 
                 var normalizedCoupon = string.IsNullOrWhiteSpace(dto.CouponCode)
@@ -2243,6 +2249,27 @@ namespace ECommerce.Business.Services.Managers
             };
 
             return Math.Round(pricingQuantity * pricePerUnit, 2, MidpointRounding.AwayFromZero);
+        }
+
+        private static decimal BuildPricingQuantity(OrderItemDto item, Product? product, bool isWeightBased)
+        {
+            if (!isWeightBased || product == null)
+            {
+                return item.Quantity;
+            }
+
+            var estimatedWeight = item.EstimatedWeight > 0
+                ? item.EstimatedWeight
+                : item.Quantity * 1000m;
+
+            var quantity = product.WeightUnit switch
+            {
+                WeightUnit.Kilogram or WeightUnit.Liter => estimatedWeight / 1000m,
+                WeightUnit.Gram or WeightUnit.Milliliter => estimatedWeight,
+                _ => item.Quantity
+            };
+
+            return quantity > 0 ? quantity : item.Quantity;
         }
 
         /// <summary>
