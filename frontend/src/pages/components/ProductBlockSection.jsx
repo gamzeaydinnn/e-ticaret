@@ -520,7 +520,9 @@ const ProductBlockSection = ({
   const scroll = (direction) => {
     const container = scrollContainerRef.current;
     if (container) {
-      const scrollAmount = 240;
+      const card = container.querySelector(".product-block-card");
+      const cardWidth = card?.offsetWidth || 132;
+      const scrollAmount = Math.max(cardWidth + 10, 120);
       container.scrollBy({
         left: direction === "left" ? -scrollAmount : scrollAmount,
         behavior: "smooth",

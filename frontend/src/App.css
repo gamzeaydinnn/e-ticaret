@@ -3822,78 +3822,78 @@ html {
 
 /* Product Card Responsive Styles */
 /* NOT: Ürün kartları kullanıcı talebiyle büyütüldü (Migros benzeri büyük görünüm).
-   Tüm breakpoint'lerde max-width ve min-height değerleri artırıldı. */
+   Ana sayfa blok kartları (.product-block-card) kendi CSS dosyasında yönetilir. */
 @media (max-width: 1400px) {
-  .modern-product-card {
+  .modern-product-card:not(.product-block-card) {
     max-width: 320px !important;
     min-height: 480px !important;
   }
 }
 
 @media (max-width: 1200px) {
-  .modern-product-card {
+  .modern-product-card:not(.product-block-card) {
     max-width: 300px !important;
     min-height: 460px !important;
   }
 }
 
 @media (max-width: 992px) {
-  .modern-product-card {
+  .modern-product-card:not(.product-block-card) {
     max-width: 270px !important;
     min-height: 430px !important;
   }
 
-  .modern-product-card .card-body {
+  .modern-product-card:not(.product-block-card) .card-body {
     padding: 10px !important;
   }
 }
 
 @media (max-width: 768px) {
-  .modern-product-card {
+  .modern-product-card:not(.product-block-card) {
     max-width: 240px !important;
     min-height: 400px !important;
   }
 
-  .modern-product-card .product-title {
+  .modern-product-card:not(.product-block-card) .product-title {
     font-size: 0.8rem !important;
     height: 38px !important;
   }
 
-  .modern-product-card .current-price {
+  .modern-product-card:not(.product-block-card) .current-price {
     font-size: 1.1rem !important;
   }
 }
 
 @media (max-width: 576px) {
-  .modern-product-card {
-    max-width: 210px !important;
-    min-height: 380px !important;
+  .modern-product-card:not(.product-block-card) {
+    max-width: none !important;
+    min-height: 300px !important;
   }
 
-  .modern-product-card .product-image-container {
-    height: 170px !important;
+  .modern-product-card:not(.product-block-card) .product-image-container {
+    height: 130px !important;
   }
 
-  .modern-product-card img {
-    max-height: 150px !important;
-    max-width: 150px !important;
+  .modern-product-card:not(.product-block-card) img {
+    max-height: 120px !important;
+    max-width: 120px !important;
   }
 
-  .modern-product-card .card-body {
+  .modern-product-card:not(.product-block-card) .card-body {
     padding: 8px !important;
-    min-height: 180px !important;
+    min-height: auto !important;
   }
 
-  .modern-product-card .product-title {
+  .modern-product-card:not(.product-block-card) .product-title {
     font-size: 0.75rem !important;
     height: 36px !important;
   }
 
-  .modern-product-card .action-buttons {
+  .modern-product-card:not(.product-block-card) .action-buttons {
     padding: 8px !important;
   }
 
-  .modern-product-card .modern-add-btn {
+  .modern-product-card:not(.product-block-card) .modern-add-btn {
     padding: 8px 16px !important;
     font-size: 0.75rem !important;
   }

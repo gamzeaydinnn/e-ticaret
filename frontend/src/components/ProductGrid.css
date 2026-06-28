@@ -343,8 +343,8 @@
   }
 
   .product-grid-card-wrapper {
-    width: 175px;
-    min-width: 175px;
+    width: 148px;
+    min-width: 148px;
   }
 
   .product-grid-header {
@@ -370,15 +370,14 @@
     padding: 6px 10px;
   }
 
-  /* Mobilde kart içi stiller — kart ve görsel büyütüldü (Migros benzeri his) */
   .product-grid-card-wrapper .modern-product-card {
-    min-height: 320px !important;
+    min-height: 260px !important;
     border-radius: 12px !important;
   }
 
   .product-grid-card-wrapper .product-image-container {
-    height: 150px !important;
-    min-height: 150px !important;
+    height: 110px !important;
+    min-height: 110px !important;
   }
 
   .product-grid-card-wrapper .card-body {
