@@ -352,6 +352,26 @@
   min-height: var(--block-image-height);
   max-height: var(--block-image-height);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.product-block-section .product-block-card .product-image-container .image-wrapper {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.product-block-section .product-block-card .product-image-container img,
+.product-block-section .product-block-card-image {
+  display: block;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: contain !important;
+  margin: 0 auto;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.08));
 }
 
 /* Slider Arrows */
@@ -412,17 +432,17 @@
 
   .product-block-container {
     padding: 0 15px;
+    align-items: start;
   }
 
   .product-block-section {
-    --block-card-width: 200px;
-    --block-image-height: 150px;
-    --block-card-height: 340px;
+    --block-card-width: 168px;
+    --block-image-height: 118px;
+    --block-card-height: 318px;
   }
 
   .product-block-container.with-poster {
     grid-template-columns: var(--block-card-width) minmax(0, 1fr);
-    align-items: start;
   }
 
   .slider-arrow {
@@ -442,15 +462,15 @@
 
 /* =====================================================
    RESPONSIVE - MOBİL
-   Poster üstte, altta yatay kaydırmalı küçük kartlar
+   Poster solda, ürünler yanında — aynı kutu boyutu
    ===================================================== */
 @media (max-width: 768px) {
   .product-block-section {
     padding: 20px 0;
     margin-bottom: 15px;
-    --block-card-width: 132px;
-    --block-image-height: 92px;
-    --block-card-height: 232px;
+    --block-card-width: 128px;
+    --block-image-height: 90px;
+    --block-card-height: 252px;
   }
 
   .product-block-header {
@@ -487,39 +507,36 @@
   }
 
   .product-block-container {
+    display: grid;
     padding: 0 12px;
-    gap: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
+    gap: 10px;
+    align-items: start;
   }
 
   .product-block-container.with-poster {
-    display: flex;
-    flex-direction: column;
-    grid-template-columns: none;
+    grid-template-columns: var(--block-card-width) minmax(0, 1fr);
   }
 
   .product-block-poster {
-    width: 100% !important;
-    min-width: 100% !important;
-    max-width: 100% !important;
-    height: 112px !important;
-    min-height: 112px !important;
-    max-height: 112px !important;
+    width: var(--block-card-width) !important;
+    min-width: var(--block-card-width) !important;
+    max-width: var(--block-card-width) !important;
+    height: var(--block-card-height) !important;
+    min-height: var(--block-card-height) !important;
+    max-height: var(--block-card-height) !important;
     border-radius: 12px !important;
-    align-self: stretch !important;
+    align-self: start !important;
+    flex-shrink: 0 !important;
   }
 
   .product-block-content {
-    width: 100%;
-    min-height: auto !important;
-    align-self: stretch;
+    align-self: start;
+    min-height: var(--block-card-height);
   }
 
   .products-slider-wrapper {
     align-items: flex-start;
-    min-height: auto !important;
+    min-height: var(--block-card-height);
   }
 
   .products-scroll-container {
@@ -527,7 +544,7 @@
     gap: 10px;
     padding: 0;
     align-items: stretch;
-    min-height: auto !important;
+    min-height: var(--block-card-height);
   }
 
   .product-block-section .product-block-card,
@@ -539,12 +556,17 @@
     min-height: var(--block-card-height) !important;
     max-height: var(--block-card-height) !important;
     scroll-snap-align: start;
+    align-self: stretch;
   }
 
   .product-block-section .product-block-card .product-image-container {
     height: var(--block-image-height) !important;
     min-height: var(--block-image-height) !important;
     max-height: var(--block-image-height) !important;
+  }
+
+  .product-block-section .product-block-card .product-image-container .image-wrapper {
+    padding: 6px;
   }
 
   .slider-arrow {
@@ -587,9 +609,9 @@
 @media (max-width: 576px) {
   .product-block-section {
     padding: 15px 0;
-    --block-card-width: 124px;
-    --block-image-height: 86px;
-    --block-card-height: 220px;
+    --block-card-width: 118px;
+    --block-image-height: 82px;
+    --block-card-height: 238px;
   }
 
   .product-block-header {
@@ -625,13 +647,26 @@
 
   .product-block-container {
     padding: 0 10px;
-    gap: 10px;
+    gap: 8px;
+    align-items: start;
+  }
+
+  .product-block-container.with-poster {
+    grid-template-columns: var(--block-card-width) minmax(0, 1fr);
   }
 
   .product-block-poster {
-    height: 96px !important;
-    min-height: 96px !important;
-    max-height: 96px !important;
+    width: var(--block-card-width) !important;
+    min-width: var(--block-card-width) !important;
+    max-width: var(--block-card-width) !important;
+    height: var(--block-card-height) !important;
+    min-height: var(--block-card-height) !important;
+    max-height: var(--block-card-height) !important;
+  }
+
+  .product-block-poster .poster-image {
+    object-fit: cover;
+    object-position: center;
   }
 
   .products-scroll-container {
@@ -681,6 +716,10 @@
   .product-block-section .savings-badge,
   .product-block-section .savings-info {
     display: none !important;
+  }
+
+  .product-block-section .action-buttons {
+    margin-top: auto !important;
   }
 }
 

@@ -4563,14 +4563,19 @@ html {
   }
 
   /* Mobil ürün görselleri büyütüldü (90/70 -> 170/150) ki kartlar
-     diğer breakpoint kurallarıyla tutarlı ve büyük görünsün. */
-  .product-image-container,
+     diğer breakpoint kurallarıyla tutarlı ve büyük görünsün.
+     Ana sayfa blok kartları (.product-block-card) hariç. */
+  .product-grid .product-image-container,
+  .product-card .product-image-container,
+  .modern-product-card:not(.product-block-card) .product-image-container,
   .product-image {
     height: 170px !important;
     min-height: 170px !important;
   }
 
-  .product-image-container img {
+  .product-grid .product-image-container img,
+  .product-card .product-image-container img,
+  .modern-product-card:not(.product-block-card) .product-image-container img {
     max-height: 150px !important;
   }
 

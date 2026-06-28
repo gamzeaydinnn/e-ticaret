@@ -1077,15 +1077,7 @@ const ProductBlockSection = ({
                           <img
                             src={productImage}
                             alt={productName}
-                            style={{
-                              // Görsel, kart boyutu büyüdüğünde de oransal kalsın diye
-                              // sabit px yerine container'a göre yüzdesel sınırlandı.
-                              maxHeight: "92%",
-                              maxWidth: "88%",
-                              objectFit: "contain",
-                              filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
-                              transition: "all 0.3s ease",
-                            }}
+                            className="product-block-card-image"
                             onError={(e) => {
                               e.target.onerror = null;
                               e.target.src = PLACEHOLDER_PRODUCT_IMAGE;
