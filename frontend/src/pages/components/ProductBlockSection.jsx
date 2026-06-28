@@ -1076,8 +1076,10 @@ const ProductBlockSection = ({
                             src={productImage}
                             alt={productName}
                             style={{
-                              maxHeight: "110px",
-                              maxWidth: "110px",
+                              // Görsel, kart boyutu büyüdüğünde de oransal kalsın diye
+                              // sabit px yerine container'a göre yüzdesel sınırlandı.
+                              maxHeight: "92%",
+                              maxWidth: "88%",
                               objectFit: "contain",
                               filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
                               transition: "all 0.3s ease",

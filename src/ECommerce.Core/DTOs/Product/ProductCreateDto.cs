@@ -102,6 +102,11 @@ namespace ECommerce.Core.DTOs.Product
         /// </summary>
         public List<string>? AdditionalImageUrls { get; set; }
 
+        /// <summary>
+        /// Tüm görseller (sıralı). Gönderildiğinde ImageUrl + AdditionalImageUrls yerine kullanılır.
+        /// </summary>
+        public List<string>? ImageUrls { get; set; }
+
         #endregion
 
         #region Varyantlar

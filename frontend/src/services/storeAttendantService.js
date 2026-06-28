@@ -15,11 +15,18 @@ const STORE_BASE = "/StoreAttendantOrder";
 // TOKEN YARDIMCI
 // ============================================================================
 const getToken = () => {
+  // NEDEN: Bu servis hem mağaza görevlisi (storeAttendantToken) hem de admin
+  // panelinden (token/authToken/adminToken) çağrılıyor. Admin oturumu çoğunlukla
+  // httpOnly cookie tabanlı olduğundan localStorage'da token bulunmayabilir;
+  // bu durumda Authorization header boş kalır ama aşağıdaki credentials:"include"
+  // ile cookie gönderilerek kimlik doğrulanır.
   return (
     localStorage.getItem("storeAttendantToken") ||
     sessionStorage.getItem("storeAttendantToken") ||
-    localStorage.getItem("token")
-  ); // Fallback to general token
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("adminToken")
+  );
 };
 
 // ============================================================================
@@ -30,6 +37,9 @@ const fetchWithAuth = async (endpoint, options = {}) => {
 
   const config = {
     ...options,
+    // NEDEN: Admin oturumu httpOnly cookie ile taşınıyor. credentials:"include"
+    // olmadan fetch cookie'yi göndermez ve backend 401 döner ("hata oluştu").
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -46,8 +56,14 @@ const fetchWithAuth = async (endpoint, options = {}) => {
       // Token'ı temizle
       localStorage.removeItem("storeAttendantToken");
       sessionStorage.removeItem("storeAttendantToken");
-      // Login sayfasına yönlendir
-      window.location.href = "/store/login";
+      // NEDEN: Bu servis admin panelinden de kullanılıyor. Admin'i mağaza
+      // login'ine atmak yanlış olur; sadece gerçekten /store yolundaysak
+      // mağaza login'ine yönlendir, aksi halde çağırana hata döndür.
+      const path =
+        typeof window !== "undefined" ? window.location.pathname : "";
+      if (path.startsWith("/store")) {
+        window.location.href = "/store/login";
+      }
       return { success: false, error: "Oturum süresi doldu" };
     }
 

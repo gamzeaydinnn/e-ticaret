@@ -109,14 +109,21 @@ namespace ECommerce.Business.Services.Managers
                     query = query.Where(o => o.Priority == filter.Priority);
                 }
 
-                // Tarih filtresi
+                // Tarih filtresi (OrderDate = siparişin verildiği tarih üzerinden)
+                // NEDEN AssignedAt yerine OrderDate: Kurye ve admin paneli "siparişin
+                //   oluşturulduğu tarih"e göre arama bekler. AssignedAt (kuryeye atanma anı)
+                //   farklı bir gün olabileceğinden kullanıcıyı yanıltıyordu. Admin paneliyle
+                //   tutarlı olması için her iki tarafta da OrderDate baz alınır.
                 if (filter.FromDate.HasValue)
                 {
-                    query = query.Where(o => o.AssignedAt >= filter.FromDate.Value);
+                    var fromDate = filter.FromDate.Value.Date;
+                    query = query.Where(o => o.OrderDate >= fromDate);
                 }
                 if (filter.ToDate.HasValue)
                 {
-                    query = query.Where(o => o.AssignedAt <= filter.ToDate.Value);
+                    // Bitiş gününü tamamen kapsamak için gün sonuna kadar al.
+                    var toEndOfDay = filter.ToDate.Value.Date.AddDays(1).AddTicks(-1);
+                    query = query.Where(o => o.OrderDate <= toEndOfDay);
                 }
 
                 // Toplam kayıt sayısı

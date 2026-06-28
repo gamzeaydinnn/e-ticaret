@@ -295,6 +295,13 @@ export default function AdminOrders() {
   // ============================================================
   const [statusFilter, setStatusFilter] = useState("all"); // Durum filtresi
   const [paymentFilter, setPaymentFilter] = useState("all"); // Ödeme filtresi
+  // TARİH ARALIĞI FİLTRESİ (sipariş tarihine göre)
+  // NEDEN client-side: Siparişler zaten tamamı bellekte tutuluyor ve durum/ödeme
+  //   filtreleri de client-side çalışıyor. Tarih filtresini de aynı yerde uygulamak
+  //   hem tutarlı hem de otomatik yenileme (polling/SignalR) sırasında filtrenin
+  //   sıfırlanmamasını sağlar. "YYYY-MM-DD" formatında saklanır.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -385,6 +392,21 @@ export default function AdminOrders() {
     } finally {
       setRefundProcessing(null);
     }
+  };
+
+  // Sipariş tarihini "gün.ay.yıl saat:dakika" formatında, güvenli şekilde biçimlendirir.
+  // Geçersiz/boş tarihte "-" döner (null/parse hatalarına karşı savunmacı).
+  const formatOrderDateTime = (value) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString("tr-TR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   const normalizeStatus = (status) => {
@@ -567,6 +589,21 @@ export default function AdminOrders() {
       if (paymentFilter === "paid" && !isPaid) return false;
       if (paymentFilter === "pending" && isPaid) return false;
     }
+    // Tarih aralığı filtresi (order.orderDate baz alınır)
+    // Geçersiz/boş tarihlerde ilgili sınır uygulanmaz (savunmacı kontrol).
+    if (dateFrom || dateTo) {
+      const orderTime = order.orderDate ? new Date(order.orderDate).getTime() : NaN;
+      if (Number.isNaN(orderTime)) return false; // tarihi olmayan sipariş, aralık seçiliyse gizlenir
+      if (dateFrom) {
+        const fromTime = new Date(`${dateFrom}T00:00:00`).getTime();
+        if (!Number.isNaN(fromTime) && orderTime < fromTime) return false;
+      }
+      if (dateTo) {
+        // Bitiş gününü tam kapsamak için gün sonuna kadar dahil et.
+        const toTime = new Date(`${dateTo}T23:59:59.999`).getTime();
+        if (!Number.isNaN(toTime) && orderTime > toTime) return false;
+      }
+    }
     return true;
   });
 
@@ -588,7 +625,7 @@ export default function AdminOrders() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, paymentFilter, pageSize]);
+  }, [statusFilter, paymentFilter, pageSize, dateFrom, dateTo]);
 
   useEffect(() => {
     const validOrderIds = new Set(orders.map((order) => order.id));
@@ -1873,6 +1910,47 @@ export default function AdminOrders() {
             <span className="badge bg-light text-dark ms-1" style={{ fontSize: "0.55rem" }}>{orders.filter((o) => { const ps = (o.paymentStatus || "").toString().toLowerCase(); return ps === "paid" || o.isPaid === true; }).length}</span>
           </button>
         </div>
+
+        {/* Tarih Aralığı Filtresi (sipariş tarihine göre arama) */}
+        <div className="d-flex align-items-center gap-1 flex-wrap">
+          <i
+            className="fas fa-calendar-alt text-muted"
+            style={{ fontSize: "0.7rem" }}
+            title="Sipariş tarihine göre filtrele"
+          ></i>
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ fontSize: "0.65rem", width: "auto", padding: "0.15rem 0.4rem" }}
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={(e) => setDateFrom(e.target.value)}
+            aria-label="Başlangıç tarihi"
+          />
+          <span className="text-muted" style={{ fontSize: "0.65rem" }}>-</span>
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            style={{ fontSize: "0.65rem", width: "auto", padding: "0.15rem 0.4rem" }}
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={(e) => setDateTo(e.target.value)}
+            aria-label="Bitiş tarihi"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              style={{ fontSize: "0.6rem", padding: "0.15rem 0.4rem" }}
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+              }}
+              title="Tarih filtresini temizle"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sipariş Listesi */}
@@ -1941,6 +2019,7 @@ export default function AdminOrders() {
                     </th>
                   )}
                   <th className="px-1 py-2">Sipariş</th>
+                  <th className="px-1 py-2 d-none d-md-table-cell">Tarih</th>
                   <th className="px-1 py-2 d-none d-md-table-cell">Müşteri</th>
                   <th className="px-1 py-2">Tutar</th>
                   <th className="px-1 py-2">Durum</th>
@@ -1952,7 +2031,7 @@ export default function AdminOrders() {
               <tbody>
                 {filteredOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={canDeleteOrders ? 8 : 7} className="text-center py-4 text-muted">
+                    <td colSpan={canDeleteOrders ? 9 : 8} className="text-center py-4 text-muted">
                       <i className="fas fa-inbox fa-2x mb-2 d-block"></i>
                       {orders.length === 0
                         ? "Henüz sipariş bulunmuyor"
@@ -1980,14 +2059,23 @@ export default function AdminOrders() {
                         <td className="px-1 py-2">
                           <span className="fw-bold">#{order.id}</span>
                           <br />
+                          {/* Mobil/küçük ekranlarda ayrı Tarih sütunu gizli olduğundan
+                              tarih+saat burada gösterilir (md altı). */}
                           <small
-                            className="text-muted d-none d-sm-inline"
+                            className="text-muted d-md-none"
                             style={{ fontSize: "0.6rem" }}
                           >
-                            {new Date(order.orderDate).toLocaleDateString(
-                              "tr-TR",
-                            )}
+                            {formatOrderDateTime(order.orderDate)}
                           </small>
+                        </td>
+                        {/* Tarih sütunu (md ve üzeri): siparişin verildiği gün + saat */}
+                        <td className="px-1 py-2 d-none d-md-table-cell">
+                          <span
+                            className="text-muted d-block"
+                            style={{ fontSize: "0.62rem", whiteSpace: "nowrap" }}
+                          >
+                            {formatOrderDateTime(order.orderDate)}
+                          </span>
                         </td>
                         <td className="px-1 py-2 d-none d-md-table-cell">
                           <span
@@ -2400,11 +2488,7 @@ export default function AdminOrders() {
                         </h6>
                         <p className="mb-1">
                           <strong>Tarih:</strong>{" "}
-                          {selectedOrder.orderDate
-                            ? new Date(
-                                selectedOrder.orderDate,
-                              ).toLocaleDateString("tr-TR")
-                            : "-"}
+                          {formatOrderDateTime(selectedOrder.orderDate)}
                         </p>
                         <p className="mb-1">
                           <strong>Tutar:</strong>{" "}

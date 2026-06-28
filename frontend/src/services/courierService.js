@@ -87,6 +87,10 @@ const normalizeOrderDetail = (order) => {
     paymentInfo: order.paymentInfo,
     cashOnDeliveryAmount: order.cashOnDeliveryAmount,
     orderDate: order.orderDate,
+    // createdAt: Timeline "Sipariş Oluşturuldu" adımı bu alanı kullanıyor.
+    // Backend detay DTO'su createdAt göndermediğinden orderDate'e map ediyoruz;
+    // böylece sipariş oluşturulma zamanı timeline'da "-" yerine doğru görünür.
+    createdAt: order.createdAt || order.orderDate,
     assignedAt: order.assignedAt,
     pickedUpAt: order.pickedUpAt,
     deliveredAt: order.deliveredAt,
@@ -211,8 +215,18 @@ export const CourierService = {
   // ============================================================
 
   // Kurye siparişlerini listele
-  getAssignedOrders: async () => {
-    const res = await api.get(ORDERS_BASE);
+  // Opsiyonel filtreler: { status, fromDate, toDate }
+  // NEDEN obje parametresi: Backend CourierOrderFilterDto status/fromDate/toDate/page/pageSize
+  //   destekliyor; tarih filtresi sipariş tarihine (OrderDate) göre çalışır. Filtre
+  //   gönderilmezse backend yalnızca aktif siparişleri döner (mevcut davranış korunur).
+  getAssignedOrders: async ({ status, fromDate, toDate } = {}) => {
+    const params = [];
+    if (status) params.push(`status=${encodeURIComponent(status)}`);
+    if (fromDate) params.push(`fromDate=${encodeURIComponent(fromDate)}`);
+    if (toDate) params.push(`toDate=${encodeURIComponent(toDate)}`);
+    const qs = params.length ? `?${params.join("&")}` : "";
+
+    const res = await api.get(`${ORDERS_BASE}${qs}`);
     const orders = (res?.orders || res?.data?.orders || res?.Orders || [])
       .map(normalizeOrderListItem)
       .filter(Boolean);

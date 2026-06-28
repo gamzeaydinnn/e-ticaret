@@ -39,6 +39,9 @@ using ECommerce.API.Data;
 using ECommerce.API.Authorization;
 using ECommerce.API.Hubs; // SignalR Hub'ları için
 using ECommerce.Core.Interfaces.Jobs; // Mikro Job interfaces
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -1010,43 +1013,13 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine("🔍🔍🔍 Database initialization başlıyor...");
         
         // Apply migrations (production-safe: works with existing databases)
+        // NEDEN özel akış: Veritabanı sunucuda zaten varken __EFMigrationsHistory tablosu
+        //   yoksa EF Core önce CREATE DATABASE dener → SQL 1801 hatası. History tablosunu
+        //   önceden oluşturarak bu adım atlanır ve sadece bekleyen migration'lar uygulanır.
         Console.WriteLine("🔍 Database existence kontrol ediliyor...");
-        try
-        {
-            // Veritabanı mevcutsa, sadece pending migrations'ları uygula
-            if (db.Database.CanConnect())
-            {
-                Console.WriteLine("✅ Veritabanı zaten mevcut, pending migrations uygulanıyor...");
-                db.Database.Migrate();
-            }
-            else
-            {
-                Console.WriteLine("⚠️ Veritabanına bağlanılamadı, yeniden denenecek...");
-                db.Database.Migrate();
-            }
-            logger.LogInformation("✅ Database migrations uygulandı");
-            Console.WriteLine("✅ Database migrations uygulandı");
-        }
-        catch (Microsoft.Data.SqlClient.SqlException sqlEx) when (sqlEx.Number == 1801)
-        {
-            // Database already exists - this is expected, continue with pending migrations
-            Console.WriteLine("⚠️ Veritabanı zaten mevcut, pending migrations uygulanıyor...");
-            logger.LogWarning("Database already exists, applying any pending migrations");
-            
-            // SqlClient'ı open/close etmek migration'ları yenilemek için gerekli
-            try
-            {
-                db.Database.Migrate();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError($"Migration error after database exists check: {ex.Message}");
-                throw;
-            }
-            
-            logger.LogInformation("✅ Database migrations uygulandı");
-            Console.WriteLine("✅ Database migrations uygulandı");
-        }
+        ApplyDatabaseMigrations(db, logger);
+        logger.LogInformation("✅ Database migrations uygulandı");
+        Console.WriteLine("✅ Database migrations uygulandı");
 
         logger.LogInformation("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
         Console.WriteLine("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
@@ -1277,3 +1250,70 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
 
 app.MapControllers();
 app.Run();
+
+/// <summary>
+/// Veritabanı migration'larını güvenli şekilde uygular.
+/// Mevcut veritabanlarında __EFMigrationsHistory eksikse CREATE DATABASE hatasını (1801) önler.
+/// </summary>
+static void ApplyDatabaseMigrations(ECommerceDbContext db, ILogger logger)
+{
+    var canConnect = db.Database.CanConnect();
+
+    if (canConnect)
+    {
+        Console.WriteLine("✅ Veritabanı bağlantısı başarılı.");
+        // History tablosu yoksa EF Migrate() önce CREATE DATABASE dener — 1801 riski.
+        // Tabloyu önceden oluşturarak doğrudan pending migration'lara geçilir.
+        EnsureMigrationHistoryTable(db, logger);
+    }
+    else
+    {
+        Console.WriteLine("⚠️ Veritabanına bağlanılamadı; oluşturma + migration denenecek...");
+    }
+
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (SqlException ex) when (ex.Number == 1801)
+    {
+        // Sunucuda veritabanı zaten var — CREATE DATABASE atlandı, tablo migration'ları devam eder.
+        logger.LogWarning(
+            "Veritabanı zaten mevcut (SQL 1801). CREATE DATABASE atlanıyor, migration history kontrol ediliyor.");
+        Console.WriteLine("⚠️ Veritabanı zaten mevcut (1801) — tablo migration'ları uygulanıyor...");
+
+        EnsureMigrationHistoryTable(db, logger);
+
+        var pending = db.Database.GetPendingMigrations().ToList();
+        if (pending.Count == 0)
+        {
+            logger.LogInformation("Uygulanacak bekleyen migration yok.");
+            Console.WriteLine("ℹ️ Uygulanacak bekleyen migration yok.");
+            return;
+        }
+
+        logger.LogInformation(
+            "Bekleyen {Count} migration uygulanacak: {Migrations}",
+            pending.Count,
+            string.Join(", ", pending));
+        Console.WriteLine($"📦 {pending.Count} bekleyen migration uygulanıyor...");
+
+        // History tablosu artık var — Migrate() CREATE DATABASE çağırmadan devam eder.
+        db.Database.Migrate();
+    }
+}
+
+/// <summary>
+/// __EFMigrationsHistory tablosunu oluşturur (yoksa).
+/// EF Core'un gereksiz CREATE DATABASE denemesini engellemek için Migrate() öncesinde çağrılır.
+/// </summary>
+static void EnsureMigrationHistoryTable(ECommerceDbContext db, ILogger logger)
+{
+    var historyRepository = db.GetInfrastructure().GetRequiredService<IHistoryRepository>();
+    if (!historyRepository.Exists())
+    {
+        logger.LogInformation("__EFMigrationsHistory tablosu oluşturuluyor...");
+        Console.WriteLine("📋 __EFMigrationsHistory tablosu oluşturuluyor...");
+        historyRepository.CreateIfNotExists();
+    }
+}

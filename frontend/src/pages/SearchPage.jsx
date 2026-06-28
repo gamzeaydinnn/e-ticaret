@@ -409,16 +409,16 @@ const SearchPage = () => {
                       <div
                         className="d-flex align-items-center justify-content-center bg-light"
                         style={{
-                          height: "140px",
-                          minHeight: "140px",
-                          padding: "10px",
+                          height: "200px",
+                          minHeight: "200px",
+                          padding: "12px",
                         }}
                       >
                         <img
                           src={product.imageUrl || "/images/placeholder.png"}
                           alt={product.name}
                           style={{
-                            maxHeight: "120px",
+                            maxHeight: "180px",
                             maxWidth: "100%",
                             objectFit: "contain",
                           }}

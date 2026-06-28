@@ -1,10 +1,14 @@
 using ECommerce.Core.DTOs.Weight;
 using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -13,20 +17,23 @@ namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/[controller]")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,SuperAdmin")]
     public class WeightReportsController : ControllerBase
     {
         private readonly IWeightReportRepository _weightReportRepository;
         private readonly IWeightService _weightService;
+        private readonly ECommerceDbContext _dbContext;
         private readonly ILogger<WeightReportsController> _logger;
 
         public WeightReportsController(
             IWeightReportRepository weightReportRepository,
             IWeightService weightService,
+            ECommerceDbContext dbContext,
             ILogger<WeightReportsController> logger)
         {
             _weightReportRepository = weightReportRepository;
             _weightService = weightService;
+            _dbContext = dbContext;
             _logger = logger;
         }
 
@@ -58,16 +65,21 @@ namespace ECommerce.API.Controllers.Admin
                     });
                 }
 
-                // Tüm durumlar için - sadece bekleyen raporları göster
-                var pendingReports = await _weightReportRepository.GetPendingReportsAsync();
+                // Tüm durumlar için - bekleyen gerçek raporlar + henüz tartı raporu oluşmamış
+                // tartılı siparişler. NEDEN: Manuel tartı bu ekrandan yapılacaksa, ilk rapor
+                // kaydı henüz oluşmamış sipariş de listede görünmelidir.
+                var pendingReports = (await _weightReportRepository.GetPendingReportsAsync()).ToList();
+                var manualWeighingOrders = await GetManualWeighingOrderDtosAsync(page, pageSize);
+                var data = pendingReports.Select(MapToDto).Concat(manualWeighingOrders).ToList();
+
                 return Ok(new
                 {
-                    data = pendingReports.Select(MapToDto),
+                    data,
                     pagination = new
                     {
                         page = 1,
-                        pageSize = pendingReports.Count(),
-                        totalCount = pendingReports.Count(),
+                        pageSize = data.Count,
+                        totalCount = data.Count,
                         totalPages = 1
                     }
                 });
@@ -192,6 +204,78 @@ namespace ECommerce.API.Controllers.Admin
                 AdminNote = report.AdminNote,
                 CourierNote = report.CourierNote
             };
+        }
+
+        private async Task<List<WeightReportResponseDto>> GetManualWeighingOrderDtosAsync(int page, int pageSize)
+        {
+            var activeStatuses = new[]
+            {
+                OrderStatus.Pending,
+                OrderStatus.New,
+                OrderStatus.Paid,
+                OrderStatus.Confirmed,
+                OrderStatus.Preparing
+            };
+
+            var orders = await _dbContext.Orders
+                .AsNoTracking()
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Where(o => o.HasWeightBasedItems &&
+                    activeStatuses.Contains(o.Status) &&
+                    o.PaymentStatus == PaymentStatus.Paid)
+                .OrderByDescending(o => o.OrderDate)
+                .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
+                .Take(Math.Clamp(pageSize, 1, 100))
+                .ToListAsync();
+
+            var result = new List<WeightReportResponseDto>();
+            foreach (var order in orders)
+            {
+                foreach (var item in order.OrderItems.Where(IsPendingWeightItem))
+                {
+                    var hasReport = await _dbContext.WeightReports
+                        .AsNoTracking()
+                        .AnyAsync(r => r.OrderItemId == item.Id);
+
+                    if (hasReport)
+                    {
+                        continue;
+                    }
+
+                    var expectedWeight = item.EstimatedWeight > 0
+                        ? item.EstimatedWeight
+                        : item.Quantity * 1000m;
+
+                    result.Add(new WeightReportResponseDto
+                    {
+                        Id = -item.Id,
+                        ExternalReportId = $"manual-pending-{order.Id}-{item.Id}",
+                        OrderId = order.Id,
+                        OrderNumber = order.OrderNumber ?? $"#{order.Id}",
+                        ExpectedWeightGrams = (int)Math.Round(expectedWeight, MidpointRounding.AwayFromZero),
+                        ReportedWeightGrams = 0,
+                        OverageGrams = 0,
+                        OverageAmount = 0,
+                        Currency = order.Currency ?? "TRY",
+                        Status = "PendingWeighing",
+                        Source = "ManualWeighing",
+                        ReceivedAt = order.OrderDate,
+                        ProcessedAt = null,
+                        AdminNote = $"{item.Product?.Name ?? "Tartılı ürün"} manuel tartı bekliyor",
+                        CourierNote = null
+                    });
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IsPendingWeightItem(OrderItem item)
+        {
+            return item.IsWeightBased &&
+                item.EstimatedWeight > 0 &&
+                (!item.ActualWeight.HasValue || item.ActualWeight.Value <= 0);
         }
     }
 }

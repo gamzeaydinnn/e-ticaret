@@ -6,6 +6,8 @@ using ECommerce.Core.Interfaces;
 using ECommerce.API.Authorization;
 using ECommerce.Core.DTOs.Admin;
 using ECommerce.Infrastructure.Services.MicroServices;
+using ECommerce.Infrastructure.Config;
+using Microsoft.Extensions.Options;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
 using ECommerce.Entities.Concrete;
@@ -32,6 +34,7 @@ namespace ECommerce.API.Controllers.Admin
         private readonly IPaymentService _paymentService;
         private readonly ECommerceDbContext _dbContext;
         private readonly IMikroDbService _mikroDbService;
+        private readonly InventorySettings _inventorySettings;
 
         public AdminDashboardController(
             IUserService userService,
@@ -43,7 +46,8 @@ namespace ECommerce.API.Controllers.Admin
             ICourierService courierService,
             IPaymentService paymentService,
             ECommerceDbContext dbContext,
-            IMikroDbService mikroDbService
+            IMikroDbService mikroDbService,
+            IOptions<InventorySettings> inventoryOptions
         )
         {
             _userService = userService;
@@ -56,6 +60,7 @@ namespace ECommerce.API.Controllers.Admin
             _paymentService = paymentService;
             _dbContext = dbContext;
             _mikroDbService = mikroDbService;
+            _inventorySettings = inventoryOptions.Value;
         }
 
         [HttpGet("stats")]
@@ -81,20 +86,30 @@ namespace ECommerce.API.Controllers.Admin
             var last14DaysStart = todayStart.AddDays(-13);
 
             var totalUsers = await _userService.GetUserCountAsync();
-            // Mikro ERP bağlıysa cache'deki ürün sayısını kullan,
-            // değilse yerel DB'den say — dashboard'da doğru rakam gösterir.
-            // NEDEN: GetWebProductCountAsync her seferinde SQL bağlantısı açıyordu.
-            // Cache zaten 2dk'da bir yenileniyor — Count doğru ve anında döner.
+            // WEB AKTİF ÜRÜN SAYISI
+            // NEDEN GetUnifiedProductsAsync().Count kullanılmıyor: Cache/SQL birleşik listesi
+            //   tüm senkronize satırları döndürebilir; dashboard'da gösterilmesi gereken
+            //   metrik Mikro'daki "webe gönderilecek" (sto_webe_gonderilecek_fl=1) adedidir.
+            // Kaynak önceliği:
+            //   1) Mikro SQL COUNT (GetWebProductCountAsync) — en doğru kaynak
+            //   2) Yerel MikroProductCache.Aktif — VPN/SQL erişilemezse fallback
+            //   3) Yerel Products.IsActive — Mikro yapılandırılmamışsa
             int totalProducts;
             if (_mikroDbService.IsConfigured)
             {
-                var cachedProducts = await _mikroDbService.GetUnifiedProductsAsync(
-                    null, null, HttpContext.RequestAborted);
-                totalProducts = cachedProducts.Count;
+                totalProducts = await _mikroDbService.GetWebProductCountAsync(
+                    HttpContext.RequestAborted);
+
+                // SQL erişimi yoksa (VPN kapalı vb.) yerel cache'teki web-aktif kayıtları say
+                if (totalProducts <= 0)
+                {
+                    totalProducts = await _dbContext.MikroProductCaches
+                        .CountAsync(p => p.Aktif);
+                }
             }
             else
             {
-                totalProducts = await _productService.GetProductCountAsync();
+                totalProducts = await _dbContext.Products.CountAsync(p => p.IsActive);
             }
             var totalOrders = await _orderService.GetOrderCountAsync();
             var totalRevenue = await _orderService.GetTotalRevenueAsync();
@@ -102,6 +117,19 @@ namespace ECommerce.API.Controllers.Admin
 
             var activeCouriers = await _dbContext.Couriers.CountAsync(c =>
                 c.IsOnline || c.Status == "active" || c.Status == "busy");
+
+            // STOK SAYIMLARI
+            // Kaynak: yerel Products tablosu (aktif ürünler). Rapor sayfasındaki
+            // "stock/low" endpoint'i ile aynı kaynağı kullanarak tutarlılık sağlanır.
+            // NOT: Mikro ERP modunda TotalProducts cache'ten gelse de stok sayımı
+            //   senkronize edilen yerel kayıtlar üzerinden yapılır (mevcut rapor mantığıyla aynı).
+            // Kritik stok eşiği ayarlardan değil dashboard için sabit/yapılandırılabilir
+            //   olmadığından, rapor sayfasıyla uyum için aynı varsayılan mantığı kullanıyoruz.
+            var criticalThreshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
+            var outOfStockCount = await _dbContext.Products.CountAsync(p =>
+                p.IsActive && p.StockQuantity <= 0);
+            var lowStockCount = await _dbContext.Products.CountAsync(p =>
+                p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= criticalThreshold);
 
             var pendingOrders = await _dbContext.Orders.CountAsync(o =>
                 o.Status == OrderStatus.New ||
@@ -285,6 +313,8 @@ namespace ECommerce.API.Controllers.Admin
                 TotalRevenue = stats.Revenue,
                 TodayOrders = stats.TodayOrders,
                 ActiveCouriers = activeCouriers,
+                OutOfStockCount = outOfStockCount,
+                LowStockCount = lowStockCount,
                 PendingOrders = pendingOrders,
                 DeliveredOrders = deliveredOrders,
                 CancelledOrders = cancelledOrders,

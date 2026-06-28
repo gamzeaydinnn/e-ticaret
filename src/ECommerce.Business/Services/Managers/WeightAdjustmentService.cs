@@ -446,11 +446,18 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                // NEDEN: Hazırlık aşamasındaki manuel düzeltmeler yalnızca operasyon tamamlanmadan yapılmalı.
+                // NEDEN: Tartım, hazırlık aşamasında VEYA KGL provizyon akışında yapılır.
+                // KGL akışı (OrderStatus dokümantasyonu): New → PreAuthorized → Confirmed →
+                // Preparing → WeightPending → ... Provizyon (Auth) alınmış siparişte kart bloke
+                // edilmiş ama tutar henüz çekilmemiştir; admin/mağaza görevlisi gerçek tartımı
+                // bu aşamada girer, finansallaştırma (Capt) sonra yapılır. Bu yüzden PreAuthorized
+                // ve WeightPending durumları da izinli olmalı.
                 if (order.Status != OrderStatus.Pending &&
                     order.Status != OrderStatus.Confirmed &&
                     order.Status != OrderStatus.Preparing &&
-                    order.Status != OrderStatus.Ready)
+                    order.Status != OrderStatus.Ready &&
+                    order.Status != OrderStatus.PreAuthorized &&
+                    order.Status != OrderStatus.WeightPending)
                 {
                     result.ErrorMessage = "Bu siparişin ağırlığı mevcut durumunda manuel güncellenemez";
                     return result;

@@ -261,6 +261,8 @@ namespace ECommerce.API.Controllers
                         .AsNoTracking()
                         .ToListAsync(HttpContext.RequestAborted);
 
+                    var fallbackImageMap = await GetProductImageUrlsMapAsync(HttpContext.RequestAborted);
+
                     var filteredFallbackProducts = fallbackLocalProducts
                         .Where(product =>
                             string.IsNullOrWhiteSpace(sku) ||
@@ -270,27 +272,32 @@ namespace ECommerce.API.Controllers
                             (!string.IsNullOrWhiteSpace(product.Name) && product.Name.Contains(name, StringComparison.OrdinalIgnoreCase)))
                         .Where(product => MatchesAdminStatusFilter(product.IsActive, status))
                         .Where(product => MatchesAdminStockFilter(product.StockQuantity, stockStatus))
-                        .Select(product => new
+                        .Select(product =>
                         {
-                            id = product.Id,
-                            sku = product.SKU,
-                            name = product.Name,
-                            price = product.Price,
-                            specialPrice = product.SpecialPrice,
-                            stockQuantity = product.StockQuantity,
-                            stock = product.StockQuantity,
-                            isActive = product.IsActive,
-                            categoryId = product.CategoryId,
-                            categoryName = product.Category != null ? product.Category.Name : string.Empty,
-                            description = product.Description,
-                            imageUrl = product.ImageUrl,
-                            adminOverrideName = product.AdminOverrideName,
-                            adminOverridePrice = product.AdminOverridePrice,
-                            adminOverrideCategory = product.AdminOverrideCategory,
-                            effectiveAdminOverrideName = false,
-                            effectiveAdminOverridePrice = false,
-                            effectiveAdminOverrideCategory = false,
-                            source = "local-db-fallback"
+                            var images = ResolveProductImages(product, fallbackImageMap);
+                            return new
+                            {
+                                id = product.Id,
+                                sku = product.SKU,
+                                name = product.Name,
+                                price = product.Price,
+                                specialPrice = product.SpecialPrice,
+                                stockQuantity = product.StockQuantity,
+                                stock = product.StockQuantity,
+                                isActive = product.IsActive,
+                                categoryId = product.CategoryId,
+                                categoryName = product.Category != null ? product.Category.Name : string.Empty,
+                                description = product.Description,
+                                imageUrl = images.imageUrl,
+                                imageUrls = images.imageUrls,
+                                adminOverrideName = product.AdminOverrideName,
+                                adminOverridePrice = product.AdminOverridePrice,
+                                adminOverrideCategory = product.AdminOverrideCategory,
+                                effectiveAdminOverrideName = false,
+                                effectiveAdminOverridePrice = false,
+                                effectiveAdminOverrideCategory = false,
+                                source = "local-db-fallback"
+                            };
                         });
 
                     var totalFallback = filteredFallbackProducts.Count();
@@ -316,6 +323,7 @@ namespace ECommerce.API.Controllers
                     .Include(product => product.Category)
                     .AsNoTracking()
                     .ToListAsync(HttpContext.RequestAborted);
+                var productImageMap = await GetProductImageUrlsMapAsync(HttpContext.RequestAborted);
                 var skuToLocal = localAll
                     .Where(p => !string.IsNullOrWhiteSpace(p.SKU))
                     .GroupBy(p => p.SKU.Trim(), StringComparer.OrdinalIgnoreCase)
@@ -378,6 +386,9 @@ namespace ECommerce.API.Controllers
                                                    categoryLookup.TryGetValue(resolvedCategoryId.Value, out var categoryName)
                             ? categoryName
                             : resolvedCategoryInfo.CategoryName;
+                        var resolvedImages = hasLocal
+                            ? ResolveProductImagesById(local!.Id, local.ImageUrl, productImageMap)
+                            : (imageUrl: string.Empty, imageUrls: new List<string>());
                         return new
                         {
                             id = hasLocal ? local!.Id : 0,
@@ -398,7 +409,8 @@ namespace ECommerce.API.Controllers
                             anagrupCode = p.AnagrupKod,
                             // Açıklama: yerel override
                             description = hasLocal && !string.IsNullOrEmpty(local!.Description) ? local.Description : string.Empty,
-                            imageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                            imageUrl = resolvedImages.imageUrl,
+                            imageUrls = resolvedImages.imageUrls,
                             adminOverrideName = hasLocal ? local!.AdminOverrideName : null,
                             adminOverridePrice = hasLocal ? local!.AdminOverridePrice : null,
                             adminOverrideCategory = hasLocal ? local!.AdminOverrideCategory : null,
@@ -417,30 +429,35 @@ namespace ECommerce.API.Controllers
 
                 var localOnlyProducts = localAll
                     .Where(product => string.IsNullOrWhiteSpace(product.SKU))
-                    .Select(product => new
+                    .Select(product =>
                     {
-                        id = product.Id,
-                        sku = product.SKU,
-                        name = product.Name,
-                        price = product.Price,
-                        specialPrice = product.SpecialPrice,
-                        stockQuantity = product.StockQuantity,
-                        stock = product.StockQuantity,
-                        isActive = product.IsActive,
-                        categoryId = (int?)product.CategoryId,
-                        categoryName = product.Category?.Name ?? categoryLookup.GetValueOrDefault(product.CategoryId, string.Empty),
-                        categorySlug = NormalizeCategorySlug(product.Category?.Slug ?? product.Category?.Name ?? string.Empty),
-                        categoryCode = string.Empty,
-                        anagrupCode = string.Empty,
-                        description = product.Description,
-                        imageUrl = product.ImageUrl,
-                        adminOverrideName = product.AdminOverrideName,
-                        adminOverridePrice = product.AdminOverridePrice,
-                        adminOverrideCategory = product.AdminOverrideCategory,
-                        effectiveAdminOverrideName = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName),
-                        effectiveAdminOverridePrice = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice),
-                        effectiveAdminOverrideCategory = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory),
-                        source = "local-db"
+                        var images = ResolveProductImages(product, productImageMap);
+                        return new
+                        {
+                            id = product.Id,
+                            sku = product.SKU,
+                            name = product.Name,
+                            price = product.Price,
+                            specialPrice = product.SpecialPrice,
+                            stockQuantity = product.StockQuantity,
+                            stock = product.StockQuantity,
+                            isActive = product.IsActive,
+                            categoryId = (int?)product.CategoryId,
+                            categoryName = product.Category?.Name ?? categoryLookup.GetValueOrDefault(product.CategoryId, string.Empty),
+                            categorySlug = NormalizeCategorySlug(product.Category?.Slug ?? product.Category?.Name ?? string.Empty),
+                            categoryCode = string.Empty,
+                            anagrupCode = string.Empty,
+                            description = product.Description,
+                            imageUrl = images.imageUrl,
+                            imageUrls = images.imageUrls,
+                            adminOverrideName = product.AdminOverrideName,
+                            adminOverridePrice = product.AdminOverridePrice,
+                            adminOverrideCategory = product.AdminOverrideCategory,
+                            effectiveAdminOverrideName = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideName, overrideDefaults.DefaultAdminOverrideName),
+                            effectiveAdminOverridePrice = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverridePrice, overrideDefaults.DefaultAdminOverridePrice),
+                            effectiveAdminOverrideCategory = ProductAdminOverridePolicy.ResolveOverride(product.AdminOverrideCategory, overrideDefaults.DefaultAdminOverrideCategory),
+                            source = "local-db"
+                        };
                     });
 
                 var filtered = mergedProducts
@@ -477,6 +494,8 @@ namespace ECommerce.API.Controllers
                 .AsNoTracking()
                 .ToListAsync(HttpContext.RequestAborted);
 
+            var localImageMap = await GetProductImageUrlsMapAsync(HttpContext.RequestAborted);
+
             var filteredLocalProducts = localProducts
                 .Where(product =>
                     string.IsNullOrWhiteSpace(sku) ||
@@ -486,21 +505,26 @@ namespace ECommerce.API.Controllers
                     (!string.IsNullOrWhiteSpace(product.Name) && product.Name.Contains(name, StringComparison.OrdinalIgnoreCase)))
                 .Where(product => MatchesAdminStatusFilter(product.IsActive, status))
                 .Where(product => MatchesAdminStockFilter(product.StockQuantity, stockStatus))
-                .Select(product => new
+                .Select(product =>
                 {
-                    id = product.Id,
-                    sku = product.SKU,
-                    name = product.Name,
-                    price = product.Price,
-                    specialPrice = product.SpecialPrice,
-                    stockQuantity = product.StockQuantity,
-                    stock = product.StockQuantity,
-                    isActive = product.IsActive,
-                    categoryId = product.CategoryId,
-                    categoryName = product.Category != null ? product.Category.Name : string.Empty,
-                    description = product.Description,
-                    imageUrl = product.ImageUrl,
-                    source = "local-db"
+                    var images = ResolveProductImages(product, localImageMap);
+                    return new
+                    {
+                        id = product.Id,
+                        sku = product.SKU,
+                        name = product.Name,
+                        price = product.Price,
+                        specialPrice = product.SpecialPrice,
+                        stockQuantity = product.StockQuantity,
+                        stock = product.StockQuantity,
+                        isActive = product.IsActive,
+                        categoryId = product.CategoryId,
+                        categoryName = product.Category != null ? product.Category.Name : string.Empty,
+                        description = product.Description,
+                        imageUrl = images.imageUrl,
+                        imageUrls = images.imageUrls,
+                        source = "local-db"
+                    };
                 });
 
             var totalLocal = filteredLocalProducts.Count();
@@ -755,6 +779,48 @@ namespace ECommerce.API.Controllers
             return resolvedCategory;
         }
 
+        private async Task<Dictionary<int, List<string>>> GetProductImageUrlsMapAsync(CancellationToken cancellationToken)
+        {
+            var rows = await _dbContext.ProductImages
+                .AsNoTracking()
+                .Where(pi => pi.IsActive && !string.IsNullOrWhiteSpace(pi.Url))
+                .OrderByDescending(pi => pi.IsMain)
+                .ThenBy(pi => pi.Id)
+                .Select(pi => new { pi.ProductId, pi.Url })
+                .ToListAsync(cancellationToken);
+
+            return rows
+                .GroupBy(row => row.ProductId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Select(x => x.Url).Distinct(StringComparer.OrdinalIgnoreCase).ToList());
+        }
+
+        private static (string imageUrl, List<string> imageUrls) ResolveProductImages(
+            Product product,
+            IReadOnlyDictionary<int, List<string>> imageMap)
+        {
+            return ResolveProductImagesById(product.Id, product.ImageUrl, imageMap);
+        }
+
+        private static (string imageUrl, List<string> imageUrls) ResolveProductImagesById(
+            int productId,
+            string? legacyImageUrl,
+            IReadOnlyDictionary<int, List<string>> imageMap)
+        {
+            if (productId > 0 && imageMap.TryGetValue(productId, out var urls) && urls.Count > 0)
+            {
+                return (urls[0], urls);
+            }
+
+            if (!string.IsNullOrWhiteSpace(legacyImageUrl))
+            {
+                return (legacyImageUrl, new List<string> { legacyImageUrl });
+            }
+
+            return (string.Empty, new List<string>());
+        }
+
         private async Task<List<MergedProductRow>> BuildMergedPublicProductsAsync(CancellationToken cancellationToken)
         {
             var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken);
@@ -783,6 +849,7 @@ namespace ECommerce.API.Controllers
 
             var idToSlug = slugToId.ToDictionary(kv => kv.Value, kv => kv.Key);
             var categoryMappings = await LoadActiveCategoryMappingsAsync(cancellationToken);
+            var productImageMap = await GetProductImageUrlsMapAsync(cancellationToken);
 
             return unified
                 .Select(p =>
@@ -799,6 +866,10 @@ namespace ECommerce.API.Controllers
                             idToSlug,
                             slugToName));
 
+                    var resolvedImages = hasLocal
+                        ? ResolveProductImagesById(local!.Id, local.ImageUrl, productImageMap)
+                        : (imageUrl: string.Empty, imageUrls: new List<string>());
+
                     return new MergedProductRow
                     {
                         Product = new ProductListDto
@@ -811,7 +882,8 @@ namespace ECommerce.API.Controllers
                             Price = ResolveDisplayPrice(p.Fiyat, hasLocal ? local : null, overrideDefaults),
                             SpecialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
                             StockQuantity = (int)Math.Max(0, p.StokMiktar),
-                            ImageUrl = hasLocal && !string.IsNullOrEmpty(local!.ImageUrl) ? local.ImageUrl : string.Empty,
+                            ImageUrl = resolvedImages.imageUrl,
+                            ImageUrls = resolvedImages.imageUrls,
                             Unit = string.IsNullOrWhiteSpace(p.Birim) ? "ADET" : p.Birim.Trim().ToUpperInvariant(),
                             CategoryId = resolvedCategory.CategoryId,
                             CategoryName = resolvedCategory.CategoryName,

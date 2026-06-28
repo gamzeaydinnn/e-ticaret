@@ -248,9 +248,16 @@ export const AdminService = {
     api.patch(`/api/admin/products/${id}/stock`, stock),
 
   // Orders
-  getOrders: async (page = 1, size = 20) => {
+  // Opsiyonel tarih aralığı (from/to) ile filtreleme destekler.
+  // NEDEN obje parametresi: İleride başka filtreler (durum, ödeme) eklemek kolay olsun
+  //   ve çağrı tarafında parametre sırası karışmasın. from/to "YYYY-MM-DD" formatında beklenir.
+  getOrders: async ({ from, to } = {}) => {
     ensureBackend();
-    return api.get(`/api/admin/orders?page=${page}&size=${size}`);
+    const params = [];
+    if (from) params.push(`from=${encodeURIComponent(from)}`);
+    if (to) params.push(`to=${encodeURIComponent(to)}`);
+    const qs = params.length ? `?${params.join("&")}` : "";
+    return api.get(`/api/admin/orders${qs}`);
   },
   getOrder: (id) => api.get(`/api/admin/orders/${id}`),
   updateOrder: (id, payload) => api.put(`/api/admin/orders/${id}`, payload),

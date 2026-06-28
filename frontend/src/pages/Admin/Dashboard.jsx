@@ -118,6 +118,8 @@ export default function Dashboard() {
     totalOrders: 0,
     totalRevenue: 0,
     totalProducts: 0,
+    outOfStockCount: 0,
+    lowStockCount: 0,
     todayOrders: 0,
     activeCouriers: 0,
     pendingOrders: 0,
@@ -192,6 +194,11 @@ export default function Dashboard() {
         0;
       const totalProducts =
         readField(data, "totalProducts", "TotalProducts") || 0;
+      // Stok sayımları: backend AdminDashboardOverviewDto'dan gelir.
+      const outOfStockCount =
+        readField(data, "outOfStockCount", "OutOfStockCount") || 0;
+      const lowStockCount =
+        readField(data, "lowStockCount", "LowStockCount") || 0;
       const todayOrders = readField(data, "todayOrders", "TodayOrders") || 0;
       const activeCouriers =
         readField(
@@ -238,6 +245,8 @@ export default function Dashboard() {
         totalOrders,
         totalRevenue,
         totalProducts,
+        outOfStockCount,
+        lowStockCount,
         todayOrders,
         activeCouriers,
         pendingOrders,
@@ -401,8 +410,28 @@ export default function Dashboard() {
             </div>
             <div className="col-6 col-lg-3">
               <div className="dashboard-kpi kpi-green">
-                <span>Toplam Ürün</span>
+                <span>Web&apos;de Aktif Ürün</span>
                 <strong>{stats.totalProducts.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            {/* Stokta Yok: stoğu tamamen biten ürünler — kırmızı vurgu ile dikkat çeker */}
+            <div className="col-6 col-lg-3">
+              <div
+                className="dashboard-kpi kpi-pink"
+                style={{ borderLeft: "4px solid #ef4444" }}
+              >
+                <span>Stokta Yok</span>
+                <strong>{stats.outOfStockCount.toLocaleString("tr-TR")}</strong>
+              </div>
+            </div>
+            {/* Kritik Stok: eşik altındaki (ama sıfır olmayan) ürünler — sarı vurgu */}
+            <div className="col-6 col-lg-3">
+              <div
+                className="dashboard-kpi kpi-amber"
+                style={{ borderLeft: "4px solid #f59e0b" }}
+              >
+                <span>Kritik Stok</span>
+                <strong>{stats.lowStockCount.toLocaleString("tr-TR")}</strong>
               </div>
             </div>
             <div className="col-6 col-lg-3">

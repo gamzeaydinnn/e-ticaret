@@ -110,7 +110,9 @@
 
 .product-grid-grid-inner {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Kartları büyütmek için minimum hücre genişliği artırıldı (220 -> 280).
+     Böylece masaüstünde daha az ama daha büyük ürün kartı gösterilir. */
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
   padding: 15px 0;
 }
@@ -178,8 +180,9 @@
    ===================================================== */
 .product-grid-card-wrapper {
   flex-shrink: 0;
-  width: 220px;
-  min-width: 220px;
+  /* Carousel kart genişliği büyütüldü (220 -> 270) — daha büyük ürün görseli için */
+  width: 270px;
+  min-width: 270px;
   scroll-snap-align: start;
   display: flex;
 }
@@ -246,8 +249,8 @@
   }
 
   .product-grid-card-wrapper {
-    width: 180px;
-    min-width: 180px;
+    width: 220px;
+    min-width: 220px;
   }
 
   .product-grid-arrow {
@@ -291,8 +294,8 @@
   }
 
   .product-grid-card-wrapper {
-    width: 160px;
-    min-width: 160px;
+    width: 200px;
+    min-width: 200px;
     scroll-snap-align: start;
   }
 
@@ -340,8 +343,8 @@
   }
 
   .product-grid-card-wrapper {
-    width: 145px;
-    min-width: 145px;
+    width: 175px;
+    min-width: 175px;
   }
 
   .product-grid-header {
@@ -367,15 +370,15 @@
     padding: 6px 10px;
   }
 
-  /* Mobilde kart içi stiller */
+  /* Mobilde kart içi stiller — kart ve görsel büyütüldü (Migros benzeri his) */
   .product-grid-card-wrapper .modern-product-card {
-    min-height: 280px !important;
+    min-height: 320px !important;
     border-radius: 12px !important;
   }
 
   .product-grid-card-wrapper .product-image-container {
-    height: 100px !important;
-    min-height: 100px !important;
+    height: 150px !important;
+    min-height: 150px !important;
   }
 
   .product-grid-card-wrapper .card-body {

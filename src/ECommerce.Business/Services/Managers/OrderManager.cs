@@ -254,7 +254,7 @@ namespace ECommerce.Business.Services.Managers
         /// SIRALAMA: En yeni siparişler en üstte görünür (OrderDate DESC).
         /// NEDEN: Admin ve mağaza görevlisi yeni siparişleri önce görmeli.
         /// </summary>
-        public async Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null)
+        public async Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null, DateTime? from = null, DateTime? to = null)
         {
             var query = _context.Orders
                 .Include(o => o.OrderItems)
@@ -263,6 +263,24 @@ namespace ECommerce.Business.Services.Managers
                 .AsQueryable();
             if (userId.HasValue)
                 query = query.Where(o => o.UserId == userId.Value);
+
+            // TARİH ARALIĞI FİLTRESİ (OrderDate üzerinden)
+            // NEDEN OrderDate: Admin "siparişin verildiği tarih"e göre arama yapmak ister;
+            //   CreatedAt (DB kayıt zamanı) veya AssignedAt (kurye atama) yerine müşteri
+            //   sipariş tarihi operasyonel olarak en anlamlı kriterdir.
+            if (from.HasValue)
+            {
+                // Başlangıç gününün en başından itibaren dahil et.
+                var fromDate = from.Value.Date;
+                query = query.Where(o => o.OrderDate >= fromDate);
+            }
+            if (to.HasValue)
+            {
+                // Bitiş gününü tam olarak kapsamak için günün sonuna (23:59:59.999) kadar al.
+                // NEDEN: Kullanıcı "2026-06-28" seçtiğinde o günün tüm siparişleri dahil olmalı.
+                var toEndOfDay = to.Value.Date.AddDays(1).AddTicks(-1);
+                query = query.Where(o => o.OrderDate <= toEndOfDay);
+            }
 
             var orders = await query
                 .OrderByDescending(o => o.OrderDate)
@@ -1151,9 +1169,18 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<decimal> GetTotalRevenueAsync()
         {
+            // CİRO HESABI - TEK KAYNAK (Single Source of Truth)
+            // NEDEN: Daha önce ciro 3 farklı yerde 3 farklı şekilde hesaplanıyordu
+            //   (dashboard KPI sadece Delivered+TotalPrice, grafik ve satış raporu ise
+            //   Delivered/Completed + FinalPrice). Bu da aynı ekranda farklı rakamlar
+            //   gösterilmesine yol açıyordu.
+            // ÇÖZÜM: Tamamlanmış sipariş kabul edilen tüm durumlar (Delivered VEYA Completed)
+            //   dahil edilir ve tartı/iade düzeltmeleri sonrası gerçek tutar olan FinalPrice
+            //   öncelikli kullanılır; FinalPrice 0 ise TotalPrice'a düşülür.
+            // Bu metot artık dashboard, grafik ve satış raporu için ortak referanstır.
             return await _context.Orders
-                .Where(o => o.Status == OrderStatus.Delivered)
-                .SumAsync(o => o.TotalPrice);
+                .Where(o => o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed)
+                .SumAsync(o => o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice);
         }
 
         public async Task<IEnumerable<OrderListDto>> GetAllOrdersAsync(int page = 1, int size = 20)

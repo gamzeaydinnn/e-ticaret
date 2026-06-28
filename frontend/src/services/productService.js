@@ -57,6 +57,24 @@ const normalizeNullableBoolean = (value) => {
   return null;
 };
 
+const resolveImageUrl = (img) => {
+  if (!img) return "";
+  if (img.startsWith("http://") || img.startsWith("https://")) {
+    return img;
+  }
+  const baseURL = getBackendBaseURL();
+  return img.startsWith("/") ? baseURL + img : baseURL + "/" + img;
+};
+
+const mapProductImageUrls = (p = {}) => {
+  const raw = p.imageUrls || p.image_urls || p.ImageUrls;
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw.map(resolveImageUrl).filter(Boolean);
+  }
+  const single = resolveImageUrl(p.image_url || p.image || p.imageUrl || "");
+  return single ? [single] : [];
+};
+
 // ============================================================
 // PRODUCT MAPPER
 // ============================================================
@@ -96,6 +114,9 @@ const mapProduct = (p = {}) => {
   const stock =
     parseInt(p.stock ?? p.stockQuantity ?? p.stock_quantity ?? 0) || 0;
 
+  const imageUrls = mapProductImageUrls(p);
+  const imageUrl = imageUrls[0] || "";
+
   return {
     id: p.id,
     name: p.name || p.title || "",
@@ -108,20 +129,8 @@ const mapProduct = (p = {}) => {
     specialPrice: special,
     pricePerUnit: parseFloat(p.pricePerUnit ?? p.PricePerUnit ?? 0) || 0,
     discountPercentage,
-    // Backend'den gelen imageUrl'i API base URL ile birleştir (eğer relative path ise)
-    imageUrl: (() => {
-      const img = p.image_url || p.image || p.imageUrl || "";
-      if (!img) return "";
-
-      // Eğer URL http/https ile başlıyorsa, zaten tam URL
-      if (img.startsWith("http://") || img.startsWith("https://")) {
-        return img;
-      }
-
-      // Relative path ise backend base URL'i ile birleştir
-      const baseURL = getBackendBaseURL();
-      return img.startsWith("/") ? baseURL + img : baseURL + "/" + img;
-    })(),
+    imageUrl,
+    imageUrls,
     stock,
     stockQuantity: stock,
     description: p.description || "",
@@ -592,13 +601,20 @@ export const ProductService = {
       const categoryId = parseRequiredCategoryId(formData.categoryId);
 
       // Form verilerini API formatına dönüştür
+      const imageUrls = Array.isArray(formData.imageUrls)
+        ? formData.imageUrls.map((url) => url?.trim()).filter(Boolean)
+        : formData.imageUrl?.trim()
+          ? [formData.imageUrl.trim()]
+          : [];
+
       const payload = {
         name: formData.name?.trim() || "",
         description: formData.description?.trim() || "",
         price: parseFloat(formData.price) || 0,
         stockQuantity: parseInt(formData.stockQuantity || formData.stock) || 0,
         categoryId,
-        imageUrl: formData.imageUrl?.trim() || null,
+        imageUrl: imageUrls[0] || null,
+        imageUrls,
         specialPrice: formData.specialPrice
           ? parseFloat(formData.specialPrice)
           : null,
@@ -632,14 +648,18 @@ export const ProductService = {
     try {
       const categoryId = parseRequiredCategoryId(formData.categoryId);
 
-      // Form verilerini API formatına dönüştür
+      const imageUrls = Array.isArray(formData.imageUrls)
+        ? formData.imageUrls.map((url) => url?.trim()).filter(Boolean)
+        : [];
+
       const payload = {
         name: formData.name?.trim() || "",
         description: formData.description?.trim() || "",
         price: parseFloat(formData.price) || 0,
         stockQuantity: parseInt(formData.stockQuantity || formData.stock) || 0,
         categoryId,
-        imageUrl: formData.imageUrl?.trim() || null,
+        imageUrl: formData.imageUrl?.trim() || imageUrls[0] || null,
+        imageUrls,
         specialPrice: formData.specialPrice
           ? parseFloat(formData.specialPrice)
           : null,

@@ -75,9 +75,11 @@ namespace ECommerce.API.Controllers.Admin
 
         [HttpGet]
         [HasPermission(Permissions.Orders.View)]
-        public async Task<IActionResult> GetOrders()
+        public async Task<IActionResult> GetOrders([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
         {
-            var orders = await _orderService.GetOrdersAsync();
+            // Tarih aralığı (from/to) opsiyoneldir; gönderilmezse tüm siparişler döner.
+            // Filtreleme OrderDate üzerinden, servis katmanında yapılır (iş kuralı orada merkezi).
+            var orders = await _orderService.GetOrdersAsync(userId: null, from: from, to: to);
             return Ok(orders);
         }
 

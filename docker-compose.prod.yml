@@ -170,6 +170,7 @@ services:
       - PaymentSettings__PosnetIsTestEnvironment=${POSNET_IS_TEST_ENVIRONMENT:-false}
       - PaymentSettings__PosnetTimeoutSeconds=${POSNET_TIMEOUT_SECONDS:-60}
       - PaymentSettings__PosnetWorldPointEnabled=${POSNET_WORLDPOINT_ENABLED:-true}
+      - PaymentSettings__PosnetUseAuthForWeightBasedItems=${POSNET_USE_AUTH_FOR_WEIGHT_BASED_ITEMS:-false}
       # CORS Configuration for production
       - Cors__AllowedOrigins__0=https://golkoygurme.com.tr
       - Cors__AllowedOrigins__1=https://www.golkoygurme.com.tr

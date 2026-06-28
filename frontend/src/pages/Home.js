@@ -1333,7 +1333,7 @@ export default function Home() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(240px, 280px))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 340px))",
                 gap: "20px",
                 justifyContent: "center",
               }}

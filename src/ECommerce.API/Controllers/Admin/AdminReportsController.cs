@@ -74,13 +74,22 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetLowStockProducts()
         {
             var threshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
+
+            // Eşik altındaki tüm aktif ürünler (stok 0 dahil) tek sorguda çekilir.
+            // NEDEN tek sorgu: Aynı tabloyu iki kez taramak yerine bellekte ayrıştırmak
+            //   daha performanslı; ürün sayısı tipik olarak yönetilebilir seviyededir.
             var products = await _context.Products
                 .Where(p => p.IsActive && p.StockQuantity <= threshold)
                 .Select(p => new { p.Id, p.Name, p.StockQuantity })
                 .OrderBy(p => p.StockQuantity)
                 .ToListAsync();
 
-            return Ok(new { threshold, products });
+            // "Stokta yok" (stok <= 0) ile "kritik stok" (0 < stok <= eşik) ayrımı.
+            // Frontend bu toplamları ayrı kartlarda gösterebilsin diye sayıları da döndürüyoruz.
+            var outOfStockCount = products.Count(p => p.StockQuantity <= 0);
+            var lowStockCount = products.Count - outOfStockCount;
+
+            return Ok(new { threshold, outOfStockCount, lowStockCount, products });
         }
 
         [HttpGet("inventory/movements")]

@@ -738,22 +738,15 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
         /// <summary>
         /// Callback'in auth-only mi yoksa sale mi olduğunu pending ödeme kaydından tespit eder.
-        /// NEDEN: Ağırlık bazlı 3D akışta callback sonrasında ödeme çekilmiş gibi davranmak capture sürecini bozar.
+        /// NEDEN: Ağırlık bazlı siparişler her zaman Auth değildir. POS Auth yetkisi kapalıysa
+        /// kg ürünler de Sale olarak çekilir; bu durumda sırf HasWeightBasedItems=true diye
+        /// siparişi PreAuthorized bırakmak sipariş/tartı ekranlarında kaydı gizler.
         /// </summary>
         private async Task<bool> IsAuthorizationOnlyFlowAsync(int orderId)
         {
             var payment = await GetLatestPosnetPaymentAsync(orderId);
-            if (payment?.TransactionType != null &&
-                payment.TransactionType.Equals("Auth", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var order = await _dbContext.Orders
-                .AsNoTracking()
-                .FirstOrDefaultAsync(o => o.Id == orderId);
-
-            return order?.HasWeightBasedItems == true;
+            return payment?.TransactionType != null &&
+                payment.TransactionType.Equals("Auth", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

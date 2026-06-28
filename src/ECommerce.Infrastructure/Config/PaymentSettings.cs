@@ -104,6 +104,12 @@ namespace ECommerce.Infrastructure.Config
         public bool PosnetWorldPointEnabled { get; set; } = false;
 
         /// <summary>
+        /// Kg bazlı ürünlerde 3D Secure'u Auth/Capture akışıyla başlatır.
+        /// Canlı POS Auth yetkisi açık değilse Yapı Kredi 0058 "POSa İzin Verilmeyen İşlem" döner.
+        /// </summary>
+        public bool PosnetUseAuthForWeightBasedItems { get; set; } = false;
+
+        /// <summary>
         /// Joker Vadaa (kişiye özel kampanyalar) aktif mi?
         /// true = Joker Vadaa sorgulama aktif
         /// </summary>

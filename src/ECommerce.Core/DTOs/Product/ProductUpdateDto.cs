@@ -14,6 +14,16 @@ namespace ECommerce.Core.DTOs.Product
 
         public string? ImageUrl { get; set; }
 
+        /// <summary>
+        /// Yeni eklenecek görseller — mevcut görseller silinmez, yalnızca eklenir.
+        /// </summary>
+        public List<string>? AdditionalImageUrls { get; set; }
+
+        /// <summary>
+        /// Güncelleme sonrası nihai görsel listesi — silinenler listede yoksa kaldırılır.
+        /// </summary>
+        public List<string>? ImageUrls { get; set; }
+
         public int? BrandId { get; set; } // Brand ilişkisi için id
         public bool? AdminOverrideName { get; set; }
         public bool? AdminOverridePrice { get; set; }

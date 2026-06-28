@@ -82,6 +82,8 @@ namespace ECommerce.Data.Repositories
         {
             return await _context.Products
                 .Include(p => p.Category)
+                .Include(p => p.ProductImages)
+                .Include(p => p.Brand)
                 .FirstOrDefaultAsync(p => p.Id == id);
         }
         public new async Task<List<Product>> GetAllAsync()

@@ -11,8 +11,8 @@
 
 import api from "./api";
 
-const WEIGHT_ADJUSTMENT_BASE = "/weight-adjustment";
-const WEIGHT_PAYMENT_BASE = "/weight-payment";
+const WEIGHT_ADJUSTMENT_BASE = "/api/weight-adjustment";
+const WEIGHT_PAYMENT_BASE = "/api/weight-payment";
 
 /**
  * Ağırlık Fark Yönetimi Servisi

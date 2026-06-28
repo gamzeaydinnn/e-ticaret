@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
 import variantStore from "../../utils/variantStore";
-import XmlImportModal from "../../components/admin/XmlImportModal";
-import VariantManager from "../../components/admin/VariantManager";
+import XmlImportModal from "../../components/Admin/XmlImportModal";
+import VariantManager from "../../components/Admin/VariantManager";
 
 const AdminProducts = () => {
   const [products, setProducts] = useState([]);
@@ -20,6 +20,7 @@ const AdminProducts = () => {
     stock: "",
     description: "",
     imageUrl: "",
+    imageUrls: [],
     isActive: true,
     adminOverrideName: null,
     adminOverridePrice: null,
@@ -75,11 +76,11 @@ const AdminProducts = () => {
   const [serverTotalPages, setServerTotalPages] = useState(1);
 
   // Resim Upload State'leri
-  const [imageFile, setImageFile] = useState(null);
   const [imageUploading, setImageUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const imageInputRef = useRef(null);
+  const replaceImageInputRef = useRef(null);
+  const replacingImageIndexRef = useRef(null);
   const dropZoneRef = useRef(null);
   const fetchProductsRef = useRef(null);
 
@@ -300,6 +301,11 @@ const AdminProducts = () => {
 
     try {
       // Ürün verilerini API formatına dönüştür
+      const isEditing = Boolean(editingProduct);
+      const currentImages = (formData.imageUrls || []).filter(Boolean);
+      const primaryImageUrl =
+        formData.imageUrl?.trim() || currentImages[0] || null;
+
       const productData = {
         name: formData.name.trim(),
         description: formData.description?.trim() || "",
@@ -307,7 +313,8 @@ const AdminProducts = () => {
         specialPrice: specialPriceValue,
         stockQuantity: stock, // API stockQuantity bekliyor
         categoryId: categoryId,
-        imageUrl: formData.imageUrl?.trim() || null,
+        imageUrl: primaryImageUrl,
+        imageUrls: currentImages,
         isActive: formData.isActive !== false,
         sku: formData.sku || "", // Mikro ERP ürünlerinde SKU bazlı güncelleme için
         adminOverrideName: formData.adminOverrideName,
@@ -345,6 +352,7 @@ const AdminProducts = () => {
         stock: "",
         description: "",
         imageUrl: "",
+        imageUrls: [],
         isActive: true,
         adminOverrideName: null,
         adminOverridePrice: null,
@@ -352,8 +360,6 @@ const AdminProducts = () => {
       });
       setEditingProduct(null);
       setEditingProductId(null);
-      setImageFile(null);
-      setImagePreview(null);
 
       // Listeyi yenile
       fetchProducts();
@@ -377,9 +383,12 @@ const AdminProducts = () => {
     setEditingProduct(product);
     setEditingProductId(product.id);
     setProductVariants(variantStore.getVariantsForProduct(product.id) || []);
-    // Mevcut ürünün resmini önizleme olarak göster
-    setImagePreview(product.imageUrl || null);
-    setImageFile(null);
+    const existingImages =
+      Array.isArray(product.imageUrls) && product.imageUrls.length > 0
+        ? product.imageUrls
+        : product.imageUrl
+          ? [product.imageUrl]
+          : [];
     setFormData({
       name: product.name,
       categoryId:
@@ -393,7 +402,8 @@ const AdminProducts = () => {
           : "",
       stock: String(resolvedStock),
       description: product.description || "",
-      imageUrl: product.imageUrl || "",
+      imageUrl: product.imageUrl || existingImages[0] || "",
+      imageUrls: existingImages,
       isActive: product.isActive,
       sku: product.sku || "", // Mikro ERP ürünlerinde SKU üzerinden güncelleme
       adminOverrideName:
@@ -418,40 +428,186 @@ const AdminProducts = () => {
    * @param {File} file - Seçilen dosya
    * @returns {boolean} - Dosya geçerli mi
    */
-  const validateAndSetImage = (file) => {
+  const validateImageFile = (file) => {
     if (!file) return false;
 
-    // Dosya türü kontrolü (frontend'de de güvenlik)
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
     if (!allowedTypes.includes(file.type)) {
       alert("Sadece resim dosyaları (jpg, png, gif, webp) yüklenebilir.");
       return false;
     }
 
-    // Dosya boyutu kontrolü (10MB)
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       alert("Dosya boyutu maksimum 10MB olabilir.");
       return false;
     }
 
-    setImageFile(file);
-    // Önizleme için ObjectURL oluştur
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
     return true;
   };
 
-  /**
-   * Resim dosyası seçildiğinde çağrılır.
-   * Dosyayı validate eder ve önizleme oluşturur.
-   * @param {Event} e - File input change event
-   */
-  const handleImageSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!validateAndSetImage(file)) {
-      e.target.value = "";
+  const appendUploadedImages = (urls) => {
+    if (!urls.length) return;
+    setFormData((prev) => {
+      const merged = [...(prev.imageUrls || []), ...urls];
+      return {
+        ...prev,
+        imageUrls: merged,
+        imageUrl: prev.imageUrl || merged[0] || "",
+      };
+    });
+  };
+
+  const uploadImageFiles = async (files) => {
+    const validFiles = Array.from(files || []).filter(validateImageFile);
+    if (!validFiles.length) return;
+
+    setImageUploading(true);
+    try {
+      const uploadedUrls = [];
+      for (const file of validFiles) {
+        const result = await ProductService.uploadImage(file);
+        if (result?.success && result?.imageUrl) {
+          uploadedUrls.push(result.imageUrl);
+        }
+      }
+
+      if (uploadedUrls.length > 0) {
+        appendUploadedImages(uploadedUrls);
+      } else {
+        throw new Error("Resim yüklenemedi");
+      }
+    } catch (err) {
+      console.error("Resim yükleme hatası:", err);
+      alert(
+        "Resim yüklenirken hata oluştu: " +
+          (err.response?.data?.message || err.message),
+      );
+    } finally {
+      setImageUploading(false);
+      if (imageInputRef.current) {
+        imageInputRef.current.value = "";
+      }
     }
+  };
+
+  const handleImageSelect = (e) => {
+    const files = e.target.files;
+    if (files?.length) {
+      uploadImageFiles(files);
+    }
+  };
+
+  const handleRemoveImage = (index) => {
+    const url = formData.imageUrls?.[index];
+    if (!url) return;
+
+    if (!window.confirm("Bu görseli kaldırmak istediğinize emin misiniz?")) {
+      return;
+    }
+
+    setFormData((prev) => {
+      const nextUrls = (prev.imageUrls || []).filter((_, i) => i !== index);
+      return {
+        ...prev,
+        imageUrls: nextUrls,
+        imageUrl:
+          prev.imageUrl?.trim() === url?.trim()
+            ? nextUrls[0] || ""
+            : prev.imageUrl,
+      };
+    });
+  };
+
+  const handleReplaceImageUrl = (index) => {
+    const current = formData.imageUrls?.[index];
+    if (!current) return;
+
+    const newUrl = window.prompt("Yeni görsel URL'si:", current);
+    if (!newUrl?.trim() || newUrl.trim() === current) return;
+
+    setFormData((prev) => {
+      const nextUrls = [...(prev.imageUrls || [])];
+      nextUrls[index] = newUrl.trim();
+      return {
+        ...prev,
+        imageUrls: nextUrls,
+        imageUrl:
+          prev.imageUrl?.trim() === current?.trim()
+            ? newUrl.trim()
+            : prev.imageUrl,
+      };
+    });
+  };
+
+  const handleReplaceImageWithFile = (index) => {
+    replacingImageIndexRef.current = index;
+    replaceImageInputRef.current?.click();
+  };
+
+  const handleReplaceImageFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    const index = replacingImageIndexRef.current;
+    e.target.value = "";
+
+    if (index === null || index === undefined || !validateImageFile(file)) {
+      replacingImageIndexRef.current = null;
+      return;
+    }
+
+    setImageUploading(true);
+    try {
+      const result = await ProductService.uploadImage(file);
+      if (!result?.success || !result?.imageUrl) {
+        throw new Error(result?.message || "Resim yüklenemedi");
+      }
+
+      const oldUrl = formData.imageUrls?.[index];
+      setFormData((prev) => {
+        const nextUrls = [...(prev.imageUrls || [])];
+        nextUrls[index] = result.imageUrl;
+        return {
+          ...prev,
+          imageUrls: nextUrls,
+          imageUrl:
+            prev.imageUrl?.trim() === oldUrl?.trim()
+              ? result.imageUrl
+              : prev.imageUrl,
+        };
+      });
+    } catch (err) {
+      alert(
+        "Görsel güncellenemedi: " +
+          (err.response?.data?.message || err.message),
+      );
+    } finally {
+      setImageUploading(false);
+      replacingImageIndexRef.current = null;
+    }
+  };
+
+  const handleSetPrimaryImage = (index) => {
+    setFormData((prev) => {
+      const selected = (prev.imageUrls || [])[index];
+      if (!selected) return prev;
+      return {
+        ...prev,
+        imageUrl: selected,
+      };
+    });
+  };
+
+  const handleMoveImage = (index, direction) => {
+    setFormData((prev) => {
+      const urls = [...(prev.imageUrls || [])];
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= urls.length) return prev;
+      [urls[index], urls[targetIndex]] = [urls[targetIndex], urls[index]];
+      return {
+        ...prev,
+        imageUrls: urls,
+      };
+    });
   };
 
   /**
@@ -483,60 +639,7 @@ const AdminProducts = () => {
 
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
-      validateAndSetImage(files[0]);
-    }
-  };
-
-  /**
-   * Seçilen resim dosyasını sunucuya yükler.
-   * Başarılı olursa imageUrl'i formData'ya set eder.
-   */
-  const handleImageUpload = async () => {
-    if (!imageFile) {
-      alert("Lütfen önce bir resim dosyası seçin.");
-      return;
-    }
-
-    setImageUploading(true);
-    try {
-      const result = await ProductService.uploadImage(imageFile);
-      if (result?.success && result?.imageUrl) {
-        // Yükleme başarılı - form'a URL'i ekle
-        setFormData((prev) => ({ ...prev, imageUrl: result.imageUrl }));
-        setImagePreview(result.imageUrl);
-        setImageFile(null);
-        // Input'u temizle
-        if (imageInputRef.current) {
-          imageInputRef.current.value = "";
-        }
-        alert("✅ Resim başarıyla yüklendi!");
-      } else {
-        throw new Error(result?.message || "Resim yüklenemedi");
-      }
-    } catch (err) {
-      console.error("Resim yükleme hatası:", err);
-      alert(
-        "Resim yüklenirken hata oluştu: " +
-          (err.response?.data?.message || err.message),
-      );
-    } finally {
-      setImageUploading(false);
-    }
-  };
-
-  /**
-   * Resim seçimini iptal eder ve önizlemeyi temizler.
-   */
-  const handleClearImage = () => {
-    setImageFile(null);
-    // Mevcut ürün düzenleniyorsa eski resmi göster
-    setImagePreview(editingProduct?.imageUrl || null);
-    setFormData((prev) => ({
-      ...prev,
-      imageUrl: editingProduct?.imageUrl || "",
-    }));
-    if (imageInputRef.current) {
-      imageInputRef.current.value = "";
+      uploadImageFiles(files);
     }
   };
 
@@ -1508,14 +1611,12 @@ const AdminProducts = () => {
                   stock: "",
                   description: "",
                   imageUrl: "",
+                  imageUrls: [],
                   isActive: true,
                   adminOverrideName: null,
                   adminOverridePrice: null,
                   adminOverrideCategory: null,
                 });
-                // Resim state'lerini sıfırla
-                setImageFile(null);
-                setImagePreview(null);
                 if (imageInputRef.current) {
                   imageInputRef.current.value = "";
                 }
@@ -2200,8 +2301,167 @@ const AdminProducts = () => {
 
                       <div className="col-12">
                         <label className="form-label fw-semibold mb-2">
-                          Ürün Resmi
+                          Ürün Görselleri
+                          {(formData.imageUrls?.length || 0) > 0 && (
+                            <span className="text-muted ms-2">
+                              ({formData.imageUrls.length} fotoğraf)
+                            </span>
+                          )}
                         </label>
+
+                        {(formData.imageUrls?.length || 0) > 0 && (
+                          <div className="row g-3 mb-3">
+                            {formData.imageUrls.map((url, index) => {
+                              const isPrimary =
+                                formData.imageUrl?.trim() === url?.trim();
+                              return (
+                                <div
+                                  key={`${url}-${index}`}
+                                  className="col-6 col-md-4 col-lg-3"
+                                >
+                                  <div
+                                    style={{
+                                      border: isPrimary
+                                        ? "2px solid #f57c00"
+                                        : "1px solid #e2e8f0",
+                                      borderRadius: "12px",
+                                      background: "#fff",
+                                      boxShadow: "0 2px 8px rgba(15,23,42,0.06)",
+                                    }}
+                                  >
+                                    <div style={{ position: "relative" }}>
+                                      <img
+                                        src={url}
+                                        alt={`Ürün görseli ${index + 1}`}
+                                        style={{
+                                          width: "100%",
+                                          height: "140px",
+                                          objectFit: "cover",
+                                          borderRadius: "11px 11px 0 0",
+                                          display: "block",
+                                        }}
+                                        onError={(e) => {
+                                          e.target.src = "/images/placeholder.png";
+                                        }}
+                                      />
+
+                                      {isPrimary && (
+                                        <span
+                                          className="badge position-absolute"
+                                          style={{
+                                            top: 8,
+                                            left: 8,
+                                            background: "#f57c00",
+                                          }}
+                                        >
+                                          Kapak
+                                        </span>
+                                      )}
+
+                                      <div
+                                        className="position-absolute d-flex flex-column gap-1"
+                                        style={{ top: 8, right: 8, zIndex: 2 }}
+                                      >
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-light border-0 shadow-sm"
+                                          style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            borderRadius: 8,
+                                          }}
+                                          onClick={() =>
+                                            handleReplaceImageWithFile(index)
+                                          }
+                                          title="Dosyayla değiştir"
+                                          disabled={imageUploading}
+                                        >
+                                          <i className="fas fa-pen text-primary"></i>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-danger shadow-sm"
+                                          style={{
+                                            width: 32,
+                                            height: 32,
+                                            padding: 0,
+                                            borderRadius: 8,
+                                          }}
+                                          onClick={() =>
+                                            handleRemoveImage(index)
+                                          }
+                                          title="Sil"
+                                        >
+                                          <i className="fas fa-trash"></i>
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="d-flex flex-wrap gap-1 p-2 border-top bg-light">
+                                      {!isPrimary && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-primary"
+                                          onClick={() =>
+                                            handleSetPrimaryImage(index)
+                                          }
+                                          title="Kapak yap"
+                                        >
+                                          <i className="fas fa-star me-1"></i>
+                                          Kapak
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() =>
+                                          handleReplaceImageUrl(index)
+                                        }
+                                        title="URL düzenle"
+                                      >
+                                        <i className="fas fa-link me-1"></i>
+                                        URL
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() =>
+                                          handleMoveImage(index, -1)
+                                        }
+                                        disabled={index === 0}
+                                        title="Sola taşı"
+                                      >
+                                        <i className="fas fa-arrow-left"></i>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() =>
+                                          handleMoveImage(index, 1)
+                                        }
+                                        disabled={
+                                          index === formData.imageUrls.length - 1
+                                        }
+                                        title="Sağa taşı"
+                                      >
+                                        <i className="fas fa-arrow-right"></i>
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <input
+                          ref={replaceImageInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          style={{ display: "none" }}
+                          onChange={handleReplaceImageFileSelect}
+                        />
 
                         {/* Drag & Drop Alanı */}
                         <div
@@ -2210,7 +2470,7 @@ const AdminProducts = () => {
                           onDragLeave={handleDragLeave}
                           onDragOver={handleDragOver}
                           onDrop={handleDrop}
-                          onClick={() => imageInputRef.current?.click()}
+                          onClick={() => !imageUploading && imageInputRef.current?.click()}
                           style={{
                             border: isDragging
                               ? "3px dashed #f57c00"
@@ -2218,142 +2478,70 @@ const AdminProducts = () => {
                             borderRadius: "16px",
                             padding: "24px",
                             textAlign: "center",
-                            cursor: "pointer",
+                            cursor: imageUploading ? "wait" : "pointer",
                             transition: "all 0.3s ease",
                             background: isDragging
                               ? "rgba(245, 124, 0, 0.1)"
                               : "rgba(245, 124, 0, 0.02)",
                             transform: isDragging ? "scale(1.02)" : "scale(1)",
+                            opacity: imageUploading ? 0.7 : 1,
                           }}
                         >
-                          {/* Resim Önizleme Alanı */}
-                          {imagePreview ? (
-                            <div className="mb-3">
-                              <img
-                                src={imagePreview}
-                                alt="Ürün önizleme"
-                                style={{
-                                  maxWidth: "200px",
-                                  maxHeight: "150px",
-                                  objectFit: "contain",
-                                  borderRadius: "12px",
-                                  border: "2px solid #e2e8f0",
-                                }}
-                                onError={(e) => {
-                                  e.target.src = "/images/placeholder.png";
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="py-3">
-                              <i
-                                className="fas fa-cloud-upload-alt"
-                                style={{
-                                  fontSize: "48px",
-                                  color: isDragging ? "#f57c00" : "#94a3b8",
-                                  transition: "color 0.3s ease",
-                                }}
-                              ></i>
-                              <p
-                                className="mt-3 mb-1 fw-medium"
-                                style={{ color: "#64748b" }}
-                              >
-                                {isDragging
-                                  ? "Bırakarak yükle"
-                                  : "Resim sürükleyip bırakın veya tıklayın"}
-                              </p>
-                              <small className="text-muted">
-                                JPG, PNG, GIF, WEBP (Maks. 10MB)
-                              </small>
-                            </div>
-                          )}
+                          <div className="py-2">
+                            {imageUploading ? (
+                              <>
+                                <span className="spinner-border text-warning mb-2"></span>
+                                <p className="mb-0 fw-medium" style={{ color: "#64748b" }}>
+                                  Görseller yükleniyor...
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <i
+                                  className="fas fa-cloud-upload-alt"
+                                  style={{
+                                    fontSize: "42px",
+                                    color: isDragging ? "#f57c00" : "#94a3b8",
+                                  }}
+                                ></i>
+                                <p className="mt-3 mb-1 fw-medium" style={{ color: "#64748b" }}>
+                                  {isDragging
+                                    ? "Bırakarak yükle"
+                                    : "Fotoğraf sürükleyin veya tıklayın"}
+                                </p>
+                                <small className="text-muted">
+                                  JPG, PNG, GIF, WEBP (Maks. 10MB) — Görselleri
+                                  düzenlemek/silmek için kaydetmeden önce kart
+                                  üzerindeki butonları kullanın
+                                </small>
+                              </>
+                            )}
+                          </div>
 
-                          {/* Gizli File Input */}
                           <input
                             ref={imageInputRef}
                             type="file"
                             accept="image/jpeg,image/png,image/gif,image/webp"
+                            multiple
                             style={{ display: "none" }}
                             onChange={handleImageSelect}
                           />
                         </div>
 
-                        {/* Yükle & Temizle Butonları */}
-                        {(imageFile || imagePreview) && (
-                          <div className="d-flex gap-2 mt-3 justify-content-center">
-                            {/* Yükle Butonu */}
-                            {imageFile && (
-                              <button
-                                type="button"
-                                className="btn text-white"
-                                style={{
-                                  background:
-                                    "linear-gradient(135deg, #10b981, #34d399)",
-                                  borderRadius: "8px",
-                                  minWidth: "120px",
-                                }}
-                                onClick={handleImageUpload}
-                                disabled={imageUploading}
-                              >
-                                {imageUploading ? (
-                                  <>
-                                    <span className="spinner-border spinner-border-sm me-1"></span>
-                                    Yükleniyor...
-                                  </>
-                                ) : (
-                                  <>
-                                    <i className="fas fa-upload me-1"></i>
-                                    Sunucuya Yükle
-                                  </>
-                                )}
-                              </button>
-                            )}
-
-                            {/* Temizle Butonu */}
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary"
-                              style={{ borderRadius: "8px" }}
-                              onClick={handleClearImage}
-                            >
-                              <i className="fas fa-times me-1"></i>
-                              Temizle
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Mevcut URL gösterimi */}
-                        {formData.imageUrl && (
-                          <div className="mt-2 text-center">
-                            <small className="text-muted">
-                              <i className="fas fa-link me-1"></i>
-                              Kayıtlı: {formData.imageUrl}
-                            </small>
-                          </div>
-                        )}
-
-                        {/* Manuel URL girişi (opsiyonel) */}
                         <div className="mt-2 text-center">
                           <small
                             className="text-primary"
                             style={{ cursor: "pointer" }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              const url = prompt(
-                                "Resim URL'si girin (opsiyonel):",
-                                formData.imageUrl,
-                              );
-                              if (url !== null) {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  imageUrl: url,
-                                }));
-                                setImagePreview(url || null);
+                              const url = prompt("Resim URL'si girin:");
+                              if (url?.trim()) {
+                                appendUploadedImages([url.trim()]);
                               }
                             }}
                           >
                             <i className="fas fa-edit me-1"></i>
-                            Manuel URL gir
+                            Manuel URL ekle
                           </small>
                         </div>
                       </div>

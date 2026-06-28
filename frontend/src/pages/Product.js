@@ -24,6 +24,7 @@ import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useAuth } from "../contexts/AuthContext";
 import getProductCategoryRules from "../config/productCategoryRules";
+import ProductGallery from "../components/ProductGallery";
 import "./Product.css";
 
 // ============================================================
@@ -114,7 +115,6 @@ export default function Product() {
   const [rule, setRule] = useState(null);
   const [validationError, setValidationError] = useState("");
   const [activeTab, setActiveTab] = useState(TABS.NUTRITION);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -374,6 +374,14 @@ export default function Product() {
     };
   }, [product]);
 
+  const productImages = useMemo(() => {
+    if (!product) return [];
+    if (Array.isArray(product.imageUrls) && product.imageUrls.length > 0) {
+      return product.imageUrls;
+    }
+    return product.imageUrl ? [product.imageUrl] : [];
+  }, [product]);
+
   // ============================================================
   // STOK DURUMU (memoized)
   // ============================================================
@@ -508,27 +516,8 @@ export default function Product() {
       <div className="product-page__content">
         {/* Sol Taraf - Ürün Görseli */}
         <div className="product-page__image-section">
-          <div className="product-page__image-container">
-            {/* Yükleniyor göstergesi */}
-            {!imageLoaded && (
-              <div className="product-page__image-skeleton">
-                <i className="fas fa-image"></i>
-              </div>
-            )}
-
-            {/* Ürün görseli - Mevcut imageUrl korunuyor */}
-            <img
-              src={product.imageUrl || "/images/placeholder.png"}
-              alt={product.name}
-              className={`product-page__image ${
-                imageLoaded ? "product-page__image--loaded" : ""
-              }`}
-              onLoad={() => setImageLoaded(true)}
-              onError={(e) => {
-                e.target.src = "/images/placeholder.png";
-                setImageLoaded(true);
-              }}
-            />
+          <div className="product-page__image-container product-page__image-container--gallery">
+            <ProductGallery images={productImages} alt={product.name} />
 
             {/* İndirim rozeti */}
             {priceInfo?.hasDiscount && (

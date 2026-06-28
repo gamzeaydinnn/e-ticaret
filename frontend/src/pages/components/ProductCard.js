@@ -23,7 +23,7 @@ export default function ProductCard({
   isFavorite,
   campaign,
   showShare = true,
-  cardMaxWidth = "280px",
+  cardMaxWidth = "340px",
 }) {
   // Eğer ürün bilgisi gelmezse, bileşeni render etme.
   if (!product) {
@@ -241,8 +241,8 @@ export default function ProductCard({
         <div
           className="product-image-container"
           style={{
-            height: "120px",
-            minHeight: "120px",
+            height: "200px",
+            minHeight: "200px",
             background: "#ffffff",
             position: "relative",
             overflow: "hidden",
@@ -261,8 +261,8 @@ export default function ProductCard({
               alt={product.name}
               className="product-image"
               style={{
-                maxHeight: "100px",
-                maxWidth: "100px",
+                maxHeight: "180px",
+                maxWidth: "180px",
                 objectFit: "contain",
                 filter: "drop-shadow(0 3px 8px rgba(0,0,0,0.1))",
               }}

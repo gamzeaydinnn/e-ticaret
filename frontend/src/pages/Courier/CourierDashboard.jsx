@@ -736,6 +736,24 @@ export default function CourierDashboard() {
                             </span>
                           </div>
 
+                          {/* Sipariş Tarihi: kuryenin siparişin ne zaman verildiğini
+                              görebilmesi için tarih + saat gösterilir. */}
+                          {order.orderTime && (
+                            <p
+                              className="text-muted mb-2"
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              <i className="fas fa-clock me-2 text-secondary"></i>
+                              {new Date(order.orderTime).toLocaleString("tr-TR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          )}
+
                           {/* Müşteri ve Adres */}
                           <div className="mb-2">
                             <p

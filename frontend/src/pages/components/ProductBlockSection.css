@@ -21,9 +21,10 @@
   background-color: #fff;
   overflow: hidden;
   margin-bottom: 20px;
-  --block-card-width: 200px;
-  --block-image-height: 130px;
-  --block-card-height: 340px;
+  /* Anasayfa ürün blokları büyütüldü (görsel ve kart yüksekliği artırıldı) */
+  --block-card-width: 250px;
+  --block-image-height: 200px;
+  --block-card-height: 400px;
   --block-shell-border: 1px solid rgba(255, 107, 53, 0.1);
   --block-shell-radius: 16px;
   --block-shell-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
@@ -420,9 +421,9 @@
   }
 
   .product-block-section {
-    --block-card-width: 170px;
-    --block-image-height: 110px;
-    --block-card-height: 310px;
+    --block-card-width: 210px;
+    --block-image-height: 160px;
+    --block-card-height: 370px;
   }
 
   /* POSTER - kart ile birebir aynı boyut */
@@ -475,9 +476,9 @@
   .product-block-section {
     padding: 20px 0;
     margin-bottom: 15px;
-    --block-card-width: 150px;
-    --block-image-height: 96px;
-    --block-card-height: 280px;
+    --block-card-width: 185px;
+    --block-image-height: 140px;
+    --block-card-height: 340px;
   }
 
   .product-block-header {
@@ -605,9 +606,9 @@
 @media (max-width: 576px) {
   .product-block-section {
     padding: 15px 0;
-    --block-card-width: 140px;
-    --block-image-height: 88px;
-    --block-card-height: 260px;
+    --block-card-width: 170px;
+    --block-image-height: 130px;
+    --block-card-height: 320px;
   }
 
   .product-block-header {

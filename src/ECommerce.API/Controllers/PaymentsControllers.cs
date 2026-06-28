@@ -508,8 +508,12 @@ namespace ECommerce.API.Controllers
                 var hasWeightBasedItems = order.HasWeightBasedItems ||
                     (order.OrderItems?.Any(oi => oi.IsWeightBased) == true);
 
-                // ── MADDE 1: KGL ürünlerde txnType "Auth" (provizyon) olmalı ─────────
-                var txnType = hasWeightBasedItems ? "Auth" : "Sale";
+                // Canlı POS'ta Auth yetkisi açık değilse Yapı Kredi finalizasyonda
+                // 0058 "POSa İzin Verilmeyen İşlem" döndürür. Bu yüzden provizyon akışı
+                // config ile bilinçli açılmadıkça kg ürünler de Sale olarak ilerler.
+                var settings = _paymentOptions.Value;
+                var useAuthForWeightItems = hasWeightBasedItems && settings.PosnetUseAuthForWeightBasedItems;
+                var txnType = useAuthForWeightItems ? "Auth" : "Sale";
 
                 // ── MADDE 9: Tutar kaynağı tek noktadan belirleniyor ──────────────────
                 decimal bankAmount;
@@ -575,6 +579,13 @@ namespace ECommerce.API.Controllers
                         bankAmount, request.OrderId);
                 }
 
+                if (hasWeightBasedItems)
+                {
+                    _logger.LogInformation(
+                        "[POSNET-3DS] KG sipariş işlem tipi: {TxnType}. PosnetUseAuthForWeightBasedItems={UseAuth}. OrderId: {OrderId}",
+                        txnType, settings.PosnetUseAuthForWeightBasedItems, request.OrderId);
+                }
+
                 // 3D Secure başlat
                 var result = await _posnetService.Initiate3DSecureAsync(
                     orderId: request.OrderId,
@@ -601,7 +612,6 @@ namespace ECommerce.API.Controllers
                     request.OrderId, oosData?.OrderId, !string.IsNullOrEmpty(oosData?.Data1));
 
                 // Form data oluştur - POSNET OOS response verilerini dahil et
-                var settings = _paymentOptions.Value;
                 var formData = new Posnet3DSecureFormData
                 {
                     ActionUrl = settings.Posnet3DServiceUrl,

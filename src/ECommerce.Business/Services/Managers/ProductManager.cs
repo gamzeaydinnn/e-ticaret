@@ -129,24 +129,7 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return null;
 
-            return new ProductListDto
-            {
-                Id = product.Id,
-                Sku = product.SKU,
-                Name = product.Name,
-                Slug = product.Slug ?? string.Empty,
-                Description = product.Description ?? string.Empty,
-                Price = product.Price,
-                SpecialPrice = product.SpecialPrice,
-                StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
-                Brand = product.Brand?.Name ?? string.Empty,
-                CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty,
-                AdminOverrideName = product.AdminOverrideName,
-                AdminOverridePrice = product.AdminOverridePrice,
-                AdminOverrideCategory = product.AdminOverrideCategory
-            };
+            return MapToDto(product);
         }
 
         public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
@@ -154,6 +137,10 @@ namespace ECommerce.Business.Services.Managers
             // SKU otomatik oluştur: CategoryId + timestamp + random
             var sku = $"PRD{productDto.CategoryId:D2}{DateTime.UtcNow:yyyyMMddHHmmss}{Random.Shared.Next(1000, 9999)}";
             var resolvedSku = string.IsNullOrWhiteSpace(productDto.SKU) ? sku : productDto.SKU.Trim();
+
+            var imageUrls = productDto.ImageUrls != null && productDto.ImageUrls.Count > 0
+                ? BuildImageUrlList(null, productDto.ImageUrls)
+                : BuildImageUrlList(productDto.ImageUrl, productDto.AdditionalImageUrls);
             
             var product = new Product
             {
@@ -163,7 +150,7 @@ namespace ECommerce.Business.Services.Managers
                 SpecialPrice = productDto.SpecialPrice,
                 StockQuantity = productDto.StockQuantity,
                 CategoryId = productDto.CategoryId,
-                ImageUrl = productDto.ImageUrl ?? string.Empty,
+                ImageUrl = imageUrls.FirstOrDefault() ?? string.Empty,
                 BrandId = productDto.BrandId,
                 AdminOverrideName = productDto.AdminOverrideName,
                 AdminOverridePrice = productDto.AdminOverridePrice,
@@ -174,27 +161,12 @@ namespace ECommerce.Business.Services.Managers
             };
 
             await _productRepository.AddAsync(product);
+            await SyncProductImagesAsync(product.Id, imageUrls);
             // Invalidate product-related caches so subsequent reads reflect the new product
             InvalidateProductCaches();
 
-            return new ProductListDto
-            {
-                Id = product.Id,
-                Sku = product.SKU,
-                Name = product.Name,
-                Slug = product.Slug ?? string.Empty,
-                Description = product.Description ?? string.Empty,
-                Price = product.Price,
-                SpecialPrice = product.SpecialPrice,
-                StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
-                Brand = product.Brand?.Name ?? string.Empty,
-                CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty,
-                AdminOverrideName = product.AdminOverrideName,
-                AdminOverridePrice = product.AdminOverridePrice,
-                AdminOverrideCategory = product.AdminOverrideCategory
-            };
+            var saved = await _productRepository.GetByIdAsync(product.Id);
+            return MapToDto(saved ?? product);
         }
 
         public async Task<ProductListDto?> UpdateProductAsync(int id, ProductUpdateDto productDto)
@@ -209,7 +181,6 @@ namespace ECommerce.Business.Services.Managers
             product.SpecialPrice = productDto.SpecialPrice;
             product.StockQuantity = productDto.StockQuantity;
             product.CategoryId = productDto.CategoryId;
-            product.ImageUrl = productDto.ImageUrl ?? product.ImageUrl;
             product.BrandId = productDto.BrandId;
             product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
             product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
@@ -217,7 +188,15 @@ namespace ECommerce.Business.Services.Managers
             product.AdminOverrideCategory = true;
             product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
+            if (!string.IsNullOrWhiteSpace(productDto.ImageUrl))
+            {
+                product.ImageUrl = productDto.ImageUrl.Trim();
+            }
+
             await _productRepository.UpdateAsync(product);
+
+            await ApplyProductImageUpdatesAsync(product.Id, productDto);
+
             if (oldStock != product.StockQuantity)
             {
                 var quantity = Math.Abs(product.StockQuantity - oldStock);
@@ -231,24 +210,8 @@ namespace ECommerce.Business.Services.Managers
             }
             InvalidateProductCaches();
             
-            return new ProductListDto
-            {
-                Id = product.Id,
-                Sku = product.SKU,
-                Name = product.Name,
-                Slug = product.Slug ?? string.Empty,
-                Description = product.Description ?? string.Empty,
-                Price = product.Price,
-                SpecialPrice = product.SpecialPrice,
-                StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
-                Brand = product.Brand?.Name ?? string.Empty,
-                CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty,
-                AdminOverrideName = product.AdminOverrideName,
-                AdminOverridePrice = product.AdminOverridePrice,
-                AdminOverrideCategory = product.AdminOverrideCategory
-            };
+            var saved = await _productRepository.GetByIdAsync(product.Id);
+            return MapToDto(saved ?? product);
         }
 
         public async Task<bool> DeleteProductAsync(int id)
@@ -287,6 +250,7 @@ namespace ECommerce.Business.Services.Managers
         public async Task<ProductListDto> UpdateBySkuAsync(string sku, ProductUpdateDto productDto)
         {
             var product = await _productRepository.GetBySkuAsync(sku);
+            var additionalImageUrls = ResolveAdditionalImageUrls(productDto);
 
             if (product != null)
             {
@@ -298,14 +262,21 @@ namespace ECommerce.Business.Services.Managers
                 product.SpecialPrice = productDto.SpecialPrice;
                 product.StockQuantity = productDto.StockQuantity;
                 product.CategoryId = productDto.CategoryId;
-                product.ImageUrl = productDto.ImageUrl ?? product.ImageUrl;
                 product.BrandId = productDto.BrandId;
                 product.AdminOverrideName = ResolveAdminOverride(product.AdminOverrideName, productDto.AdminOverrideName);
                 product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
                 product.AdminOverrideCategory = true;
                 product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
 
+                if (!string.IsNullOrWhiteSpace(productDto.ImageUrl))
+                {
+                    product.ImageUrl = productDto.ImageUrl.Trim();
+                }
+
                 await _productRepository.UpdateAsync(product);
+
+                await ApplyProductImageUpdatesAsync(product.Id, productDto);
+
                 if (oldStock != product.StockQuantity)
                 {
                     await _inventoryLogService.WriteAsync(
@@ -317,6 +288,9 @@ namespace ECommerce.Business.Services.Managers
             }
             else
             {
+                var createUrls = additionalImageUrls != null && additionalImageUrls.Count > 0
+                    ? BuildImageUrlList(productDto.ImageUrl, additionalImageUrls)
+                    : BuildImageUrlList(productDto.ImageUrl, null);
                 // Yeni ürün oluştur — Mikro'dan gelen SKU korunur
                 product = new Product
                 {
@@ -326,7 +300,7 @@ namespace ECommerce.Business.Services.Managers
                     SpecialPrice = productDto.SpecialPrice,
                     StockQuantity = productDto.StockQuantity,
                     CategoryId = productDto.CategoryId,
-                    ImageUrl = productDto.ImageUrl ?? string.Empty,
+                    ImageUrl = createUrls.FirstOrDefault() ?? string.Empty,
                     BrandId = productDto.BrandId,
                     AdminOverrideName = productDto.AdminOverrideName,
                     AdminOverridePrice = productDto.AdminOverridePrice,
@@ -335,28 +309,13 @@ namespace ECommerce.Business.Services.Managers
                     Slug = await GenerateUniqueProductSlugAsync(productDto.Name, sku)
                 };
                 await _productRepository.AddAsync(product);
+                await SyncProductImagesAsync(product.Id, createUrls);
             }
 
             InvalidateProductCaches();
 
-            return new ProductListDto
-            {
-                Id = product.Id,
-                Sku = product.SKU,
-                Name = product.Name,
-                Slug = product.Slug ?? string.Empty,
-                Description = product.Description ?? string.Empty,
-                Price = product.Price,
-                SpecialPrice = product.SpecialPrice,
-                StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
-                Brand = product.Brand?.Name ?? string.Empty,
-                CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty,
-                AdminOverrideName = product.AdminOverrideName,
-                AdminOverridePrice = product.AdminOverridePrice,
-                AdminOverrideCategory = product.AdminOverrideCategory
-            };
+            var saved = await _productRepository.GetByIdAsync(product.Id);
+            return MapToDto(saved ?? product);
         }
 
         private static bool? ResolveAdminOverride(bool? currentValue, bool? requestedValue)
@@ -835,6 +794,7 @@ namespace ECommerce.Business.Services.Managers
         /// </summary>
         private ProductListDto MapToDto(Product product)
         {
+            var imageUrls = GetProductImageUrls(product);
             return new ProductListDto
             {
                 Id = product.Id,
@@ -845,11 +805,329 @@ namespace ECommerce.Business.Services.Managers
                 Price = product.Price,
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
-                ImageUrl = product.ImageUrl,
+                ImageUrl = imageUrls.FirstOrDefault() ?? product.ImageUrl,
+                ImageUrls = imageUrls,
                 Brand = product.Brand?.Name ?? string.Empty,
                 CategoryId = product.CategoryId,
-                CategoryName = product.Category?.Name ?? string.Empty
+                CategoryName = product.Category?.Name ?? string.Empty,
+                AdminOverrideName = product.AdminOverrideName,
+                AdminOverridePrice = product.AdminOverridePrice,
+                AdminOverrideCategory = product.AdminOverrideCategory
             };
+        }
+
+        private static List<string> GetProductImageUrls(Product product)
+        {
+            if (product.ProductImages?.Any(pi => pi.IsActive && !string.IsNullOrWhiteSpace(pi.Url)) == true)
+            {
+                return product.ProductImages
+                    .Where(pi => pi.IsActive && !string.IsNullOrWhiteSpace(pi.Url))
+                    .OrderByDescending(pi => pi.IsMain)
+                    .ThenBy(pi => pi.Id)
+                    .Select(pi => pi.Url.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            if (!string.IsNullOrWhiteSpace(product.ImageUrl))
+            {
+                return new List<string> { product.ImageUrl.Trim() };
+            }
+
+            return new List<string>();
+        }
+
+        private static List<string> BuildImageUrlList(string? primaryUrl, IEnumerable<string>? additionalUrls)
+        {
+            var result = new List<string>();
+            if (!string.IsNullOrWhiteSpace(primaryUrl))
+            {
+                result.Add(primaryUrl.Trim());
+            }
+
+            if (additionalUrls != null)
+            {
+                foreach (var url in additionalUrls)
+                {
+                    if (string.IsNullOrWhiteSpace(url)) continue;
+                    var trimmed = url.Trim();
+                    if (!result.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+                    {
+                        result.Add(trimmed);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        private static List<string>? ResolveAdditionalImageUrls(ProductUpdateDto productDto)
+        {
+            if (productDto.AdditionalImageUrls != null && productDto.AdditionalImageUrls.Count > 0)
+            {
+                return BuildImageUrlList(null, productDto.AdditionalImageUrls);
+            }
+
+            if (productDto.ImageUrls != null && productDto.ImageUrls.Count > 0)
+            {
+                return BuildImageUrlList(null, productDto.ImageUrls);
+            }
+
+            return null;
+        }
+
+        private async Task ApplyProductImageUpdatesAsync(int productId, ProductUpdateDto productDto)
+        {
+            if (_dbContext == null) return;
+
+            await EnsureLegacyImageMigratedAsync(productId);
+
+            if (productDto.ImageUrls != null)
+            {
+                await SyncProductImagesToDesiredListAsync(
+                    productId,
+                    productDto.ImageUrls,
+                    productDto.ImageUrl);
+                return;
+            }
+
+            var additionalUrls = ResolveAdditionalImageUrls(productDto);
+            if (additionalUrls != null && additionalUrls.Count > 0)
+            {
+                await AppendProductImagesAsync(productId, additionalUrls);
+            }
+
+            if (!string.IsNullOrWhiteSpace(productDto.ImageUrl))
+            {
+                await SetPrimaryProductImageAsync(productId, productDto.ImageUrl.Trim());
+            }
+        }
+
+        private async Task EnsureLegacyImageMigratedAsync(int productId)
+        {
+            if (_dbContext == null) return;
+
+            var product = await _dbContext.Products
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == productId);
+            if (product == null || string.IsNullOrWhiteSpace(product.ImageUrl))
+            {
+                return;
+            }
+
+            var hasImages = await _dbContext.ProductImages
+                .AnyAsync(pi => pi.ProductId == productId && pi.IsActive);
+            if (hasImages)
+            {
+                return;
+            }
+
+            _dbContext.ProductImages.Add(new ProductImage
+            {
+                ProductId = productId,
+                Url = product.ImageUrl.Trim(),
+                FileName = product.ImageUrl.Split('/').LastOrDefault() ?? "image",
+                IsMain = true,
+                IsActive = true
+            });
+            await _dbContext.SaveChangesAsync();
+        }
+
+        private async Task AppendProductImagesAsync(int productId, IList<string> urls)
+        {
+            if (_dbContext == null) return;
+
+            var normalized = urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (normalized.Count == 0) return;
+
+            var existingUrls = await _dbContext.ProductImages
+                .Where(pi => pi.ProductId == productId && pi.IsActive)
+                .Select(pi => pi.Url)
+                .ToListAsync();
+
+            var productImageUrl = await _dbContext.Products
+                .AsNoTracking()
+                .Where(p => p.Id == productId)
+                .Select(p => p.ImageUrl)
+                .FirstOrDefaultAsync();
+
+            var knownUrls = new HashSet<string>(existingUrls, StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(productImageUrl))
+            {
+                knownUrls.Add(productImageUrl.Trim());
+            }
+
+            var added = false;
+            foreach (var url in normalized)
+            {
+                if (knownUrls.Contains(url)) continue;
+
+                _dbContext.ProductImages.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    Url = url,
+                    FileName = url.Split('/').LastOrDefault() ?? "image",
+                    IsMain = false,
+                    IsActive = true
+                });
+                knownUrls.Add(url);
+                added = true;
+            }
+
+            if (added)
+            {
+                await _dbContext.SaveChangesAsync();
+            }
+        }
+
+        private async Task SetPrimaryProductImageAsync(int productId, string primaryUrl)
+        {
+            if (_dbContext == null || string.IsNullOrWhiteSpace(primaryUrl)) return;
+
+            var normalizedPrimary = primaryUrl.Trim();
+            var images = await _dbContext.ProductImages
+                .Where(pi => pi.ProductId == productId && pi.IsActive)
+                .ToListAsync();
+
+            var matched = images.FirstOrDefault(pi =>
+                string.Equals(pi.Url, normalizedPrimary, StringComparison.OrdinalIgnoreCase));
+
+            if (matched == null)
+            {
+                _dbContext.ProductImages.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    Url = normalizedPrimary,
+                    FileName = normalizedPrimary.Split('/').LastOrDefault() ?? "image",
+                    IsMain = true,
+                    IsActive = true
+                });
+            }
+            else
+            {
+                foreach (var image in images)
+                {
+                    image.IsMain = string.Equals(image.Url, normalizedPrimary, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == productId);
+            if (product != null)
+            {
+                product.ImageUrl = normalizedPrimary;
+            }
+
+            await _dbContext.SaveChangesAsync();
+        }
+
+        private async Task SyncProductImagesToDesiredListAsync(
+            int productId,
+            IList<string> desiredUrls,
+            string? primaryImageUrl)
+        {
+            if (_dbContext == null) return;
+
+            var normalized = desiredUrls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var existing = await _dbContext.ProductImages
+                .Where(pi => pi.ProductId == productId)
+                .ToListAsync();
+
+            var desiredSet = new HashSet<string>(normalized, StringComparer.OrdinalIgnoreCase);
+            foreach (var image in existing)
+            {
+                if (!desiredSet.Contains(image.Url.Trim()))
+                {
+                    _dbContext.ProductImages.Remove(image);
+                }
+            }
+
+            var remainingUrls = existing
+                .Where(pi => desiredSet.Contains(pi.Url.Trim()))
+                .Select(pi => pi.Url.Trim())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var url in normalized)
+            {
+                if (remainingUrls.Contains(url)) continue;
+
+                _dbContext.ProductImages.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    Url = url,
+                    FileName = url.Split('/').LastOrDefault() ?? "image",
+                    IsMain = false,
+                    IsActive = true
+                });
+                remainingUrls.Add(url);
+            }
+
+            var product = await _dbContext.Products.FirstOrDefaultAsync(p => p.Id == productId);
+            if (product != null)
+            {
+                var primary = !string.IsNullOrWhiteSpace(primaryImageUrl)
+                    ? primaryImageUrl.Trim()
+                    : normalized.FirstOrDefault() ?? string.Empty;
+                product.ImageUrl = primary;
+            }
+
+            await _dbContext.SaveChangesAsync();
+
+            if (normalized.Count == 0)
+            {
+                return;
+            }
+
+            var primaryToSet = !string.IsNullOrWhiteSpace(primaryImageUrl)
+                ? primaryImageUrl.Trim()
+                : normalized[0];
+            await SetPrimaryProductImageAsync(productId, primaryToSet);
+        }
+
+        /// <summary>
+        /// Yeni ürün oluşturma — ilk görsel seti.
+        /// </summary>
+        private async Task SyncProductImagesAsync(int productId, IList<string> urls)
+        {
+            if (_dbContext == null) return;
+
+            var normalized = urls
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .Select(url => url.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var existing = await _dbContext.ProductImages
+                .Where(pi => pi.ProductId == productId)
+                .ToListAsync();
+
+            if (existing.Count > 0)
+            {
+                _dbContext.ProductImages.RemoveRange(existing);
+            }
+
+            for (var i = 0; i < normalized.Count; i++)
+            {
+                var url = normalized[i];
+                _dbContext.ProductImages.Add(new ProductImage
+                {
+                    ProductId = productId,
+                    Url = url,
+                    FileName = url.Split('/').LastOrDefault() ?? "image",
+                    IsMain = i == 0,
+                    IsActive = true
+                });
+            }
+
+            await _dbContext.SaveChangesAsync();
         }
         
         /// <summary>

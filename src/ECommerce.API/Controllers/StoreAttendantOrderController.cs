@@ -25,7 +25,7 @@ namespace ECommerce.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize(Roles = "Admin,StoreAttendant")]
+    [Authorize(Roles = "Admin,SuperAdmin,StoreAttendant")]
     public class StoreAttendantOrderController : ControllerBase
     {
         private readonly IOrderService _orderService;

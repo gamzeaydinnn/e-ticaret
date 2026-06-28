@@ -314,7 +314,7 @@ namespace ECommerce.API.Controllers
         /// PATCH /api/weight-adjustment/admin/orders/{orderId}/items/{orderItemId}/manual-weight
         /// </summary>
         [HttpPatch("admin/orders/{orderId}/items/{orderItemId}/manual-weight")]
-        [Authorize(Roles = "Admin,StoreAttendant")]
+        [Authorize(Roles = "Admin,SuperAdmin,StoreAttendant")]
         public async Task<IActionResult> UpdateManualWeight(
             int orderId,
             int orderItemId,

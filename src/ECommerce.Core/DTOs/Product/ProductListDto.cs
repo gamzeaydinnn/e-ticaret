@@ -37,6 +37,12 @@ namespace ECommerce.Core.DTOs.Product
         
         public int StockQuantity { get; set; }
         public string? ImageUrl { get; set; }
+
+        /// <summary>
+        /// Ürün görselleri — birincil görsel ImageUrl ile aynı (ilk eleman).
+        /// </summary>
+        public List<string> ImageUrls { get; set; } = new();
+
         public string? Brand { get; set; }
 
         /// <summary>

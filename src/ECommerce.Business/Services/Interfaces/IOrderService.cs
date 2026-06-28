@@ -7,7 +7,13 @@ namespace ECommerce.Business.Services.Interfaces
 {
     public interface IOrderService
     {
-        Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null);
+        /// <summary>
+        /// Siparişleri listeler. Opsiyonel tarih aralığı (OrderDate) ve kullanıcı filtresi uygular.
+        /// </summary>
+        /// <param name="userId">Belirli bir kullanıcının siparişleri (null = tümü)</param>
+        /// <param name="from">Başlangıç tarihi - dahil (OrderDate >= from)</param>
+        /// <param name="to">Bitiş tarihi - dahil (OrderDate &lt;= to, gün sonuna kadar)</param>
+        Task<IEnumerable<OrderListDto>> GetOrdersAsync(int? userId = null, DateTime? from = null, DateTime? to = null);
         Task<OrderListDto?> GetByIdAsync(int id);
         Task<OrderListDto?> GetByClientOrderIdAsync(Guid clientOrderId);
         

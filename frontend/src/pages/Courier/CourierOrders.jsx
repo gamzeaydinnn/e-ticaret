@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
@@ -14,6 +14,16 @@ export default function CourierOrders() {
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  // FİLTRE STATE'LERİ (sunucu taraflı filtreleme - backend OrderDate'e göre süzer)
+  // statusFilter boş ise backend varsayılan olarak yalnızca aktif siparişleri döner;
+  // bir durum seçilirse (ör. delivered) geçmiş siparişler de görüntülenebilir.
+  const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  // Polling/SignalR çağrıları güncel filtre değerlerini okuyabilsin diye ref kullanıyoruz.
+  // NEDEN ref: setInterval closure'ı kurulduğu anki state'i yakalar; ref ile her zaman
+  //   en güncel filtreye erişiriz ve otomatik yenileme filtreyi sıfırlamaz.
+  const filtersRef = useRef({ status: "", fromDate: "", toDate: "" });
   const navigate = useNavigate();
   const { courier, isAuthenticated, loading: authLoading } = useCourierAuth();
 
@@ -52,12 +62,31 @@ export default function CourierOrders() {
     };
   }, [navigate, authLoading, isAuthenticated, courier?.id]);
 
+  // Filtre değiştiğinde ref'i güncelle ve listeyi yeniden yükle.
+  // İlk mount'taki yükleme ana useEffect içinde yapıldığından burada
+  // sadece filtre değişimlerinde tetiklenir (auth hazırsa).
+  useEffect(() => {
+    filtersRef.current = {
+      status: statusFilter,
+      fromDate: dateFrom,
+      toDate: dateTo,
+    };
+    if (authLoading || !isAuthenticated || !courier?.id) return;
+    loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, dateFrom, dateTo]);
+
   const loadOrders = async () => {
     try {
       console.log("🔍 [CourierOrders] Kurye bilgisi:", courier);
       console.log("🔍 [CourierOrders] Kurye ID:", courier?.id);
 
-      const response = await CourierService.getAssignedOrders();
+      const { status, fromDate, toDate } = filtersRef.current;
+      const response = await CourierService.getAssignedOrders({
+        status: status || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+      });
       console.log("🔍 [CourierOrders] API yanıtı:", response);
 
       const { orders: orderData = [] } = response || {};
@@ -346,10 +375,68 @@ export default function CourierOrders() {
           <div className="col-12">
             <div className="card border-0 shadow-sm">
               <div className="card-header bg-white border-0 py-3">
-                <h5 className="fw-bold mb-0">
-                  <i className="fas fa-list-alt me-2 text-primary"></i>
-                  Tüm Siparişler ({orders.length})
-                </h5>
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <h5 className="fw-bold mb-0">
+                    <i className="fas fa-list-alt me-2 text-primary"></i>
+                    Tüm Siparişler ({orders.length})
+                  </h5>
+                  {/* Tarih ve durum filtreleri (sipariş tarihine göre arama) */}
+                  <div className="d-flex flex-wrap align-items-center gap-2">
+                    <select
+                      className="form-select form-select-sm"
+                      style={{ width: "auto", fontSize: "0.8rem" }}
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      aria-label="Durum filtresi"
+                    >
+                      <option value="">Aktif Siparişler</option>
+                      <option value="Assigned">Atandı</option>
+                      <option value="PickedUp">Teslim Alındı</option>
+                      <option value="OutForDelivery">Yolda</option>
+                      <option value="Delivered">Teslim Edildi</option>
+                      <option value="DeliveryFailed">Teslim Edilemedi</option>
+                    </select>
+                    <div className="d-flex align-items-center gap-1">
+                      <i
+                        className="fas fa-calendar-alt text-muted"
+                        style={{ fontSize: "0.8rem" }}
+                        title="Sipariş tarihine göre filtrele"
+                      ></i>
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        style={{ width: "auto", fontSize: "0.8rem" }}
+                        value={dateFrom}
+                        max={dateTo || undefined}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        aria-label="Başlangıç tarihi"
+                      />
+                      <span className="text-muted">-</span>
+                      <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        style={{ width: "auto", fontSize: "0.8rem" }}
+                        value={dateTo}
+                        min={dateFrom || undefined}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        aria-label="Bitiş tarihi"
+                      />
+                    </div>
+                    {(statusFilter || dateFrom || dateTo) && (
+                      <button
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => {
+                          setStatusFilter("");
+                          setDateFrom("");
+                          setDateTo("");
+                        }}
+                        title="Filtreleri temizle"
+                      >
+                        <i className="fas fa-times me-1"></i>Temizle
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="card-body p-0">
                 {orders.length === 0 ? (

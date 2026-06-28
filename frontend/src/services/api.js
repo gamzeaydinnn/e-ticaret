@@ -53,11 +53,15 @@ api.interceptors.request.use(
       url.includes("/api/courier/orders") ||
       url.includes("/api/courier/summary") ||
       url.includes("/api/courier/deliveries");
+    const isAdminWeightRequest =
+      url.includes("/weight-adjustment/admin") ||
+      url.includes("/weight-payment/admin");
     const isCourierRequest =
       isCourierAuthRequest ||
       isCourierSelfServiceRequest ||
-      url.includes("/weight-adjustment") ||
-      url.includes("/weight-payment");
+      (!isAdminWeightRequest &&
+        (url.includes("/weight-adjustment") ||
+          url.includes("/weight-payment")));
 
     const courierToken =
       localStorage.getItem("courierToken") ||
@@ -150,13 +154,17 @@ api.interceptors.response.use(
     const status = error?.response?.status ?? 0;
     const data = error?.response?.data;
     const url = error?.config?.url || "";
+    const isAdminWeightRequest =
+      url.includes("/weight-adjustment/admin") ||
+      url.includes("/weight-payment/admin");
     const isCourierRequest =
       url.includes("/api/courier/auth") ||
       url.includes("/api/courier/orders") ||
       url.includes("/api/courier/summary") ||
       url.includes("/api/courier/deliveries") ||
-      url.includes("/weight-adjustment") ||
-      url.includes("/weight-payment");
+      (!isAdminWeightRequest &&
+        (url.includes("/weight-adjustment") ||
+          url.includes("/weight-payment")));
 
     const firstValidationError = (() => {
       if (!data?.errors || typeof data.errors !== "object") return null;

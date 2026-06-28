@@ -189,6 +189,19 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
+.product-page__image-container--gallery {
+  max-width: 100%;
+  aspect-ratio: auto;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+  display: block;
+}
+
+.product-page__image-container--gallery .product-gallery__main {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
 .product-page__image-skeleton {
   position: absolute;
   inset: 0;

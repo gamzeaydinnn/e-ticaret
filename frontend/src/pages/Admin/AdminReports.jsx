@@ -3,7 +3,12 @@ import { AdminService } from "../../services/adminService";
 import "../../styles/adminReports.css";
 
 export default function AdminReports() {
-  const [lowStock, setLowStock] = useState({ threshold: 0, products: [] });
+  const [lowStock, setLowStock] = useState({
+    threshold: 0,
+    outOfStockCount: 0,
+    lowStockCount: 0,
+    products: [],
+  });
   const [loadingLow, setLoadingLow] = useState(true);
   const [from, setFrom] = useState(
     isoDate(new Date(Date.now() - 7 * 86400000))
@@ -36,6 +41,15 @@ export default function AdminReports() {
     setTimeout(() => setErrorMsg(""), 3500);
   };
 
+  // Tarih aralığına bağlı tüm raporları birlikte yeniler.
+  // NEDEN: ERP senkron ve Stok Hareketleri aynı from/to tarihlerini paylaşıyor;
+  //   daha önce tarih değiştirilip "Güncelle"ye basıldığında sadece ERP yenileniyordu,
+  //   stok hareketleri eski aralıkta kalıyordu (tutarsız görünüm). Tek butonla ikisi de güncellenir.
+  const applyDateRange = () => {
+    loadErp();
+    loadMovements();
+  };
+
   useEffect(() => {
     loadLowStock();
     loadMovements();
@@ -52,7 +66,12 @@ export default function AdminReports() {
     } catch (e) {
       console.error("Low stock report error:", e);
       setErrorMsg(e.message || "Low stock verisi alınamadı.");
-      setLowStock({ threshold: 0, products: [] });
+      setLowStock({
+        threshold: 0,
+        outOfStockCount: 0,
+        lowStockCount: 0,
+        products: [],
+      });
     } finally {
       setLoadingLow(false);
     }
@@ -318,7 +337,7 @@ export default function AdminReports() {
             </div>
             <button
               className="btn btn-sm btn-outline-secondary report-button"
-              onClick={loadErp}
+              onClick={applyDateRange}
             >
               Güncelle
             </button>
@@ -396,10 +415,17 @@ export default function AdminReports() {
               <div className="report-card__title">
                 <i className="fas fa-exclamation-triangle text-danger"></i>
                 <span>
-                  Düşük Stok
+                  Stok Durumu
                   <small className="text-muted ms-1">
                     (eşik: {lowStock.threshold})
                   </small>
+                </span>
+                {/* Stokta yok ve kritik stok toplamları rozet olarak özetlenir */}
+                <span className="badge bg-danger ms-2">
+                  Stokta Yok: {lowStock.outOfStockCount ?? 0}
+                </span>
+                <span className="badge bg-warning text-dark ms-1">
+                  Kritik: {lowStock.lowStockCount ?? 0}
                 </span>
               </div>
               <div className="report-card__actions">
@@ -433,34 +459,49 @@ export default function AdminReports() {
                         <th className="px-1">ID</th>
                         <th className="px-1">Ürün</th>
                         <th className="px-1">Stok</th>
+                        <th className="px-1">Durum</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lowStock.products?.length ? (
-                        lowStock.products.map((p) => (
-                          <tr key={p.id}>
-                            <td className="px-1">{p.id}</td>
-                            <td
-                              className="px-1 text-truncate"
-                              style={{ maxWidth: "100px" }}
-                            >
-                              {p.name}
-                            </td>
-                            <td
-                              className={`px-1 ${
-                                p.stockQuantity <= lowStock.threshold
-                                  ? "text-danger fw-bold"
-                                  : ""
-                              }`}
-                            >
-                              {p.stockQuantity}
-                            </td>
-                          </tr>
-                        ))
+                        lowStock.products.map((p) => {
+                          // Stok 0 veya altı ise "Stokta Yok", aksi halde "Kritik".
+                          const isOutOfStock = (p.stockQuantity ?? 0) <= 0;
+                          return (
+                            <tr key={p.id}>
+                              <td className="px-1">{p.id}</td>
+                              <td
+                                className="px-1 text-truncate"
+                                style={{ maxWidth: "100px" }}
+                              >
+                                {p.name}
+                              </td>
+                              <td
+                                className={`px-1 fw-bold ${
+                                  isOutOfStock ? "text-danger" : "text-warning"
+                                }`}
+                              >
+                                {p.stockQuantity}
+                              </td>
+                              <td className="px-1">
+                                <span
+                                  className={`badge ${
+                                    isOutOfStock
+                                      ? "bg-danger"
+                                      : "bg-warning text-dark"
+                                  }`}
+                                  style={{ fontSize: "0.55rem" }}
+                                >
+                                  {isOutOfStock ? "Stokta Yok" : "Kritik"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
-                          <td colSpan="3" className="text-muted">
-                            Düşük stok yok
+                          <td colSpan="4" className="text-muted">
+                            Stok sorunu yok
                           </td>
                         </tr>
                       )}

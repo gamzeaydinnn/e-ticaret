@@ -11,6 +11,13 @@ namespace ECommerce.Core.DTOs.Admin
         public decimal TotalRevenue { get; set; }
         public int TodayOrders { get; set; }
         public int ActiveCouriers { get; set; }
+        // STOK İSTATİSTİKLERİ
+        // OutOfStockCount: stoğu tamamen biten (StockQuantity <= 0) aktif ürün sayısı.
+        // LowStockCount: kritik eşik altındaki (0 < stok <= eşik) aktif ürün sayısı.
+        // NEDEN ayrı tutuluyor: "Stokta yok" ile "kritik/düşük stok" operasyonel olarak
+        //   farklı aksiyon gerektirir; tek bir listede karışmamalı.
+        public int OutOfStockCount { get; set; }
+        public int LowStockCount { get; set; }
         public int PendingOrders { get; set; }
         public int DeliveredOrders { get; set; }
         // İade istatistikleri

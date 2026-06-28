@@ -3821,24 +3821,26 @@ html {
 }
 
 /* Product Card Responsive Styles */
+/* NOT: Ürün kartları kullanıcı talebiyle büyütüldü (Migros benzeri büyük görünüm).
+   Tüm breakpoint'lerde max-width ve min-height değerleri artırıldı. */
 @media (max-width: 1400px) {
   .modern-product-card {
-    max-width: 260px !important;
-    min-height: 420px !important;
+    max-width: 320px !important;
+    min-height: 480px !important;
   }
 }
 
 @media (max-width: 1200px) {
   .modern-product-card {
-    max-width: 240px !important;
-    min-height: 400px !important;
+    max-width: 300px !important;
+    min-height: 460px !important;
   }
 }
 
 @media (max-width: 992px) {
   .modern-product-card {
-    max-width: 220px !important;
-    min-height: 380px !important;
+    max-width: 270px !important;
+    min-height: 430px !important;
   }
 
   .modern-product-card .card-body {
@@ -3848,8 +3850,8 @@ html {
 
 @media (max-width: 768px) {
   .modern-product-card {
-    max-width: 200px !important;
-    min-height: 360px !important;
+    max-width: 240px !important;
+    min-height: 400px !important;
   }
 
   .modern-product-card .product-title {
@@ -3864,17 +3866,17 @@ html {
 
 @media (max-width: 576px) {
   .modern-product-card {
-    max-width: 180px !important;
-    min-height: 340px !important;
+    max-width: 210px !important;
+    min-height: 380px !important;
   }
 
   .modern-product-card .product-image-container {
-    height: 140px !important;
+    height: 170px !important;
   }
 
   .modern-product-card img {
-    max-height: 110px !important;
-    max-width: 110px !important;
+    max-height: 150px !important;
+    max-width: 150px !important;
   }
 
   .modern-product-card .card-body {
@@ -4560,14 +4562,16 @@ html {
     padding: 6px !important;
   }
 
+  /* Mobil ürün görselleri büyütüldü (90/70 -> 170/150) ki kartlar
+     diğer breakpoint kurallarıyla tutarlı ve büyük görünsün. */
   .product-image-container,
   .product-image {
-    height: 90px !important;
-    min-height: 90px !important;
+    height: 170px !important;
+    min-height: 170px !important;
   }
 
   .product-image-container img {
-    max-height: 70px !important;
+    max-height: 150px !important;
   }
 
   .product-card .card-title,

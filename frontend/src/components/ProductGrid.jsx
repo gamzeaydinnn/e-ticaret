@@ -980,7 +980,7 @@ export default function ProductGrid({
                           overflow: "hidden",
                           position: "relative",
                           cursor: "pointer",
-                          minHeight: "320px",
+                          minHeight: "380px",
                           width: "100%",
                           display: "flex",
                           flexDirection: "column",
@@ -1123,7 +1123,7 @@ export default function ProductGrid({
                         <div
                           className="product-image-container"
                           style={{
-                            height: 120,
+                            height: 200,
                             background: "#ffffff",
                             position: "relative",
                             overflow: "hidden",
@@ -1148,8 +1148,8 @@ export default function ProductGrid({
                                 alt={p.name}
                                 className="product-image"
                                 style={{
-                                  maxHeight: "100px",
-                                  maxWidth: "100px",
+                                  maxHeight: "180px",
+                                  maxWidth: "180px",
                                   objectFit: "contain",
                                   filter:
                                     "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
@@ -1166,8 +1166,8 @@ export default function ProductGrid({
                                 alt={p.name || "Ürün görseli"}
                                 className="product-image"
                                 style={{
-                                  maxHeight: "100px",
-                                  maxWidth: "100px",
+                                  maxHeight: "180px",
+                                  maxWidth: "180px",
                                   objectFit: "contain",
                                   filter:
                                     "drop-shadow(0 4px 12px rgba(0,0,0,0.1))",
