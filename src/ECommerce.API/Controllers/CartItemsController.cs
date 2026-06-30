@@ -32,6 +32,8 @@ namespace ECommerce.API.Controllers
         private readonly IPricingEngine _pricingEngine;
         private readonly ICartService _cartService;
         private readonly IShippingService _shippingService;
+        private readonly IOrderLimitResolver _orderLimitResolver;
+        private readonly IProductOrderLimitSettingsService _limitSettingsService;
         private readonly ILogger<CartItemsController> _logger;
 
         public CartItemsController(
@@ -39,12 +41,16 @@ namespace ECommerce.API.Controllers
             IPricingEngine pricingEngine,
             ICartService cartService,
             IShippingService shippingService,
+            IOrderLimitResolver orderLimitResolver,
+            IProductOrderLimitSettingsService limitSettingsService,
             ILogger<CartItemsController> logger)
         {
             _context = context;
             _pricingEngine = pricingEngine;
             _cartService = cartService;
             _shippingService = shippingService;
+            _orderLimitResolver = orderLimitResolver;
+            _limitSettingsService = limitSettingsService;
             _logger = logger;
         }
 
@@ -102,7 +108,7 @@ namespace ECommerce.API.Controllers
             }
 
             // Ürün ve stok kontrolü
-            var product = await _context.Products.FindAsync(request.ProductId);
+            var product = await GetProductForCartAsync(request.ProductId);
             if (product == null || !product.IsActive)
             {
                 return NotFound(new { message = "Ürün bulunamadı." });
@@ -143,13 +149,23 @@ namespace ECommerce.API.Controllers
                 }
             }
 
-            // Stok kontrolü
-            if (request.Quantity > availableStock)
+            if (!ValidateStockAvailability(product, request.Quantity, availableStock, out var stockError))
             {
-                return BadRequest(new { 
-                    message = $"Yetersiz stok. Maksimum {availableStock} adet ekleyebilirsiniz.",
-                    availableStock = availableStock
-                });
+                return BadRequest(stockError);
+            }
+
+            var existingCartItem = await _context.CartItems
+                .FirstOrDefaultAsync(c =>
+                    c.CartToken == token &&
+                    c.ProductId == request.ProductId &&
+                    c.ProductVariantId == resolvedVariantId &&
+                    c.IsActive);
+
+            var totalQuantity = request.Quantity + (existingCartItem?.Quantity ?? 0m);
+            var limitError = await ValidateOrderQuantityAsync(product, variant, totalQuantity);
+            if (limitError != null)
+            {
+                return BadRequest(limitError);
             }
 
             // Sepete ekle
@@ -196,7 +212,7 @@ namespace ECommerce.API.Controllers
             // Stok kontrolü (miktar > 0 ise)
             if (request.Quantity > 0)
             {
-                var product = await _context.Products.FindAsync(request.ProductId);
+                var product = await GetProductForCartAsync(request.ProductId);
                 if (product == null)
                 {
                     return NotFound(new { message = "Ürün bulunamadı." });
@@ -226,12 +242,21 @@ namespace ECommerce.API.Controllers
                     }
                 }
 
-                if (request.Quantity > availableStock)
+                if (!ValidateStockAvailability(product, request.Quantity, availableStock, out var stockError))
                 {
-                    return BadRequest(new { 
-                        message = $"Yetersiz stok. Maksimum {availableStock} adet.",
-                        availableStock = availableStock
-                    });
+                    return BadRequest(stockError);
+                }
+
+                ProductVariant? variantForLimit = null;
+                if (resolvedVariantId.HasValue)
+                {
+                    variantForLimit = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
+                }
+
+                var limitError = await ValidateOrderQuantityAsync(product, variantForLimit, request.Quantity);
+                if (limitError != null)
+                {
+                    return BadRequest(limitError);
                 }
 
                 request.VariantId = resolvedVariantId;
@@ -437,7 +462,7 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = error });
 
             // Ürün ve stok kontrolü
-            var product = await _context.Products.FindAsync(dto.ProductId);
+            var product = await GetProductForCartAsync(dto.ProductId);
             if (product == null)
             {
                 return NotFound(new { message = "Ürün bulunamadı." });
@@ -469,9 +494,21 @@ namespace ECommerce.API.Controllers
                 }
             }
 
-            if (dto.Quantity > availableStock)
+            if (!ValidateStockAvailability(product, dto.Quantity, availableStock, out var stockError))
             {
-                return BadRequest(new { message = $"Yetersiz stok. Maksimum {availableStock} adet." });
+                return BadRequest(stockError);
+            }
+
+            ProductVariant? variantForLimit = null;
+            if (resolvedVariantId.HasValue)
+            {
+                variantForLimit = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
+            }
+
+            var limitError = await ValidateOrderQuantityAsync(product, variantForLimit, dto.Quantity);
+            if (limitError != null)
+            {
+                return BadRequest(limitError);
             }
 
             // Kullanıcı ID veya CartToken kontrolü
@@ -527,7 +564,7 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = error });
 
             // Stok kontrolü
-            var product = await _context.Products.FindAsync(dto.ProductId);
+            var product = await GetProductForCartAsync(dto.ProductId);
             if (product == null)
             {
                 return BadRequest(new { message = "Ürün bulunamadı." });
@@ -559,9 +596,21 @@ namespace ECommerce.API.Controllers
                 }
             }
 
-            if (dto.Quantity > availableStock)
+            if (!ValidateStockAvailability(product, dto.Quantity, availableStock, out var stockError))
             {
-                return BadRequest(new { message = $"Yetersiz stok. Maksimum {availableStock} adet." });
+                return BadRequest(stockError);
+            }
+
+            ProductVariant? variantForLimit = null;
+            if (resolvedVariantId.HasValue)
+            {
+                variantForLimit = await _context.ProductVariants.FindAsync(resolvedVariantId.Value);
+            }
+
+            var limitError = await ValidateOrderQuantityAsync(product, variantForLimit, dto.Quantity);
+            if (limitError != null)
+            {
+                return BadRequest(limitError);
             }
 
             // Entity güncelleme
@@ -693,6 +742,85 @@ namespace ECommerce.API.Controllers
             // ✅ Tek doğruluk kaynağı: tespit WeightBasedProductResolver üzerinden yapılır
             // (null güvenli). Daha önce buradaki "geniş" kural diğer katmanlardan farklıydı.
             return WeightBasedProductResolver.ResolveIsWeightBased(product);
+        }
+
+        /// <summary>
+        /// Sepet limit/stok doğrulaması için kategori bilgisiyle ürün yükler.
+        /// FindAsync kullanılırsa manav ürünleri yanlışlıkla adet (max 5) sayılır.
+        /// </summary>
+        private async Task<Product?> GetProductForCartAsync(int productId)
+        {
+            return await _context.Products
+                .Include(p => p.Category)
+                .FirstOrDefaultAsync(p => p.Id == productId);
+        }
+
+        /// <summary>
+        /// Tartılı ürünlerde StockQuantity kg miktarı değildir; yalnızca satışa açık sinyalidir.
+        /// </summary>
+        private static bool ValidateStockAvailability(
+            Product product,
+            decimal requestedQuantity,
+            decimal availableStock,
+            out object errorResponse)
+        {
+            errorResponse = null!;
+            var isWeightBased = IsWeightBasedProduct(product);
+
+            if (isWeightBased)
+            {
+                if (availableStock <= 0)
+                {
+                    errorResponse = new
+                    {
+                        message = "Bu ürün şu an stokta bulunmamaktadır.",
+                        availableStock = 0m
+                    };
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (requestedQuantity > availableStock)
+            {
+                errorResponse = new
+                {
+                    message = $"Yetersiz stok. Maksimum {availableStock} adet ekleyebilirsiniz.",
+                    availableStock
+                };
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task<object?> ValidateOrderQuantityAsync(
+            Product product,
+            ProductVariant? variant,
+            decimal quantity)
+        {
+            var settings = await _limitSettingsService.GetActiveSettingsAsync();
+            var limits = _orderLimitResolver.ResolveLimits(product, variant, settings);
+            var validation = _orderLimitResolver.ValidateQuantity(limits, quantity);
+
+            if (validation.IsValid)
+            {
+                return null;
+            }
+
+            return new
+            {
+                message = validation.ErrorMessage,
+                limits = new
+                {
+                    limits.MinQuantity,
+                    limits.MaxQuantity,
+                    limits.Step,
+                    limits.Unit,
+                    limits.IsWeightBased
+                }
+            };
         }
 
         #endregion

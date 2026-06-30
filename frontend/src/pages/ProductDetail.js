@@ -9,8 +9,8 @@ import { Helmet } from "react-helmet-async";
 import { useParams } from "react-router-dom";
 import { ProductService } from "../services/productService";
 import { CampaignService } from "../services/campaignService";
-import getProductCategoryRules from "../config/productCategoryRules";
-import { getVariantsForProduct } from "../utils/variantStore";
+import { resolveProductOrderRuleWithFallback } from "../utils/orderLimitUtils";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 import variantService from "../services/variantService";
 import reviewService from "../services/reviewService";
 import ReviewList from "../components/ReviewList";
@@ -170,92 +170,45 @@ export default function ProductDetail() {
   const [selectedVariantId, setSelectedVariantId] = useState(null);
 
   useEffect(() => {
+    if (!product?.id) return;
     let mounted = true;
     (async () => {
       try {
-        const rules = await getProductCategoryRules();
+        const apiVariants = await variantService.getVariantsByProduct(product.id);
         if (!mounted) return;
-        if (!product) return; // guard when product not yet loaded
-        let match = (rules || []).find((r) => {
-          const examples = (r.examples || []).map((e) =>
-            String(e).toLowerCase(),
-          );
-          const pname = (product.name || "").toLowerCase();
-          return (
-            (r.category || "").toLowerCase().includes(pname) ||
-            examples.some((ex) => pname.includes(ex) || ex.includes(pname))
-          );
-        });
-        const pcat = (product.categoryName || "").toLowerCase();
-        if (
-          !match &&
-          (pcat.includes("meyve") ||
-            pcat.includes("sebze") ||
-            pcat.includes("et") ||
-            pcat.includes("tavuk") ||
-            pcat.includes("balık") ||
-            pcat.includes("balik"))
-        ) {
-          match =
-            (rules || []).find((r) => (r.unit || "").toLowerCase() === "kg") ||
-            null;
+        setVariants(apiVariants || []);
+        const defaultVariant =
+          apiVariants?.find((v) => v.stock > 0) || apiVariants?.[0];
+        setSelectedVariantId(defaultVariant?.id ?? null);
+      } catch {
+        if (mounted) {
+          setVariants([]);
+          setSelectedVariantId(null);
         }
-        // categories that should be sold as units with min 1 max 10
-        const unitLimitCats = [
-          "süt",
-          "süt ürünleri",
-          "süt urunleri",
-          "temel gıda",
-          "temel gida",
-          "temizlik",
-          "içecek",
-          "icecek",
-          "atıştırmalık",
-          "atistirmalik",
-        ];
-        if (!match && unitLimitCats.some((tok) => pcat.includes(tok))) {
-          match = {
-            category: "Kategori adedi sınırı",
-            unit: "adet",
-            min_quantity: 1,
-            max_quantity: 10,
-            step: 1,
-          };
-        }
-        setRule(match || null);
-        if (match) {
-          // set sensible default quantity respecting min and step
-          const defaultQ = match.min_quantity || 1;
-          setQuantity(defaultQ);
-        }
-        // load variants from API (with fallback to client-side variantStore)
-        try {
-          // Önce API'den çekmeyi dene
-          const apiVariants = await variantService.getByProduct(product.id);
-          if (apiVariants && apiVariants.length > 0) {
-            setVariants(apiVariants);
-            // Varsayılan varyantı seç (ilk stoklu olanı)
-            const defaultVariant =
-              apiVariants.find((v) => v.stock > 0) || apiVariants[0];
-            setSelectedVariantId(defaultVariant.id);
-          } else {
-            // API'de yoksa local store'a bak (fallback)
-            const v = getVariantsForProduct(product.id);
-            setVariants(v || []);
-            if (v && v.length) setSelectedVariantId(v[0].id);
-          }
-        } catch (e) {
-          // API hatası - local store'a fallback
-          const v = getVariantsForProduct(product.id);
-          setVariants(v || []);
-          if (v && v.length) setSelectedVariantId(v[0].id);
-        }
-      } catch (e) {
-        setRule(null);
       }
     })();
-    return () => (mounted = false);
+    return () => {
+      mounted = false;
+    };
   }, [product]);
+
+  useEffect(() => {
+    if (!product) return;
+    let mounted = true;
+    (async () => {
+      const selectedVariant = variants.find((v) => v.id === selectedVariantId);
+      const resolvedRule = await resolveProductOrderRuleWithFallback(
+        product,
+        selectedVariant,
+      );
+      if (!mounted) return;
+      setRule(resolvedRule);
+      setQuantity(resolvedRule?.min_quantity || 1);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [product, variants, selectedVariantId]);
 
   const validateAndAdd = () => {
     setValidationError("");
@@ -279,15 +232,27 @@ export default function ProductDetail() {
         return setValidationError(
           `Miktar ${step} ${rule.unit} adımlarıyla olmalıdır.`,
         );
-    } else {
-      // default business rule: do not allow >5 units for regular (non-weighted) items
-      if (!product.isWeighted && q > 5)
-        return setValidationError(
-          "Bu üründen en fazla 5 adet ekleyebilirsiniz.",
-        );
+    } else if (!isStrictVariableWeightProduct(product) && q > 5) {
+      return setValidationError(
+        "Bu üründen en fazla 5 adet ekleyebilirsiniz.",
+      );
     }
     // pass validation
-    ctxAddToCart(product, q);
+    const selectedVariant = variants.find(
+      (v) => String(v.id) === String(selectedVariantId),
+    );
+    if (variants.length > 0 && !selectedVariant) {
+      return setValidationError("Lütfen bir seçenek seçin.");
+    }
+    const variantInfo = selectedVariant
+      ? {
+          variantId: selectedVariant.id,
+          sku: selectedVariant.sku,
+          title: selectedVariant.title || selectedVariant.sku,
+          price: selectedVariant.price,
+        }
+      : null;
+    ctxAddToCart(product, q, variantInfo);
     setValidationError("");
   };
 

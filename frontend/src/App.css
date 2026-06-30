@@ -1312,9 +1312,9 @@
   }
 
   .carousel-slide {
-    min-height: 200px !important;
-    height: 50vw !important;
-    max-height: 350px !important;
+    min-height: 140px !important;
+    height: min(200px, 52vw) !important;
+    max-height: 200px !important;
   }
 
   .carousel-nav {
@@ -1336,7 +1336,79 @@
   }
 
   .campaign-carousel {
-    padding: 15px 0 !important;
+    padding: 0 0 4px !important;
+  }
+
+  .campaign-carousel.py-4 {
+    padding: 0 0 4px !important;
+  }
+
+  .campaign-carousel .carousel-container .position-absolute.bottom-0 {
+    margin-bottom: 0.25rem !important;
+  }
+
+  .campaign-carousel .carousel-slide {
+    min-height: 140px !important;
+    height: min(200px, 52vw) !important;
+    max-height: 200px !important;
+  }
+
+  .promo-section,
+  .promo-section.py-3 {
+    padding: 8px 0 16px !important;
+    margin: 0 !important;
+  }
+
+  .promo-section .container-fluid {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .promo-grid {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .product-blocks-section,
+  .product-blocks-section.py-4 {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .product-blocks-section .container-fluid {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .product-blocks-section .product-block-section:first-child {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  .product-blocks-section .product-block-section:first-child .product-block-header {
+    padding-top: 0 !important;
+    padding-bottom: 6px !important;
+  }
+
+  .recipe-section {
+    padding: 4px 0 !important;
+  }
+
+  .features-section {
+    padding: 10px 0 16px !important;
+  }
+
+  .features-section .row {
+    --bs-gutter-y: 0.75rem;
+  }
+
+  .features-section .feature-card {
+    padding: 16px 12px !important;
+    margin: 0 !important;
   }
 
   .special-images-container .d-flex {
@@ -3639,6 +3711,7 @@ html {
     gap: 10px !important;
     padding: 0 10px !important;
     -webkit-overflow-scrolling: touch;
+    margin: 0 !important;
   }
 
   .promo-grid-item {
@@ -3686,6 +3759,12 @@ html {
     scroll-snap-align: start;
     border-radius: 10px !important;
   }
+
+  .campaign-carousel .carousel-slide {
+    min-height: 130px !important;
+    height: min(185px, 50vw) !important;
+    max-height: 185px !important;
+  }
 }
 
 /* ===================================== */
@@ -3706,15 +3785,32 @@ html {
 }
 
 @media (max-width: 576px) {
+  .recipe-section {
+    padding: 8px 0 !important;
+  }
+
+  .recipe-section-header {
+    margin-bottom: 8px !important;
+  }
+
+  .recipe-section-header h3 {
+    font-size: 1.15rem !important;
+  }
+
   .recipe-grid {
     flex-direction: column;
     align-items: center;
+    gap: 10px !important;
   }
 
   .recipe-card {
     width: 100% !important;
     max-width: 100% !important;
     flex: none !important;
+  }
+
+  .recipe-card img {
+    height: 110px !important;
   }
 }
 
@@ -3862,6 +3958,12 @@ html {
   .modern-product-card:not(.product-block-card) .current-price {
     font-size: 1.1rem !important;
   }
+
+  .product-grid-grid-inner .product-grid-card,
+  .category-products-grid .modern-product-card {
+    max-width: none !important;
+    min-height: auto !important;
+  }
 }
 
 @media (max-width: 576px) {
@@ -3896,6 +3998,84 @@ html {
   .modern-product-card:not(.product-block-card) .modern-add-btn {
     padding: 8px 16px !important;
     font-size: 0.75rem !important;
+  }
+
+  /* Grid / kategori listesi — dar 2 sütun kartlar */
+  .product-grid-grid-inner .product-grid-card,
+  .category-products-grid .modern-product-card {
+    min-height: auto !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .product-image-container,
+  .category-products-grid .product-image-container {
+    height: 90px !important;
+    min-height: 90px !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .product-image-container img,
+  .category-products-grid .product-image-container img,
+  .category-products-grid .product-image {
+    max-height: 80px !important;
+    max-width: 80px !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .product-title,
+  .category-products-grid .product-title {
+    font-size: 0.58rem !important;
+    line-height: 1.2 !important;
+    height: 2.4em !important;
+    min-height: 2.4em !important;
+    max-height: 2.4em !important;
+    -webkit-line-clamp: 2 !important;
+    word-break: break-word !important;
+    overflow: hidden !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .price-section,
+  .category-products-grid .price-section {
+    min-height: auto !important;
+    margin-bottom: 4px !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .current-price,
+  .category-products-grid .current-price,
+  .category-products-grid .product-price {
+    font-size: 0.75rem !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .modern-add-btn,
+  .category-products-grid .modern-add-btn,
+  .category-products-grid .btn-add-cart {
+    padding: 6px 4px !important;
+    font-size: 0.6rem !important;
+    border-radius: 8px !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .card-body,
+  .category-products-grid .card-body {
+    padding: 6px !important;
+    min-height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .action-buttons,
+  .category-products-grid .action-buttons {
+    margin-top: auto !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .btn-compare {
+    display: none !important;
+  }
+
+  .category-products-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
   }
 }
 
@@ -4186,8 +4366,9 @@ html {
   }
 
   .campaign-carousel .carousel-slide {
-    height: min(240px, 55vw);
-    min-height: 170px;
+    height: min(200px, 52vw) !important;
+    min-height: 140px !important;
+    max-height: 200px !important;
   }
 
   .campaign-carousel .carousel-nav {
@@ -4231,8 +4412,9 @@ html {
   }
 
   .campaign-carousel .carousel-slide {
-    height: min(210px, 55vw);
-    min-height: 160px;
+    height: min(185px, 50vw) !important;
+    min-height: 130px !important;
+    max-height: 185px !important;
   }
 
   .campaign-carousel .carousel-nav {

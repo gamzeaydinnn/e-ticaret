@@ -520,6 +520,52 @@ class SignalRService {
   }
 
   /**
+   * Misafir (token'sız) kullanıcı için sipariş takip bağlantısı kurar.
+   * NEDEN: Misafir siparişlerinde JWT yoktur; OrderHub anonim bağlantıya izin verir
+   * ve JoinGuestOrderTracking(orderNumber, email) ile doğrulama yapılır.
+   *
+   * @param {string} orderNumber - Sipariş numarası (ORD-...)
+   * @param {string} email - Sipariş sahibinin e-postası
+   * @returns {Promise<number>} Başarılı olursa orderId, değilse -1
+   */
+  async connectGuestOrderTracking(orderNumber, email) {
+    if (!orderNumber || !email) {
+      return -1;
+    }
+
+    // Anonim bağlantı: token provider null döndürür (sorun değil)
+    const deliveryHub = this.getOrCreateConnection(HUB_URLS.delivery, {
+      tokenProvider: () => null,
+    });
+
+    if (!deliveryHub.isConnected()) {
+      await deliveryHub.start();
+    }
+
+    if (!deliveryHub.isConnected()) {
+      console.warn("[SignalR] Misafir takip: bağlantı kurulamadı");
+      return -1;
+    }
+
+    try {
+      const orderId = await deliveryHub.invoke(
+        "JoinGuestOrderTracking",
+        orderNumber,
+        email,
+      );
+      if (orderId && orderId > 0) {
+        console.log(
+          `[SignalR] Misafir sipariş takibi başladı: #${orderId} (${orderNumber})`,
+        );
+      }
+      return orderId;
+    } catch (error) {
+      console.warn("[SignalR] Misafir takip grubuna katılma hatası:", error);
+      return -1;
+    }
+  }
+
+  /**
    * Sipariş durum değişikliği dinler (müşteri için)
    */
   onOrderStatusChanged(handler) {
@@ -537,6 +583,19 @@ class SignalRService {
     return this.on(
       HUB_URLS.delivery,
       SignalREvents.DELIVERY_STATUS_CHANGED,
+      handler,
+    );
+  }
+
+  /**
+   * Teslimat tamamlandı bildirimi dinler.
+   * NEDEN: Backend OrderHub'a "DeliveryCompleted" event'i gönderiyor; eski kod
+   * sadece "DeliveryStatusChanged" dinlediği için teslim bildirimi kaçıyordu.
+   */
+  onDeliveryCompleted(handler) {
+    return this.on(
+      HUB_URLS.delivery,
+      SignalREvents.DELIVERY_COMPLETED,
       handler,
     );
   }

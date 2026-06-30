@@ -136,6 +136,17 @@ namespace ECommerce.Core.DTOs.Product
         public bool? AdminOverridePrice { get; set; }
         public bool? AdminOverrideCategory { get; set; }
 
+        #region Sipariş Limitleri
+
+        public int MaxOrderQuantity { get; set; } = 0;
+        public int MinOrderQuantity { get; set; } = 0;
+        public decimal QuantityStep { get; set; } = 0m;
+        public bool IsWeightBased { get; set; } = false;
+        public decimal MinOrderWeight { get; set; } = 0m;
+        public decimal MaxOrderWeight { get; set; } = 0m;
+
+        #endregion
+
         #endregion
     }
 }

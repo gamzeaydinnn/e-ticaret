@@ -75,7 +75,7 @@ export const WeightAdjustmentService = {
       const response = await api.get(
         `${WEIGHT_ADJUSTMENT_BASE}/orders/${orderId}/summary`,
       );
-      return response.data;
+      return response?.data ?? response;
     } catch (error) {
       console.error(
         "[WeightAdjustmentService] getOrderWeightSummary error:",
@@ -107,14 +107,17 @@ export const WeightAdjustmentService = {
 
   /**
    * Kuryenin bekleyen siparişlerini getir
-   * @returns {Promise} Bekleyen siparişler listesi
+   * @returns {Promise<Array>} Bekleyen siparişler listesi
    */
   getCourierPendingOrders: async () => {
     try {
       const response = await api.get(
         `${WEIGHT_ADJUSTMENT_BASE}/courier/pending`,
       );
-      return response.data;
+      if (Array.isArray(response)) return response;
+      if (Array.isArray(response?.data)) return response.data;
+      if (Array.isArray(response?.Data)) return response.Data;
+      return [];
     } catch (error) {
       console.error(
         "[WeightAdjustmentService] getCourierPendingOrders error:",

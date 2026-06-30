@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductService } from "../../services/productService";
 import categoryService from "../../services/categoryService";
-import variantStore from "../../utils/variantStore";
 import XmlImportModal from "../../components/Admin/XmlImportModal";
 import VariantManager from "../../components/Admin/VariantManager";
 
@@ -25,6 +24,11 @@ const AdminProducts = () => {
     adminOverrideName: null,
     adminOverridePrice: null,
     adminOverrideCategory: null,
+    maxOrderQuantity: "",
+    minOrderQuantity: "",
+    quantityStep: "",
+    minOrderWeightKg: "",
+    maxOrderWeightKg: "",
   });
   const [globalOverrideSettings, setGlobalOverrideSettings] = useState({
     defaultAdminOverrideName: false,
@@ -34,7 +38,6 @@ const AdminProducts = () => {
   const [globalOverrideLoading, setGlobalOverrideLoading] = useState(false);
   const [globalOverrideSaving, setGlobalOverrideSaving] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
-  const [productVariants, setProductVariants] = useState([]);
 
   // Excel Import State'leri
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -320,6 +323,21 @@ const AdminProducts = () => {
         adminOverrideName: formData.adminOverrideName,
         adminOverridePrice: formData.adminOverridePrice,
         adminOverrideCategory: formData.adminOverrideCategory,
+        maxOrderQuantity: formData.maxOrderQuantity
+          ? parseInt(formData.maxOrderQuantity, 10)
+          : 0,
+        minOrderQuantity: formData.minOrderQuantity
+          ? parseInt(formData.minOrderQuantity, 10)
+          : 0,
+        quantityStep: formData.quantityStep
+          ? parseFloat(formData.quantityStep)
+          : 0,
+        minOrderWeight: formData.minOrderWeightKg
+          ? parseFloat(formData.minOrderWeightKg) * 1000
+          : 0,
+        maxOrderWeight: formData.maxOrderWeightKg
+          ? parseFloat(formData.maxOrderWeightKg) * 1000
+          : 0,
       };
 
       if (editingProduct) {
@@ -329,16 +347,6 @@ const AdminProducts = () => {
       } else {
         // Yeni ürün oluştur - ProductService.createAdmin kullan
         const created = await ProductService.createAdmin(productData);
-        // created may be the created product object or an id depending on API
-        const newId = created && created.id ? created.id : created;
-        // if we had a temp editing id, move local variants into new product id
-        if (editingProductId && String(editingProductId).startsWith("temp-")) {
-          try {
-            variantStore.moveVariants(editingProductId, newId);
-          } catch (moveErr) {
-            console.warn("Variant migration failed:", moveErr);
-          }
-        }
         alert("✅ Yeni ürün başarıyla eklendi!");
       }
 
@@ -357,6 +365,11 @@ const AdminProducts = () => {
         adminOverrideName: null,
         adminOverridePrice: null,
         adminOverrideCategory: null,
+        maxOrderQuantity: "",
+        minOrderQuantity: "",
+        quantityStep: "",
+        minOrderWeightKg: "",
+        maxOrderWeightKg: "",
       });
       setEditingProduct(null);
       setEditingProductId(null);
@@ -382,7 +395,6 @@ const AdminProducts = () => {
 
     setEditingProduct(product);
     setEditingProductId(product.id);
-    setProductVariants(variantStore.getVariantsForProduct(product.id) || []);
     const existingImages =
       Array.isArray(product.imageUrls) && product.imageUrls.length > 0
         ? product.imageUrls
@@ -418,6 +430,20 @@ const AdminProducts = () => {
         product.adminOverrideCategory === true || product.adminOverrideCategory === false
           ? product.adminOverrideCategory
           : null,
+      maxOrderQuantity:
+        product.maxOrderQuantity > 0 ? String(product.maxOrderQuantity) : "",
+      minOrderQuantity:
+        product.minOrderQuantity > 0 ? String(product.minOrderQuantity) : "",
+      quantityStep:
+        product.quantityStep > 0 ? String(product.quantityStep) : "",
+      minOrderWeightKg:
+        product.minOrderWeight > 0
+          ? String(Number(product.minOrderWeight) / 1000)
+          : "",
+      maxOrderWeightKg:
+        product.maxOrderWeight > 0
+          ? String(Number(product.maxOrderWeight) / 1000)
+          : "",
     });
     setShowModal(true);
   };
@@ -641,19 +667,6 @@ const AdminProducts = () => {
     if (files && files.length > 0) {
       uploadImageFiles(files);
     }
-  };
-
-  const handleAddVariant = (variant) => {
-    if (!editingProductId) return;
-    const added = variantStore.addVariant(editingProductId, variant);
-    setProductVariants(variantStore.getVariantsForProduct(editingProductId));
-    return added;
-  };
-
-  const handleRemoveVariant = (variantId) => {
-    if (!editingProductId) return;
-    variantStore.removeVariant(editingProductId, variantId);
-    setProductVariants(variantStore.getVariantsForProduct(editingProductId));
   };
 
   const handleDelete = async (id) => {
@@ -971,7 +984,12 @@ const AdminProducts = () => {
                     setSelectedProductForVariants(product);
                     setShowVariantManager(true);
                   }}
-                  title="Varyantlar"
+                  disabled={Number(product.id) <= 0}
+                  title={
+                    Number(product.id) <= 0
+                      ? "Mikro ürünlerde varyant yönetimi desteklenmiyor"
+                      : "Varyantlar"
+                  }
                 >
                   <i className="fas fa-layer-group"></i>
                   <span className="admin-product-action-text">
@@ -1616,15 +1634,16 @@ const AdminProducts = () => {
                   adminOverrideName: null,
                   adminOverridePrice: null,
                   adminOverrideCategory: null,
+                  maxOrderQuantity: "",
+                  minOrderQuantity: "",
+                  quantityStep: "",
+                  minOrderWeightKg: "",
+                  maxOrderWeightKg: "",
                 });
                 if (imageInputRef.current) {
                   imageInputRef.current.value = "";
                 }
-                const tempId = `temp-${Date.now()}`;
-                setEditingProductId(tempId);
-                setProductVariants(
-                  variantStore.getVariantsForProduct(tempId) || [],
-                );
+                setEditingProductId(null);
                 setShowModal(true);
               }}
             >
@@ -2546,80 +2565,120 @@ const AdminProducts = () => {
                         </div>
                       </div>
 
-                      {(editingProduct ||
-                        (editingProductId &&
-                          String(editingProductId).startsWith("temp-"))) && (
-                        <div className="col-12 mt-3">
-                          <h6 className="mb-2">Varyantlar (geçici - local)</h6>
-                          <div className="d-flex gap-2 mb-2">
-                            <input
-                              id="v-package"
-                              className="form-control"
-                              placeholder="Paket tipi (ör. 500g)"
-                            ></input>
-                            <input
-                              id="v-qty"
-                              className="form-control"
-                              placeholder="Miktar"
-                              type="number"
-                            ></input>
-                            <input
-                              id="v-unit"
-                              className="form-control"
-                              placeholder="Unit (kg/adet/lt)"
-                            ></input>
-                            <button
-                              className="btn btn-primary"
-                              type="button"
-                              onClick={() => {
-                                const pkg =
-                                  document.getElementById("v-package").value;
-                                const qty =
-                                  parseFloat(
-                                    document.getElementById("v-qty").value,
-                                  ) || 0;
-                                const unit =
-                                  document.getElementById("v-unit").value ||
-                                  "adet";
-                                handleAddVariant({
-                                  packageType: pkg,
-                                  quantity: qty,
-                                  unit,
-                                  stock: 0,
-                                });
-                                document.getElementById("v-package").value = "";
-                                document.getElementById("v-qty").value = "";
-                                document.getElementById("v-unit").value = "";
-                              }}
-                            >
-                              Varyant Ekle
-                            </button>
+                      <div className="col-12">
+                        <div
+                          className="border-0 p-3"
+                          style={{
+                            background: "rgba(15, 23, 42, 0.04)",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div className="fw-semibold mb-2">
+                            Sipariş Limitleri (0 = global varsayılan)
                           </div>
-
-                          <div>
-                            {productVariants.map((v) => (
-                              <div
-                                key={v.id}
-                                className="d-flex align-items-center justify-content-between mb-1"
-                              >
-                                <div>
-                                  {v.packageType || `${v.quantity} ${v.unit}`}
-                                  {v.expiresAt ? ` — SKT: ${v.expiresAt}` : ""}
-                                </div>
-                                <div>
-                                  <button
-                                    className="btn btn-sm btn-danger"
-                                    type="button"
-                                    onClick={() => handleRemoveVariant(v.id)}
-                                  >
-                                    Sil
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
+                          <div className="row g-2">
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                Max Adet
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="form-control"
+                                value={formData.maxOrderQuantity}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    maxOrderQuantity: e.target.value,
+                                  })
+                                }
+                                placeholder="Varsayılan: 5"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                Min Adet
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                className="form-control"
+                                value={formData.minOrderQuantity}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    minOrderQuantity: e.target.value,
+                                  })
+                                }
+                                placeholder="Varsayılan: 1"
+                              />
+                            </div>
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                Adım
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                value={formData.quantityStep}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    quantityStep: e.target.value,
+                                  })
+                                }
+                                placeholder="Varsayılan: 1"
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label fw-semibold">
+                                Max Kg (tartılı ürünler)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                value={formData.maxOrderWeightKg}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    maxOrderWeightKg: e.target.value,
+                                  })
+                                }
+                                placeholder="Varsayılan: 10"
+                              />
+                            </div>
+                            <div className="col-md-6">
+                              <label className="form-label fw-semibold">
+                                Min Kg (tartılı ürünler)
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="form-control"
+                                value={formData.minOrderWeightKg}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    minOrderWeightKg: e.target.value,
+                                  })
+                                }
+                                placeholder="Varsayılan: 0.25"
+                              />
+                            </div>
                           </div>
+                          {editingProduct && Number(editingProduct.id) > 0 && (
+                            <small className="text-muted d-block mt-2">
+                              SKU varyantları için{" "}
+                              <strong>Varyant Yönet</strong> butonunu kullanın.
+                            </small>
+                          )}
                         </div>
-                      )}
+                      </div>
 
                       <div className="col-12">
                         <div className="form-check">
@@ -2909,6 +2968,7 @@ const AdminProducts = () => {
         {/* Variant Manager Modal */}
         {showVariantManager && selectedProductForVariants && (
           <VariantManager
+            isOpen={showVariantManager}
             productId={selectedProductForVariants.id}
             productName={selectedProductForVariants.name}
             onClose={() => {

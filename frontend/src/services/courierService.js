@@ -43,6 +43,50 @@ const parseCoordinates = (coordinates) => {
   return { deliveryLatitude: parts[0], deliveryLongitude: parts[1] };
 };
 
+/** Türkiye telefon numarasını ekranda gösterim için normalize eder (0XXXXXXXXXX) */
+export const formatPhoneDisplay = (phone) => {
+  if (!phone) return "";
+  let digits = String(phone).replace(/\D/g, "");
+  if (digits.startsWith("90") && digits.length >= 12) {
+    digits = digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return digits;
+  }
+  if (digits.length === 10 && digits.startsWith("5")) {
+    return `0${digits}`;
+  }
+  if (digits.length === 9 && digits.startsWith("5")) {
+    return `0${digits}`;
+  }
+  return digits || String(phone).trim();
+};
+
+/** Okunabilir format: 545 275 94 25 — satır kırılmasın diye nbsp kullanır */
+export const formatPhoneReadable = (phone) => {
+  let digits = formatPhoneDisplay(phone).replace(/\D/g, "");
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  if (digits.length === 10 && digits.startsWith("5")) {
+    const nbsp = "\u00A0";
+    return `${digits.slice(0, 3)}${nbsp}${digits.slice(3, 6)}${nbsp}${digits.slice(6, 8)}${nbsp}${digits.slice(8)}`;
+  }
+  return formatPhoneDisplay(phone);
+};
+
+/** Mobil arama için tel: URI (+90 formatı) */
+export const getPhoneTelUri = (phone) => {
+  const display = formatPhoneDisplay(phone);
+  if (!display) return "";
+  const digits = display.replace(/\D/g, "");
+  const national = digits.startsWith("0") ? digits.slice(1) : digits;
+  if (national.length >= 10) {
+    return `tel:+90${national}`;
+  }
+  return `tel:${display}`;
+};
+
 const normalizeOrderListItem = (order) => {
   if (!order) return null;
   return {
@@ -52,6 +96,13 @@ const normalizeOrderListItem = (order) => {
     customerPhone: order.customerPhone,
     address: order.addressSummary || order.fullAddress || order.shippingAddress,
     totalAmount: order.totalAmount ?? order.finalPrice,
+    finalAmount: order.finalAmount ?? order.totalAmount ?? order.finalPrice,
+    totalPriceDifference: order.totalPriceDifference ?? 0,
+    authorizedAmount: order.authorizedAmount ?? 0,
+    weightAdjustmentStatus: order.weightAdjustmentStatus,
+    hasWeightDifference: order.hasWeightDifference ?? false,
+    hasWeightBasedItems: order.hasWeightBasedItems ?? false,
+    allItemsWeighed: order.allItemsWeighed ?? false,
     status: order.status,
     statusText: order.statusText,
     statusColor: order.statusColor,
@@ -82,6 +133,14 @@ const normalizeOrderDetail = (order) => {
     city: order.city,
     googleMapsUrl: order.googleMapsUrl,
     orderTotal: order.totalAmount,
+    finalAmount: order.finalAmount ?? order.totalAmount,
+    shippingCost: order.shippingCost ?? 0,
+    totalPriceDifference: order.totalPriceDifference ?? 0,
+    authorizedAmount: order.authorizedAmount ?? 0,
+    weightAdjustmentStatus: order.weightAdjustmentStatus,
+    hasWeightDifference: order.hasWeightDifference ?? false,
+    hasWeightBasedItems: order.hasWeightBasedItems ?? false,
+    allItemsWeighed: order.allItemsWeighed ?? false,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     paymentInfo: order.paymentInfo,
@@ -107,11 +166,15 @@ const normalizeOrderDetail = (order) => {
       price: item.unitPrice,
       totalPrice: item.totalPrice,
       weightUnit: item.unit,
-      isWeightBased:
+      isWeightBased: item.isWeightBased ?? (
         item.unit?.toLowerCase() === "gram" ||
-        item.unit?.toLowerCase() === "kilogram",
+        item.unit?.toLowerCase() === "kilogram"
+      ),
       expectedWeightGrams: item.expectedWeightGrams,
       actualWeightGrams: item.actualWeightGrams,
+      weightDifferenceGrams: item.weightDifferenceGrams,
+      weightDifferenceAmount: item.weightDifferenceAmount,
+      hasWeightDifference: item.hasWeightDifference ?? false,
     })),
     ...coords,
   };

@@ -149,8 +149,10 @@ export function CourierSignalRProvider({ children }) {
     (conn) => {
       if (!conn) return;
 
-      // Yeni görev atandı (Backend "OrderAssigned" event'i gönderir)
-      conn.on("OrderAssigned", (task) => {
+      // Yeni görev atandı — backend iki farklı event adı kullanabiliyor:
+      // "OrderAssigned" (RealTimeNotificationService) ve "NewOrderAssigned" (DispatcherOrderController).
+      // İkisini de aynı handler ile karşılıyoruz ki atama bildirimi kaçmasın.
+      const handleAssigned = (task) => {
         console.log("📦 Yeni görev atandı:", task);
 
         const notification = {
@@ -169,7 +171,9 @@ export function CourierSignalRProvider({ children }) {
         window.dispatchEvent(
           new CustomEvent("courierTaskAssigned", { detail: task }),
         );
-      });
+      };
+      conn.on("OrderAssigned", handleAssigned);
+      conn.on("NewOrderAssigned", handleAssigned);
 
       // Sipariş durumu değişti (Backend "OrderStatusChanged" event'i gönderir)
       conn.on("OrderStatusChanged", (data) => {
@@ -227,7 +231,8 @@ export function CourierSignalRProvider({ children }) {
           id: Date.now(),
           type: "admin_message",
           title: "Admin Mesajı",
-          message: message.text,
+          // Backend "AdminMessage" event'inde alan adı "message"; eski "text" alanına da düş.
+          message: message?.message || message?.text || "Yeni mesaj",
           data: message,
           timestamp: new Date().toISOString(),
           read: false,

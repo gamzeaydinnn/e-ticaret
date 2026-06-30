@@ -41,7 +41,11 @@ const VariantManager = ({
     weightGrams: "",
     volumeML: "",
     supplierCode: "",
+    maxOrderQuantity: "",
   });
+
+  // Stok hızlı düzenleme — onBlur ile kaydet
+  const [stockDrafts, setStockDrafts] = useState({});
 
   // Bulk operations
   const [selectedVariants, setSelectedVariants] = useState([]);
@@ -58,8 +62,13 @@ const VariantManager = ({
     setError(null);
 
     try {
-      const data = await variantService.getVariantsByProduct(productId);
+      const data = await variantService.getVariantsByProductAdmin(productId);
       setVariants(data || []);
+      const drafts = {};
+      (data || []).forEach((v) => {
+        drafts[v.id] = String(v.stock ?? 0);
+      });
+      setStockDrafts(drafts);
     } catch (err) {
       setError(
         err.response?.data?.message || "Varyantlar yüklenirken hata oluştu.",
@@ -90,6 +99,7 @@ const VariantManager = ({
       weightGrams: "",
       volumeML: "",
       supplierCode: "",
+      maxOrderQuantity: "",
     });
     setEditingVariant(null);
     setShowForm(false);
@@ -111,6 +121,10 @@ const VariantManager = ({
       weightGrams: variant.weightGrams?.toString() || "",
       volumeML: variant.volumeML?.toString() || "",
       supplierCode: variant.supplierCode || "",
+      maxOrderQuantity:
+        variant.maxOrderQuantity > 0
+          ? String(variant.maxOrderQuantity)
+          : "",
     });
     setShowForm(true);
   }, []);
@@ -190,14 +204,41 @@ const VariantManager = ({
 
   const handleQuickStockUpdate = useCallback(
     async (variantId, newStock) => {
+      const parsed = parseInt(newStock, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setError("Geçerli bir stok miktarı giriniz.");
+        return;
+      }
+
       try {
-        await variantService.updateVariantStock(variantId, parseInt(newStock));
+        await variantService.updateVariantStock(variantId, parsed);
         loadVariants();
       } catch (err) {
         setError("Stok güncellenirken hata oluştu.");
       }
     },
     [loadVariants],
+  );
+
+  const handleStockDraftChange = useCallback((variantId, value) => {
+    setStockDrafts((prev) => ({ ...prev, [variantId]: value }));
+  }, []);
+
+  const handleStockBlur = useCallback(
+    (variantId, originalStock) => {
+      const draft = stockDrafts[variantId];
+      const parsed = parseInt(draft, 10);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        setStockDrafts((prev) => ({
+          ...prev,
+          [variantId]: String(originalStock ?? 0),
+        }));
+        return;
+      }
+      if (parsed === originalStock) return;
+      handleQuickStockUpdate(variantId, parsed);
+    },
+    [stockDrafts, handleQuickStockUpdate],
   );
 
   // ============================================================
@@ -426,6 +467,18 @@ const VariantManager = ({
 
                 <div className="variant-form-row">
                   <div className="variant-form-group">
+                    <label>Max Sipariş Adedi</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.maxOrderQuantity}
+                      onChange={(e) =>
+                        handleInputChange("maxOrderQuantity", e.target.value)
+                      }
+                      placeholder="Boş = ürün/global limit"
+                    />
+                  </div>
+                  <div className="variant-form-group">
                     <label>Ağırlık (gram)</label>
                     <input
                       type="number"
@@ -511,6 +564,7 @@ const VariantManager = ({
                   <span className="variant-col-title">Başlık</span>
                   <span className="variant-col-price">Fiyat</span>
                   <span className="variant-col-stock">Stok</span>
+                  <span className="variant-col-limit">Max Adet</span>
                   <span className="variant-col-actions">İşlemler</span>
                 </div>
 
@@ -560,13 +614,22 @@ const VariantManager = ({
                           <input
                             type="number"
                             min="0"
-                            value={variant.stock}
+                            value={stockDrafts[variant.id] ?? variant.stock}
                             onChange={(e) =>
-                              handleQuickStockUpdate(variant.id, e.target.value)
+                              handleStockDraftChange(variant.id, e.target.value)
+                            }
+                            onBlur={() =>
+                              handleStockBlur(variant.id, variant.stock)
                             }
                             className="variant-stock-input"
                           />
                         </div>
+                      </div>
+
+                      <div className="variant-col-limit">
+                        {variant.maxOrderQuantity > 0
+                          ? variant.maxOrderQuantity
+                          : "—"}
                       </div>
 
                       <div className="variant-col-actions">

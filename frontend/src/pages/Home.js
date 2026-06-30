@@ -28,7 +28,7 @@ import HeroSlider from "../components/HeroSlider";
 import PromoCards from "../components/PromoCards";
 import { useCart } from "../contexts/CartContext";
 import { useAuth } from "../contexts/AuthContext";
-import AddToCartModal from "../components/AddToCartModal";
+import CartActionToast, { useCartActionToast } from "../components/CartActionToast";
 
 // ============================================
 // ANA BİLEŞEN
@@ -105,9 +105,12 @@ export default function Home() {
   // Auth context'i - Admin kontrolü için
   const { user } = useAuth();
 
-  // Sepete ekleme modal state'i
-  const [cartModalOpen, setCartModalOpen] = useState(false);
-  const [addedProduct, setAddedProduct] = useState(null);
+  const {
+    notification: cartNotification,
+    showCartSuccess,
+    showCartError,
+    dismiss: dismissCartNotification,
+  } = useCartActionToast();
 
   // ============================================
   // VERİ YÜKLEME FONKSİYONU
@@ -408,16 +411,16 @@ export default function Home() {
       try {
         const result = await addToCart(product, quantity, resolvedVariantInfo);
         if (!result?.success) {
-          throw new Error(result?.error || "Sepete eklenemedi");
+          showCartError(result?.error || "Sepete eklenemedi.");
+          return;
         }
-        setAddedProduct(product);
-        setCartModalOpen(true);
+        showCartSuccess(product, user ? "registered" : "guest");
       } catch (error) {
         console.error("Sepete ekleme hatası:", error);
-        alert("Ürün sepete eklenirken bir hata oluştu.");
+        showCartError("Ürün sepete eklenirken bir hata oluştu.");
       }
     },
-    [featured, addToCart],
+    [featured, addToCart, user, showCartSuccess, showCartError],
   );
 
   // ============================================
@@ -1490,10 +1493,9 @@ export default function Home() {
       </section>
 
       {/* Sepete Ekleme Modal */}
-      <AddToCartModal
-        isOpen={cartModalOpen}
-        onClose={() => setCartModalOpen(false)}
-        product={addedProduct}
+      <CartActionToast
+        notification={cartNotification}
+        onDismiss={dismissCartNotification}
       />
     </div>
   );

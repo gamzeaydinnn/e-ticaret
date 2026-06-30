@@ -102,8 +102,7 @@ namespace ECommerce.API.Controllers
             if (productId <= 0)
                 return BadRequest(new { message = "Geçersiz ürün ID" });
 
-            // GetByProductIdAsync tüm varyantları (aktif+pasif) döndürür
-            var variants = await _variantService.GetByProductIdAsync(productId);
+            var variants = await _variantService.GetByProductIdAsync(productId, includeInactive: true);
             return Ok(variants);
         }
 

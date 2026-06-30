@@ -5,6 +5,10 @@ import "react-toastify/dist/ReactToastify.css";
 // Basit global toast helper'ı; istediğinde import edip kullanabilirsin:
 // toast.success("Mesaj"), toast.error("Hata") vb.
 
+// Merkezi z-index ölçeği ile uyumlu: toast bildirimleri her zaman header/modal üstünde
+// görünmeli (bkz. notification katmanı standardizasyonu).
+const TOAST_Z_INDEX = 13000;
+
 export function GlobalToastContainer() {
   return (
     <ToastContainer
@@ -17,6 +21,7 @@ export function GlobalToastContainer() {
       draggable
       pauseOnHover
       theme="colored"
+      style={{ zIndex: TOAST_Z_INDEX }}
     />
   );
 }

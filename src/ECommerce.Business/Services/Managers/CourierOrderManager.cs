@@ -945,7 +945,15 @@ namespace ECommerce.Business.Services.Managers
                 OrderDate = order.OrderDate,
                 EstimatedDelivery = order.EstimatedDelivery,
                 ItemCount = order.OrderItems?.Count ?? 0,
-                HasCustomerNote = !string.IsNullOrWhiteSpace(order.DeliveryNotes)
+                HasCustomerNote = !string.IsNullOrWhiteSpace(order.DeliveryNotes),
+                // Ağırlık ve ödeme bilgileri
+                FinalAmount = order.FinalAmount > 0 ? order.FinalAmount : order.FinalPrice,
+                TotalPriceDifference = order.TotalPriceDifference,
+                AuthorizedAmount = order.AuthorizedAmount,
+                WeightAdjustmentStatus = order.WeightAdjustmentStatus.ToString(),
+                HasWeightDifference = order.TotalPriceDifference != 0,
+                HasWeightBasedItems = order.HasWeightBasedItems,
+                AllItemsWeighed = order.AllItemsWeighed
             };
         }
 
@@ -974,6 +982,7 @@ namespace ECommerce.Business.Services.Managers
                 PaymentStatus = order.PaymentStatus.ToString(),
                 PaymentInfo = GetPaymentInfoText(order),
                 CashOnDeliveryAmount = order.PaymentStatus != PaymentStatus.Paid ? order.FinalPrice : null,
+                ShippingCost = order.ShippingCost,
                 OrderDate = order.OrderDate,
                 AssignedAt = order.AssignedAt,
                 PickedUpAt = order.PickedUpAt,
@@ -981,6 +990,13 @@ namespace ECommerce.Business.Services.Managers
                 EstimatedDelivery = order.EstimatedDelivery,
                 Priority = order.Priority,
                 CustomerNote = order.DeliveryNotes,
+                FinalAmount = order.FinalAmount > 0 ? order.FinalAmount : order.FinalPrice,
+                TotalPriceDifference = order.TotalPriceDifference,
+                AuthorizedAmount = order.AuthorizedAmount,
+                WeightAdjustmentStatus = order.WeightAdjustmentStatus.ToString(),
+                HasWeightDifference = order.TotalPriceDifference != 0,
+                HasWeightBasedItems = order.HasWeightBasedItems,
+                AllItemsWeighed = order.AllItemsWeighed,
                 Items = order.OrderItems?.Select(MapToItemDto).ToList() ?? new List<CourierOrderItemDto>(),
                 AllowedActions = new CourierAllowedActions
                 {
@@ -1021,9 +1037,12 @@ namespace ECommerce.Business.Services.Managers
                 UnitPrice = item.UnitPrice,
                 TotalPrice = totalPrice,
                 Unit = unit,
+                IsWeightBased = item.IsWeightBased,
                 HasWeightDifference = item.ActualWeight.HasValue && item.WeightDifference.HasValue && item.WeightDifference.Value != 0,
-                ExpectedWeightGrams = item.IsWeightBased ? (int?)item.EstimatedWeight : item.ExpectedWeightGrams,
-                ActualWeightGrams = item.ActualWeight
+                WeightDifferenceGrams = item.WeightDifference,
+                ExpectedWeightGrams = item.IsWeightBased ? item.EstimatedWeight : item.ExpectedWeightGrams,
+                ActualWeightGrams = item.ActualWeight,
+                WeightDifferenceAmount = item.PriceDifference
             };
         }
 

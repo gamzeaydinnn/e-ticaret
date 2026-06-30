@@ -656,8 +656,38 @@ namespace ECommerce.API.Services
                 }
                 catch { /* StoreAttendant bildirimi opsiyonel */ }
 
+                // Sevkiyat görevlilerine bildirim (sevkiyat ekranındaki listeden düşmeli)
+                try
+                {
+                    await _dispatcherHub.Clients.Group(DispatcherHub.GetDispatchRoomGroupName())
+                        .SendAsync("OrderCancelled", notification);
+                }
+                catch { /* Dispatcher bildirimi opsiyonel */ }
+
+                // MÜŞTERİYE bildirim (sipariş takip ekranı) — önceden eksikti, müşteri iptali göremiyordu.
+                // Sipariş takip ekranı "OrderStatusChanged" event'ini dinliyor, bu yüzden o formatta gönderiyoruz.
+                try
+                {
+                    var customerNotification = new
+                    {
+                        type = "OrderStatusChanged",
+                        orderId,
+                        orderNumber,
+                        oldStatus = (string?)null,
+                        newStatus = "Cancelled",
+                        status = "Cancelled",
+                        statusText = "İptal Edildi",
+                        reason,
+                        changedBy = cancelledBy,
+                        timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    };
+                    await _orderHub.Clients.Group($"order-{orderId}")
+                        .SendAsync("OrderStatusChanged", customerNotification);
+                }
+                catch { /* Müşteri bildirimi opsiyonel */ }
+
                 _logger.LogInformation(
-                    "📢 Sipariş iptal bildirimi gönderildi. OrderId={OrderId}, CancelledBy={CancelledBy}",
+                    "📢 Sipariş iptal bildirimi gönderildi (admin/store/dispatcher/müşteri). OrderId={OrderId}, CancelledBy={CancelledBy}",
                     orderId, cancelledBy);
             }
             catch (Exception ex)

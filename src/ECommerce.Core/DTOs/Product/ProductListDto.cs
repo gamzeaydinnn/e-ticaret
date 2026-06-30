@@ -1,4 +1,5 @@
 using ECommerce.Core.DTOs;
+using ECommerce.Core.Interfaces;
 using System;
 using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Product
@@ -59,6 +60,14 @@ namespace ECommerce.Core.DTOs.Product
         public bool EffectiveAdminOverrideName { get; set; }
         public bool EffectiveAdminOverridePrice { get; set; }
         public bool EffectiveAdminOverrideCategory { get; set; }
+
+        public bool IsWeightBased { get; set; }
+        public int MaxOrderQuantity { get; set; }
+        public int MinOrderQuantity { get; set; }
+        public decimal QuantityStep { get; set; }
+        public decimal MinOrderWeight { get; set; }
+        public decimal MaxOrderWeight { get; set; }
+        public OrderLimitDto? OrderLimits { get; set; }
         
         #region Kampanya Bilgileri
         

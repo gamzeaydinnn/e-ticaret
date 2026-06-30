@@ -13,7 +13,7 @@ import { CART_SETTINGS_EVENT } from "../services/cartSettingsService";
 import LoginModal from "./LoginModal";
 import LoginRequiredModal from "./LoginRequiredModal";
 import Pagination from "./Pagination";
-import AddToCartModal from "./AddToCartModal";
+import CartActionToast, { useCartActionToast } from "./CartActionToast";
 import WeightSelectionModal, {
   isWeightBasedProduct,
 } from "./WeightSelectionModal";
@@ -269,9 +269,13 @@ export default function ProductGrid({
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showLoginAlert, setShowLoginAlert] = useState(false);
   const [showFavoriteAlert, setShowFavoriteAlert] = useState(false);
-  const [cartNotification, setCartNotification] = useState(null);
-  const [cartModalOpen, setCartModalOpen] = useState(false);
-  const [addedProduct, setAddedProduct] = useState(null);
+  const {
+    notification: cartNotification,
+    showCartSuccess,
+    showCartError,
+    showFavoriteSuccess,
+    dismiss: dismissCartNotification,
+  } = useCartActionToast();
   const [guestFirstOrderShippingMessage, setGuestFirstOrderShippingMessage] =
     useState("");
   // NEDEN: Backend 400 "Yetersiz stok" döndüğünde ürünü anlık out-of-stock işaretle
@@ -457,14 +461,10 @@ export default function ProductGrid({
           new Set(prev).add(product.id ?? product.sku),
         );
       }
-      setCartNotification({
-        type: "error",
-        message: result.error || "Sepete eklenemedi.",
-      });
-      setTimeout(() => setCartNotification(null), 4000);
+      showCartError(result.error || "Sepete eklenemedi.");
       return;
     }
-    showCartNotification(product, user ? "registered" : "guest");
+    showCartSuccess(product, user ? "registered" : "guest");
   };
 
   // Kg bazlı ürün sepete ekleme (modal onayı sonrası)
@@ -483,14 +483,10 @@ export default function ProductGrid({
           new Set(prev).add(product.id ?? product.sku),
         );
       }
-      setCartNotification({
-        type: "error",
-        message: result.error || "Sepete eklenemedi.",
-      });
-      setTimeout(() => setCartNotification(null), 4000);
+      showCartError(result.error || "Sepete eklenemedi.");
       return;
     }
-    showCartNotification(product, user ? "registered" : "guest");
+    showCartSuccess(product, user ? "registered" : "guest");
   };
 
   // load rules once
@@ -522,13 +518,9 @@ export default function ProductGrid({
           // Kullanıcının seçtiği miktarı doğru şekilde sepete ekle
           const result = await ctxAddToCart(product, quantity);
           if (result && result.success === false) {
-            setCartNotification({
-              type: "error",
-              message: result.error || "Sepete eklenemedi.",
-            });
-            setTimeout(() => setCartNotification(null), 4000);
+            showCartError(result.error || "Sepete eklenemedi.");
           } else {
-            showCartNotification(product, "guest");
+            showCartSuccess(product, "guest");
           }
         }
         localStorage.removeItem("tempProductId");
@@ -584,10 +576,13 @@ export default function ProductGrid({
       }
     }
 
-    if (!productId) return; // Sessizce yoksay — SKU bile yoksa bir şey yapamayız
+    if (!productId) return;
 
-    ctxToggleFavorite(productId);
-    showFavoriteNotification(product);
+    const wasFavorite = ctxIsFavorite(productId);
+    await ctxToggleFavorite(productId);
+    if (!wasFavorite) {
+      showFavoriteSuccess(product);
+    }
   };
 
   const handleFavoriteGuestContinue = () => {
@@ -602,34 +597,6 @@ export default function ProductGrid({
   // isFavorite artık context'ten geliyor
   const isFavorite = (productId) => {
     return ctxIsFavorite(productId);
-  };
-
-  const showFavoriteNotification = (product) => {
-    // Toast bildirim göster
-    setCartNotification({
-      type: "favorite",
-      product: product,
-      message: "Favorilere eklendi!",
-    });
-
-    setTimeout(() => {
-      setCartNotification(null);
-    }, 3000);
-  };
-
-  const showCartNotification = (product, userType) => {
-    setAddedProduct(product);
-    setCartModalOpen(true);
-    setCartNotification({
-      type: "success",
-      product: product,
-      userType: userType,
-    });
-
-    // 4 saniye sonra bildirimi gizle
-    setTimeout(() => {
-      setCartNotification(null);
-    }, 4000);
   };
 
   const handleProductClick = (product, event) => {
@@ -970,7 +937,7 @@ export default function ProductGrid({
                       className="product-grid-card-wrapper"
                     >
                       <div
-                        className="modern-product-card h-100"
+                        className="modern-product-card product-grid-card h-100"
                         style={{
                           background: "#ffffff",
                           borderRadius: "16px",
@@ -980,7 +947,6 @@ export default function ProductGrid({
                           overflow: "hidden",
                           position: "relative",
                           cursor: "pointer",
-                          minHeight: "380px",
                           width: "100%",
                           display: "flex",
                           flexDirection: "column",
@@ -1014,15 +980,20 @@ export default function ProductGrid({
                         {/* Stok Rozetleri */}
                         {isLowStock && !isOutOfStock && (
                           <div
-                            className="position-absolute top-0 end-0 p-2"
+                            className="position-absolute top-0 start-0 p-1"
                             style={{ zIndex: 3 }}
                           >
                             <span
-                              className="badge bg-warning text-dark"
+                              className="badge bg-warning text-dark stock-badge-mobile"
                               style={{
-                                fontSize: "0.65rem",
-                                padding: "3px 8px",
-                                borderRadius: "12px",
+                                fontSize: "0.55rem",
+                                padding: "2px 6px",
+                                borderRadius: "8px",
+                                maxWidth: "72px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                display: "inline-block",
                               }}
                             >
                               Az Stok
@@ -1684,251 +1655,11 @@ export default function ProductGrid({
         </div>
       )}
 
-      <AddToCartModal
-        isOpen={cartModalOpen}
-        onClose={() => setCartModalOpen(false)}
-        product={addedProduct}
+      <CartActionToast
+        notification={cartNotification}
+        onDismiss={dismissCartNotification}
+        guestFirstOrderShippingMessage={guestFirstOrderShippingMessage}
       />
-
-      {/* Premium Cart Notification Toast */}
-      {cartNotification && (
-        <div
-          className="position-fixed top-0 end-0 m-4"
-          style={{ zIndex: 9999 }}
-        >
-          <div
-            className="toast show border-0 shadow-lg"
-            style={{
-              borderRadius: "25px",
-              minWidth: "380px",
-              background:
-                cartNotification.type === "success"
-                  ? "linear-gradient(145deg, #ffffff, #f8f9fa)"
-                  : cartNotification.type === "favorite"
-                    ? "linear-gradient(145deg, #fdf2f8, #fce7f3)"
-                    : "linear-gradient(145deg, #fff5f5, #fed7d7)",
-              animation:
-                "slideInRight 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-              border:
-                cartNotification.type === "success"
-                  ? "3px solid #10b981"
-                  : cartNotification.type === "favorite"
-                    ? "3px solid #e91e63"
-                    : "3px solid #ef4444",
-              boxShadow:
-                "0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1)",
-            }}
-          >
-            <div
-              className="toast-header border-0"
-              style={{
-                background:
-                  cartNotification.type === "success"
-                    ? "linear-gradient(135deg, #10b981, #059669)"
-                    : cartNotification.type === "favorite"
-                      ? "linear-gradient(135deg, #e91e63, #ad1457)"
-                      : "linear-gradient(135deg, #ef4444, #dc2626)",
-                borderRadius: "22px 22px 0 0",
-                color: "white",
-                padding: "1rem 1.5rem",
-              }}
-            >
-              <div className="d-flex align-items-center">
-                <div
-                  className="rounded-circle me-3 d-flex align-items-center justify-content-center"
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    backgroundColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <i
-                    className={`fas ${
-                      cartNotification.type === "success"
-                        ? "fa-check"
-                        : cartNotification.type === "favorite"
-                          ? "fa-heart"
-                          : "fa-exclamation"
-                    }`}
-                    style={{ fontSize: "1.2rem" }}
-                  ></i>
-                </div>
-                <strong className="fs-6">
-                  {cartNotification.type === "success"
-                    ? "Sepete Eklendi!"
-                    : cartNotification.type === "favorite"
-                      ? "Favorilere Eklendi!"
-                      : "Hata Oluştu!"}
-                </strong>
-              </div>
-              <button
-                type="button"
-                className="btn-close btn-close-white ms-auto"
-                onClick={() => setCartNotification(null)}
-                style={{ opacity: 0.8 }}
-              ></button>
-            </div>
-
-            {cartNotification.type === "success" &&
-              cartNotification.product && (
-                <div className="toast-body p-4">
-                  <div className="d-flex align-items-start">
-                    <div className="position-relative me-3">
-                      <img
-                        src={
-                          cartNotification.product.imageUrl ||
-                          "/images/placeholder.png"
-                        }
-                        alt={cartNotification.product.name}
-                        style={{
-                          width: "70px",
-                          height: "70px",
-                          objectFit: "contain",
-                          borderRadius: "15px",
-                          border: "3px solid #10b981",
-                          background:
-                            "linear-gradient(135deg, #f8f9fa, #e9ecef)",
-                          padding: "5px",
-                        }}
-                      />
-                      <div
-                        className="position-absolute top-0 start-100 translate-middle rounded-circle bg-success d-flex align-items-center justify-content-center"
-                        style={{ width: "24px", height: "24px" }}
-                      >
-                        <i
-                          className="fas fa-check text-white"
-                          style={{ fontSize: "0.7rem" }}
-                        ></i>
-                      </div>
-                    </div>
-
-                    <div className="flex-grow-1">
-                      <h6
-                        className="mb-1 fw-bold text-dark"
-                        style={{ fontSize: "0.95rem" }}
-                      >
-                        {cartNotification.product.name}
-                      </h6>
-                      <div className="d-flex align-items-center mb-2">
-                        <span className="text-success fw-bold me-2">
-                          ₺
-                          {(
-                            cartNotification.product.specialPrice ||
-                            cartNotification.product.price
-                          )?.toFixed(2)}
-                        </span>
-                        {cartNotification.product.specialPrice && (
-                          <span className="text-muted text-decoration-line-through small">
-                            ₺{cartNotification.product.price?.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-
-                      {cartNotification.userType === "guest" &&
-                        guestFirstOrderShippingMessage.trim() && (
-                        <div
-                          className="alert border-0 p-3 mb-3"
-                          style={{
-                            borderRadius: "15px",
-                            background:
-                              "linear-gradient(135deg, #fff3cd, #ffeaa7)",
-                            border: "2px solid #f39c12",
-                          }}
-                        >
-                          <div className="d-flex align-items-center">
-                            <div
-                              className="rounded-circle me-2 d-flex align-items-center justify-content-center"
-                              style={{
-                                width: "30px",
-                                height: "30px",
-                                backgroundColor: "#f39c12",
-                              }}
-                            >
-                              <i
-                                className="fas fa-gift text-white"
-                                style={{ fontSize: "0.8rem" }}
-                              ></i>
-                            </div>
-                            <div>
-                              <div className="fw-bold text-warning small mb-1">
-                                🎁 SÜPER FIRSAT!
-                              </div>
-                              <div
-                                className="text-dark"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  whiteSpace: "pre-line",
-                                }}
-                              >
-                                {guestFirstOrderShippingMessage}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="d-grid gap-2">
-                        <div className="row g-2">
-                          <div className="col-8">
-                            <button
-                              className="btn w-100 text-white fw-bold"
-                              onClick={() => {
-                                setCartNotification(null);
-                                window.location.href = "/cart";
-                              }}
-                              style={{
-                                borderRadius: "20px",
-                                fontSize: "0.8rem",
-                                background:
-                                  "linear-gradient(135deg, #10b981, #059669)",
-                                border: "none",
-                                padding: "10px",
-                              }}
-                            >
-                              <i className="fas fa-shopping-cart me-1"></i>
-                              Sepete Git
-                            </button>
-                          </div>
-
-                          {cartNotification.userType === "guest" && (
-                            <div className="col-4">
-                              <button
-                                className="btn btn-outline-warning w-100 fw-bold"
-                                onClick={() => {
-                                  setCartNotification(null);
-                                  setShowLoginAlert(true);
-                                }}
-                                style={{
-                                  borderRadius: "20px",
-                                  fontSize: "0.75rem",
-                                  borderWidth: "2px",
-                                  padding: "10px 8px",
-                                }}
-                              >
-                                <i
-                                  className="fas fa-user-plus"
-                                  style={{ fontSize: "0.7rem" }}
-                                ></i>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {cartNotification.type === "error" && (
-              <div className="toast-body">
-                <p className="mb-0 text-danger fw-bold">
-                  {cartNotification.message}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Login Required Modal */}
       <LoginRequiredModal

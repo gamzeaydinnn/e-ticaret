@@ -38,9 +38,9 @@ namespace ECommerce.Business.Services.Managers
             return variant != null ? MapToDetailDto(variant) : null;
         }
         
-        public async Task<IEnumerable<ProductVariantDetailDto>> GetByProductIdAsync(int productId)
+        public async Task<IEnumerable<ProductVariantDetailDto>> GetByProductIdAsync(int productId, bool includeInactive = false)
         {
-            var variants = await _unitOfWork.ProductVariants.GetByProductIdAsync(productId);
+            var variants = await _unitOfWork.ProductVariants.GetByProductIdAsync(productId, includeInactive);
             return variants.Select(MapToDetailDto);
         }
         
@@ -59,6 +59,7 @@ namespace ECommerce.Business.Services.Managers
                 VolumeML = dto.VolumeML,
                 SupplierCode = dto.SupplierCode,
                 ParentSku = dto.ParentSku,
+                MaxOrderQuantity = dto.MaxOrderQuantity,
                 IsActive = true,
                 LastSyncedAt = DateTime.UtcNow,
                 LastSeenAt = DateTime.UtcNow
@@ -66,6 +67,13 @@ namespace ECommerce.Business.Services.Managers
             
             await _unitOfWork.ProductVariants.AddAsync(variant);
             await _unitOfWork.SaveChangesAsync();
+
+            if (dto.OptionValueIds is { Count: > 0 })
+            {
+                await _unitOfWork.ProductOptions.SetVariantOptionValuesAsync(
+                    variant.Id,
+                    dto.OptionValueIds);
+            }
             
             _logger.LogInformation("Varyant oluşturuldu: SKU={SKU}, ProductId={ProductId}", variant.SKU, productId);
             return MapToDetailDto(variant);
@@ -85,11 +93,21 @@ namespace ECommerce.Business.Services.Managers
             if (dto.WeightGrams.HasValue) variant.WeightGrams = dto.WeightGrams.Value;
             if (dto.VolumeML.HasValue) variant.VolumeML = dto.VolumeML.Value;
             if (dto.SupplierCode != null) variant.SupplierCode = dto.SupplierCode;
+            if (dto.MaxOrderQuantity.HasValue) variant.MaxOrderQuantity = Math.Max(0, dto.MaxOrderQuantity.Value);
+            if (dto.IsActive.HasValue) variant.IsActive = dto.IsActive.Value;
             
             variant.LastSyncedAt = DateTime.UtcNow;
             variant.LastSeenAt = DateTime.UtcNow;
             
             await _unitOfWork.ProductVariants.UpdateAsync(variant);
+
+            if (dto.OptionValueIds != null)
+            {
+                await _unitOfWork.ProductOptions.SetVariantOptionValuesAsync(
+                    variant.Id,
+                    dto.OptionValueIds);
+            }
+            
             await _unitOfWork.SaveChangesAsync();
             
             _logger.LogInformation("Varyant güncellendi: ID={Id}, SKU={SKU}", variantId, variant.SKU);
@@ -213,22 +231,25 @@ namespace ECommerce.Business.Services.Managers
         
         #region Option Management
         
-        public Task AddOptionValueAsync(int variantId, int optionId, int optionValueId)
+        public async Task AddOptionValueAsync(int variantId, int optionId, int optionValueId)
         {
-            // TODO: VariantOptionValue repository eklenince implement edilecek
-            return Task.CompletedTask;
+            await _unitOfWork.ProductOptions.AssignOptionValueToVariantAsync(variantId, optionValueId);
         }
         
-        public Task RemoveOptionValueAsync(int variantId, int optionId)
+        public async Task RemoveOptionValueAsync(int variantId, int optionId)
         {
-            // TODO: VariantOptionValue repository eklenince implement edilecek
-            return Task.CompletedTask;
+            var values = await _unitOfWork.ProductOptions.GetVariantOptionValuesAsync(variantId);
+            var target = values.FirstOrDefault(v => v.OptionId == optionId);
+            if (target != null)
+            {
+                await _unitOfWork.ProductOptions.RemoveOptionValueFromVariantAsync(variantId, target.Id);
+            }
         }
         
-        public Task UpdateOptionValuesAsync(int variantId, IEnumerable<(int OptionId, int ValueId)> optionValues)
+        public async Task UpdateOptionValuesAsync(int variantId, IEnumerable<(int OptionId, int ValueId)> optionValues)
         {
-            // TODO: VariantOptionValue repository eklenince implement edilecek
-            return Task.CompletedTask;
+            var valueIds = optionValues?.Select(x => x.ValueId).ToList() ?? new List<int>();
+            await _unitOfWork.ProductOptions.SetVariantOptionValuesAsync(variantId, valueIds);
         }
         
         #endregion
@@ -253,8 +274,26 @@ namespace ECommerce.Business.Services.Managers
         
         public async Task<ProductVariantDetailDto?> FindByOptionsAsync(int productId, IDictionary<int, int> optionValueMap)
         {
-            var variants = await _unitOfWork.ProductVariants.GetByProductIdAsync(productId);
-            return variants.Select(MapToDetailDto).FirstOrDefault();
+            if (optionValueMap == null || optionValueMap.Count == 0)
+            {
+                return null;
+            }
+
+            var variants = await _unitOfWork.ProductVariants.GetByProductIdAsync(productId, includeInactive: false);
+            foreach (var variant in variants)
+            {
+                var values = await _unitOfWork.ProductOptions.GetVariantOptionValuesAsync(variant.Id);
+                var assigned = values.ToDictionary(v => v.OptionId, v => v.Id);
+                var isMatch = optionValueMap.All(kvp =>
+                    assigned.TryGetValue(kvp.Key, out var valueId) && valueId == kvp.Value);
+
+                if (isMatch)
+                {
+                    return MapToDetailDto(variant);
+                }
+            }
+
+            return null;
         }
         
         #endregion
@@ -279,7 +318,8 @@ namespace ECommerce.Business.Services.Managers
                 ParentSku = entity.ParentSku,
                 IsActive = entity.IsActive,
                 LastSyncedAt = entity.LastSyncedAt,
-                LastSeenAt = entity.LastSeenAt
+                LastSeenAt = entity.LastSeenAt,
+                MaxOrderQuantity = entity.MaxOrderQuantity
             };
         }
         

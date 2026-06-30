@@ -342,8 +342,10 @@ export default function OrderHistory() {
     const unsub1 = signalRService.onOrderStatusChanged(handleOrderStatusChanged);
     const unsub2 = signalRService.onWeightChargeApplied(handleWeightChargeApplied);
     const unsub3 = signalRService.onDeliveryStatusChanged(handleDeliveryCompleted);
+    // Backend "DeliveryCompleted" event'i gönderiyor; bu da dinlenmeli (eksikti)
+    const unsub4 = signalRService.onDeliveryCompleted(handleDeliveryCompleted);
 
-    signalRUnsubscribesRef.current = [unsub1, unsub2, unsub3];
+    signalRUnsubscribesRef.current = [unsub1, unsub2, unsub3, unsub4];
 
     DEBUG && console.log("[OrderHistory] SignalR event listener'ları kuruldu");
 
@@ -410,7 +412,7 @@ export default function OrderHistory() {
         setGuestSearchError(
           guestSearchTab === "phone"
             ? "Bu telefon numarasıyla eşleşen sipariş bulunamadı."
-            : "Bu sipariş numarasıyla eşleşen sipariş bulunamadı."
+            : "Bu sipariş numarasıyla eşleşen sipariş bulunamadı. Sipariş numaranız ORD- ile başlayan koddur (örn. ORD-20260628-102230-1234)."
         );
       }
     } catch (err) {
@@ -607,7 +609,7 @@ export default function OrderHistory() {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="ORD-12345"
+                    placeholder="ORD-20260628-102230-1234"
                     value={guestOrderNumber}
                     onChange={(e) => setGuestOrderNumber(e.target.value)}
                     disabled={guestSearchLoading}

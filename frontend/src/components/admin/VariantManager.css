@@ -328,7 +328,7 @@
 /* List Header */
 .variant-list-header {
   display: grid;
-  grid-template-columns: 40px 140px 1fr 100px 100px 100px;
+  grid-template-columns: 40px 140px 1fr 100px 100px 80px 100px;
   gap: 12px;
   padding: 12px 16px;
   background: #f9fafb;
@@ -342,7 +342,7 @@
 /* List Items */
 .variant-list-item {
   display: grid;
-  grid-template-columns: 40px 140px 1fr 100px 100px 100px;
+  grid-template-columns: 40px 140px 1fr 100px 100px 80px 100px;
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid #f3f4f6;
@@ -415,6 +415,12 @@
 /* Stock Column */
 .variant-col-stock {
   text-align: center;
+}
+
+.variant-col-limit {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #374151;
 }
 
 .variant-stock-badge {

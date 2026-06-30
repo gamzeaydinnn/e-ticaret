@@ -8,6 +8,7 @@
 // ============================================================
 
 import api from "./api";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 
 // ============================================================
 // KONFIGÜRASYON
@@ -117,7 +118,7 @@ const mapProduct = (p = {}) => {
   const imageUrls = mapProductImageUrls(p);
   const imageUrl = imageUrls[0] || "";
 
-  return {
+  const mapped = {
     id: p.id,
     name: p.name || p.title || "",
     category: p.category_name || p.category || "",
@@ -149,6 +150,18 @@ const mapProduct = (p = {}) => {
     effectiveAdminOverrideName: p.effectiveAdminOverrideName === true,
     effectiveAdminOverridePrice: p.effectiveAdminOverridePrice === true,
     effectiveAdminOverrideCategory: p.effectiveAdminOverrideCategory === true,
+    maxOrderQuantity: parseInt(p.maxOrderQuantity ?? p.MaxOrderQuantity ?? 0, 10) || 0,
+    minOrderQuantity: parseInt(p.minOrderQuantity ?? p.MinOrderQuantity ?? 0, 10) || 0,
+    quantityStep: parseFloat(p.quantityStep ?? p.QuantityStep ?? 0) || 0,
+    minOrderWeight: parseFloat(p.minOrderWeight ?? p.MinOrderWeight ?? 0) || 0,
+    maxOrderWeight: parseFloat(p.maxOrderWeight ?? p.MaxOrderWeight ?? 0) || 0,
+    orderLimits: p.orderLimits || p.OrderLimits || null,
+  };
+
+  return {
+    ...mapped,
+    isWeightBased:
+      mapped.isWeightBased || isStrictVariableWeightProduct(mapped),
   };
 };
 
@@ -622,6 +635,11 @@ export const ProductService = {
         adminOverrideName: normalizeNullableBoolean(formData.adminOverrideName),
         adminOverridePrice: normalizeNullableBoolean(formData.adminOverridePrice),
         adminOverrideCategory: normalizeNullableBoolean(formData.adminOverrideCategory),
+        maxOrderQuantity: parseInt(formData.maxOrderQuantity, 10) || 0,
+        minOrderQuantity: parseInt(formData.minOrderQuantity, 10) || 0,
+        quantityStep: parseFloat(formData.quantityStep) || 0,
+        minOrderWeight: parseFloat(formData.minOrderWeight) || 0,
+        maxOrderWeight: parseFloat(formData.maxOrderWeight) || 0,
       };
 
       const response = await api.post("/api/products", payload);
@@ -667,6 +685,11 @@ export const ProductService = {
         adminOverrideName: normalizeNullableBoolean(formData.adminOverrideName),
         adminOverridePrice: normalizeNullableBoolean(formData.adminOverridePrice),
         adminOverrideCategory: normalizeNullableBoolean(formData.adminOverrideCategory),
+        maxOrderQuantity: parseInt(formData.maxOrderQuantity, 10) || 0,
+        minOrderQuantity: parseInt(formData.minOrderQuantity, 10) || 0,
+        quantityStep: parseFloat(formData.quantityStep) || 0,
+        minOrderWeight: parseFloat(formData.minOrderWeight) || 0,
+        maxOrderWeight: parseFloat(formData.maxOrderWeight) || 0,
       };
 
       let response;

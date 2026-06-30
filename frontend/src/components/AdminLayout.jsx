@@ -271,6 +271,12 @@ function AdminLayoutInner({ children }) {
         label: "Sepet Ayarları",
         permission: PERMISSIONS.SETTINGS_SYSTEM,
       },
+      {
+        path: "/admin/order-limit-settings",
+        icon: "fas fa-sliders-h",
+        label: "Sipariş Limitleri",
+        permission: PERMISSIONS.SETTINGS_SYSTEM,
+      },
       // =============================================================================
       // Kupon Yönetimi - İndirim kuponları için admin sayfası
       // =============================================================================

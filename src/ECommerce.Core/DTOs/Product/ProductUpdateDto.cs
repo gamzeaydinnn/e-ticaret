@@ -34,5 +34,11 @@ namespace ECommerce.Core.DTOs.Product
         /// SKU üzerinden eşleştirme yapılır.
         /// </summary>
         public string? SKU { get; set; }
+
+        public int? MaxOrderQuantity { get; set; }
+        public int? MinOrderQuantity { get; set; }
+        public decimal? QuantityStep { get; set; }
+        public decimal? MinOrderWeight { get; set; }
+        public decimal? MaxOrderWeight { get; set; }
     }
 }

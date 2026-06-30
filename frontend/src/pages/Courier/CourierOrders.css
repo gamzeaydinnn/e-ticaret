@@ -1,9 +1,254 @@
-/* Kurye Siparişler Sayfası Özel Stiller */
+/* ==========================================================================
+   Kurye Paneli - Modern Tasarım
+   ========================================================================== */
 
-/* Pulse animasyonu - Admin onayı bekliyor uyarısı için */
+/* Genel Değişkenler */
+:root {
+  --courier-primary: #ff6b35;
+  --courier-secondary: #4a90d9;
+  --courier-success: #28a745;
+  --courier-warning: #ffc107;
+  --courier-danger: #dc3545;
+  --courier-info: #17a2b8;
+  --courier-dark: #2d3436;
+  --courier-light: #f8f9fa;
+  --courier-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  --courier-shadow-hover: 0 8px 25px rgba(0, 0, 0, 0.15);
+  --courier-radius: 12px;
+  --courier-radius-sm: 8px;
+}
+
+/* ==========================================================================
+   Aksiyon Butonları - Yeni Tasarım
+   ========================================================================== */
+
+/* Ana buton container */
+.courier-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Ortak buton stili */
+.courier-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: var(--courier-radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--courier-shadow);
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 48px;
+}
+
+.courier-btn:active {
+  transform: scale(0.95);
+}
+
+.courier-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Buton ikonları */
+.courier-btn i {
+  font-size: 1.1rem;
+}
+
+.courier-btn .btn-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.courier-btn .btn-label {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.courier-btn .btn-action {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* Teslim Al Butonu - Mavi */
+.courier-btn-pickup {
+  background: linear-gradient(135deg, #4a90d9, #357abd);
+  color: white;
+  flex: 1;
+  min-width: 140px;
+}
+
+.courier-btn-pickup:hover {
+  background: linear-gradient(135deg, #357abd, #2868a0);
+  box-shadow: 0 6px 20px rgba(74, 144, 217, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Yola Çık Butonu - Turuncu */
+.courier-btn-start {
+  background: linear-gradient(135deg, #ff6b35, #e85d2c);
+  color: white;
+  flex: 1;
+  min-width: 140px;
+}
+
+.courier-btn-start:hover {
+  background: linear-gradient(135deg, #e85d2c, #d14a1a);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Teslim Et Butonu - Yeşil */
+.courier-btn-deliver {
+  background: linear-gradient(135deg, #28a745, #1e7e34);
+  color: white;
+  flex: 1;
+  min-width: 140px;
+}
+
+.courier-btn-deliver:hover {
+  background: linear-gradient(135deg, #1e7e34, #155d27);
+  box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Tartı Farkı Uyarılı Teslim - Sarı */
+.courier-btn-deliver-warning {
+  background: linear-gradient(135deg, #ffc107, #e0a800);
+  color: #212529;
+  flex: 1;
+  min-width: 140px;
+  animation: pulseWarning 2s infinite;
+}
+
+.courier-btn-deliver-warning:hover {
+  background: linear-gradient(135deg, #e0a800, #c69500);
+  box-shadow: 0 6px 20px rgba(255, 193, 7, 0.5);
+}
+
+/* Nakit Tahsilat Butonu - Kırmızı */
+.courier-btn-collect {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  flex: 1;
+  min-width: 160px;
+  animation: pulseCollect 1.5s infinite;
+}
+
+.courier-btn-collect:hover {
+  background: linear-gradient(135deg, #c82333, #a71d2a);
+  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+}
+
+/* Harita Butonu - Açık */
+.courier-btn-map {
+  background: white;
+  color: var(--courier-info);
+  border: 2px solid var(--courier-info);
+  flex: 0 0 auto;
+  min-width: 50px;
+  padding: 12px;
+}
+
+.courier-btn-map:hover {
+  background: var(--courier-info);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Telefon Butonu */
+.courier-btn-call {
+  background: white;
+  color: var(--courier-success);
+  border: 2px solid var(--courier-success);
+  flex: 0 0 auto;
+  min-width: 50px;
+  padding: 12px;
+}
+
+.courier-btn-call:hover {
+  background: var(--courier-success);
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Problem/Detay Butonu */
+.courier-btn-problem {
+  background: white;
+  color: var(--courier-secondary);
+  border: 2px solid var(--courier-secondary);
+  flex: 0 0 auto;
+  min-width: 50px;
+  padding: 12px;
+}
+
+.courier-btn-problem:hover {
+  background: var(--courier-secondary);
+  color: white;
+}
+
+/* ==========================================================================
+   Etiketli Mini Butonlar
+   ========================================================================== */
+
+.courier-btn-with-label {
+  flex-direction: column;
+  padding: 8px 12px;
+  min-width: 60px;
+  gap: 4px;
+}
+
+.courier-btn-with-label i {
+  font-size: 1.2rem;
+}
+
+.btn-mini-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   Animasyonlar
+   ========================================================================== */
+
+@keyframes pulseWarning {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(255, 193, 7, 0.6);
+  }
+}
+
+@keyframes pulseCollect {
+  0%, 100% {
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 4px 25px rgba(220, 53, 69, 0.6);
+    transform: scale(1.02);
+  }
+}
+
 @keyframes pulse {
-  0%,
-  100% {
+  0%, 100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -11,39 +256,6 @@
     transform: scale(1.05);
     opacity: 0.8;
   }
-}
-
-/* Belirgin uyarı badge'leri */
-.badge.bg-warning.fw-bold {
-  animation: pulse 2s ease-in-out infinite;
-}
-
-/* Satır vurgulama */
-.table-warning {
-  background-color: #fff3cd !important;
-  border-left: 4px solid #ffc107 !important;
-}
-
-.table-info {
-  background-color: #d1ecf1 !important;
-  border-left: 4px solid #0dcaf0 !important;
-}
-
-/* Hover efektleri */
-.table-hover tbody tr:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-/* Modal arka plan bulanıklığı */
-.modal.fade.show {
-  backdrop-filter: blur(4px);
-}
-
-/* Alert kutularının animasyonu */
-.alert {
-  animation: slideInDown 0.5s ease;
 }
 
 @keyframes slideInDown {
@@ -57,42 +269,314 @@
   }
 }
 
-/* Buton hover efektleri */
-.btn-warning:hover,
-.btn-success:hover,
-.btn-primary:hover {
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ==========================================================================
+   Sipariş Kartları
+   ========================================================================== */
+
+.courier-order-card {
+  background: white;
+  border-radius: var(--courier-radius);
+  box-shadow: var(--courier-shadow);
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.courier-order-card:hover {
+  box-shadow: var(--courier-shadow-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Durum bazlı kart renkleri */
+.courier-order-card.status-assigned {
+  border-left-color: var(--courier-warning);
+  background: linear-gradient(to right, #fff8e1, white);
+}
+
+.courier-order-card.status-picked_up,
+.courier-order-card.status-pickedup {
+  border-left-color: var(--courier-info);
+  background: linear-gradient(to right, #e3f2fd, white);
+}
+
+.courier-order-card.status-out_for_delivery,
+.courier-order-card.status-outfordelivery {
+  border-left-color: var(--courier-primary);
+  background: linear-gradient(to right, #fff3e0, white);
+}
+
+.courier-order-card.status-delivered {
+  border-left-color: var(--courier-success);
+  background: linear-gradient(to right, #e8f5e9, white);
+}
+
+.courier-order-card.status-deliverypaymentpending,
+.courier-order-card.status-delivery_payment_pending {
+  border-left-color: var(--courier-danger);
+  background: linear-gradient(to right, #ffebee, white);
+  animation: pulseCard 2s infinite;
+}
+
+@keyframes pulseCard {
+  0%, 100% { box-shadow: var(--courier-shadow); }
+  50% { box-shadow: 0 4px 20px rgba(220, 53, 69, 0.3); }
+}
+
+/* ==========================================================================
+   Durum Badge'leri
+   ========================================================================== */
+
+.courier-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.courier-status-badge.assigned {
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  color: #856404;
+}
+
+.courier-status-badge.picked_up {
+  background: linear-gradient(135deg, #d1ecf1, #81ecec);
+  color: #0c5460;
+}
+
+.courier-status-badge.out_for_delivery {
+  background: linear-gradient(135deg, #ffe5d0, #fab1a0);
+  color: #8b4513;
+}
+
+.courier-status-badge.delivered {
+  background: linear-gradient(135deg, #d4edda, #55efc4);
+  color: #155724;
+}
+
+.courier-status-badge.delivery_payment_pending {
+  background: linear-gradient(135deg, #f8d7da, #ff7675);
+  color: #721c24;
+  animation: pulse 2s infinite;
+}
+
+/* ==========================================================================
+   Tutar Gösterimi
+   ========================================================================== */
+
+.courier-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.courier-amount-main {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--courier-success);
+}
+
+.courier-amount-diff {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.courier-amount-diff.positive {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.courier-amount-diff.negative {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+/* ==========================================================================
+   Tablo Stilleri (Desktop)
+   ========================================================================== */
+
+.table-warning {
+  background-color: #fff8e1 !important;
+  border-left: 4px solid #ffc107 !important;
+}
+
+.table-info {
+  background-color: #e3f2fd !important;
+  border-left: 4px solid #0dcaf0 !important;
+}
+
+.table-danger {
+  background-color: #ffebee !important;
+  border-left: 4px solid #dc3545 !important;
+}
+
+.table-hover tbody tr {
   transition: all 0.3s ease;
 }
 
-/* Telefon linki stili */
-a[href^="tel:"] {
-  color: #0d6efd;
-  text-decoration: none;
-  transition: color 0.3s ease;
+.table-hover tbody tr:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-a[href^="tel:"]:hover {
-  color: #0a58ca;
-  text-decoration: underline;
+/* ==========================================================================
+   Uyarı ve Bildirim Kutuları
+   ========================================================================== */
+
+.courier-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--courier-radius-sm);
+  margin-bottom: 12px;
+  animation: slideInDown 0.5s ease;
 }
 
-/* Badge'lerdeki ikonlar */
-.badge i {
-  animation: fadeIn 0.3s ease;
+.courier-alert-warning {
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  border: 1px solid #ffc107;
+  color: #856404;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+.courier-alert-danger {
+  background: linear-gradient(135deg, #f8d7da, #ff7675);
+  border: 1px solid #dc3545;
+  color: #721c24;
+}
+
+.courier-alert-success {
+  background: linear-gradient(135deg, #d4edda, #55efc4);
+  border: 1px solid #28a745;
+  color: #155724;
+}
+
+.courier-alert i {
+  font-size: 1.5rem;
+}
+
+/* ==========================================================================
+   Ek Tahsilat Badge
+   ========================================================================== */
+
+.courier-extra-payment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  color: white;
+  border-radius: var(--courier-radius-sm);
+  font-weight: 700;
+  font-size: 0.85rem;
+  animation: pulseCollect 1.5s infinite;
+}
+
+.courier-extra-payment i {
+  font-size: 1rem;
+}
+
+/* ==========================================================================
+   Modal Stilleri
+   ========================================================================== */
+
+.modal.fade.show {
+  backdrop-filter: blur(4px);
+}
+
+.courier-modal .modal-content {
+  border-radius: var(--courier-radius);
+  border: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.courier-modal .modal-header {
+  background: linear-gradient(135deg, var(--courier-primary), #e85d2c);
+  color: white;
+  border-radius: var(--courier-radius) var(--courier-radius) 0 0;
+  padding: 16px 20px;
+}
+
+.courier-modal .modal-title {
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Responsive - Mobil
+   ========================================================================== */
+
+@media (max-width: 576px) {
+  .courier-btn {
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    min-height: 44px;
   }
-  to {
-    opacity: 1;
+
+  .courier-btn i {
+    font-size: 1rem;
+  }
+
+  .courier-btn .btn-label {
+    display: none;
+  }
+
+  .courier-btn .btn-action {
+    font-size: 0.85rem;
+  }
+
+  .courier-action-buttons {
+    gap: 6px;
+  }
+
+  .courier-order-card {
+    padding: 12px;
+  }
+
+  .courier-amount-main {
+    font-size: 1.1rem;
+  }
+
+  .courier-status-badge {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+
+  /* Mobilde butonlar tam genişlik */
+  .courier-btn-pickup,
+  .courier-btn-start,
+  .courier-btn-deliver,
+  .courier-btn-deliver-warning,
+  .courier-btn-collect {
+    min-width: unset;
+    flex: 1 1 45%;
+  }
+
+  .courier-btn-map,
+  .courier-btn-call,
+  .courier-btn-problem {
+    min-width: 44px;
+    padding: 10px;
   }
 }
 
-/* Responsive iyileştirmeler */
 @media (max-width: 768px) {
   .table-responsive {
     font-size: 0.9rem;
@@ -105,5 +589,628 @@ a[href^="tel:"]:hover {
 
   .alert {
     font-size: 0.9rem;
+  }
+}
+
+/* ==========================================================================
+   Responsive - Tablet
+   ========================================================================== */
+
+@media (min-width: 577px) and (max-width: 991px) {
+  .courier-btn {
+    padding: 10px 14px;
+  }
+
+  .courier-action-buttons {
+    flex-wrap: wrap;
+  }
+
+  .courier-btn-pickup,
+  .courier-btn-start,
+  .courier-btn-deliver,
+  .courier-btn-deliver-warning,
+  .courier-btn-collect {
+    flex: 1 1 48%;
+  }
+}
+
+/* ==========================================================================
+   Loading States
+   ========================================================================== */
+
+.courier-btn.loading {
+  position: relative;
+  color: transparent;
+}
+
+.courier-btn.loading::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid white;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Telefon ve Harita Linkleri
+   ========================================================================== */
+
+a[href^="tel:"] {
+  color: var(--courier-success);
+  text-decoration: none;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(40, 167, 69, 0.1);
+}
+
+a[href^="tel:"]:hover {
+  background: var(--courier-success);
+  color: white;
+  transform: scale(1.1);
+}
+
+/* ==========================================================================
+   Bildirim Badge'leri
+   ========================================================================== */
+
+.badge.bg-warning.fw-bold {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.badge i {
+  animation: fadeIn 0.3s ease;
+}
+
+/* ==========================================================================
+   Dashboard İstatistik Kartları
+   ========================================================================== */
+
+.courier-stat-card {
+  background: white;
+  border-radius: var(--courier-radius);
+  box-shadow: var(--courier-shadow);
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.courier-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: currentColor;
+  opacity: 0.3;
+}
+
+.courier-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--courier-shadow-hover);
+}
+
+.courier-stat-card .stat-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+.courier-stat-card .stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.courier-stat-card .stat-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.courier-stat-card.primary {
+  color: var(--courier-secondary);
+}
+
+.courier-stat-card.warning {
+  color: var(--courier-warning);
+}
+
+.courier-stat-card.success {
+  color: var(--courier-success);
+}
+
+.courier-stat-card.info {
+  color: var(--courier-info);
+}
+
+/* ==========================================================================
+   Dashboard Sipariş Kartı
+   ========================================================================== */
+
+.courier-dashboard-order {
+  background: white;
+  border-radius: var(--courier-radius);
+  box-shadow: var(--courier-shadow);
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.courier-dashboard-order:hover {
+  box-shadow: var(--courier-shadow-hover);
+}
+
+.courier-dashboard-order.status-assigned {
+  border-left-color: var(--courier-warning);
+  background: linear-gradient(to right, rgba(255, 193, 7, 0.1), white);
+}
+
+.courier-dashboard-order.status-picked_up,
+.courier-dashboard-order.status-pickedup {
+  border-left-color: var(--courier-info);
+  background: linear-gradient(to right, rgba(23, 162, 184, 0.1), white);
+}
+
+.courier-dashboard-order.status-out_for_delivery,
+.courier-dashboard-order.status-outfordelivery {
+  border-left-color: var(--courier-primary);
+  background: linear-gradient(to right, rgba(255, 107, 53, 0.1), white);
+}
+
+.courier-dashboard-order.status-deliverypaymentpending {
+  border-left-color: var(--courier-danger);
+  background: linear-gradient(to right, rgba(220, 53, 69, 0.15), white);
+  animation: pulseCard 2s infinite;
+}
+
+/* ==========================================================================
+   Yeni Sipariş Animasyonları
+   ========================================================================== */
+
+.glow-effect {
+  animation: glowPulse 1s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(255, 193, 7, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 193, 7, 0.6);
+  }
+}
+
+.shake-animation {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.pulse-badge {
+  animation: pulseBadge 1s ease-in-out infinite;
+}
+
+@keyframes pulseBadge {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* ==========================================================================
+   Header/Navbar Stilleri
+   ========================================================================== */
+
+.courier-header {
+  background: linear-gradient(135deg, var(--courier-primary) 0%, #e85d2c 100%);
+  padding: 12px 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.courier-header .navbar-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* ==========================================================================
+   Quick Actions Grid
+   ========================================================================== */
+
+.courier-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+@media (min-width: 768px) {
+  .courier-quick-actions {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.courier-quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 12px;
+  background: white;
+  border-radius: var(--courier-radius);
+  box-shadow: var(--courier-shadow);
+  text-decoration: none;
+  color: var(--courier-dark);
+  transition: all 0.3s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.courier-quick-action:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--courier-shadow-hover);
+  color: var(--courier-primary);
+}
+
+.courier-quick-action i {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+  color: var(--courier-primary);
+}
+
+.courier-quick-action span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Online/Offline Toggle
+   ========================================================================== */
+
+.courier-status-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 30px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.courier-status-toggle.online {
+  background: linear-gradient(135deg, var(--courier-success), #1e7e34);
+  color: white;
+}
+
+.courier-status-toggle.offline {
+  background: linear-gradient(135deg, #6c757d, #495057);
+  color: white;
+}
+
+.courier-status-toggle:hover {
+  transform: scale(1.05);
+}
+
+.courier-status-toggle .status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: statusPulse 2s infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.courier-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.courier-empty-state i {
+  font-size: 4rem;
+  color: #dee2e6;
+  margin-bottom: 16px;
+}
+
+.courier-empty-state h5 {
+  color: #6c757d;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.courier-empty-state p {
+  color: #adb5bd;
+  font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   Responsive Fine-tuning
+   ========================================================================== */
+
+@media (max-width: 375px) {
+  .courier-btn .btn-text {
+    display: none;
+  }
+  
+  .courier-btn {
+    min-width: 44px;
+    padding: 10px;
+    justify-content: center;
+  }
+  
+  .courier-action-buttons {
+    justify-content: center;
+  }
+  
+  /* Küçük ekranlarda mini etiketler hala görünür */
+  .courier-btn-with-label {
+    min-width: 52px;
+    padding: 6px 8px;
+  }
+  
+  .btn-mini-label {
+    font-size: 0.55rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .courier-btn-with-label {
+    min-width: 56px;
+    padding: 8px 10px;
+  }
+  
+  .courier-btn-with-label i {
+    font-size: 1.1rem;
+  }
+  
+  .btn-mini-label {
+    font-size: 0.6rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .courier-btn {
+    padding: 14px 20px;
+  }
+  
+  .courier-btn .btn-action {
+    font-size: 1rem;
+  }
+}
+
+/* ==========================================================================
+   Mobil Sipariş Kartları
+   ========================================================================== */
+
+.courier-order-card {
+  border-radius: var(--courier-radius);
+  transition: all 0.2s ease;
+}
+
+.courier-order-card:active {
+  transform: scale(0.98);
+}
+
+/* Mobil için tarih inputları */
+@media (max-width: 576px) {
+  input[type="date"] {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+    width: 110px !important;
+  }
+  
+  .form-select-sm {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  
+  /* Kart içindeki butonlar */
+  .card .btn-sm {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Modal - portal ile tam ekran */
+.courier-order-modal-root {
+  z-index: 1060;
+}
+
+.courier-order-modal-root .courier-order-modal {
+  margin: 0;
+  max-width: 100%;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+}
+
+.courier-order-modal-content {
+  height: 100%;
+  min-height: 100vh;
+  border-radius: 0 !important;
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.courier-order-modal .modal-content,
+.courier-order-modal .modal-body,
+.courier-order-modal .card,
+.courier-order-modal .card-body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.courier-order-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: visible !important;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px !important;
+}
+
+.courier-order-modal .card-body {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+.courier-customer-card,
+.courier-customer-card .card-body,
+.courier-customer-card .courier-phone-wrapper {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Sipariş bilgi satırları */
+.courier-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.courier-info-row .courier-info-value {
+  flex-shrink: 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Telefon - tek satır, ortalı, taşma yok */
+.courier-phone-wrapper {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.courier-phone-block {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 10px 8px;
+  background: #ecfdf5;
+  border: 1px solid #86efac;
+  border-radius: 10px;
+  text-decoration: none;
+  color: #15803d;
+  font-size: clamp(0.72rem, 3.6vw, 0.9rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.courier-phone-block:hover,
+.courier-phone-block:active {
+  background: #dcfce7;
+  color: #166534;
+  text-decoration: none;
+}
+
+/* Modal footer butonları - eşit boyut ve hizalama */
+.courier-order-modal .courier-modal-footer {
+  background: #f8f9fa;
+  border-top: 1px solid #dee2e6;
+  padding: 10px 12px !important;
+}
+
+.courier-order-modal .courier-modal-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+}
+
+.courier-order-modal .courier-modal-footer .btn,
+.courier-order-modal .courier-modal-footer a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  line-height: 1;
+}
+
+.courier-order-modal .courier-modal-icon-btn {
+  flex: 0 0 48px;
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0 !important;
+  border-radius: 8px;
+}
+
+.courier-order-modal .courier-modal-main-btn {
+  flex: 1 1 auto;
+  min-height: 48px;
+  height: 48px;
+  padding: 0 12px !important;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.courier-order-modal .modal-footer .btn {
+  flex: unset !important;
+  min-width: unset !important;
+}
+
+/* Navbar düzeltmeleri */
+@media (max-width: 576px) {
+  .navbar {
+    padding: 0.5rem 0.75rem !important;
+  }
+  
+  .navbar .btn-link {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.85rem;
+  }
+  
+  .navbar-brand {
+    font-size: 1rem !important;
   }
 }

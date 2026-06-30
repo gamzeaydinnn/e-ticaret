@@ -9,7 +9,8 @@ using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
 using ECommerce.Data.Context;
-using ECommerce.Core.Helpers;
+using ECommerce.Core.Interfaces;
+using ECommerce.Business.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
@@ -24,6 +25,9 @@ namespace ECommerce.Business.Services.Managers
         private readonly IMemoryCache _cache;
         private readonly IInventoryLogService _inventoryLogService;
         private readonly ECommerceDbContext? _dbContext;
+        private readonly IOrderLimitResolver? _orderLimitResolver;
+        private readonly IProductOrderLimitSettingsService? _limitSettingsService;
+        private ProductOrderLimitSettingsDto? _cachedLimitSettings;
         private const string ProductCacheKeysKey = "products_cache_keys";
 
         public ProductManager(
@@ -31,13 +35,17 @@ namespace ECommerce.Business.Services.Managers
             IReviewRepository reviewRepository,
             IMemoryCache cache,
             IInventoryLogService inventoryLogService,
-            ECommerceDbContext? dbContext = null)
+            ECommerceDbContext? dbContext = null,
+            IOrderLimitResolver? orderLimitResolver = null,
+            IProductOrderLimitSettingsService? limitSettingsService = null)
         {
             _productRepository = productRepository;
             _reviewRepository = reviewRepository;
             _cache = cache;
             _inventoryLogService = inventoryLogService;
             _dbContext = dbContext;
+            _orderLimitResolver = orderLimitResolver;
+            _limitSettingsService = limitSettingsService;
         }
 
         // Backwards-compatible constructor for tests or callers that don't provide an IMemoryCache.
@@ -129,7 +137,9 @@ namespace ECommerce.Business.Services.Managers
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return null;
 
-            return MapToDto(product);
+            var dto = MapToDto(product);
+            await EnrichWithOrderLimitsAsync(dto, product);
+            return dto;
         }
 
         public async Task<ProductListDto> CreateProductAsync(ProductCreateDto productDto)
@@ -157,7 +167,13 @@ namespace ECommerce.Business.Services.Managers
                 // Admin panelinden kaydedilen kategori, sonraki Mikro sync'lerinde ezilmemelidir.
                 AdminOverrideCategory = true,
                 SKU = resolvedSku,
-                Slug = await GenerateUniqueProductSlugAsync(productDto.Name, resolvedSku)
+                Slug = await GenerateUniqueProductSlugAsync(productDto.Name, resolvedSku),
+                MaxOrderQuantity = productDto.MaxOrderQuantity,
+                MinOrderQuantity = productDto.MinOrderQuantity,
+                QuantityStep = productDto.QuantityStep,
+                IsWeightBased = productDto.IsWeightBased,
+                MinOrderWeight = productDto.MinOrderWeight,
+                MaxOrderWeight = productDto.MaxOrderWeight
             };
 
             await _productRepository.AddAsync(product);
@@ -187,6 +203,17 @@ namespace ECommerce.Business.Services.Managers
             // Admin'in seçtiği kategori son karar olmalı; sync bunu tekrar yazmamalı.
             product.AdminOverrideCategory = true;
             product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
+
+            if (productDto.MaxOrderQuantity.HasValue)
+                product.MaxOrderQuantity = Math.Max(0, productDto.MaxOrderQuantity.Value);
+            if (productDto.MinOrderQuantity.HasValue)
+                product.MinOrderQuantity = Math.Max(0, productDto.MinOrderQuantity.Value);
+            if (productDto.QuantityStep.HasValue)
+                product.QuantityStep = Math.Max(0m, productDto.QuantityStep.Value);
+            if (productDto.MinOrderWeight.HasValue)
+                product.MinOrderWeight = Math.Max(0m, productDto.MinOrderWeight.Value);
+            if (productDto.MaxOrderWeight.HasValue)
+                product.MaxOrderWeight = Math.Max(0m, productDto.MaxOrderWeight.Value);
 
             if (!string.IsNullOrWhiteSpace(productDto.ImageUrl))
             {
@@ -267,6 +294,17 @@ namespace ECommerce.Business.Services.Managers
                 product.AdminOverridePrice = ResolveAdminOverride(product.AdminOverridePrice, productDto.AdminOverridePrice);
                 product.AdminOverrideCategory = true;
                 product.Slug = await EnsureProductSlugAsync(product, productDto.Name, product.SKU);
+
+                if (productDto.MaxOrderQuantity.HasValue)
+                    product.MaxOrderQuantity = Math.Max(0, productDto.MaxOrderQuantity.Value);
+                if (productDto.MinOrderQuantity.HasValue)
+                    product.MinOrderQuantity = Math.Max(0, productDto.MinOrderQuantity.Value);
+                if (productDto.QuantityStep.HasValue)
+                    product.QuantityStep = Math.Max(0m, productDto.QuantityStep.Value);
+                if (productDto.MinOrderWeight.HasValue)
+                    product.MinOrderWeight = Math.Max(0m, productDto.MinOrderWeight.Value);
+                if (productDto.MaxOrderWeight.HasValue)
+                    product.MaxOrderWeight = Math.Max(0m, productDto.MaxOrderWeight.Value);
 
                 if (!string.IsNullOrWhiteSpace(productDto.ImageUrl))
                 {
@@ -740,6 +778,7 @@ namespace ECommerce.Business.Services.Managers
             
             // Kampanya bilgilerini hesapla
             EnrichWithCampaignInfo(dto, product);
+            await EnrichWithOrderLimitsAsync(dto, product);
             
             return dto;
         }
@@ -763,10 +802,16 @@ namespace ECommerce.Business.Services.Managers
                 if (categoryId.HasValue)
                     products = products.Where(p => p.CategoryId == categoryId.Value);
 
-                // DTO'ya çevir ve kampanya bilgilerini ekle
-                var dtoList = products.Select(p => {
+                // DTO'ya çevir, kampanya ve sipariş limitlerini ekle
+                var limitSettings = await GetLimitSettingsAsync();
+                var dtoList = products.Select(p =>
+                {
                     var dto = MapToDto(p);
                     EnrichWithCampaignInfo(dto, p);
+                    if (_orderLimitResolver != null)
+                    {
+                        dto.OrderLimits = _orderLimitResolver.ResolveLimits(p, null, limitSettings);
+                    }
                     return dto;
                 }).ToList();
                 
@@ -812,8 +857,53 @@ namespace ECommerce.Business.Services.Managers
                 CategoryName = product.Category?.Name ?? string.Empty,
                 AdminOverrideName = product.AdminOverrideName,
                 AdminOverridePrice = product.AdminOverridePrice,
-                AdminOverrideCategory = product.AdminOverrideCategory
+                AdminOverrideCategory = product.AdminOverrideCategory,
+                IsWeightBased = WeightBasedProductResolver.ResolveIsWeightBased(product),
+                Unit = MapWeightUnitLabel(product.WeightUnit),
+                MaxOrderQuantity = product.MaxOrderQuantity,
+                MinOrderQuantity = product.MinOrderQuantity,
+                QuantityStep = product.QuantityStep,
+                MinOrderWeight = product.MinOrderWeight,
+                MaxOrderWeight = product.MaxOrderWeight
             };
+        }
+
+        private async Task EnrichWithOrderLimitsAsync(ProductListDto dto, Product product, ProductVariant? variant = null)
+        {
+            if (_orderLimitResolver == null)
+            {
+                return;
+            }
+
+            var settings = await GetLimitSettingsAsync();
+            dto.OrderLimits = _orderLimitResolver.ResolveLimits(product, variant, settings);
+        }
+
+        private static string MapWeightUnitLabel(Entities.Enums.WeightUnit unit) =>
+            unit switch
+            {
+                Entities.Enums.WeightUnit.Kilogram => "KG",
+                Entities.Enums.WeightUnit.Gram => "GR",
+                Entities.Enums.WeightUnit.Liter => "LT",
+                Entities.Enums.WeightUnit.Milliliter => "ML",
+                _ => "ADET"
+            };
+
+        private async Task<ProductOrderLimitSettingsDto> GetLimitSettingsAsync()
+        {
+            if (_cachedLimitSettings != null)
+            {
+                return _cachedLimitSettings;
+            }
+
+            if (_limitSettingsService == null)
+            {
+                _cachedLimitSettings = new ProductOrderLimitSettingsDto();
+                return _cachedLimitSettings;
+            }
+
+            _cachedLimitSettings = await _limitSettingsService.GetActiveSettingsAsync();
+            return _cachedLimitSettings;
         }
 
         private static List<string> GetProductImageUrls(Product product)

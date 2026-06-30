@@ -204,19 +204,23 @@ export const CartProvider = ({ children }) => {
           });
 
           if (existingItem) {
+            const mergedQuantity = normalizeWeightStepQuantity(
+              Number(existingItem.quantity || 0) + normalizedQuantity,
+            );
+
             if (isAuthenticated) {
               if (existingItem.id) {
                 await CartService.updateItem(
                   existingItem.id,
                   productId,
-                  normalizedQuantity,
+                  mergedQuantity,
                   variantId,
                 );
               }
             } else {
               await CartService.updateGuestCartItem(
                 productId,
-                normalizedQuantity,
+                mergedQuantity,
                 variantId,
               );
             }

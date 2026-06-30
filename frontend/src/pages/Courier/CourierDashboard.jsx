@@ -14,6 +14,7 @@ import {
   SignalREvents,
   ConnectionState,
 } from "../../services/signalRService";
+import "./CourierOrders.css";
 
 export default function CourierDashboard() {
   // Auth context
@@ -29,6 +30,8 @@ export default function CourierDashboard() {
   // State
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
   const [signalRConnected, setSignalRConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [stats, setStats] = useState({
@@ -50,13 +53,48 @@ export default function CourierDashboard() {
   // Yeni sipariş animasyonu için state
   const [newOrderAnimation, setNewOrderAnimation] = useState(false);
 
+  // ----- Bildirim Zili (panel içi) -----
+  // NEDEN: Kurye paneline kadar gelen tüm SignalR olayları yalnızca anlık
+  // tarayıcı bildirimi/ses olarak geçiyordu; geriye dönük görülebilecek bir
+  // bildirim listesi yoktu. Burada panel-içi kalıcı bir bildirim merkezi var.
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifBell, setShowNotifBell] = useState(false);
+  // Ekranın üstünde beliren dikkat çekici "yeni sipariş" flash banner'ı
+  const [flashBanner, setFlashBanner] = useState(null);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const pushNotification = useCallback((notif) => {
+    setNotifications((prev) =>
+      [
+        {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          ...notif,
+        },
+        ...prev,
+      ].slice(0, 50),
+    );
+  }, []);
+
   const navigate = useNavigate();
 
   // =========================================================================
   // SİPARİŞLERİ YÜKLE
   // =========================================================================
-  const loadOrders = useCallback(async () => {
-    if (!courier?.id) return;
+  const loadOrders = useCallback(async ({ showRefreshState = false } = {}) => {
+    if (!courier?.id) {
+      if (showRefreshState) {
+        setRefreshError("Kurye oturumu bulunamadı. Lütfen tekrar giriş yapın.");
+      }
+      return false;
+    }
+
+    if (showRefreshState) {
+      setRefreshing(true);
+      setRefreshError(null);
+    }
 
     try {
       const { orders: orderData = [], summary } =
@@ -76,12 +114,30 @@ export default function CourierDashboard() {
       } else {
         calculateStats(orderData);
       }
+      return true;
     } catch (error) {
+      if (error?.isCourierAuthError) {
+        navigate("/courier/login");
+        return false;
+      }
       console.error("Sipariş yükleme hatası:", error);
+      if (showRefreshState) {
+        setRefreshError(
+          error?.message || "Siparişler yenilenemedi. Bağlantınızı kontrol edin.",
+        );
+      }
+      return false;
     } finally {
+      if (showRefreshState) {
+        setRefreshing(false);
+      }
       setLoading(false);
     }
-  }, [courier?.id]);
+  }, [courier?.id, navigate]);
+
+  const handleRefresh = useCallback(async () => {
+    await loadOrders({ showRefreshState: true });
+  }, [loadOrders]);
 
   // =========================================================================
   // İSTATİSTİKLERİ HESAPLA
@@ -173,10 +229,23 @@ export default function CourierDashboard() {
       console.log("📦 Yeni sipariş atandı:", data);
       loadOrders(); // Listeyi yenile
       playNotificationSound();
+      const orderLabel = `#${data.orderNumber || data.orderId}`;
       showNotification(
         "🚴 Yeni Sipariş Atandı!",
-        `Sipariş #${data.orderNumber || data.orderId} size atandı! Teslim alınmayı bekliyor.`,
+        `Sipariş ${orderLabel} size atandı! Teslim alınmayı bekliyor.`,
       );
+      pushNotification({
+        type: "task_assigned",
+        title: "Yeni Görev",
+        message: `Sipariş ${orderLabel} size atandı.`,
+      });
+
+      // Ekranın üstünde dikkat çekici flash banner göster (5 sn)
+      setFlashBanner({
+        text: `Yeni sipariş atandı: ${orderLabel}`,
+        ts: Date.now(),
+      });
+      setTimeout(() => setFlashBanner(null), 5000);
 
       // Yeni sipariş animasyonu başlat
       setNewOrderAnimation(true);
@@ -199,10 +268,13 @@ export default function CourierDashboard() {
       console.log("❌ Sipariş iptal edildi:", data);
       setOrders((prev) => prev.filter((o) => o.id !== data.orderId));
       setLastUpdate(new Date());
-      showNotification(
-        "Sipariş İptal",
-        `Sipariş #${data.orderId} iptal edildi.`,
-      );
+      const orderLabel = `#${data.orderNumber || data.orderId}`;
+      showNotification("Sipariş İptal", `Sipariş ${orderLabel} iptal edildi.`);
+      pushNotification({
+        type: "task_cancelled",
+        title: "Görev İptal",
+        message: `Sipariş ${orderLabel} iptal edildi.`,
+      });
     };
 
     // Event listener'ları kaydet - Backend event isimleriyle eşleştir
@@ -230,7 +302,7 @@ export default function CourierDashboard() {
       courierHub.off("OrderUnassigned", handleOrderCancelled);
       courierHub.off("PlaySound");
     };
-  }, [courier?.id, loadOrders]);
+  }, [courier?.id, loadOrders, pushNotification]);
 
   // =========================================================================
   // BİLDİRİM SESİ VE TOGGLE
@@ -483,17 +555,113 @@ export default function CourierDashboard() {
             </span>
 
             <div className="d-flex align-items-center gap-2">
-              {/* Ses Toggle Butonu */}
+              {/* Bildirim Zili (panel içi bildirim merkezi) */}
+              <div className="position-relative">
+                <button
+                  onClick={() => {
+                    setShowNotifBell((v) => !v);
+                    // Açılırken tümünü okundu say
+                    if (!showNotifBell) {
+                      setNotifications((prev) =>
+                        prev.map((n) => ({ ...n, read: true })),
+                      );
+                    }
+                  }}
+                  className="btn btn-sm btn-light position-relative"
+                  style={{ fontSize: "0.75rem" }}
+                  title="Bildirimler"
+                >
+                  <i className="fas fa-bell"></i>
+                  {unreadCount > 0 && (
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger pulse-badge"
+                      style={{ fontSize: "0.55rem" }}
+                    >
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotifBell && (
+                  <div
+                    className="position-absolute bg-white shadow-lg rounded-3"
+                    style={{
+                      right: 0,
+                      top: "calc(100% + 6px)",
+                      width: "300px",
+                      maxWidth: "calc(100vw - 24px)",
+                      zIndex: 12000,
+                      color: "#212529",
+                    }}
+                  >
+                    <div className="d-flex justify-content-between align-items-center p-2 border-bottom">
+                      <span className="fw-bold" style={{ fontSize: "0.8rem" }}>
+                        <i className="fas fa-bell me-1 text-warning"></i>
+                        Bildirimler
+                      </span>
+                      {notifications.length > 0 && (
+                        <button
+                          className="btn btn-sm btn-link text-danger p-0"
+                          style={{ fontSize: "0.7rem" }}
+                          onClick={() => setNotifications([])}
+                          title="Tümünü temizle"
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+                      {notifications.length === 0 ? (
+                        <div className="text-center py-3 text-muted">
+                          <i className="fas fa-bell-slash mb-1"></i>
+                          <p className="mb-0" style={{ fontSize: "0.75rem" }}>
+                            Henüz bildirim yok
+                          </p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            className="p-2 border-bottom"
+                            style={{ fontSize: "0.75rem" }}
+                          >
+                            <div className="fw-semibold">
+                              <i
+                                className={`fas fa-${
+                                  n.type === "task_cancelled"
+                                    ? "ban text-danger"
+                                    : "box text-primary"
+                                } me-1`}
+                              ></i>
+                              {n.title}
+                            </div>
+                            <div className="text-muted">{n.message}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Ses Aç/Kapa - zil ikonu kullanılmaz (bildirim zili ile karışmasın) */}
               <button
                 onClick={toggleSound}
                 className={`btn btn-sm ${soundEnabled ? "btn-light" : "btn-outline-light"}`}
                 style={{ fontSize: "0.75rem" }}
                 title={
-                  soundEnabled ? "Bildirimleri Sessize Al" : "Bildirimleri Aç"
+                  soundEnabled
+                    ? "Bildirim sesini kapat"
+                    : "Bildirim sesini aç"
+                }
+                aria-label={
+                  soundEnabled
+                    ? "Bildirim sesini kapat"
+                    : "Bildirim sesini aç"
                 }
               >
                 <i
-                  className={`fas fa-${soundEnabled ? "bell" : "bell-slash"}`}
+                  className={`fas fa-${soundEnabled ? "volume-up" : "volume-mute"}`}
                 ></i>
               </button>
 
@@ -531,6 +699,26 @@ export default function CourierDashboard() {
           </div>
         </nav>
 
+        {/* Yeni sipariş FLASH BANNER — dikkat çekici, ekranın üstünde */}
+        {flashBanner && (
+          <div
+            className="text-white text-center fw-bold py-2 px-3 glow-effect"
+            style={{
+              position: "sticky",
+              top: "56px",
+              zIndex: 11000,
+              background: "linear-gradient(135deg, #ff6b35, #e74c3c)",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+            }}
+            onClick={() => setFlashBanner(null)}
+          >
+            <i className="fas fa-motorcycle me-2"></i>
+            {flashBanner.text}
+            <i className="fas fa-times ms-3 opacity-75"></i>
+          </div>
+        )}
+
         <div className="container-fluid p-3 p-md-4">
           {/* Hoşgeldin Mesajı */}
           <div className="row mb-3">
@@ -549,15 +737,25 @@ export default function CourierDashboard() {
                         Son güncelleme: {lastUpdate.toLocaleTimeString("tr-TR")}
                       </span>
                     )}
+                    {refreshError && (
+                      <span className="text-danger d-block mt-1">
+                        <i className="fas fa-exclamation-circle me-1"></i>
+                        {refreshError}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <button
-                  onClick={loadOrders}
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
                   className="btn btn-outline-primary btn-sm"
-                  style={{ fontSize: "0.75rem" }}
+                  style={{ fontSize: "0.75rem", minWidth: "96px" }}
+                  title="Sipariş listesini yenile"
                 >
-                  <i className="fas fa-sync-alt me-1"></i>
-                  Yenile
+                  <i
+                    className={`fas fa-sync-alt me-1 ${refreshing ? "fa-spin" : ""}`}
+                  ></i>
+                  {refreshing ? "Yenileniyor..." : "Yenile"}
                 </button>
               </div>
             </div>
@@ -705,11 +903,7 @@ export default function CourierDashboard() {
                   {activeOrders.slice(0, 6).map((order) => (
                     <div key={order.id} className="col-12">
                       <div
-                        className={`card border-0 order-card status-${order.status}`}
-                        style={{
-                          borderRadius: "10px",
-                          backgroundColor: "#f8f9fa",
-                        }}
+                        className={`courier-dashboard-order status-${(order.status || '').toLowerCase().replace('_', '-')}`}
                       >
                         <div className="card-body p-2 p-md-3">
                           {/* Üst Satır: Sipariş No + Durum + Tutar */}
@@ -780,8 +974,8 @@ export default function CourierDashboard() {
                             </p>
                           </div>
 
-                          {/* MVP: TEK TIK AKSİYON BUTONLARI */}
-                          <div className="d-flex gap-2 mt-2">
+                          {/* MVP: TEK TIK AKSİYON BUTONLARI - YENİ TASARIM */}
+                          <div className="courier-action-buttons">
                             {/* 📍 HARİTADA GÖR */}
                             <button
                               onClick={(e) => {
@@ -795,16 +989,55 @@ export default function CourierDashboard() {
                                   );
                                 }
                               }}
-                              className="btn btn-outline-info btn-sm flex-grow-1"
-                              style={{ fontSize: "0.75rem" }}
+                              className="courier-btn courier-btn-map courier-btn-with-label"
+                              title="Teslimat adresini Google Haritalar'da aç"
                             >
-                              <i className="fas fa-map-marked-alt me-1"></i>
-                              Harita
+                              <i className="fas fa-map-marked-alt"></i>
+                              <span className="btn-mini-label">Harita</span>
                             </button>
 
-                            {/* 🛵 YOLA ÇIK - assigned durumunda */}
+                            {/* 📞 TELEFON */}
+                            {order.customerPhone && (
+                              <a
+                                href={`tel:${order.customerPhone}`}
+                                className="courier-btn courier-btn-call courier-btn-with-label"
+                                title="Müşteriyi telefonla ara"
+                              >
+                                <i className="fas fa-phone"></i>
+                                <span className="btn-mini-label">Ara</span>
+                              </a>
+                            )}
+
+                            {/* 📦 TESLİM AL - assigned durumunda */}
                             {(order.status === "assigned" ||
                               order.status === "ready") && (
+                              <button
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  try {
+                                    await CourierService.updateOrderStatus(
+                                      order.id,
+                                      "picked_up",
+                                    );
+                                    playNotificationSound();
+                                    loadOrders();
+                                  } catch (err) {
+                                    alert("Hata: " + err.message);
+                                  }
+                                }}
+                                className="courier-btn courier-btn-pickup"
+                              >
+                                <i className="fas fa-box-open"></i>
+                                <span className="btn-text">
+                                  <span className="btn-label">Mağazadan</span>
+                                  <span className="btn-action">TESLİM AL</span>
+                                </span>
+                              </button>
+                            )}
+
+                            {/* 🛵 YOLA ÇIK - picked_up durumunda */}
+                            {(order.status === "picked_up" ||
+                              order.status === "pickedup") && (
                               <button
                                 onClick={async (e) => {
                                   e.preventDefault();
@@ -818,11 +1051,13 @@ export default function CourierDashboard() {
                                     alert("Hata: " + err.message);
                                   }
                                 }}
-                                className="btn btn-primary btn-sm flex-grow-1"
-                                style={{ fontSize: "0.75rem" }}
+                                className="courier-btn courier-btn-start"
                               >
-                                <i className="fas fa-play me-1"></i>
-                                Yola Çık
+                                <i className="fas fa-motorcycle"></i>
+                                <span className="btn-text">
+                                  <span className="btn-label">Teslimat İçin</span>
+                                  <span className="btn-action">YOLA ÇIK</span>
+                                </span>
                               </button>
                             )}
 
@@ -833,39 +1068,87 @@ export default function CourierDashboard() {
                               <button
                                 onClick={async (e) => {
                                   e.preventDefault();
+                                  if (order.hasWeightBasedItems || order.hasWeightDifference || order.totalPriceDifference) {
+                                    const finalAmt = order.finalAmount || order.totalAmount || 0;
+                                    const priceDiff = order.totalPriceDifference || 0;
+                                    const msg = priceDiff > 0
+                                      ? `⚠️ Bu siparişte tartı farkı var!\n\nToplam Tutar: ${finalAmt.toFixed(2)} ₺\nEk Tahsilat: +${priceDiff.toFixed(2)} ₺\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`
+                                      : `Bu siparişte ağırlık bazlı ürün var.\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`;
+                                    if (window.confirm(msg)) {
+                                      navigate(`/courier/orders`);
+                                    }
+                                    return;
+                                  }
                                   try {
-                                    await CourierService.markDelivered(
-                                      order.id,
-                                    );
+                                    await CourierService.markDelivered(order.id);
                                     playNotificationSound();
                                     loadOrders();
                                   } catch (err) {
                                     alert("Hata: " + err.message);
                                   }
                                 }}
-                                className="btn btn-success btn-sm flex-grow-1"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  fontWeight: "bold",
-                                }}
+                                className={`courier-btn ${
+                                  order.hasWeightDifference || order.totalPriceDifference
+                                    ? "courier-btn-deliver-warning"
+                                    : "courier-btn-deliver"
+                                }`}
+                                title={
+                                  order.totalPriceDifference
+                                    ? `⚠️ Tartı farkı: ${order.totalPriceDifference > 0 ? "+" : ""}${(order.totalPriceDifference || 0).toFixed(2)} ₺`
+                                    : "Siparişi Teslim Et"
+                                }
                               >
-                                <i className="fas fa-check-double me-1"></i>
-                                TESLİM ET
+                                <i className={`fas ${order.totalPriceDifference ? "fa-exclamation-triangle" : "fa-check-circle"}`}></i>
+                                <span className="btn-text">
+                                  <span className="btn-label">
+                                    {order.totalPriceDifference ? "Fark Var!" : "Müşteriye"}
+                                  </span>
+                                  <span className="btn-action">
+                                    {order.totalPriceDifference 
+                                      ? `TESLİM (+${(order.totalPriceDifference || 0).toFixed(0)}₺)` 
+                                      : "TESLİM ET"}
+                                  </span>
+                                </span>
                               </button>
                             )}
 
-                            {/* ❌ PROBLEM BİLDİR */}
+                            {/* 💰 NAKİT TAHSİL - DeliveryPaymentPending durumunda */}
+                            {(order.status === "deliverypaymentpending" ||
+                              order.status === "delivery_payment_pending") && (
+                              <button
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  const priceDiff = order.totalPriceDifference || 0;
+                                  if (window.confirm(
+                                    `💰 NAKİT TAHSİLAT\n\nTahsil Edilecek Tutar: ${priceDiff.toFixed(2)} ₺\n\nMüşteriden bu tutarı nakit olarak tahsil ettiniz mi?`
+                                  )) {
+                                    navigate(`/courier/orders`);
+                                  }
+                                }}
+                                className="courier-btn courier-btn-collect"
+                              >
+                                <i className="fas fa-hand-holding-usd"></i>
+                                <span className="btn-text">
+                                  <span className="btn-label">Nakit Tahsil</span>
+                                  <span className="btn-action">
+                                    {(order.totalPriceDifference || 0).toFixed(2)} ₺ AL
+                                  </span>
+                                </span>
+                              </button>
+                            )}
+
+                            {/* ❌ PROBLEM BİLDİR / DETAY */}
                             {order.status !== "delivered" && (
                               <button
                                 onClick={(e) => {
                                   e.preventDefault();
                                   navigate(`/courier/orders/${order.id}`);
                                 }}
-                                className="btn btn-outline-danger btn-sm"
-                                style={{ fontSize: "0.75rem" }}
-                                title="Problem Bildir"
+                                className="courier-btn courier-btn-problem courier-btn-with-label"
+                                title="Sipariş detaylarını gör veya sorun bildir"
                               >
-                                <i className="fas fa-exclamation-triangle"></i>
+                                <i className="fas fa-info-circle"></i>
+                                <span className="btn-mini-label">Detay</span>
                               </button>
                             )}
                           </div>
@@ -890,7 +1173,7 @@ export default function CourierDashboard() {
 
           {/* Hızlı Aksiyonlar */}
           <div className="row g-2 mt-3">
-            <div className="col-6">
+            <div className="col-12">
               <Link
                 to="/courier/orders"
                 className="btn btn-outline-primary w-100 py-3"
@@ -898,16 +1181,6 @@ export default function CourierDashboard() {
               >
                 <i className="fas fa-list-alt d-block mb-1 fs-4"></i>
                 <span style={{ fontSize: "0.8rem" }}>Tüm Siparişler</span>
-              </Link>
-            </div>
-            <div className="col-6">
-              <Link
-                to="/courier/weight-entry"
-                className="btn btn-outline-warning w-100 py-3"
-                style={{ borderRadius: "10px" }}
-              >
-                <i className="fas fa-balance-scale d-block mb-1 fs-4"></i>
-                <span style={{ fontSize: "0.8rem" }}>Tartı Girişi</span>
               </Link>
             </div>
           </div>

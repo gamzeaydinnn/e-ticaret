@@ -25,7 +25,7 @@ namespace ECommerce.Business.Services.Interfaces
         /// <summary>
         /// Bir ürüne ait tüm varyantları listeler.
         /// </summary>
-        Task<IEnumerable<ProductVariantDetailDto>> GetByProductIdAsync(int productId);
+        Task<IEnumerable<ProductVariantDetailDto>> GetByProductIdAsync(int productId, bool includeInactive = false);
         
         /// <summary>
         /// Yeni varyant oluşturur.

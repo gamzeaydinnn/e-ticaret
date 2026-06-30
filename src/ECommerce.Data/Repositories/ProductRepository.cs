@@ -88,8 +88,10 @@ namespace ECommerce.Data.Repositories
         }
         public new async Task<List<Product>> GetAllAsync()
         {
-            // Sadece aktif (webe_gonderilecek_fl=1 karşılığı) ürünler — pasifler gösterilmez
-            return await _context.Products.Where(p => p.IsActive).ToListAsync();
+            return await _context.Products
+                .Include(p => p.Category)
+                .Where(p => p.IsActive)
+                .ToListAsync();
         }
 
         /*public async Task<Product> UpdateAsync(Product product)
@@ -149,7 +151,9 @@ namespace ECommerce.Data.Repositories
                 return null;
             }
 
-            return await _dbSet.FirstOrDefaultAsync(p => p.IsActive && p.SKU.ToLower() == normalizedSku.ToLower());
+            return await _dbSet
+                .Include(p => p.Category)
+                .FirstOrDefaultAsync(p => p.IsActive && p.SKU.ToLower() == normalizedSku.ToLower());
         }
 
         /// <summary>

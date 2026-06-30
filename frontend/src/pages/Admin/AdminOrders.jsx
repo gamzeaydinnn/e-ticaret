@@ -222,12 +222,38 @@ export default function AdminOrders() {
       playNotificationSound();
     };
 
+    // Ödeme başarılı handler — sipariş ödendiğinde liste güncel kalsın
+    // NEDEN: Önceden PaymentSuccess yalnızca bildirim ziline düşüyor, liste
+    // bayat kalabiliyordu (Pending görünüyordu). Artık tam yenileme yapılır.
+    const handlePaymentSuccess = (e) => {
+      const data = e.detail;
+      console.log("💳 Ödeme başarılı, liste yenileniyor:", data);
+      loadData(false);
+      setLastUpdate(new Date());
+    };
+
+    // Sipariş iptal handler — iptal edilen sipariş anında güncellensin
+    const handleOrderCancelled = (e) => {
+      const data = e.detail;
+      console.log("🚫 Sipariş iptal edildi:", data);
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === data.orderId || o.orderNumber === data.orderNumber
+            ? { ...o, status: "cancelled" }
+            : o,
+        ),
+      );
+      setLastUpdate(new Date());
+    };
+
     // Merkezi context'in yayınladığı global event'leri dinle
     window.addEventListener("adminNewOrder", handleOrderCreated);
     window.addEventListener("adminOrderStatusChanged", handleOrderStatusChanged);
     window.addEventListener("adminDeliveryAssigned", handleDeliveryAssigned);
     window.addEventListener("adminDeliveryCompleted", handleDeliveryCompleted);
     window.addEventListener("adminDeliveryFailed", handleDeliveryFailed);
+    window.addEventListener("adminPaymentSuccess", handlePaymentSuccess);
+    window.addEventListener("adminOrderCancelled", handleOrderCancelled);
     // Delivery hub'ın doğrudan yayınladığı event'leri de dinle
     window.addEventListener("adminDeliveryOrderCreated", handleOrderCreated);
     window.addEventListener("adminDeliveryStatusChanged", handleOrderStatusChanged);
@@ -238,6 +264,8 @@ export default function AdminOrders() {
       window.removeEventListener("adminDeliveryAssigned", handleDeliveryAssigned);
       window.removeEventListener("adminDeliveryCompleted", handleDeliveryCompleted);
       window.removeEventListener("adminDeliveryFailed", handleDeliveryFailed);
+      window.removeEventListener("adminPaymentSuccess", handlePaymentSuccess);
+      window.removeEventListener("adminOrderCancelled", handleOrderCancelled);
       window.removeEventListener("adminDeliveryOrderCreated", handleOrderCreated);
       window.removeEventListener("adminDeliveryStatusChanged", handleOrderStatusChanged);
     };

@@ -36,6 +36,7 @@ namespace ECommerce.API.Controllers
         private readonly IWeightAdjustmentService _weightAdjustmentService;
         private readonly IOrderService _orderService;
         private readonly ICourierService _courierService;
+        private readonly ICourierOrderService _courierOrderService;
         private readonly UserManager<User> _userManager;
         private readonly ILogger<WeightAdjustmentController>? _logger;
 
@@ -43,12 +44,14 @@ namespace ECommerce.API.Controllers
             IWeightAdjustmentService weightAdjustmentService,
             IOrderService orderService,
             ICourierService courierService,
+            ICourierOrderService courierOrderService,
             UserManager<User> userManager,
             ILogger<WeightAdjustmentController>? logger = null)
         {
             _weightAdjustmentService = weightAdjustmentService;
             _orderService = orderService;
             _courierService = courierService;
+            _courierOrderService = courierOrderService;
             _userManager = userManager;
             _logger = logger;
         }
@@ -245,16 +248,11 @@ namespace ECommerce.API.Controllers
         {
             try
             {
-                var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int userId))
-                    return Unauthorized(new { success = false, message = "Kullanıcı kimliği bulunamadı" });
-
-                var couriers = await _courierService.GetAllAsync();
-                var courier = couriers.FirstOrDefault(c => c.UserId == userId);
-                if (courier == null)
+                var courierId = await GetCurrentCourierIdAsync();
+                if (courierId == null)
                     return Unauthorized(new { success = false, message = "Kurye kaydı bulunamadı" });
 
-                var pendingOrders = await _weightAdjustmentService.GetPendingWeightEntriesForCourierAsync(courier.Id);
+                var pendingOrders = await _weightAdjustmentService.GetPendingWeightEntriesForCourierAsync(courierId.Value);
                 return Ok(new { success = true, data = pendingOrders });
             }
             catch (Exception ex)
@@ -567,6 +565,27 @@ namespace ECommerce.API.Controllers
         }
 
         #endregion
+
+        #region Yardımcı Metotlar
+
+        private int? GetCurrentUserId()
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return int.TryParse(userIdStr, out var userId) ? userId : null;
+        }
+
+        private async Task<int?> GetCurrentCourierIdAsync()
+        {
+            var userId = GetCurrentUserId();
+            if (userId == null)
+            {
+                return null;
+            }
+
+            return await _courierOrderService.GetCourierIdByUserIdAsync(userId.Value);
+        }
+
+        #endregion
     }
 
     #region Request DTOs
@@ -580,6 +599,15 @@ namespace ECommerce.API.Controllers
         /// Gerçek ağırlık (ürünün WeightUnit'ına göre)
         /// </summary>
         public decimal ActualWeight { get; set; }
+
+        /// <summary>
+        /// Frontend uyumu için alias - actualWeightGrams olarak gönderilirse ActualWeight'e atanır
+        /// </summary>
+        public decimal? ActualWeightGrams
+        {
+            get => null;
+            set { if (value.HasValue && value.Value > 0) ActualWeight = value.Value; }
+        }
 
         /// <summary>
         /// Kurye notu (opsiyonel)

@@ -75,6 +75,24 @@ namespace ECommerce.Entities.Concrete
         /// </summary>
         public decimal WeightTolerancePercent { get; set; } = 10m;
 
+        /// <summary>
+        /// Adet bazlı ürünler için maksimum sipariş adedi.
+        /// 0 = global varsayılan kullanılır.
+        /// </summary>
+        public int MaxOrderQuantity { get; set; } = 0;
+
+        /// <summary>
+        /// Adet bazlı ürünler için minimum sipariş adedi.
+        /// 0 = global varsayılan kullanılır.
+        /// </summary>
+        public int MinOrderQuantity { get; set; } = 0;
+
+        /// <summary>
+        /// Adet bazlı ürünler için miktar artış adımı.
+        /// 0 = global varsayılan kullanılır.
+        /// </summary>
+        public decimal QuantityStep { get; set; } = 0m;
+
         #endregion
 
         // Navigation

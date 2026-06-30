@@ -564,6 +564,12 @@ namespace ECommerce.Business.Services.Managers
                 result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(authorizedAmount);
                 result.AdjustmentStatus = adjustment.Status;
 
+                // Kurye atanmışsa anlık bildirim gönder (tartı güncellendi)
+                if (order.CourierId.HasValue)
+                {
+                    await NotifyCourierWeightUpdateAsync(order, priceDifference, order.FinalAmount);
+                }
+
                 return result;
             }
             catch (Exception ex)
@@ -647,6 +653,28 @@ namespace ECommerce.Business.Services.Managers
                     if (order != null)
                     {
                         await UpdateOrderTotalsAsync(order);
+                        await _unitOfWork.SaveChangesAsync();
+
+                        // Kurye atanmışsa admin kararı hakkında bildirim gönder
+                        if (order.CourierId.HasValue)
+                        {
+                            var decisionText = decision switch
+                            {
+                                AdminDecisionType.Approve => "onaylandı",
+                                AdminDecisionType.Reject => "reddedildi",
+                                AdminDecisionType.Override => "düzenlendi",
+                                AdminDecisionType.WaiveForCustomer => "müşteri lehine iptal edildi",
+                                _ => "güncellendi"
+                            };
+                            await NotifyCourierWeightUpdateAsync(
+                                order, 
+                                adjustment.PriceDifference, 
+                                order.FinalAmount);
+                            
+                            _logger?.LogInformation(
+                                "[WEIGHT-SVC] Admin karar bildirimi kuryeye gönderildi: Order={OrderId}, Decision={Decision}",
+                                order.Id, decisionText);
+                        }
                     }
                 }
 
@@ -844,18 +872,9 @@ namespace ECommerce.Business.Services.Managers
         {
             _logger?.LogInformation("[WEIGHT-SVC] Kurye bekleyen tartım listesi: Courier={CourierId}", courierId);
 
-            var orders = await _orderRepository.GetAllAsync();
+            var orders = await _orderRepository.GetCourierPendingWeightOrdersAsync(courierId);
 
             var pendingOrders = orders
-                .Where(order =>
-                    order.IsActive &&
-                    order.CourierId == courierId &&
-                    order.HasWeightBasedItems &&
-                    order.WeightAdjustmentStatus == WeightAdjustmentStatus.PendingWeighing &&
-                    order.Status != OrderStatus.Cancelled &&
-                    order.Status != OrderStatus.Refunded &&
-                    order.Status != OrderStatus.Delivered)
-                .OrderByDescending(order => order.OrderDate)
                 .Select(order =>
                 {
                     var pendingItems = (order.OrderItems ?? Enumerable.Empty<OrderItem>())
@@ -886,7 +905,7 @@ namespace ECommerce.Business.Services.Managers
                         OrderId = order.Id,
                         OrderNumber = order.OrderNumber ?? $"#{order.Id}",
                         CustomerName = order.CustomerName ?? "Misafir",
-                        CustomerAddress = order.ShippingAddress,
+                        CustomerAddress = order.ShippingAddress ?? string.Empty,
                         CustomerPhone = order.CustomerPhone ?? string.Empty,
                         OrderDate = order.OrderDate,
                         EstimatedTotal = pendingItems.Sum(item => item.EstimatedPrice),
@@ -1278,6 +1297,53 @@ namespace ECommerce.Business.Services.Managers
                 < 0 => WeightAdjustmentStatus.PendingRefund,
                 _ => WeightAdjustmentStatus.NoDifference
             };
+        }
+
+        /// <summary>
+        /// Mağaza/admin tartı güncellemesi sonrası kuryeye SignalR bildirimi gönderir.
+        /// </summary>
+        private async Task NotifyCourierWeightUpdateAsync(Order order, decimal priceDifference, decimal finalAmount)
+        {
+            if (_serviceProvider == null || !order.CourierId.HasValue) return;
+
+            try
+            {
+                var notificationService = _serviceProvider.GetService<IRealTimeNotificationService>();
+                if (notificationService == null)
+                {
+                    _logger?.LogWarning("[WEIGHT-SVC] IRealTimeNotificationService bulunamadı, kurye bildirimi atlandı");
+                    return;
+                }
+
+                var details = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    orderId = order.Id,
+                    orderNumber = order.OrderNumber,
+                    finalAmount = finalAmount,
+                    priceDifference = priceDifference,
+                    weightAdjustmentStatus = order.WeightAdjustmentStatus.ToString(),
+                    allItemsWeighed = order.AllItemsWeighed,
+                    message = priceDifference > 0
+                        ? $"Sipariş #{order.OrderNumber}: Tartı sonrası +{priceDifference:F2} TL ek tahsilat"
+                        : priceDifference < 0
+                            ? $"Sipariş #{order.OrderNumber}: Tartı sonrası {priceDifference:F2} TL iade"
+                            : $"Sipariş #{order.OrderNumber}: Tartı güncellendi"
+                });
+
+                await notificationService.NotifyOrderUpdatedForCourierAsync(
+                    order.CourierId.Value,
+                    order.Id,
+                    "WeightAdjusted",
+                    details);
+
+                _logger?.LogInformation(
+                    "[WEIGHT-SVC] Kurye bildirimi gönderildi: Courier={CourierId}, Order={OrderId}, Diff={PriceDiff:F2}",
+                    order.CourierId.Value, order.Id, priceDifference);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "[WEIGHT-SVC] Kurye bildirimi gönderilemedi: Order={OrderId}", order.Id);
+            }
         }
 
         private WeightAdjustmentDto MapToDto(WeightAdjustment adjustment)

@@ -53,6 +53,7 @@ import AdminNewsletter from "./pages/Admin/AdminNewsletter";
 import AdminShippingSettings from "./pages/Admin/AdminShippingSettings";
 // Sepet Ayarları
 import AdminCartSettings from "./pages/Admin/AdminCartSettings";
+import AdminOrderLimitSettings from "./pages/Admin/AdminOrderLimitSettings";
 import AuditLogsPage from "./pages/Admin/logs/AuditLogsPage";
 import ErrorLogsPage from "./pages/Admin/logs/ErrorLogsPage";
 import InventoryLogsPage from "./pages/Admin/logs/InventoryLogsPage";
@@ -66,7 +67,6 @@ import CourierDashboard from "./pages/Courier/CourierDashboard";
 import CourierLogin from "./pages/Courier/CourierLogin";
 import CourierOrders from "./pages/Courier/CourierOrders";
 import CourierDeliveryDetail from "./pages/Courier/CourierDeliveryDetail";
-import CourierWeightEntry from "./pages/Courier/CourierWeightEntry";
 // Dispatcher (Sevkiyat Görevlisi) sayfaları
 import DispatcherLogin from "./pages/Dispatcher/DispatcherLogin";
 import DispatcherDashboard from "./pages/Dispatcher/DispatcherDashboard";
@@ -83,6 +83,7 @@ import {
   StoreAttendantGuard,
   StoreAttendantLoginGuard,
 } from "./guards/StoreAttendantGuard";
+import { CourierGuard, CourierLoginGuard } from "./guards/CourierGuard";
 // Admin guards
 import Footer from "./components/Footer";
 import CookieConsent from "./components/CookieConsent"; // KVKK uyumlu cookie consent banner
@@ -140,6 +141,8 @@ import {
 } from "./components/payment/PaymentResultPages";
 // Mobil Bottom Navigation
 import MobileBottomNav from "./components/MobileBottomNav";
+// Header'da aktif sipariş rozeti
+import ActiveOrdersBadge from "./components/ActiveOrdersBadge";
 import "./styles/mobileNav.css";
 import "./styles/panelMobile.css"; // Panel sayfaları için mobil stiller
 
@@ -587,11 +590,11 @@ function Header() {
                 {/* Siparişlerim butonu - Mobilde gizli (bottom nav'da var) */}
                 <button
                   onClick={() => navigate("/orders")}
-                  className="modern-action-btn d-none d-md-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent"
+                  className="modern-action-btn d-none d-md-flex flex-column align-items-center p-1 p-md-2 border-0 bg-transparent position-relative"
                   title="Siparişlerim"
                 >
                   <div
-                    className="action-icon p-1 p-md-2 rounded-circle"
+                    className="action-icon p-1 p-md-2 rounded-circle position-relative"
                     style={{
                       background: "linear-gradient(135deg, #ff6b35, #ffa500)",
                       boxShadow: "0 2px 8px rgba(255,107,53,0.3)",
@@ -602,6 +605,8 @@ function Header() {
                       className="fas fa-truck text-white"
                       style={{ fontSize: "0.8rem" }}
                     ></i>
+                    {/* Devam eden sipariş sayısı rozeti */}
+                    <ActiveOrdersBadge />
                   </div>
                   <small
                     className="text-muted fw-semibold mt-1 d-none d-md-block"
@@ -1084,6 +1089,16 @@ function App() {
             </AdminGuard>
           }
         />
+        <Route
+          path="/admin/order-limit-settings"
+          element={
+            <AdminGuard requiredPermission="settings.system">
+              <AdminLayout>
+                <AdminOrderLimitSettings />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
         {/* Kupon Yönetimi Sayfası */}
         <Route
           path="/admin/coupons"
@@ -1181,16 +1196,39 @@ function App() {
           }
         />
         {/* Kurye Panel Rotaları */}
-        <Route path="/courier/login" element={<CourierLogin />} />
-        <Route path="/courier/dashboard" element={<CourierDashboard />} />
-        <Route path="/courier/orders" element={<CourierOrders />} />
         <Route
-          path="/courier/orders/:taskId"
-          element={<CourierDeliveryDetail />}
+          path="/courier/login"
+          element={
+            <CourierLoginGuard>
+              <CourierLogin />
+            </CourierLoginGuard>
+          }
+        />
+        <Route path="/courier" element={<Navigate to="/courier/dashboard" replace />} />
+        <Route
+          path="/courier/dashboard"
+          element={
+            <CourierGuard>
+              <CourierDashboard />
+            </CourierGuard>
+          }
         />
         <Route
-          path="/courier/orders/:orderId/weight"
-          element={<CourierWeightEntry />}
+          path="/courier/orders"
+          element={
+            <CourierGuard>
+              <CourierOrders />
+            </CourierGuard>
+          }
+        />
+
+        <Route
+          path="/courier/orders/:taskId"
+          element={
+            <CourierGuard>
+              <CourierDeliveryDetail />
+            </CourierGuard>
+          }
         />
         {/* Dispatcher (Sevkiyat Görevlisi) Panel Rotaları */}
         <Route
@@ -1846,7 +1884,7 @@ function HomePage() {
           }}
         >
           <div className="container-fluid px-4" style={{ maxWidth: "1100px" }}>
-            <div className="mb-3">
+            <div className="recipe-section-header mb-2">
               <h3
                 className="fw-bold mb-0"
                 style={{
@@ -1927,33 +1965,6 @@ function HomePage() {
                       e.target.src = "/images/placeholder.png";
                     }}
                   />
-                  {/* Başlık Overlay */}
-                  {recipe.title && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        background:
-                          "linear-gradient(transparent, rgba(0,0,0,0.7))",
-                        padding: "20px 10px 10px",
-                        color: "white",
-                      }}
-                    >
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: "0.75rem",
-                          fontWeight: "600",
-                          textShadow: "1px 1px 2px rgba(0,0,0,0.5)",
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        {recipe.title}
-                      </p>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
@@ -1962,11 +1973,11 @@ function HomePage() {
             <style>{`
               @media (max-width: 576px) {
                 .recipe-grid {
-                  gap: 10px !important;
+                  gap: 8px !important;
                   max-width: 100% !important;
                 }
                 .recipe-card img {
-                  height: 120px !important;
+                  height: 110px !important;
                 }
                 .recipe-card {
                   border-radius: 10px !important;

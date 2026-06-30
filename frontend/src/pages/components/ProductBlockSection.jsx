@@ -8,6 +8,9 @@ import { CART_SETTINGS_EVENT } from "../../services/cartSettingsService";
 import WeightSelectionModal, {
   isWeightBasedProduct,
 } from "../../components/WeightSelectionModal";
+import CartActionToast, {
+  useCartActionToast,
+} from "../../components/CartActionToast";
 import "./ProductBlockSection.css";
 
 const WEIGHT_FALLBACK_KEYWORDS = [
@@ -280,8 +283,13 @@ const ProductBlockSection = ({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  // Toast bildirimi için state
-  const [cartNotification, setCartNotification] = useState(null);
+  const {
+    notification: cartNotification,
+    showCartSuccess,
+    showCartError,
+    showFavoriteSuccess,
+    dismiss: dismissCartNotification,
+  } = useCartActionToast();
   const [guestFirstOrderShippingMessage, setGuestFirstOrderShippingMessage] =
     useState("");
 
@@ -426,32 +434,13 @@ const ProductBlockSection = ({
     };
   };
 
-  // Toast bildirim gösterme fonksiyonu
+  // Toast bildirim gösterme — ortak CartActionToast bileşeni kullanılır
   const showCartNotification = (product, userType) => {
-    setCartNotification({
-      type: "success",
-      product: product,
-      userType: userType,
-    });
-
-    // 4 saniye sonra bildirimi gizle
-    setTimeout(() => {
-      setCartNotification(null);
-    }, 4000);
+    showCartSuccess(product, userType);
   };
 
-  // Favori toast bildirimi gösterme fonksiyonu
   const showFavoriteNotification = (product) => {
-    setCartNotification({
-      type: "favorite",
-      product: product,
-      message: "Favorilere eklendi!",
-    });
-
-    // 3 saniye sonra bildirimi gizle
-    setTimeout(() => {
-      setCartNotification(null);
-    }, 3000);
+    showFavoriteSuccess(product);
   };
 
   // Block yoksa veya aktif değilse gösterme
@@ -663,10 +652,7 @@ const ProductBlockSection = ({
         getVariantInfoFromProduct(productToAdd),
       );
       if (result && result.success === false) {
-        setCartNotification({
-          type: "error",
-          message: result.error || "Sepete eklenemedi.",
-        });
+        showCartError(result.error || "Sepete eklenemedi.");
         return;
       }
       showCartNotification(productToAdd, user ? "registered" : "guest");
@@ -680,10 +666,7 @@ const ProductBlockSection = ({
       getVariantInfoFromProduct(productToAdd),
     );
     if (addResult && addResult.success === false) {
-      setCartNotification({
-        type: "error",
-        message: addResult.error || "Sepete eklenemedi.",
-      });
+      showCartError(addResult.error || "Sepete eklenemedi.");
       return;
     }
     showCartNotification(productToAdd, user ? "registered" : "guest");
@@ -714,10 +697,7 @@ const ProductBlockSection = ({
         getVariantInfoFromProduct(productWithWeight),
       );
       if (result && result.success === false) {
-        setCartNotification({
-          type: "error",
-          message: result.error || "Sepete eklenemedi.",
-        });
+        showCartError(result.error || "Sepete eklenemedi.");
         return;
       }
       showCartNotification(productWithWeight, user ? "registered" : "guest");
@@ -731,51 +711,62 @@ const ProductBlockSection = ({
       getVariantInfoFromProduct(productWithWeight),
     );
     if (addResult && addResult.success === false) {
-      setCartNotification({
-        type: "error",
-        message: addResult.error || "Sepete eklenemedi.",
-      });
+      showCartError(addResult.error || "Sepete eklenemedi.");
       return;
     }
     showCartNotification(productWithWeight, user ? "registered" : "guest");
   };
 
-  // Favorilere ekle/çıkar - ProductGrid ile AYNI
-  const handleToggleFavorite = (e, productId, product) => {
+  // Favorilere ekle/çıkar — id=0 Mikro ürünlerde ensure-local ile gerçek ID alınır
+  const handleToggleFavorite = async (e, productId, product) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (productId === undefined || productId === null || productId === "") {
-      console.warn(
-        "[ProductBlockSection] Favori işlemi atlandı: productId boş",
-        {
-          product,
-        },
-      );
-      return;
+    let resolvedId =
+      productId !== undefined && productId !== null && productId !== ""
+        ? Number(productId)
+        : null;
+
+    if (resolvedId !== null && (Number.isNaN(resolvedId) || resolvedId <= 0)) {
+      resolvedId = null;
     }
-    const id = Number(productId);
-    if (Number.isNaN(id)) {
-      console.warn("[ProductBlockSection] Geçersiz productId:", productId);
+
+    if (!resolvedId && product?.sku) {
+      try {
+        const base = process.env.REACT_APP_API_URL || "";
+        const res = await fetch(
+          `${base}/api/products/ensure-local/${encodeURIComponent(product.sku)}`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          resolvedId = data?.id || null;
+        }
+      } catch (err) {
+        console.warn("[ProductBlockSection] ensure-local (favori) hatası:", err);
+      }
+    }
+
+    if (!resolvedId) {
+      console.warn("[ProductBlockSection] Favori işlemi atlandı: geçerli productId yok");
       return;
     }
 
-    // Eğer zaten favoride değilse, bildirimi göster
-    const alreadyFavorite = Array.isArray(favorites)
-      ? favorites.includes(id)
-      : isFavorite(id);
+    const alreadyFavorite = isFavorite(resolvedId);
 
     if (typeof onToggleFavorite === "function") {
-      onToggleFavorite(id);
+      onToggleFavorite(resolvedId);
     } else {
-      console.log("[ProductBlockSection] Favori toggle:", id);
-      toggleFavorite(id);
+      await toggleFavorite(resolvedId);
     }
 
-    // Favorilere ekleme durumunda toast göster
     if (!alreadyFavorite && product) {
       showFavoriteNotification({
-        id: id,
+        id: resolvedId,
         name: product.name || product.Name || "",
         imageUrl: product.imageUrl || product.ImageUrl || product.image || "",
         price: product.price || product.Price || 0,
@@ -937,9 +928,8 @@ const ProductBlockSection = ({
                 const rating = product.rating || product.Rating || 0;
                 const reviewCount =
                   product.reviewCount || product.ReviewCount || 0;
-                const isProductFavorite = Array.isArray(favorites)
-                  ? favorites.includes(productId)
-                  : productId !== null
+                const isProductFavorite =
+                  productId !== null && productId > 0
                     ? isFavorite(productId)
                     : false;
 
@@ -1220,252 +1210,11 @@ const ProductBlockSection = ({
         </div>
       </div>
 
-      {/* Premium Cart Notification Toast - ProductGrid ile AYNI */}
-      {cartNotification && (
-        <div
-          className="position-fixed top-0 end-0 m-4"
-          style={{ zIndex: 9999 }}
-        >
-          <div
-            className="toast show border-0 shadow-lg"
-            style={{
-              borderRadius: "25px",
-              minWidth: "380px",
-              background:
-                cartNotification.type === "success"
-                  ? "linear-gradient(145deg, #ffffff, #f8f9fa)"
-                  : cartNotification.type === "favorite"
-                    ? "linear-gradient(145deg, #fdf2f8, #fce7f3)"
-                    : "linear-gradient(145deg, #fff5f5, #fed7d7)",
-              animation:
-                "slideInRight 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)",
-              border:
-                cartNotification.type === "success"
-                  ? "3px solid #10b981"
-                  : cartNotification.type === "favorite"
-                    ? "3px solid #e91e63"
-                    : "3px solid #ef4444",
-              boxShadow:
-                "0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1)",
-            }}
-          >
-            <div
-              className="toast-header border-0"
-              style={{
-                background:
-                  cartNotification.type === "success"
-                    ? "linear-gradient(135deg, #10b981, #059669)"
-                    : cartNotification.type === "favorite"
-                      ? "linear-gradient(135deg, #e91e63, #ad1457)"
-                      : "linear-gradient(135deg, #ef4444, #dc2626)",
-                borderRadius: "22px 22px 0 0",
-                color: "white",
-                padding: "1rem 1.5rem",
-              }}
-            >
-              <div className="d-flex align-items-center">
-                <div
-                  className="rounded-circle me-3 d-flex align-items-center justify-content-center"
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    backgroundColor: "rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <i
-                    className={`fas ${
-                      cartNotification.type === "success"
-                        ? "fa-check"
-                        : cartNotification.type === "favorite"
-                          ? "fa-heart"
-                          : "fa-exclamation"
-                    }`}
-                    style={{ fontSize: "1.2rem" }}
-                  ></i>
-                </div>
-                <strong className="fs-6">
-                  {cartNotification.type === "success"
-                    ? "Sepete Eklendi!"
-                    : cartNotification.type === "favorite"
-                      ? "Favorilere Eklendi!"
-                      : "Hata Oluştu!"}
-                </strong>
-              </div>
-              <button
-                type="button"
-                className="btn-close btn-close-white ms-auto"
-                onClick={() => setCartNotification(null)}
-                style={{ opacity: 0.8 }}
-              ></button>
-            </div>
-
-            {cartNotification.type === "success" &&
-              cartNotification.product && (
-                <div className="toast-body p-4">
-                  <div className="d-flex align-items-start">
-                    <div className="position-relative me-3">
-                      <img
-                        src={
-                          cartNotification.product.imageUrl ||
-                          "/images/placeholder.png"
-                        }
-                        alt={cartNotification.product.name}
-                        style={{
-                          width: "70px",
-                          height: "70px",
-                          objectFit: "contain",
-                          borderRadius: "15px",
-                          border: "3px solid #10b981",
-                          background:
-                            "linear-gradient(135deg, #f8f9fa, #e9ecef)",
-                          padding: "5px",
-                        }}
-                      />
-                      <div
-                        className="position-absolute top-0 start-100 translate-middle rounded-circle bg-success d-flex align-items-center justify-content-center"
-                        style={{ width: "24px", height: "24px" }}
-                      >
-                        <i
-                          className="fas fa-check text-white"
-                          style={{ fontSize: "0.7rem" }}
-                        ></i>
-                      </div>
-                    </div>
-
-                    <div className="flex-grow-1">
-                      <h6
-                        className="mb-1 fw-bold text-dark"
-                        style={{ fontSize: "0.95rem" }}
-                      >
-                        {cartNotification.product.name}
-                      </h6>
-                      <div className="d-flex align-items-center mb-2">
-                        <span className="text-success fw-bold me-2">
-                          ₺
-                          {(
-                            cartNotification.product.specialPrice ||
-                            cartNotification.product.price
-                          )?.toFixed(2)}
-                        </span>
-                        {cartNotification.product.specialPrice && (
-                          <span className="text-muted text-decoration-line-through small">
-                            ₺
-                            {cartNotification.product.originalPrice?.toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-
-                      {cartNotification.userType === "guest" &&
-                        guestFirstOrderShippingMessage.trim() && (
-                        <div
-                          className="alert border-0 p-3 mb-3"
-                          style={{
-                            borderRadius: "15px",
-                            background:
-                              "linear-gradient(135deg, #fff3cd, #ffeaa7)",
-                            border: "2px solid #f39c12",
-                          }}
-                        >
-                          <div className="d-flex align-items-center">
-                            <div
-                              className="rounded-circle me-2 d-flex align-items-center justify-content-center"
-                              style={{
-                                width: "30px",
-                                height: "30px",
-                                backgroundColor: "#f39c12",
-                              }}
-                            >
-                              <i
-                                className="fas fa-gift text-white"
-                                style={{ fontSize: "0.8rem" }}
-                              ></i>
-                            </div>
-                            <div>
-                              <div className="fw-bold text-warning small mb-1">
-                                🎁 SÜPER FIRSAT!
-                              </div>
-                              <div
-                                className="text-dark"
-                                style={{
-                                  fontSize: "0.75rem",
-                                  whiteSpace: "pre-line",
-                                }}
-                              >
-                                {guestFirstOrderShippingMessage}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="d-grid gap-2">
-                        <div className="row g-2">
-                          <div
-                            className={
-                              cartNotification.userType === "guest"
-                                ? "col-8"
-                                : "col-12"
-                            }
-                          >
-                            <button
-                              className="btn w-100 text-white fw-bold"
-                              onClick={() => {
-                                setCartNotification(null);
-                                navigate("/cart");
-                              }}
-                              style={{
-                                borderRadius: "20px",
-                                fontSize: "0.8rem",
-                                background:
-                                  "linear-gradient(135deg, #10b981, #059669)",
-                                border: "none",
-                                padding: "10px",
-                              }}
-                            >
-                              <i className="fas fa-shopping-cart me-1"></i>
-                              Sepete Git
-                            </button>
-                          </div>
-
-                          {cartNotification.userType === "guest" && (
-                            <div className="col-4">
-                              <button
-                                className="btn btn-outline-warning w-100 fw-bold"
-                                onClick={() => {
-                                  setCartNotification(null);
-                                  navigate("/login");
-                                }}
-                                style={{
-                                  borderRadius: "20px",
-                                  fontSize: "0.75rem",
-                                  borderWidth: "2px",
-                                  padding: "10px 8px",
-                                }}
-                              >
-                                <i
-                                  className="fas fa-user-plus"
-                                  style={{ fontSize: "0.7rem" }}
-                                ></i>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {cartNotification.type === "error" && (
-              <div className="toast-body">
-                <p className="mb-0 text-danger fw-bold">
-                  {cartNotification.message}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <CartActionToast
+        notification={cartNotification}
+        onDismiss={dismissCartNotification}
+        guestFirstOrderShippingMessage={guestFirstOrderShippingMessage}
+      />
 
       {/* Kg Seçici Modal */}
       <WeightSelectionModal

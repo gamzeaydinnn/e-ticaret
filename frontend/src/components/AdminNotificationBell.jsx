@@ -257,7 +257,8 @@ export default function AdminNotificationBell() {
             top: "100%",
             width: "340px",
             maxWidth: "calc(100vw - 20px)",
-            zIndex: 1050,
+            // Site header (z-index 1100) ve diğer overlay'lerin üstünde kalmalı.
+            zIndex: 12000,
             animation: "fadeIn 0.2s ease",
           }}
         >

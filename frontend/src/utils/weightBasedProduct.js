@@ -92,13 +92,22 @@ export function isStrictVariableWeightProduct(product) {
     return true;
   }
 
-  // 5) Yapısal veri yetersiz: isim+kategori heuristiğine düş (son çare).
-  if (!productName) return false;
-  if (!STANDALONE_KG_PATTERN.test(productName)) return false;
-
+  // 5) Taze ürün kategorisi (meyve/sebze/kasap vb.) — isimde "KG" şart değil.
   const categoryName = String(
     product.categoryName || product.category?.name || "",
-  ).trim().toUpperCase();
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    VARIABLE_WEIGHT_CATEGORY_HINTS.some((hint) => categoryName.includes(hint))
+  ) {
+    return true;
+  }
+
+  // 6) Yapısal veri yetersiz: isimde "KG" + kategori ipucu (son çare).
+  if (!productName) return false;
+  if (!STANDALONE_KG_PATTERN.test(productName)) return false;
 
   return VARIABLE_WEIGHT_CATEGORY_HINTS.some((hint) =>
     categoryName.includes(hint),

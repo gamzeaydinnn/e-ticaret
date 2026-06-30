@@ -37,6 +37,48 @@ const ORDER_STATUSES = {
     color: "#ffc107",
     bgColor: "#fff3cd",
   },
+  // Ödeme aşaması (kart ile ödeme başarılı)
+  paid: {
+    step: 0,
+    label: "Ödeme Alındı",
+    shortLabel: "Ödendi",
+    description: "Ödemeniz başarıyla alındı, siparişiniz onay bekliyor",
+    icon: "fa-credit-card",
+    color: "#0ea5e9",
+    bgColor: "#e0f2fe",
+  },
+  // KGL / provizyon: tutar bloke edildi, henüz tahsil edilmedi
+  preauthorized: {
+    step: 0,
+    label: "Ödeme Onaylandı (Provizyon)",
+    shortLabel: "Provizyon",
+    description:
+      "Ödemeniz için provizyon alındı. Tartı/ürün kesinleştiğinde tahsilat yapılacak.",
+    icon: "fa-shield-alt",
+    color: "#0ea5e9",
+    bgColor: "#e0f2fe",
+  },
+  // Tartı bazlı ürünlerde ağırlık kesinleşmesi bekleniyor
+  weightpending: {
+    step: 2,
+    label: "Tartı Bekleniyor",
+    shortLabel: "Tartılıyor",
+    description:
+      "Tartı bazlı ürünleriniz hazırlanıyor, kesin tutar tartı sonrası belirlenecek",
+    icon: "fa-balance-scale",
+    color: "#fd7e14",
+    bgColor: "#ffe5d0",
+  },
+  weight_pending: {
+    step: 2,
+    label: "Tartı Bekleniyor",
+    shortLabel: "Tartılıyor",
+    description:
+      "Tartı bazlı ürünleriniz hazırlanıyor, kesin tutar tartı sonrası belirlenecek",
+    icon: "fa-balance-scale",
+    color: "#fd7e14",
+    bgColor: "#ffe5d0",
+  },
   // Onay aşaması
   confirmed: {
     step: 1,
@@ -307,12 +349,22 @@ const OrderTracking = () => {
   // =========================================================================
   const [guestSearchPhone, setGuestSearchPhone] = useState("");
   const [guestSearchOrderNo, setGuestSearchOrderNo] = useState("");
+  const [guestSearchEmail, setGuestSearchEmail] = useState("");
+  const [guestSearchEmailOrderNo, setGuestSearchEmailOrderNo] = useState("");
   const [guestSearchTab, setGuestSearchTab] = useState("phone");
   const [guestSearchLoading, setGuestSearchLoading] = useState(false);
   const [guestSearchError, setGuestSearchError] = useState(null);
 
-  // Misafir kullanıcı mı kontrolü
-  const isGuest = !localStorage.getItem("token") || !localStorage.getItem("userId");
+  // Token geçersiz/expired olduğunda (API 401) misafir paneline düşmek için.
+  // NEDEN: localStorage'da bayat token kalırsa kullanıcı ne listesini görebiliyor
+  // ne de misafir arama panelini görebiliyordu; bu fallback paneli tekrar açar.
+  const [forceGuestMode, setForceGuestMode] = useState(false);
+
+  // Misafir kullanıcı mı kontrolü (bayat token durumu da misafir sayılır)
+  const isGuest =
+    !localStorage.getItem("token") ||
+    !localStorage.getItem("userId") ||
+    forceGuestMode;
 
   // =========================================================================
   // VERİ YÜKLEME
@@ -392,6 +444,14 @@ const OrderTracking = () => {
     } catch (error) {
       console.error("Siparişler yüklenemedi:", error);
 
+      // Token geçersiz/expired ise misafir moduna düş (arama paneli görünsün)
+      if (error?.status === 401 || error?.response?.status === 401) {
+        console.warn(
+          "[OrderTracking] Token geçersiz, misafir moduna geçiliyor.",
+        );
+        setForceGuestMode(true);
+      }
+
       // ================================================================
       // API HATASI DURUMUNDA MİSAFİR SİPARİŞLERİNİ GÖSTER
       // ================================================================
@@ -435,28 +495,59 @@ const OrderTracking = () => {
     e.preventDefault();
     setGuestSearchError(null);
 
-    // Validasyon
-    if (guestSearchTab === "phone" && !guestSearchPhone?.trim()) {
-      setGuestSearchError("Lütfen telefon numaranızı girin.");
-      return;
-    }
-    if (guestSearchTab === "orderNumber" && !guestSearchOrderNo?.trim()) {
-      setGuestSearchError("Lütfen sipariş numaranızı girin.");
-      return;
-    }
+    // Sipariş numarası format ipucu (ORD-yyyyMMdd-HHmmss-xxxx)
+    const ORDER_NO_HINT =
+      "Sipariş numaranız onay/e-posta'da yer alan ORD- ile başlayan koddur (örn. ORD-20260628-102230-1234).";
+
+    // ----- Validasyon -----
     if (guestSearchTab === "phone") {
+      if (!guestSearchPhone?.trim()) {
+        setGuestSearchError("Lütfen telefon numaranızı girin.");
+        return;
+      }
       const digits = guestSearchPhone.replace(/\D/g, "");
       if (digits.length < 10) {
         setGuestSearchError("Geçerli bir telefon numarası girin (en az 10 hane).");
         return;
       }
     }
+    if (guestSearchTab === "orderNumber" && !guestSearchOrderNo?.trim()) {
+      setGuestSearchError(`Lütfen sipariş numaranızı girin. ${ORDER_NO_HINT}`);
+      return;
+    }
+    if (guestSearchTab === "email") {
+      if (!guestSearchEmail?.trim() || !guestSearchEmailOrderNo?.trim()) {
+        setGuestSearchError(
+          "Lütfen e-posta adresinizi ve sipariş numaranızı girin.",
+        );
+        return;
+      }
+    }
 
     setGuestSearchLoading(true);
     try {
+      // E-posta + sipariş numarası ile güvenli sorgulama (guest-lookup)
+      if (guestSearchTab === "email") {
+        const order = await OrderService.findGuestOrder(
+          guestSearchEmail.trim(),
+          guestSearchEmailOrderNo.trim(),
+        );
+        if (order) {
+          setOrders([order]);
+          setGuestSearchError(null);
+        } else {
+          setGuestSearchError(
+            `Bu e-posta ve sipariş numarasıyla eşleşen sipariş bulunamadı. ${ORDER_NO_HINT}`,
+          );
+        }
+        return;
+      }
+
+      // Telefon veya sipariş numarası ile sorgulama (guest-track)
       const params = {};
       if (guestSearchTab === "phone") params.phone = guestSearchPhone.trim();
-      if (guestSearchTab === "orderNumber") params.orderNumber = guestSearchOrderNo.trim();
+      if (guestSearchTab === "orderNumber")
+        params.orderNumber = guestSearchOrderNo.trim();
 
       const results = await OrderService.trackGuestOrder(params);
 
@@ -467,7 +558,7 @@ const OrderTracking = () => {
         setGuestSearchError(
           guestSearchTab === "phone"
             ? "Bu telefon numarasıyla eşleşen sipariş bulunamadı."
-            : "Bu sipariş numarasıyla eşleşen sipariş bulunamadı."
+            : `Bu sipariş numarasıyla eşleşen sipariş bulunamadı. ${ORDER_NO_HINT}`,
         );
       }
     } catch (err) {
@@ -475,7 +566,7 @@ const OrderTracking = () => {
       setGuestSearchError(
         err?.status === 404
           ? "Bu bilgilerle eşleşen sipariş bulunamadı."
-          : "Sipariş araması sırasında bir hata oluştu."
+          : "Sipariş araması sırasında bir hata oluştu.",
       );
     } finally {
       setGuestSearchLoading(false);
@@ -679,12 +770,72 @@ const OrderTracking = () => {
     // ================================================================
     const token = localStorage.getItem("token");
     if (!token) {
-      console.log("[OrderTracking] Misafir kullanıcı, polling aktif edilecek");
+      console.log(
+        "[OrderTracking] Misafir kullanıcı: SignalR (guest) + polling fallback",
+      );
 
       // ================================================================
-      // MİSAFİR İÇİN POLLİNG MEKANİZMASI
-      // Her 15 saniyede sipariş durumunu kontrol et
-      // NEDEN: SignalR yetkisiz kullanıcılar için çalışmaz
+      // MİSAFİR İÇİN CANLI TAKİP (SignalR)
+      // OrderHub anonim bağlantıya izin verir; saklanan sipariş no + email ile
+      // JoinGuestOrderTracking çağrılır. Bağlantı kurulamazsa polling devreye girer.
+      // ================================================================
+      const guestUnsubscribers = [];
+      const setupGuestRealtime = async () => {
+        try {
+          const guestOrders = JSON.parse(
+            localStorage.getItem("guestOrders") || "[]",
+          );
+          const trackable = guestOrders
+            .filter((o) => o?.orderNumber && o?.email)
+            .slice(0, 5);
+
+          let anyJoined = false;
+          for (const go of trackable) {
+            const joinedId = await signalRService.connectGuestOrderTracking(
+              go.orderNumber,
+              go.email,
+            );
+            if (joinedId && joinedId > 0) anyJoined = true;
+          }
+
+          if (anyJoined) {
+            setConnectionStatus(ConnectionState.CONNECTED);
+
+            const unsubStatus = signalRService.onOrderStatusChanged((data) => {
+              const statusInfo = getStatusInfo(data.newStatus || data.status);
+              showBrowserNotification(
+                `📦 Sipariş #${data.orderNumber || data.orderId}`,
+                statusInfo.label + " - " + (statusInfo.description || ""),
+                statusInfo.icon,
+              );
+              setNotification({
+                type: "info",
+                title: `Sipariş #${data.orderNumber || data.orderId}`,
+                message: statusInfo.label,
+                icon: statusInfo.icon,
+                color: statusInfo.color,
+              });
+              setOrders((prev) =>
+                prev.map((o) =>
+                  o.id === data.orderId ||
+                  o.orderNumber === data.orderNumber
+                    ? { ...o, status: data.newStatus || data.status }
+                    : o,
+                ),
+              );
+              setTimeout(() => setNotification(null), 6000);
+            });
+            guestUnsubscribers.push(unsubStatus);
+          }
+        } catch (e) {
+          console.warn("[OrderTracking] Misafir SignalR kurulum hatası:", e);
+        }
+      };
+      setupGuestRealtime();
+
+      // ================================================================
+      // MİSAFİR İÇİN POLLİNG FALLBACK
+      // SignalR çalışsa bile güvenlik ağı olarak periyodik kontrol.
       // ================================================================
       const pollInterval = setInterval(async () => {
         try {
@@ -758,9 +909,18 @@ const OrderTracking = () => {
         } catch (e) {
           console.warn("[OrderTracking] Polling hatası:", e);
         }
-      }, 15000); // 15 saniye
+      }, 30000); // 30 saniye (SignalR ana kanal, bu güvenlik ağı)
 
-      return () => clearInterval(pollInterval);
+      return () => {
+        clearInterval(pollInterval);
+        guestUnsubscribers.forEach((unsub) => {
+          try {
+            unsub();
+          } catch {
+            /* no-op */
+          }
+        });
+      };
     }
 
     // SignalR bağlantısı kur (sadece giriş yapmış kullanıcılar için)
@@ -848,6 +1008,13 @@ const OrderTracking = () => {
           : prev,
       );
 
+      // Header'daki aktif sipariş rozetinin de güncellenmesi için global olay yay
+      try {
+        window.dispatchEvent(
+          new CustomEvent("orderStatusChanged", { detail: data }),
+        );
+      } catch (e) {}
+
       // Bildirimi 5 saniye sonra kaldır
       setTimeout(() => setNotification(null), 5000);
     });
@@ -861,6 +1028,34 @@ const OrderTracking = () => {
         if (data.orderId) {
           loadOrders(); // Verileri yenile
         }
+      },
+    );
+
+    // Teslimat tamamlandı dinle (backend "DeliveryCompleted" gönderiyor)
+    const unsubscribeDeliveryCompleted = signalRService.onDeliveryCompleted(
+      (data) => {
+        console.log("[OrderTracking] Teslimat tamamlandı:", data);
+        const statusInfo = getStatusInfo("delivered");
+        showBrowserNotification(
+          `📦 Sipariş #${data.orderNumber || data.orderId}`,
+          statusInfo.label,
+          statusInfo.icon,
+        );
+        setNotification({
+          type: "success",
+          title: `Sipariş #${data.orderNumber || data.orderId}`,
+          message: statusInfo.label,
+          icon: statusInfo.icon,
+          color: statusInfo.color,
+        });
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === data.orderId || o.orderNumber === data.orderNumber
+              ? { ...o, status: "delivered" }
+              : o,
+          ),
+        );
+        setTimeout(() => setNotification(null), 6000);
       },
     );
 
@@ -931,6 +1126,7 @@ const OrderTracking = () => {
     return () => {
       unsubscribeStatus();
       unsubscribeDelivery();
+      unsubscribeDeliveryCompleted();
       unsubscribeWeightCharge();
       unsubscribeState();
       deliveryHub.off("PlaySound", handlePlaySound);
@@ -1062,15 +1258,23 @@ const OrderTracking = () => {
       }}
     >
       <div className="container">
-        {/* Real-time Bildirim */}
+        {/* Real-time Bildirim - sabit (fixed) konumda, header/modal üstünde */}
         {notification && (
           <div
-            className="alert d-flex align-items-center shadow-lg mb-4"
+            className="alert d-flex align-items-center shadow-lg"
             style={{
-              backgroundColor: notification.color + "15",
-              borderLeft: `4px solid ${notification.color}`,
-              borderRadius: "12px",
+              position: "fixed",
+              top: "84px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "min(94vw, 520px)",
+              backgroundColor: "#ffffff",
+              borderLeft: `5px solid ${notification.color}`,
+              borderRadius: "14px",
+              boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
+              zIndex: 13000,
               animation: "slideIn 0.3s ease",
+              margin: 0,
             }}
           >
             <i
@@ -1191,10 +1395,29 @@ const OrderTracking = () => {
                   <i className="fas fa-hashtag me-2"></i>
                   Sipariş No
                 </button>
+                <button
+                  type="button"
+                  className="btn flex-grow-1"
+                  style={{
+                    borderRadius: "10px",
+                    fontSize: "0.85rem",
+                    fontWeight: guestSearchTab === "email" ? "600" : "400",
+                    backgroundColor: guestSearchTab === "email" ? "white" : "transparent",
+                    border: "none",
+                    padding: "10px 16px",
+                    color: guestSearchTab === "email" ? "#FF8C00" : "#666",
+                    boxShadow: guestSearchTab === "email" ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.2s ease",
+                  }}
+                  onClick={() => { setGuestSearchTab("email"); setGuestSearchError(null); }}
+                >
+                  <i className="fas fa-envelope me-2"></i>
+                  E-posta
+                </button>
               </div>
 
               <form onSubmit={handleGuestSearch}>
-                <div className="d-flex gap-2">
+                <div className="d-flex gap-2 align-items-start">
                   {/* Telefon numarası girişi */}
                   {guestSearchTab === "phone" && (
                     <div className="input-group flex-grow-1">
@@ -1234,7 +1457,7 @@ const OrderTracking = () => {
                     <input
                       type="text"
                       className="form-control flex-grow-1"
-                      placeholder="ORD-12345"
+                      placeholder="ORD-20260628-102230-1234"
                       value={guestSearchOrderNo}
                       onChange={(e) => setGuestSearchOrderNo(e.target.value)}
                       disabled={guestSearchLoading}
@@ -1245,6 +1468,42 @@ const OrderTracking = () => {
                         borderRadius: "8px",
                       }}
                     />
+                  )}
+
+                  {/* E-posta + sipariş numarası girişi (güvenli sorgulama) */}
+                  {guestSearchTab === "email" && (
+                    <div className="flex-grow-1 d-flex flex-column gap-2">
+                      <input
+                        type="email"
+                        className="form-control"
+                        placeholder="ornek@eposta.com"
+                        value={guestSearchEmail}
+                        onChange={(e) => setGuestSearchEmail(e.target.value)}
+                        disabled={guestSearchLoading}
+                        style={{
+                          border: "2px solid #FFE0B2",
+                          fontSize: "0.95rem",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="ORD-20260628-102230-1234"
+                        value={guestSearchEmailOrderNo}
+                        onChange={(e) =>
+                          setGuestSearchEmailOrderNo(e.target.value)
+                        }
+                        disabled={guestSearchLoading}
+                        style={{
+                          border: "2px solid #FFE0B2",
+                          fontSize: "0.95rem",
+                          padding: "10px 14px",
+                          borderRadius: "8px",
+                        }}
+                      />
+                    </div>
                   )}
 
                   {/* Sorgula butonu */}
@@ -1275,9 +1534,12 @@ const OrderTracking = () => {
 
                 {/* Yardımcı metin */}
                 <small className="text-muted d-block mt-2" style={{ fontSize: "0.78rem" }}>
-                  {guestSearchTab === "phone"
-                    ? "Sipariş verirken kullandığınız telefon numarasını girin"
-                    : "Sipariş onay sayfasından aldığınız sipariş numaranızı girin"}
+                  {guestSearchTab === "phone" &&
+                    "Sipariş verirken kullandığınız telefon numarasını girin"}
+                  {guestSearchTab === "orderNumber" &&
+                    "Onay sayfası/e-postanızdaki ORD- ile başlayan sipariş numaranızı girin"}
+                  {guestSearchTab === "email" &&
+                    "Sipariş verirken kullandığınız e-posta ve ORD- ile başlayan sipariş numaranızı girin"}
                 </small>
               </form>
 

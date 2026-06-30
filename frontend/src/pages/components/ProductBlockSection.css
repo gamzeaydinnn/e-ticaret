@@ -17,10 +17,10 @@
 }
 
 .product-block-section {
-  padding: 30px 0;
+  padding: 20px 0;
   background-color: #fff;
   overflow: hidden;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   /* Anasayfa ürün blokları büyütüldü (görsel ve kart yüksekliği artırıldı) */
   --block-card-width: 250px;
   --block-image-height: 200px;
@@ -466,16 +466,17 @@
    ===================================================== */
 @media (max-width: 768px) {
   .product-block-section {
-    padding: 20px 0;
-    margin-bottom: 15px;
+    padding: 8px 0;
+    margin-bottom: 8px;
     --block-card-width: 128px;
-    --block-image-height: 90px;
-    --block-card-height: 252px;
+    --block-image-height: 72px;
+    --block-card-height: 208px;
+    overflow: visible !important;
   }
 
   .product-block-header {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding: 0 12px 15px;
+    padding: 0 12px 8px;
     gap: 10px;
     align-items: start;
   }
@@ -532,19 +533,23 @@
   .product-block-content {
     align-self: start;
     min-height: var(--block-card-height);
+    overflow: visible !important;
   }
 
   .products-slider-wrapper {
     align-items: flex-start;
     min-height: var(--block-card-height);
+    overflow: visible !important;
   }
 
   .products-scroll-container {
     scroll-snap-type: x mandatory;
     gap: 10px;
-    padding: 0;
+    padding: 4px 0;
     align-items: stretch;
-    min-height: var(--block-card-height);
+    min-height: calc(var(--block-card-height) + 8px);
+    overflow-x: auto !important;
+    overflow-y: visible !important;
   }
 
   .product-block-section .product-block-card,
@@ -556,7 +561,9 @@
     min-height: var(--block-card-height) !important;
     max-height: var(--block-card-height) !important;
     scroll-snap-align: start;
-    align-self: stretch;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
   .product-block-section .product-block-card .product-image-container {
@@ -566,7 +573,7 @@
   }
 
   .product-block-section .product-block-card .product-image-container .image-wrapper {
-    padding: 6px;
+    padding: 4px;
   }
 
   .slider-arrow {
@@ -586,37 +593,58 @@
   }
 
   .product-block-section .product-title {
-    font-size: 0.68rem;
-    height: 30px;
-    min-height: 30px;
+    font-size: 0.56rem;
+    font-weight: 500;
+    line-height: 1.2;
+    height: 2.4em !important;
+    min-height: 2.4em !important;
+    max-height: 2.4em !important;
+    -webkit-line-clamp: 2;
+    text-transform: none;
+    letter-spacing: 0;
+    word-break: break-word;
+    margin-bottom: 2px !important;
+    overflow: hidden;
   }
 
   .product-block-section .product-price,
   .product-block-section .current-price {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
 
   .product-block-section .price-section {
-    min-height: auto;
-    margin-bottom: 4px;
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    margin-bottom: 0 !important;
+    overflow: hidden;
   }
 
   .product-block-section .product-block-card .card-body {
-    padding: 8px !important;
+    padding: 5px 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+  }
+
+  .product-block-section .action-buttons {
+    margin-top: auto !important;
   }
 }
 
 @media (max-width: 576px) {
   .product-block-section {
-    padding: 15px 0;
+    padding: 6px 0;
+    margin-bottom: 6px;
     --block-card-width: 118px;
-    --block-image-height: 82px;
-    --block-card-height: 238px;
+    --block-image-height: 66px;
+    --block-card-height: 196px;
+    overflow: visible !important;
   }
 
   .product-block-header {
     grid-template-columns: minmax(0, 1fr) auto;
-    padding: 0 10px 12px;
+    padding: 0 10px 8px;
   }
 
   .block-title {
@@ -671,6 +699,15 @@
 
   .products-scroll-container {
     gap: 8px;
+    padding: 4px 0;
+    min-height: calc(var(--block-card-height) + 8px);
+  }
+
+  .product-block-section .product-block-card,
+  .product-block-section .modern-product-card.product-block-card {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-shrink: 0 !important;
   }
 
   .product-block-section .modern-add-btn {
@@ -687,25 +724,46 @@
   }
 
   .product-block-section .product-title {
-    font-size: 0.62rem !important;
-    line-height: 1.25 !important;
-    height: 28px !important;
-    min-height: 28px !important;
+    font-size: 0.52rem !important;
+    line-height: 1.18 !important;
+    height: 2.36em !important;
+    min-height: 2.36em !important;
+    max-height: 2.36em !important;
+    -webkit-line-clamp: 2 !important;
+    text-transform: none !important;
+    word-break: break-word !important;
+    margin-bottom: 1px !important;
+    overflow: hidden !important;
   }
 
   .product-block-section .product-price,
   .product-block-section .current-price,
   .product-block-section .new-price-large {
-    font-size: 0.72rem !important;
+    font-size: 0.68rem !important;
   }
 
   .product-block-section .original-price,
   .product-block-section .original-price-large {
-    font-size: 0.58rem !important;
+    font-size: 0.54rem !important;
+  }
+
+  .product-block-section .price-section {
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+    margin-bottom: 0 !important;
+    overflow: hidden !important;
   }
 
   .product-block-section .product-block-card .card-body {
-    padding: 6px !important;
+    padding: 4px 5px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+  }
+
+  .product-block-section .action-buttons {
+    margin-top: auto !important;
   }
 
   .product-block-section .opportunity-badge {
@@ -716,10 +774,6 @@
   .product-block-section .savings-badge,
   .product-block-section .savings-info {
     display: none !important;
-  }
-
-  .product-block-section .action-buttons {
-    margin-top: auto !important;
   }
 }
 

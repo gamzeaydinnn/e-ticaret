@@ -23,7 +23,8 @@ import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useAuth } from "../contexts/AuthContext";
-import getProductCategoryRules from "../config/productCategoryRules";
+import { resolveProductOrderRuleWithFallback } from "../utils/orderLimitUtils";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 import "./ProductDetailModal.css";
 
 // Varsayılan besin değerleri (ürüne özgü değilse gösterilir)
@@ -114,64 +115,10 @@ export default function ProductDetailModal({
 
     const loadRules = async () => {
       try {
-        const rules = await getProductCategoryRules();
+        const resolvedRule = await resolveProductOrderRuleWithFallback(product);
         if (!mounted) return;
-
-        const pname = (product.name || "").toLowerCase();
-        const pcat = (product.categoryName || "").toLowerCase();
-
-        // Kategori bazlı kural eşleştirme
-        let match = (rules || []).find((r) => {
-          const examples = (r.examples || []).map((e) =>
-            String(e).toLowerCase(),
-          );
-          return (
-            (r.category || "").toLowerCase().includes(pname) ||
-            examples.some((ex) => pname.includes(ex) || ex.includes(pname))
-          );
-        });
-
-        // Tartılı ürün kategorileri için kg kuralı
-        if (
-          !match &&
-          (pcat.includes("meyve") ||
-            pcat.includes("sebze") ||
-            pcat.includes("et") ||
-            pcat.includes("tavuk") ||
-            pcat.includes("balık") ||
-            pcat.includes("balik"))
-        ) {
-          match = (rules || []).find(
-            (r) => (r.unit || "").toLowerCase() === "kg",
-          );
-        }
-
-        // Adet limitli kategoriler
-        const unitLimitCats = [
-          "süt",
-          "süt ürünleri",
-          "süt urunleri",
-          "temel gıda",
-          "temel gida",
-          "temizlik",
-          "içecek",
-          "icecek",
-          "atıştırmalık",
-          "atistirmalik",
-        ];
-
-        if (!match && unitLimitCats.some((tok) => pcat.includes(tok))) {
-          match = {
-            category: "Kategori adedi sınırı",
-            unit: "adet",
-            min_quantity: 1,
-            max_quantity: 10,
-            step: 1,
-          };
-        }
-
-        setRule(match || null);
-        setQuantity(match?.min_quantity || 1);
+        setRule(resolvedRule);
+        setQuantity(resolvedRule?.min_quantity || 1);
       } catch (error) {
         console.error("Kural yükleme hatası:", error);
         setRule(null);
@@ -272,7 +219,7 @@ export default function ProductDetailModal({
         );
         return;
       }
-    } else if (!product.isWeighted && q > 5) {
+    } else if (!isStrictVariableWeightProduct(product) && q > 5) {
       setValidationError("Bu üründen en fazla 5 adet ekleyebilirsiniz.");
       return;
     }

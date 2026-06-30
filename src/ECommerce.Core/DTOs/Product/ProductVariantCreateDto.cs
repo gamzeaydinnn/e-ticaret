@@ -105,6 +105,12 @@ namespace ECommerce.Core.DTOs.Product
         /// </summary>
         public bool IsActive { get; set; } = true;
 
+        /// <summary>
+        /// Varyant bazlı maksimum sipariş adedi. 0 = ürün/global varsayılan.
+        /// </summary>
+        [Range(0, int.MaxValue, ErrorMessage = "Maksimum sipariş adedi negatif olamaz")]
+        public int MaxOrderQuantity { get; set; } = 0;
+
         #endregion
 
         #region Option Değerleri

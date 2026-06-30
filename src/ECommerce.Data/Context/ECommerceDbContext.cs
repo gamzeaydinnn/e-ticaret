@@ -195,6 +195,11 @@ namespace ECommerce.Data.Context
         /// </summary>
         public virtual DbSet<ProductAdminOverrideSetting> ProductAdminOverrideSettings { get; set; }
 
+        /// <summary>
+        /// Sipariş miktar limiti varsayılanlarını tutar (singleton).
+        /// </summary>
+        public virtual DbSet<ProductOrderLimitSetting> ProductOrderLimitSettings { get; set; }
+
         // ═══════════════════════════════════════════════════════════════════════════════
         // ANA SAYFA ÜRÜN BLOK SİSTEMİ
         // Admin panelinden yönetilebilir ürün blokları (İndirimli, Süt Ürünleri vb.)
@@ -1465,6 +1470,7 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.PricePerUnit).HasPrecision(18, 2);
                 entity.Property(e => e.MinOrderWeight).HasPrecision(18, 4);
                 entity.Property(e => e.MaxOrderWeight).HasPrecision(18, 4);
+                entity.Property(e => e.QuantityStep).HasPrecision(18, 4);
                 entity.Property(e => e.WeightTolerancePercent).HasPrecision(5, 2);
             });
 
@@ -1592,6 +1598,19 @@ namespace ECommerce.Data.Context
                     .HasMaxLength(500);
 
                 // Audit alanları
+                entity.Property(e => e.UpdatedByUserName)
+                    .HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<ProductOrderLimitSetting>(entity =>
+            {
+                entity.ToTable("ProductOrderLimitSettings");
+
+                entity.Property(e => e.DefaultQuantityStepPiece).HasPrecision(18, 4);
+                entity.Property(e => e.DefaultMaxWeightKg).HasPrecision(18, 4);
+                entity.Property(e => e.DefaultMinWeightKg).HasPrecision(18, 4);
+                entity.Property(e => e.DefaultWeightStepKg).HasPrecision(18, 4);
+
                 entity.Property(e => e.UpdatedByUserName)
                     .HasMaxLength(200);
             });

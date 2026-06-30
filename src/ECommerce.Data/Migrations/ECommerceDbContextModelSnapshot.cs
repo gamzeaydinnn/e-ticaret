@@ -490,6 +490,10 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("GuestFirstOrderShippingMessage")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
@@ -524,6 +528,7 @@ namespace ECommerce.Data.Migrations
                         {
                             Id = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            GuestFirstOrderShippingMessage = "Hesap oluştur, ilk alışverişinde kargo bedava!",
                             IsActive = true,
                             IsMinimumCartAmountActive = false,
                             MinimumCartAmount = 0m,
@@ -2531,9 +2536,15 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsWeightBased")
                         .HasColumnType("bit");
 
+                    b.Property<int>("MaxOrderQuantity")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("MaxOrderWeight")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("MinOrderQuantity")
+                        .HasColumnType("int");
 
                     b.Property<decimal>("MinOrderWeight")
                         .HasPrecision(18, 4)
@@ -2551,6 +2562,10 @@ namespace ECommerce.Data.Migrations
                     b.Property<decimal>("PricePerUnit")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("QuantityStep")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<string>("SKU")
                         .IsRequired()
@@ -2752,6 +2767,57 @@ namespace ECommerce.Data.Migrations
                     b.ToTable("ProductOptionValues", (string)null);
                 });
 
+            modelBuilder.Entity("ECommerce.Entities.Concrete.ProductOrderLimitSetting", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DefaultMaxQuantityPiece")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DefaultMaxWeightKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<int>("DefaultMinQuantityPiece")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DefaultMinWeightKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DefaultQuantityStepPiece")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DefaultWeightStepKg")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("UpdatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UpdatedByUserName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProductOrderLimitSettings", (string)null);
+                });
+
             modelBuilder.Entity("ECommerce.Entities.Concrete.ProductReview", b =>
                 {
                     b.Property<int>("Id")
@@ -2824,6 +2890,9 @@ namespace ECommerce.Data.Migrations
 
                     b.Property<DateTime?>("LastSyncedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("MaxOrderQuantity")
+                        .HasColumnType("int");
 
                     b.Property<string>("ParentSku")
                         .HasMaxLength(50)

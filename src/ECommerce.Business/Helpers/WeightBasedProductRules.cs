@@ -104,14 +104,17 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            if (FixedWeightPattern.IsMatch(normalizedName))
+            if (HasPackagedNameSignal(productName))
             {
                 return false;
             }
 
-            if (Regex.IsMatch(normalizedName, @"\bADET\b", RegexOptions.IgnoreCase))
+            var normalizedCategory = (categoryNameOrCode ?? string.Empty).Trim().ToUpperInvariant();
+            if (!string.IsNullOrWhiteSpace(normalizedCategory)
+                && VariableWeightCategoryHints.Any(h => normalizedCategory.Contains(h)))
             {
-                return false;
+                // Meyve/sebze/kasap gibi kategorilerde isimde "KG" olmasa da tartılı satılır.
+                return true;
             }
 
             if (!StandaloneKgPattern.IsMatch(normalizedName))
@@ -129,7 +132,6 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            var normalizedCategory = (categoryNameOrCode ?? string.Empty).Trim().ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(normalizedCategory))
             {
                 return false;

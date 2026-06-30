@@ -6,7 +6,7 @@
 // ==========================================================================
 
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 
 export default function CourierLogin() {
@@ -21,7 +21,10 @@ export default function CourierLogin() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated, loading: authLoading } = useCourierAuth();
+  const redirectTarget =
+    location.state?.from?.pathname || "/courier/dashboard";
 
   // URL'den session_expired parametresini oku ve hata mesajı göster
   useEffect(() => {
@@ -31,12 +34,12 @@ export default function CourierLogin() {
     }
   }, []);
 
-  // Zaten giriş yapmışsa dashboard'a yönlendir
+  // Zaten giriş yapmışsa hedef sayfaya yönlendir
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate("/courier/dashboard");
+      navigate(redirectTarget, { replace: true });
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, authLoading, navigate, redirectTarget]);
 
   // =========================================================================
   // FORM SUBMIT
@@ -74,8 +77,7 @@ export default function CourierLogin() {
       );
 
       if (result.success) {
-        // Başarılı giriş - Dashboard'a yönlendir
-        navigate("/courier/dashboard");
+        navigate(redirectTarget, { replace: true });
       } else {
         // Hata mesajını Türkçeleştir
         setError(translateError(result.error));

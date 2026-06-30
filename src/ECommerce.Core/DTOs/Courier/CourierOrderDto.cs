@@ -95,6 +95,45 @@ namespace ECommerce.Core.DTOs.Courier
         /// Müşteri notu var mı?
         /// </summary>
         public bool HasCustomerNote { get; set; }
+
+        #region Ağırlık ve Ödeme Bilgileri
+
+        /// <summary>
+        /// Tartı sonrası kesin tutar (mağaza/kurye tartısı dahil)
+        /// </summary>
+        public decimal FinalAmount { get; set; }
+
+        /// <summary>
+        /// Tartı farkından kaynaklanan tutar farkı (pozitif=ek tahsilat, negatif=iade)
+        /// </summary>
+        public decimal TotalPriceDifference { get; set; }
+
+        /// <summary>
+        /// Provizyon tutarı (kart ödemeleri için)
+        /// </summary>
+        public decimal AuthorizedAmount { get; set; }
+
+        /// <summary>
+        /// Ağırlık ayarlama durumu
+        /// </summary>
+        public string? WeightAdjustmentStatus { get; set; }
+
+        /// <summary>
+        /// Tartı farkı var mı?
+        /// </summary>
+        public bool HasWeightDifference { get; set; }
+
+        /// <summary>
+        /// Ağırlık bazlı ürün içeriyor mu?
+        /// </summary>
+        public bool HasWeightBasedItems { get; set; }
+
+        /// <summary>
+        /// Tüm ürünler tartıldı mı?
+        /// </summary>
+        public bool AllItemsWeighed { get; set; }
+
+        #endregion
     }
 
     /// <summary>
@@ -199,6 +238,11 @@ namespace ECommerce.Core.DTOs.Courier
         /// </summary>
         public decimal? CashOnDeliveryAmount { get; set; }
 
+        /// <summary>
+        /// Kargo / teslimat ücreti
+        /// </summary>
+        public decimal ShippingCost { get; set; }
+
         #endregion
 
         #region Sipariş Bilgileri
@@ -249,6 +293,45 @@ namespace ECommerce.Core.DTOs.Courier
 
         #endregion
 
+        #region Ağırlık ve Ödeme Bilgileri
+
+        /// <summary>
+        /// Tartı sonrası kesin tutar
+        /// </summary>
+        public decimal FinalAmount { get; set; }
+
+        /// <summary>
+        /// Tartı farkından kaynaklanan tutar farkı (pozitif=ek tahsilat, negatif=iade)
+        /// </summary>
+        public decimal TotalPriceDifference { get; set; }
+
+        /// <summary>
+        /// Provizyon tutarı (kart ödemeleri için)
+        /// </summary>
+        public decimal AuthorizedAmount { get; set; }
+
+        /// <summary>
+        /// Ağırlık ayarlama durumu
+        /// </summary>
+        public string? WeightAdjustmentStatus { get; set; }
+
+        /// <summary>
+        /// Tartı farkı var mı?
+        /// </summary>
+        public bool HasWeightDifference { get; set; }
+
+        /// <summary>
+        /// Ağırlık bazlı ürün içeriyor mu?
+        /// </summary>
+        public bool HasWeightBasedItems { get; set; }
+
+        /// <summary>
+        /// Tüm ürünler tartıldı mı? (admin/mağaza tarafından)
+        /// </summary>
+        public bool AllItemsWeighed { get; set; }
+
+        #endregion
+
         /// <summary>
         /// Sipariş kalemleri
         /// </summary>
@@ -296,9 +379,19 @@ namespace ECommerce.Core.DTOs.Courier
         public string Unit { get; set; } = "adet";
 
         /// <summary>
+        /// Ağırlık bazlı ürün mü?
+        /// </summary>
+        public bool IsWeightBased { get; set; }
+
+        /// <summary>
         /// Tartı farkı var mı? (Ağırlık bazlı ürünler için)
         /// </summary>
         public bool HasWeightDifference { get; set; }
+
+        /// <summary>
+        /// Ağırlık farkı (gram) — pozitif fazlalık, negatif eksik
+        /// </summary>
+        public decimal? WeightDifferenceGrams { get; set; }
 
         /// <summary>
         /// Beklenen ağırlık (gram)

@@ -93,6 +93,11 @@ namespace ECommerce.Core.DTOs.Product
         /// </summary>
         public bool InStock => Stock > 0;
 
+        /// <summary>
+        /// Varyant bazlı maksimum sipariş adedi. 0 = ürün/global varsayılan.
+        /// </summary>
+        public int MaxOrderQuantity { get; set; }
+
         #endregion
 
         #region Fiziksel Özellikler

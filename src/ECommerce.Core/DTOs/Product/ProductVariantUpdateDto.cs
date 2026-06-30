@@ -87,6 +87,12 @@ namespace ECommerce.Core.DTOs.Product
         /// </summary>
         public bool? IsActive { get; set; }
 
+        /// <summary>
+        /// Varyant bazlı maksimum sipariş adedi. Null = değişmez, 0 = ürün/global varsayılan.
+        /// </summary>
+        [Range(0, int.MaxValue, ErrorMessage = "Maksimum sipariş adedi negatif olamaz")]
+        public int? MaxOrderQuantity { get; set; }
+
         #endregion
 
         #region Option Değerleri
@@ -119,6 +125,7 @@ namespace ECommerce.Core.DTOs.Product
                    SupplierCode != null ||
                    ParentSku != null ||
                    IsActive.HasValue ||
+                   MaxOrderQuantity.HasValue ||
                    OptionValueIds != null;
         }
 

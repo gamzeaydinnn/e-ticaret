@@ -15,6 +15,10 @@ import categoryService from "../services/categoryService";
 import { ProductService } from "../services/productService";
 import ProductCard from "./components/ProductCard";
 import CategoryTile from "./components/CategoryTile";
+import { useCart } from "../contexts/CartContext";
+import { useFavorites } from "../contexts/FavoriteContext";
+import { useAuth } from "../contexts/AuthContext";
+import CartActionToast, { useCartActionToast } from "../components/CartActionToast";
 
 export default function CategoryDetail() {
   const { slug } = useParams();
@@ -26,13 +30,15 @@ export default function CategoryDetail() {
   const [breadcrumb, setBreadcrumb] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("favorites")) || [];
-    } catch {
-      return [];
-    }
-  });
+  const { addToCart } = useCart();
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { user } = useAuth();
+  const {
+    notification: cartNotification,
+    showCartSuccess,
+    showCartError,
+    dismiss: dismissCartNotification,
+  } = useCartActionToast();
 
   useEffect(() => {
     loadCategoryData();
@@ -94,19 +100,20 @@ export default function CategoryDetail() {
     }
   };
 
-  const handleToggleFavorite = (productId) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId];
-      localStorage.setItem("favorites", JSON.stringify(updated));
-      return updated;
-    });
+  const handleToggleFavorite = async (productId) => {
+    const id = Number(productId);
+    if (!id || Number.isNaN(id)) return;
+    await toggleFavorite(id);
   };
 
-  const handleAddToCart = (productId) => {
-    const product = products.find((p) => p.id === productId);
-    if (product) alert(`${product.name} sepete eklendi!`);
+  const handleAddToCart = async (product) => {
+    if (!product) return;
+    const result = await addToCart(product, 1);
+    if (result?.success === false) {
+      showCartError(result.error || "Sepete eklenemedi.");
+      return;
+    }
+    showCartSuccess(product, user ? "registered" : "guest");
   };
 
   if (loading) {
@@ -370,25 +377,24 @@ export default function CategoryDetail() {
             </Link>
           </div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: 16,
-            }}
-          >
+          <div className="category-products-grid">
             {products.map((p) => (
               <ProductCard
                 key={p.id}
                 product={p}
                 onToggleFavorite={handleToggleFavorite}
-                isFavorite={favorites.includes(p.id)}
+                isFavorite={isFavorite(p.id)}
                 onAddToCart={handleAddToCart}
               />
             ))}
           </div>
         )}
       </section>
+
+      <CartActionToast
+        notification={cartNotification}
+        onDismiss={dismissCartNotification}
+      />
     </div>
   );
 }

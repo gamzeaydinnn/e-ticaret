@@ -1,6 +1,7 @@
 using ECommerce.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Business.Services.Managers;
+using ECommerce.Business.Helpers;
 using ECommerce.Business.Services.Interfaces;
 using WebPush;
 using ECommerce.Core.Interfaces;
@@ -519,6 +520,8 @@ builder.Services.AddScoped<IExtendedPaymentService, PaymentManager>();
 builder.Services.AddScoped<IShippingService, ShippingManager>();
 builder.Services.AddScoped<ICartSettingsService, CartSettingsManager>();
 builder.Services.AddScoped<IProductAdminOverrideSettingsService, ProductAdminOverrideSettingsManager>();
+builder.Services.AddScoped<IProductOrderLimitSettingsService, ProductOrderLimitSettingsManager>();
+builder.Services.AddSingleton<IOrderLimitResolver, OrderLimitResolver>();
 builder.Services.AddScoped<ProductManager>();
 builder.Services.AddScoped<OrderManager>();
 builder.Services.AddScoped<UserManager>();

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
-import { CourierService } from "../../services/courierService";
+import { CourierService, formatPhoneDisplay, formatPhoneReadable, getPhoneTelUri } from "../../services/courierService";
+import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 import "./CourierOrders.css";
 
 export default function CourierOrders() {
@@ -202,6 +204,50 @@ export default function CourierOrders() {
     }
   };
 
+  // Nakit tahsilat onayı - DeliveryPaymentPending durumunda kullanılır
+  const handleCashSettlement = async (order) => {
+    const priceDiff = order.totalPriceDifference || 0;
+    
+    if (!window.confirm(
+      `💰 NAKİT TAHSİLAT ONAYI\n\n` +
+      `Sipariş: #${order.id}\n` +
+      `Müşteri: ${order.customerName}\n` +
+      `Tahsil edilecek ek tutar: ${priceDiff.toFixed(2)} ₺\n\n` +
+      `Bu tutarı müşteriden nakit olarak tahsil ettiniz mi?`
+    )) {
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const result = await WeightAdjustmentService.calculateCashSettlement(order.id, {
+        collectedAmount: priceDiff,
+        notes: "Kurye tarafından nakit tahsil edildi",
+      });
+
+      if (result.success) {
+        alert(
+          `✅ Tahsilat Kaydedildi!\n\n` +
+          `Sipariş: #${order.id}\n` +
+          `Tahsil edilen tutar: ${priceDiff.toFixed(2)} ₺\n\n` +
+          `Sipariş tamamlandı.`
+        );
+        await loadOrders();
+      } else {
+        alert(`⚠️ Hata: ${result.message || "Tahsilat kaydedilemedi"}`);
+      }
+    } catch (error) {
+      console.error("Nakit tahsilat hatası:", error);
+      alert(
+        `❌ Tahsilat Hatası!\n\n${
+          error.response?.data?.message || error.message || "Bilinmeyen hata"
+        }`
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const updateOrderStatus = async (orderId, newStatus, notes = "") => {
     // Teslim durumu için özel kontrol
     if (newStatus === "delivered") {
@@ -246,7 +292,8 @@ export default function CourierOrders() {
       delivered: "Teslim Edildi",
       delivery_failed: "Başarısız",
       deliveryfailed: "Başarısız",
-      deliverypaymentpending: "Ödeme Bekliyor",
+      deliverypaymentpending: "Ek Ödeme Bekliyor",
+      delivery_payment_pending: "Ek Ödeme Bekliyor",
     };
     return statusMap[normalized] || status;
   };
@@ -259,8 +306,19 @@ export default function CourierOrders() {
         ...order,
         ...detail,
         address: detail?.deliveryAddress || order.address,
+        orderTime: detail?.orderDate || order.orderTime,
+        orderTotal: detail?.orderTotal ?? order.totalAmount,
         totalAmount: detail?.orderTotal ?? order.totalAmount,
-        items: detail?.items?.map((item) => item.name) || order.items,
+        finalAmount:
+          detail?.finalAmount ??
+          detail?.orderTotal ??
+          order.finalAmount ??
+          order.totalAmount,
+        totalPriceDifference:
+          detail?.totalPriceDifference ?? order.totalPriceDifference ?? 0,
+        shippingCost: detail?.shippingCost ?? order.shippingCost ?? 0,
+        paymentMethod: detail?.paymentMethod || order.paymentMethod,
+        items: detail?.items || [],
       });
     } catch (error) {
       console.error("Sipariş detayları yüklenemedi:", error);
@@ -270,6 +328,33 @@ export default function CourierOrders() {
     }
   };
 
+  const formatItemWeightDiff = (item) => {
+    const grams = Number(item?.weightDifferenceGrams);
+    if (!Number.isFinite(grams) || grams === 0) return null;
+    return {
+      label: grams > 0 ? "Fazlalık" : "Eksik",
+      gramsText: `${grams > 0 ? "+" : ""}${grams}g`,
+      amount: Number(item?.weightDifferenceAmount) || 0,
+      tone: grams > 0 ? "warning" : "info",
+    };
+  };
+
+  const getOrderBreakdown = (order) => {
+    const items = order?.items || [];
+    const itemsSubtotal = items.reduce(
+      (sum, item) => sum + Number(item.totalPrice || 0),
+      0,
+    );
+    return {
+      itemsSubtotal,
+      shippingCost: Number(order?.shippingCost || 0),
+      weightDiff: Number(order?.totalPriceDifference || 0),
+      orderTotal: Number(order?.orderTotal || order?.totalAmount || 0),
+      finalAmount: Number(
+        order?.finalAmount || order?.orderTotal || order?.totalAmount || 0,
+      ),
+    };
+  };
   const getStatusColor = (status, fallbackColor) => {
     if (fallbackColor) return fallbackColor;
     const normalized = (status || "").toLowerCase();
@@ -285,9 +370,16 @@ export default function CourierOrders() {
       delivered: "success", // 🟢 Yeşil - Teslim Edildi
       delivery_failed: "danger",
       deliveryfailed: "danger",
-      deliverypaymentpending: "warning",
+      deliverypaymentpending: "danger", // 🔴 Kırmızı - Ek ödeme gerekli
+      delivery_payment_pending: "danger",
     };
     return colorMap[normalized] || "secondary";
+  };
+
+  // DeliveryPaymentPending durumu kontrolü
+  const isDeliveryPaymentPending = (status) => {
+    const normalized = (status || "").toLowerCase();
+    return normalized === "deliverypaymentpending" || normalized === "delivery_payment_pending";
   };
 
   // =========================================================================
@@ -370,422 +462,286 @@ export default function CourierOrders() {
         </div>
       </nav>
 
-      <div className="container-fluid p-4">
-        <div className="row">
-          <div className="col-12">
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white border-0 py-3">
-                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                  <h5 className="fw-bold mb-0">
-                    <i className="fas fa-list-alt me-2 text-primary"></i>
-                    Tüm Siparişler ({orders.length})
-                  </h5>
-                  {/* Tarih ve durum filtreleri (sipariş tarihine göre arama) */}
-                  <div className="d-flex flex-wrap align-items-center gap-2">
-                    <select
-                      className="form-select form-select-sm"
-                      style={{ width: "auto", fontSize: "0.8rem" }}
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      aria-label="Durum filtresi"
-                    >
-                      <option value="">Aktif Siparişler</option>
-                      <option value="Assigned">Atandı</option>
-                      <option value="PickedUp">Teslim Alındı</option>
-                      <option value="OutForDelivery">Yolda</option>
-                      <option value="Delivered">Teslim Edildi</option>
-                      <option value="DeliveryFailed">Teslim Edilemedi</option>
-                    </select>
-                    <div className="d-flex align-items-center gap-1">
-                      <i
-                        className="fas fa-calendar-alt text-muted"
-                        style={{ fontSize: "0.8rem" }}
-                        title="Sipariş tarihine göre filtrele"
-                      ></i>
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        style={{ width: "auto", fontSize: "0.8rem" }}
-                        value={dateFrom}
-                        max={dateTo || undefined}
-                        onChange={(e) => setDateFrom(e.target.value)}
-                        aria-label="Başlangıç tarihi"
-                      />
-                      <span className="text-muted">-</span>
-                      <input
-                        type="date"
-                        className="form-control form-control-sm"
-                        style={{ width: "auto", fontSize: "0.8rem" }}
-                        value={dateTo}
-                        min={dateFrom || undefined}
-                        onChange={(e) => setDateTo(e.target.value)}
-                        aria-label="Bitiş tarihi"
-                      />
-                    </div>
-                    {(statusFilter || dateFrom || dateTo) && (
-                      <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() => {
-                          setStatusFilter("");
-                          setDateFrom("");
-                          setDateTo("");
-                        }}
-                        title="Filtreleri temizle"
-                      >
-                        <i className="fas fa-times me-1"></i>Temizle
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="card-body p-0">
-                {orders.length === 0 ? (
-                  <div className="text-center py-5">
-                    <i className="fas fa-inbox fs-1 text-muted mb-3"></i>
-                    <p className="text-muted">
-                      Henüz atanmış siparişiniz bulunmuyor.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="table-responsive">
-                    <table className="table table-hover mb-0">
-                      <thead className="bg-light">
-                        <tr>
-                          <th>Sipariş</th>
-                          <th>Müşteri</th>
-                          <th>Adres</th>
-                          <th>Tutar</th>
-                          <th>Teslimat</th>
-                          <th>Durum</th>
-                          <th>İşlemler</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orders.map((order) => {
-                          const weightReport = weightReports[order.id];
-                          const hasPendingWeight =
-                            weightReport?.status === "Pending";
-                          const hasApprovedWeight =
-                            weightReport?.status === "Approved";
-
-                          return (
-                            <tr
-                              key={order.id}
-                              className={
-                                hasPendingWeight
-                                  ? "table-warning"
-                                  : hasApprovedWeight
-                                    ? "table-info"
-                                    : ""
-                              }
-                            >
-                              <td>
-                                <div>
-                                  <span className="fw-bold">#{order.id}</span>
-                                  {hasPendingWeight && (
-                                    <div className="mt-1">
-                                      <span
-                                        className="badge bg-warning text-dark fw-bold px-3 py-2"
-                                        style={{
-                                          fontSize: "0.85rem",
-                                          boxShadow:
-                                            "0 2px 8px rgba(255, 193, 7, 0.4)",
-                                        }}
-                                        title="Ağırlık fazlalığı admin onayı bekliyor"
-                                      >
-                                        <i className="fas fa-clock me-1"></i>
-                                        ADMİN ONAYI BEKLİYOR
-                                      </span>
-                                    </div>
-                                  )}
-                                  {hasApprovedWeight && (
-                                    <div className="mt-1">
-                                      <span
-                                        className="badge bg-success fw-bold px-3 py-2"
-                                        style={{
-                                          fontSize: "0.85rem",
-                                          boxShadow:
-                                            "0 2px 8px rgba(40, 167, 69, 0.4)",
-                                        }}
-                                        title="Ağırlık fazlalığı onaylandı"
-                                      >
-                                        <i className="fas fa-check-circle me-1"></i>
-                                        ONAYLANDI +{weightReport.overageGrams}g
-                                      </span>
-                                    </div>
-                                  )}
-                                  <br />
-                                  <small className="text-muted">
-                                    {order.orderTime
-                                      ? new Date(
-                                          order.orderTime,
-                                        ).toLocaleString("tr-TR")
-                                      : "-"}
-                                  </small>
-                                </div>
-                              </td>
-                              <td>
-                                <div>
-                                  <span className="fw-semibold">
-                                    {order.customerName}
-                                  </span>
-                                  <br />
-                                  <small className="text-muted">
-                                    {order.customerPhone}
-                                  </small>
-                                </div>
-                              </td>
-                              <td>
-                                <span
-                                  className="text-muted"
-                                  title={order.address || "-"}
-                                >
-                                  {(order.address || "-").length > 40
-                                    ? (order.address || "-").substring(0, 40) +
-                                      "..."
-                                    : order.address || "-"}
-                                </span>
-                              </td>
-                              <td>
-                                <span className="fw-bold text-success">
-                                  {Number(order.totalAmount || 0).toFixed(2)} ₺
-                                </span>
-                                {hasApprovedWeight && (
-                                  <div>
-                                    <small className="text-success fw-bold">
-                                      +{weightReport.overageAmount} ₺ ek
-                                    </small>
-                                  </div>
-                                )}
-                                {hasPendingWeight && (
-                                  <div>
-                                    <small className="text-warning">
-                                      <i className="fas fa-clock"></i> Onay
-                                      bekliyor
-                                    </small>
-                                  </div>
-                                )}
-                              </td>
-                              <td>
-                                <span className="badge bg-light text-dark border px-2 py-1">
-                                  {order.shippingMethod === "car"
-                                    ? "Araç"
-                                    : order.shippingMethod === "motorcycle"
-                                      ? "Motosiklet"
-                                      : order.shippingMethod || "-"}
-                                </span>
-                              </td>
-                              <td>
-                                <span
-                                  className={`badge bg-${getStatusColor(
-                                    order.status,
-                                    order.statusColor,
-                                  )}`}
-                                >
-                                  {getStatusText(
-                                    order.status,
-                                    order.statusText,
-                                  )}
-                                </span>
-                              </td>
-                              <td>
-                                <div className="d-flex gap-2 flex-wrap">
-                                  <button
-                                    onClick={() => openOrderDetail(order)}
-                                    className="btn btn-outline-primary btn-sm"
-                                    title="Detayları Gör"
-                                    disabled={detailLoading}
-                                  >
-                                    {detailLoading ? (
-                                      <span className="spinner-border spinner-border-sm"></span>
-                                    ) : (
-                                      <i className="fas fa-eye"></i>
-                                    )}
-                                  </button>
-
-                                  {/* Durum Değiştirme Butonu - Yeni akış: Assigned → PickedUp → OutForDelivery → Delivered */}
-                                  {getNextStatus(order.status) && (
-                                    <button
-                                      onClick={() =>
-                                        updateOrderStatus(
-                                          order.id,
-                                          getNextStatus(order.status),
-                                        )
-                                      }
-                                      disabled={
-                                        updating ||
-                                        (getNextStatus(order.status) ===
-                                          "delivered" &&
-                                          hasPendingWeight)
-                                      }
-                                      className={`btn btn-sm ${
-                                        getNextStatus(order.status) ===
-                                        "delivered"
-                                          ? hasPendingWeight
-                                            ? "btn-warning"
-                                            : hasApprovedWeight
-                                              ? "btn-success"
-                                              : "btn-success"
-                                          : getNextStatusButtonClass(
-                                              order.status,
-                                            )
-                                      }`}
-                                      title={
-                                        getNextStatus(order.status) ===
-                                        "delivered"
-                                          ? hasPendingWeight
-                                            ? "⚠️ Admin onayı bekleniyor - teslimat yapılamaz"
-                                            : hasApprovedWeight
-                                              ? `✅ Teslim Et & +${weightReport.overageAmount}₺ Tahsil Et`
-                                              : "✅ Teslim Et"
-                                          : getNextStatusText(order.status)
-                                      }
-                                    >
-                                      {updating ? (
-                                        <span className="spinner-border spinner-border-sm"></span>
-                                      ) : (
-                                        <>
-                                          <i
-                                            className={`fas ${getNextStatusIcon(order.status)} me-1`}
-                                          ></i>
-                                          <span className="d-none d-md-inline">
-                                            {getNextStatusText(order.status)}
-                                          </span>
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+      <div className="container-fluid px-2 px-md-4 py-3">
+        {/* Filtreler */}
+        <div className="card border-0 shadow-sm mb-3">
+          <div className="card-body p-2 p-md-3">
+            <div className="d-flex flex-column gap-2">
+              <div className="d-flex justify-content-between align-items-center">
+                <h6 className="fw-bold mb-0">
+                  <i className="fas fa-list-alt me-2 text-primary"></i>
+                  Siparişler ({orders.length})
+                </h6>
+                {(statusFilter || dateFrom || dateTo) && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      setStatusFilter("");
+                      setDateFrom("");
+                      setDateTo("");
+                    }}
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
                 )}
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <select
+                  className="form-select form-select-sm"
+                  style={{ flex: "1", minWidth: "130px" }}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="">Aktif Siparişler</option>
+                  <option value="Assigned">Atandı</option>
+                  <option value="PickedUp">Teslim Alındı</option>
+                  <option value="OutForDelivery">Yolda</option>
+                  <option value="Delivered">Teslim Edildi</option>
+                  <option value="DeliveryFailed">Başarısız</option>
+                </select>
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  style={{ width: "130px" }}
+                  value={dateFrom}
+                  placeholder="gg.aa.yyyy"
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="form-control form-control-sm"
+                  style={{ width: "130px" }}
+                  value={dateTo}
+                  placeholder="gg.aa.yyyy"
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
               </div>
             </div>
           </div>
         </div>
+
+        {/* Sipariş Listesi - Kart Görünümü */}
+        {orders.length === 0 ? (
+          <div className="text-center py-5">
+            <i className="fas fa-inbox fs-1 text-muted mb-3 d-block"></i>
+            <p className="text-muted">Henüz atanmış siparişiniz bulunmuyor.</p>
+          </div>
+        ) : (
+          <div className="d-flex flex-column gap-2">
+            {orders.map((order) => {
+              const weightReport = weightReports[order.id];
+              const hasPendingWeight = weightReport?.status === "Pending";
+              const hasApprovedWeight = weightReport?.status === "Approved";
+              const isPaymentPending = isDeliveryPaymentPending(order.status);
+              const hasWeightDiff = order.hasWeightDifference || order.totalPriceDifference > 0;
+              const finalAmount = order.finalAmount || order.totalAmount;
+              const priceDiff = order.totalPriceDifference || 0;
+
+              return (
+                <div
+                  key={order.id}
+                  className={`card border-0 shadow-sm ${
+                    isPaymentPending
+                      ? "border-start border-danger border-4"
+                      : hasPendingWeight
+                        ? "border-start border-warning border-4"
+                        : hasApprovedWeight
+                          ? "border-start border-success border-4"
+                          : ""
+                  }`}
+                >
+                  <div className="card-body p-3">
+                    {/* Üst Satır: Sipariş No, Durum, Tutar */}
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <span className="fw-bold text-primary">#{order.id}</span>
+                        <span
+                          className={`badge bg-${getStatusColor(order.status, order.statusColor)} ms-2`}
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {getStatusText(order.status, order.statusText)}
+                        </span>
+                      </div>
+                      <div className="text-end">
+                        <div className="fw-bold" style={{ color: "#ff6b35", fontSize: "1.1rem" }}>
+                          {Number(finalAmount || 0).toFixed(2)} ₺
+                        </div>
+                        {priceDiff !== 0 && (
+                          <small className={priceDiff > 0 ? "text-warning fw-bold" : "text-info"}>
+                            {priceDiff > 0 ? "+" : ""}{priceDiff.toFixed(2)} ₺
+                          </small>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Müşteri & Adres */}
+                    <div className="mb-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <i className="fas fa-user text-muted" style={{ width: "16px" }}></i>
+                        <span className="fw-semibold">{order.customerName}</span>
+                        {order.customerPhone && (
+                          <a href={getPhoneTelUri(order.customerPhone)} className="text-success ms-auto">
+                            <i className="fas fa-phone-alt"></i>
+                          </a>
+                        )}
+                      </div>
+                      <div className="d-flex align-items-start gap-2">
+                        <i className="fas fa-map-marker-alt text-muted mt-1" style={{ width: "16px" }}></i>
+                        <small className="text-muted" style={{ lineHeight: "1.3" }}>
+                          {(order.address || "-").length > 60
+                            ? (order.address || "-").substring(0, 60) + "..."
+                            : order.address || "-"}
+                        </small>
+                      </div>
+                    </div>
+
+                    {/* Uyarı Badges */}
+                    {(hasPendingWeight || hasApprovedWeight || isPaymentPending) && (
+                      <div className="mb-2">
+                        {hasPendingWeight && (
+                          <span className="badge bg-warning text-dark me-1">
+                            <i className="fas fa-clock me-1"></i>Onay Bekliyor
+                          </span>
+                        )}
+                        {hasApprovedWeight && (
+                          <span className="badge bg-success me-1">
+                            <i className="fas fa-check me-1"></i>+{weightReport.overageGrams}g
+                          </span>
+                        )}
+                        {isPaymentPending && (
+                          <span className="badge bg-danger">
+                            <i className="fas fa-exclamation-triangle me-1"></i>Ek Tahsilat
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Aksiyon Butonları */}
+                    <div className="d-flex flex-wrap gap-2 mt-2">
+                      {/* Detay */}
+                      <button
+                        onClick={() => openOrderDetail(order)}
+                        className="btn btn-sm btn-outline-primary"
+                        disabled={detailLoading}
+                        style={{ flex: "0 0 auto" }}
+                      >
+                        <i className="fas fa-info-circle me-1"></i>Detay
+                      </button>
+
+                      {/* Harita */}
+                      {order.address && (
+                        <button
+                          onClick={() => {
+                            window.open(
+                              `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.address)}`,
+                              "_blank"
+                            );
+                          }}
+                          className="btn btn-sm btn-outline-secondary"
+                          style={{ flex: "0 0 auto" }}
+                        >
+                          <i className="fas fa-map-marker-alt me-1"></i>Harita
+                        </button>
+                      )}
+
+                      {/* Ana Aksiyon Butonu */}
+                      {isPaymentPending && priceDiff > 0 ? (
+                        <button
+                          onClick={() => handleCashSettlement(order)}
+                          disabled={updating}
+                          className="btn btn-sm btn-danger flex-grow-1"
+                        >
+                          <i className="fas fa-hand-holding-usd me-1"></i>
+                          {priceDiff.toFixed(2)} ₺ AL
+                        </button>
+                      ) : (order.status?.toLowerCase() === "assigned" || order.status?.toLowerCase() === "ready") ? (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, "picked_up")}
+                          disabled={updating}
+                          className="btn btn-sm btn-primary flex-grow-1"
+                        >
+                          <i className="fas fa-box-open me-1"></i>TESLİM AL
+                        </button>
+                      ) : (order.status?.toLowerCase() === "picked_up" || order.status?.toLowerCase() === "pickedup") ? (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, "out_for_delivery")}
+                          disabled={updating}
+                          className="btn btn-sm flex-grow-1"
+                          style={{ background: "#ff6b35", color: "white" }}
+                        >
+                          <i className="fas fa-motorcycle me-1"></i>YOLA ÇIK
+                        </button>
+                      ) : (order.status?.toLowerCase() === "out_for_delivery" || 
+                           order.status?.toLowerCase() === "outfordelivery" ||
+                           order.status?.toLowerCase() === "in_transit") && !isPaymentPending ? (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, "delivered")}
+                          disabled={updating || hasPendingWeight}
+                          className={`btn btn-sm flex-grow-1 ${hasPendingWeight || hasWeightDiff ? "btn-warning" : "btn-success"}`}
+                        >
+                          <i className={`fas ${hasPendingWeight ? "fa-clock" : "fa-check-circle"} me-1`}></i>
+                          {hasPendingWeight ? "ONAY BEKLİYOR" : "TESLİM ET"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Sipariş Detay Modal */}
-      {selectedOrder && (
+      {/* Sipariş Detay Modal - body'ye portal (overflow kesmesini önler) */}
+      {selectedOrder &&
+        createPortal(
         <div
-          className="modal fade show d-block"
+          className="modal fade show d-block courier-order-modal-root"
           tabIndex="-1"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedOrder(null);
+          }}
         >
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
+          <div className="modal-dialog courier-order-modal">
+            <div className="modal-content courier-order-modal-content">
+              {/* Header */}
+              <div
+                className="modal-header py-2"
+                style={{ background: "linear-gradient(135deg, #ff6b35, #ff8c00)" }}
+              >
+                <h6 className="modal-title text-white mb-0">
                   <i className="fas fa-receipt me-2"></i>
-                  Sipariş #{selectedOrder.id} Detayı
-                </h5>
+                  Sipariş #{selectedOrder.id}
+                </h6>
                 <button
                   onClick={() => setSelectedOrder(null)}
-                  className="btn-close"
+                  className="btn-close btn-close-white"
                 ></button>
               </div>
-              <div className="modal-body">
-                {/* Ağırlık Onay Durumu - Belirgin Uyarı */}
+
+              {/* Body */}
+              <div className="modal-body p-3 courier-order-modal-body">
+                {/* Uyarı Badges */}
                 {(() => {
                   const report = weightReports[selectedOrder.id];
-                  if (report && report.status === "Pending") {
+                  if (report?.status === "Pending") {
                     return (
-                      <div
-                        className="alert alert-warning border-warning border-3 mb-4"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%)",
-                          boxShadow: "0 4px 12px rgba(255, 193, 7, 0.3)",
-                        }}
-                      >
-                        <div className="d-flex align-items-center">
-                          <div className="flex-shrink-0">
-                            <i
-                              className="fas fa-exclamation-triangle fa-3x text-warning"
-                              style={{ animation: "pulse 2s infinite" }}
-                            ></i>
-                          </div>
-                          <div className="flex-grow-1 ms-3">
-                            <h5 className="alert-heading mb-2">
-                              <i className="fas fa-clock me-2"></i>
-                              ADMİN ONAYI BEKLENİYOR
-                            </h5>
-                            <p className="mb-2">
-                              <strong>
-                                Bu siparişte ağırlık fazlalığı tespit edildi!
-                              </strong>
-                            </p>
-                            <div className="d-flex gap-3 mb-0">
-                              <div>
-                                <small className="text-muted">Fazlalık:</small>
-                                <strong className="ms-1 text-warning">
-                                  +{report.overageGrams}g
-                                </strong>
-                              </div>
-                              <div>
-                                <small className="text-muted">Ek Ücret:</small>
-                                <strong className="ms-1 text-warning">
-                                  +{report.overageAmount} ₺
-                                </strong>
-                              </div>
-                            </div>
-                            <hr className="my-2" />
-                            <small className="text-muted">
-                              <i className="fas fa-info-circle me-1"></i>
-                              Admin onayından sonra teslimat yapabilir ve ek
-                              ücreti tahsil edebilirsiniz.
-                            </small>
-                          </div>
+                      <div className="alert alert-warning py-2 mb-3">
+                        <i className="fas fa-clock me-2"></i>
+                        <strong>Admin Onayı Bekleniyor</strong>
+                        <div className="small mt-1">
+                          Fazlalık: +{report.overageGrams}g | Ek: +{report.overageAmount} ₺
                         </div>
                       </div>
                     );
-                  } else if (report && report.status === "Approved") {
+                  } else if (report?.status === "Approved") {
                     return (
-                      <div
-                        className="alert alert-success border-success border-3 mb-4"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #d1f2eb 0%, #a8e6cf 100%)",
-                          boxShadow: "0 4px 12px rgba(40, 167, 69, 0.3)",
-                        }}
-                      >
-                        <div className="d-flex align-items-center">
-                          <div className="flex-shrink-0">
-                            <i className="fas fa-check-circle fa-3x text-success"></i>
-                          </div>
-                          <div className="flex-grow-1 ms-3">
-                            <h5 className="alert-heading mb-2">
-                              <i className="fas fa-thumbs-up me-2"></i>
-                              ADMİN ONAYI VERİLDİ
-                            </h5>
-                            <p className="mb-2">
-                              Ağırlık fazlalığı onaylandı. Teslimat yapıp ek
-                              ücreti tahsil edebilirsiniz.
-                            </p>
-                            <div className="d-flex gap-3 mb-0">
-                              <div>
-                                <small className="text-muted">
-                                  Onaylanan Fazlalık:
-                                </small>
-                                <strong className="ms-1 text-success">
-                                  +{report.overageGrams}g
-                                </strong>
-                              </div>
-                              <div>
-                                <small className="text-muted">
-                                  Tahsil Edilecek:
-                                </small>
-                                <strong className="ms-1 text-success">
-                                  +{report.overageAmount} ₺
-                                </strong>
-                              </div>
-                            </div>
-                          </div>
+                      <div className="alert alert-success py-2 mb-3">
+                        <i className="fas fa-check-circle me-2"></i>
+                        <strong>Onaylandı</strong>
+                        <div className="small mt-1">
+                          Fazlalık: +{report.overageGrams}g | Tahsil: +{report.overageAmount} ₺
                         </div>
                       </div>
                     );
@@ -793,156 +749,215 @@ export default function CourierOrders() {
                   return null;
                 })()}
 
-                <div className="row">
-                  <div className="col-md-6">
-                    <h6 className="fw-bold mb-3">
+                {/* Müşteri Bilgileri */}
+                <div className="card border-0 shadow-sm mb-3 courier-customer-card">
+                  <div className="card-body p-3">
+                    <h6 className="fw-bold mb-2">
                       <i className="fas fa-user me-2 text-primary"></i>
                       Müşteri Bilgileri
                     </h6>
                     <div className="mb-2">
-                      <small className="text-muted">Ad Soyad</small>
-                      <p className="mb-0 fw-semibold">
-                        {selectedOrder.customerName}
-                      </p>
+                      <div className="fw-semibold mb-2">{selectedOrder.customerName}</div>
+                      {selectedOrder.customerPhone && (
+                        <div className="courier-phone-wrapper">
+                          <a
+                            href={getPhoneTelUri(selectedOrder.customerPhone)}
+                            className="courier-phone-block"
+                            title={`Ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
+                          >
+                            {formatPhoneReadable(selectedOrder.customerPhone)}
+                          </a>
+                        </div>
+                      )}
                     </div>
-                    <div className="mb-2">
-                      <small className="text-muted">Telefon</small>
-                      <p className="mb-0 fw-semibold">
-                        <a
-                          href={`tel:${selectedOrder.customerPhone}`}
-                          className="text-decoration-none"
-                        >
-                          <i className="fas fa-phone me-1"></i>
-                          {selectedOrder.customerPhone}
-                        </a>
-                      </p>
-                    </div>
-                    <div className="mb-2">
+                    <div>
                       <small className="text-muted">Adres</small>
-                      <p className="mb-0">{selectedOrder.address}</p>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <h6 className="fw-bold mb-3">
-                      <i className="fas fa-box me-2 text-primary"></i>
-                      Sipariş Bilgileri
-                    </h6>
-                    <div className="mb-2">
-                      <small className="text-muted">Sipariş Zamanı</small>
-                      <p className="mb-0 fw-semibold">
-                        {selectedOrder.orderTime
-                          ? new Date(selectedOrder.orderTime).toLocaleString(
-                              "tr-TR",
-                            )
-                          : "-"}
-                      </p>
-                    </div>
-                    <div className="mb-2">
-                      <small className="text-muted">Tutar</small>
-                      <p className="mb-0 fw-semibold text-success">
-                        {Number(selectedOrder.totalAmount || 0).toFixed(2)} ₺
-                      </p>
-                    </div>
-                    <div className="mb-2">
-                      <small className="text-muted">Teslimat Türü</small>
-                      <p className="mb-0">
-                        <span className="badge bg-light text-dark border">
-                          <i
-                            className={`fas fa-${
-                              selectedOrder.shippingMethod === "car"
-                                ? "car"
-                                : "motorcycle"
-                            } me-1`}
-                          ></i>
-                          {selectedOrder.shippingMethod === "car"
-                            ? "Araç"
-                            : "Motosiklet"}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="mb-2">
-                      <small className="text-muted">Durum</small>
-                      <p className="mb-0">
-                        <span
-                          className={`badge bg-${getStatusColor(
-                            selectedOrder.status,
-                            selectedOrder.statusColor,
-                          )}`}
-                        >
-                          {getStatusText(
-                            selectedOrder.status,
-                            selectedOrder.statusText,
-                          )}
-                        </span>
-                      </p>
+                      <p className="mb-0 small">{selectedOrder.address}</p>
                     </div>
                   </div>
                 </div>
 
-                <hr className="my-3" />
-
-                <h6 className="fw-bold mb-3">
-                  <i className="fas fa-shopping-basket me-2 text-primary"></i>
-                  Ürünler
-                </h6>
-                {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                  <ul className="list-group">
-                    {selectedOrder.items.map((item, index) => (
-                      <li
-                        key={index}
-                        className="list-group-item d-flex justify-content-between align-items-center"
-                      >
-                        <span>
-                          <i className="fas fa-check text-success me-2"></i>
-                          {item}
+                {/* Sipariş Bilgileri */}
+                {(() => {
+                  const breakdown = getOrderBreakdown(selectedOrder);
+                  return (
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    <h6 className="fw-bold mb-2">
+                      <i className="fas fa-box me-2 text-primary"></i>
+                      Sipariş Bilgileri
+                    </h6>
+                    <div className="courier-info-row mb-2">
+                      <span className="text-muted">Tarih</span>
+                      <span className="fw-semibold courier-info-value">
+                        {selectedOrder.orderTime
+                          ? new Date(selectedOrder.orderTime).toLocaleDateString("tr-TR")
+                          : "-"}
+                      </span>
+                    </div>
+                    {selectedOrder.paymentMethod && (
+                      <div className="courier-info-row mb-2">
+                        <span className="text-muted">Ödeme</span>
+                        <span className="fw-semibold courier-info-value">{selectedOrder.paymentMethod}</span>
+                      </div>
+                    )}
+                    {breakdown.itemsSubtotal > 0 && (
+                      <div className="courier-info-row mb-2">
+                        <span className="text-muted">Ürünler Toplamı</span>
+                        <span className="courier-info-value">{breakdown.itemsSubtotal.toFixed(2)} ₺</span>
+                      </div>
+                    )}
+                    {breakdown.shippingCost > 0 && (
+                      <div className="courier-info-row mb-2">
+                        <span className="text-muted">Kargo</span>
+                        <span className="courier-info-value">{breakdown.shippingCost.toFixed(2)} ₺</span>
+                      </div>
+                    )}
+                    {breakdown.weightDiff !== 0 && (
+                      <div className="courier-info-row mb-2">
+                        <span className="text-muted">Tartı Farkı</span>
+                        <span className={`courier-info-value ${breakdown.weightDiff > 0 ? "text-warning fw-bold" : "text-info fw-bold"}`}>
+                          {breakdown.weightDiff > 0 ? "+" : ""}
+                          {breakdown.weightDiff.toFixed(2)} ₺
                         </span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-muted small">
-                    Ürün listesi mevcut değil.
+                      </div>
+                    )}
+                    <div className="courier-info-row mb-2 pt-2 border-top">
+                      <span className="text-muted fw-semibold">Tahsil Edilecek</span>
+                      <span className="fw-bold courier-info-value" style={{ color: "#ff6b35", fontSize: "1.05rem" }}>
+                        {breakdown.finalAmount.toFixed(2)} ₺
+                      </span>
+                    </div>
+                    {breakdown.finalAmount !== breakdown.orderTotal && breakdown.orderTotal > 0 && (
+                      <div className="courier-info-row mb-2">
+                        <span className="text-muted small">Sipariş Tutarı</span>
+                        <span className="text-muted small courier-info-value">{breakdown.orderTotal.toFixed(2)} ₺</span>
+                      </div>
+                    )}
+                    <div className="courier-info-row">
+                      <span className="text-muted">Durum</span>
+                      <span className={`badge bg-${getStatusColor(selectedOrder.status, selectedOrder.statusColor)} courier-info-value`}>
+                        {getStatusText(selectedOrder.status, selectedOrder.statusText)}
+                      </span>
+                    </div>
                   </div>
-                )}
+                </div>
+                  );
+                })()}
 
-                {getNextStatus(selectedOrder.status) && (
-                  <div className="mt-4 text-center">
+                {/* Ürünler */}
+                <div className="card border-0 shadow-sm mb-3">
+                  <div className="card-body p-3">
+                    <h6 className="fw-bold mb-2">
+                      <i className="fas fa-shopping-basket me-2 text-primary"></i>
+                      Ürünler
+                    </h6>
+                    {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                      <div className="d-flex flex-column gap-2">
+                        {selectedOrder.items.map((item, index) => {
+                          const weightDiff = formatItemWeightDiff(item);
+                          return (
+                            <div key={item.id || index} className="border-bottom pb-2">
+                              <div className="d-flex justify-content-between">
+                                <span className="fw-semibold">{item.name}</span>
+                                <span className="fw-bold">{Number(item.totalPrice || 0).toFixed(2)} ₺</span>
+                              </div>
+                              <small className="text-muted">
+                                {item.quantity}{" "}
+                                {(item.weightUnit || "adet").toLowerCase()} ×{" "}
+                                {Number(item.price || 0).toFixed(2)} ₺
+                              </small>
+                              {item.isWeightBased && item.actualWeightGrams != null && (
+                                <div className="small text-muted">
+                                  Tartı: {item.expectedWeightGrams}g → {item.actualWeightGrams}g
+                                </div>
+                              )}
+                              {weightDiff && (
+                                <span className={`badge bg-${weightDiff.tone} mt-1`} style={{ fontSize: "0.7rem" }}>
+                                  {weightDiff.label} {weightDiff.gramsText}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <small className="text-muted">Ürün listesi yok</small>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer - Aksiyon Butonları */}
+              <div className="modal-footer courier-modal-footer p-2">
+                <div className="courier-modal-actions">
+                  {selectedOrder.address && (
                     <button
+                      type="button"
                       onClick={() => {
-                        setSelectedOrder(null);
-                        updateOrderStatus(
-                          selectedOrder.id,
-                          getNextStatus(selectedOrder.status),
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedOrder.address)}`,
+                          "_blank"
                         );
                       }}
-                      disabled={updating}
-                      className={`btn btn-lg ${
+                      className="btn btn-outline-secondary courier-modal-icon-btn"
+                      title="Haritada aç"
+                    >
+                      <i className="fas fa-map-marker-alt"></i>
+                    </button>
+                  )}
+                  {selectedOrder.customerPhone && (
+                    <a
+                      href={getPhoneTelUri(selectedOrder.customerPhone)}
+                      className="btn btn-success courier-modal-icon-btn"
+                      title={`Ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
+                      aria-label={`Müşteriyi ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
+                    >
+                      <i className="fas fa-phone"></i>
+                    </a>
+                  )}
+                  {getNextStatus(selectedOrder.status) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedOrder(null);
+                        updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status));
+                      }}
+                      disabled={updating || (getNextStatus(selectedOrder.status) === "delivered" && weightReports[selectedOrder.id]?.status === "Pending")}
+                      className={`btn courier-modal-main-btn ${
                         getNextStatus(selectedOrder.status) === "delivered"
-                          ? weightReports[selectedOrder.id]?.status ===
-                            "Pending"
-                            ? "btn-warning"
-                            : "btn-success"
-                          : "btn-primary"
+                          ? "btn-success"
+                          : getNextStatus(selectedOrder.status) === "out_for_delivery"
+                            ? "btn-warning text-dark"
+                            : "btn-primary"
                       }`}
                     >
                       {updating ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2"></span>
-                          İşleniyor...
-                        </>
+                        <span className="spinner-border spinner-border-sm"></span>
                       ) : (
                         <>
-                          <i className="fas fa-arrow-right me-2"></i>
-                          {getNextStatusText(selectedOrder.status)}
+                          <i className={`fas me-2 ${
+                            getNextStatus(selectedOrder.status) === "delivered"
+                              ? "fa-check-circle"
+                              : getNextStatus(selectedOrder.status) === "out_for_delivery"
+                                ? "fa-motorcycle"
+                                : "fa-box-open"
+                          }`}></i>
+                          {getNextStatus(selectedOrder.status) === "picked_up"
+                            ? "TESLİM AL"
+                            : getNextStatus(selectedOrder.status) === "out_for_delivery"
+                              ? "YOLA ÇIK"
+                              : "TESLİM ET"}
                         </>
                       )}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Ağırlık Onay Uyarı Modal */}

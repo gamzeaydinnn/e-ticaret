@@ -21,6 +21,18 @@ const StatusBadge = ({ status }) => {
     New: { label: "Yeni Sipariş", color: "#6c757d", icon: "circle" },
     pending: { label: "Beklemede", color: "#ffc107", icon: "clock" },
     Pending: { label: "Beklemede", color: "#ffc107", icon: "clock" },
+    paid: { label: "Ödeme Alındı", color: "#0ea5e9", icon: "credit-card" },
+    Paid: { label: "Ödeme Alındı", color: "#0ea5e9", icon: "credit-card" },
+    preauthorized: {
+      label: "Provizyon Alındı",
+      color: "#0ea5e9",
+      icon: "shield-alt",
+    },
+    PreAuthorized: {
+      label: "Provizyon Alındı",
+      color: "#0ea5e9",
+      icon: "shield-alt",
+    },
     confirmed: { label: "Onaylandı", color: "#17a2b8", icon: "check-circle" },
     Confirmed: { label: "Onaylandı", color: "#17a2b8", icon: "check-circle" },
     preparing: { label: "Hazırlanıyor", color: "#fd7e14", icon: "utensils" },
@@ -69,6 +81,11 @@ const StatusBadge = ({ status }) => {
     Shipped: { label: "Kargoda", color: "#6f42c1", icon: "truck" },
     Refunded: { label: "İade Edildi", color: "#6c757d", icon: "undo" },
     WeightPending: {
+      label: "Tartım Bekleniyor",
+      color: "#ff9800",
+      icon: "balance-scale",
+    },
+    weightpending: {
       label: "Tartım Bekleniyor",
       color: "#ff9800",
       icon: "balance-scale",

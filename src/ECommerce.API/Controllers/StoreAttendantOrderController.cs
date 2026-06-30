@@ -184,20 +184,19 @@ namespace ECommerce.API.Controllers
                     userName
                 );
 
-                // Sevkiyat görevlilerine ek olarak SESLİ BİLDİRİM gönder
-                await _dispatcherHubContext.Clients.All.SendAsync("OrderReady", new
-                {
-                    orderId = result.Id,
-                    orderNumber = result.OrderNumber,
-                    status = "Ready",
-                    statusText = "Hazır",
-                    totalAmount = result.FinalPrice,
-                    itemCount = result.TotalItems,
-                    weightInGrams = request?.WeightInGrams,
-                    timestamp = DateTime.UtcNow,
-                    playSound = true, // Sevkiyat görevlisi için ses çal
-                    soundType = "order_ready" // Hangi sesi çalacağını belirt
-                });
+                // Sevkiyat görevlilerine ZENGİN "hazır" bildirimi gönder (adres, tutar, ödeme,
+                // ağırlık + ses). NEDEN: Önceden ad-hoc "OrderReady" event'i gönderiliyordu ancak
+                // sevkiyat kartı için gereken adres/ödeme bilgisini taşımıyordu. Standart
+                // OrderReadyForDispatch event'i artık tek kaynak.
+                await _notificationService.NotifyDispatcherOrderReadyAsync(
+                    result.Id,
+                    result.OrderNumber,
+                    result.ShippingAddress,
+                    result.FinalPrice,
+                    result.PaymentMethod,
+                    request?.WeightInGrams,
+                    DateTime.UtcNow
+                );
 
                 _logger.LogInformation("Sipariş #{OrderId} hazır olarak işaretlendi. Görevli: {UserName}, Ağırlık: {Weight}g", 
                     orderId, userName, request?.WeightInGrams ?? 0);

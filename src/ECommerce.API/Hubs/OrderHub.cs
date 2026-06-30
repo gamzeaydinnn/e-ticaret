@@ -15,15 +15,16 @@ namespace ECommerce.API.Hubs
     /// 3. Müşteri sadece KENDİ siparişini takip edebilir (ownership kontrolü)
     /// 
     /// GÜVENLİK:
-    /// - [Authorize] ile sadece giriş yapmış kullanıcılar erişebilir
-    /// - Order ownership kontrolü: userId == order.UserId
-    /// - Guest siparişler için orderId + email kombinasyonu ile doğrulama
+    /// - Hub seviyesinde anonim baglantiya izin verilir (misafir siparis takibi icin).
+    ///   Kimlik dogrulamasi gerektiren metodlar ([Authorize]) tek tek isaretlenmistir.
+    /// - Order ownership kontrolü: userId == order.UserId (JoinOrderTracking)
+    /// - Guest siparişler için orderNumber + email kombinasyonu ile doğrulama (JoinGuestOrderTracking)
     /// 
     /// EVENTS:
     /// - OrderStatusChanged(orderId, status, message, timestamp)
     /// - OrderDeliveryUpdate(orderId, courierName, estimatedMinutes)
     /// </summary>
-    [Authorize]
+    [AllowAnonymous]
     public class OrderHub : Hub
     {
         private readonly ECommerceDbContext _context;
@@ -41,6 +42,7 @@ namespace ECommerce.API.Hubs
         /// </summary>
         /// <param name="orderId">Takip edilecek sipariş ID</param>
         /// <returns>Başarılı olursa true, değilse false</returns>
+        [Authorize]
         public async Task<bool> JoinOrderTracking(int orderId)
         {
             try

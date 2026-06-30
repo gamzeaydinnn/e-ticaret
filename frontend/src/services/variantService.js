@@ -19,12 +19,32 @@ import api from "./api";
 export const getVariantsByProduct = async (productId) => {
   try {
     const response = await api.get(`/api/productvariants/product/${productId}`);
-    return response.data || [];
+    return (response.data || []).map(mapVariant);
   } catch (error) {
     console.error("Varyantlar yüklenirken hata:", error);
     throw error;
   }
 };
+
+/**
+ * Admin: bir ürünün tüm varyantlarını getirir (aktif + pasif)
+ * @param {number} productId - Ürün ID
+ * @returns {Promise<Array>} Varyant listesi
+ */
+export const getVariantsByProductAdmin = async (productId) => {
+  try {
+    const response = await api.get(
+      `/api/productvariants/admin/product/${productId}`,
+    );
+    return (response.data || []).map(mapVariant);
+  } catch (error) {
+    console.error("Admin varyantlar yüklenirken hata:", error);
+    throw error;
+  }
+};
+
+/** @deprecated getVariantsByProduct kullanın */
+export const getByProduct = getVariantsByProduct;
 
 /**
  * Tek bir varyantı ID ile getirir
@@ -81,6 +101,9 @@ export const createVariant = async (productId, variantData) => {
         volumeML: variantData.volumeML ? parseInt(variantData.volumeML) : null,
         supplierCode: variantData.supplierCode || null,
         parentSku: variantData.parentSku || null,
+        maxOrderQuantity: variantData.maxOrderQuantity
+          ? parseInt(variantData.maxOrderQuantity, 10)
+          : 0,
       },
     };
 
@@ -113,6 +136,9 @@ export const createVariantsBulk = async (productId, variants) => {
         volumeML: v.volumeML ? parseInt(v.volumeML) : null,
         supplierCode: v.supplierCode || null,
         parentSku: v.parentSku || null,
+        maxOrderQuantity: v.maxOrderQuantity
+          ? parseInt(v.maxOrderQuantity, 10)
+          : 0,
       })),
     };
 
@@ -151,6 +177,11 @@ export const updateVariant = async (variantId, updateData) => {
           ? parseInt(updateData.volumeML)
           : undefined,
       supplierCode: updateData.supplierCode,
+      maxOrderQuantity:
+        updateData.maxOrderQuantity !== undefined &&
+        updateData.maxOrderQuantity !== ""
+          ? parseInt(updateData.maxOrderQuantity, 10)
+          : undefined,
     };
 
     // undefined değerleri temizle
@@ -287,6 +318,9 @@ export const mapVariant = (variant) => {
     volumeML: variant.volumeML || null,
     supplierCode: variant.supplierCode || "",
     parentSku: variant.parentSku || "",
+    maxOrderQuantity:
+      parseInt(variant.maxOrderQuantity ?? variant.MaxOrderQuantity ?? 0, 10) ||
+      0,
     isActive: variant.isActive !== false,
     lastSyncedAt: variant.lastSyncedAt ? new Date(variant.lastSyncedAt) : null,
     lastSeenAt: variant.lastSeenAt ? new Date(variant.lastSeenAt) : null,
@@ -345,6 +379,8 @@ export const getStockStatus = (stock) => {
 // Default export
 export default {
   getVariantsByProduct,
+  getVariantsByProductAdmin,
+  getByProduct,
   getVariantById,
   getVariantBySku,
   createVariant,

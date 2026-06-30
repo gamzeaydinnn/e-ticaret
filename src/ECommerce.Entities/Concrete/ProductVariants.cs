@@ -38,6 +38,12 @@ namespace ECommerce.Entities.Concrete
         public int Stock { get; set; }
 
         /// <summary>
+        /// Bu varyant için maksimum sipariş adedi (adet bazlı ürünler).
+        /// 0 = ürün/global varsayılan kullanılır.
+        /// </summary>
+        public int MaxOrderQuantity { get; set; } = 0;
+
+        /// <summary>
         /// Stok Tutma Birimi - XML entegrasyonunun ana anahtarı (UNIQUE)
         /// Tedarikçi sistemleriyle eşleşme bu alan üzerinden yapılır
         /// </summary>

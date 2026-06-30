@@ -23,8 +23,10 @@ import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useAuth } from "../contexts/AuthContext";
-import getProductCategoryRules from "../config/productCategoryRules";
+import { resolveProductOrderRuleWithFallback } from "../utils/orderLimitUtils";
+import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 import ProductGallery from "../components/ProductGallery";
+import CartActionToast, { useCartActionToast } from "../components/CartActionToast";
 import "./Product.css";
 
 // ============================================================
@@ -101,11 +103,16 @@ export default function Product() {
   const navigate = useNavigate();
 
   // Context hooks
-  // eslint-disable-next-line no-unused-vars
   const { user } = useAuth();
   const { addToCart: ctxAddToCart } = useCart();
   const { toggleFavorite, isFavorite } = useFavorites();
   const { toggleCompare, isInCompare } = useCompare();
+  const {
+    notification: cartNotification,
+    showCartSuccess,
+    showCartError,
+    dismiss: dismissCartNotification,
+  } = useCartActionToast();
 
   // State tanımlamaları
   const [product, setProduct] = useState(null);
@@ -178,64 +185,10 @@ export default function Product() {
 
     const loadRules = async () => {
       try {
-        const rules = await getProductCategoryRules();
+        const resolvedRule = await resolveProductOrderRuleWithFallback(product);
         if (!mounted) return;
-
-        const pname = (product.name || "").toLowerCase();
-        const pcat = (product.categoryName || "").toLowerCase();
-
-        // Kategori bazlı kural eşleştirme
-        let match = (rules || []).find((r) => {
-          const examples = (r.examples || []).map((e) =>
-            String(e).toLowerCase(),
-          );
-          return (
-            (r.category || "").toLowerCase().includes(pname) ||
-            examples.some((ex) => pname.includes(ex) || ex.includes(pname))
-          );
-        });
-
-        // Tartılı ürün kategorileri için kg kuralı
-        if (
-          !match &&
-          (pcat.includes("meyve") ||
-            pcat.includes("sebze") ||
-            pcat.includes("et") ||
-            pcat.includes("tavuk") ||
-            pcat.includes("balık") ||
-            pcat.includes("balik"))
-        ) {
-          match = (rules || []).find(
-            (r) => (r.unit || "").toLowerCase() === "kg",
-          );
-        }
-
-        // Adet limitli kategoriler
-        const unitLimitCats = [
-          "süt",
-          "süt ürünleri",
-          "süt urunleri",
-          "temel gıda",
-          "temel gida",
-          "temizlik",
-          "içecek",
-          "icecek",
-          "atıştırmalık",
-          "atistirmalik",
-        ];
-
-        if (!match && unitLimitCats.some((tok) => pcat.includes(tok))) {
-          match = {
-            category: "Kategori adedi sınırı",
-            unit: "adet",
-            min_quantity: 1,
-            max_quantity: 10,
-            step: 1,
-          };
-        }
-
-        setRule(match || null);
-        setQuantity(match?.min_quantity || 1);
+        setRule(resolvedRule);
+        setQuantity(resolvedRule?.min_quantity || 1);
       } catch (error) {
         console.error("Kural yükleme hatası:", error);
         setRule(null);
@@ -270,7 +223,7 @@ export default function Product() {
   // ============================================================
   // SEPETE EKLEME VALİDASYONU
   // ============================================================
-  const handleAddToCart = useCallback(() => {
+  const handleAddToCart = useCallback(async () => {
     if (!product) return;
 
     setValidationError("");
@@ -295,7 +248,6 @@ export default function Product() {
         return;
       }
 
-      // Step validasyonu
       const remainder = Math.abs(
         (q - min) / step - Math.round((q - min) / step),
       );
@@ -305,18 +257,21 @@ export default function Product() {
         );
         return;
       }
-    } else if (!product.isWeighted && q > 5) {
+    } else if (!isStrictVariableWeightProduct(product) && q > 5) {
       setValidationError("Bu üründen en fazla 5 adet ekleyebilirsiniz.");
       return;
     }
 
-    // Sepete ekle
-    ctxAddToCart(product, q);
+    const result = await ctxAddToCart(product, q);
+    if (result && result.success === false) {
+      showCartError(result.error || "Sepete eklenemedi.");
+      return;
+    }
 
-    // Başarı geri bildirimi
+    showCartSuccess(product, user ? "registered" : "guest");
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
-  }, [quantity, rule, product, ctxAddToCart]);
+  }, [quantity, rule, product, ctxAddToCart, user, showCartSuccess, showCartError]);
 
   // ============================================================
   // PAYLAŞ FONKSİYONU
@@ -664,7 +619,9 @@ export default function Product() {
 
           {/* Miktar Seçici */}
           <div className="product-page__quantity-section">
-            <label className="product-page__quantity-label">Adet</label>
+            <label className="product-page__quantity-label">
+              {rule?.unit === "kg" ? "Miktar (kg)" : "Adet"}
+            </label>
             <div className="product-page__quantity-controls">
               <button
                 className="product-page__quantity-btn"
@@ -1162,6 +1119,11 @@ export default function Product() {
           )}
         </div>
       </div>
+
+      <CartActionToast
+        notification={cartNotification}
+        onDismiss={dismissCartNotification}
+      />
     </div>
   );
 }

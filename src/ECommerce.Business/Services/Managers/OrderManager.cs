@@ -702,16 +702,28 @@ namespace ECommerce.Business.Services.Managers
                 .Where(p => productIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id);
 
+            var variantIds = dto.OrderItems
+                .Where(i => i.ProductVariantId.HasValue && i.ProductVariantId > 0)
+                .Select(i => i.ProductVariantId!.Value)
+                .Distinct()
+                .ToList();
+
+            var checkoutVariants = variantIds.Count == 0
+                ? new Dictionary<int, ProductVariant>()
+                : await _context.ProductVariants
+                    .Where(v => variantIds.Contains(v.Id))
+                    .ToDictionaryAsync(v => v.Id);
+
             var inventoryItems = dto.OrderItems
                 .Select(item =>
                 {
                     checkoutProducts.TryGetValue(item.ProductId, out var product);
-                    // ✅ Tek doğruluk kaynağı (null ürün güvenli biçimde false döner).
                     var isWeightBasedProduct = WeightBasedProductResolver.ResolveIsWeightBased(product);
 
                     return new OrderItemDto
                     {
                         ProductId = item.ProductId,
+                        ProductVariantId = item.ProductVariantId,
                         Quantity = isWeightBasedProduct ? 1m : item.Quantity,
                         UnitPrice = item.UnitPrice,
                         EstimatedWeight = item.EstimatedWeight,
@@ -760,11 +772,29 @@ namespace ECommerce.Business.Services.Managers
                         checkoutProducts.TryGetValue(item.ProductId, out var product);
                         if (product == null)
                             throw new Exception($"Ürün bulunamadı: {item.ProductId}");
+
+                        ProductVariant? variantEntity = null;
+                        if (item.ProductVariantId.HasValue &&
+                            item.ProductVariantId > 0 &&
+                            checkoutVariants.TryGetValue(item.ProductVariantId.Value, out var resolvedVariant))
+                        {
+                            variantEntity = resolvedVariant;
+                        }
+                        else
+                        {
+                            variantEntity = await _context.ProductVariants
+                                .Where(v => v.ProductId == product.Id && v.IsActive && v.Stock > 0)
+                                .OrderBy(v => v.Id)
+                                .FirstOrDefaultAsync();
+                        }
                         
                         // ✅ Tek doğruluk kaynağı: kg tespiti ve birim fiyat resolver'dan gelir.
-                        // Sepet (CartManager/PricingEngine) ile birebir aynı kuralı kullandığından
-                        // sipariş toplamı ve 3DS tutarı sepetle tutarlı olur.
                         var (isWeightBasedProduct, unitPrice) = WeightBasedProductResolver.Resolve(product);
+
+                        if (!isWeightBasedProduct && variantEntity != null)
+                        {
+                            unitPrice = variantEntity.Price;
+                        }
                         
                         var requestedQuantity = item.Quantity;
                         var estimatedWeight = isWeightBasedProduct
@@ -798,6 +828,9 @@ namespace ECommerce.Business.Services.Managers
                         items.Add(new OrderItem
                         {
                             ProductId = product.Id,
+                            ProductVariantId = variantEntity?.Id,
+                            VariantTitle = variantEntity?.Title,
+                            VariantSku = variantEntity?.SKU,
                             Quantity = storedQuantity,  // KG bazlı ürünlerde bu değer kg cinsinden quantity olacak
                             UnitPrice = unitPrice,
                             ExpectedWeightGrams = expectedWeightGrams,

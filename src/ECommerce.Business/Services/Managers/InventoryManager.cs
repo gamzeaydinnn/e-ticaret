@@ -165,13 +165,39 @@ namespace ECommerce.Business.Services.Managers
             }
 
             var grouped = materialized
-                .GroupBy(i => i.ProductId)
-                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                .GroupBy(i => new { i.ProductId, i.ProductVariantId })
+                .Select(g => new
+                {
+                    g.Key.ProductId,
+                    g.Key.ProductVariantId,
+                    Quantity = g.Sum(x => x.Quantity)
+                })
                 .ToList();
 
             var now = DateTime.UtcNow;
             foreach (var entry in grouped)
             {
+                if (entry.ProductVariantId.HasValue && entry.ProductVariantId > 0)
+                {
+                    var variant = await _context.ProductVariants
+                        .FirstOrDefaultAsync(v =>
+                            v.Id == entry.ProductVariantId.Value &&
+                            v.ProductId == entry.ProductId &&
+                            v.IsActive);
+
+                    if (variant == null)
+                    {
+                        return (false, $"Varyant bulunamadı: {entry.ProductVariantId}");
+                    }
+
+                    if (variant.Stock < entry.Quantity)
+                    {
+                        return (false, $"Yetersiz varyant stoku: {variant.Title}");
+                    }
+
+                    continue;
+                }
+
                 var product = await _productRepository.GetByIdAsync(entry.ProductId);
                 if (product == null)
                 {

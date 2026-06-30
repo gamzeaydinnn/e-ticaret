@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
@@ -44,6 +45,26 @@ namespace ECommerce.Data.Repositories
                 .ThenInclude(oi => oi.Product)
                 .ThenInclude(p => p.Category)
                 .Where(o => o.IsActive)
+                .OrderByDescending(o => o.OrderDate)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<Order>> GetCourierPendingWeightOrdersAsync(int courierId)
+        {
+            return await _dbSet
+                .AsNoTracking()
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .Where(o =>
+                    o.IsActive &&
+                    o.CourierId == courierId &&
+                    o.HasWeightBasedItems &&
+                    o.Status != OrderStatus.Cancelled &&
+                    o.Status != OrderStatus.Refunded &&
+                    o.Status != OrderStatus.Delivered)
+                .Where(o => o.OrderItems.Any(i =>
+                    !i.IsWeighed &&
+                    (i.IsWeightBased || (i.Product != null && i.Product.IsWeightBased))))
                 .OrderByDescending(o => o.OrderDate)
                 .ToListAsync();
         }
