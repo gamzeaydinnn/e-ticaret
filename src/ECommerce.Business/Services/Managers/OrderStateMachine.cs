@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
@@ -241,18 +242,8 @@ namespace ECommerce.Business.Services.Managers
             OrderStatus.Cancelled
         };
 
-        // İptal edilebilir durumlar
-        // MARKET KURALI: Sadece sipariş hazırlanmaya başlamadan önce iptal edilebilir
-        // Hazırlanıyor, Hazır, Yolda, Teslim Edildi durumlarında müşteri hizmetleriyle iletişime geçilmeli
-        private static readonly HashSet<OrderStatus> CancellableStates = new()
-        {
-            OrderStatus.New,       // Yeni sipariş - henüz işleme alınmadı
-            OrderStatus.Pending,   // Ödeme bekleniyor
-            OrderStatus.Paid,      // Ödendi ama henüz onaylanmadı (POSNET reverse ile iade)
-            OrderStatus.Confirmed  // Onaylandı ama henüz hazırlanmaya başlamadı
-            // NOT: Preparing, Processing, Ready, ReadyForPickup, DeliveryFailed çıkarıldı
-            // Bu durumlarda müşteri hizmetleriyle iletişime geçilmeli
-        };
+        // İptal edilebilir durumlar — kurye teslim alana kadar müşteri otomatik iptal edebilir
+        private static readonly HashSet<OrderStatus> CancellableStates = OrderCancelPolicy.AutoCancellableStatuses;
 
         // İade edilebilir durumlar
         private static readonly HashSet<OrderStatus> RefundableStates = new()

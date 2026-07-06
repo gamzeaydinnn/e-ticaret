@@ -235,7 +235,10 @@
   }
 
   /* Home sayfası için özel padding */
-  .home-page-wrapper {
+  .home-page-wrapper,
+  .account-hub-page,
+  .profile-settings-page,
+  .addresses-page {
     padding-bottom: calc(var(--mobile-nav-height) + 16px);
   }
 }
@@ -383,3 +386,72 @@
     display: none !important;
   }
 }
+
+/* ============================================
+   Mobil Footer Şeridi (#7)
+   ============================================ */
+.mobile-footer-strip {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem 1rem 0.75rem;
+  margin-bottom: 0;
+}
+
+.mobile-footer-strip-inner {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.mobile-footer-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.mobile-footer-link {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.625rem;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mobile-footer-link:hover {
+  color: #ff6b35;
+  border-color: rgba(255, 107, 53, 0.35);
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.1);
+}
+
+.mobile-footer-legal {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  padding-bottom: 0.25rem;
+}
+
+.mobile-footer-legal a {
+  color: #64748b;
+  text-decoration: none;
+}
+
+.mobile-footer-legal a:hover {
+  color: #ff6b35;
+}
+
+@media (max-width: 768px) {
+  .mobile-footer-strip {
+    padding-bottom: calc(var(--mobile-nav-height) + 0.75rem);
+  }
+}
+

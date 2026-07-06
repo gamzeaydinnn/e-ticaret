@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { AuthService } from "../../services/authService";
+import { resolveAdminLandingPath } from "../../utils/adminNavigation";
 
 export default function AdminLogin() {
   const [credentials, setCredentials] = useState({
@@ -96,10 +97,11 @@ export default function AdminLogin() {
         // ============================================================================
         console.log("⏳ İzinler yükleniyor...");
         let permissionsReady = false;
+        let loadedPermissions = [];
         try {
           if (loadUserPermissions) {
             // İzinleri yükle ve dönen değeri al
-            const loadedPermissions = await loadUserPermissions(userData, true); // forceRefresh=true
+            loadedPermissions = (await loadUserPermissions(userData, true)) || [];
 
             // İzinler başarıyla yüklendi mi kontrol et
             if (
@@ -113,18 +115,7 @@ export default function AdminLogin() {
                 "adet",
               );
             } else {
-              // İzin bulunamadı - localStorage'a varsayılan dashboard.view ekle (fallback)
-              const fallbackPerms = ["dashboard.view"];
-              localStorage.setItem(
-                "userPermissions",
-                JSON.stringify(fallbackPerms),
-              );
-              localStorage.setItem(
-                "permissionsCacheTime",
-                Date.now().toString(),
-              );
-              localStorage.setItem("permissionsCacheRole", userData.role);
-              console.warn("⚠️ İzin bulunamadı, fallback kullanılıyor");
+              console.warn("⚠️ İzin bulunamadı, rol bazlı yönlendirme kullanılacak");
               permissionsReady = true;
             }
 
@@ -146,13 +137,10 @@ export default function AdminLogin() {
         // ROL BAZLI YÖNLENDİRME
         // StoreAttendant ve Dispatcher için özel sayfalar
         // ============================================================================
-        let targetPage = "/admin/dashboard";
-
-        if (userData.role === "StoreAttendant") {
-          targetPage = "/admin/orders"; // Sipariş hazırlama sayfasına yönlendir
-        } else if (userData.role === "Dispatcher") {
-          targetPage = "/admin/orders"; // Sevkiyat için sipariş sayfasına yönlendir
-        }
+        const targetPage = resolveAdminLandingPath({
+          user: userData,
+          permissions: Array.isArray(loadedPermissions) ? loadedPermissions : [],
+        });
 
         // ============================================================================
         // SAYFA YENİLEME - State senkronizasyonu için

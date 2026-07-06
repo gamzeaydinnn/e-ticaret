@@ -15,7 +15,33 @@ import {
 } from "react";
 import { AuthService } from "../services/authService";
 import { smsService } from "../services/otpService";
+import { FAVORITES_TOKEN_KEY } from "../services/favoriteService";
 import permissionService from "../services/permissionService";
+import { getApiErrorMessage } from "../utils/errorMessages";
+
+const unwrapApiPayload = (resp) =>
+  resp && resp.data !== undefined ? resp.data : resp;
+
+const hasAuthToken = (data) => Boolean(data?.Token || data?.token);
+
+const isEmailVerificationMessage = (message) => {
+  if (!message || typeof message !== "string") return false;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("doğrulanmamış") ||
+    lower.includes("doğrulayın") ||
+    lower.includes("doğrulama linki") ||
+    (lower.includes("e-posta") && lower.includes("doğrula"))
+  );
+};
+
+const buildEmailVerificationResult = (message) => ({
+  success: false,
+  emailVerificationRequired: true,
+  message:
+    message ||
+    "Kayıt alındı. E-postanızdaki doğrulama linkine tıklayın, ardından giriş yapabilirsiniz.",
+});
 
 const AuthContext = createContext();
 
@@ -418,9 +444,19 @@ export const AuthProvider = ({ children }) => {
     try {
       // Backend API çağrısı (axios interceptor data döndürür)
       const resp = await AuthService.login({ email, password });
-      const data = resp && resp.data === undefined ? resp : resp.data; // her iki şekli destekle
+      const data = unwrapApiPayload(resp);
 
-      if (data && (data.success || data.token || data.Token)) {
+      const token = data?.token || data?.Token;
+      const hasSuccessFlag = Boolean(data?.success || data?.Success);
+
+      if (hasSuccessFlag && !token) {
+        return {
+          success: false,
+          error: "Giriş tamamlanamadı. Lütfen tekrar deneyin.",
+        };
+      }
+
+      if (data && token) {
         const rawUserData =
           data.user ||
           data.User || {
@@ -437,7 +473,6 @@ export const AuthProvider = ({ children }) => {
         const userData = normalizeUserData(rawUserData, {
           id: data.id ?? data.userId ?? data.UserId ?? null,
         });
-        const token = data.token || data.Token;
         const refreshToken = data.refreshToken || data.RefreshToken;
 
         // Token ve kullanıcı bilgilerini kaydet
@@ -495,11 +530,16 @@ export const AuthProvider = ({ children }) => {
       }
 
       // Production'da demo login yok, backend hatası döndür
+      const errorMessage =
+        error?.message ||
+        error?.response?.data?.Message ||
+        error?.response?.data?.message ||
+        "Giriş yapılamadı. Lütfen tekrar deneyin.";
+
       return {
         success: false,
-        error:
-          error?.response?.data?.message ||
-          "Giriş yapılamadı. Lütfen tekrar deneyin.",
+        error: errorMessage,
+        emailVerificationRequired: isEmailVerificationMessage(errorMessage),
       };
     }
   };
@@ -543,6 +583,7 @@ export const AuthProvider = ({ children }) => {
 
     // Favori verileri
     localStorage.removeItem("guestFavorites");
+    localStorage.removeItem(FAVORITES_TOKEN_KEY);
 
     // Diğer kullanıcı spesifik veriler
     localStorage.removeItem("tempProductId");
@@ -566,20 +607,34 @@ export const AuthProvider = ({ children }) => {
     phoneNumber,
     confirmPassword,
   ) => {
+    const normalizedPhone = (phoneNumber || "").replace(/\D/g, "");
+
+    // Telefon numarası varsa backend'in SMS kayıt akışını kullan
+    if (normalizedPhone.length >= 10) {
+      return registerWithPhone(
+        email,
+        password,
+        firstName,
+        lastName,
+        phoneNumber,
+        confirmPassword,
+      );
+    }
+
     try {
-      // Backend API çağrısı
       const resp = await AuthService.register({
         email,
         password,
-        confirmPassword: confirmPassword || password, // Backend için şifre onayı
+        confirmPassword: confirmPassword || password,
         firstName,
         lastName,
-        phoneNumber, // Telefon numarası eklendi
+        phoneNumber,
       });
 
-      const data = resp && resp.data === undefined ? resp : resp.data;
+      const data = unwrapApiPayload(resp);
 
-      if (data && (data.Token || data.token)) {
+      // Token yoksa oturum AÇILMAZ — backend e-posta doğrulaması bekler
+      if (hasAuthToken(data)) {
         const userData = normalizeUserData(data.user || data.User, {
           id: data.id ?? data.userId ?? data.UserId ?? Date.now(),
           email,
@@ -588,7 +643,6 @@ export const AuthProvider = ({ children }) => {
           name: `${firstName} ${lastName}`,
         });
 
-        // Token ve kullanıcı bilgilerini kaydet
         AuthService.saveToken(data.Token || data.token);
         localStorage.setItem("user", JSON.stringify(userData));
         if (userData?.id != null) {
@@ -598,14 +652,28 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
 
         return { success: true, user: userData };
-      } else {
-        return {
-          success: false,
-          error: (data && (data.Message || data.message)) || "Kayıt başarısız!",
-        };
       }
+
+      if (
+        data?.EmailVerificationRequired ||
+        data?.emailVerificationRequired ||
+        isEmailVerificationMessage(data?.Message || data?.message)
+      ) {
+        return buildEmailVerificationResult(data?.Message || data?.message);
+      }
+
+      return buildEmailVerificationResult(data?.Message || data?.message);
     } catch (error) {
       console.error("Register error:", error);
+
+      const apiMessage =
+        error?.message ||
+        error?.response?.data?.Message ||
+        error?.response?.data?.message;
+
+      if (isEmailVerificationMessage(apiMessage)) {
+        return buildEmailVerificationResult(apiMessage);
+      }
 
       // Backend bağlantısı yoksa demo register'a geç (SADECE DEVELOPMENT)
       if (process.env.NODE_ENV === "development") {
@@ -652,6 +720,8 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         error:
+          error?.message ||
+          error?.response?.data?.Message ||
           error?.response?.data?.message ||
           "Kayıt yapılamadı. Lütfen tekrar deneyin.",
       };
@@ -670,11 +740,13 @@ export const AuthProvider = ({ children }) => {
     firstName,
     lastName,
     phoneNumber,
+    confirmPassword,
   ) => {
     try {
       const result = await smsService.registerWithPhone({
         email,
         password,
+        confirmPassword: confirmPassword || password,
         firstName,
         lastName,
         phoneNumber,
@@ -683,21 +755,24 @@ export const AuthProvider = ({ children }) => {
       if (result.success) {
         return {
           success: true,
-          message: result.message,
-          userId: result.userId,
+          pendingVerification: true,
           phoneVerificationRequired: true,
-        };
-      } else {
-        return {
-          success: false,
-          error: result.message || "Kayıt başarısız!",
+          message:
+            result.message ||
+            "Doğrulama kodu telefonunuza gönderildi. Lütfen kodu girin.",
+          userId: result.userId,
         };
       }
+
+      return {
+        success: false,
+        error: result.message || "Kayıt başarısız!",
+      };
     } catch (error) {
       console.error("RegisterWithPhone error:", error);
       return {
         success: false,
-        error: "Kayıt sırasında bir hata oluştu.",
+        error: getApiErrorMessage(error, "Kayıt sırasında bir hata oluştu."),
       };
     }
   };
@@ -706,7 +781,12 @@ export const AuthProvider = ({ children }) => {
    * Telefon doğrulama kodunu kontrol eder ve hesabı aktif eder.
    * Başarılı olursa JWT token döner.
    */
-  const verifyPhoneRegistration = async (phoneNumber, code, email) => {
+  const verifyPhoneRegistration = async (
+    phoneNumber,
+    code,
+    email,
+    profile = {},
+  ) => {
     try {
       const result = await smsService.verifyPhoneRegistration(
         phoneNumber,
@@ -714,39 +794,65 @@ export const AuthProvider = ({ children }) => {
         email,
       );
 
-      if (result.success && result.token) {
-        // Token ve kullanıcı bilgilerini kaydet
-        AuthService.saveToken(result.token);
+      const token = result.token || result.Token;
+      if (result.success !== false && token) {
+        AuthService.saveToken(token);
 
-        // Kullanıcı bilgilerini decode et veya API'den al
-        const userData = normalizeUserData(result.user || result.User, {
-          id: result.userId ?? result.UserId ?? Date.now(),
-          email,
-          phoneNumber,
-        });
+        const refreshToken = result.refreshToken || result.RefreshToken;
+        if (refreshToken) {
+          localStorage.setItem("refreshToken", refreshToken);
+        }
+
+        let userData = null;
+        try {
+          const me = await AuthService.me();
+          userData = normalizeUserData(me, {
+            email,
+            firstName: profile.firstName,
+            lastName: profile.lastName,
+            phoneNumber,
+          });
+        } catch (meError) {
+          console.warn("Kullanıcı profili alınamadı, form verisi kullanılıyor:", meError);
+          userData = normalizeUserData(null, {
+            id: result.userId ?? result.UserId ?? null,
+            email,
+            firstName: profile.firstName || "",
+            lastName: profile.lastName || "",
+            name:
+              profile.name ||
+              `${profile.firstName || ""} ${profile.lastName || ""}`.trim(),
+            phoneNumber,
+          });
+        }
 
         localStorage.setItem("user", JSON.stringify(userData));
         if (userData?.id != null) {
           localStorage.setItem("userId", String(userData.id));
         }
         setUser(userData);
+        await loadUserPermissions(userData);
 
         return {
           success: true,
-          message: result.message,
-          token: result.token,
-        };
-      } else {
-        return {
-          success: false,
-          error: result.message || "Doğrulama başarısız!",
+          message: result.message || "Kayıt tamamlandı. Hoş geldiniz!",
+          token,
+          user: userData,
         };
       }
+
+      return {
+        success: false,
+        error: result.message || "Doğrulama başarısız!",
+      };
     } catch (error) {
       console.error("VerifyPhoneRegistration error:", error);
       return {
         success: false,
-        error: "Doğrulama sırasında bir hata oluştu.",
+        error:
+          error?.message ||
+          error?.response?.data?.Message ||
+          "Doğrulama sırasında bir hata oluştu.",
       };
     }
   };
@@ -804,10 +910,23 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = useCallback(
+    (partial = {}) => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        const updated = normalizeUserData({ ...prev, ...partial }, prev);
+        localStorage.setItem("user", JSON.stringify(updated));
+        return updated;
+      });
+    },
+    [normalizeUserData],
+  );
+
   const value = {
     // User state
     user,
     setUser,
+    updateUser,
     loading,
     isAuthenticated: !!user?.id,
 
@@ -827,16 +946,21 @@ export const AuthProvider = ({ children }) => {
             lastName: data.lastName,
             role: data.role || "User",
           });
+          const enrichedUser = {
+            ...userData,
+            passwordless: true,
+            loginProvider: provider,
+          };
           AuthService.saveToken(token);
-          localStorage.setItem("user", JSON.stringify(userData));
-          if (userData?.id != null)
-            localStorage.setItem("userId", String(userData.id));
-          setUser(userData);
+          localStorage.setItem("user", JSON.stringify(enrichedUser));
+          if (enrichedUser?.id != null)
+            localStorage.setItem("userId", String(enrichedUser.id));
+          setUser(enrichedUser);
 
           // İzinleri yükle
-          await loadUserPermissions(userData);
+          await loadUserPermissions(enrichedUser);
 
-          return { success: true, user: userData };
+          return { success: true, user: enrichedUser };
         }
         return {
           success: false,

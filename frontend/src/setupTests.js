@@ -25,11 +25,14 @@ jest.mock("react-router-dom", () => {
       ReactMock.createElement("a", props, children),
     useLocation: () => ({ pathname: "/" }),
     useNavigate: () => () => {},
+    useSearchParams: () => [new URLSearchParams(), jest.fn()],
     BrowserRouter: ({ children }) =>
       ReactMock.createElement("div", null, children),
     MemoryRouter: ({ children }) =>
       ReactMock.createElement("div", null, children),
     Routes: ({ children }) => ReactMock.createElement("div", null, children),
     Route: ({ element }) => element || null,
+    Navigate: ({ to }) =>
+      ReactMock.createElement("span", { "data-testid": "navigate", "data-to": to }),
   };
 });

@@ -47,6 +47,9 @@ namespace ECommerce.Business.Services.Managers
             { Roles.StoreManager, "Mağaza Yöneticisi" },
             { Roles.CustomerSupport, "Müşteri Hizmetleri" },
             { Roles.Logistics, "Lojistik" },
+            { Roles.StoreAttendant, "Market Görevlisi" },
+            { Roles.Dispatcher, "Sevkiyat Görevlisi" },
+            { Roles.Courier, "Kurye" },
             { Roles.User, "Kullanıcı" },
             { Roles.Customer, "Müşteri" }
         };
@@ -583,6 +586,9 @@ namespace ECommerce.Business.Services.Managers
                 Roles.StoreManager => "Mağaza operasyonlarını yönetir. Ürün, kategori, kampanya yetkisi.",
                 Roles.CustomerSupport => "Müşteri hizmetleri. Sipariş ve iade işlemleri.",
                 Roles.Logistics => "Lojistik personeli. Kargo ve teslimat işlemleri.",
+                Roles.StoreAttendant => "Market görevlisi. Sipariş hazırlama, tartı ve stok kontrolü.",
+                Roles.Dispatcher => "Sevkiyat görevlisi. Hazır siparişlere kurye atama.",
+                Roles.Courier => "Kurye. Teslimat operasyonları.",
                 Roles.User => "Standart kullanıcı/müşteri.",
                 Roles.Customer => "Müşteri hesabı.",
                 _ => null
@@ -598,8 +604,11 @@ namespace ECommerce.Business.Services.Managers
                 Roles.StoreManager => 3,
                 Roles.CustomerSupport => 4,
                 Roles.Logistics => 5,
-                Roles.User => 6,
-                Roles.Customer => 7,
+                Roles.StoreAttendant => 6,
+                Roles.Dispatcher => 7,
+                Roles.Courier => 8,
+                Roles.User => 9,
+                Roles.Customer => 10,
                 _ => 99
             };
         }

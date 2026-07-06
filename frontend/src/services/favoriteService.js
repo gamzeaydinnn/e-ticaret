@@ -12,6 +12,8 @@ import api from "./api";
 const base = "/api/favorites";
 const FAVORITES_TOKEN_KEY = "favorites_guest_token";
 
+export { FAVORITES_TOKEN_KEY };
+
 // ============================================================
 // TOKEN YÖNETİMİ
 // ============================================================

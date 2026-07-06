@@ -676,8 +676,8 @@ export default function ProductDetailModal({
                 >
                   <p>
                     İnternet sitemizde ve online satış kanallarımızda yer alan
-                    ürün etiket bilgileri, ürünün tedarikçisi tarafından Dijital
-                    Platform Gıda Hizmetleri A.Ş.'ye iletilen en güncel
+                    ürün etiket bilgileri, ürünün tedarikçisi tarafından Gölköy
+                    Gurme'ye iletilen en güncel
                     bilgilerdir. Ürün etiket bilgileri ile internet sitemiz ve
                     online satış kanallarımızda bulunan bilgiler arasında
                     herhangi bir farklılık bulunması halinde sorumluluk tamamen

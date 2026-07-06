@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.DTOs.Category;
+using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.API.Authorization;
 using System.Threading.Tasks;
@@ -16,10 +18,14 @@ namespace ECommerce.API.Controllers.Admin
     public class AdminCategoriesController : ControllerBase
     {
         private readonly ICategoryService _categoryService;
+        private readonly IAdminCatalogStatsService _adminCatalogStatsService;
 
-        public AdminCategoriesController(ICategoryService categoryService)
+        public AdminCategoriesController(
+            ICategoryService categoryService,
+            IAdminCatalogStatsService adminCatalogStatsService)
         {
             _categoryService = categoryService;
+            _adminCatalogStatsService = adminCatalogStatsService;
         }
 
         // GET /api/admin/categories
@@ -28,12 +34,12 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllAdminAsync();
-            // productCount her kategori için ayrı sorgu (N kategorisi için)
-            // Admin paneli için yeterli — production'da cache eklenebilir
+            var productCounts = await _adminCatalogStatsService.GetActiveProductCountsByCategoryAsync(
+                HttpContext.RequestAborted);
             var result = new List<object>();
             foreach (var c in categories)
             {
-                var productCount = await _categoryService.GetProductCountAsync(c.Id);
+                productCounts.TryGetValue(c.Id, out var productCount);
                 result.Add(new
                 {
                     c.Id,
@@ -129,7 +135,24 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetCategoryTree()
         {
             var tree = await _categoryService.GetCategoryTreeAsync();
+            var productCounts = await _adminCatalogStatsService.GetActiveProductCountsByCategoryAsync(
+                HttpContext.RequestAborted);
+            ApplyCatalogProductCounts(tree, productCounts);
             return Ok(tree);
+        }
+
+        private static void ApplyCatalogProductCounts(
+            IEnumerable<CategoryTreeDto> nodes,
+            IReadOnlyDictionary<int, int> productCounts)
+        {
+            foreach (var node in nodes)
+            {
+                node.ProductCount = productCounts.TryGetValue(node.Id, out var count) ? count : 0;
+                if (node.Children?.Count > 0)
+                {
+                    ApplyCatalogProductCounts(node.Children, productCounts);
+                }
+            }
         }
 
         // ✨ YENİ: GET /api/admin/categories/root - Ana kategoriler

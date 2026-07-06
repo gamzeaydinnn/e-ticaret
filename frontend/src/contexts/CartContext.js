@@ -111,12 +111,23 @@ export const CartProvider = ({ children }) => {
         setCartItems([]);
       }
 
-      // Kullanıcı login olduysa (misafir → kayıtlı)
+      // Kullanıcı login olduysa (misafir → kayıtlı): önce merge, sonra token temizle
       if (currentUserId && !prevUserId) {
-        console.log(
-          "🔄 Login algılandı, misafir sepet token'ı temizleniyor (merge kapalı)",
-        );
-        CartService.clearGuestToken();
+        console.log("🔄 Login algılandı, misafir sepet merge ediliyor...");
+        try {
+          const result = await CartService.mergeGuestCart();
+          if (result?.mergedCount > 0) {
+            console.log(
+              "✅ Misafir sepet aktarıldı:",
+              result.mergedCount,
+              "ürün",
+            );
+          }
+        } catch (err) {
+          console.error("❌ Sepet merge hatası (sessizce devam):", err);
+        } finally {
+          CartService.clearGuestToken();
+        }
       }
 
       // Sepeti yükle (kullanıcıya özel)

@@ -21,202 +21,6 @@ import "./ProductGrid.css";
 
 const PLACEHOLDER_PRODUCT_IMAGE = "/images/placeholder.png";
 
-const DEMO_PRODUCTS = [
-  // Et ve Et Ürünleri (categoryId: 1)
-  {
-    id: 1,
-    name: "Dana But Tas Kebaplık Et Çiftlik Kg",
-    description: "Taze dana eti, kuşbaşı doğranmış 500g",
-    price: 375.95,
-    originalPrice: 429.95,
-    categoryId: 1,
-    categoryName: "Et ve Et Ürünleri",
-    imageUrl: "/images/dana-kusbasi.jpg",
-    isNew: true,
-    discountPercentage: 26,
-    rating: 4.7,
-    reviewCount: 67,
-    badge: "İndirim",
-    specialPrice: 279.0,
-    stockQuantity: 25,
-  },
-  {
-    id: 2,
-    name: "Kuzu İncik Kg",
-    description: "Taze kuzu incik, kilogram",
-    price: 1399.95,
-    categoryId: 1,
-    categoryName: "Et ve Et Ürünleri",
-    imageUrl: "/images/kuzu-incik.webp",
-    isNew: false,
-    discountPercentage: 50,
-    rating: 4.4,
-    reviewCount: 195,
-    badge: "İndirim",
-    specialPrice: 699.95,
-    stockQuantity: 15,
-  },
-  // Süt Ürünleri (categoryId: 2)
-  {
-    id: 3,
-    name: "Pınar Süt 1L",
-    description: "Tam yağlı UHT süt 1 litre",
-    price: 28.5,
-    categoryId: 2,
-    categoryName: "Süt Ürünleri",
-    imageUrl: "/images/pinar-nestle-sut.jpg",
-    isNew: false,
-    discountPercentage: 0,
-    rating: 4.6,
-    reviewCount: 234,
-    stockQuantity: 50,
-  },
-  {
-    id: 4,
-    name: "Sek Kaşar Peyniri 200 G",
-    description: "Dilimli kaşar peyniri 200g",
-    price: 75.9,
-    categoryId: 2,
-    categoryName: "Süt Ürünleri",
-    imageUrl: "/images/sek-kasar-peyniri-200-gr-38be46-1650x1650.jpg",
-    isNew: false,
-    discountPercentage: 15,
-    rating: 4.4,
-    reviewCount: 156,
-    badge: "İndirim",
-    specialPrice: 64.5,
-    stockQuantity: 30,
-  },
-  // Meyve ve Sebze (categoryId: 3)
-  {
-    id: 5,
-    name: "Domates Kg",
-    description: "Taze domates, kilogram",
-    price: 45.9,
-    categoryId: 3,
-    categoryName: "Meyve ve Sebze",
-    imageUrl: "/images/domates.webp",
-    isNew: true,
-    discountPercentage: 0,
-    rating: 4.9,
-    reviewCount: 312,
-    stockQuantity: 100,
-  },
-  {
-    id: 6,
-    name: "Salatalık Kg",
-    description: "Taze salatalık, kilogram",
-    price: 28.9,
-    categoryId: 3,
-    categoryName: "Meyve ve Sebze",
-    imageUrl: "/images/salatalik.jpg",
-    isNew: false,
-    discountPercentage: 0,
-    rating: 4.3,
-    reviewCount: 67,
-    stockQuantity: 80,
-  },
-  // İçecekler (categoryId: 4)
-  {
-    id: 7,
-    name: "Lipton Ice Tea Limon 330 Ml",
-    description: "Soğuk çay, kutu 330ml",
-    price: 60.0,
-    categoryId: 4,
-    categoryName: "İçecekler",
-    imageUrl: "/images/lipton-ice-tea.jpg",
-    isNew: false,
-    discountPercentage: 32,
-    rating: 4.2,
-    reviewCount: 89,
-    badge: "İndirim",
-    specialPrice: 40.9,
-    stockQuantity: 60,
-  },
-  {
-    id: 8,
-    name: "Nescafe 2si 1 Arada Sütlü Köpüklü 15 x 10g",
-    description: "Kahve karışımı, paket 15 x 10g",
-    price: 145.55,
-    originalPrice: 169.99,
-    categoryId: 4,
-    categoryName: "İçecekler",
-    imageUrl: "/images/nescafe.jpg",
-    isNew: false,
-    discountPercentage: 42,
-    rating: 4.3,
-    reviewCount: 143,
-    badge: "İndirim",
-    specialPrice: 84.5,
-    stockQuantity: 25,
-  },
-  {
-    id: 9,
-    name: "Coca-Cola Orijinal Tat Kutu 330ml",
-    description: "Kola gazlı içecek kutu",
-    price: 12.5,
-    categoryId: 4,
-    categoryName: "İçecekler",
-    imageUrl: "/images/coca-cola.jpg",
-    isNew: false,
-    discountPercentage: 20,
-    rating: 4.2,
-    reviewCount: 445,
-    badge: "İndirim",
-    specialPrice: 10.0,
-    stockQuantity: 75,
-  },
-  // Atıştırmalık (categoryId: 5)
-  {
-    id: 10,
-    name: "Ülker Altınbaşak Tahıl Cipsi 50 Gr",
-    description: "Taco aromalı & çıtır tahıl cipsi",
-    price: 18.0,
-    categoryId: 5,
-    categoryName: "Atıştırmalık",
-    imageUrl: "/images/tahil-cipsi.jpg",
-    isNew: false,
-    discountPercentage: 17,
-    rating: 4.8,
-    reviewCount: 256,
-    badge: "İndirim",
-    specialPrice: 14.9,
-    stockQuantity: 35,
-  },
-  {
-    id: 11,
-    name: "Mis Bulgur Pilavlık 1Kg",
-    description: "Birinci sınıf bulgur 1kg",
-    price: 32.9,
-    categoryId: 7,
-    categoryName: "Temel Gıda",
-    imageUrl: "/images/bulgur.png",
-    isNew: true,
-    discountPercentage: 0,
-    rating: 4.7,
-    reviewCount: 89,
-    stockQuantity: 40,
-  },
-  // Temizlik (categoryId: 6)
-  {
-    id: 12,
-    name: "Cif Krem Doğanın Gücü Hijyen 675Ml",
-    description: "Yüzey temizleyici, çok amaçlı temizlik",
-    price: 204.95,
-    originalPrice: 229.95,
-    categoryId: 6,
-    categoryName: "Temizlik",
-    imageUrl: "/images/yeşil-cif-krem.jpg",
-    isNew: true,
-    discountPercentage: 37,
-    rating: 4.5,
-    reviewCount: 128,
-    badge: "İndirim",
-    specialPrice: 129.95,
-    stockQuantity: 20,
-  },
-];
-
 export default function ProductGrid({
   products: initialProducts,
   categoryId,
@@ -255,7 +59,6 @@ export default function ProductGrid({
   );
   const [totalPages, setTotalPages] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
-  const [usingMockData, setUsingMockData] = useState(false);
   const [rules, setRules] = useState([]);
   // Modal state'leri artık ProductDetailModal içinde yönetiliyor
   // eslint-disable-next-line no-unused-vars
@@ -637,7 +440,6 @@ export default function ProductGrid({
           setTotalProducts(initialProducts.length);
           setTotalPages(1);
           setError("");
-          setUsingMockData(false);
           return;
         }
 
@@ -672,35 +474,17 @@ export default function ProductGrid({
           isPagedCategoryView ? Math.max(1, response?.totalPages || 1) : 1,
         );
         setError("");
-        setUsingMockData(false);
       } catch (err) {
         if (!isMounted) {
           return;
         }
 
-        debugLog("Ürün listesi yüklenemedi, demo verilere düşülüyor", err);
+        debugLog("Ürün listesi yüklenemedi", err);
 
-        const demoProducts = categoryId
-          ? DEMO_PRODUCTS.filter(
-              (product) => Number(product.categoryId) === Number(categoryId),
-            )
-          : DEMO_PRODUCTS;
-        const pagedDemoProducts = isPagedCategoryView
-          ? demoProducts.slice(
-              (currentPage - 1) * pageSize,
-              currentPage * pageSize,
-            )
-          : demoProducts;
-
-        setData(pagedDemoProducts);
-        setTotalProducts(demoProducts.length);
-        setTotalPages(
-          isPagedCategoryView
-            ? Math.max(1, Math.ceil(demoProducts.length / pageSize))
-            : 1,
-        );
-        setError("");
-        setUsingMockData(true);
+        setData([]);
+        setTotalProducts(0);
+        setTotalPages(1);
+        setError(err?.message || "Ürünler yüklenemedi");
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -805,21 +589,6 @@ export default function ProductGrid({
               <i className="fas fa-chevron-right"></i>
             </a>
           )}
-        </div>
-      )}
-
-      {usingMockData && (
-        <div
-          className="alert border-0 shadow-sm mb-4 text-center"
-          style={{
-            backgroundColor: "#fff8e1",
-            color: "#fb8c00",
-            borderRadius: "15px",
-          }}
-        >
-          <i className="fas fa-info-circle me-2"></i>
-          Demo verisi gösteriliyor. Backend bağlantısı kurulduğunda ürünler
-          otomatik güncellenecek.
         </div>
       )}
 

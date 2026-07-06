@@ -604,6 +604,33 @@ export const ProductService = {
     }
   },
 
+  getAdminStats: async () => {
+    try {
+      const response = await api.get("/api/products/admin/stats");
+      return {
+        totalProducts: Number(response?.totalProducts ?? 0),
+        activeProducts: Number(response?.activeProducts ?? 0),
+        inactiveProducts: Number(response?.inactiveProducts ?? 0),
+        lowStockProducts: Number(response?.lowStockProducts ?? 0),
+        outOfStockProducts: Number(response?.outOfStockProducts ?? 0),
+        uncategorizedProducts: Number(response?.uncategorizedProducts ?? 0),
+        totalCategories: Number(response?.totalCategories ?? 0),
+        productsByCategory: response?.productsByCategory || {},
+      };
+    } catch (err) {
+      console.error("❌ Admin katalog istatistikleri yüklenemedi:", err);
+      return {
+        totalProducts: 0,
+        activeProducts: 0,
+        inactiveProducts: 0,
+        lowStockProducts: 0,
+        outOfStockProducts: 0,
+        uncategorizedProducts: 0,
+        totalCategories: 0,
+      };
+    }
+  },
+
   /**
    * Yeni ürün oluşturur
    * @param {object} formData - Ürün verileri

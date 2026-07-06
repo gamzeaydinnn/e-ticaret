@@ -9,6 +9,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { resolveAdminLandingPath } from "../utils/adminNavigation";
 
 // Admin rolleri listesi
 const ADMIN_ROLES = [
@@ -236,8 +237,15 @@ export const AdminGuard = ({
       });
 
       if (!hasAccess) {
-        // Yetkisiz - fallback path'e veya access denied sayfasına yönlendir
-        const redirectPath = fallbackPath || "/admin/access-denied";
+        const redirectPath =
+          fallbackPath === "auto"
+            ? resolveAdminLandingPath({
+                user,
+                permissions: normalizedPermissions,
+                hasPermission,
+                hasAnyPermission,
+              })
+            : fallbackPath || "/admin/access-denied";
         return (
           <Navigate
             to={redirectPath}
@@ -301,7 +309,7 @@ export const PermissionGuard = ({
  * Admin login kontrolü - giriş yapmışsa admin paneline yönlendir
  */
 export const AdminLoginGuard = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, permissions, hasPermission, hasAnyPermission } = useAuth();
 
   if (loading) {
     return (
@@ -316,9 +324,18 @@ export const AdminLoginGuard = ({ children }) => {
     );
   }
 
-  // Admin girişi yapmışsa dashboard'a yönlendir
   if (user && (user.isAdmin || ADMIN_ROLES.includes(user.role))) {
-    return <Navigate to="/admin/dashboard" replace />;
+    return (
+      <Navigate
+        to={resolveAdminLandingPath({
+          user,
+          permissions,
+          hasPermission,
+          hasAnyPermission,
+        })}
+        replace
+      />
+    );
   }
 
   return children;

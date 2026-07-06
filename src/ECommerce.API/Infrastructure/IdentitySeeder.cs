@@ -427,17 +427,11 @@ namespace ECommerce.API.Infrastructure
                 }
             }
 
-            // ============================================================================
-            // FAZLA İZİNLERİ TEMİZLE
-            // Rol-izin haritasında tanımlı olmayan ama veritabanında var olan izinleri sil
-            // Bu güvenlik için önemli: Artık geçerli olmayan izinler otomatik kaldırılır
-            // ============================================================================
-            var removedCount = await CleanupExcessPermissionsAsync(dbContext, rolePermissionMap, roles, permissions, logger);
-
-            if (addedCount > 0 || removedCount > 0)
+            // Yalnızca eksik varsayılan izinleri ekle; admin panelinden atanan izinleri silme.
+            if (addedCount > 0)
             {
                 await dbContext.SaveChangesAsync();
-                logger?.LogInformation("✅ RolePermissions güncellendi: {Added} eklendi, {Removed} kaldırıldı", addedCount, removedCount);
+                logger?.LogInformation("✅ RolePermissions güncellendi: {Added} varsayılan izin eklendi", addedCount);
             }
         }
 

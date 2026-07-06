@@ -538,4 +538,132 @@ export const PERMISSION_MODULES = {
   ],
 };
 
+export const ROLE_LABELS = {
+  SuperAdmin: "Süper Yönetici",
+  Admin: "Yönetici",
+  StoreManager: "Mağaza Yöneticisi",
+  CustomerSupport: "Müşteri Hizmetleri",
+  Logistics: "Lojistik",
+  StoreAttendant: "Market Görevlisi",
+  Dispatcher: "Sevkiyat Görevlisi",
+  Courier: "Kurye",
+  User: "Kullanıcı",
+  Customer: "Müşteri",
+};
+
+export const PERMISSION_MODULE_LABELS = {
+  dashboard: { name: "Kontrol Paneli", description: "Dashboard ve özet ekranları" },
+  products: { name: "Ürünler", description: "Ürün listeleme ve yönetimi" },
+  categories: { name: "Kategoriler", description: "Kategori ağacı ve düzenleme" },
+  orders: { name: "Siparişler", description: "Sipariş görüntüleme ve işlemleri" },
+  users: { name: "Kullanıcılar", description: "Kullanıcı hesap yönetimi" },
+  roles: { name: "Roller", description: "Rol ve izin yönetimi" },
+  campaigns: { name: "Kampanyalar", description: "Kampanya tanımları" },
+  coupons: { name: "Kuponlar", description: "Kupon yönetimi" },
+  couriers: { name: "Kuryeler", description: "Kurye kayıtları ve atamalar" },
+  shipping: { name: "Kargo", description: "Kargo ve teslimat işlemleri" },
+  reports: { name: "Raporlar", description: "Satış ve operasyon raporları" },
+  banners: { name: "Banner / Poster", description: "Ana sayfa görsel içerikleri" },
+  brands: { name: "Markalar", description: "Marka yönetimi" },
+  settings: { name: "Ayarlar", description: "Sistem ve mağaza ayarları" },
+  logs: { name: "Loglar", description: "Denetim ve hata kayıtları" },
+  newsletter: { name: "Bülten", description: "E-posta bülteni işlemleri" },
+  store: { name: "Market Operasyonları", description: "Market görevlisi sipariş hazırlama" },
+  dispatch: { name: "Sevkiyat", description: "Sevkiyat görevlisi operasyonları" },
+};
+
+const PERMISSION_LABELS = {
+  "dashboard.view": "Dashboard Görüntüleme",
+  "dashboard.statistics": "Dashboard İstatistikleri",
+  "dashboard.revenue": "Gelir Grafiği Görüntüleme",
+  "products.view": "Ürünleri Görüntüleme",
+  "products.create": "Ürün Oluşturma",
+  "products.update": "Ürün Güncelleme",
+  "products.delete": "Ürün Silme",
+  "products.stock": "Stok Yönetimi",
+  "products.pricing": "Fiyat Yönetimi",
+  "products.import": "Ürün İçe Aktarma",
+  "products.export": "Ürün Dışa Aktarma",
+  "categories.view": "Kategorileri Görüntüleme",
+  "categories.create": "Kategori Oluşturma",
+  "categories.update": "Kategori Güncelleme",
+  "categories.delete": "Kategori Silme",
+  "orders.view": "Siparişleri Görüntüleme",
+  "orders.details": "Sipariş Detaylarını Görüntüleme",
+  "orders.status": "Sipariş Durumu Güncelleme",
+  "orders.assign_courier": "Kurye Atama",
+  "orders.customer_info": "Müşteri Bilgilerini Görüntüleme",
+  "orders.cancel": "Sipariş İptali",
+  "orders.refund": "İade İşlemi",
+  "orders.export": "Sipariş Dışa Aktarma",
+  "store.summary": "Günlük Özet Görüntüleme",
+  "store.orders.updatestatus": "Sipariş Durumu Güncelleme",
+  "store.orders.pending": "Bekleyen Siparişleri Görüntüleme",
+  "store.orders.prepare": "Sipariş Hazırlamaya Başlama",
+  "store.orders.ready": "Siparişi Hazır İşaretleme",
+  "store.orders.weight": "Tartı / Ağırlık Girişi",
+  "store.orders.details": "Sipariş Detaylarını Görüntüleme",
+  "store.orders.summary": "Günlük Özet Görüntüleme",
+  "store.orders.assign_courier": "Kurye Atama",
+  "store.orders.update_status": "Sipariş Durumu Güncelleme (eski kod)",
+  "store.orders.cancel": "Sipariş İptali",
+  "store.orders.refund": "İade İşlemi",
+  "dispatch.orders.ready": "Hazır Siparişleri Görüntüleme",
+  "dispatch.orders.assign": "Kurye Atama",
+  "dispatch.orders.reassign": "Kurye Yeniden Atama",
+  "dispatch.couriers.view": "Kuryeleri Görüntüleme",
+  "dispatch.couriers.details": "Kurye Detaylarını Görüntüleme",
+  "dispatch.couriers.message": "Kuryeye Mesaj Gönderme",
+  "dispatch.statistics": "Sevkiyat İstatistikleri",
+  "dispatch.orders.details": "Sevkiyat Sipariş Detayları",
+};
+
+export const getPermissionModuleKey = (permissionCode = "") => {
+  const code = String(permissionCode).toLowerCase();
+  if (code.startsWith("store.")) return "store";
+  if (code.startsWith("dispatch.")) return "dispatch";
+  return code.split(".")[0] || "other";
+};
+
+export const getPermissionModuleLabel = (permissionCode = "") => {
+  const moduleKey = getPermissionModuleKey(permissionCode);
+  return (
+    PERMISSION_MODULE_LABELS[moduleKey]?.name ||
+    moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1)
+  );
+};
+
+export const getPermissionDisplayName = (permission = {}) => {
+  const code = (
+    permission.code ||
+    permission.name ||
+    permission.Name ||
+    ""
+  ).toLowerCase();
+
+  if (!code) return "";
+
+  return (
+    permission.displayName ||
+    permission.DisplayName ||
+    PERMISSION_LABELS[code] ||
+    code
+      .split(".")
+      .slice(-2)
+      .join(" ")
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase())
+  );
+};
+
+export const getRoleDisplayName = (role = {}) => {
+  const name = role.name || role.Name || "";
+  return (
+    role.displayName ||
+    role.DisplayName ||
+    ROLE_LABELS[name] ||
+    name
+  );
+};
+
 export default permissionService;

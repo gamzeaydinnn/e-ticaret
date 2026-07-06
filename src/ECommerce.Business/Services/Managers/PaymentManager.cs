@@ -948,6 +948,14 @@ namespace ECommerce.Business.Services.Managers
                         return false;
                     }
 
+                    if (await HasCompletedPartialRefundAsync(payment.OrderId, paymentId))
+                    {
+                        _logger?.LogWarning(
+                            "POSNET reverse engellendi: Siparişte kısmi iade mevcut. PaymentId: {PaymentId}, OrderId: {OrderId}",
+                            paymentId, payment.OrderId);
+                        return await PartialRefundAsync(paymentId, payment.Amount - (payment.RefundedAmount ?? 0m));
+                    }
+
                     var result = await _posnet.ProcessReverseAsync(payment.OrderId, hostLogKey);
 
                     if (result.IsSuccess)
@@ -994,6 +1002,19 @@ namespace ECommerce.Business.Services.Managers
                     }
                     else
                     {
+                        var errorText = result.Error ?? string.Empty;
+                        var isGroupClosed = errorText.Contains("0211", StringComparison.OrdinalIgnoreCase)
+                            || errorText.Contains("211", StringComparison.OrdinalIgnoreCase)
+                            || ((int)result.ErrorCode).ToString().Contains("211", StringComparison.Ordinal);
+
+                        if (isGroupClosed)
+                        {
+                            _logger?.LogWarning(
+                                "POSNET reverse grup kapama (0211) - return fallback deneniyor. PaymentId: {PaymentId}",
+                                paymentId);
+                            return await PartialRefundAsync(paymentId, payment.Amount - (payment.RefundedAmount ?? 0m));
+                        }
+
                         _logger?.LogError("POSNET para iadesi başarısız. PaymentId: {PaymentId}, Hata: {Error}", paymentId, result.Error);
                         return false;
                     }
@@ -1330,6 +1351,18 @@ namespace ECommerce.Business.Services.Managers
                 await LogFailureAsync(payment.OrderId, payment.Amount, provider, "REFUND_EXCEPTION", ex.Message, ex, payment.ProviderPaymentId);
                 return false;
             }
+        }
+
+        private async Task<bool> HasCompletedPartialRefundAsync(int orderId, int paymentId)
+        {
+            return await _db.Payments.AnyAsync(p =>
+                p.OrderId == orderId &&
+                p.Id != paymentId &&
+                (
+                    p.TransactionType == "return" ||
+                    p.Status == "PartiallyRefunded" ||
+                    ((p.RefundedAmount ?? 0m) > 0m && p.Status != "Cancelled")
+                ));
         }
     }
 }

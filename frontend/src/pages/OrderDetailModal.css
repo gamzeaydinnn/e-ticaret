@@ -521,7 +521,12 @@
   padding: 16px 24px;
   border-top: 1px solid #eee;
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-footer-custom .btn-close-modal {
+  align-self: flex-end;
 }
 
 .btn-close-modal {

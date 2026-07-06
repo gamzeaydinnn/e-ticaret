@@ -19,6 +19,43 @@ const isCacheValid = () => {
   return cacheTimestamp && Date.now() - cacheTimestamp < CACHE_DURATION;
 };
 
+const dedupeArray = (values = []) =>
+  [...new Set((values || []).filter(Boolean))];
+
+const mergeFooterData = (data = {}) => {
+  const defaults = getDefaultSiteSettings();
+  const footerFromApi = data.footer || {};
+  return {
+    ...defaults,
+    ...data,
+    company: { ...defaults.company, ...(data.company || {}) },
+    contact: { ...defaults.contact, ...(data.contact || {}) },
+    socialMedia: { ...defaults.socialMedia, ...(data.socialMedia || {}) },
+    footer: {
+      ...defaults.footer,
+      ...footerFromApi,
+      paymentMethods: dedupeArray(
+        footerFromApi.paymentMethods?.length
+          ? footerFromApi.paymentMethods
+          : defaults.footer.paymentMethods,
+      ),
+      securityFeatures: dedupeArray(
+        footerFromApi.securityFeatures?.length
+          ? footerFromApi.securityFeatures
+          : defaults.footer.securityFeatures,
+      ),
+    },
+  };
+};
+
+/**
+ * axios interceptor zaten response.data döndürür; tekrar .data kullanma.
+ */
+const unwrapApiResponse = (response) =>
+  response && typeof response === "object" && "data" in response
+    ? response.data
+    : response;
+
 /**
  * Tüm site ayarlarını getirir
  */
@@ -29,7 +66,7 @@ export const getSiteSettings = async () => {
 
   try {
     const response = await api.get("/api/sitesettings");
-    siteSettingsCache = response.data;
+    siteSettingsCache = mergeFooterData(unwrapApiResponse(response));
     cacheTimestamp = Date.now();
     return siteSettingsCache;
   } catch (error) {
@@ -49,7 +86,7 @@ export const getFooterData = async () => {
 
   try {
     const response = await api.get("/api/sitesettings/footer");
-    footerDataCache = response.data;
+    footerDataCache = mergeFooterData(unwrapApiResponse(response));
     cacheTimestamp = Date.now();
     return footerDataCache;
   } catch (error) {
@@ -65,7 +102,8 @@ export const getFooterData = async () => {
 export const getCompanyInfo = async () => {
   try {
     const response = await api.get("/api/sitesettings/company");
-    return response.data;
+    const defaults = getDefaultSiteSettings().company;
+    return { ...defaults, ...unwrapApiResponse(response) };
   } catch (error) {
     console.error("Firma bilgileri alınamadı:", error);
     return getDefaultSiteSettings().company;
@@ -78,7 +116,8 @@ export const getCompanyInfo = async () => {
 export const getContactInfo = async () => {
   try {
     const response = await api.get("/api/sitesettings/contact");
-    return response.data;
+    const defaults = getDefaultSiteSettings().contact;
+    return { ...defaults, ...unwrapApiResponse(response) };
   } catch (error) {
     console.error("İletişim bilgileri alınamadı:", error);
     return getDefaultSiteSettings().contact;
@@ -151,4 +190,14 @@ export default {
   getCompanyInfo,
   getContactInfo,
   clearCache,
+};
+
+export const getWhatsAppNumber = async () => {
+  const contact = await getContactInfo();
+  return contact?.whatsAppNumber || contact?.whatsappNumber || "905334783072";
+};
+
+export const buildWhatsAppUrl = async (message) => {
+  const number = await getWhatsAppNumber();
+  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 };

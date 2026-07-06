@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -136,8 +137,9 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                             targetPriceList, targetDepot, deleted, inserted, updated);
                     }
 
-                    var products = await innerService.GetUnifiedProductsAsync(
-                        fiyatListesiNo, depoNo, cancellationToken);
+                    var products = MikroWebCatalogFilter.OnlyWebActive(
+                        await innerService.GetUnifiedProductsAsync(
+                            fiyatListesiNo, depoNo, cancellationToken));
 
                     if (products.Count > 0)
                     {

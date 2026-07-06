@@ -10,6 +10,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./OrderDetailModal.css";
 import signalRService from "../services/signalRService";
 import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
+import OrderActions from "../components/orders/OrderActions";
+import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 
 /**
  * Durum badge'ini render et
@@ -251,7 +253,16 @@ const WeightDifferenceCard = ({ weightAdjustment }) => {
   );
 };
 
-export default function OrderDetailModal({ show, onHide, order, onOrderUpdate }) {
+export default function OrderDetailModal({
+  show,
+  onHide,
+  order,
+  onOrderUpdate,
+  onCancel,
+  isCancelling = false,
+  refundRequests = [],
+  isAuthenticated = false,
+}) {
   // Real-time order updates state
   const [localOrder, setLocalOrder] = useState(order);
   const signalRUnsubscribesRef = useRef([]);
@@ -498,6 +509,14 @@ export default function OrderDetailModal({ show, onHide, order, onOrderUpdate })
 
         {/* Footer */}
         <div className="modal-footer-custom">
+          <OrderActions
+            order={localOrder}
+            onCancel={onCancel}
+            isCancelling={isCancelling}
+            layout="inline"
+            refundRequests={refundRequests}
+            isAuthenticated={isAuthenticated}
+          />
           <button className="btn-close-modal" onClick={onHide}>
             Kapat
           </button>

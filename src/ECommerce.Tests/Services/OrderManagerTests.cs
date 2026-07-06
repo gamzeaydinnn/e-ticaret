@@ -534,7 +534,8 @@ namespace ECommerce.Tests.Services
                 ShippingAddress = "Adres",
                 ShippingCity = "İstanbul",
                 TotalPrice = 200m,
-                Status = OrderStatus.Pending
+                Status = OrderStatus.Pending,
+                OrderDate = DateTime.UtcNow
             };
             context.Orders.Add(order);
             await context.SaveChangesAsync();

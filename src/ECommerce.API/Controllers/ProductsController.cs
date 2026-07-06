@@ -17,6 +17,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Core.Interfaces.Sync;
 using ECommerce.Core.Helpers;
+using ECommerce.API.Authorization;
 using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -135,6 +136,7 @@ namespace ECommerce.API.Controllers
         private readonly IAutoCategoryMappingEngine? _autoCategoryMappingEngine;
         private readonly IProductInfoSyncService? _productInfoSyncService;
         private readonly IProductAdminOverrideSettingsService _productAdminOverrideSettingsService;
+        private readonly IAdminCatalogStatsService _adminCatalogStatsService;
 
         // İzin verilen dosya türleri (güvenlik için whitelist yaklaşımı)
         private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".avif", ".svg" };
@@ -157,6 +159,7 @@ namespace ECommerce.API.Controllers
             ECommerceDbContext dbContext,
             IHttpClientFactory httpClientFactory,
             IProductAdminOverrideSettingsService productAdminOverrideSettingsService,
+            IAdminCatalogStatsService adminCatalogStatsService,
             IAutoCategoryMappingEngine? autoCategoryMappingEngine = null,
             IProductInfoSyncService? productInfoSyncService = null)
         {
@@ -169,12 +172,14 @@ namespace ECommerce.API.Controllers
             _dbContext = dbContext;
             _httpClientFactory = httpClientFactory;
             _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
+            _adminCatalogStatsService = adminCatalogStatsService;
             _autoCategoryMappingEngine = autoCategoryMappingEngine;
             _productInfoSyncService = productInfoSyncService;
         }
 
         [HttpGet("admin/override-settings")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.View)]
         public async Task<IActionResult> GetAdminOverrideSettings()
         {
             var settings = await _productAdminOverrideSettingsService.GetSettingsForAdminAsync(HttpContext.RequestAborted);
@@ -182,7 +187,8 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpPut("admin/override-settings")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         public async Task<IActionResult> UpdateAdminOverrideSettings([FromBody] ProductAdminOverrideSettingsUpdateDto request)
         {
             if (request == null)
@@ -235,7 +241,8 @@ namespace ECommerce.API.Controllers
 
         // Admin panel için tüm ürünleri getir — Mikro ERP SQL tabanlı (aktif ürünler)
         [HttpGet("admin/all")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.View)]
         public async Task<IActionResult> GetAllProductsForAdmin(
             [FromQuery] int page = 1,
             [FromQuery] int size = 100,
@@ -249,7 +256,7 @@ namespace ECommerce.API.Controllers
 
             if (_mikroDbService.IsConfigured)
             {
-                var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
 
                 if (unified.Count == 0)
                 {
@@ -398,7 +405,7 @@ namespace ECommerce.API.Controllers
                             specialPrice = ResolveDisplaySpecialPrice(hasLocal ? local : null, overrideDefaults),
                             stockQuantity = (int)Math.Max(0, p.StokMiktar),
                             stock = (int)Math.Max(0, p.StokMiktar),
-                            isActive = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
+                            isActive = MikroWebCatalogFilter.ResolveIsActive(p, hasLocal ? local : null),
                             // Kategori: yerel override varsa yerel
                             categoryId = resolvedCategoryId,
                             categoryName = resolvedCategoryName,
@@ -545,6 +552,36 @@ namespace ECommerce.API.Controllers
             });
         }
 
+        [HttpGet("admin/stats")]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.View)]
+        public async Task<IActionResult> GetAdminCatalogStats()
+        {
+            const int lowStockThreshold = 10;
+            var products = await _adminCatalogStatsService.GetProductSnapshotsAsync(HttpContext.RequestAborted);
+            var productsByCategory = products
+                .Where(product => product.IsActive && product.CategoryId.HasValue && product.CategoryId.Value > 0)
+                .GroupBy(product => product.CategoryId!.Value)
+                .ToDictionary(group => group.Key, group => group.Count());
+            var totalCategories = await _dbContext.Categories
+                .AsNoTracking()
+                .CountAsync(category => category.IsActive, HttpContext.RequestAborted);
+
+            return Ok(new
+            {
+                totalProducts = products.Count(product => product.IsActive),
+                activeProducts = products.Count(product => product.IsActive),
+                inactiveProducts = products.Count(product => !product.IsActive),
+                lowStockProducts = products.Count(product =>
+                    product.StockQuantity > 0 && product.StockQuantity <= lowStockThreshold),
+                outOfStockProducts = products.Count(product => product.StockQuantity <= 0),
+                uncategorizedProducts = products.Count(product =>
+                    !product.CategoryId.HasValue || product.CategoryId.Value <= 0),
+                totalCategories,
+                productsByCategory,
+            });
+        }
+
         private static bool MatchesAdminStatusFilter(bool isActive, string? status)
         {
             return NormalizeAdminFilterValue(status) switch
@@ -571,18 +608,32 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
+        /// Mikro'dan yalnızca web aktif (sto_webe_gonderilecek_fl=1) ürünleri getirir.
+        /// </summary>
+        private async Task<List<MikroUnifiedProductDto>> GetWebActiveUnifiedProductsAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!_mikroDbService.IsConfigured)
+                return new List<MikroUnifiedProductDto>();
+
+            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken);
+            return MikroWebCatalogFilter.OnlyWebActive(unified);
+        }
+
+        /// <summary>
         /// Mikro ERP ürünlerini otomatik kategorize eder.
         /// Ürün adına göre akıllı eşleme yapar, eksik kategorileri oluşturur,
         /// yerel DB'de ürün kaydı yoksa SKU bazlı upsert yapar.
         /// </summary>
         [HttpPost("admin/auto-categorize")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         public async Task<IActionResult> AutoCategorizeProducts()
         {
             if (!_mikroDbService.IsConfigured)
                 return BadRequest(new { message = "Mikro ERP bağlantısı yapılandırılmamış." });
 
-            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+            var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
             if (unified.Count == 0)
                 return Ok(new { message = "Mikro ERP'de ürün bulunamadı.", created = 0, updated = 0 });
 
@@ -823,7 +874,7 @@ namespace ECommerce.API.Controllers
 
         private async Task<List<MergedProductRow>> BuildMergedPublicProductsAsync(CancellationToken cancellationToken)
         {
-            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken);
+            var unified = await GetWebActiveUnifiedProductsAsync(cancellationToken);
             if (unified.Count == 0)
                 return new List<MergedProductRow>();
 
@@ -896,7 +947,7 @@ namespace ECommerce.API.Controllers
                         },
                         CategorySlug = resolvedCategory.CategorySlug,
                         CreatedAt = hasLocal ? local!.CreatedAt : DateTime.MinValue,
-                        IsVisible = hasLocal ? local!.IsActive : p.WebeGonderilecekFl,
+                        IsVisible = MikroWebCatalogFilter.IsWebCatalogProduct(p, hasLocal ? local : null),
                     };
                 })
                 .Where(row => row.IsVisible)
@@ -954,7 +1005,8 @@ namespace ECommerce.API.Controllers
         /// <param name="size">Sayfa başına ürün sayısı (max: 100)</param>
         /// <returns>PagedResult formatında ürün listesi</returns>
         [HttpGet("admin/paged")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.View)]
         public async Task<IActionResult> GetProductsPaged([FromQuery] int page = 1, [FromQuery] int size = 50)
         {
             // Güvenlik: max sayfa boyutunu sınırla
@@ -1001,7 +1053,7 @@ namespace ECommerce.API.Controllers
             // Local DB stok bilgisi stale olabilir — Mikro'dan gerçek zamanlı stok al
             if (_mikroDbService.IsConfigured && !string.IsNullOrEmpty(product.Sku))
             {
-                var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
                 var mikro = unified.FirstOrDefault(u =>
                     string.Equals(u.StokKod, product.Sku, StringComparison.OrdinalIgnoreCase));
                 if (mikro != null)
@@ -1032,7 +1084,7 @@ namespace ECommerce.API.Controllers
                 {
                     if (_mikroDbService.IsConfigured && !string.IsNullOrEmpty(localDto.Sku))
                     {
-                        var unifiedLocal = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                        var unifiedLocal = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
                         var mikroLocal = unifiedLocal.FirstOrDefault(u =>
                             string.Equals(u.StokKod, localDto.Sku, StringComparison.OrdinalIgnoreCase));
 
@@ -1051,7 +1103,7 @@ namespace ECommerce.API.Controllers
 
             if (!_mikroDbService.IsConfigured) return NotFound();
 
-            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+            var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
             var mikro = unified.FirstOrDefault(u =>
                 string.Equals(GenerateSlug(u.StokAd), slug, StringComparison.OrdinalIgnoreCase));
 
@@ -1084,7 +1136,7 @@ namespace ECommerce.API.Controllers
                     // Local DB stok bilgisi stale olabilir — Mikro'dan gerçek zamanlı stok al
                     if (_mikroDbService.IsConfigured)
                     {
-                        var unifiedLocal = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                        var unifiedLocal = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
                         var mikroLocal = unifiedLocal.FirstOrDefault(u =>
                             string.Equals(u.StokKod, sku, StringComparison.OrdinalIgnoreCase));
                         if (mikroLocal != null)
@@ -1100,7 +1152,7 @@ namespace ECommerce.API.Controllers
             // Local DB'de yoksa Mikro'dan getir
             if (!_mikroDbService.IsConfigured) return NotFound();
 
-            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+            var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
             var mikro = unified.FirstOrDefault(u =>
                 string.Equals(u.StokKod, sku, StringComparison.OrdinalIgnoreCase));
 
@@ -1161,7 +1213,7 @@ namespace ECommerce.API.Controllers
             if (!_mikroDbService.IsConfigured)
                 return NotFound(new { message = "Mikro ERP bağlantısı yok." });
 
-            var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+            var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
             var mikro = unified.FirstOrDefault(u =>
                 string.Equals(u.StokKod, sku, StringComparison.OrdinalIgnoreCase));
 
@@ -1420,7 +1472,8 @@ namespace ECommerce.API.Controllers
 
         // Yeni ürün oluştur
         [HttpPost]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Create)]
         public async Task<IActionResult> CreateProduct([FromBody] ProductCreateDto dto)
         {
             if (dto == null) return BadRequest("Ürün bilgileri gerekli.");
@@ -1438,7 +1491,8 @@ namespace ECommerce.API.Controllers
 
         // Ürün güncelle
         [HttpPut("{id}")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         public async Task<IActionResult> UpdateProduct(int id, [FromBody] ProductUpdateDto dto)
         {
             if (dto == null) return BadRequest("Ürün bilgileri gerekli.");
@@ -1456,7 +1510,8 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpGet("admin/duplicates")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.View)]
         public async Task<IActionResult> GetDuplicateProducts()
         {
             var products = await _dbContext.Products
@@ -1535,7 +1590,8 @@ namespace ECommerce.API.Controllers
 
         // SKU bazlı ürün güncelle/oluştur — Mikro ERP ürünlerinde id=0 olduğundan SKU ile eşleştir
         [HttpPut("by-sku/{sku}")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         public async Task<IActionResult> UpdateProductBySku(string sku, [FromBody] ProductUpdateDto dto)
         {
             if (dto == null) return BadRequest("Ürün bilgileri gerekli.");
@@ -1554,7 +1610,8 @@ namespace ECommerce.API.Controllers
 
         // Ürün sil
         [HttpDelete("{id}")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Delete)]
         public async Task<IActionResult> DeleteProduct(int id)
         {
             try
@@ -1574,7 +1631,8 @@ namespace ECommerce.API.Controllers
         }
 
         [HttpPatch("{id}/deactivate")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         public async Task<IActionResult> DeactivateProduct(int id)
         {
             if (id <= 0)
@@ -1611,7 +1669,8 @@ namespace ECommerce.API.Controllers
 
         // Stok güncelle
         [HttpPatch("{id}/stock")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.ManageStock)]
         public async Task<IActionResult> UpdateStock(int id, [FromBody] StockUpdateDto dto)
         {
             try
@@ -1631,7 +1690,8 @@ namespace ECommerce.API.Controllers
         // Görsel URL sütunu: HTTP/HTTPS URL (otomatik indirilir), yüklenen dosya adı, veya mevcut /uploads/ yolu
         // Aynı anda birden fazla görsel dosyası gönderilebilir — CSV'deki dosya adıyla eşleştirilir
         [HttpPost("import/excel")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Import)]
         [RequestSizeLimit(200 * 1024 * 1024)] // 200MB — görseller dahil
         public async Task<IActionResult> ImportFromExcel(IFormFile file, [FromForm] IFormFileCollection? images = null)
         {
@@ -2177,7 +2237,8 @@ namespace ECommerce.API.Controllers
         // Excel şablonu indir
         // Türkçe karakterli örnek veriler ve detaylı açıklamalar içerir
         [HttpGet("import/template")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Import)]
         public IActionResult DownloadTemplate()
         {
             using var workbook = new XLWorkbook();
@@ -2357,7 +2418,8 @@ namespace ECommerce.API.Controllers
         /// Türkçe karakterler UTF-8 encoding ile doğru şekilde kaydedilir.
         /// </summary>
         [HttpGet("export/excel")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Export)]
         public async Task<IActionResult> ExportToExcel()
         {
             try
@@ -2368,7 +2430,7 @@ namespace ECommerce.API.Controllers
                 IEnumerable<object> exportRows;
                 if (_mikroDbService.IsConfigured)
                 {
-                    var unified = await _mikroDbService.GetUnifiedProductsAsync(null, null, HttpContext.RequestAborted);
+                    var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
                     var localAll = (await _productRepository.GetAllAsync()).ToList();
                     var skuToLocal = localAll
                         .Where(p => !string.IsNullOrEmpty(p.SKU))
@@ -2542,7 +2604,8 @@ namespace ECommerce.API.Controllers
         /// <param name="image">Yüklenecek resim dosyası (jpg, jpeg, png, gif, webp)</param>
         /// <returns>Yüklenen dosyanın URL'ini döner</returns>
         [HttpPost("upload/image")]
-        [Authorize(Roles = Roles.AdminLike)]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Products.Update)]
         [RequestSizeLimit(MaxFileSize)]
         public async Task<IActionResult> UploadImage(IFormFile image)
         {

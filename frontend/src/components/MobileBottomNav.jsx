@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCartCount } from "../hooks/useCartCount";
+import { useFavorites } from "../contexts/FavoriteContext";
 import categoryServiceReal, {
   normalizeCategorySlug,
 } from "../services/categoryServiceReal";
@@ -88,17 +89,20 @@ const NAV_ITEMS = [
     exactMatch: true,
   },
   {
-    id: "campaigns",
-    label: "Kampanyalar",
-    icon: "fa-tags",
-    path: "/campaigns",
-    exactMatch: false,
+    id: "favorites",
+    label: "Favoriler",
+    icon: "fa-heart",
+    path: "/favorites",
+    showBadge: true,
+    badgeSource: "favorites",
+    exactMatch: true,
   },
   {
     id: "account",
     label: "Hesabım",
     icon: "fa-user",
-    path: "/profile",
+    path: "/account",
+    matchPaths: ["/account", "/profile", "/addresses"],
     exactMatch: false,
   },
 ];
@@ -107,6 +111,11 @@ const NAV_ITEMS = [
  * Aktif route kontrolü
  */
 const isActiveRoute = (currentPath, navItem) => {
+  if (navItem.matchPaths?.length) {
+    return navItem.matchPaths.some(
+      (path) => currentPath === path || currentPath.startsWith(`${path}/`),
+    );
+  }
   if (navItem.exactMatch) {
     return currentPath === navItem.path;
   }
@@ -117,6 +126,8 @@ const MobileBottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { count: cartCount } = useCartCount();
+  const { favorites } = useFavorites();
+  const favoriteCount = favorites?.length ?? 0;
   const [showCategories, setShowCategories] = useState(false);
   const [categories, setCategories] = useState([]);
 
@@ -207,6 +218,9 @@ const MobileBottomNav = () => {
               ? showCategories || isActiveRoute(location.pathname, item)
               : isActiveRoute(location.pathname, item);
 
+            const badgeCount =
+              item.badgeSource === "favorites" ? favoriteCount : cartCount;
+
             return (
               <button
                 key={item.id}
@@ -219,13 +233,13 @@ const MobileBottomNav = () => {
                 <div className="mobile-nav-icon">
                   <i className={`fas ${item.icon}`}></i>
 
-                  {/* Sepet Badge */}
-                  {item.showBadge && cartCount > 0 && (
+                  {/* Badge */}
+                  {item.showBadge && badgeCount > 0 && (
                     <span
                       className="mobile-nav-badge"
-                      aria-label={`${cartCount} ürün`}
+                      aria-label={`${badgeCount} ürün`}
                     >
-                      {cartCount > 99 ? "99+" : cartCount}
+                      {badgeCount > 99 ? "99+" : badgeCount}
                     </span>
                   )}
                 </div>

@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import api from "../services/api";
+import profileService from "../services/profileService";
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: "",
@@ -21,12 +21,11 @@ export default function Profile() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const response = await api.get("/profile");
+        const response = await profileService.getProfile();
         if (response.success && response.data) {
           setForm({
             firstName: response.data.firstName || "",
@@ -66,13 +65,19 @@ export default function Profile() {
     setError("");
 
     try {
-      const response = await api.put("/profile", {
+      const response = await profileService.updateProfile({
         firstName: form.firstName,
         lastName: form.lastName,
         phoneNumber: form.phone,
       });
       if (response.success) {
         setMessage("Profil başarıyla güncellendi!");
+        updateUser({
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
+          name: `${form.firstName} ${form.lastName}`.trim(),
+        });
       }
     } catch (err) {
       setError(err.message || "Profil güncellenemedi");
@@ -90,7 +95,7 @@ export default function Profile() {
     }
 
     try {
-      const response = await api.post("/profile/change-password", {
+      const response = await profileService.changePassword({
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword,
         confirmPassword: passwordForm.confirmPassword,
@@ -108,21 +113,6 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = async () => {
-    setLogoutLoading(true);
-    setMessage("");
-    setError("");
-
-    try {
-      await logout();
-      navigate("/account");
-    } catch (err) {
-      setError("Çıkış yapılırken bir hata oluştu");
-    } finally {
-      setLogoutLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl text-center">
@@ -134,40 +124,41 @@ export default function Profile() {
   }
 
   if (!user) {
-    return (
-      <div className="container my-5" style={{ maxWidth: "640px" }}>
-        <div className="alert alert-warning">
-          Profil bilgilerini görüntülemek için giriş yapmanız gerekiyor.
-        </div>
-        <button
-          type="button"
-          className="btn btn-warning"
-          onClick={() => navigate("/account")}
-        >
-          Hesabıma Git
-        </button>
-      </div>
-    );
+    return <Navigate to="/account" replace />;
   }
 
+  const isPasswordless =
+    user.passwordless ||
+    user.loginProvider === "google" ||
+    user.loginProvider === "facebook";
+
   return (
-    <div className="container my-5">
+    <div className="container my-4 my-md-5 profile-settings-page">
       <div className="row">
-        <div className="col-12 mb-4 d-flex align-items-center justify-content-between gap-3">
-          <h2 className="fw-bold">
-            <i className="bi bi-person-circle me-2"></i>
-            Profilim
-          </h2>
+        <div className="col-12 mb-4">
           <button
             type="button"
-            className="btn btn-outline-danger"
-            onClick={handleLogout}
-            disabled={logoutLoading}
-            style={{ borderRadius: "12px", fontWeight: "600" }}
+            className="btn btn-link text-decoration-none ps-0 mb-2 d-md-none"
+            onClick={() => navigate("/account")}
           >
-            <i className="bi bi-box-arrow-right me-2"></i>
-            {logoutLoading ? "Çıkış yapılıyor..." : "Çıkış Yap"}
+            <i className="fas fa-arrow-left me-2" />
+            Hesabım
           </button>
+          <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap">
+            <h2 className="fw-bold mb-0">
+              <i className="fas fa-user-circle me-2 text-warning" />
+              Profil ve Şifre
+            </h2>
+            <button
+              type="button"
+              className="btn btn-outline-secondary d-none d-md-inline-flex"
+              onClick={() => navigate("/account")}
+              style={{ borderRadius: "12px", fontWeight: "600" }}
+            >
+              <i className="fas fa-arrow-left me-2" />
+              Hesabıma Dön
+            </button>
+          </div>
         </div>
       </div>
 
@@ -209,7 +200,7 @@ export default function Profile() {
           >
             <div className="card-header bg-white border-0 pt-4 pb-3">
               <h5 className="mb-0 fw-bold">
-                <i className="bi bi-person-fill text-primary me-2"></i>
+                <i className="fas fa-user text-primary me-2" />
                 Profil Bilgileri
               </h5>
             </div>
@@ -217,7 +208,7 @@ export default function Profile() {
               <form onSubmit={handleProfileUpdate}>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-person me-1"></i>
+                    <i className="fas fa-user me-1" />
                     Ad
                   </label>
                   <input
@@ -233,7 +224,7 @@ export default function Profile() {
                 </div>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-person me-1"></i>
+                    <i className="fas fa-user me-1" />
                     Soyad
                   </label>
                   <input
@@ -249,7 +240,7 @@ export default function Profile() {
                 </div>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-envelope me-1"></i>
+                    <i className="fas fa-envelope me-1" />
                     E-posta
                   </label>
                   <input
@@ -260,13 +251,13 @@ export default function Profile() {
                     style={{ backgroundColor: "#f8f9fa" }}
                   />
                   <small className="text-muted">
-                    <i className="bi bi-info-circle me-1"></i>
+                    <i className="fas fa-info-circle me-1" />
                     E-posta adresi değiştirilemez
                   </small>
                 </div>
                 <div className="mb-4">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-telephone me-1"></i>
+                    <i className="fas fa-phone me-1" />
                     Telefon
                   </label>
                   <input
@@ -289,7 +280,7 @@ export default function Profile() {
                     fontWeight: "600",
                   }}
                 >
-                  <i className="bi bi-check-circle me-2"></i>
+                  <i className="fas fa-check-circle me-2" />
                   Profili Güncelle
                 </button>
               </form>
@@ -305,15 +296,24 @@ export default function Profile() {
           >
             <div className="card-header bg-white border-0 pt-4 pb-3">
               <h5 className="mb-0 fw-bold">
-                <i className="bi bi-shield-lock text-warning me-2"></i>
+                <i className="fas fa-shield-alt text-warning me-2" />
                 Şifre Değiştir
               </h5>
             </div>
             <div className="card-body px-4 pb-4">
+              {isPasswordless ? (
+                <div className="alert alert-info mb-0">
+                  <i className="fas fa-info-circle me-2" />
+                  {user.loginProvider === "google" ? "Google" : "Sosyal"} ile
+                  giriş yaptınız. Şifre belirlemek için çıkış yapıp giriş
+                  ekranından &quot;Şifremi Unuttum&quot; akışını
+                  kullanabilirsiniz.
+                </div>
+              ) : (
               <form onSubmit={handlePasswordChange}>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-key me-1"></i>
+                    <i className="fas fa-key me-1" />
                     Mevcut Şifre
                   </label>
                   <input
@@ -332,7 +332,7 @@ export default function Profile() {
                 </div>
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-key-fill me-1"></i>
+                    <i className="fas fa-key me-1" />
                     Yeni Şifre
                   </label>
                   <input
@@ -351,7 +351,7 @@ export default function Profile() {
                 </div>
                 <div className="mb-4">
                   <label className="form-label fw-semibold">
-                    <i className="bi bi-key-fill me-1"></i>
+                    <i className="fas fa-key me-1" />
                     Yeni Şifre (Tekrar)
                   </label>
                   <input
@@ -377,62 +377,11 @@ export default function Profile() {
                     color: "#fff",
                   }}
                 >
-                  <i className="bi bi-shield-check me-2"></i>
+                  <i className="fas fa-shield-alt me-2" />
                   Şifreyi Değiştir
                 </button>
               </form>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hızlı Erişim Kartları */}
-      <div className="row g-4 mt-3">
-        <div className="col-md-4">
-          <div
-            className="card shadow-sm border-0 h-100"
-            style={{ borderRadius: "16px", cursor: "pointer" }}
-            onClick={() => (window.location.href = "/addresses")}
-          >
-            <div className="card-body text-center p-4">
-              <i
-                className="bi bi-geo-alt-fill text-danger"
-                style={{ fontSize: "3rem" }}
-              ></i>
-              <h5 className="mt-3 mb-2 fw-bold">Adreslerim</h5>
-              <p className="text-muted mb-0">Teslimat adreslerini yönet</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div
-            className="card shadow-sm border-0 h-100"
-            style={{ borderRadius: "16px", cursor: "pointer" }}
-            onClick={() => (window.location.href = "/orders")}
-          >
-            <div className="card-body text-center p-4">
-              <i
-                className="bi bi-box-seam text-success"
-                style={{ fontSize: "3rem" }}
-              ></i>
-              <h5 className="mt-3 mb-2 fw-bold">Siparişlerim</h5>
-              <p className="text-muted mb-0">Sipariş geçmişini görüntüle</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-md-4">
-          <div
-            className="card shadow-sm border-0 h-100"
-            style={{ borderRadius: "16px", cursor: "pointer" }}
-            onClick={() => (window.location.href = "/favorites")}
-          >
-            <div className="card-body text-center p-4">
-              <i
-                className="bi bi-heart-fill text-danger"
-                style={{ fontSize: "3rem" }}
-              ></i>
-              <h5 className="mt-3 mb-2 fw-bold">Favorilerim</h5>
-              <p className="text-muted mb-0">Beğendiğin ürünler</p>
+              )}
             </div>
           </div>
         </div>

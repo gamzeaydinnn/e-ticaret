@@ -604,13 +604,52 @@ namespace ECommerce.Core.Constants
         /// </summary>
         public static string GetDisplayName(string permissionName)
         {
-            // Module ve action parçalarını ayır
-            var parts = permissionName.Split('.');
-            if (parts.Length != 2)
+            if (string.IsNullOrWhiteSpace(permissionName))
+            {
                 return permissionName;
+            }
+
+            var normalized = permissionName.Trim().ToLowerInvariant();
+
+            return normalized switch
+            {
+                "store.orders.pending" => "Bekleyen Siparişleri Görüntüleme",
+                "store.orders.prepare" => "Sipariş Hazırlamaya Başlama",
+                "store.orders.ready" => "Siparişi Hazır İşaretleme",
+                "store.orders.weight" => "Tartı / Ağırlık Girişi",
+                "store.orders.details" => "Sipariş Detaylarını Görüntüleme",
+                "store.orders.summary" => "Günlük Özet Görüntüleme",
+                "store.orders.assign_courier" => "Kurye Atama",
+                "store.orders.update_status" => "Sipariş Durumu Güncelleme",
+                "store.orders.cancel" => "Sipariş İptali",
+                "store.orders.refund" => "İade İşlemi",
+                "dispatch.orders.ready" => "Hazır Siparişleri Görüntüleme",
+                "dispatch.orders.assign" => "Kurye Atama",
+                "dispatch.orders.reassign" => "Kurye Yeniden Atama",
+                "dispatch.couriers.view" => "Kuryeleri Görüntüleme",
+                "dispatch.couriers.details" => "Kurye Detaylarını Görüntüleme",
+                "dispatch.couriers.message" => "Kuryeye Mesaj Gönderme",
+                "dispatch.statistics" => "Sevkiyat İstatistikleri",
+                "dispatch.orders.details" => "Sevkiyat Sipariş Detayları",
+                "orders.view_details" => "Sipariş Detaylarını Görüntüleme",
+                "orders.update_status" => "Sipariş Durumu Güncelleme",
+                "orders.view_customer_info" => "Müşteri Bilgilerini Görüntüleme",
+                "dashboard.view_statistics" => "Dashboard İstatistikleri",
+                "dashboard.view_revenue" => "Gelir Grafiği Görüntüleme",
+                _ => BuildDisplayNameFromParts(normalized),
+            };
+        }
+
+        private static string BuildDisplayNameFromParts(string permissionName)
+        {
+            var parts = permissionName.Split('.');
+            if (parts.Length < 2)
+            {
+                return permissionName;
+            }
 
             var module = parts[0];
-            var action = parts[1];
+            var action = string.Join("_", parts.Skip(1));
 
             // Modül çevirisi
             var moduleDisplay = module switch

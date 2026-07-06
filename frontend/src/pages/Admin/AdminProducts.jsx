@@ -66,7 +66,7 @@ const AdminProducts = () => {
   const [searchFilters, setSearchFilters] = useState({
     sku: "",
     name: "",
-    status: "all",
+    status: "active",
     stockStatus: "all",
   });
   const [draftSearchFilters, setDraftSearchFilters] = useState({
@@ -77,6 +77,16 @@ const AdminProducts = () => {
   const [pageSize, setPageSize] = useState(24);
   const [totalProductsCount, setTotalProductsCount] = useState(0);
   const [serverTotalPages, setServerTotalPages] = useState(1);
+  const [catalogStats, setCatalogStats] = useState({
+    totalProducts: 0,
+    activeProducts: 0,
+    inactiveProducts: 0,
+    lowStockProducts: 0,
+    outOfStockProducts: 0,
+    uncategorizedProducts: 0,
+    totalCategories: 0,
+  });
+  const [catalogStatsLoading, setCatalogStatsLoading] = useState(true);
 
   // Resim Upload State'leri
   const [imageUploading, setImageUploading] = useState(false);
@@ -130,6 +140,7 @@ const AdminProducts = () => {
       });
       alert("✅ Tüm ürünler için varsayılan Mikro bağımsızlık ayarları güncellendi.");
       fetchProducts();
+      fetchCatalogStats();
     } catch (err) {
       console.error("Genel Mikro bağımsızlık ayarları kaydedilemedi:", err);
       alert(
@@ -148,6 +159,18 @@ const AdminProducts = () => {
       [fieldName]: nextValue,
     }));
   };
+
+  const fetchCatalogStats = useCallback(async () => {
+    try {
+      setCatalogStatsLoading(true);
+      const stats = await ProductService.getAdminStats();
+      setCatalogStats(stats);
+    } catch (err) {
+      console.error("Katalog istatistikleri yükleme hatası:", err);
+    } finally {
+      setCatalogStatsLoading(false);
+    }
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -202,6 +225,7 @@ const AdminProducts = () => {
 
   useEffect(() => {
     fetchCategories();
+    fetchCatalogStats();
     fetchDuplicateGroups();
     fetchGlobalOverrideSettings();
 
@@ -212,8 +236,8 @@ const AdminProducts = () => {
       // Kendi CRUD işlemlerimizden sonra zaten fetchProducts çağrılıyor
       // Bu subscription daha çok multi-tab senkronizasyonu için
       if (event.action === "import") {
-        // Excel import sonrası tam yenileme
         fetchProductsRef.current?.();
+        fetchCatalogStats();
       }
     });
 
@@ -376,6 +400,7 @@ const AdminProducts = () => {
 
       // Listeyi yenile
       fetchProducts();
+      fetchCatalogStats();
       fetchDuplicateGroups();
     } catch (err) {
       console.error("Ürün kaydetme hatası:", err);
@@ -674,7 +699,8 @@ const AdminProducts = () => {
       try {
         // ProductService.deleteAdmin kullan - veritabanından kalıcı siler
         await ProductService.deleteAdmin(id);
-        fetchProducts(); // Listeyi yenile
+        fetchProducts();
+        fetchCatalogStats();
       } catch (err) {
         console.error("Ürün silme hatası:", err);
         alert(
@@ -704,8 +730,8 @@ const AdminProducts = () => {
         excelImageFiles,
       );
       setExcelResult(result);
-      // Başarılı olursa ürün listesini yenile
       fetchProducts();
+      fetchCatalogStats();
     } catch (err) {
       console.error("Excel yükleme hatası:", err);
       setExcelError(
@@ -806,6 +832,7 @@ const AdminProducts = () => {
 
       // Listeyi ve kategorileri yenile
       fetchProducts();
+      fetchCatalogStats();
       fetchCategories();
       fetchDuplicateGroups();
     } catch (err) {
@@ -884,7 +911,7 @@ const AdminProducts = () => {
 
     try {
       await ProductService.deactivateAdmin(product.id);
-      await Promise.all([fetchProducts(), fetchDuplicateGroups()]);
+      await Promise.all([fetchProducts(), fetchCatalogStats(), fetchDuplicateGroups()]);
       alert("✅ Ürün pasife alındı.");
     } catch (err) {
       console.error("Ürün pasife alma hatası:", err);
@@ -1039,13 +1066,14 @@ const AdminProducts = () => {
     );
   }
 
-  const totalProducts = totalProductsCount;
-  const activeProducts = products.filter((product) => product.isActive).length;
-  const lowStockProducts = products.filter(
-    (product) => (product.stock ?? product.stockQuantity ?? 0) <= 10,
-  ).length;
-  const totalCategories = categories.length;
-  const uncategorizedCount = uncategorizedProducts.length;
+  const formatStatValue = (value) =>
+    catalogStatsLoading ? "…" : Number(value || 0).toLocaleString("tr-TR");
+
+  const totalProducts = catalogStats.totalProducts || totalProductsCount;
+  const activeProducts = catalogStats.activeProducts;
+  const lowStockProducts = catalogStats.lowStockProducts;
+  const totalCategories = catalogStats.totalCategories || categories.length;
+  const uncategorizedCount = catalogStats.uncategorizedProducts;
   const hasActiveFilters =
     searchFilters.sku.trim().length > 0 ||
     searchFilters.name.trim().length > 0 ||
@@ -1380,25 +1408,25 @@ const AdminProducts = () => {
             <div className="admin-products-summary">
               <div className="admin-products-stat">
                 <span className="admin-products-stat-value">
-                  {totalProducts}
+                  {formatStatValue(totalProducts)}
                 </span>
                 <span className="admin-products-stat-label">Toplam Ürün</span>
               </div>
               <div className="admin-products-stat">
                 <span className="admin-products-stat-value">
-                  {activeProducts}
+                  {formatStatValue(activeProducts)}
                 </span>
                 <span className="admin-products-stat-label">Aktif</span>
               </div>
               <div className="admin-products-stat">
                 <span className="admin-products-stat-value">
-                  {lowStockProducts}
+                  {formatStatValue(lowStockProducts)}
                 </span>
                 <span className="admin-products-stat-label">Düşük Stok</span>
               </div>
               <div className="admin-products-stat">
                 <span className="admin-products-stat-value">
-                  {totalCategories}
+                  {formatStatValue(totalCategories)}
                 </span>
                 <span className="admin-products-stat-label">Kategori</span>
               </div>
@@ -1758,7 +1786,7 @@ const AdminProducts = () => {
                     setSearchFilters({
                       sku: "",
                       name: "",
-                      status: "all",
+                      status: "active",
                       stockStatus: "all",
                     });
                     setCurrentPage(1);
@@ -2960,7 +2988,8 @@ const AdminProducts = () => {
             onClose={() => setShowXmlImportModal(false)}
             onImportComplete={() => {
               setShowXmlImportModal(false);
-              fetchProducts(); // Ürün listesini yenile
+              fetchProducts();
+              fetchCatalogStats();
             }}
           />
         )}

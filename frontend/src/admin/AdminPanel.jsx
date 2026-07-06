@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import AdminDashboard from "../pages/Admin/Dashboard";
 import AdminProducts from "../pages/Admin/AdminProducts";
-import AdminCategories from "../pages/Admin/AdminCategories";
+import AdminCategories from "../pages/Admin/AdminCategories.jsx";
 import AdminOrders from "../pages/Admin/AdminOrders";
 import AdminUsers from "../pages/Admin/AdminUsers";
 import CouponManagement from "../pages/Admin/CouponManagement";

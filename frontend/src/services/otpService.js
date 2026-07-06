@@ -1,6 +1,7 @@
 // src/services/otpService.js
 // SMS doğrulama servisi - Backend /api/sms/* endpoint'leri ile iletişim kurar
 import api from "./api";
+import { getApiErrorMessage } from "../utils/errorMessages";
 
 /**
  * SMS Doğrulama Servisi
@@ -51,13 +52,12 @@ const smsService = {
       };
     } catch (error) {
       console.error("[SmsService] OTP gönderme hatası:", error);
-      const data = error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "SMS gönderilemedi",
-        errorCode: data.errorCode,
-        retryAfterSeconds: data.retryAfterSeconds,
-        remainingDailyCount: data.remainingDailyCount,
+        message: getApiErrorMessage(error, "SMS gönderilemedi"),
+        errorCode: error.raw?.response?.data?.errorCode,
+        retryAfterSeconds: error.raw?.response?.data?.retryAfterSeconds,
+        remainingDailyCount: error.raw?.response?.data?.remainingDailyCount,
       };
     }
   },
@@ -94,10 +94,10 @@ const smsService = {
       };
     } catch (error) {
       console.error("[SmsService] OTP doğrulama hatası:", error);
-      const data = error.response?.data || {};
+      const data = error.raw?.response?.data || error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "Doğrulama başarısız",
+        message: getApiErrorMessage(error, "Doğrulama başarısız"),
         errorCode: data.errorCode,
         remainingAttempts: data.remainingAttempts,
       };
@@ -123,10 +123,10 @@ const smsService = {
       };
     } catch (error) {
       console.error("[SmsService] OTP resend hatası:", error);
-      const data = error.response?.data || {};
+      const data = error.raw?.response?.data || error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "SMS gönderilemedi",
+        message: getApiErrorMessage(error, "SMS gönderilemedi"),
         errorCode: data.errorCode,
         retryAfterSeconds: data.retryAfterSeconds,
       };
@@ -200,17 +200,23 @@ const smsService = {
         "/api/auth/register-with-phone",
         userData,
       );
-      console.log("[SmsService] Kayıt başlatıldı:", response.data);
+      const data = response?.data ?? response ?? {};
+      console.log("[SmsService] Kayıt başlatıldı:", data);
       return {
-        success: true,
-        ...response.data,
+        success: data.Success ?? data.success ?? true,
+        message: data.Message ?? data.message,
+        userId: data.UserId ?? data.userId,
+        phoneVerificationRequired:
+          data.PhoneVerificationRequired ?? data.phoneVerificationRequired ?? true,
       };
     } catch (error) {
       console.error("[SmsService] Kayıt hatası:", error);
-      const data = error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "Kayıt başarısız",
+        message: getApiErrorMessage(
+          error,
+          "Kayıt başarısız. Lütfen bilgilerinizi kontrol edin.",
+        ),
       };
     }
   },
@@ -229,17 +235,19 @@ const smsService = {
         code,
         email,
       });
-      console.log("[SmsService] Kayıt doğrulandı:", response.data);
+      const data = response?.data ?? response ?? {};
+      console.log("[SmsService] Kayıt doğrulandı:", data);
       return {
-        success: true,
-        ...response.data,
+        success: data.Success ?? data.success ?? true,
+        message: data.Message ?? data.message,
+        token: data.Token ?? data.token,
+        refreshToken: data.RefreshToken ?? data.refreshToken,
       };
     } catch (error) {
       console.error("[SmsService] Kayıt doğrulama hatası:", error);
-      const data = error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "Doğrulama başarısız",
+        message: getApiErrorMessage(error, "Doğrulama başarısız"),
       };
     }
   },
@@ -279,10 +287,9 @@ const smsService = {
       };
     } catch (error) {
       console.error("[SmsService] Şifre sıfırlama hatası:", error);
-      const data = error.response?.data || {};
       return {
         success: false,
-        message: data.Message || data.message || "İşlem başarısız",
+        message: getApiErrorMessage(error, "İşlem başarısız"),
       };
     }
   },
@@ -310,10 +317,9 @@ const smsService = {
       };
     } catch (error) {
       console.error("[SmsService] Şifre sıfırlama hatası:", error);
-      const data = error.response?.data || {};
       return {
         success: false,
-        message: data.message || data.Message || "Şifre sıfırlama başarısız",
+        message: getApiErrorMessage(error, "Şifre sıfırlama başarısız"),
       };
     }
   },

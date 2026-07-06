@@ -11,6 +11,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import permissionService, {
   PERMISSIONS,
   PERMISSION_MODULES,
+  ROLE_LABELS,
+  PERMISSION_MODULE_LABELS,
+  getPermissionModuleKey,
+  getPermissionModuleLabel,
+  getPermissionDisplayName,
+  getRoleDisplayName,
 } from "../../services/permissionService";
 
 const getValue = (obj, ...keys) => {
@@ -30,6 +36,7 @@ const normalizeRole = (role) => {
     name,
     displayName:
       getValue(role, "displayName", "DisplayName", "roleDisplayName", "RoleDisplayName") ||
+      ROLE_LABELS[name] ||
       name,
     description: getValue(role, "description", "Description") || "",
     isSystemRole: getValue(role, "isSystemRole", "IsSystemRole") === true,
@@ -56,9 +63,11 @@ const normalizePermission = (permission) => {
     code,
     name: getValue(permission, "name", "Name") || code,
     displayName:
-      getValue(permission, "displayName", "DisplayName") ||
-      code.split(".").pop() ||
-      code,
+      getPermissionDisplayName({
+        code,
+        displayName: getValue(permission, "displayName", "DisplayName"),
+        name: getValue(permission, "name", "Name"),
+      }) || code,
     description: getValue(permission, "description", "Description") || "",
   };
 };
@@ -364,13 +373,13 @@ const AdminRoles = () => {
 
     allPermissions.forEach((permission) => {
       const code = permission.code || permission.name || permission;
-      const module = code.split(".")[0];
+      const module = getPermissionModuleKey(code);
 
       if (!groups[module]) {
         groups[module] = {
           name: module,
-          displayName: PERMISSION_MODULES[module]?.name || module,
-          description: PERMISSION_MODULES[module]?.description || "",
+          displayName: getPermissionModuleLabel(code),
+          description: PERMISSION_MODULE_LABELS[module]?.description || "",
           permissions: [],
         };
       }
@@ -378,7 +387,7 @@ const AdminRoles = () => {
       groups[module].permissions.push({
         code: code,
         name: permission.name || code,
-        displayName: permission.displayName || code.split(".").pop(),
+        displayName: getPermissionDisplayName(permission),
         description: permission.description || "",
       });
     });
@@ -493,7 +502,7 @@ const AdminRoles = () => {
                       style={{ fontSize: "0.95rem" }}
                     >
                       <i className="fas fa-user-tag me-2 text-primary"></i>
-                      {role.displayName || role.name}
+                      {getRoleDisplayName(role)}
                     </h6>
                     <span
                       className="badge bg-secondary"

@@ -18,7 +18,7 @@ import "./styles/adminMobile.css";
 import AccountPage from "./components/AccountPage";
 import CartPage from "./components/CartPage";
 import FavoritesPage from "./components/FavoritesPage";
-import LoginModal from "./components/LoginModal";
+import { LoginModalProvider, useLoginModal } from "./contexts/LoginModalContext";
 import OrderSuccess from "./components/OrderSuccess";
 import OrderTracking from "./components/OrderTracking";
 import PaymentPage from "./components/PaymentPage";
@@ -86,6 +86,7 @@ import {
 import { CourierGuard, CourierLoginGuard } from "./guards/CourierGuard";
 // Admin guards
 import Footer from "./components/Footer";
+import MobileFooterStrip from "./components/MobileFooterStrip";
 import CookieConsent from "./components/CookieConsent"; // KVKK uyumlu cookie consent banner
 import { GlobalToastContainer } from "./components/ToastProvider";
 import { AdminGuard, AdminLoginGuard } from "./guards/AdminGuard";
@@ -105,7 +106,6 @@ import Faq from "./pages/Faq.jsx";
 import Feedback from "./pages/Feedback.jsx";
 import HelpCenter from "./pages/HelpCenter.jsx";
 import Home from "./pages/Home";
-import OrderHistory from "./pages/OrderHistory";
 import PaymentOptions from "./pages/PaymentOptions.jsx";
 import PressKit from "./pages/PressKit.jsx";
 import Product from "./pages/Product";
@@ -162,7 +162,7 @@ function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { openLoginModal } = useLoginModal();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [categories, setCategories] = useState([]);
   const [hoveredCat, setHoveredCat] = useState(null);
@@ -215,7 +215,7 @@ function Header() {
     if (user) {
       setShowUserDropdown(!showUserDropdown);
     } else {
-      setShowLoginModal(true);
+      openLoginModal("login");
     }
   };
 
@@ -382,7 +382,7 @@ function Header() {
                           }}
                           onClick={() => {
                             setShowUserDropdown(false);
-                            navigate("/profile");
+                            navigate("/account");
                           }}
                         >
                           <div
@@ -493,51 +493,6 @@ function Header() {
                               Siparişlerim
                             </div>
                             <small className="text-muted">Sipariş takibi</small>
-                          </div>
-                        </button>
-
-                        <button
-                          className="dropdown-item d-flex align-items-center px-4 py-3 border-0 bg-transparent w-100 text-start"
-                          style={{
-                            transition: "all 0.2s ease",
-                            fontSize: "14px",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background =
-                              "linear-gradient(135deg, #f8f9ff, #e3f2fd)";
-                            e.target.style.transform = "translateX(5px)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background = "transparent";
-                            e.target.style.transform = "translateX(0)";
-                          }}
-                          onClick={() => {
-                            setShowUserDropdown(false);
-                            navigate("/orders/history");
-                          }}
-                        >
-                          <div
-                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                            style={{
-                              width: "32px",
-                              height: "32px",
-                              background:
-                                "linear-gradient(135deg, #6c5ce7, #a363d9)",
-                              color: "white",
-                            }}
-                          >
-                            <i
-                              className="fas fa-history"
-                              style={{ fontSize: "14px" }}
-                            ></i>
-                          </div>
-                          <div>
-                            <div className="fw-semibold text-dark">
-                              Sipariş Geçmişi
-                            </div>
-                            <small className="text-muted">
-                              Önceki siparişlerim
-                            </small>
                           </div>
                         </button>
 
@@ -812,23 +767,12 @@ function Header() {
           </div>
         </div>
       </nav>
-
-      {/* Login Modal */}
-      <LoginModal
-        show={showLoginModal}
-        onHide={() => setShowLoginModal(false)}
-        onLoginSuccess={() => {
-          setShowLoginModal(false);
-          // Başarılı giriş sonrası gerekli işlemler
-        }}
-      />
     </div>
   );
 }
 
 function App() {
   const location = useLocation();
-  const showGlobalFooter = location.pathname !== "/";
 
   // Admin, kurye, dispatcher ve store attendant sayfalarında Header'ı gizle
   const isAdminPage = location.pathname.startsWith("/admin");
@@ -840,6 +784,7 @@ function App() {
     !isCourierPage &&
     !isDispatcherPage &&
     !isStoreAttendantPage;
+  const showGlobalFooter = showHeader;
 
   return (
     <div className="App">
@@ -852,7 +797,7 @@ function App() {
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/orders" element={<OrderTracking />} />
-        <Route path="/orders/history" element={<OrderHistory />} />
+        <Route path="/orders/history" element={<Navigate to="/orders" replace />} />
         <Route path="/payment" element={<PaymentPage />} />
         <Route path="/order-success" element={<OrderSuccess />} />
         <Route path="/reset-password" element={<ResetPassword />} />
@@ -925,7 +870,7 @@ function App() {
         <Route
           path="/admin/dashboard"
           element={
-            <AdminGuard>
+            <AdminGuard requiredPermission="dashboard.view" fallbackPath="auto">
               <AdminLayout>
                 <Dashboard />
               </AdminLayout>
@@ -1284,7 +1229,8 @@ function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
 
-      {/* Footer - Mobilde gizli (desktop-only-footer class'ı ile) */}
+      {/* Footer — mobil: kompakt şerit; desktop: tam footer */}
+      {showGlobalFooter && showHeader && <MobileFooterStrip />}
       {showGlobalFooter && showHeader && <Footer />}
 
       {/* Mobile Bottom Navigation - Sadece mobilde görünür, admin/kurye sayfalarında gizli */}
@@ -1314,9 +1260,11 @@ function AppWithProviders() {
                       <CompareProvider>
                         <ErrorBoundary>
                           <Router>
-                            <ScrollToTop />
-                            <App />
-                            <CompareFloatingButton />
+                            <LoginModalProvider>
+                              <ScrollToTop />
+                              <App />
+                              <CompareFloatingButton />
+                            </LoginModalProvider>
                           </Router>
                         </ErrorBoundary>
                       </CompareProvider>
@@ -2170,288 +2118,9 @@ function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Modern Footer - Mobilde gizli */}
-      <footer
-        className="modern-footer d-none d-md-block"
-        style={{
-          background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
-          color: "white",
-        }}
-      >
-        <div className="container-fluid px-4 py-5">
-          <div className="row">
-            {/* Company Info */}
-            <div className="col-lg-4 col-md-6 mb-4">
-              <div className="footer-brand footer-brand-panel">
-                <div className="d-flex align-items-center mb-4 footer-brand-logos">
-                  <div className="footer-brand-main">
-                    <div className="footer-logo-crop" aria-label="Gölköy Gurme">
-                      <img
-                        className="footer-logo-image"
-                        src="/images/golkoy-logo-new.png"
-                        alt="Gölköy Gurme"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <p className="footer-description">
-                  Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli
-                  ürünleri, en yüksek kalite standartlarında siz değerli
-                  müşterilerimize sunmayı amaçlıyoruz.
-                </p>
-                <div className="footer-trust-row">
-                  <span className="footer-trust-chip">Dogal Secki</span>
-                  <span className="footer-trust-chip">Soguk Zincir</span>
-                  <span className="footer-trust-chip">Guvenli Odeme</span>
-                </div>
-                <div className="footer-features">
-                  <div className="footer-feature">
-                    <i className="fas fa-shield-alt text-success me-2"></i>
-                    SSL güvenli alışveriş
-                  </div>
-                  <div className="footer-feature">
-                    <i className="fas fa-credit-card text-info me-2"></i>
-                    Güvenli ödeme sistemi
-                  </div>
-                  <div className="footer-feature">
-                    <i className="fas fa-heart text-danger me-2"></i>
-                    Müşteri memnuniyeti odaklı
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Categories */}
-            <div className="col-lg-2 col-md-6 mb-4">
-              <h6 className="footer-title">Kategoriler</h6>
-              <ul className="footer-links">
-                <li>
-                  <a href="/category/meyve-ve-sebze" className="footer-link">
-                    Meyve & Sebze
-                  </a>
-                </li>
-                <li>
-                  <a href="/category/et-ve-et-urunleri" className="footer-link">
-                    Et & Tavuk & Balık
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="/category/sut-ve-sut-urunleri"
-                    className="footer-link"
-                  >
-                    Süt Ürünleri
-                  </a>
-                </li>
-                <li>
-                  <a href="/category/temel-gida" className="footer-link">
-                    Temel Gıda
-                  </a>
-                </li>
-                <li>
-                  <a href="/category/icecekler" className="footer-link">
-                    İçecekler
-                  </a>
-                </li>
-                <li>
-                  <a href="/category/atistirmalik" className="footer-link">
-                    Atıştırmalık
-                  </a>
-                </li>
-                <li>
-                  <a href="/category/temizlik" className="footer-link">
-                    Temizlik
-                  </a>
-                </li>
-                <li>
-                  <a href="/favorites" className="footer-link">
-                    Favorilerim
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Customer Services */}
-            <div className="col-lg-2 col-md-6 mb-4">
-              <h6 className="footer-title">Müşteri Hizmetleri</h6>
-              <ul className="footer-links">
-                <li>
-                  <Link to="/yardim" className="footer-link">
-                    Yardım Merkezi
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/iletisim" className="footer-link text-warning">
-                    İletişim
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/siparis-takibi" className="footer-link">
-                    Sipariş Takibi
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/iade-degisim" className="footer-link">
-                    İade & Değişim
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/kargo-bilgileri" className="footer-link">
-                    Kargo Bilgileri
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/odeme-secenekleri" className="footer-link">
-                    Ödeme Seçenekleri
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/guvenli-alisveris" className="footer-link">
-                    Güvenli Alışveriş
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/sss" className="footer-link">
-                    S.S.S
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/geri-bildirim" className="footer-link">
-                    Geri Bildirim
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* Contact Info */}
-            <div className="col-lg-2 col-md-6 mb-4">
-              <h6 className="footer-title">İletişim</h6>
-              <div className="contact-info">
-                <div className="contact-item">
-                  <i className="fas fa-phone text-warning me-2"></i>
-                  <div>
-                    <strong>+90 533 478 30 72</strong>
-                    <br />
-                    <small>Müşteri Hizmetleri</small>
-                  </div>
-                </div>
-                <div className="contact-item">
-                  <i className="fas fa-envelope text-warning me-2"></i>
-                  <div>
-                    <strong>golturkbuku@golkoygurme.com.tr</strong>
-                    <br />
-                    <small>Genel bilgi ve destek</small>
-                  </div>
-                </div>
-                <div className="contact-item">
-                  <i className="fas fa-map-marker-alt text-warning me-2"></i>
-                  <div>
-                    <strong>Gölköy Mah. 67 Sokak No: 1/A Bodrum/Muğla</strong>
-                    <br />
-                    <small>Merkez Ofis</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Corporate */}
-            <div className="col-lg-3 col-md-6 mb-4">
-              <h6 className="footer-title">Kurumsal</h6>
-              <ul className="footer-links">
-                <li>
-                  <Link to="/hakkimizda" className="footer-link">
-                    Hakkımızda
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/vizyon-misyon" className="footer-link">
-                    Vizyon & Misyon
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/kariyer" className="footer-link">
-                    Kariyer (Yakında)
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/basin-kiti" className="footer-link">
-                    Basın Kiti
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/surdurulebilirlik" className="footer-link">
-                    Sürdürülebilirlik
-                  </Link>
-                </li>
-              </ul>
-
-              {/* Social Media */}
-              <div className="social-media mt-4">
-                <h6 className="footer-title">Sosyal Medya</h6>
-                <div className="social-links">
-                  <a
-                    href="https://www.facebook.com/golkoygurmebodrum"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-facebook-f"></i>
-                  </a>
-                  <a
-                    href="https://www.instagram.com/golkoygurmebodrum?igsh=aWJwMHJsbXdjYmt4"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-instagram"></i>
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer Bottom */}
-        <div className="footer-bottom">
-          <div className="container-fluid px-4">
-            <div className="row align-items-center">
-              <div className="col-md-8">
-                <div className="footer-bottom-links">
-                  <span>Tüm haklar Gölköy Gurme Markete aittir.</span>
-                  <Link
-                    to="/gizlilik-politikasi"
-                    className="footer-bottom-link"
-                  >
-                    Gizlilik Politikası
-                  </Link>
-                  <Link to="/kullanim-sartlari" className="footer-bottom-link">
-                    Kullanım Şartları
-                  </Link>
-                  <Link to="/kvkk" className="footer-bottom-link">
-                    KVKK
-                  </Link>
-                  <Link to="/cerez-politikasi" className="footer-bottom-link">
-                    Çerez Politikası
-                  </Link>
-                </div>
-              </div>
-              <div className="col-md-4 text-end">
-                <div className="payment-methods">
-                  <span className="payment-text">Kabul Edilen Kartlar:</span>
-                  <div className="payment-cards">
-                    <span className="payment-card">VISA</span>
-                    <span className="payment-card">MC</span>
-                    <span className="payment-card">TROY</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
     </>
   );
 }
 
 export default AppWithProviders;
+

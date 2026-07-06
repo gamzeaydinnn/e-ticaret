@@ -1,6 +1,13 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { buildWhatsAppUrl } from "../utils/customerSupport";
 
 export default function Returns() {
+  const [whatsAppUrl, setWhatsAppUrl] = useState(null);
+
+  useEffect(() => {
+    buildWhatsAppUrl("İade/Değişim talebi").then(setWhatsAppUrl);
+  }, []);
+
   return (
     <div className="container py-5">
       <h1 className="h3 fw-bold mb-3" style={{ color: "#2d3748" }}>
@@ -65,17 +72,30 @@ export default function Returns() {
           İade/Değişim İçin İletişim
         </h5>
         <p className="ps-4">
-          WhatsApp veya telefon yoluyla müşteri hizmetlerimize ulaşarak sipariş
-          numaranızı ve sorunu bildirmeniz yeterlidir. Kuryemiz en kısa sürede
-          gerekli işlemi gerçekleştirecektir.
+          WhatsApp üzerinden müşteri hizmetlerimize ulaşarak sipariş
+          numaranızı ve sorunu bildirmeniz yeterlidir.
         </p>
+        <div className="ps-4">
+          {whatsAppUrl && (
+            <a
+              href={whatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-success"
+            >
+              <i className="fab fa-whatsapp me-2" />
+              WhatsApp ile İletişim
+            </a>
+          )}
+        </div>
       </div>
 
       <div className="alert alert-info">
         <i className="fas fa-info-circle me-2"></i>
-        <strong>Not:</strong> İade koşullarını sağlayan ürünler için ödemeniz
-        aynı ödeme yöntemi ile iade edilir veya bir sonraki siparişinizden
-        düşülür.
+        <strong>Not:</strong> Kurye teslim almadan önce siparişinizi uygulamadan
+        iptal edebilirsiniz. Teslim alındıktan sonra iade için WhatsApp üzerinden
+        bizimle iletişime geçmeniz gerekir. İade koşullarını sağlayan ürünler
+        için ödemeniz aynı ödeme yöntemi ile iade edilir.
       </div>
     </div>
   );

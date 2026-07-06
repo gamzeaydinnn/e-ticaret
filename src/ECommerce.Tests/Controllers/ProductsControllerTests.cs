@@ -35,6 +35,18 @@ namespace ECommerce.Tests.Controllers
             return service;
         }
 
+        private static Mock<IAdminCatalogStatsService> CreateAdminCatalogStatsService()
+        {
+            var service = new Mock<IAdminCatalogStatsService>();
+            service
+                .Setup(stats => stats.GetProductSnapshotsAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<AdminCatalogProductSnapshot>());
+            service
+                .Setup(stats => stats.GetActiveProductCountsByCategoryAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Dictionary<int, int>());
+            return service;
+        }
+
         private static ECommerceDbContext CreateContext()
         {
             var options = new DbContextOptionsBuilder<ECommerceDbContext>()
@@ -54,6 +66,7 @@ namespace ECommerce.Tests.Controllers
             var productRepository = new Mock<IProductRepository>();
             var httpClientFactory = new Mock<IHttpClientFactory>();
             var productAdminOverrideSettingsService = CreateOverrideSettingsService();
+            var adminCatalogStatsService = CreateAdminCatalogStatsService();
 
             mikroDbService.SetupGet(x => x.IsConfigured).Returns(true);
             mikroDbService
@@ -69,7 +82,8 @@ namespace ECommerce.Tests.Controllers
                 productRepository.Object,
                 context,
                 httpClientFactory.Object,
-                productAdminOverrideSettingsService.Object);
+                productAdminOverrideSettingsService.Object,
+                adminCatalogStatsService.Object);
 
             controller.ControllerContext = new ControllerContext
             {
@@ -177,6 +191,7 @@ namespace ECommerce.Tests.Controllers
             var productRepository = new Mock<IProductRepository>();
             var httpClientFactory = new Mock<IHttpClientFactory>();
             var productAdminOverrideSettingsService = CreateOverrideSettingsService();
+            var adminCatalogStatsService = CreateAdminCatalogStatsService();
 
             mikroDbService.SetupGet(x => x.IsConfigured).Returns(true);
             mikroDbService
@@ -195,7 +210,8 @@ namespace ECommerce.Tests.Controllers
                 productRepository.Object,
                 context,
                 httpClientFactory.Object,
-                productAdminOverrideSettingsService.Object);
+                productAdminOverrideSettingsService.Object,
+                adminCatalogStatsService.Object);
 
             controller.ControllerContext = new ControllerContext
             {
@@ -223,6 +239,7 @@ namespace ECommerce.Tests.Controllers
             var productRepository = new Mock<IProductRepository>();
             var httpClientFactory = new Mock<IHttpClientFactory>();
             var productAdminOverrideSettingsService = CreateOverrideSettingsService();
+            var adminCatalogStatsService = CreateAdminCatalogStatsService();
 
             var pagedResult = new ECommerce.Core.DTOs.PagedResult<ProductListDto>(
                 new List<ProductListDto>
@@ -252,7 +269,8 @@ namespace ECommerce.Tests.Controllers
                 productRepository.Object,
                 context,
                 httpClientFactory.Object,
-                productAdminOverrideSettingsService.Object);
+                productAdminOverrideSettingsService.Object,
+                adminCatalogStatsService.Object);
 
             controller.ControllerContext = new ControllerContext
             {
@@ -316,6 +334,7 @@ namespace ECommerce.Tests.Controllers
             var productRepository = new Mock<IProductRepository>();
             var httpClientFactory = new Mock<IHttpClientFactory>();
             var productAdminOverrideSettingsService = CreateOverrideSettingsService();
+            var adminCatalogStatsService = CreateAdminCatalogStatsService();
 
             mikroDbService.SetupGet(service => service.IsConfigured).Returns(true);
             mikroDbService
@@ -344,7 +363,8 @@ namespace ECommerce.Tests.Controllers
                 productRepository.Object,
                 context,
                 httpClientFactory.Object,
-                productAdminOverrideSettingsService.Object);
+                productAdminOverrideSettingsService.Object,
+                adminCatalogStatsService.Object);
 
             controller.ControllerContext = new ControllerContext
             {

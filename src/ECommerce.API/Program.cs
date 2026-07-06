@@ -534,6 +534,7 @@ builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.INotificationS
 builder.Services.AddScoped<IOrderStateMachine, OrderStateMachine>();
 
 // RefundManager - İade talebi yönetim servisi
+builder.Services.AddScoped<IOrderCancellationHandler, OrderCancellationHandler>();
 builder.Services.AddScoped<IRefundService, RefundManager>();
 
 // PaymentCaptureService - Authorize/Capture ödeme akışını yönetir
@@ -576,6 +577,7 @@ builder.Services.AddScoped<IReviewService, ReviewManager>();
 builder.Services.AddScoped<IAddressService, AddressManager>();
 builder.Services.AddScoped<ICouponService, CouponManager>();
 builder.Services.AddScoped<ICategoryService, CategoryManager>();
+builder.Services.AddScoped<IAdminCatalogStatsService, ECommerce.API.Infrastructure.AdminCatalogStatsService>();
 builder.Services.AddScoped<IFavoriteService, FavoriteManager>();
 builder.Services.AddScoped<ICourierService, CourierManager>();
 builder.Services.AddScoped<ICampaignService, CampaignManager>();
@@ -1049,6 +1051,12 @@ using (var scope = app.Services.CreateScope())
         CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
         logger.LogInformation("✅ CategorySeeder tamamlandı");
         Console.WriteLine("✅ CategorySeeder tamamlandı");
+
+        logger.LogInformation("🧹 Legacy seed ürün cleanup başlatılıyor...");
+        Console.WriteLine("🧹 Legacy seed ürün cleanup başlatılıyor...");
+        LegacySeedProductCleanup.RunAsync(services).GetAwaiter().GetResult();
+        logger.LogInformation("✅ Legacy seed cleanup tamamlandı");
+        Console.WriteLine("✅ Legacy seed cleanup tamamlandı");
         
         logger.LogInformation("✅ Tüm seed işlemleri başarıyla tamamlandı!");
         Console.WriteLine("✅✅✅ TÜM SEED İŞLEMLERİ BAŞARIYLA TAMAMLANDI! ✅✅✅");

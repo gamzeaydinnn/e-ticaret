@@ -16,6 +16,18 @@ jest.mock("../hooks/useCartCount", () => ({
   useCartCount: () => ({ count: 3 }),
 }));
 
+jest.mock("../contexts/FavoriteContext", () => ({
+  useFavorites: () => ({ favorites: [{ id: 1 }, { id: 2 }] }),
+}));
+
+jest.mock("../services/categoryServiceReal", () => ({
+  __esModule: true,
+  default: {
+    getActive: jest.fn().mockResolvedValue([]),
+  },
+  normalizeCategorySlug: (slug) => slug,
+}));
+
 // Mock useNavigate
 const mockNavigate = jest.fn();
 jest.mock("react-router-dom", () => ({
@@ -52,7 +64,7 @@ describe("MobileBottomNav", () => {
       expect(screen.getByText("Anasayfa")).toBeInTheDocument();
       expect(screen.getByText("Kategoriler")).toBeInTheDocument();
       expect(screen.getByText("Sepetim")).toBeInTheDocument();
-      expect(screen.getByText("Kampanyalar")).toBeInTheDocument();
+      expect(screen.getByText("Favoriler")).toBeInTheDocument();
       expect(screen.getByText("Hesabım")).toBeInTheDocument();
     });
 
@@ -63,8 +75,17 @@ describe("MobileBottomNav", () => {
         </MemoryRouter>
       );
 
-      // Cart badge should show count of 3 (from mock)
-      expect(screen.getByText("3")).toBeInTheDocument();
+      expect(screen.getByLabelText("3 ürün")).toBeInTheDocument();
+    });
+
+    test("renders favorites badge with count", () => {
+      render(
+        <MemoryRouter>
+          <MobileBottomNav />
+        </MemoryRouter>
+      );
+
+      expect(screen.getByLabelText("2 ürün")).toBeInTheDocument();
     });
   });
 
@@ -83,7 +104,7 @@ describe("MobileBottomNav", () => {
       expect(mockNavigate).toHaveBeenCalledWith("/");
     });
 
-    test("navigates to categories when Kategoriler is clicked", () => {
+    test("opens category panel when Kategoriler is clicked", () => {
       render(
         <MemoryRouter>
           <MobileBottomNav />
@@ -91,7 +112,8 @@ describe("MobileBottomNav", () => {
       );
 
       fireEvent.click(screen.getByText("Kategoriler"));
-      expect(mockNavigate).toHaveBeenCalledWith("/category");
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(screen.getByText("Kategoriler", { selector: "h5" })).toBeInTheDocument();
     });
 
     test("navigates to cart when Sepetim is clicked", () => {
@@ -105,18 +127,18 @@ describe("MobileBottomNav", () => {
       expect(mockNavigate).toHaveBeenCalledWith("/cart");
     });
 
-    test("navigates to campaigns when Kampanyalar is clicked", () => {
+    test("navigates to favorites when Favoriler is clicked", () => {
       render(
         <MemoryRouter>
           <MobileBottomNav />
         </MemoryRouter>
       );
 
-      fireEvent.click(screen.getByText("Kampanyalar"));
-      expect(mockNavigate).toHaveBeenCalledWith("/campaigns");
+      fireEvent.click(screen.getByText("Favoriler"));
+      expect(mockNavigate).toHaveBeenCalledWith("/favorites");
     });
 
-    test("navigates to profile when Hesabım is clicked", () => {
+    test("navigates to account when Hesabım is clicked", () => {
       render(
         <MemoryRouter>
           <MobileBottomNav />
@@ -124,7 +146,7 @@ describe("MobileBottomNav", () => {
       );
 
       fireEvent.click(screen.getByText("Hesabım"));
-      expect(mockNavigate).toHaveBeenCalledWith("/profile");
+      expect(mockNavigate).toHaveBeenCalledWith("/account");
     });
   });
 
@@ -165,15 +187,26 @@ describe("MobileBottomNav", () => {
       expect(cartButton).toHaveClass("active");
     });
 
-    test("campaigns button is active when on campaigns page", () => {
+    test("favorites button is active when on favorites page", () => {
       render(
-        <MemoryRouter initialEntries={["/campaigns"]}>
+        <MemoryRouter initialEntries={["/favorites"]}>
           <MobileBottomNav />
         </MemoryRouter>
       );
 
-      const campaignsButton = screen.getByLabelText("Kampanyalar");
-      expect(campaignsButton).toHaveClass("active");
+      const favoritesButton = screen.getByLabelText("Favoriler");
+      expect(favoritesButton).toHaveClass("active");
+    });
+
+    test("account button is active when on account page", () => {
+      render(
+        <MemoryRouter initialEntries={["/account"]}>
+          <MobileBottomNav />
+        </MemoryRouter>
+      );
+
+      const accountButton = screen.getByLabelText("Hesabım");
+      expect(accountButton).toHaveClass("active");
     });
 
     test("account button is active when on profile page", () => {

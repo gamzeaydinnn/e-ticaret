@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ECommerce.Core.DTOs;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.HomeBlock;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -61,6 +62,7 @@ namespace ECommerce.Business.Services.Managers
                 _logger.LogInformation("🏠 Ana sayfa blokları getiriliyor...");
 
                 var blocks = await _repository.GetActiveBlocksWithProductsAsync();
+                var mikroVisibleSkus = await GetMikroVisibleSkusAsync();
                 var result = new List<HomeProductBlockDto>();
 
                 foreach (var block in blocks)
@@ -68,7 +70,11 @@ namespace ECommerce.Business.Services.Managers
                     var dto = MapToDto(block);
                     
                     // Blok tipine göre ürünleri doldur
-                    dto.Products = await GetProductsForBlockAsync(block, onlyInStock: true, onlyPositivePrice: true);
+                    dto.Products = await GetProductsForBlockAsync(
+                        block,
+                        onlyInStock: true,
+                        onlyPositivePrice: true,
+                        mikroVisibleSkus: mikroVisibleSkus);
                     
                     result.Add(dto);
                 }
@@ -101,9 +107,15 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 var dto = MapToDto(block);
+                var mikroVisibleSkus = await GetMikroVisibleSkusAsync();
                 
                 // Tümünü Gör sayfası: stokta olmayan ve fiyatı 0 olan ürünleri filtrele
-                dto.Products = await GetProductsForBlockAsync(block, includeAll: true, onlyInStock: true, onlyPositivePrice: true);
+                dto.Products = await GetProductsForBlockAsync(
+                    block,
+                    includeAll: true,
+                    onlyInStock: true,
+                    onlyPositivePrice: true,
+                    mikroVisibleSkus: mikroVisibleSkus);
 
                 return dto;
             }
@@ -156,7 +168,12 @@ namespace ECommerce.Business.Services.Managers
             if (block == null) return null;
 
             var dto = MapToDto(block);
-            dto.Products = await GetProductsForBlockAsync(block, includeAll: true, onlyInStock: false, onlyPositivePrice: false);
+            dto.Products = await GetProductsForBlockAsync(
+                block,
+                includeAll: true,
+                onlyInStock: false,
+                onlyPositivePrice: false,
+                applyStorefrontFilter: false);
             
             return dto;
         }
@@ -441,7 +458,8 @@ namespace ECommerce.Business.Services.Managers
         public async Task<IEnumerable<HomeBlockProductItemDto>> GetProductsByBlockTypeAsync(
             string blockType, int? categoryId, int maxCount)
         {
-            var products = await GetProductsByTypeAsync(blockType, categoryId, maxCount);
+            var mikroVisibleSkus = await GetMikroVisibleSkusAsync();
+            var products = await GetProductsByTypeAsync(blockType, categoryId, maxCount, mikroVisibleSkus: mikroVisibleSkus);
             return products.Select((p, index) => MapProductToDto(p, index));
         }
 
@@ -453,9 +471,19 @@ namespace ECommerce.Business.Services.Managers
         /// Blok için ürünleri getirir - Blok tipine göre farklı kaynak kullanır
         /// </summary>
         private async Task<List<HomeBlockProductItemDto>> GetProductsForBlockAsync(
-            HomeProductBlock block, bool includeAll = false, bool onlyInStock = false, bool onlyPositivePrice = false)
+            HomeProductBlock block,
+            bool includeAll = false,
+            bool onlyInStock = false,
+            bool onlyPositivePrice = false,
+            HashSet<string>? mikroVisibleSkus = null,
+            bool applyStorefrontFilter = true)
         {
             var maxCount = includeAll ? int.MaxValue : block.MaxProductCount;
+
+            if (applyStorefrontFilter)
+            {
+                mikroVisibleSkus ??= await GetMikroVisibleSkusAsync();
+            }
 
             switch (block.BlockType.ToLower())
             {
@@ -467,7 +495,8 @@ namespace ECommerce.Business.Services.Managers
                             bp.Product != null &&
                             bp.Product.IsActive &&
                             (!onlyInStock || bp.Product.StockQuantity > 0) &&
-                            (!onlyPositivePrice || HasPositiveDisplayPrice(bp.Product)))
+                            (!onlyPositivePrice || HasPositiveDisplayPrice(bp.Product)) &&
+                            (!applyStorefrontFilter || StorefrontProductVisibility.IsVisible(bp.Product, mikroVisibleSkus)))
                         .OrderBy(bp => bp.DisplayOrder)
                         .Take(maxCount)
                         .Select((bp, index) => MapProductToDto(bp.Product, index))
@@ -476,22 +505,26 @@ namespace ECommerce.Business.Services.Managers
                 case "category":
                     // Kategori bazlı
                     if (!block.CategoryId.HasValue) return new List<HomeBlockProductItemDto>();
-                    var categoryProducts = await GetProductsByTypeAsync("category", block.CategoryId, maxCount, onlyInStock, onlyPositivePrice);
+                    var categoryProducts = await GetProductsByTypeAsync(
+                        "category", block.CategoryId, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
                     return categoryProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "discounted":
                     // İndirimli ürünler
-                    var discountedProducts = await GetProductsByTypeAsync("discounted", null, maxCount, onlyInStock, onlyPositivePrice);
+                    var discountedProducts = await GetProductsByTypeAsync(
+                        "discounted", null, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
                     return discountedProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "newest":
                     // En yeni ürünler
-                    var newestProducts = await GetProductsByTypeAsync("newest", null, maxCount, onlyInStock, onlyPositivePrice);
+                    var newestProducts = await GetProductsByTypeAsync(
+                        "newest", null, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
                     return newestProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "bestseller":
                     // En çok satanlar - başarılı siparişlerde satılan toplam adet bazlı
-                    var bestsellerProducts = await GetProductsByTypeAsync("bestseller", null, maxCount, onlyInStock, onlyPositivePrice);
+                    var bestsellerProducts = await GetProductsByTypeAsync(
+                        "bestseller", null, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
                     return bestsellerProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 default:
@@ -503,8 +536,19 @@ namespace ECommerce.Business.Services.Managers
         /// <summary>
         /// Blok tipine göre ürünleri veritabanından çeker
         /// </summary>
-        private async Task<List<Product>> GetProductsByTypeAsync(string blockType, int? categoryId, int maxCount, bool onlyInStock = false, bool onlyPositivePrice = false)
+        private async Task<List<Product>> GetProductsByTypeAsync(
+            string blockType,
+            int? categoryId,
+            int maxCount,
+            bool onlyInStock = false,
+            bool onlyPositivePrice = false,
+            HashSet<string>? mikroVisibleSkus = null,
+            bool applyStorefrontFilter = true)
         {
+            if (applyStorefrontFilter)
+            {
+                mikroVisibleSkus ??= await GetMikroVisibleSkusAsync();
+            }
             IQueryable<Product> query = _context.Products
                 .Include(p => p.Category)
                 .Where(p => p.IsActive);
@@ -607,9 +651,13 @@ namespace ECommerce.Business.Services.Managers
                         orderedBestSellerProducts.AddRange(remainingProducts);
                     }
 
-                    return onlyPositivePrice
+                    var bestSellerResult = onlyPositivePrice
                         ? orderedBestSellerProducts.Where(HasPositiveDisplayPrice).Take(maxCount).ToList()
                         : orderedBestSellerProducts;
+
+                    return applyStorefrontFilter
+                        ? FilterStorefrontProducts(bestSellerResult, mikroVisibleSkus!, maxCount)
+                        : bestSellerResult;
 
                 default:
                     query = query.OrderBy(p => p.Name);
@@ -623,7 +671,33 @@ namespace ECommerce.Business.Services.Managers
                 products = products.Where(HasPositiveDisplayPrice).ToList();
             }
 
-            return products.Take(maxCount).ToList();
+            products = products.Take(maxCount).ToList();
+
+            return applyStorefrontFilter
+                ? FilterStorefrontProducts(products, mikroVisibleSkus!, maxCount)
+                : products;
+        }
+
+        private async Task<HashSet<string>> GetMikroVisibleSkusAsync()
+        {
+            var skus = await _context.MikroProductCaches
+                .AsNoTracking()
+                .Where(c => c.Aktif && c.SatisFiyati > 0 && c.SatilabilirMiktar > 0)
+                .Select(c => c.StokKod)
+                .ToListAsync();
+
+            return skus.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static List<Product> FilterStorefrontProducts(
+            List<Product> products,
+            HashSet<string> mikroVisibleSkus,
+            int maxCount)
+        {
+            return products
+                .Where(p => StorefrontProductVisibility.IsVisible(p, mikroVisibleSkus))
+                .Take(maxCount)
+                .ToList();
         }
 
         private static bool HasPositiveDisplayPrice(Product product)

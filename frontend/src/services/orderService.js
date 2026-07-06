@@ -87,6 +87,13 @@ const normalizeOrder = (order = {}) => {
     shippingCost: order.shippingCost ?? 0,
     items: normalizedItems,
     orderItems: normalizedItems,
+    canCancel: order.canCancel ?? order.CanCancel ?? false,
+    cancelMode: order.cancelMode || order.CancelMode || null,
+    canDownloadInvoice:
+      order.canDownloadInvoice ?? order.CanDownloadInvoice ?? false,
+    isPaid: order.isPaid ?? order.IsPaid ?? false,
+    paymentStatus: (order.paymentStatus || order.PaymentStatus || "").toLowerCase(),
+    paymentMethod: order.paymentMethod || order.PaymentMethod || "",
     raw: order,
   };
 };
@@ -156,16 +163,17 @@ export const OrderService = {
       throw error;
     }
   },
-  downloadInvoice: async (id) => {
+  downloadInvoice: async (id, label) => {
     const blob = await api.get(`${base}/${id}/invoice`, {
       responseType: "blob",
       transformResponse: (value) => value,
     });
 
+    const safeLabel = String(label || id).replace(/[^\w.-]+/g, "-");
     const url = window.URL.createObjectURL(new Blob([blob]));
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", `invoice-${id}.pdf`);
+    link.setAttribute("download", `fatura-${safeLabel}.pdf`);
     document.body.appendChild(link);
     link.click();
     link.remove();

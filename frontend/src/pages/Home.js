@@ -28,6 +28,7 @@ import HeroSlider from "../components/HeroSlider";
 import PromoCards from "../components/PromoCards";
 import { useCart } from "../contexts/CartContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useFavorites } from "../contexts/FavoriteContext";
 import CartActionToast, { useCartActionToast } from "../components/CartActionToast";
 
 // ============================================
@@ -37,9 +38,7 @@ import CartActionToast, { useCartActionToast } from "../components/CartActionToa
 // GÜVENLİK: Production'da debug log'ları kapalı
 const DEBUG = process.env.NODE_ENV === "development";
 
-// ============================================
-// CACHE YÖNETİMİ — localStorage TTL cache
-// ============================================
+const HOME_PRODUCTS_CACHE_KEY = "home_products_v2";
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 dakika
 
 function cacheSet(key, data) {
@@ -88,16 +87,8 @@ export default function Home() {
   const [recipeBanners, setRecipeBanners] = useState([]); // Şef Tavsiyesi / Tarif posterleri
   const [bannersLoading, setBannersLoading] = useState(true);
 
-  // Favori state'i
-  const [favorites, setFavorites] = useState(() => {
-    // localStorage'dan favori ürünleri yükle
-    try {
-      const stored = localStorage.getItem("favorites");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Favoriler — FavoriteContext (backend senkron)
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   // Sepet context'i
   const { addToCart } = useCart();
@@ -145,7 +136,7 @@ export default function Home() {
     }
 
     // ─── ÜRÜNLER ──────────────────────────────────────────────
-    const cachedProducts = !forceRefresh && cacheGet("home_products");
+    const cachedProducts = !forceRefresh && cacheGet(HOME_PRODUCTS_CACHE_KEY);
     if (cachedProducts) {
       // Cache'den anında göster — spinner kaldır
       setFeatured(cachedProducts);
@@ -158,7 +149,7 @@ export default function Home() {
       const items = await ProductService.list();
       setFeatured(items || []);
       setProductError(null);
-      cacheSet("home_products", items || []);
+      cacheSet(HOME_PRODUCTS_CACHE_KEY, items || []);
     } catch (err) {
       console.error("[Home] Products error:", err.message);
       if (!cachedProducts) {
@@ -247,6 +238,10 @@ export default function Home() {
   // ============================================
 
   useEffect(() => {
+    try {
+      localStorage.removeItem("home_products");
+    } catch { /* yoksay */ }
+
     loadData();
 
     // Sayfa odağına geldiğinde verileri yenile (sekmeler arası senkronizasyon)
@@ -325,16 +320,13 @@ export default function Home() {
   // FAVORİ İŞLEMLERİ
   // ============================================
 
-  /** Favori ürün ekle/çıkar */
-  const handleToggleFavorite = useCallback((productId) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(productId)
-        ? prev.filter((id) => id !== productId)
-        : [...prev, productId];
-      localStorage.setItem("favorites", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+  /** Favori ürün ekle/çıkar — backend ile senkron */
+  const handleToggleFavorite = useCallback(
+    (productId) => {
+      toggleFavorite(productId);
+    },
+    [toggleFavorite],
+  );
 
   // ============================================
   // SEPET İŞLEMLERİ
@@ -1251,8 +1243,6 @@ export default function Home() {
               key={block.id}
               block={block}
               onAddToCart={handleAddToCart}
-              onToggleFavorite={handleToggleFavorite}
-              favorites={favorites}
             />
           ))}
         </section>
@@ -1346,8 +1336,8 @@ export default function Home() {
                   key={p.id}
                   product={p}
                   campaign={getCampaignForProduct(p)}
-                  onToggleFavorite={handleToggleFavorite}
-                  isFavorite={favorites.includes(p.id)}
+                  onToggleFavorite={() => handleToggleFavorite(p.id)}
+                  isFavorite={isFavorite(p.id)}
                   onAddToCart={handleAddToCart}
                 />
               ))}

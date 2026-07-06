@@ -20,6 +20,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.Helpers;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
@@ -35,35 +36,12 @@ namespace ECommerce.Business.Services.Managers
         private readonly ECommerceDbContext _db;
         private readonly IExtendedPaymentService _paymentService;
         private readonly IRealTimeNotificationService _notificationService;
+        private readonly IOrderCancellationHandler? _orderCancellationHandler;
         private readonly ILogger<RefundManager> _logger;
 
-        // Kargo yola çıkmamış durumlar → Otomatik iptal + reverse yapılabilir
-        // NEDEN bu kümede Preparing ve Ready var: Ürün henüz depoda, fiziksel teslimat başlamadı
-        private static readonly HashSet<OrderStatus> AutoCancellableStatuses = new()
-        {
-            OrderStatus.New,
-            OrderStatus.Pending,
-            OrderStatus.Confirmed,
-            OrderStatus.Paid,
-            OrderStatus.Preparing
-        };
+        private static readonly HashSet<OrderStatus> AutoCancellableStatuses = OrderCancelPolicy.AutoCancellableStatuses;
 
-        // Kargo yola çıkmış durumlar → Admin onaylı iade gerekli
-        // NEDEN: Fiziksel teslimat başlamış, kargo/ürün müşteride veya yolda
-        private static readonly HashSet<OrderStatus> RequiresAdminApprovalStatuses = new()
-        {
-            OrderStatus.Preparing,
-            OrderStatus.Ready,
-            OrderStatus.Assigned,
-            OrderStatus.PickedUp,
-            OrderStatus.InTransit,
-            OrderStatus.OutForDelivery,
-            OrderStatus.Shipped,
-            OrderStatus.Delivered,
-            OrderStatus.DeliveryFailed,
-            OrderStatus.DeliveryPaymentPending,
-            OrderStatus.Completed
-        };
+        private static readonly HashSet<OrderStatus> RequiresAdminApprovalStatuses = OrderCancelPolicy.WhatsAppRequiredStatuses;
 
         private static readonly string[] ReversiblePaymentStatuses =
         {
@@ -79,12 +57,14 @@ namespace ECommerce.Business.Services.Managers
             ECommerceDbContext db,
             IExtendedPaymentService paymentService,
             IRealTimeNotificationService notificationService,
-            ILogger<RefundManager> logger)
+            ILogger<RefundManager> logger,
+            IOrderCancellationHandler? orderCancellationHandler = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _paymentService = paymentService ?? throw new ArgumentNullException(nameof(paymentService));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _orderCancellationHandler = orderCancellationHandler;
         }
 
         private Task<Payments?> GetLatestReversiblePaymentAsync(int orderId)
@@ -389,6 +369,13 @@ namespace ECommerce.Business.Services.Managers
 
             if (AutoCancellableStatuses.Contains(order.Status))
             {
+                if (!OrderCancelPolicy.IsSameBusinessDay(order.OrderDate, OrderCancelPolicy.GetTurkeyNow()))
+                {
+                    return RefundRequestResult.Failed(
+                        "Sipariş iptali yalnızca siparişin verildiği gün yapılabilir.",
+                        "SAME_DAY_CANCEL_ONLY");
+                }
+
                 // AKIŞ 1: Kargo yola çıkmamış → Otomatik iptal + para iadesi
                 return await HandleAutoCancelAsync(order, refundRequest);
             }
@@ -427,10 +414,14 @@ namespace ECommerce.Business.Services.Managers
 
             bool paymentRefunded = false;
             string transactionType = "none";
+            var isCod = IsCashOnDelivery(order.PaymentMethod);
 
-            // Krédi kartı ödemesi varsa para iadesini dene
-            if (payment != null && order.PaymentMethod?.ToLower() != "cash_on_delivery"
-                                && order.PaymentMethod?.ToLower() != "kapida_odeme")
+            if (isCod)
+            {
+                paymentRefunded = true;
+                transactionType = "cod";
+            }
+            else if (payment != null)
             {
                 // ═══════════════════════════════════════════════════════════════
                 // MADDE 10 DÜZELTMESİ: İade için orijinal sale/capt kaydı kullan
@@ -514,13 +505,20 @@ namespace ECommerce.Business.Services.Managers
                 {
                     _logger.LogError(ex,
                         "[İADE] Para iadesi hatası. OrderId={OrderId}", order.Id);
+                    refundRequest.RefundFailureReason = $"POSNET hatası: {ex.Message}";
                 }
             }
             else
             {
-                // Kapıda ödeme veya ödeme kaydı yoksa direkt iptal
-                paymentRefunded = true; // Fiziksel ödeme henüz alınmadı
+                // Online ödeme kaydı yok — tahsilat yapılmamış kabul et
+                paymentRefunded = true;
                 transactionType = "none";
+            }
+
+            if (payment != null && !isCod && !paymentRefunded)
+            {
+                refundRequest.RefundFailureReason ??=
+                    "POSNET reverse ve return işlemleri başarısız. Admin panelden tekrar deneyin.";
             }
 
             // Sipariş durumunu güncelle
@@ -543,7 +541,9 @@ namespace ECommerce.Business.Services.Managers
             refundRequest.TransactionType = transactionType;
             refundRequest.ProcessedAt = DateTime.UtcNow;
             refundRequest.AdminNote = paymentRefunded
-                ? "Sistem tarafından otomatik iptal ve para iadesi yapıldı."
+                ? transactionType == "cod"
+                    ? "Kapıda ödeme siparişi iptal edildi — tahsilat yapılmadı."
+                    : "Sistem tarafından otomatik iptal ve para iadesi yapıldı."
                 : "Otomatik iptal yapıldı ancak para iadesi başarısız. Admin müdahalesi gerekli.";
 
             if (paymentRefunded)
@@ -564,6 +564,8 @@ namespace ECommerce.Business.Services.Managers
 
             await _db.SaveChangesAsync();
 
+            await NotifyDeliveryCancellationAsync(order.Id, refundRequest.Reason ?? "Sipariş iptal edildi", order.UserId ?? 0);
+
             // Bildirim gönder
             try
             {
@@ -579,9 +581,21 @@ namespace ECommerce.Business.Services.Managers
             }
 
             var resultDto = MapToDto(refundRequest, order);
-            var message = paymentRefunded
-                ? "Siparişiniz iptal edildi ve para iadeniz başlatıldı. Kartınıza yansıma süresi bankanıza göre değişiklik gösterebilir."
-                : "Siparişiniz iptal edildi ancak para iadesi işleminde bir sorun oluştu. Müşteri hizmetlerimiz sizinle iletişime geçecek.";
+            string message;
+            if (isCod)
+            {
+                message = "Siparişiniz iptal edildi. Kapıda ödeme seçtiğiniz için tahsilat yapılmayacaktır.";
+            }
+            else if (paymentRefunded)
+            {
+                message =
+                    "Siparişiniz iptal edildi ve para iadeniz başlatıldı. Kartınıza yansıma süresi bankanıza göre değişiklik gösterebilir.";
+            }
+            else
+            {
+                message =
+                    "Siparişiniz iptal edildi ancak para iadesi işleminde bir sorun oluştu. Müşteri hizmetlerimiz sizinle iletişime geçecek.";
+            }
 
             return RefundRequestResult.Succeeded(resultDto, message, autoCancelled: true);
         }
@@ -1074,6 +1088,8 @@ namespace ECommerce.Business.Services.Managers
 
             await _db.SaveChangesAsync();
 
+            await NotifyDeliveryCancellationAsync(orderId, reason, adminUserId);
+
             // Bildirim: Müşteriye + Admin + StoreAttendant
             try
             {
@@ -1523,6 +1539,23 @@ namespace ECommerce.Business.Services.Managers
         // ═══════════════════════════════════════════════════════════════════════════
         // YARDIMCI METODLAR
         // ═══════════════════════════════════════════════════════════════════════════
+
+        private async Task NotifyDeliveryCancellationAsync(int orderId, string reason, int cancelledByUserId)
+        {
+            if (_orderCancellationHandler == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await _orderCancellationHandler.HandleOrderCancellationAsync(orderId, reason, cancelledByUserId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[İADE] Teslimat iptal handler hatası. OrderId={OrderId}", orderId);
+            }
+        }
 
         /// <summary>
         /// Sipariş kalemlerinin stoklarını geri yükler.

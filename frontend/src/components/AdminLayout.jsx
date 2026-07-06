@@ -184,8 +184,7 @@ function AdminLayoutInner({ children }) {
         path: "/admin/dashboard",
         icon: "fas fa-tachometer-alt",
         label: "Dashboard",
-        // Dashboard tüm admin kullanıcılar için her zaman görünür (landing page)
-        alwaysVisible: true,
+        permission: PERMISSIONS.DASHBOARD_VIEW,
       },
       {
         path: "/admin/products",
@@ -329,9 +328,6 @@ function AdminLayoutInner({ children }) {
   // Filtrelenmiş menü öğeleri - tamamen izin bazlı
   const filteredMenuItems = useMemo(() => {
     return menuItems.filter((item) => {
-      // alwaysVisible öğeler her zaman gösterilir (ör. Dashboard)
-      if (item.alwaysVisible) return true;
-
       // İzin kontrolü - izin yoksa gizle
       if (item.permission && !checkPermission(item.permission)) return false;
 

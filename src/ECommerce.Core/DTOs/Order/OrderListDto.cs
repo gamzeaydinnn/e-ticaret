@@ -1,6 +1,4 @@
 using System;
-using ECommerce.Core.DTOs;
-using System;
 using System.Collections.Generic;
 namespace ECommerce.Core.DTOs.Order
 {
@@ -18,6 +16,12 @@ namespace ECommerce.Core.DTOs.Order
         public decimal CampaignDiscountAmount { get; set; }
         public string? CouponCode { get; set; }
         public string Status { get; set; } = string.Empty;
+        /// <summary>Müşteri iptal modu: auto | whatsapp | none</summary>
+        public string CancelMode { get; set; } = string.Empty;
+        /// <summary>Aynı gün otomatik iptal mümkün mü?</summary>
+        public bool CanCancel { get; set; }
+        /// <summary>PDF fatura indirilebilir mi?</summary>
+        public bool CanDownloadInvoice { get; set; }
         // NEDEN: Admin ve panel filtreleri "ödendi" bilgisini doğrudan ister.
         public string PaymentStatus { get; set; } = string.Empty;
         public bool IsPaid { get; set; }

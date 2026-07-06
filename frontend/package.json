@@ -34,6 +34,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "check:imports": "node scripts/check-import-case.js",
+    "prebuild": "node scripts/check-import-case.js",
     "serve:prerender": "serve -s build -l 5000",
     "test": "react-scripts test",
     "eject": "react-scripts eject",

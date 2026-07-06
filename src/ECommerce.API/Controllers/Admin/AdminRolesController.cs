@@ -251,30 +251,17 @@ namespace ECommerce.API.Controllers.Admin
                 }
 
                 var userId = GetCurrentUserId();
-
-                // Mevcut izinleri al
                 var currentPermissions = await _rolePermissionService.GetRolePermissionsAsync(roleId);
                 var currentPermissionIds = currentPermissions.Select(p => p.Id).ToList();
+                var requestedIds = request.PermissionIds ?? new List<int>();
 
-                // Kaldırılacak izinler
-                var permissionsToRemove = currentPermissionIds.Except(request.PermissionIds).ToList();
-                // Eklenecek izinler
-                var permissionsToAdd = request.PermissionIds.Except(currentPermissionIds).ToList();
+                var permissionsToAdd = requestedIds.Except(currentPermissionIds).ToList();
+                var permissionsToRemove = currentPermissionIds.Except(requestedIds).ToList();
 
-                // İzinleri kaldır
-                foreach (var permissionId in permissionsToRemove)
-                {
-                    await _rolePermissionService.RemovePermissionFromRoleAsync(roleId, permissionId);
-                }
-
-                // Yeni izinleri ekle
-                foreach (var permissionId in permissionsToAdd)
-                {
-                    await _rolePermissionService.AssignPermissionToRoleAsync(roleId, permissionId, userId);
-                }
+                await _rolePermissionService.UpdateRolePermissionsAsync(roleId, requestedIds, userId);
 
                 // Audit log
-                await _auditLogService.WriteAsync(GetCurrentUserId(), "RolePermissionsUpdated", "Role", roleId.ToString().ToString(), null, new { message = $"Rol '{role.Name}' izinleri güncellendi. Eklenen: {permissionsToAdd.Count}, Kaldırılan: {permissionsToRemove.Count}"
+                await _auditLogService.WriteAsync(GetCurrentUserId(), "RolePermissionsUpdated", "Role", roleId.ToString(), null, new { message = $"Rol '{role.Name}' izinleri güncellendi. Eklenen: {permissionsToAdd.Count}, Kaldırılan: {permissionsToRemove.Count}"
                  });
 
                 // Güncel izinleri döndür
@@ -694,6 +681,9 @@ namespace ECommerce.API.Controllers.Admin
                 "Brands" => "Markalar",
                 "Settings" => "Ayarlar",
                 "Logs" => "Loglar",
+                "Store" => "Market Operasyonları",
+                "Dispatch" => "Sevkiyat",
+                "Newsletter" => "Bülten",
                 _ => module
             };
         }

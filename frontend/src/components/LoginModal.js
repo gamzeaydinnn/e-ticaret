@@ -1,12 +1,19 @@
 // src/components/LoginModal.js
 // Giriş ve Kayıt Modalı - SMS OTP doğrulama ile kullanıcı kayıt akışı
 // Google OAuth entegrasyonu
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../contexts/AuthContext";
-import otpService, { SmsVerificationPurpose } from "../services/otpService";
 
-const LoginModal = ({ show, onHide, onLoginSuccess }) => {
+const formatRegistrationError = (message) => {
+  if (!message) return "Kayıt başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
+  if (/email.*kullan/i.test(message)) {
+    return `${message} Zaten hesabınız varsa giriş yapmayı deneyin.`;
+  }
+  return message;
+};
+
+const LoginModal = ({ show, onHide, onLoginSuccess, initialMode = "login" }) => {
   // ==================== STATE TANIMLARI ====================
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -34,7 +41,6 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
 
   const {
     login,
-    register,
     registerWithPhone,
     verifyPhoneRegistration,
     forgotPasswordByPhone,
@@ -42,56 +48,97 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     loginWithSocial,
   } = useAuth();
 
+  useEffect(() => {
+    if (!show) return;
+
+    setIsLogin(initialMode !== "register");
+    setIsForgotPassword(false);
+    setForgotPasswordStep(1);
+    setError("");
+    setSuccess("");
+    setShowOtpInput(false);
+    setOtpSent(false);
+    setOtpVerified(false);
+    setOtpCountdown(0);
+  }, [show, initialMode]);
+
+  const validateRegistrationFields = () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("Ad ve soyad alanlarını doldurun");
+      return false;
+    }
+    if (!email.trim()) {
+      setError("E-posta adresinizi girin");
+      return false;
+    }
+    if (!phoneNumber || phoneNumber.length < 10) {
+      setError("Geçerli bir telefon numarası girin (05XXXXXXXXX)");
+      return false;
+    }
+    if (!password || password.length < 6) {
+      setError("Şifre en az 6 karakter olmalıdır");
+      return false;
+    }
+    if (password !== confirmPasswordRegister) {
+      setError("Şifreler eşleşmiyor");
+      return false;
+    }
+    return true;
+  };
+
+  const startOtpCountdown = (seconds = 120) => {
+    setOtpCountdown(seconds);
+    const timer = setInterval(() => {
+      setOtpCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   // ==================== OTP İŞLEMLERİ ====================
 
   /**
-   * Kayıt için OTP kodu gönder
-   * Backend'deki yeni /api/sms/send-otp endpoint'ini kullanır
+   * Kayıt için SMS kodu gönder — backend register-with-phone akışı
    */
   const handleSendOtp = async () => {
-    if (!phoneNumber || phoneNumber.length < 10) {
-      setError("Geçerli bir telefon numarası girin (05XXXXXXXXX)");
+    if (!validateRegistrationFields()) {
       return;
     }
 
     setLoading(true);
     setError("");
+    setSuccess("");
 
-    // Yeni backend API'yi kullan - purpose: Registration (1)
-    const result = await otpService.sendOtp(
+    const result = await registerWithPhone(
+      email,
+      password,
+      firstName,
+      lastName,
       phoneNumber,
-      SmsVerificationPurpose.Registration,
+      confirmPasswordRegister,
     );
 
     if (result.success) {
       setOtpSent(true);
       setShowOtpInput(true);
-      setSuccess("Doğrulama kodu telefonunuza gönderildi.");
-      setOtpCountdown(result.expiresInSeconds || 120); // Backend'den gelen süre
-
-      // Countdown timer
-      const timer = setInterval(() => {
-        setOtpCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      setOtpVerified(false);
+      setSuccess(
+        result.message || "Doğrulama kodu telefonunuza gönderildi.",
+      );
+      startOtpCountdown(120);
     } else {
-      setError(result.message || "SMS gönderilemedi");
-      if (result.retryAfterSeconds) {
-        setOtpCountdown(result.retryAfterSeconds);
-      }
+      setError(result.error || "SMS gönderilemedi");
     }
 
     setLoading(false);
   };
 
   /**
-   * Kayıt için OTP kodunu doğrula
-   * Backend'deki yeni /api/sms/verify-otp endpoint'ini kullanır
+   * Kayıt OTP kodunu doğrula — backend verify-phone-registration akışı
    */
   const handleVerifyOtp = async () => {
     if (!otpCode || otpCode.length !== 6) {
@@ -102,24 +149,30 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     setLoading(true);
     setError("");
 
-    // Yeni backend API'yi kullan - purpose: Registration (1)
-    const result = await otpService.verifyOtp(
+    const result = await verifyPhoneRegistration(
       phoneNumber,
       otpCode,
-      SmsVerificationPurpose.Registration,
+      email,
+      { firstName, lastName },
     );
 
     if (result.success) {
       setOtpVerified(true);
-      setSuccess("Telefon numaranız doğrulandı!");
+      setSuccess(result.message || "Kayıt tamamlandı. Hoş geldiniz!");
+      onLoginSuccess && onLoginSuccess();
+      onHide();
+      setEmail("");
+      setPassword("");
+      setConfirmPasswordRegister("");
+      setFirstName("");
+      setLastName("");
+      setPhoneNumber("");
+      setOtpCode("");
+      setOtpVerified(false);
+      setOtpSent(false);
       setShowOtpInput(false);
     } else {
-      setError(result.message || "Kod doğrulanamadı");
-      if (result.remainingAttempts !== undefined) {
-        setError(
-          `${result.message} (${result.remainingAttempts} deneme kaldı)`,
-        );
-      }
+      setError(result.error || "Kod doğrulanamadı");
     }
 
     setLoading(false);
@@ -178,7 +231,9 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
     // reset endpoint'inde tekrar doğrulama yapıldığı için hata yaratıyordu.
     setError("");
     setForgotPasswordStep(3);
-    setSuccess("Yeni şifrenizi belirleyin.");
+    setSuccess(
+      "Kod bir sonraki adımda doğrulanacak. Yeni şifrenizi belirleyin.",
+    );
   };
 
   /**
@@ -280,50 +335,84 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
-    // Kayıt için validasyonlar
-    if (!isLogin) {
-      // OTP zorunlu
-      if (!otpVerified) {
-        setError("Lütfen telefon numaranızı doğrulayın");
-        return;
+    if (isLogin) {
+      setLoading(true);
+      try {
+        const result = await login(email, password);
+        if (result.success) {
+          onLoginSuccess && onLoginSuccess();
+          onHide();
+          setEmail("");
+          setPassword("");
+        } else if (result.emailVerificationRequired) {
+          setError("");
+          setSuccess(
+            result.error ||
+              "E-posta adresiniz henüz doğrulanmamış. Gelen kutunuzu ve spam klasörünü kontrol edin, ardından tekrar giriş yapın.",
+          );
+        } else {
+          setError(result.error || "Giriş başarısız");
+        }
+      } catch (error) {
+        setError("Bir hata oluştu. Lütfen tekrar deneyin.");
+      } finally {
+        setLoading(false);
       }
+      return;
+    }
 
-      // Şifre minimum 6 karakter
-      if (password.length < 6) {
-        setError("Şifre en az 6 karakter olmalıdır");
-        return;
-      }
-
-      // Şifre onayı kontrolü
-      if (password !== confirmPasswordRegister) {
-        setError("Şifreler eşleşmiyor");
-        return;
-      }
+    // Kayıt: SMS henüz gönderilmediyse önce kaydı başlat
+    if (!validateRegistrationFields()) {
+      return;
     }
 
     setLoading(true);
 
     try {
       let result;
-      if (isLogin) {
-        result = await login(email, password);
-      } else {
-        // Telefon numarası ile kayıt
-        result = await register(
+
+      if (!otpSent) {
+        result = await registerWithPhone(
           email,
           password,
           firstName,
           lastName,
           phoneNumber,
-          confirmPasswordRegister, // Şifre onayı eklendi
+          confirmPasswordRegister,
         );
+
+        if (result.success) {
+          setOtpSent(true);
+          setShowOtpInput(true);
+          setSuccess(
+            result.message || "Doğrulama kodu telefonunuza gönderildi.",
+          );
+          startOtpCountdown(120);
+        } else {
+          setSuccess("");
+          setError(formatRegistrationError(result.error));
+        }
+        return;
       }
 
+      if (!otpCode || otpCode.length !== 6) {
+        setError("SMS ile gelen 6 haneli doğrulama kodunu girin");
+        return;
+      }
+
+      result = await verifyPhoneRegistration(
+        phoneNumber,
+        otpCode,
+        email,
+        { firstName, lastName },
+      );
+
       if (result.success) {
+        setSuccess(result.message || "Kayıt tamamlandı. Hoş geldiniz!");
         onLoginSuccess && onLoginSuccess();
         onHide();
-        // Formu temizle
         setEmail("");
         setPassword("");
         setConfirmPasswordRegister("");
@@ -335,10 +424,16 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
         setOtpSent(false);
         setShowOtpInput(false);
       } else {
-        setError(result.error);
+        setSuccess("");
+        setError(formatRegistrationError(result.error || "Kayıt tamamlanamadı"));
       }
     } catch (error) {
-      setError("Bir hata oluştu. Lütfen tekrar deneyin.");
+      setSuccess("");
+      setError(
+        formatRegistrationError(
+          error?.message || "Bir hata oluştu. Lütfen tekrar deneyin.",
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -1467,7 +1562,7 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                       e.target.style.boxShadow =
                         "0 4px 15px rgba(255, 107, 53, 0.3)";
                     }}
-                    disabled={loading || (!isLogin && !otpVerified)}
+                    disabled={loading}
                   >
                     {loading ? (
                       <div className="d-flex align-items-center justify-content-center">
@@ -1480,7 +1575,13 @@ const LoginModal = ({ show, onHide, onLoginSuccess }) => {
                         Lütfen bekleyin...
                       </div>
                     ) : (
-                      <>{isLogin ? "Giriş Yap" : "Hesap Oluştur"}</>
+                      <>
+                        {isLogin
+                          ? "Giriş Yap"
+                          : otpSent
+                            ? "Doğrula ve Kayıt Ol"
+                            : "Kayıt Ol"}
+                      </>
                     )}
                   </button>
 

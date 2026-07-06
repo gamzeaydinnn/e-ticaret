@@ -1,0 +1,194 @@
+/* ==============================================================================
+   CourierLogin.css - Kurye Giriş Paneli
+   Web ve mobil stiller ayrı tutulur.
+   ============================================================================== */
+
+/* --- Web (masaüstü / tablet geniş) ---------------------------------------- */
+.courier-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  padding: 2.5rem 1.5rem;
+  box-sizing: border-box;
+}
+
+.courier-login-shell {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.courier-login-card {
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.courier-login-card-body {
+  padding: 2.5rem;
+}
+
+.courier-login-logo {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff6b35, #ff8c00);
+  border-radius: 18px;
+  box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+}
+
+.courier-login-title {
+  font-weight: 700;
+  color: #212529;
+  margin-bottom: 0.25rem;
+}
+
+.courier-login-subtitle {
+  color: #6c757d;
+  margin-bottom: 0;
+}
+
+.courier-login-alert {
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.courier-login-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.courier-login-input {
+  border-radius: 10px;
+  font-size: 1rem;
+}
+
+.courier-login-password-input {
+  border-radius: 10px 0 0 10px;
+  font-size: 1rem;
+  border-right: none;
+}
+
+.courier-login-password-toggle {
+  border-radius: 0 10px 10px 0;
+  border-left: none;
+  border-color: #dee2e6;
+}
+
+.courier-login-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.courier-login-remember-label {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+.courier-login-forgot {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.courier-login-submit {
+  background: linear-gradient(135deg, #ff6b35, #ff8c00);
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.courier-login-demo-badge {
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.courier-login-demo-password {
+  font-size: 0.7rem;
+}
+
+.courier-login-footer {
+  text-align: center;
+  margin-top: 1rem;
+  color: #6c757d;
+}
+
+.courier-login-page--loading {
+  align-items: center;
+}
+
+/* --- Mobil (telefon) ------------------------------------------------------ */
+@media (max-width: 767.98px) {
+  .courier-login-page {
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    padding-top: max(1.25rem, env(safe-area-inset-top, 0px));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+    min-height: 100dvh;
+  }
+
+  .courier-login-shell {
+    max-width: 100%;
+  }
+
+  .courier-login-card-body {
+    padding: 1.25rem 1rem;
+  }
+
+  .courier-login-logo {
+    width: 60px;
+    height: 60px;
+    border-radius: 14px;
+  }
+
+  .courier-login-title {
+    font-size: 1.35rem;
+  }
+
+  .courier-login-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .courier-login-options {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .courier-login-forgot {
+    align-self: flex-end;
+  }
+
+  .courier-login-submit {
+    min-height: 48px;
+    padding: 14px;
+  }
+
+  .courier-login-demo-badges {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .courier-login-demo-badge {
+    width: 100%;
+    max-width: 280px;
+    text-align: center;
+    padding: 0.5rem 0.75rem;
+  }
+}

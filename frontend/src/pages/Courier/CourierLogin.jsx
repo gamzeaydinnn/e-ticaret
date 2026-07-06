@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
+import "./CourierLogin.css";
 
 export default function CourierLogin() {
   // Form state
@@ -153,7 +154,7 @@ export default function CourierLogin() {
   // Auth yüklenirken bekle
   if (authLoading) {
     return (
-      <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+      <div className="courier-login-page courier-login-page--loading">
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Yükleniyor...</span>
         </div>
@@ -162,75 +163,53 @@ export default function CourierLogin() {
   }
 
   return (
-    <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
-      <div className="container-fluid px-3 px-sm-4">
-        <div className="row justify-content-center">
-          <div className="col-12 col-sm-10 col-md-7 col-lg-4 d-flex justify-content-center">
-            <div
-              className="card shadow-lg border-0 w-100"
-              style={{ borderRadius: "16px", maxWidth: "420px" }}
-            >
-              <div className="card-body p-4 p-md-5">
-                {/* Logo ve Başlık */}
-                <div className="text-center mb-4">
-                  <div
-                    className="mx-auto mb-3 d-flex align-items-center justify-content-center"
-                    style={{
-                      width: "70px",
-                      height: "70px",
-                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                      borderRadius: "18px",
-                      boxShadow: "0 8px 25px rgba(255, 107, 53, 0.3)",
-                    }}
-                  >
-                    <i className="fas fa-motorcycle text-white fs-3"></i>
-                  </div>
-                  <h3 className="fw-bold text-dark mb-1">Kurye Paneli</h3>
-                  <p className="text-muted mb-0">Hesabınızla giriş yapın</p>
-                </div>
+    <div className="courier-login-page">
+      <div className="courier-login-shell">
+        <div className="card shadow-lg border-0 courier-login-card">
+          <div className="card-body courier-login-card-body">
+            {/* Logo ve Başlık */}
+            <div className="text-center mb-4">
+              <div className="courier-login-logo">
+                <i className="fas fa-motorcycle text-white fs-3"></i>
+              </div>
+              <h3 className="courier-login-title">Kurye Paneli</h3>
+              <p className="courier-login-subtitle">Hesabınızla giriş yapın</p>
+            </div>
 
-                {/* Hata Mesajı */}
-                {error && (
-                  <div
-                    className="alert alert-danger py-2 d-flex align-items-center"
-                    role="alert"
-                    style={{ borderRadius: "10px", fontSize: "0.9rem" }}
-                  >
-                    <i className="fas fa-exclamation-circle me-2"></i>
-                    <span>{error}</span>
-                  </div>
-                )}
+            {/* Hata Mesajı */}
+            {error && (
+              <div
+                className="alert alert-danger py-2 d-flex align-items-center courier-login-alert"
+                role="alert"
+              >
+                <i className="fas fa-exclamation-circle me-2"></i>
+                <span>{error}</span>
+              </div>
+            )}
 
                 {/* Giriş Formu */}
                 <form onSubmit={handleSubmit}>
                   {/* E-posta veya Telefon */}
                   <div className="mb-3">
-                    <label
-                      className="form-label fw-semibold"
-                      style={{ fontSize: "0.9rem" }}
-                    >
+                    <label className="form-label courier-login-label">
                       <i className="fas fa-user me-2 text-muted"></i>
                       E-posta veya Telefon
                     </label>
                     <input
                       type="text"
                       name="emailOrPhone"
-                      className="form-control form-control-lg"
+                      className="form-control form-control-lg courier-login-input"
                       value={formData.emailOrPhone}
                       onChange={handleChange}
                       placeholder="ornek@email.com veya 05xx xxx xxxx"
                       required
                       autoComplete="username"
-                      style={{ borderRadius: "10px", fontSize: "1rem" }}
                     />
                   </div>
 
                   {/* Şifre */}
                   <div className="mb-3">
-                    <label
-                      className="form-label fw-semibold"
-                      style={{ fontSize: "0.9rem" }}
-                    >
+                    <label className="form-label courier-login-label">
                       <i className="fas fa-lock me-2 text-muted"></i>
                       Şifre
                     </label>
@@ -238,27 +217,17 @@ export default function CourierLogin() {
                       <input
                         type={showPassword ? "text" : "password"}
                         name="password"
-                        className="form-control form-control-lg"
+                        className="form-control form-control-lg courier-login-password-input"
                         value={formData.password}
                         onChange={handleChange}
                         placeholder="••••••••"
                         required
                         autoComplete="current-password"
-                        style={{
-                          borderRadius: "10px 0 0 10px",
-                          fontSize: "1rem",
-                          borderRight: "none",
-                        }}
                       />
                       <button
                         type="button"
-                        className="btn btn-outline-secondary"
+                        className="btn btn-outline-secondary courier-login-password-toggle"
                         onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          borderRadius: "0 10px 10px 0",
-                          borderLeft: "none",
-                          borderColor: "#dee2e6",
-                        }}
                         tabIndex={-1}
                       >
                         <i
@@ -269,7 +238,7 @@ export default function CourierLogin() {
                   </div>
 
                   {/* Beni Hatırla */}
-                  <div className="mb-4 d-flex justify-content-between align-items-center">
+                  <div className="courier-login-options">
                     <div className="form-check">
                       <input
                         type="checkbox"
@@ -281,17 +250,15 @@ export default function CourierLogin() {
                         style={{ cursor: "pointer" }}
                       />
                       <label
-                        className="form-check-label text-muted"
+                        className="form-check-label courier-login-remember-label"
                         htmlFor="rememberMe"
-                        style={{ cursor: "pointer", fontSize: "0.9rem" }}
                       >
                         Beni hatırla
                       </label>
                     </div>
                     <a
                       href="#forgot"
-                      className="text-primary text-decoration-none"
-                      style={{ fontSize: "0.9rem" }}
+                      className="text-primary text-decoration-none courier-login-forgot"
                       onClick={(e) => {
                         e.preventDefault();
                         alert(
@@ -307,15 +274,7 @@ export default function CourierLogin() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="btn btn-lg w-100 text-white fw-bold"
-                    style={{
-                      background: "linear-gradient(135deg, #ff6b35, #ff8c00)",
-                      border: "none",
-                      borderRadius: "10px",
-                      boxShadow: "0 4px 15px rgba(255, 107, 53, 0.3)",
-                      padding: "12px",
-                      fontSize: "1rem",
-                    }}
+                    className="btn btn-lg w-100 text-white courier-login-submit"
                   >
                     {loading ? (
                       <>
@@ -337,10 +296,9 @@ export default function CourierLogin() {
                     <i className="fas fa-info-circle me-1"></i>
                     Demo hesap bilgileri:
                   </small>
-                  <div className="d-flex justify-content-center gap-2 flex-wrap">
+                  <div className="d-flex justify-content-center gap-2 flex-wrap courier-login-demo-badges">
                     <span
-                      className="badge bg-light text-dark"
-                      style={{ cursor: "pointer", fontSize: "0.75rem" }}
+                      className="badge bg-light text-dark courier-login-demo-badge"
                       onClick={() =>
                         setFormData((prev) => ({
                           ...prev,
@@ -353,8 +311,7 @@ export default function CourierLogin() {
                       ahmet@courier.com
                     </span>
                     <span
-                      className="badge bg-light text-dark"
-                      style={{ cursor: "pointer", fontSize: "0.75rem" }}
+                      className="badge bg-light text-dark courier-login-demo-badge"
                       onClick={() =>
                         setFormData((prev) => ({
                           ...prev,
@@ -367,23 +324,15 @@ export default function CourierLogin() {
                       0532 123 4567
                     </span>
                   </div>
-                  <small
-                    className="text-muted d-block mt-1"
-                    style={{ fontSize: "0.7rem" }}
-                  >
+                  <small className="text-muted d-block mt-1 courier-login-demo-password">
                     Şifre: Ahmet.123
                   </small>
                 </div>
               </div>
             </div>
 
-            {/* Alt Bilgi */}
-            <div className="text-center mt-3">
-              <small className="text-muted">
-                © 2026 E-Ticaret Kurye Sistemi
-              </small>
-            </div>
-          </div>
+        <div className="courier-login-footer">
+          <small>© 2026 E-Ticaret Kurye Sistemi</small>
         </div>
       </div>
     </div>

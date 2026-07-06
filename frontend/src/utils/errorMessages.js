@@ -213,6 +213,29 @@ export const handleApiError = (response) => {
 };
 
 /**
+ * api.js interceptor'ının fırlattığı normalize Error + ham axios yanıtından mesaj okur.
+ */
+export const getApiErrorMessage = (
+  error,
+  fallback = "Bir hata oluştu. Lütfen tekrar deneyin.",
+) => {
+  if (!error) return fallback;
+
+  const data = error.raw?.response?.data || error.response?.data || {};
+  const message =
+    data.message ||
+    data.Message ||
+    data.error ||
+    (typeof error.message === "string" &&
+    !/^Request failed with status code \d+$/.test(error.message)
+      ? error.message
+      : null);
+
+  if (message) return translateError(message);
+  return fallback;
+};
+
+/**
  * Identity hatalarını toplu çevirir
  * @param {Array} errors - Identity error array
  * @returns {string} Birleştirilmiş Türkçe hata mesajları

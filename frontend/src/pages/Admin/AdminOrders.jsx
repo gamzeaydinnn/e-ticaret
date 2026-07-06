@@ -8,6 +8,10 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 import { usePermission } from "../../hooks/usePermission";
+import { normalizeRefundStatus } from "../../utils/orderCancelPolicy";
+
+const getRefundStatusKey = (req) =>
+  normalizeRefundStatus(req?.status ?? req?.statusText ?? "");
 
 // ============================================================
 // ADMIN ORDERS - Sipariş Yönetimi
@@ -362,7 +366,12 @@ export default function AdminOrders() {
     }
   }, []);
 
-  // İade paneli açılınca verileri yükle
+  // İade taleplerini sayfa açılışında yükle (başarısız iade badge'i için)
+  useEffect(() => {
+    loadRefundRequests();
+  }, [loadRefundRequests]);
+
+  // İade paneli açılınca verileri yenile
   useEffect(() => {
     if (showRefundPanel) {
       loadRefundRequests();
@@ -404,13 +413,22 @@ export default function AdminOrders() {
 
   // Başarısız iadeyi yeniden dene
   const handleRetryRefund = async (refundRequestId) => {
-    if (!window.confirm("Para iadesini yeniden denemek istiyor musunuz?"))
+    if (
+      !window.confirm(
+        "POSNET para iadesini tekrar denemek istediğinize emin misiniz?",
+      )
+    ) {
       return;
+    }
 
     setRefundProcessing(refundRequestId);
     try {
-      await AdminService.retryRefund(refundRequestId);
-      alert("Para iadesi yeniden denendi.");
+      const result = await AdminService.retryRefund(refundRequestId);
+      const msg =
+        result?.data?.message ||
+        result?.message ||
+        "Para iadesi yeniden denendi.";
+      alert(msg);
       await loadRefundRequests();
       await loadData(false);
     } catch (err) {
@@ -1339,18 +1357,33 @@ export default function AdminOrders() {
           >
             <i className="fas fa-undo me-1"></i>
             İade Talepleri
-            {refundRequests.filter(
-              (r) => r.status === 0 || r.statusText === "Beklemede",
-            ).length > 0 && (
+            {refundRequests.filter((r) => getRefundStatusKey(r) === "pending")
+              .length > 0 && (
               <span
                 className="badge bg-danger ms-1"
                 style={{ fontSize: "0.6rem" }}
               >
                 {
                   refundRequests.filter(
-                    (r) => r.status === 0 || r.statusText === "Beklemede",
+                    (r) => getRefundStatusKey(r) === "pending",
                   ).length
                 }
+              </span>
+            )}
+            {refundRequests.filter(
+              (r) => getRefundStatusKey(r) === "refundfailed",
+            ).length > 0 && (
+              <span
+                className="badge bg-dark ms-1"
+                style={{ fontSize: "0.6rem" }}
+                title="POSNET iadesi başarısız — tekrar deneyin"
+              >
+                {
+                  refundRequests.filter(
+                    (r) => getRefundStatusKey(r) === "refundfailed",
+                  ).length
+                }{" "}
+                hata
               </span>
             )}
           </button>
@@ -1367,6 +1400,18 @@ export default function AdminOrders() {
             <h6 className="mb-0">
               <i className="fas fa-undo me-2"></i>
               İade Talepleri Yönetimi
+              {refundRequests.filter(
+                (r) => getRefundStatusKey(r) === "refundfailed",
+              ).length > 0 && (
+                <span className="badge bg-danger ms-2">
+                  {
+                    refundRequests.filter(
+                      (r) => getRefundStatusKey(r) === "refundfailed",
+                    ).length
+                  }{" "}
+                  başarısız iade
+                </span>
+              )}
             </h6>
             <div className="d-flex gap-2">
               <button
@@ -1416,14 +1461,15 @@ export default function AdminOrders() {
                     </tr>
                   </thead>
                   <tbody>
-                    {refundRequests.map((req) => (
+                    {refundRequests.map((req) => {
+                      const statusKey = getRefundStatusKey(req);
+                      return (
                       <tr
                         key={req.id}
                         className={
-                          req.status === 0 || req.statusText === "Beklemede"
+                          statusKey === "pending"
                             ? "table-warning"
-                            : req.status === 5 ||
-                                req.statusText === "İade Başarısız"
+                            : statusKey === "refundfailed"
                               ? "table-danger"
                               : ""
                         }
@@ -1478,6 +1524,12 @@ export default function AdminOrders() {
                           >
                             {req.statusText}
                           </span>
+                          {statusKey === "refundfailed" &&
+                            req.refundFailureReason && (
+                              <small className="text-danger d-block mt-1">
+                                {req.refundFailureReason}
+                              </small>
+                            )}
                         </td>
                         <td>
                           <small>
@@ -1494,8 +1546,7 @@ export default function AdminOrders() {
                           </small>
                         </td>
                         <td>
-                          {(req.status === 0 ||
-                            req.statusText === "Beklemede") && (
+                          {statusKey === "pending" && (
                             <div className="d-flex flex-column gap-1">
                               <input
                                 type="text"
@@ -1543,15 +1594,14 @@ export default function AdminOrders() {
                               </div>
                             </div>
                           )}
-                          {(req.status === 5 ||
-                            req.statusText === "İade Başarısız") && (
+                          {statusKey === "refundfailed" && (
                             <button
-                              className="btn btn-outline-warning btn-sm"
+                              className="btn btn-warning btn-sm fw-bold"
                               onClick={() => handleRetryRefund(req.id)}
                               disabled={refundProcessing === req.id}
                             >
                               <i className="fas fa-redo me-1"></i>
-                              Tekrar Dene
+                              POSNET Tekrar Dene
                             </button>
                           )}
                           {req.processedAt && (
@@ -1564,7 +1614,8 @@ export default function AdminOrders() {
                           )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2897,6 +2948,12 @@ export default function AdminOrders() {
                       <div className="col-12 col-lg-6">
                         <div className="card border-0 shadow-sm h-100">
                           <div className="card-body">
+                            <div className="alert alert-info py-2 mb-3" style={{ fontSize: "0.82rem" }}>
+                              <i className="fas fa-whatsapp me-1 text-success"></i>
+                              WhatsApp&apos;tan gelen iade taleplerinde sipariş numarası ile arama
+                              yapın; kısmi iade için aşağıdan ürün ve adet seçip uygulayın.
+                            </div>
+
                             <div className="d-flex justify-content-between align-items-center mb-2">
                               <h6 className="fw-bold mb-0" style={{ fontSize: "0.82rem" }}>
                                 <i className="fas fa-undo me-1 text-warning"></i>

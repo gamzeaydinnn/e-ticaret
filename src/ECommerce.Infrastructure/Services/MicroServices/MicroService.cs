@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using System;
@@ -2987,8 +2988,9 @@ ORDER BY S.sto_kod;";
 
                 // YENİ AKIŞ: Liste 11'den oku — hazırlanmış fiyatlar
                 // NEDEN: SqlVeriOkuV2 → timeout. Direkt conn → <2s
-                var products = await _mikroDbService.GetUnifiedProductsAsync(
-                    webListeNo, depoNo, cancellationToken);
+                var products = MikroWebCatalogFilter.OnlyWebActive(
+                    await _mikroDbService.GetUnifiedProductsAsync(
+                        webListeNo, depoNo, cancellationToken));
 
                 _logger.LogInformation(
                     "[MicroService] Birleşik SQL sorgusu tamamlandı. Toplam ürün: {Count}, Fiyat>0: {PriceOk}, Stok>0: {StockOk}",
@@ -3094,7 +3096,7 @@ ORDER BY S.sto_kod;";
                         AnagrupKod = ReadStringFromRow(row, "anagrup_kod", "sto_anagrup_kod", "AnagrupKod"),
                         Birim = ReadStringFromRow(row, "birim", "sto_birim1_ad", "Birim"),
                         KdvOrani = ParseDecimalFlexible(kdvRaw),
-                        WebeGonderilecekFl = ParseBoolFlexible(webFlagRaw) ?? true,
+                        WebeGonderilecekFl = ParseBoolFlexible(webFlagRaw) ?? false,
                         SonHareketTarihi = DateTime.TryParse(sonHareketRaw, out var sht) ? sht : null
                     });
                 }

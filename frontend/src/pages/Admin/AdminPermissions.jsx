@@ -10,6 +10,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import permissionService, {
   PERMISSIONS,
   PERMISSION_MODULES,
+  ROLE_LABELS,
+  PERMISSION_MODULE_LABELS,
+  getPermissionModuleKey,
+  getPermissionModuleLabel,
+  getPermissionDisplayName,
+  getRoleDisplayName,
 } from "../../services/permissionService";
 import "./styles/AdminPermissions.css";
 
@@ -30,8 +36,8 @@ const normalizeRole = (role) => {
     name: name || "",
     displayName:
       getValue(role, "displayName", "DisplayName", "roleDisplayName", "RoleDisplayName") ||
-      name ||
-      "",
+      ROLE_LABELS[name] ||
+      name || "",
     description: getValue(role, "description", "Description") || "",
     canEdit: getValue(role, "canEdit", "CanEdit") !== false,
   };
@@ -54,9 +60,11 @@ const normalizePermission = (permission) => {
     code,
     name: getValue(permission, "name", "Name") || code,
     displayName:
-      getValue(permission, "displayName", "DisplayName") ||
-      code.split(".").slice(1).join(".") ||
-      code,
+      getPermissionDisplayName({
+        code,
+        displayName: getValue(permission, "displayName", "DisplayName"),
+        name: getValue(permission, "name", "Name"),
+      }) || code,
     description: getValue(permission, "description", "Description") || "",
     isActive: getValue(permission, "isActive", "IsActive") !== false,
   };
@@ -84,8 +92,18 @@ const AdminPermissions = () => {
   // Erişim kontrolü
   const canView =
     user?.role === "SuperAdmin" ||
+    hasPermission?.(PERMISSIONS.ROLES_VIEW) ||
     hasPermission?.(PERMISSIONS.ROLES_PERMISSIONS);
-  const canManage = user?.role === "SuperAdmin";
+  const canManage =
+    user?.role === "SuperAdmin" ||
+    hasPermission?.(PERMISSIONS.ROLES_PERMISSIONS);
+
+  const canEditRoleInMatrix = (role) => {
+    if (!role?.canEdit || !role?.id) return false;
+    if (role.name === "SuperAdmin") return false;
+    if (role.name === "Admin" && user?.role !== "SuperAdmin") return false;
+    return true;
+  };
 
   // Verileri yükle
   const loadData = useCallback(async () => {
@@ -139,7 +157,14 @@ const AdminPermissions = () => {
         if (!mergedRolesMap.has(key)) {
           mergedRolesMap.set(key, role);
         } else {
-          mergedRolesMap.set(key, { ...mergedRolesMap.get(key), ...role });
+          const existing = mergedRolesMap.get(key);
+          mergedRolesMap.set(key, {
+            ...existing,
+            ...role,
+            canEdit:
+              getValue(role, "canEdit", "CanEdit") ??
+              existing.canEdit,
+          });
         }
       });
       const mergedRoles = Array.from(mergedRolesMap.values()).sort((a, b) =>
@@ -236,13 +261,13 @@ const AdminPermissions = () => {
 
     permissions.forEach((permission) => {
       const code = permission.code || permission.name || permission;
-      const module = code.split(".")[0];
+      const module = getPermissionModuleKey(code);
 
       if (!groups[module]) {
         groups[module] = {
           name: module,
-          displayName: PERMISSION_MODULES[module]?.name || module,
-          description: PERMISSION_MODULES[module]?.description || "",
+          displayName: getPermissionModuleLabel(code),
+          description: PERMISSION_MODULE_LABELS[module]?.description || "",
           permissions: [],
         };
       }
@@ -250,8 +275,7 @@ const AdminPermissions = () => {
       groups[module].permissions.push({
         code: code,
         name: permission.name || code,
-        displayName:
-          permission.displayName || code.split(".").slice(1).join("."),
+        displayName: getPermissionDisplayName(permission),
         description: permission.description || "",
         isActive: permission.isActive !== false,
       });
@@ -292,6 +316,9 @@ const AdminPermissions = () => {
 
   // Matrix permission toggle
   const handleMatrixToggle = (roleName, permissionCode) => {
+    const role = roles.find((r) => r.name === roleName);
+    if (!canManage || !canEditRoleInMatrix(role)) return;
+
     setRolePermissionMatrix((prev) => {
       const rolePerms = prev[roleName] || [];
       const newPerms = rolePerms.includes(permissionCode)
@@ -318,7 +345,7 @@ const AdminPermissions = () => {
 
       // Her rol için izinleri güncelle
       for (const role of roles) {
-        if (!role.canEdit || !role.id) continue;
+        if (!canEditRoleInMatrix(role)) continue;
 
         const newPermissions = (rolePermissionMatrix[role.name] || [])
           .map((code) => permissionCodeToId[code])
@@ -332,6 +359,7 @@ const AdminPermissions = () => {
 
       setSuccessMessage("Tüm izin değişiklikleri kaydedildi.");
       setMatrixModified(false);
+      await loadData();
     } catch (err) {
       console.error("Matrix save error:", err);
       setError(err.message || "İzinler kaydedilirken hata oluştu.");
@@ -525,7 +553,7 @@ const AdminPermissions = () => {
       </div>
 
       {/* Permission Matrix Table */}
-      {canManage && roles.length > 0 && (
+      {canView && roles.length > 0 && (
         <div className="card shadow-sm border-0 mb-4">
           <div className="card-header bg-white py-3">
             <h5 className="mb-0">
@@ -548,7 +576,7 @@ const AdminPermissions = () => {
                         style={{ minWidth: "100px" }}
                       >
                         <div className="small">
-                          {role.displayName || role.name}
+                          {getRoleDisplayName(role)}
                         </div>
                         <span className="badge bg-secondary small">
                           {role.name}
@@ -586,6 +614,7 @@ const AdminPermissions = () => {
                               role.name
                             ]?.includes(perm.code);
                             const isSuperAdmin = role.name === "SuperAdmin";
+                            const isEditable = canManage && canEditRoleInMatrix(role);
 
                             return (
                               <td
@@ -602,6 +631,7 @@ const AdminPermissions = () => {
                                       type="checkbox"
                                       className="form-check-input permissions-checkbox"
                                       checked={hasPermission}
+                                      disabled={!isEditable}
                                       onChange={() =>
                                         handleMatrixToggle(role.name, perm.code)
                                       }

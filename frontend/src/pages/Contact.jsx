@@ -1,27 +1,24 @@
-import React from "react";
-
-// ===========================================================================
-// İLETİŞİM SAYFASI
-// Müşteri hizmetleri iletişim bilgileri ve WhatsApp desteği
-// ===========================================================================
-
-// WhatsApp ve iletişim sabitleri
-const CONTACT_INFO = {
-  whatsappNumber: "905334783072",
-  phoneDisplay: "+90 533 478 30 72",
-  email: "golturkbuku@golkoygurme.com.tr",
-  address: "Gölköy Mah. 67 Sokak No: 1/A Bodrum / Muğla",
-};
-
-// WhatsApp mesaj şablonu
-const getWhatsAppUrl = (message = "Merhaba, destek almak istiyorum.") => {
-  return `https://wa.me/${CONTACT_INFO.whatsappNumber}?text=${encodeURIComponent(message)}`;
-};
+import React, { useEffect, useState } from "react";
+import {
+  buildWhatsAppUrl,
+  getSupportPhoneDisplay,
+} from "../utils/customerSupport";
 
 export default function Contact() {
-  // WhatsApp butonuna tıklama
+  const [whatsAppUrl, setWhatsAppUrl] = useState(null);
+  const [phoneDisplay, setPhoneDisplay] = useState("+90 533 478 30 72");
+  const email = "golturkbuku@golkoygurme.com.tr";
+  const address = "Gölköy Mah. 67 Sokak No: 1/A Bodrum / Muğla";
+
+  useEffect(() => {
+    buildWhatsAppUrl("Merhaba, destek almak istiyorum.").then(setWhatsAppUrl);
+    getSupportPhoneDisplay().then(setPhoneDisplay);
+  }, []);
+
   const openWhatsApp = () => {
-    window.open(getWhatsAppUrl(), "_blank");
+    if (whatsAppUrl) {
+      window.open(whatsAppUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   return (
@@ -112,9 +109,12 @@ export default function Contact() {
                 </div>
                 <div>
                   <a
-                    href={getWhatsAppUrl()}
+                    href={whatsAppUrl || "#"}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => {
+                      if (!whatsAppUrl) e.preventDefault();
+                    }}
                     className="text-decoration-none fw-bold d-block"
                     style={{ color: "#25D366" }}
                   >
@@ -145,11 +145,11 @@ export default function Contact() {
                 </div>
                 <div>
                   <a
-                    href={`tel:+${CONTACT_INFO.whatsappNumber}`}
+                    href={`tel:${phoneDisplay.replace(/\s/g, "")}`}
                     className="text-decoration-none fw-bold d-block"
                     style={{ color: "#ff8c00" }}
                   >
-                    {CONTACT_INFO.phoneDisplay}
+                    {phoneDisplay}
                   </a>
                   <small className="text-muted">Hafta içi 09:00 - 18:00</small>
                 </div>
@@ -176,11 +176,11 @@ export default function Contact() {
                 </div>
                 <div>
                   <a
-                    href={`mailto:${CONTACT_INFO.email}`}
+                    href={`mailto:${email}`}
                     className="text-decoration-none fw-bold d-block"
                     style={{ color: "#3b82f6" }}
                   >
-                    {CONTACT_INFO.email}
+                    {email}
                   </a>
                   <small className="text-muted">Genel bilgi ve destek</small>
                 </div>
@@ -230,7 +230,7 @@ export default function Contact() {
                   >
                     Adres
                   </span>
-                  <span className="text-muted">{CONTACT_INFO.address}</span>
+                  <span className="text-muted">{address}</span>
                 </div>
               </div>
 

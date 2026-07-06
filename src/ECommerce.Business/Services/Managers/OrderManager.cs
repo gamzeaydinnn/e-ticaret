@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Helpers;
 using Microsoft.AspNetCore.Http;
 using System.Security.Claims;
 using System.Text.Json;
@@ -1040,56 +1041,37 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// Müşteri sipariş iptali - MARKET KURALLARI:
-        /// 1. Sadece kendi siparişini iptal edebilir
-        /// 2. Sadece aynı gün içinde iptal edilebilir
-        /// 3. Sadece hazırlanıyor aşaması ve öncesinde (New, Pending, Confirmed, Paid, Preparing) iptal edilebilir
-        /// Aksi halde müşteri hizmetleriyle iletişime geçilmeli
+        /// Müşteri sipariş iptali — OrderCancelPolicy ile hizalı.
+        /// API akışı için IRefundService.CreateRefundRequestAsync tercih edilmelidir.
         /// </summary>
+        [Obsolete("OrdersController / IRefundService.CreateRefundRequestAsync kullanın. Bu metot POSNET iadesi yapmaz.")]
         public async Task<(bool Success, string? ErrorMessage)> CancelOrderAsync(int orderId, int userId)
         {
             var order = await _context.Orders
                 .Include(o => o.OrderItems)
                 .FirstOrDefaultAsync(o => o.Id == orderId);
 
-            // Sipariş bulunamadı veya başka kullanıcıya ait
             if (order == null || order.UserId != userId)
                 return (false, "Sipariş bulunamadı veya bu siparişi iptal etme yetkiniz yok.");
 
-            // MARKET KURALI: Sadece aynı gün içinde iptal edilebilir
-            // Gün kontrolü - sipariş tarihi ile bugünün tarihi karşılaştırılır
-            var orderDate = order.CreatedAt.Date;
-            var today = DateTime.Today;
-            if (orderDate != today)
-            {
-                return (false, "Sipariş sadece aynı gün içinde iptal edilebilir. İptal için müşteri hizmetleriyle iletişime geçiniz.");
-            }
+            if (order.Status == OrderStatus.Cancelled)
+                return (false, "Bu sipariş zaten iptal edilmiş.");
 
-            // Durum kontrolü - sadece hazırlanıyor aşaması ve öncesi iptal edilebilir
-            var cancellableStatuses = new[]
+            if (order.Status == OrderStatus.Refunded)
+                return (false, "Bu sipariş için zaten iade yapılmış.");
+
+            if (!OrderCancelPolicy.CanCustomerAutoCancel(order.Status, order.OrderDate))
             {
-                OrderStatus.New,
-                OrderStatus.Pending,
-                OrderStatus.Confirmed,
-                OrderStatus.Paid,
-                OrderStatus.Preparing
-            };
-            if (!cancellableStatuses.Contains(order.Status))
-            {
-                var statusMessage = order.Status switch
+                if (!OrderCancelPolicy.IsSameBusinessDay(order.OrderDate, OrderCancelPolicy.GetTurkeyNow()))
                 {
-                    OrderStatus.Preparing => "Siparişiniz hazırlanmaya başladı",
-                    OrderStatus.Ready or OrderStatus.ReadyForPickup => "Siparişiniz teslimata hazır",
-                    OrderStatus.Assigned or OrderStatus.PickedUp => "Siparişiniz kuryeye teslim edildi",
-                    OrderStatus.InTransit or OrderStatus.OutForDelivery => "Siparişiniz yolda",
-                    OrderStatus.Delivered => "Siparişiniz teslim edildi",
-                    OrderStatus.Cancelled => "Siparişiniz zaten iptal edilmiş",
-                    _ => "Siparişiniz bu aşamada"
-                };
-                return (false, $"{statusMessage}. Bu aşamada iptal için müşteri hizmetleriyle iletişime geçiniz.");
+                    return (false,
+                        "Sipariş iptali yalnızca siparişin verildiği gün yapılabilir. Müşteri hizmetleriyle iletişime geçin.");
+                }
+
+                return (false,
+                    "Bu sipariş mevcut durumunda doğrudan iptal edilemez. Müşteri hizmetleriyle iletişime geçin.");
             }
 
-            // İptal işlemini gerçekleştir
             var result = await CancelOrderInternalAsync(order);
             return result
                 ? (true, null)
@@ -1372,6 +1354,9 @@ namespace ECommerce.Business.Services.Managers
                 CouponCode = order.AppliedCouponCode,
                 TrackingNumber = order.TrackingNumber,
                 Status = order.Status.ToString(),
+                CancelMode = OrderCancelPolicy.GetCancelMode(order.Status, order.OrderDate),
+                CanCancel = OrderCancelPolicy.CanCustomerAutoCancel(order.Status, order.OrderDate),
+                CanDownloadInvoice = OrderInvoicePolicy.CanDownloadInvoice(order),
                 // DÜZELTME: PaymentStatus ve IsPaid alanları eklendi
                 // Admin panelindeki "Ödendi/Ödeme Bekliyor" filtreleri bu alanlara bağlı
                 PaymentStatus = order.PaymentStatus.ToString(),

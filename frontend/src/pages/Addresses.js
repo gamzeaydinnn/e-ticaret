@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
-import api from "../services/api";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import addressService from "../services/addressService";
 
 export default function Addresses() {
+  const { user, loading: authLoading } = useAuth();
   const [addresses, setAddresses] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [loadError, setLoadError] = useState("");
   const [form, setForm] = useState({
     title: "",
     fullName: "",
@@ -16,15 +20,23 @@ export default function Addresses() {
   });
 
   useEffect(() => {
-    loadAddresses();
-  }, []);
+    if (user) {
+      loadAddresses();
+    }
+  }, [user]);
 
   const loadAddresses = async () => {
+    setLoadError("");
     try {
-      const res = await api.get("/addresses");
-      setAddresses(res.data || []);
+      const items = await addressService.getAll();
+      setAddresses(items);
     } catch (err) {
       console.error("Adresler yüklenemedi:", err);
+      if (err.status === 401) {
+        setLoadError("Oturum süreniz dolmuş. Lütfen tekrar giriş yapın.");
+      } else {
+        setLoadError(err.message || "Adresler yüklenemedi");
+      }
     }
   };
 
@@ -32,9 +44,9 @@ export default function Addresses() {
     e.preventDefault();
     try {
       if (editingId) {
-        await api.put(`/addresses/${editingId}`, form);
+        await addressService.update(editingId, form);
       } else {
-        await api.post("/addresses", form);
+        await addressService.create(form);
       }
       loadAddresses();
       resetForm();
@@ -44,7 +56,15 @@ export default function Addresses() {
   };
 
   const handleEdit = (address) => {
-    setForm(address);
+    setForm({
+      title: address.title || "",
+      fullName: address.fullName || "",
+      phone: address.phone || "",
+      city: address.city || "",
+      district: address.district || "",
+      address: address.address || address.street || "",
+      postalCode: address.postalCode || "",
+    });
     setEditingId(address.id);
     setShowForm(true);
   };
@@ -52,7 +72,7 @@ export default function Addresses() {
   const handleDelete = async (id) => {
     if (window.confirm("Bu adresi silmek istediğinize emin misiniz?")) {
       try {
-        await api.delete(`/addresses/${id}`);
+        await addressService.remove(id);
         loadAddresses();
       } catch (err) {
         alert("Adres silinemedi: " + err.message);
@@ -74,8 +94,22 @@ export default function Addresses() {
     setShowForm(false);
   };
 
+  if (authLoading) {
+    return (
+      <div className="container my-5 text-center">
+        <div className="spinner-border text-warning" role="status">
+          <span className="visually-hidden">Yükleniyor...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/account" replace />;
+  }
+
   return (
-    <div className="container my-5">
+    <div className="container my-4 my-md-5 addresses-page">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2 style={{ color: "#FF8C00", fontWeight: "bold" }}>📍 Adreslerim</h2>
         <button
@@ -94,6 +128,10 @@ export default function Addresses() {
           + Yeni Adres Ekle
         </button>
       </div>
+
+      {loadError && (
+        <div className="alert alert-warning">{loadError}</div>
+      )}
 
       {/* Adres Listesi */}
       <div className="row g-4 mb-4">
@@ -161,6 +199,12 @@ export default function Addresses() {
           </div>
         ))}
       </div>
+
+      {addresses.length === 0 && !loadError && (
+        <div className="text-center text-muted py-4">
+          Henüz kayıtlı adresiniz yok.
+        </div>
+      )}
 
       {/* Adres Formu Modal */}
       {showForm && (

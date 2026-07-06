@@ -9,6 +9,7 @@ using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.Constants;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.Extensions;
+using ECommerce.Core.Helpers;
 using ECommerce.API.Infrastructure;
 using ECommerce.Core.Interfaces;
 using FluentValidation;
@@ -428,8 +429,8 @@ namespace ECommerce.API.Controllers
         /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
         /// MARKET KURALLARI:
         /// - Sadece aynı gün içinde iptal edilebilir
-        /// - Sadece hazırlanıyor aşaması ve öncesinde iptal edilebilir
-        /// - Aksi halde müşteri hizmetleriyle iletişime geçilmeli
+        /// - Kurye teslim alana kadar (Assigned dahil) otomatik iptal edilebilir
+        /// - PickedUp sonrası müşteri hizmetleriyle iletişime geçilmeli
         /// </summary>
         [HttpPost("{orderId}/cancel")]
         [Authorize]
@@ -459,22 +460,22 @@ namespace ECommerce.API.Controllers
                 {
                     success = false,
                     message = "Sipariş iptali yalnızca siparişin verildiği gün yapılabilir.",
-                    errorCode = "SAME_DAY_CANCEL_ONLY"
+                    errorCode = "SAME_DAY_CANCEL_ONLY",
+                    cancelMode = OrderCancelPolicy.CancelModeWhatsApp,
+                    contactInfo = BuildContactInfo()
                 });
             }
 
-            if (!Enum.TryParse<OrderStatus>(order.Status, true, out var orderStatus) ||
-                (orderStatus != OrderStatus.New &&
-                 orderStatus != OrderStatus.Pending &&
-                 orderStatus != OrderStatus.Confirmed &&
-                 orderStatus != OrderStatus.Paid &&
-                 orderStatus != OrderStatus.Preparing))
+            if (!OrderCancelPolicy.TryParseOrderStatus(order.Status, out var orderStatus) ||
+                !OrderCancelPolicy.AutoCancellableStatuses.Contains(orderStatus))
             {
                 return BadRequest(new
                 {
                     success = false,
                     message = "Bu sipariş mevcut durumunda doğrudan iptal edilemez. Müşteri hizmetleriyle iletişime geçin.",
-                    errorCode = "ORDER_NOT_CANCELLABLE"
+                    errorCode = "ORDER_NOT_CANCELLABLE",
+                    cancelMode = OrderCancelPolicy.GetCancelMode(order.Status, order.OrderDate),
+                    contactInfo = BuildContactInfo()
                 });
             }
 
@@ -493,11 +494,8 @@ namespace ECommerce.API.Controllers
                     success = false,
                     message = result.Message ?? "Sipariş iptal edilemedi.",
                     errorCode = result.ErrorCode,
-                    contactInfo = new {
-                        whatsapp = "+905334783072",
-                        phone = "+90 533 478 30 72",
-                        email = "golturkbuku@golkoygurme.com.tr"
-                    }
+                    cancelMode = OrderCancelPolicy.CancelModeWhatsApp,
+                    contactInfo = BuildContactInfo()
                 });
             }
 
@@ -505,8 +503,18 @@ namespace ECommerce.API.Controllers
             {
                 success = true,
                 message = result.Message ?? "Sipariş iptal edildi ve iade süreci başlatıldı.",
-                autoCancelled = result.AutoCancelled
+                autoCancelled = result.AutoCancelled,
+                cancelMode = OrderCancelPolicy.CancelModeNone
             });
+        }
+
+        private static object BuildContactInfo()
+        {
+            return new {
+                whatsapp = "+905334783072",
+                phone = "+90 533 478 30 72",
+                email = "golturkbuku@golkoygurme.com.tr"
+            };
         }
 
         private static DateTime GetTurkeyNow()
@@ -887,9 +895,8 @@ namespace ECommerce.API.Controllers
         {
             var orderDetail = await _orderService.GetDetailByIdAsync(orderId);
             if (orderDetail == null)
-                return NotFound();
+                return NotFound(new { success = false, message = "Sipariş bulunamadı." });
 
-            // Sadece sipariş sahibi veya admin/super admin fatura indirebilsin
             var currentUserId = User.GetUserId();
             var isAdminLike = User.IsInRole(Roles.Admin) || User.IsInRole(Roles.SuperAdmin);
             if (!isAdminLike && orderDetail.UserId != currentUserId)
@@ -897,8 +904,29 @@ namespace ECommerce.API.Controllers
                 return Forbid();
             }
 
+            if (!Enum.TryParse<OrderStatus>(orderDetail.Status, true, out var orderStatus))
+            {
+                return BadRequest(new { success = false, message = "Geçersiz sipariş durumu." });
+            }
+
+            if (!Enum.TryParse<PaymentStatus>(orderDetail.PaymentStatus, true, out var paymentStatus))
+            {
+                paymentStatus = orderDetail.IsPaid ? PaymentStatus.Paid : PaymentStatus.Pending;
+            }
+
+            if (!OrderInvoicePolicy.CanDownloadInvoice(orderStatus, paymentStatus))
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Bu sipariş için henüz fatura oluşturulamaz. Ödeme tamamlandıktan sonra tekrar deneyin.",
+                    errorCode = "INVOICE_NOT_AVAILABLE"
+                });
+            }
+
             var pdfBytes = InvoiceGenerator.Generate(orderDetail);
-            return File(pdfBytes, "application/pdf", $"invoice-{orderId}.pdf");
+            var fileName = $"fatura-{orderDetail.TrackingNumber ?? orderId.ToString()}.pdf";
+            return File(pdfBytes, "application/pdf", fileName);
         }
 
         /// <summary>

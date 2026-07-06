@@ -104,9 +104,9 @@
 .brand-logo-shell {
   display: flex;
   align-items: center;
-  width: 170px;
-  min-width: 170px;
-  height: 70px;
+  width: 188px;
+  min-width: 188px;
+  height: 78px;
   justify-content: flex-start;
 }
 
@@ -118,8 +118,8 @@
 }
 
 .brand-logo-crop {
-  width: 170px;
-  height: 70px;
+  width: 188px;
+  height: 78px;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
@@ -128,11 +128,11 @@
 }
 
 .brand-logo-image {
-  width: 238px;
+  width: 263px;
   max-width: none;
   height: auto;
   display: block;
-  transform: translate(-29px, -67px);
+  transform: translate(-32px, -74px);
   transform-origin: top left;
   pointer-events: none;
   user-select: none;
@@ -151,48 +151,47 @@
 }
 
 .footer-brand-logos {
-  gap: 0;
-}
-
-.footer-brand-main {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-left: 0;
 }
 
-.footer-brand-logo-image,
-.footer-brand-secondary-image {
-  width: auto;
-  height: 148px;
-  max-width: min(100%, 320px);
-  display: block;
-  object-fit: contain;
-  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.22));
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  backface-visibility: hidden;
-  transform: translateZ(0);
+.footer-brand-link {
+  display: inline-flex;
+  text-decoration: none;
+  flex-shrink: 0;
 }
 
 .footer-logo-crop {
-  width: 188px;
-  height: 76px;
+  width: 162px;
+  height: 78px;
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
   overflow: hidden;
-  filter: drop-shadow(0 3px 12px rgba(0, 0, 0, 0.2));
+  flex-shrink: 0;
+  margin-left: 0;
 }
 
-.footer-logo-image {
-  width: 286px;
+.footer-brand-logo-image {
+  width: 263px;
   max-width: none;
   height: auto;
   display: block;
-  transform: translate(-34px, -88px);
+  transform: translate(-50px, -74px);
   transform-origin: top left;
   pointer-events: none;
   user-select: none;
+}
+
+.footer-brand-secondary-image {
+  height: 72px;
+  width: auto;
+  max-width: 180px;
+  display: block;
+  object-fit: contain;
 }
 
 .footer-secondary-logo {
@@ -2860,7 +2859,115 @@ html {
   color: #d3dbe3;
   line-height: 1.75;
   margin-bottom: 16px;
-  max-width: 32ch;
+  max-width: 100%;
+}
+
+.footer-main-row {
+  --bs-gutter-x: 2rem;
+  --bs-gutter-y: 1.5rem;
+}
+
+.modern-footer .footer-col {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.modern-footer .footer-shell {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.modern-footer .footer-col-brand {
+  padding-left: 0;
+  padding-right: 0.5rem;
+}
+
+.modern-footer .footer-col-contact {
+  padding-left: 0.75rem;
+  padding-right: 1rem;
+}
+
+.modern-footer .footer-col-corporate {
+  padding-left: 1rem;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.contact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.contact-item-icon {
+  flex: 0 0 20px;
+  width: 20px;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contact-text-block {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.contact-text-block strong,
+.footer-contact-email {
+  display: block;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.contact-text-block small {
+  display: block;
+  color: #bdc3c7;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.footer-contact-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.2s ease;
+}
+
+.footer-contact-link:hover {
+  color: inherit;
+  text-decoration: none;
+  transform: translateX(2px);
+}
+
+.contact-item i {
+  margin-top: 0;
+}
+
+.contact-item strong {
+  color: white;
+}
+
+.contact-item small {
+  color: #bdc3c7;
 }
 
 .footer-brand-panel {
@@ -2870,16 +2977,10 @@ html {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
   border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 18px 40px rgba(9, 18, 33, 0.18);
-  backdrop-filter: blur(10px);
 }
 
 .footer-brand-panel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 24px;
-  pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 140, 0, 0.12), transparent 42%);
+  content: none;
 }
 
 .footer-trust-row {
@@ -2921,19 +3022,6 @@ html {
   font-weight: 700;
   margin-bottom: 20px;
   font-size: 1.1rem;
-  position: relative;
-  padding-bottom: 10px;
-}
-
-.footer-title::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 34px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #ff8c42, rgba(255, 140, 66, 0.1));
 }
 
 .footer-links {
@@ -2943,7 +3031,7 @@ html {
 }
 
 .footer-links li {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .footer-link {
@@ -2959,45 +3047,32 @@ html {
   padding-left: 5px;
 }
 
-.contact-info {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.contact-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.contact-item i {
-  margin-top: 2px;
-}
-
-.contact-item strong {
-  color: white;
-}
-
-.contact-item small {
-  color: #bdc3c7;
-}
-
 .social-links {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
+}
+
+.modern-footer .social-media {
+  margin-top: 1.25rem;
+}
+
+.modern-footer .social-media .footer-title {
+  margin-bottom: 12px;
 }
 
 .social-link {
   width: 40px;
   height: 40px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #bdc3c7;
+  color: #ffffff;
+  font-size: 18px;
   text-decoration: none;
   transition: all 0.3s ease;
 }
@@ -3014,6 +3089,11 @@ html {
   padding: 20px 0;
   margin-top: 40px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.footer-bottom .footer-shell {
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .footer-bottom-links {
@@ -4275,7 +4355,31 @@ html {
 /* Modern Footer Styles */
 .modern-footer {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.modern-footer .footer-main-row {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+@media (min-width: 992px) {
+  .modern-footer .footer-main-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.72fr) minmax(0, 0.82fr) minmax(0, 1fr) minmax(0, 0.72fr);
+    gap: 1.5rem 1.75rem;
+  }
+
+  .modern-footer .footer-main-row > .footer-col {
+    width: auto;
+    max-width: none;
+    padding: 0;
+  }
+
+  .modern-footer .footer-shell {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
 }
 
 /* Footer mobilde gizlenir - bottom navigation ile çakışmayı önler */
@@ -4521,6 +4625,12 @@ html {
    MOBILE RESPONSIVE - PROFESYONEL
    ============================================ */
 
+@media (max-width: 768px) {
+  .mobile-header-row {
+    display: none !important;
+  }
+}
+
 @media (max-width: 576px) {
   /* === HEADER === */
   .main-header {
@@ -4556,41 +4666,42 @@ html {
   }
 
   .brand-logo-shell {
-    width: 122px !important;
-    min-width: 122px !important;
-    height: 42px !important;
+    width: 132px !important;
+    min-width: 132px !important;
+    height: 46px !important;
   }
 
-  .logo-stack {
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 0 !important;
+  .brand-logo-crop {
+    width: 132px !important;
+    height: 46px !important;
+    overflow: hidden !important;
   }
 
-  .logo-container {
-    margin: 0 !important;
+  .brand-logo-image {
+    width: 194px !important;
+    max-width: none !important;
+    transform: translate(-23px, -54px) !important;
   }
 
-  /* Gölköy logo - küçük ve sola */
+  .footer-logo-crop {
+    width: 132px !important;
+    height: 46px !important;
+  }
+
+  .footer-brand-logo-image {
+    width: 194px !important;
+    transform: translate(-23px, -54px) !important;
+  }
+
+  .footer-brand-secondary-image {
+    height: 56px !important;
+    max-width: 140px !important;
+  }
+
   .logo-container img {
     height: 42px !important;
     width: auto !important;
     margin: 0 !important;
-  }
-
-  /* Doğadan Sofranza - büyük ve belirgin */
-  .secondary-logo-container {
-    margin-left: 5px !important;
-  }
-
-  .brand-logo-crop {
-    width: 122px !important;
-    height: 42px !important;
-  }
-
-  .brand-logo-image {
-    width: 178px !important;
-    transform: translate(-21px, -50px) !important;
   }
 
   .secondary-logo {
@@ -4646,8 +4757,7 @@ html {
   }
 
   .mobile-search-row {
-    order: -1 !important;
-    margin-top: 0 !important;
+    margin-top: 4px !important;
   }
 
   .mobile-search-row > .col-12 {
@@ -4909,13 +5019,23 @@ html {
   }
 
   .brand-logo-crop {
-    width: 146px !important;
-    height: 56px !important;
+    width: 160px !important;
+    height: 62px !important;
   }
 
   .brand-logo-image {
-    width: 212px !important;
-    transform: translate(-27px, -63px) !important;
+    width: 234px !important;
+    transform: translate(-30px, -70px) !important;
+  }
+
+  .footer-logo-crop {
+    width: 138px !important;
+    height: 62px !important;
+  }
+
+  .footer-brand-logo-image {
+    width: 234px !important;
+    transform: translate(-44px, -70px) !important;
   }
 
   .secondary-logo {
