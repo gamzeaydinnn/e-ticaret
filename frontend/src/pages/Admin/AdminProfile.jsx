@@ -9,6 +9,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import AdminService from "../../services/adminService";
+import { ROLE_LABELS } from "../../services/permissionService";
 import "./AdminProfile.css";
 
 const AdminProfile = () => {
@@ -33,6 +34,12 @@ const AdminProfile = () => {
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+  });
+  const [accountMeta, setAccountMeta] = useState({
+    role: currentUser?.role || "",
+    isActive: currentUser?.isActive ?? true,
+    createdAt: currentUser?.createdAt || null,
+    lastLoginAt: currentUser?.lastLoginAt || null,
   });
   const [passwordError, setPasswordError] = useState(null);
   const [passwordSuccess, setPasswordSuccess] = useState(null);
@@ -67,14 +74,37 @@ const AdminProfile = () => {
       const userData = response?.data || response;
 
       if (userData) {
+        const resolvedIsActive = userData.isActive ?? userData.IsActive ?? true;
+        const resolvedRole = userData.role || userData.Role || currentUser?.role || "";
+        const resolvedCreatedAt = userData.createdAt || userData.CreatedAt || null;
+        const resolvedLastLoginAt =
+          userData.lastLoginAt || userData.LastLoginAt || null;
+
         setProfileData({
-          firstName: userData.firstName || "",
-          lastName: userData.lastName || "",
-          email: userData.email || "",
-          phoneNumber: userData.phoneNumber || "",
-          address: userData.address || "",
-          city: userData.city || "",
+          firstName: userData.firstName || userData.FirstName || "",
+          lastName: userData.lastName || userData.LastName || "",
+          email: userData.email || userData.Email || "",
+          phoneNumber: userData.phoneNumber || userData.PhoneNumber || "",
+          address: userData.address || userData.Address || "",
+          city: userData.city || userData.City || "",
         });
+
+        setAccountMeta({
+          role: resolvedRole,
+          isActive: resolvedIsActive,
+          createdAt: resolvedCreatedAt,
+          lastLoginAt: resolvedLastLoginAt,
+        });
+
+        if (setUser && currentUser) {
+          setUser({
+            ...currentUser,
+            role: resolvedRole,
+            isActive: resolvedIsActive,
+            createdAt: resolvedCreatedAt,
+            lastLoginAt: resolvedLastLoginAt,
+          });
+        }
       }
     } catch (err) {
       console.error("Profil yükleme hatası:", err);
@@ -445,32 +475,32 @@ const AdminProfile = () => {
               <div className="mb-2">
                 <strong>Rol:</strong>
                 <span className="badge bg-primary ms-2">
-                  {currentUser?.role || "N/A"}
+                  {ROLE_LABELS[accountMeta.role] || accountMeta.role || "N/A"}
                 </span>
               </div>
               <div className="mb-2">
                 <strong>Durum:</strong>
                 <span
-                  className={`badge ms-2 ${currentUser?.isActive ? "bg-success" : "bg-danger"}`}
+                  className={`badge ms-2 ${accountMeta.isActive !== false ? "bg-success" : "bg-danger"}`}
                 >
-                  {currentUser?.isActive ? "Aktif" : "Pasif"}
+                  {accountMeta.isActive !== false ? "Aktif" : "Pasif"}
                 </span>
               </div>
-              {currentUser?.createdAt && (
+              {accountMeta.createdAt && (
                 <div className="mb-2">
                   <strong>Kayıt Tarihi:</strong>
                   <span className="ms-2">
-                    {new Date(currentUser.createdAt).toLocaleDateString(
+                    {new Date(accountMeta.createdAt).toLocaleDateString(
                       "tr-TR",
                     )}
                   </span>
                 </div>
               )}
-              {currentUser?.lastLoginAt && (
+              {accountMeta.lastLoginAt && (
                 <div className="mb-2">
                   <strong>Son Giriş:</strong>
                   <span className="ms-2">
-                    {new Date(currentUser.lastLoginAt).toLocaleString("tr-TR")}
+                    {new Date(accountMeta.lastLoginAt).toLocaleString("tr-TR")}
                   </span>
                 </div>
               )}

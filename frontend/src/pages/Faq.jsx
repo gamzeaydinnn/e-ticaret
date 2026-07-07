@@ -4,7 +4,7 @@ export default function Faq() {
   const items = [
     {
       q: "Siparişim ne zaman gelir?",
-      a: "Teslimat süresi bölgenize göre değişmekle birlikte, Bodrum ve çevresinde aynı gün / ertesi gün teslimat yapılır.",
+      a: "Siparişleriniz kendi kurye ekibimizle Bodrum ve çevresine aynı gün veya ertesi gün teslim edilir. Bodrum çevresi dışına teslimat yapılmamaktadır.",
     },
     {
       q: "İade ve değişim şartları nelerdir?",

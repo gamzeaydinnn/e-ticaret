@@ -1184,18 +1184,20 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<decimal> GetTotalRevenueAsync()
         {
-            // CİRO HESABI - TEK KAYNAK (Single Source of Truth)
-            // NEDEN: Daha önce ciro 3 farklı yerde 3 farklı şekilde hesaplanıyordu
-            //   (dashboard KPI sadece Delivered+TotalPrice, grafik ve satış raporu ise
-            //   Delivered/Completed + FinalPrice). Bu da aynı ekranda farklı rakamlar
-            //   gösterilmesine yol açıyordu.
-            // ÇÖZÜM: Tamamlanmış sipariş kabul edilen tüm durumlar (Delivered VEYA Completed)
-            //   dahil edilir ve tartı/iade düzeltmeleri sonrası gerçek tutar olan FinalPrice
-            //   öncelikli kullanılır; FinalPrice 0 ise TotalPrice'a düşülür.
-            // Bu metot artık dashboard, grafik ve satış raporu için ortak referanstır.
             return await _context.Orders
-                .Where(o => o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed)
-                .SumAsync(o => o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice);
+                .AsNoTracking()
+                .Where(o =>
+                    o.Status != OrderStatus.Cancelled &&
+                    o.Status != OrderStatus.Refunded &&
+                    o.Status != OrderStatus.PaymentFailed &&
+                    o.PaymentStatus != PaymentStatus.Failed &&
+                    o.PaymentStatus != PaymentStatus.Cancelled &&
+                    o.PaymentStatus != PaymentStatus.Refunded)
+                .SumAsync(o =>
+                    o.CapturedAmount > 0 ? o.CapturedAmount :
+                    o.FinalAmount > 0 ? o.FinalAmount :
+                    o.FinalPrice > 0 ? o.FinalPrice :
+                    o.TotalPrice);
         }
 
         public async Task<IEnumerable<OrderListDto>> GetAllOrdersAsync(int page = 1, int size = 20)

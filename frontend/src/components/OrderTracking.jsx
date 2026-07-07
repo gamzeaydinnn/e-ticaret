@@ -332,6 +332,7 @@ const OrderTracking = () => {
   const [connectionStatus, setConnectionStatus] = useState(
     ConnectionState.DISCONNECTED,
   );
+  const [pollingFallback, setPollingFallback] = useState(false);
   const [notification, setNotification] = useState(null);
   const [cancellingOrderId, setCancellingOrderId] = useState(null); // İptal işlemi yapılan sipariş ID'si
   const [refundRequests, setRefundRequests] = useState([]);
@@ -890,10 +891,20 @@ const OrderTracking = () => {
     }
 
     // SignalR bağlantısı kur (sadece giriş yapmış kullanıcılar için)
+    let authPollInterval = null;
+    const startAuthPolling = () => {
+      if (authPollInterval) return;
+      setPollingFallback(true);
+      authPollInterval = setInterval(() => {
+        loadOrders().catch(() => {});
+      }, 30000);
+    };
+
     const connectSignalR = async () => {
       try {
         const connected = await signalRService.connectCustomer();
         if (connected) {
+          setPollingFallback(false);
           setConnectionStatus(ConnectionState.CONNECTED);
           console.log("[OrderTracking] SignalR bağlantısı kuruldu");
 
@@ -926,10 +937,15 @@ const OrderTracking = () => {
               e,
             );
           }
+        } else {
+          console.warn(
+            "[OrderTracking] SignalR bağlanamadı, periyodik güncelleme kullanılacak",
+          );
+          startAuthPolling();
         }
       } catch (error) {
         console.error("[OrderTracking] SignalR bağlantı hatası:", error);
-        setConnectionStatus(ConnectionState.FAILED);
+        startAuthPolling();
       }
     };
 
@@ -1090,6 +1106,7 @@ const OrderTracking = () => {
 
     // Cleanup
     return () => {
+      if (authPollInterval) clearInterval(authPollInterval);
       unsubscribeStatus();
       unsubscribeDelivery();
       unsubscribeDeliveryCompleted();
@@ -1150,6 +1167,18 @@ const OrderTracking = () => {
   // RENDER HELPERS
   // =========================================================================
   const renderConnectionBadge = () => {
+    if (pollingFallback && connectionStatus !== ConnectionState.CONNECTED) {
+      return (
+        <span
+          className="badge bg-warning text-dark ms-2"
+          style={{ fontSize: "10px" }}
+        >
+          <i className="fas fa-sync me-1"></i>
+          Periyodik Güncelleme
+        </span>
+      );
+    }
+
     const statusConfig = {
       [ConnectionState.CONNECTED]: {
         color: "success",

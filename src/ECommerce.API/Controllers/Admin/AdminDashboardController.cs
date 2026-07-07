@@ -8,10 +8,10 @@ using ECommerce.Core.DTOs.Admin;
 using ECommerce.Infrastructure.Services.MicroServices;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
-using ECommerce.Entities.Concrete;
-using Microsoft.EntityFrameworkCore;
+using ECommerce.Core.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -81,9 +81,8 @@ namespace ECommerce.API.Controllers.Admin
 
         private async Task<AdminDashboardOverviewDto> BuildDashboardOverviewAsync()
         {
-            var utcNow = DateTime.UtcNow;
-            var todayStart = utcNow.Date;
-            var last14DaysStart = todayStart.AddDays(-13);
+            var turkeyToday = OrderCancelPolicy.GetTurkeyNow().Date;
+            var last14DaysStart = turkeyToday.AddDays(-13);
 
             var totalUsers = await _userService.GetUserCountAsync();
             // WEB AKTİF ÜRÜN SAYISI
@@ -164,23 +163,27 @@ namespace ECommerce.API.Controllers.Admin
                 .SumAsync(r => (decimal?)r.RefundAmount) ?? 0;
 
             var dailyRaw = await _dbContext.Orders
-                .Where(o => o.OrderDate >= last14DaysStart)
-                .GroupBy(o => o.OrderDate.Date)
+                .AsNoTracking()
+                .Where(o => o.OrderDate >= OrderReportHelper.TurkeyToUtc(last14DaysStart))
+                .ToListAsync();
+
+            var dailyGrouped = dailyRaw
+                .GroupBy(o => OrderCancelPolicy.ConvertUtcToTurkey(o.OrderDate).Date)
                 .Select(g => new
                 {
                     Date = g.Key,
-                    Orders = g.Count(),
-                    Revenue = g.Where(o =>
-                            o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed)
-                        .Sum(o => o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice)
+                    Orders = g.Count(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus)),
+                    Revenue = g
+                        .Where(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus))
+                        .Sum(OrderReportHelper.GetSaleAmount)
                 })
-                .ToListAsync();
+                .ToList();
 
-            var dailyMap = dailyRaw.ToDictionary(x => x.Date, x => x);
+            var dailyMap = dailyGrouped.ToDictionary(x => x.Date, x => x);
             var dailyMetrics = new List<AdminDashboardMetricPointDto>();
             for (var i = 13; i >= 0; i--)
             {
-                var day = todayStart.AddDays(-i);
+                var day = turkeyToday.AddDays(-i);
                 if (dailyMap.TryGetValue(day, out var existing))
                 {
                     dailyMetrics.Add(new AdminDashboardMetricPointDto

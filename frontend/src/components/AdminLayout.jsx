@@ -211,6 +211,18 @@ function AdminLayoutInner({ children }) {
         permission: PERMISSIONS.USERS_VIEW,
       },
       {
+        path: "/admin/roles",
+        icon: "fas fa-user-shield",
+        label: "Roller",
+        permission: PERMISSIONS.ROLES_VIEW,
+      },
+      {
+        path: "/admin/permissions",
+        icon: "fas fa-key",
+        label: "İzinler",
+        permission: PERMISSIONS.ROLES_PERMISSIONS,
+      },
+      {
         path: "/admin/couriers",
         icon: "fas fa-motorcycle",
         label: "Kuryeler",
@@ -713,7 +725,7 @@ function AdminLayoutInner({ children }) {
       >
         {/* Top Navigation */}
         <nav
-          className="navbar navbar-expand-lg bg-white shadow-sm sticky-top py-1 py-lg-2"
+          className="navbar navbar-expand-lg bg-white shadow-sm sticky-top py-1 py-lg-2 admin-main-topbar"
           style={{ borderBottom: "1px solid #e5e7eb" }}
         >
           <div className="container-fluid px-2 px-lg-3 admin-topbar-shell">
@@ -1129,6 +1141,19 @@ const styles = `
   border: none;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.admin-main-topbar {
+  z-index: 1060;
+}
+
+.admin-topbar-profile {
+  position: relative;
+  z-index: 1070;
+}
+
+.admin-topbar-profile .dropdown-menu {
+  z-index: 1071 !important;
 }
 .dropdown-item:hover {
   background-color: rgba(245, 124, 0, 0.1);

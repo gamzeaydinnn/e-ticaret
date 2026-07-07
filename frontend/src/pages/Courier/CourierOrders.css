@@ -1100,6 +1100,24 @@ a[href^="tel:"]:hover {
   max-width: 100%;
 }
 
+.courier-call-btn {
+  min-width: 72px;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.25);
+}
+
+.courier-phone-readable {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  word-break: keep-all;
+}
+
+.courier-modal-call-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 /* Sipariş bilgi satırları */
 .courier-info-row {
   display: flex;

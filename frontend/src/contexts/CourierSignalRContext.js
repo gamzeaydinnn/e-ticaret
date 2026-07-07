@@ -14,15 +14,14 @@ import React, {
   useRef,
 } from "react";
 import * as signalR from "@microsoft/signalr";
+import { getSignalRHubUrl } from "../config/apiConfig";
 import { useCourierAuth } from "./CourierAuthContext";
 
 // Context
 const CourierSignalRContext = createContext(null);
 
 // SignalR Hub URL
-const HUB_URL = process.env.REACT_APP_API_URL
-  ? `${process.env.REACT_APP_API_URL}/hubs/courier`
-  : "http://localhost:5153/hubs/courier";
+const HUB_URL = getSignalRHubUrl("/hubs/courier");
 
 export function CourierSignalRProvider({ children }) {
   const { token, courier, isAuthenticated, logout } = useCourierAuth();

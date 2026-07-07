@@ -89,14 +89,7 @@ export default function ActiveOrdersBadge() {
 
   return (
     <span
-      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-      style={{
-        background: "linear-gradient(135deg, #e74c3c, #ec7063)",
-        fontSize: "0.6rem",
-        minWidth: "16px",
-        height: "16px",
-        animation: "pulse 2s infinite",
-      }}
+      className="header-action-badge"
       title={`${activeCount} devam eden sipariş`}
     >
       {activeCount > 9 ? "9+" : activeCount}

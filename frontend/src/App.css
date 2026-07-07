@@ -2900,6 +2900,14 @@ html {
   gap: 16px;
 }
 
+.contact-phone-row {
+  min-width: 0;
+}
+
+.contact-phone-number {
+  white-space: nowrap;
+}
+
 .contact-item {
   display: flex;
   align-items: flex-start;
@@ -4305,6 +4313,43 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
+}
+
+.header-action-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  background: linear-gradient(135deg, #e74c3c, #ec7063);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(231, 76, 60, 0.35);
+  transform: none;
+  animation: header-badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes header-badge-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 2px 6px rgba(231, 76, 60, 0.35);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 3px 10px rgba(231, 76, 60, 0.45);
+  }
 }
 
 .search-suggestions {

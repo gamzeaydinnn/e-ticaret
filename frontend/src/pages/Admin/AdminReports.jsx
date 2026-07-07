@@ -125,7 +125,9 @@ export default function AdminReports() {
       return;
     }
     const topProducts = sales.topProducts?.length
-      ? sales.topProducts.map((p) => `#${p.productId} (${p.quantity})`).join(", ")
+      ? sales.topProducts
+          .map((p) => `${p.productName || `#${p.productId}`} (${p.quantity})`)
+          .join(", ")
       : "-";
     const rows = [
       [
@@ -302,7 +304,7 @@ export default function AdminReports() {
                 <span className="report-metric__value report-metric__value--muted">
                   {sales.topProducts
                     ?.slice(0, 2)
-                    .map((p) => `#${p.productId}`)
+                    .map((p) => p.productName || `#${p.productId}`)
                     .join(", ") || "-"}
                 </span>
               </div>

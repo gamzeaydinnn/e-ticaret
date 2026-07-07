@@ -126,11 +126,11 @@ export default function Contact() {
 
               {/* Telefon */}
               <div
-                className="d-flex align-items-center mb-3 p-3 rounded"
+                className="d-flex align-items-center mb-3 p-3 rounded contact-phone-row"
                 style={{ background: "#fff7ed" }}
               >
                 <div
-                  className="d-flex align-items-center justify-content-center me-3"
+                  className="d-flex align-items-center justify-content-center me-3 flex-shrink-0"
                   style={{
                     width: "48px",
                     height: "48px",
@@ -143,15 +143,35 @@ export default function Contact() {
                     style={{ fontSize: "20px" }}
                   ></i>
                 </div>
-                <div>
-                  <a
-                    href={`tel:${phoneDisplay.replace(/\s/g, "")}`}
-                    className="text-decoration-none fw-bold d-block"
-                    style={{ color: "#ff8c00" }}
-                  >
-                    {phoneDisplay}
-                  </a>
-                  <small className="text-muted">Hafta içi 09:00 - 18:00</small>
+                <div className="flex-grow-1 min-width-0">
+                  <div className="d-none d-md-block">
+                    <a
+                      href={`tel:${phoneDisplay.replace(/\s/g, "")}`}
+                      className="text-decoration-none fw-bold d-block contact-phone-number"
+                      style={{ color: "#ff8c00" }}
+                    >
+                      {phoneDisplay}
+                    </a>
+                    <small className="text-muted">Hafta içi 09:00 - 18:00</small>
+                  </div>
+                  <div className="d-md-none">
+                    <a
+                      href={`tel:${phoneDisplay.replace(/\s/g, "")}`}
+                      className="btn w-100 fw-bold text-white"
+                      style={{
+                        background: "#ff8c00",
+                        borderRadius: "12px",
+                        padding: "12px 16px",
+                      }}
+                      aria-label={`Ara: ${phoneDisplay}`}
+                    >
+                      <i className="fas fa-phone-alt me-2"></i>
+                      Ara
+                    </a>
+                    <small className="text-muted d-block mt-2 text-center">
+                      Hafta içi 09:00 - 18:00
+                    </small>
+                  </div>
                 </div>
               </div>
 
@@ -161,7 +181,7 @@ export default function Contact() {
                 style={{ background: "#eff6ff" }}
               >
                 <div
-                  className="d-flex align-items-center justify-content-center me-3"
+                  className="d-flex align-items-center justify-content-center me-3 flex-shrink-0"
                   style={{
                     width: "48px",
                     height: "48px",
@@ -174,10 +194,10 @@ export default function Contact() {
                     style={{ fontSize: "20px" }}
                   ></i>
                 </div>
-                <div>
+                <div className="min-width-0 flex-grow-1">
                   <a
                     href={`mailto:${email}`}
-                    className="text-decoration-none fw-bold d-block"
+                    className="text-decoration-none fw-bold d-block text-break"
                     style={{ color: "#3b82f6" }}
                   >
                     {email}

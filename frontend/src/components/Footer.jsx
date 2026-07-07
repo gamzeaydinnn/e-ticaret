@@ -1,9 +1,33 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getFooterData } from "../services/siteSettingsService";
+import categoryServiceReal, {
+  normalizeCategorySlug,
+} from "../services/categoryServiceReal";
 
 const dedupeArray = (values = []) =>
   [...new Set((values || []).filter(Boolean))];
+
+const createSlug = (name) => {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ı/g, "i")
+    .replace(/ö/g, "o")
+    .replace(/ş/g, "s")
+    .replace(/ü/g, "u")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+};
+
+const getCategoryPath = (category) => {
+  const slug = normalizeCategorySlug(category.slug || createSlug(category.name));
+  return slug ? `/category/${slug}` : "/";
+};
 
 /**
  * Footer - Site Alt Bilgi Bileşeni
@@ -16,6 +40,7 @@ const dedupeArray = (values = []) =>
  */
 export default function Footer() {
   const [footerData, setFooterData] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,6 +56,29 @@ export default function Footer() {
     };
 
     fetchFooterData();
+  }, []);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const cats = await categoryServiceReal.getActive();
+        const rootCategories = (cats || [])
+          .filter((cat) => !cat.parentId)
+          .sort(
+            (a, b) =>
+              (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
+              String(a.name || "").localeCompare(String(b.name || ""), "tr"),
+          );
+        setCategories(rootCategories);
+      } catch (error) {
+        console.error("Footer kategorileri yüklenemedi:", error);
+        setCategories([]);
+      }
+    };
+
+    loadCategories();
+    const unsubscribe = categoryServiceReal.subscribe(loadCategories);
+    return () => unsubscribe && unsubscribe();
   }, []);
 
   // Yükleniyor durumu
@@ -83,9 +131,9 @@ export default function Footer() {
                 <p className="footer-description">{company.description}</p>
               )}
               <div className="footer-trust-row">
-                <span className="footer-trust-chip">Doğal Seçki</span>
+                <span className="footer-trust-chip">Taze Ürün</span>
                 <span className="footer-trust-chip">Soğuk Zincir</span>
-                <span className="footer-trust-chip">Güvenli Ödeme</span>
+                <span className="footer-trust-chip">Kapıda Teslimat</span>
               </div>
               {footer.showSSLBadge && securityFeatures.length > 0 && (
                 <div className="footer-features">
@@ -112,45 +160,28 @@ export default function Footer() {
           <div className="col-lg-2 col-md-6 footer-col">
             <h6 className="footer-title">Kategoriler</h6>
             <ul className="footer-links">
+              {categories.length > 0 ? (
+                categories.map((category) => (
+                  <li key={category.id || category.slug || category.name}>
+                    <Link
+                      to={getCategoryPath(category)}
+                      className="footer-link"
+                    >
+                      {category.name}
+                    </Link>
+                  </li>
+                ))
+              ) : (
+                <li>
+                  <span className="footer-link text-white-50">
+                    Kategoriler yükleniyor…
+                  </span>
+                </li>
+              )}
               <li>
-                <a href="/category/meyve-ve-sebze" className="footer-link">
-                  Meyve & Sebze
-                </a>
-              </li>
-              <li>
-                <a href="/category/et-ve-et-urunleri" className="footer-link">
-                  Et & Tavuk & Balık
-                </a>
-              </li>
-              <li>
-                <a href="/category/sut-ve-sut-urunleri" className="footer-link">
-                  Süt Ürünleri
-                </a>
-              </li>
-              <li>
-                <a href="/category/temel-gida" className="footer-link">
-                  Temel Gıda
-                </a>
-              </li>
-              <li>
-                <a href="/category/icecekler" className="footer-link">
-                  İçecekler
-                </a>
-              </li>
-              <li>
-                <a href="/category/atistirmalik" className="footer-link">
-                  Atıştırmalık
-                </a>
-              </li>
-              <li>
-                <a href="/category/temizlik" className="footer-link">
-                  Temizlik
-                </a>
-              </li>
-              <li>
-                <a href="/favorites" className="footer-link">
+                <Link to="/favorites" className="footer-link">
                   Favorilerim
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -181,7 +212,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link to="/kargo-bilgileri" className="footer-link">
-                  Kargo Bilgileri
+                  Teslimat Bilgileri
                 </Link>
               </li>
               <li>

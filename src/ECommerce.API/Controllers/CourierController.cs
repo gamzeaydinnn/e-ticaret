@@ -3,6 +3,8 @@
 •	POST /api/courier/orders/{orderId}/status -> teslim edildi / teslim edilemedi gibi status güncellemesi
 */
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using ECommerce.API.Authorization;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.Interfaces;
@@ -182,6 +184,8 @@ namespace ECommerce.API.Controllers
 
         // POST: api/courier
         [HttpPost]
+        [Authorize(Roles = Roles.AllStaff)]
+        [HasPermission(Permissions.Couriers.Create)]
         public async Task<IActionResult> Add([FromBody] CourierCreateRequestDto dto)
         {
             _logger.LogInformation("Kurye oluşturma isteği alındı: {@Dto}", new { dto.Name, dto.Email, dto.Phone, dto.Vehicle });

@@ -142,7 +142,7 @@ const getDefaultSiteSettings = () => ({
     shortName: "Gölköy Gurme",
     legalName: "Gölköy Gurme Market",
     description:
-      "Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli ürünleri, en yüksek kalite standartlarında siz değerli müşterilerimize sunmayı amaçlıyoruz.",
+      "Bodrum Gölköy'de taze meyve-sebze, et, süt ürünleri ve günlük market ihtiyaçlarınızı kendi kuryemizle kapınıza getiriyoruz. Yerel lezzetler, soğuk zincir ve güvenli alışveriş.",
     logoUrl: "/images/golkoy-logo1.png",
     secondaryLogoUrl: "/images/dogadan-sofranza-logo.png",
     copyrightText: "Tüm haklar Gölköy Gurme Markete aittir.",
@@ -152,11 +152,12 @@ const getDefaultSiteSettings = () => ({
     phoneDisplay: "+90 533 478 30 72",
     phoneLabel: "Müşteri Hizmetleri",
     whatsAppNumber: "905334783072",
-    whatsAppMessage: "Merhaba, sipariş hakkında bilgi almak istiyorum.",
+    whatsAppMessage:
+      "Merhaba, Gölköy Gurme siparişim hakkında bilgi almak istiyorum.",
     email: "golturkbuku@golkoygurme.com.tr",
     emailLabel: "Genel bilgi ve destek",
     address: "Gölköy Mah. 67 Sokak No: 1/A Bodrum/Muğla",
-    addressLabel: "Merkez Ofis",
+    addressLabel: "Gölköy Mağaza",
   },
   socialMedia: {
     facebook: "https://www.facebook.com/golkoygurmebodrum",
@@ -172,9 +173,9 @@ const getDefaultSiteSettings = () => ({
     showPaymentMethods: true,
     paymentMethods: ["VISA", "MC", "TROY"],
     securityFeatures: [
-      "SSL güvenli alışveriş",
+      "Taze ürün garantisi",
+      "Soğuk zincir teslimat",
       "Güvenli ödeme sistemi",
-      "Müşteri memnuniyeti odaklı",
     ],
   },
 });

@@ -845,14 +845,24 @@ export default function StoreAttendantDashboard({
           font-size: 1.2rem;
           margin-bottom: 3px;
         }
+
+        .store-attendant-topbar {
+          z-index: 1030;
+        }
+
+        .store-attendant-admin-toolbar {
+          position: relative;
+          z-index: 1;
+        }
       `}</style>
 
       <div className="min-vh-100 bg-light" style={{ paddingBottom: "70px" }}>
         {/* ================================================================ */}
-        {/* HEADER */}
+        {/* HEADER - Admin modunda AdminLayout üst barı kullanılır */}
         {/* ================================================================ */}
+        {!isAdminMode ? (
         <nav
-          className="navbar navbar-dark sticky-top py-2 px-3"
+          className="navbar navbar-dark sticky-top py-2 px-3 store-attendant-topbar"
           style={{
             background: "linear-gradient(135deg, #2E7D32 0%, #43A047 100%)",
           }}
@@ -934,6 +944,29 @@ export default function StoreAttendantDashboard({
             </div>
           </div>
         </nav>
+        ) : (
+          <div className="d-flex justify-content-end align-items-center gap-2 px-3 py-2 bg-white border-bottom store-attendant-admin-toolbar">
+            <button
+              className="btn btn-sm btn-outline-success"
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              title="Yenile"
+            >
+              <i
+                className={`fas fa-sync-alt ${refreshing ? "fa-spin" : ""}`}
+              ></i>
+            </button>
+            <button
+              className={`btn btn-sm ${soundEnabled ? "btn-success" : "btn-outline-success"}`}
+              onClick={handleSoundToggle}
+              title={soundEnabled ? "Sesi Kapat" : "Sesi Aç"}
+            >
+              <i
+                className={`fas fa-${soundEnabled ? "bell" : "bell-slash"}`}
+              ></i>
+            </button>
+          </div>
+        )}
 
         {/* ================================================================ */}
         {/* ANA İÇERİK */}

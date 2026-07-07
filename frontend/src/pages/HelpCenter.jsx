@@ -22,8 +22,10 @@ export default function HelpCenter() {
         <li className="mb-3">
           <strong>Teslimat süresi nedir?</strong>
           <br />
-          Bodrum ve çevresine aynı gün / ertesi gün teslimat; diğer bölgeler
-          için kargo firmasının teslimat süreleri geçerlidir.
+          Siparişleriniz Gölköy Market&apos;in kendi kurye ekibiyle Bodrum ve
+          çevresine aynı gün veya ertesi gün teslim edilir. Hizmet yalnızca
+          Bodrum ve çevresiyle sınırlıdır; kargo firması ile gönderim
+          yapılmamaktadır.
         </li>
         <li className="mb-3">
           <strong>Ürünüm hasarlı geldi, ne yapmalıyım?</strong>

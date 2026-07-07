@@ -9,13 +9,15 @@ using ECommerce.Core.Constants;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using ECommerce.Entities.Enums;
+using ECommerce.Entities.Concrete;
+using ECommerce.Core.Helpers;
 using System.Text.RegularExpressions;
-//Dönem içi sipariş sayısı, ciro, satılan adet ve top 5 ürün (OrderDate ve Delivered/Completed).
+
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
     [Route("api/admin/reports")]
-    [Authorize(Roles = Roles.AllStaff)] // CustomerSupport ve Logistics da raporlara erişebilsin
+    [Authorize(Roles = Roles.AllStaff)]
     public class AdminReportsController : ControllerBase
     {
         private readonly ECommerceDbContext _context;
@@ -30,39 +32,49 @@ namespace ECommerce.API.Controllers.Admin
         [HttpGet("sales")]
         public async Task<IActionResult> GetSalesReport([FromQuery] string period = "daily")
         {
-            DateTime from = DateTime.UtcNow.Date;
-            if (period.Equals("weekly", StringComparison.OrdinalIgnoreCase))
-                from = DateTime.UtcNow.Date.AddDays(-7);
-            else if (period.Equals("monthly", StringComparison.OrdinalIgnoreCase))
-                from = DateTime.UtcNow.Date.AddDays(-30);
+            var (fromUtc, toUtcExclusive) = OrderReportHelper.GetPeriodRangeUtc(period);
 
-            // Tüm siparişleri getir (iptal hariç) - sipariş sayısı ve adet için
-            var allOrders = await _context.Orders
+            var orders = await _context.Orders
+                .AsNoTracking()
                 .Include(o => o.OrderItems)
-                .Where(o => o.OrderDate >= from && o.Status != OrderStatus.Cancelled)
+                .Where(o => o.OrderDate >= fromUtc && o.OrderDate < toUtcExclusive)
                 .ToListAsync();
 
-            var ordersCount = allOrders.Count;
-            var itemsSold = allOrders.Sum(o => o.OrderItems.Sum(i => i.Quantity));
-
-            // Gelir hesaplaması: Delivered/Completed siparişlerden
-            var completedOrders = allOrders
-                .Where(o => o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed)
+            var saleOrders = orders
+                .Where(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus))
                 .ToList();
-            var revenue = completedOrders.Sum(o => o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice);
 
-            var topProducts = allOrders
+            var ordersCount = saleOrders.Count;
+            var revenue = saleOrders.Sum(OrderReportHelper.GetSaleAmount);
+            var itemsSold = saleOrders.Sum(o => o.OrderItems.Sum(i => i.Quantity));
+
+            var productNameMap = await _context.Products
+                .AsNoTracking()
+                .Where(p => saleOrders
+                    .SelectMany(o => o.OrderItems)
+                    .Select(i => i.ProductId)
+                    .Distinct()
+                    .Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Name);
+
+            var topProducts = saleOrders
                 .SelectMany(o => o.OrderItems)
                 .GroupBy(i => i.ProductId)
-                .Select(g => new { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
-                .OrderByDescending(x => x.Quantity)
+                .Select(g => new
+                {
+                    productId = g.Key,
+                    productName = productNameMap.TryGetValue(g.Key, out var name) ? name : $"Ürün #{g.Key}",
+                    quantity = g.Sum(x => x.Quantity)
+                })
+                .OrderByDescending(x => x.quantity)
                 .Take(5)
                 .ToList();
 
             return Ok(new
             {
-                from,
-                to = DateTime.UtcNow,
+                from = fromUtc,
+                to = toUtcExclusive,
+                period,
                 ordersCount,
                 revenue,
                 itemsSold,
@@ -75,17 +87,13 @@ namespace ECommerce.API.Controllers.Admin
         {
             var threshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
 
-            // Eşik altındaki tüm aktif ürünler (stok 0 dahil) tek sorguda çekilir.
-            // NEDEN tek sorgu: Aynı tabloyu iki kez taramak yerine bellekte ayrıştırmak
-            //   daha performanslı; ürün sayısı tipik olarak yönetilebilir seviyededir.
             var products = await _context.Products
+                .AsNoTracking()
                 .Where(p => p.IsActive && p.StockQuantity <= threshold)
                 .Select(p => new { p.Id, p.Name, p.StockQuantity })
                 .OrderBy(p => p.StockQuantity)
                 .ToListAsync();
 
-            // "Stokta yok" (stok <= 0) ile "kritik stok" (0 < stok <= eşik) ayrımı.
-            // Frontend bu toplamları ayrı kartlarda gösterebilsin diye sayıları da döndürüyoruz.
             var outOfStockCount = products.Count(p => p.StockQuantity <= 0);
             var lowStockCount = products.Count - outOfStockCount;
 
@@ -95,20 +103,20 @@ namespace ECommerce.API.Controllers.Admin
         [HttpGet("inventory/movements")]
         public async Task<IActionResult> GetInventoryMovements([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
         {
-            var start = from ?? DateTime.UtcNow.Date.AddDays(-7);
-            var end = to ?? DateTime.UtcNow;
+            var (startUtc, endUtcExclusive) = OrderReportHelper.GetDateRangeUtc(from, to);
 
             var movements = await _context.InventoryLogs
+                .AsNoTracking()
                 .Include(l => l.Product)
-                .Where(l => l.CreatedAt >= start && l.CreatedAt <= end)
+                .Where(l => l.CreatedAt >= startUtc && l.CreatedAt < endUtcExclusive)
                 .OrderByDescending(l => l.CreatedAt)
                 .Select(l => new
                 {
                     l.Id,
                     l.ProductId,
                     ProductName = l.Product != null ? l.Product.Name : "",
-                    l.Action,
-                    l.Quantity,
+                    changeType = l.Action,
+                    changeQuantity = l.Quantity,
                     l.OldStock,
                     l.NewStock,
                     l.ReferenceId,
@@ -116,17 +124,17 @@ namespace ECommerce.API.Controllers.Admin
                 })
                 .ToListAsync();
 
-            return Ok(new { start, end, movements });
+            return Ok(new { start = startUtc, end = endUtcExclusive, movements });
         }
 
         [HttpGet("erp/sync-status")]
         public async Task<IActionResult> GetErpSyncStatus([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
         {
-            var start = from ?? DateTime.UtcNow.Date.AddDays(-7);
-            var end = to ?? DateTime.UtcNow;
+            var (startUtc, endUtcExclusive) = OrderReportHelper.GetDateRangeUtc(from, to);
 
             var logs = await _context.MicroSyncLogs
-                .Where(l => l.CreatedAt >= start && l.CreatedAt <= end)
+                .AsNoTracking()
+                .Where(l => l.CreatedAt >= startUtc && l.CreatedAt < endUtcExclusive)
                 .OrderByDescending(l => l.CreatedAt)
                 .ToListAsync();
 
@@ -166,7 +174,7 @@ namespace ECommerce.API.Controllers.Admin
                 .ThenBy(x => x.direction)
                 .ToList();
 
-            return Ok(new { start, end, groups });
+            return Ok(new { start = startUtc, end = endUtcExclusive, groups });
         }
     }
 }

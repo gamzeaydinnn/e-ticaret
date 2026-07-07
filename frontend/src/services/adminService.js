@@ -322,7 +322,12 @@ export const AdminService = {
   getLowStockProducts: async () => {
     ensureBackend();
     const res = await api.get("/api/admin/reports/stock/low");
-    return res;
+    return {
+      threshold: res?.threshold ?? res?.Threshold ?? 0,
+      outOfStockCount: res?.outOfStockCount ?? res?.OutOfStockCount ?? 0,
+      lowStockCount: res?.lowStockCount ?? res?.LowStockCount ?? 0,
+      products: res?.products ?? res?.Products ?? [],
+    };
   },
   getInventoryMovements: async ({ from, to } = {}) => {
     ensureBackend();
@@ -348,7 +353,23 @@ export const AdminService = {
     const res = await api.get(
       `/api/admin/reports/sales?period=${encodeURIComponent(period)}`,
     );
-    return res;
+    const topProducts = (res?.topProducts || res?.TopProducts || []).map(
+      (product) => ({
+        productId: product.productId ?? product.ProductId,
+        productName: product.productName ?? product.ProductName ?? "",
+        quantity: product.quantity ?? product.Quantity ?? 0,
+      }),
+    );
+
+    return {
+      from: res?.from ?? res?.From,
+      to: res?.to ?? res?.To,
+      period: res?.period ?? res?.Period ?? period,
+      ordersCount: res?.ordersCount ?? res?.OrdersCount ?? 0,
+      revenue: Number(res?.revenue ?? res?.Revenue ?? 0),
+      itemsSold: Number(res?.itemsSold ?? res?.ItemsSold ?? 0),
+      topProducts,
+    };
   },
   getErpSyncStatus: async ({ from, to } = {}) => {
     ensureBackend();
@@ -356,7 +377,11 @@ export const AdminService = {
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     const qs = params.length ? `?${params.join("&")}` : "";
-    return api.get(`/api/admin/reports/erp/sync-status${qs}`);
+    return api.get(`/api/admin/reports/erp/sync-status${qs}`).then((res) => ({
+      start: res?.start ?? res?.Start,
+      end: res?.end ?? res?.End,
+      groups: res?.groups ?? res?.Groups ?? [],
+    }));
   },
 
   // Coupons

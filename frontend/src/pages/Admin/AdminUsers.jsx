@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { AdminService } from "../../services/adminService";
 import { useAuth } from "../../contexts/AuthContext";
-import { permissionService } from "../../services/permissionService";
+import { permissionService, ROLE_LABELS } from "../../services/permissionService";
 // ============================================================================
 // Yeni Bileşen İmportları - RBAC Security Complete Fix
 // Arama, filtreleme, sayfalama ve hata mesajları için
@@ -108,12 +108,23 @@ const ROLE_DESCRIPTIONS = {
   },
 };
 
-// ============================================================================
-// Rol Seçenekleri - Admin panelinden atanabilecek roller
-// Tüm admin rolleri dahil edildi (Madde 6 düzeltmesi)
-// requiresSuperAdmin: true olan roller sadece SuperAdmin tarafından atanabilir
-// ============================================================================
-const ASSIGNABLE_ROLES = [
+// Backend AllowedRoles ile senkron — API yüklenemezse fallback
+const ASSIGNABLE_ROLE_NAMES = new Set([
+  "SuperAdmin",
+  "Admin",
+  "StoreManager",
+  "CustomerSupport",
+  "Logistics",
+  "StoreAttendant",
+  "Dispatcher",
+  "Courier",
+  "User",
+  "Customer",
+]);
+
+const PRIVILEGED_ASSIGNABLE_ROLES = new Set(["SuperAdmin", "Admin"]);
+
+const FALLBACK_ASSIGNABLE_ROLES = [
   { value: "SuperAdmin", label: "Süper Yönetici", requiresSuperAdmin: true },
   { value: "Admin", label: "Admin (Eski)", requiresSuperAdmin: true },
   {
@@ -131,12 +142,9 @@ const ASSIGNABLE_ROLES = [
     label: "Lojistik Görevlisi",
     requiresSuperAdmin: false,
   },
-  // =========================================================================
-  // YENİ ROLLER - Order-Courier-Panel Sistemi için
-  // =========================================================================
   {
     value: "StoreAttendant",
-    label: "📦 Market Görevlisi",
+    label: "Market Görevlisi",
     requiresSuperAdmin: false,
   },
   {
@@ -144,16 +152,31 @@ const ASSIGNABLE_ROLES = [
     label: "Sevkiyat Görevlisi",
     requiresSuperAdmin: false,
   },
-  // =========================================================================
-  // Kurye Rolü - Admin panelinden de atanabilir
-  // =========================================================================
   {
     value: "Courier",
     label: "Kurye",
     requiresSuperAdmin: false,
   },
   { value: "User", label: "Müşteri", requiresSuperAdmin: false },
+  { value: "Customer", label: "Müşteri (Customer)", requiresSuperAdmin: false },
 ];
+
+const mapApiRolesToAssignable = (roles) =>
+  roles
+    .map((role) => {
+      const value = role.name || role.Name;
+      if (!value || !ASSIGNABLE_ROLE_NAMES.has(value)) return null;
+      return {
+        value,
+        label:
+          role.displayName ||
+          role.DisplayName ||
+          ROLE_LABELS[value] ||
+          value,
+        requiresSuperAdmin: PRIVILEGED_ASSIGNABLE_ROLES.has(value),
+      };
+    })
+    .filter(Boolean);
 
 const AdminUsers = () => {
   const {
@@ -245,6 +268,7 @@ const AdminUsers = () => {
   const [matrixSaving, setMatrixSaving] = useState({});
   const [matrixExpandedModules, setMatrixExpandedModules] = useState({});
   const [matrixSaveSuccess, setMatrixSaveSuccess] = useState(null);
+  const [assignableRoles, setAssignableRoles] = useState(FALLBACK_ASSIGNABLE_ROLES);
 
   // Admin yetkisi kontrolü - backend ile tutarlı olması için
   // SuperAdmin/Admin her zaman yetkiliyken, diğer roller permission tabanlı kontrol edilir
@@ -434,9 +458,29 @@ const AdminUsers = () => {
     }));
   }, []);
 
+  const loadAssignableRoles = useCallback(async () => {
+    try {
+      const response = await AdminService.getRoles();
+      const payload = response?.data || response;
+      const list = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+          ? payload
+          : [];
+      const mapped = mapApiRolesToAssignable(list);
+      if (mapped.length > 0) {
+        setAssignableRoles(mapped);
+      }
+    } catch (err) {
+      console.warn("[AdminUsers] Rol listesi API'den yüklenemedi, fallback kullanılıyor:", err);
+      setAssignableRoles(FALLBACK_ASSIGNABLE_ROLES);
+    }
+  }, []);
+
   useEffect(() => {
     loadUsers();
-  }, [loadUsers]);
+    loadAssignableRoles();
+  }, [loadUsers, loadAssignableRoles]);
 
   // Dinamik matris verilerini yükle
   useEffect(() => {
@@ -447,6 +491,7 @@ const AdminUsers = () => {
 
   const canEditUserRole = (u) => {
     if (!canManageRoles) return false;
+    if (u?.id === currentUser?.id) return false;
     if (u?.role === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
       return false;
     }
@@ -520,9 +565,12 @@ const AdminUsers = () => {
     }
 
     const desiredRole = createForm.role || "User";
-    if (desiredRole === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
+    if (
+      (desiredRole === "SuperAdmin" || desiredRole === "Admin") &&
+      currentUser?.role !== "SuperAdmin"
+    ) {
       setCreateError(
-        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız.",
+        "SuperAdmin ve Admin rollerini atamak için SuperAdmin yetkisine sahip olmalısınız.",
       );
       return;
     }
@@ -562,6 +610,10 @@ const AdminUsers = () => {
 
   const handleSaveRole = async () => {
     if (!selectedUser) return;
+    if (selectedUser.id === currentUser?.id) {
+      alert("Kendi rolünüzü değiştiremezsiniz.");
+      return;
+    }
     try {
       setSaving(true);
       await AdminService.updateUserRole(selectedUser.id, selectedRole);
@@ -733,15 +785,24 @@ const AdminUsers = () => {
   const handleBulkRoleChange = async (newRole) => {
     if (selectedUserIds.length === 0) return;
 
-    // SuperAdmin rolü için yetki kontrolü
-    if (newRole === "SuperAdmin" && currentUser?.role !== "SuperAdmin") {
+    // SuperAdmin / Admin rolü için yetki kontrolü
+    if (
+      (newRole === "SuperAdmin" || newRole === "Admin") &&
+      currentUser?.role !== "SuperAdmin"
+    ) {
       alert(
-        "SuperAdmin rolü atamak için SuperAdmin yetkisine sahip olmalısınız.",
+        "SuperAdmin ve Admin rollerini atamak için SuperAdmin yetkisine sahip olmalısınız.",
       );
       return;
     }
 
-    const confirmMessage = `${selectedUserIds.length} kullanıcının rolünü "${
+    const targetIds = selectedUserIds.filter((id) => id !== currentUser?.id);
+    if (targetIds.length === 0) {
+      alert("Kendi rolünüzü değiştiremezsiniz.");
+      return;
+    }
+
+    const confirmMessage = `${targetIds.length} kullanıcının rolünü "${
       ROLE_DESCRIPTIONS[newRole]?.name || newRole
     }" olarak değiştirmek istediğinizden emin misiniz?`;
     if (!window.confirm(confirmMessage)) return;
@@ -751,7 +812,7 @@ const AdminUsers = () => {
 
       // Paralel olarak tüm kullanıcıların rolünü güncelle
       const results = await Promise.allSettled(
-        selectedUserIds.map((userId) =>
+        targetIds.map((userId) =>
           AdminService.updateUserRole(userId, newRole),
         ),
       );
@@ -765,7 +826,7 @@ const AdminUsers = () => {
       // UI'ı güncelle
       setUsers((prev) =>
         prev.map((u) =>
-          selectedUserIds.includes(u.id) ? { ...u, role: newRole } : u,
+          targetIds.includes(u.id) ? { ...u, role: newRole } : u,
         ),
       );
 
@@ -1181,7 +1242,7 @@ const AdminUsers = () => {
                 <option value="" disabled>
                   Seçin...
                 </option>
-                {ASSIGNABLE_ROLES.map((role) => (
+                {assignableRoles.map((role) => (
                   <option
                     key={role.value}
                     value={role.value}
@@ -1838,7 +1899,7 @@ const AdminUsers = () => {
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value)}
                   >
-                    {ASSIGNABLE_ROLES.map((role) => (
+                    {assignableRoles.map((role) => (
                       <option
                         key={role.value}
                         value={role.value}
@@ -2000,7 +2061,7 @@ const AdminUsers = () => {
                         value={createForm.role}
                         onChange={handleCreateInputChange}
                       >
-                        {ASSIGNABLE_ROLES.map((role) => (
+                        {assignableRoles.map((role) => (
                           <option
                             key={role.value}
                             value={role.value}

@@ -52,6 +52,16 @@ export const API_CONFIG = {
 
 export const getApiBaseUrl = () => API_CONFIG.BASE_URL;
 
+/**
+ * SignalR hub tam URL'si.
+ * REACT_APP_API_URL sonunda /api olsa bile hub yolu kökten (/hubs/...) kurulur.
+ */
+export const getSignalRHubUrl = (hubPath) => {
+  const normalizedPath = hubPath.startsWith("/") ? hubPath : `/${hubPath}`;
+  const origin = API_CONFIG.BASE_URL.replace(/\/api\/?$/, "");
+  return `${origin}${normalizedPath}`;
+};
+
 export const isBackendAvailable = () => API_CONFIG.BACKEND_ENABLED;
 
 export const isAuthEnabled = () => API_CONFIG.AUTH_ENABLED;

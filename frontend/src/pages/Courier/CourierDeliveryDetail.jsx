@@ -292,6 +292,19 @@ export default function CourierDeliveryDetail() {
           font-size: 16px;
           line-height: 1;
         }
+        .courier-detail-page {
+          padding-bottom: calc(220px + env(safe-area-inset-bottom));
+        }
+        .courier-customer-note {
+          border-radius: 10px;
+          padding: 12px 14px;
+          line-height: 1.5;
+          word-break: break-word;
+        }
+        .courier-customer-note strong {
+          display: block;
+          margin-bottom: 4px;
+        }
         .action-btn-group {
           position: fixed;
           bottom: 0;
@@ -346,7 +359,7 @@ export default function CourierDeliveryDetail() {
         }
       `}</style>
 
-      <div className="min-vh-100 bg-light" style={{ paddingBottom: "100px" }}>
+      <div className="min-vh-100 bg-light courier-detail-page">
         {/* Header */}
         <nav
           className="navbar navbar-dark mobile-header sticky-top"
@@ -459,19 +472,19 @@ export default function CourierDeliveryDetail() {
                 </div>
 
                 {task.notesForCourier && (
-                  <div
-                    className="alert alert-info mb-0"
-                    style={{ borderRadius: "10px" }}
-                  >
-                    <i className="fas fa-sticky-note me-2"></i>
-                    <strong>Not:</strong> {task.notesForCourier}
+                  <div className="alert alert-info mb-0 courier-customer-note d-flex align-items-start gap-2">
+                    <i className="fas fa-sticky-note flex-shrink-0 mt-1"></i>
+                    <div>
+                      <strong>Müşteri Notu</strong>
+                      <div>{task.notesForCourier}</div>
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Address Card */}
               <div className="info-card shadow-sm">
-                <div className="d-flex justify-content-between align-items-start mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-3">
                   <h6 className="fw-bold mb-0">
                     <i
                       className="fas fa-map-marker-alt me-2"

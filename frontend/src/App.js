@@ -41,6 +41,8 @@ import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
+import AdminRoles from "./pages/Admin/AdminRoles";
+import AdminPermissions from "./pages/Admin/AdminPermissions";
 import AdminWeightManagement from "./pages/Admin/AdminWeightManagement";
 import PosterManagement from "./pages/Admin/PosterManagement";
 import AdminHomeBlocks from "./pages/Admin/AdminHomeBlocks"; // Ana sayfa blok yönetimi
@@ -158,7 +160,7 @@ const HEADER_FALLBACK_CATEGORIES = [
 ];
 
 function Header() {
-  const { count: cartCount } = useCartCount();
+  const { count: cartCount, lineCount: cartLineCount } = useCartCount();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -589,19 +591,9 @@ function Header() {
                       className="fas fa-shopping-cart text-white"
                       style={{ fontSize: "0.8rem" }}
                     ></i>
-                    {cartCount > 0 && (
-                      <span
-                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                        style={{
-                          background:
-                            "linear-gradient(135deg, #e74c3c, #ec7063)",
-                          fontSize: "0.6rem",
-                          minWidth: "16px",
-                          height: "16px",
-                          animation: "pulse 2s infinite",
-                        }}
-                      >
-                        {cartCount}
+                    {(cartCount > 0 || cartLineCount > 0) && (
+                      <span className="header-action-badge">
+                        {cartLineCount > 99 ? "99+" : cartLineCount}
                       </span>
                     )}
                   </div>
@@ -893,6 +885,26 @@ function App() {
             <AdminGuard requiredPermission="users.view">
               <AdminLayout>
                 <AdminUsers />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/roles"
+          element={
+            <AdminGuard requiredPermission="roles.view">
+              <AdminLayout>
+                <AdminRoles />
+              </AdminLayout>
+            </AdminGuard>
+          }
+        />
+        <Route
+          path="/admin/permissions"
+          element={
+            <AdminGuard requiredPermission="roles.view">
+              <AdminLayout>
+                <AdminPermissions />
               </AdminLayout>
             </AdminGuard>
           }

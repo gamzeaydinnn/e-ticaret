@@ -32,7 +32,7 @@ namespace ECommerce.Infrastructure.Config
         public string Name { get; set; } = "Gölköy Gurme";
         public string ShortName { get; set; } = "Gölköy Gurme";
         public string LegalName { get; set; } = "Gölköy Gurme Market";
-        public string Description { get; set; } = "Gölköy Gurme olarak, doğanın bize sunduğu en saf ve lezzetli ürünleri, en yüksek kalite standartlarında siz değerli müşterilerimize sunmayı amaçlıyoruz.";
+        public string Description { get; set; } = "Bodrum Gölköy'de taze meyve-sebze, et, süt ürünleri ve günlük market ihtiyaçlarınızı kendi kuryemizle kapınıza getiriyoruz. Yerel lezzetler, soğuk zincir ve güvenli alışveriş.";
         public string LogoUrl { get; set; } = "/images/golkoy-logo1.png";
         public string SecondaryLogoUrl { get; set; } = "/images/dogadan-sofranza-logo.png";
         public string CopyrightText { get; set; } = "Tüm haklar Gölköy Gurme Markete aittir.";
@@ -44,11 +44,11 @@ namespace ECommerce.Infrastructure.Config
         public string PhoneDisplay { get; set; } = "+90 533 478 30 72";
         public string PhoneLabel { get; set; } = "Müşteri Hizmetleri";
         public string WhatsAppNumber { get; set; } = "905334783072";
-        public string WhatsAppMessage { get; set; } = "Merhaba, sipariş hakkında bilgi almak istiyorum.";
+        public string WhatsAppMessage { get; set; } = "Merhaba, Gölköy Gurme siparişim hakkında bilgi almak istiyorum.";
         public string Email { get; set; } = "golturkbuku@golkoygurme.com.tr";
         public string EmailLabel { get; set; } = "Genel bilgi ve destek";
         public string Address { get; set; } = "Gölköy Mah. 67 Sokak No: 1/A Bodrum/Muğla";
-        public string AddressLabel { get; set; } = "Merkez Ofis";
+        public string AddressLabel { get; set; } = "Gölköy Mağaza";
     }
 
     public class SocialMediaLinks
@@ -68,9 +68,9 @@ namespace ECommerce.Infrastructure.Config
         public string[] PaymentMethods { get; set; } = new[] { "VISA", "MC", "TROY" };
         public string[] SecurityFeatures { get; set; } = new[] 
         { 
-            "SSL güvenli alışveriş", 
-            "Güvenli ödeme sistemi", 
-            "Müşteri memnuniyeti odaklı" 
+            "Taze ürün garantisi", 
+            "Soğuk zincir teslimat", 
+            "Güvenli ödeme sistemi" 
         };
     }
 }

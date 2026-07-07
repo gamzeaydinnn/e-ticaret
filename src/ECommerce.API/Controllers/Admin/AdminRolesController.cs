@@ -321,6 +321,12 @@ namespace ECommerce.API.Controllers.Admin
                     });
                 }
 
+                // Sadece SuperAdmin Admin rolünün izinlerini değiştirebilir
+                if (role.Name == Roles.Admin && !User.IsInRole(Roles.SuperAdmin))
+                {
+                    return Forbid();
+                }
+
                 // İzin kontrol
                 var permission = await _permissionService.GetPermissionByIdAsync(permissionId);
                 if (permission == null)
@@ -383,6 +389,12 @@ namespace ECommerce.API.Controllers.Admin
                         success = false, 
                         message = "SuperAdmin rolünün izinleri değiştirilemez." 
                     });
+                }
+
+                // Sadece SuperAdmin Admin rolünün izinlerini değiştirebilir
+                if (role.Name == Roles.Admin && !User.IsInRole(Roles.SuperAdmin))
+                {
+                    return Forbid();
                 }
 
                 // İzin kontrol

@@ -97,6 +97,9 @@ export const AuthProvider = ({ children }) => {
         }`.trim(),
       role,
       isAdmin: source.isAdmin ?? source.IsAdmin ?? role === "Admin",
+      isActive: source.isActive ?? source.IsActive ?? true,
+      createdAt: source.createdAt || source.CreatedAt || null,
+      lastLoginAt: source.lastLoginAt || source.LastLoginAt || null,
     };
   }, []);
 

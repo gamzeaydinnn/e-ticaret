@@ -122,11 +122,9 @@ namespace ECommerce.API.Controllers.Admin
                 return BadRequest(new { success = false, message = "Geçersiz rol değeri." });
             }
 
-            // SuperAdmin rolü sadece SuperAdmin tarafından atanabilir
-            if (targetRole == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
-            {
-                return Forbid();
-            }
+            var createRoleValidation = ValidatePrivilegedRoleAssignment(targetRole);
+            if (createRoleValidation != null)
+                return createRoleValidation;
 
             // Email benzersizlik kontrolü - Identity UserManager kullan
             var existingUser = await _userManager.FindByEmailAsync(dto.Email);
@@ -269,48 +267,17 @@ namespace ECommerce.API.Controllers.Admin
                 user.PhoneNumber = dto.PhoneNumber;
             }
 
-            if (!string.IsNullOrWhiteSpace(dto.Role))
+            // Rol değişikliği yalnızca PUT /users/{id}/role endpoint'i üzerinden yapılır
+            if (!string.IsNullOrWhiteSpace(dto.Role) && !string.Equals(dto.Role, user.Role, StringComparison.OrdinalIgnoreCase))
             {
-                if (!IsAllowedRole(dto.Role))
-                {
-                    return BadRequest(new { success = false, message = "Geçersiz rol değeri." });
-                }
-
-                if (dto.Role == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
-                {
-                    return Forbid();
-                }
-
-                // ============================================================================
-                // KRİTİK: Identity UserRoles tablosunu da güncelle
-                // Sadece user.Role property'sini değiştirmek yetmez!
-                // [Authorize(Roles = "...")] ve PermissionService için Identity rolü gerekli
-                // ============================================================================
-                var oldRole = user.Role;
-                
-                // Mevcut Identity rollerini kaldır
-                var currentIdentityRoles = await _userManager.GetRolesAsync(user);
-                if (currentIdentityRoles.Any())
-                {
-                    await _userManager.RemoveFromRolesAsync(user, currentIdentityRoles);
-                }
-                
-                // Yeni Identity rolünü ata
-                var identityRoleResult = await _userManager.AddToRoleAsync(user, dto.Role);
-                if (!identityRoleResult.Succeeded)
-                {
-                    var roleErrors = string.Join(", ", identityRoleResult.Errors.Select(e => e.Description));
-                    _logger.LogWarning("Identity rol ataması başarısız: {Errors}", roleErrors);
-                    // Devam et - en azından user.Role güncellensin
-                }
-                
-                // User entity'sindeki Role alanını da güncelle
-                user.Role = dto.Role;
-                
-                // Permission cache'ini temizle (rol değişti)
-                _permissionManager?.InvalidateUserPermissionsCache(id);
+                return BadRequest(new { success = false, message = "Rol değişikliği için PUT /api/admin/users/{id}/role endpoint'ini kullanın." });
             }
-            // şifre güncelleme opsiyonel olarak eklenebilir
+
+            // Mevcut SuperAdmin hesabını sadece SuperAdmin düzenleyebilir
+            if (user.Role == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
+            {
+                return Forbid();
+            }
 
             await _userService.UpdateAsync(user);
             await _auditLogService.WriteAsync(
@@ -348,6 +315,16 @@ namespace ECommerce.API.Controllers.Admin
             if (user.Role == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
             {
                 return Forbid();
+            }
+
+            // GÜVENLİK: Son SuperAdmin silinemez
+            if (user.Role == Roles.SuperAdmin)
+            {
+                var superAdminCount = await GetSuperAdminCountAsync();
+                if (superAdminCount <= 1)
+                {
+                    return BadRequest(new { success = false, message = "Sistemdeki son Süper Yönetici silinemez." });
+                }
             }
 
             var deletedUserInfo = new
@@ -457,10 +434,9 @@ namespace ECommerce.API.Controllers.Admin
                 return BadRequest(new { success = false, message = "Geçersiz rol değeri." });
             }
 
-            if (dto.Role == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
-            {
-                return Forbid();
-            }
+            var roleChangeValidation = await ValidateRoleChangeAsync(id, user.Role, dto.Role);
+            if (roleChangeValidation != null)
+                return roleChangeValidation;
 
             var oldRole = user.Role;
             
@@ -616,6 +592,58 @@ namespace ECommerce.API.Controllers.Admin
 
         private static bool IsAllowedRole(string? role) =>
             !string.IsNullOrWhiteSpace(role) && AllowedRoles.Contains(role);
+
+        /// <summary>
+        /// SuperAdmin ve Admin rollerinin yalnızca SuperAdmin tarafından atanmasını sağlar.
+        /// </summary>
+        private IActionResult? ValidatePrivilegedRoleAssignment(string newRole)
+        {
+            if ((newRole == Roles.SuperAdmin || newRole == Roles.Admin) && !User.IsInRole(Roles.SuperAdmin))
+            {
+                return Forbid();
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Rol değişikliği güvenlik kontrolleri: self-change, SuperAdmin hedefi, son SuperAdmin.
+        /// </summary>
+        private async Task<IActionResult?> ValidateRoleChangeAsync(int targetUserId, string? currentRole, string newRole)
+        {
+            if (targetUserId == GetAdminUserId())
+            {
+                return BadRequest(new { success = false, message = "Kendi rolünüzü değiştiremezsiniz." });
+            }
+
+            if (currentRole == Roles.SuperAdmin && !User.IsInRole(Roles.SuperAdmin))
+            {
+                return Forbid();
+            }
+
+            var privilegedValidation = ValidatePrivilegedRoleAssignment(newRole);
+            if (privilegedValidation != null)
+                return privilegedValidation;
+
+            if (currentRole == Roles.SuperAdmin &&
+                !string.Equals(newRole, Roles.SuperAdmin, StringComparison.OrdinalIgnoreCase))
+            {
+                var superAdminCount = await GetSuperAdminCountAsync();
+                if (superAdminCount <= 1)
+                {
+                    return BadRequest(new { success = false, message = "Sistemde en az bir Süper Yönetici bulunmalıdır." });
+                }
+            }
+
+            return null;
+        }
+
+        private async Task<int> GetSuperAdminCountAsync()
+        {
+            return await _dbContext.Users
+                .AsNoTracking()
+                .CountAsync(u => u.Role == Roles.SuperAdmin);
+        }
 
         private int GetAdminUserId()
         {

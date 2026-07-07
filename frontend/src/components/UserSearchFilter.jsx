@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { useState, useEffect, useCallback } from "react";
+import { ROLE_LABELS } from "../services/permissionService";
 
 // Debounce hook - arama performansı için
 const useDebounce = (value, delay) => {
@@ -191,18 +192,7 @@ const UserSearchFilter = ({
 /**
  * Rol adını Türkçe görüntü adına çevirir
  */
-const getRoleDisplayName = (role) => {
-  const roleNames = {
-    SuperAdmin: "Süper Admin",
-    Admin: "Admin",
-    StoreManager: "Mağaza Yöneticisi",
-    CustomerSupport: "Müşteri Destek",
-    Logistics: "Lojistik",
-    User: "Kullanıcı",
-    Customer: "Müşteri",
-  };
-  return roleNames[role] || role;
-};
+const getRoleDisplayName = (role) => ROLE_LABELS[role] || role;
 
 /**
  * Kullanıcı listesini filtreler

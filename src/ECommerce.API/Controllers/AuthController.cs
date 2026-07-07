@@ -298,7 +298,8 @@ namespace ECommerce.API.Controllers
                     lastName = user.LastName,
                     name = !string.IsNullOrEmpty(user.FullName) ? user.FullName : $"{user.FirstName} {user.LastName}".Trim(),
                     role = user.Role,
-                    isAdmin = isAdmin
+                    isAdmin = isAdmin,
+                    isActive = user.IsActive
                 } : null;
 
                 return Ok(new { 

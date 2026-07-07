@@ -13,6 +13,7 @@
  */
 
 import * as signalR from "@microsoft/signalr";
+import { getSignalRHubUrl } from "../config/apiConfig";
 
 // ============================================================================
 // SABITLER VE KONFİGÜRASYON
@@ -153,10 +154,8 @@ class SignalRHubConnection {
     try {
       this.updateState(ConnectionState.CONNECTING);
 
-      // API base URL'i belirle
-      // .env yuklenmediginde 3000'e degil backend'e gitmesi icin guvenli fallback kullan
-      const baseUrl = process.env.REACT_APP_API_URL || "http://localhost:5153";
-      const fullUrl = `${baseUrl}${this.hubUrl}`;
+      // API base URL'i belirle (hub yolu /hubs/... kökten gelir)
+      const fullUrl = getSignalRHubUrl(this.hubUrl);
 
       // SignalR bağlantısı oluştur
       this.connection = new signalR.HubConnectionBuilder()

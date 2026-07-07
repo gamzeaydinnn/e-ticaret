@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
 import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
-import { CourierService, formatPhoneDisplay, formatPhoneReadable, getPhoneTelUri } from "../../services/courierService";
+import { CourierService, formatPhoneDisplay, formatPhoneReadable, getPhoneTelUri, mapCourierStatusColor } from "../../services/courierService";
 import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 import "./CourierOrders.css";
 
@@ -299,6 +299,7 @@ export default function CourierOrders() {
   };
 
   const openOrderDetail = async (order) => {
+    setSelectedOrder({ ...order, items: order.items || [] });
     setDetailLoading(true);
     try {
       const detail = await CourierService.getTaskDetail(order.id);
@@ -318,11 +319,12 @@ export default function CourierOrders() {
           detail?.totalPriceDifference ?? order.totalPriceDifference ?? 0,
         shippingCost: detail?.shippingCost ?? order.shippingCost ?? 0,
         paymentMethod: detail?.paymentMethod || order.paymentMethod,
-        items: detail?.items || [],
+        status: detail?.status || order.status,
+        statusText: detail?.statusText || order.statusText,
+        items: detail?.items?.length ? detail.items : order.items || [],
       });
     } catch (error) {
       console.error("Sipariş detayları yüklenemedi:", error);
-      setSelectedOrder(order);
     } finally {
       setDetailLoading(false);
     }
@@ -355,26 +357,8 @@ export default function CourierOrders() {
       ),
     };
   };
-  const getStatusColor = (status, fallbackColor) => {
-    if (fallbackColor) return fallbackColor;
-    const normalized = (status || "").toLowerCase();
-    const colorMap = {
-      preparing: "warning",
-      ready: "info",
-      assigned: "warning", // 🟡 Sarı - Atandı
-      picked_up: "info", // 🔵 Açık mavi - Teslim Alındı
-      pickedup: "info",
-      out_for_delivery: "primary", // 🔵 Mavi - Yolda
-      outfordelivery: "primary",
-      in_transit: "primary",
-      delivered: "success", // 🟢 Yeşil - Teslim Edildi
-      delivery_failed: "danger",
-      deliveryfailed: "danger",
-      deliverypaymentpending: "danger", // 🔴 Kırmızı - Ek ödeme gerekli
-      delivery_payment_pending: "danger",
-    };
-    return colorMap[normalized] || "secondary";
-  };
+  const getStatusColor = (status, fallbackColor) =>
+    mapCourierStatusColor(fallbackColor, status);
 
   // DeliveryPaymentPending durumu kontrolü
   const isDeliveryPaymentPending = (status) => {
@@ -722,6 +706,12 @@ export default function CourierOrders() {
 
               {/* Body */}
               <div className="modal-body p-3 courier-order-modal-body">
+                {detailLoading && (
+                  <div className="text-center text-muted py-2 mb-2">
+                    <span className="spinner-border spinner-border-sm me-2" role="status" />
+                    Ürün bilgileri yükleniyor...
+                  </div>
+                )}
                 {/* Uyarı Badges */}
                 {(() => {
                   const report = weightReports[selectedOrder.id];
@@ -756,20 +746,25 @@ export default function CourierOrders() {
                       <i className="fas fa-user me-2 text-primary"></i>
                       Müşteri Bilgileri
                     </h6>
-                    <div className="mb-2">
-                      <div className="fw-semibold mb-2">{selectedOrder.customerName}</div>
+                    <div className="d-flex align-items-start justify-content-between gap-2 mb-2">
+                      <div className="fw-semibold">{selectedOrder.customerName}</div>
                       {selectedOrder.customerPhone && (
-                        <div className="courier-phone-wrapper">
-                          <a
-                            href={getPhoneTelUri(selectedOrder.customerPhone)}
-                            className="courier-phone-block"
-                            title={`Ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
-                          >
-                            {formatPhoneReadable(selectedOrder.customerPhone)}
-                          </a>
-                        </div>
+                        <a
+                          href={getPhoneTelUri(selectedOrder.customerPhone)}
+                          className="btn btn-success btn-sm courier-call-btn flex-shrink-0"
+                          title={`Ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
+                          aria-label={`Müşteriyi ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
+                        >
+                          <i className="fas fa-phone-alt me-1"></i>
+                          Ara
+                        </a>
                       )}
                     </div>
+                    {selectedOrder.customerPhone && (
+                      <div className="courier-phone-readable text-muted small mb-2">
+                        {formatPhoneReadable(selectedOrder.customerPhone)}
+                      </div>
+                    )}
                     <div>
                       <small className="text-muted">Adres</small>
                       <p className="mb-0 small">{selectedOrder.address}</p>
@@ -882,7 +877,11 @@ export default function CourierOrders() {
                         })}
                       </div>
                     ) : (
-                      <small className="text-muted">Ürün listesi yok</small>
+                      <small className="text-muted">
+                        {detailLoading
+                          ? "Ürünler yükleniyor..."
+                          : "Ürün listesi yok"}
+                      </small>
                     )}
                   </div>
                 </div>
@@ -913,7 +912,8 @@ export default function CourierOrders() {
                       title={`Ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
                       aria-label={`Müşteriyi ara: ${formatPhoneReadable(selectedOrder.customerPhone)}`}
                     >
-                      <i className="fas fa-phone"></i>
+                      <i className="fas fa-phone-alt me-1"></i>
+                      <span className="courier-modal-call-label">Ara</span>
                     </a>
                   )}
                   {getNextStatus(selectedOrder.status) && (

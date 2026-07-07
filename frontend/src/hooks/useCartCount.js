@@ -5,10 +5,11 @@ import { useCart } from "../contexts/CartContext";
  * Geriye dönük uyumluluk için mevcut API'yi korur
  */
 export const useCartCount = () => {
-  const { getCartCount, loadCart } = useCart();
+  const { getCartCount, loadCart, cartItems } = useCart();
 
   return {
     count: getCartCount(),
+    lineCount: cartItems?.length ?? 0,
     refresh: loadCart,
   };
 };
