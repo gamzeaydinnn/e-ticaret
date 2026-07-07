@@ -352,12 +352,13 @@ export const AdminService = {
     ensureBackend();
     const res = await api.get(
       `/api/admin/reports/sales?period=${encodeURIComponent(period)}`,
+      { timeout: 30000 },
     );
     const topProducts = (res?.topProducts || res?.TopProducts || []).map(
       (product) => ({
         productId: product.productId ?? product.ProductId,
         productName: product.productName ?? product.ProductName ?? "",
-        quantity: product.quantity ?? product.Quantity ?? 0,
+        quantity: Number(product.quantity ?? product.Quantity ?? 0),
       }),
     );
 
@@ -365,7 +366,12 @@ export const AdminService = {
       from: res?.from ?? res?.From,
       to: res?.to ?? res?.To,
       period: res?.period ?? res?.Period ?? period,
-      ordersCount: res?.ordersCount ?? res?.OrdersCount ?? 0,
+      periodStart: res?.periodStart ?? res?.PeriodStart,
+      periodEnd: res?.periodEnd ?? res?.PeriodEnd,
+      ordersCount: Number(res?.ordersCount ?? res?.OrdersCount ?? 0),
+      netOrdersCount: Number(
+        res?.netOrdersCount ?? res?.NetOrdersCount ?? res?.ordersCount ?? res?.OrdersCount ?? 0,
+      ),
       revenue: Number(res?.revenue ?? res?.Revenue ?? 0),
       itemsSold: Number(res?.itemsSold ?? res?.ItemsSold ?? 0),
       topProducts,
@@ -377,11 +383,25 @@ export const AdminService = {
     if (from) params.push(`from=${encodeURIComponent(from)}`);
     if (to) params.push(`to=${encodeURIComponent(to)}`);
     const qs = params.length ? `?${params.join("&")}` : "";
-    return api.get(`/api/admin/reports/erp/sync-status${qs}`).then((res) => ({
+    const res = await api.get(`/api/admin/reports/erp/sync-status${qs}`, {
+      timeout: 30000,
+    });
+    return {
       start: res?.start ?? res?.Start,
       end: res?.end ?? res?.End,
-      groups: res?.groups ?? res?.Groups ?? [],
-    }));
+      groups: (res?.groups ?? res?.Groups ?? []).map((group) => ({
+        entity: group.entity ?? group.Entity,
+        direction: group.direction ?? group.Direction,
+        lastStatus: group.lastStatus ?? group.LastStatus,
+        lastAttemptAt: group.lastAttemptAt ?? group.LastAttemptAt,
+        lastSuccessAt: group.lastSuccessAt ?? group.LastSuccessAt,
+        lastMessage: group.lastMessage ?? group.LastMessage,
+        lastError: group.lastError ?? group.LastError,
+        updatedCount: group.updatedCount ?? group.UpdatedCount,
+        totalAttempts: group.totalAttempts ?? group.TotalAttempts,
+        recentCount: group.recentCount ?? group.RecentCount,
+      })),
+    };
   },
 
   // Coupons

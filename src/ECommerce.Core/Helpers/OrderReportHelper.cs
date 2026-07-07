@@ -38,7 +38,8 @@ namespace ECommerce.Core.Helpers
         {
             var local = DateTime.SpecifyKind(turkeyLocalDateTime, DateTimeKind.Unspecified);
 
-            foreach (var timeZoneId in new[] { "Turkey Standard Time", "Europe/Istanbul" })
+            // Linux Docker'da "Turkey Standard Time" yok; Europe/Istanbul önce denenir.
+            foreach (var timeZoneId in new[] { "Europe/Istanbul", "Turkey Standard Time" })
             {
                 try
                 {
@@ -53,20 +54,33 @@ namespace ECommerce.Core.Helpers
                 }
             }
 
-            return local;
+            // Türkiye 2016'dan beri sabit UTC+3
+            return DateTime.SpecifyKind(local.AddHours(-3), DateTimeKind.Utc);
+        }
+
+        /// <summary>
+        /// Sipariş listesi (GetOrdersAsync) ile aynı mantıkta UTC aralığı.
+        /// </summary>
+        public static (DateTime FromUtcInclusive, DateTime ToUtcInclusive) GetOrdersCompatibleRangeUtc(
+            DateTime turkeyStartDate,
+            DateTime turkeyEndDate)
+        {
+            var fromUtc = TurkeyToUtc(turkeyStartDate.Date);
+            var toUtcExclusive = TurkeyToUtc(turkeyEndDate.Date.AddDays(1));
+            return (fromUtc, toUtcExclusive.AddTicks(-1));
         }
 
         public static (DateTime FromUtc, DateTime ToUtcExclusive) GetPeriodRangeUtc(string period)
         {
             var turkeyToday = OrderCancelPolicy.GetTurkeyNow().Date;
-            var fromTurkey = period.Equals("weekly", StringComparison.OrdinalIgnoreCase)
-                ? turkeyToday.AddDays(-7)
+            var turkeyStart = period.Equals("weekly", StringComparison.OrdinalIgnoreCase)
+                ? turkeyToday.AddDays(-6)
                 : period.Equals("monthly", StringComparison.OrdinalIgnoreCase)
-                    ? turkeyToday.AddDays(-30)
+                    ? turkeyToday.AddDays(-29)
                     : turkeyToday;
 
             return (
-                TurkeyToUtc(fromTurkey),
+                TurkeyToUtc(turkeyStart),
                 TurkeyToUtc(turkeyToday.AddDays(1))
             );
         }
@@ -74,10 +88,13 @@ namespace ECommerce.Core.Helpers
         public static (DateTime FromUtc, DateTime ToUtcExclusive) GetDateRangeUtc(DateTime? from, DateTime? to)
         {
             var turkeyNow = OrderCancelPolicy.GetTurkeyNow();
-            var startTurkey = (from ?? turkeyNow.Date.AddDays(-7)).Date;
-            var endTurkeyExclusive = (to ?? turkeyNow.Date).Date.AddDays(1);
+            var startTurkey = (from ?? turkeyNow.Date.AddDays(-6)).Date;
+            var endTurkey = (to ?? turkeyNow.Date).Date;
 
-            return (TurkeyToUtc(startTurkey), TurkeyToUtc(endTurkeyExclusive));
+            return (
+                TurkeyToUtc(startTurkey),
+                TurkeyToUtc(endTurkey.AddDays(1))
+            );
         }
     }
 }

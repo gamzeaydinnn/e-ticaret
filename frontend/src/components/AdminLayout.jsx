@@ -211,18 +211,6 @@ function AdminLayoutInner({ children }) {
         permission: PERMISSIONS.USERS_VIEW,
       },
       {
-        path: "/admin/roles",
-        icon: "fas fa-user-shield",
-        label: "Roller",
-        permission: PERMISSIONS.ROLES_VIEW,
-      },
-      {
-        path: "/admin/permissions",
-        icon: "fas fa-key",
-        label: "İzinler",
-        permission: PERMISSIONS.ROLES_PERMISSIONS,
-      },
-      {
         path: "/admin/couriers",
         icon: "fas fa-motorcycle",
         label: "Kuryeler",

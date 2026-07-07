@@ -41,8 +41,6 @@ import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
-import AdminRoles from "./pages/Admin/AdminRoles";
-import AdminPermissions from "./pages/Admin/AdminPermissions";
 import AdminWeightManagement from "./pages/Admin/AdminWeightManagement";
 import PosterManagement from "./pages/Admin/PosterManagement";
 import AdminHomeBlocks from "./pages/Admin/AdminHomeBlocks"; // Ana sayfa blok yönetimi
@@ -891,23 +889,11 @@ function App() {
         />
         <Route
           path="/admin/roles"
-          element={
-            <AdminGuard requiredPermission="roles.view">
-              <AdminLayout>
-                <AdminRoles />
-              </AdminLayout>
-            </AdminGuard>
-          }
+          element={<Navigate to="/admin/users" replace />}
         />
         <Route
           path="/admin/permissions"
-          element={
-            <AdminGuard requiredPermission="roles.view">
-              <AdminLayout>
-                <AdminPermissions />
-              </AdminLayout>
-            </AdminGuard>
-          }
+          element={<Navigate to="/admin/users" replace />}
         />
         <Route
           path="/admin/orders"

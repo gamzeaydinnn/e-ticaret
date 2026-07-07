@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -33,32 +34,45 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetSalesReport([FromQuery] string period = "daily")
         {
             var (fromUtc, toUtcExclusive) = OrderReportHelper.GetPeriodRangeUtc(period);
+            var turkeyToday = OrderCancelPolicy.GetTurkeyNow().Date;
+            var turkeyStart = period.Equals("weekly", StringComparison.OrdinalIgnoreCase)
+                ? turkeyToday.AddDays(-6)
+                : period.Equals("monthly", StringComparison.OrdinalIgnoreCase)
+                    ? turkeyToday.AddDays(-29)
+                    : turkeyToday;
 
-            var orders = await _context.Orders
+            var ordersInPeriod = await _context.Orders
                 .AsNoTracking()
                 .Include(o => o.OrderItems)
                 .Where(o => o.OrderDate >= fromUtc && o.OrderDate < toUtcExclusive)
                 .ToListAsync();
 
-            var saleOrders = orders
+            // Siparişler sayfasıyla uyum: dönemdeki TÜM siparişler sayılır.
+            var ordersCount = ordersInPeriod.Count;
+
+            var saleOrders = ordersInPeriod
                 .Where(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus))
                 .ToList();
 
-            var ordersCount = saleOrders.Count;
             var revenue = saleOrders.Sum(OrderReportHelper.GetSaleAmount);
-            var itemsSold = saleOrders.Sum(o => o.OrderItems.Sum(i => i.Quantity));
+            var itemsSold = saleOrders.Sum(o =>
+                (o.OrderItems ?? Enumerable.Empty<OrderItem>()).Sum(i => i.Quantity));
 
-            var productNameMap = await _context.Products
-                .AsNoTracking()
-                .Where(p => saleOrders
-                    .SelectMany(o => o.OrderItems)
-                    .Select(i => i.ProductId)
-                    .Distinct()
-                    .Contains(p.Id))
-                .ToDictionaryAsync(p => p.Id, p => p.Name);
+            var productIds = saleOrders
+                .SelectMany(o => o.OrderItems ?? Enumerable.Empty<OrderItem>())
+                .Select(i => i.ProductId)
+                .Distinct()
+                .ToList();
+
+            var productNameMap = productIds.Count == 0
+                ? new Dictionary<int, string>()
+                : await _context.Products
+                    .AsNoTracking()
+                    .Where(p => productIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.Name);
 
             var topProducts = saleOrders
-                .SelectMany(o => o.OrderItems)
+                .SelectMany(o => o.OrderItems ?? Enumerable.Empty<OrderItem>())
                 .GroupBy(i => i.ProductId)
                 .Select(g => new
                 {
@@ -75,7 +89,10 @@ namespace ECommerce.API.Controllers.Admin
                 from = fromUtc,
                 to = toUtcExclusive,
                 period,
+                periodStart = turkeyStart.ToString("yyyy-MM-dd"),
+                periodEnd = turkeyToday.ToString("yyyy-MM-dd"),
                 ordersCount,
+                netOrdersCount = saleOrders.Count,
                 revenue,
                 itemsSold,
                 topProducts

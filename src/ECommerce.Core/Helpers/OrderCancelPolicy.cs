@@ -143,7 +143,7 @@ namespace ECommerce.Core.Helpers
                 ? utcDateTime
                 : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
 
-            foreach (var timeZoneId in new[] { "Turkey Standard Time", "Europe/Istanbul" })
+            foreach (var timeZoneId in new[] { "Europe/Istanbul", "Turkey Standard Time" })
             {
                 try
                 {
