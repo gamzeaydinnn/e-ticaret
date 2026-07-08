@@ -2421,6 +2421,33 @@ namespace ECommerce.API.Controllers
                 "urun_sablonu.xlsx");
         }
 
+        private async Task<List<object>> BuildLocalDbExportRowsAsync()
+        {
+            var localProducts = await _dbContext.Products
+                .Include(product => product.Category)
+                .AsNoTracking()
+                .ToListAsync(HttpContext.RequestAborted);
+
+            return localProducts
+                .OrderBy(product => string.IsNullOrWhiteSpace(product.SKU) ? product.Name : product.SKU)
+                .ThenBy(product => product.Name)
+                .Select(product => (object)new
+                {
+                    product.Id,
+                    product.Name,
+                    product.Description,
+                    product.Price,
+                    product.SpecialPrice,
+                    product.StockQuantity,
+                    product.CategoryId,
+                    CategoryName = product.Category?.Name ?? string.Empty,
+                    product.ImageUrl,
+                    Sku = product.SKU ?? string.Empty,
+                    IsActive = product.IsActive
+                })
+                .ToList();
+        }
+
         /// <summary>
         /// Mevcut ürünleri Excel dosyası olarak dışa aktarır.
         /// Admin panelinden tüm ürünleri indirmek için kullanılır.
@@ -2440,6 +2467,15 @@ namespace ECommerce.API.Controllers
                 if (_mikroDbService.IsConfigured)
                 {
                     var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
+
+                    if (unified.Count == 0)
+                    {
+                        _logger.LogWarning(
+                            "[Products][Export] Mikro configured but returned 0 products. Falling back to local DB.");
+                        exportRows = await BuildLocalDbExportRowsAsync();
+                    }
+                    else
+                    {
                     var localAll = (await _productRepository.GetAllAsync()).ToList();
                     var skuToLocal = localAll
                         .Where(p => !string.IsNullOrEmpty(p.SKU))
@@ -2469,16 +2505,11 @@ namespace ECommerce.API.Controllers
                             };
                         })
                         .ToList();
+                    }
                 }
                 else
                 {
-                    var dbProducts = await _productService.GetActiveProductsAsync(1, 50000);
-                    exportRows = dbProducts.Select(p => (object)new
-                    {
-                        p.Id, p.Name, p.Description, p.Price, p.SpecialPrice,
-                        p.StockQuantity, p.CategoryId, p.CategoryName, p.ImageUrl,
-                        Sku = "", IsActive = true
-                    }).ToList();
+                    exportRows = await BuildLocalDbExportRowsAsync();
                 }
 
                 var productList = exportRows.ToList();

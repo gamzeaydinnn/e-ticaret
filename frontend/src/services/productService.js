@@ -1060,10 +1060,24 @@ export const ProductService = {
     try {
       const response = await api.get("/api/products/export/excel", {
         responseType: "blob",
-        timeout: 60000, // 1 dakika
+        timeout: 120000,
       });
       return response;
     } catch (err) {
+      const data = err.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.message) {
+            throw new Error(parsed.message);
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof Error && parseErr.message !== err.message) {
+            throw parseErr;
+          }
+        }
+      }
       console.error("❌ Excel export hatası:", err);
       throw err;
     }
