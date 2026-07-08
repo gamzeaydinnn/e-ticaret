@@ -621,6 +621,32 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
+        /// Ürün detayında stok/fiyat güncellemesi için tek SKU lookup — tüm listeyi çekmez.
+        /// </summary>
+        private async Task<MikroUnifiedProductDto?> GetWebActiveProductBySkuAsync(
+            string sku,
+            CancellationToken cancellationToken)
+        {
+            if (!_mikroDbService.IsConfigured || string.IsNullOrWhiteSpace(sku))
+                return null;
+
+            return await _mikroDbService.GetProductBySkuAsync(sku.Trim(), cancellationToken);
+        }
+
+        private static void ApplyMikroStockOverlay(
+            ProductListDto product,
+            MikroUnifiedProductDto? mikro)
+        {
+            if (mikro == null)
+                return;
+
+            product.StockQuantity = (int)Math.Max(0, mikro.StokMiktar);
+            product.Unit = string.IsNullOrWhiteSpace(mikro.Birim)
+                ? "ADET"
+                : mikro.Birim.Trim().ToUpperInvariant();
+        }
+
+        /// <summary>
         /// Mikro ERP ürünlerini otomatik kategorize eder.
         /// Ürün adına göre akıllı eşleme yapar, eksik kategorileri oluşturur,
         /// yerel DB'de ürün kaydı yoksa SKU bazlı upsert yapar.
@@ -1053,14 +1079,10 @@ namespace ECommerce.API.Controllers
             // Local DB stok bilgisi stale olabilir — Mikro'dan gerçek zamanlı stok al
             if (_mikroDbService.IsConfigured && !string.IsNullOrEmpty(product.Sku))
             {
-                var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
-                var mikro = unified.FirstOrDefault(u =>
-                    string.Equals(u.StokKod, product.Sku, StringComparison.OrdinalIgnoreCase));
-                if (mikro != null)
-                {
-                    product.StockQuantity = (int)Math.Max(0, mikro.StokMiktar);
-                    product.Unit = string.IsNullOrWhiteSpace(mikro.Birim) ? "ADET" : mikro.Birim.Trim().ToUpperInvariant();
-                }
+                var mikro = await GetWebActiveProductBySkuAsync(
+                    product.Sku,
+                    HttpContext.RequestAborted);
+                ApplyMikroStockOverlay(product, mikro);
             }
 
             return Ok(product);
@@ -1084,17 +1106,10 @@ namespace ECommerce.API.Controllers
                 {
                     if (_mikroDbService.IsConfigured && !string.IsNullOrEmpty(localDto.Sku))
                     {
-                        var unifiedLocal = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
-                        var mikroLocal = unifiedLocal.FirstOrDefault(u =>
-                            string.Equals(u.StokKod, localDto.Sku, StringComparison.OrdinalIgnoreCase));
-
-                        if (mikroLocal != null)
-                        {
-                            localDto.StockQuantity = (int)Math.Max(0, mikroLocal.StokMiktar);
-                            localDto.Unit = string.IsNullOrWhiteSpace(mikroLocal.Birim)
-                                ? "ADET"
-                                : mikroLocal.Birim.Trim().ToUpperInvariant();
-                        }
+                        var mikroLocal = await GetWebActiveProductBySkuAsync(
+                            localDto.Sku,
+                            HttpContext.RequestAborted);
+                        ApplyMikroStockOverlay(localDto, mikroLocal);
                     }
 
                     return Ok(localDto);
@@ -1136,14 +1151,10 @@ namespace ECommerce.API.Controllers
                     // Local DB stok bilgisi stale olabilir — Mikro'dan gerçek zamanlı stok al
                     if (_mikroDbService.IsConfigured)
                     {
-                        var unifiedLocal = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
-                        var mikroLocal = unifiedLocal.FirstOrDefault(u =>
-                            string.Equals(u.StokKod, sku, StringComparison.OrdinalIgnoreCase));
-                        if (mikroLocal != null)
-                        {
-                            localDto.StockQuantity = (int)Math.Max(0, mikroLocal.StokMiktar);
-                            localDto.Unit = string.IsNullOrWhiteSpace(mikroLocal.Birim) ? "ADET" : mikroLocal.Birim.Trim().ToUpperInvariant();
-                        }
+                        var mikroLocal = await GetWebActiveProductBySkuAsync(
+                            sku,
+                            HttpContext.RequestAborted);
+                        ApplyMikroStockOverlay(localDto, mikroLocal);
                     }
                     return Ok(localDto);
                 }
@@ -1152,9 +1163,7 @@ namespace ECommerce.API.Controllers
             // Local DB'de yoksa Mikro'dan getir
             if (!_mikroDbService.IsConfigured) return NotFound();
 
-            var unified = await GetWebActiveUnifiedProductsAsync(HttpContext.RequestAborted);
-            var mikro = unified.FirstOrDefault(u =>
-                string.Equals(u.StokKod, sku, StringComparison.OrdinalIgnoreCase));
+            var mikro = await GetWebActiveProductBySkuAsync(sku, HttpContext.RequestAborted);
 
             if (mikro == null) return NotFound();
 

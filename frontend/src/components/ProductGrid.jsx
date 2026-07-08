@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useCart } from "../contexts/CartContext";
 import { useCompare } from "../contexts/CompareContext";
 import { useFavorites } from "../contexts/FavoriteContext";
-import { ProductService } from "../services/productService";
+import { ProductService, getProductDetailPath } from "../services/productService";
 import productServiceMock from "../services/productServiceMock";
 import cartSettingsService from "../services/cartSettingsService";
 import { CART_SETTINGS_EVENT } from "../services/cartSettingsService";
@@ -413,15 +413,8 @@ export default function ProductGrid({
 
     // NEDEN: Mikro-only ürünlerde id=0 — slug veya sku ile yönlendir.
     // /product/0 → backend 404 dönerdi. Slug varsa slug, yoksa sku/ prefix kullan.
-    if (product.id && product.id > 0) {
-      navigate(`/product/${product.slug || product.id}`);
-    } else if (product.slug) {
-      navigate(`/product/${product.slug}`);
-    } else if (product.sku) {
-      navigate(`/product/sku/${product.sku}`);
-    } else {
-      navigate(`/product/${product.id}`);
-    }
+    const detailPath = getProductDetailPath(product);
+    navigate(detailPath, { state: { product } });
   };
 
   useEffect(() => {

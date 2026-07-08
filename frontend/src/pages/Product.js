@@ -17,8 +17,8 @@
  * @version 2.0.0
  */
 import React, { useEffect, useState, useCallback, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { ProductService } from "../services/productService";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
+import { ProductService, findProductPreview } from "../services/productService";
 import { useCart } from "../contexts/CartContext";
 import { useFavorites } from "../contexts/FavoriteContext";
 import { useCompare } from "../contexts/CompareContext";
@@ -101,6 +101,7 @@ export default function Product() {
   // NEDEN: /product/:id ve /product/sku/:sku iki ayrı rota — her ikisini destekle
   const { id, sku } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Context hooks
   const { user } = useAuth();
@@ -132,13 +133,25 @@ export default function Product() {
     let mounted = true;
 
     const loadProduct = async () => {
-      setLoading(true);
+      const normalizedId = typeof id === "string" ? id.trim() : "";
+      const isNumericId = /^\d+$/.test(normalizedId);
+      const previewProduct =
+        location.state?.product ||
+        findProductPreview({
+          id: sku ? undefined : isNumericId ? normalizedId : undefined,
+          slug: sku || isNumericId ? undefined : normalizedId,
+          sku,
+        });
+
+      if (previewProduct) {
+        setProduct(previewProduct);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
       try {
-        const normalizedId = typeof id === "string" ? id.trim() : "";
-        const isNumericId = /^\d+$/.test(normalizedId);
-
         // NEDEN: SKU rotasından geliyorsa (/product/sku/:sku) farklı endpoint çağır.
         // Mikro-only ürünlerde id=0 olur, normal /api/products/0 çalışmaz.
         // Slug rotasında ise ürün adından türeyen /product/{slug} URL'si backend'de slug endpoint'ine gider.
@@ -153,12 +166,12 @@ export default function Product() {
         // Id=0 olan Mikro ürünleri de geçerli — sadece data varlığını kontrol et
         if (data && (data.id > 0 || data.sku || data.name)) {
           setProduct(data);
-        } else {
+        } else if (!previewProduct) {
           setError("Ürün bulunamadı");
         }
       } catch (err) {
         console.error("Ürün yüklenirken hata:", err);
-        if (mounted) {
+        if (mounted && !previewProduct) {
           setError("Ürün yüklenirken bir hata oluştu");
         }
       } finally {
@@ -173,7 +186,7 @@ export default function Product() {
     return () => {
       mounted = false;
     };
-  }, [id, sku]);
+  }, [id, sku, location.state?.product]);
 
   // ============================================================
   // KATEGORİ KURALLARINI YÜKLE

@@ -21,7 +21,27 @@ export default function ProductGallery({
 
   useEffect(() => {
     setActiveIndex(0);
+    const src = normalizedImages[0];
+    if (!src) {
+      setLoaded(false);
+      return undefined;
+    }
+
+    const probe = new Image();
+    probe.src = src;
+    if (probe.complete) {
+      setLoaded(true);
+      return undefined;
+    }
+
     setLoaded(false);
+    probe.onload = () => setLoaded(true);
+    probe.onerror = () => setLoaded(true);
+
+    return () => {
+      probe.onload = null;
+      probe.onerror = null;
+    };
   }, [normalizedImages.join("|")]);
 
   const hasImages = normalizedImages.length > 0;
@@ -53,6 +73,7 @@ export default function ProductGallery({
         <img
           src={activeImage}
           alt={alt}
+          decoding="async"
           className={`product-gallery__main-image ${
             loaded ? "product-gallery__main-image--loaded" : ""
           }`}

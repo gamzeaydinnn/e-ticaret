@@ -31,6 +31,13 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// SKU ile tek web-aktif ürün döner. Ürün detayında tüm listeyi çekmek yerine kullanılır.
+        /// </summary>
+        Task<MikroUnifiedProductDto?> GetProductBySkuAsync(
+            string sku,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Mikro fiyat listesi satırlarını direkt SQL ile çeker.
         /// SQL KAYNAK: BuildSqlPriceQuery
         /// </summary>

@@ -270,6 +270,88 @@ export const getProductDetailPath = (product = {}) => {
   return `/product/${product?.id || ""}`;
 };
 
+const HOME_PRODUCTS_CACHE_KEY = "home_products_v2";
+const DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+const detailCache = new Map();
+
+const buildDetailCacheKey = ({ id, slug, sku } = {}) => {
+  if (sku) return `sku:${String(sku).trim().toLowerCase()}`;
+  if (slug && !/^\d+$/.test(String(slug).trim())) {
+    return `slug:${String(slug).trim().toLowerCase()}`;
+  }
+  if (id != null && String(id).trim() !== "") {
+    return `id:${String(id).trim()}`;
+  }
+  return null;
+};
+
+const getDetailFromCache = (key) => {
+  if (!key) return null;
+  const entry = detailCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > DETAIL_CACHE_TTL_MS) {
+    detailCache.delete(key);
+    return null;
+  }
+  return entry.product;
+};
+
+const setDetailCache = (product) => {
+  if (!product) return;
+  const keys = [
+    buildDetailCacheKey({ id: product.id }),
+    buildDetailCacheKey({ slug: product.slug }),
+    buildDetailCacheKey({ sku: product.sku }),
+  ].filter(Boolean);
+
+  keys.forEach((key) => {
+    detailCache.set(key, { product, ts: Date.now() });
+  });
+};
+
+const readHomeProductsCache = () => {
+  try {
+    const raw = localStorage.getItem(HOME_PRODUCTS_CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > DETAIL_CACHE_TTL_MS) return null;
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Liste veya detay önbelleğinden ürün önizlemesi döner — detay sayfası anında açılsın.
+ */
+export const findProductPreview = ({ id, slug, sku } = {}) => {
+  const detailKey = buildDetailCacheKey({ id, slug, sku });
+  const fromDetail = getDetailFromCache(detailKey);
+  if (fromDetail) return fromDetail;
+
+  const list = readHomeProductsCache();
+  if (!list?.length) return null;
+
+  const normalizedSku = sku ? String(sku).trim().toLowerCase() : "";
+  const normalizedSlug = slug ? String(slug).trim().toLowerCase() : "";
+  const normalizedId = id != null ? String(id).trim() : "";
+
+  return (
+    list.find((p) => {
+      if (normalizedSku && String(p.sku || "").trim().toLowerCase() === normalizedSku) {
+        return true;
+      }
+      if (normalizedSlug && String(p.slug || "").trim().toLowerCase() === normalizedSlug) {
+        return true;
+      }
+      if (normalizedId && String(p.id ?? "").trim() === normalizedId) {
+        return true;
+      }
+      return false;
+    }) || null
+  );
+};
+
 // ============================================================
 // PRODUCT SERVICE
 // ============================================================
@@ -311,7 +393,11 @@ export const ProductService = {
           return displayPrice > 0;
         })
         .map(mapProduct)
-        .filter((p) => p !== null); // null değerleri temizle
+        .filter((p) => p !== null)
+        .map((p) => {
+          setDetailCache(p);
+          return p;
+        }); // null değerleri temizle + detay önbelleğine yaz
     } catch (err) {
       console.error("❌ Ürünler yüklenemedi:", err);
       // Fallback: boş array döndür (UI crash önleme)
@@ -333,7 +419,9 @@ export const ProductService = {
 
       const response = await api.get(`/api/products/${id}`);
       const product = response?.data || response;
-      return product ? mapProduct(product) : null;
+      const mapped = product ? mapProduct(product) : null;
+      if (mapped) setDetailCache(mapped);
+      return mapped;
     } catch (err) {
       console.error(`❌ Ürün bulunamadı (ID: ${id}):`, err);
       return null;
@@ -350,7 +438,9 @@ export const ProductService = {
         `/api/products/slug/${encodeURIComponent(slug)}`,
       );
       const product = response?.data || response;
-      return product ? mapProduct(product) : null;
+      const mapped = product ? mapProduct(product) : null;
+      if (mapped) setDetailCache(mapped);
+      return mapped;
     } catch (err) {
       console.error(`❌ Ürün bulunamadı (slug: ${slug}):`, err);
       return null;
@@ -368,7 +458,9 @@ export const ProductService = {
         `/api/products/sku/${encodeURIComponent(sku)}`,
       );
       const product = response?.data || response;
-      return product ? mapProduct(product) : null;
+      const mapped = product ? mapProduct(product) : null;
+      if (mapped) setDetailCache(mapped);
+      return mapped;
     } catch (err) {
       console.error(`❌ Ürün bulunamadı (SKU: ${sku}):`, err);
       return null;

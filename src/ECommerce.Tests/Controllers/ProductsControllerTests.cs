@@ -72,6 +72,11 @@ namespace ECommerce.Tests.Controllers
             mikroDbService
                 .Setup(x => x.GetUnifiedProductsAsync(null, null, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(unifiedProducts);
+            mikroDbService
+                .Setup(x => x.GetProductBySkuAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((string sku, CancellationToken _) =>
+                    unifiedProducts.FirstOrDefault(p =>
+                        string.Equals(p.StokKod, sku, StringComparison.OrdinalIgnoreCase)));
 
             var controller = new ProductsController(
                 productService.Object,

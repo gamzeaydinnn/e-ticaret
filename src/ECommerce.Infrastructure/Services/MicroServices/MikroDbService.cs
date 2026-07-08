@@ -1,5 +1,6 @@
 using System.Data;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -130,6 +131,20 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 _logger.LogError(ex, "[MikroDbService] Birleşik ürün sorgusu beklenmeyen hata.");
                 return [];
             }
+        }
+
+        /// <inheritdoc/>
+        public async Task<MikroUnifiedProductDto?> GetProductBySkuAsync(
+            string sku,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(sku))
+                return null;
+
+            var unified = await GetUnifiedProductsAsync(null, null, cancellationToken);
+            return MikroWebCatalogFilter.OnlyWebActive(unified)
+                .FirstOrDefault(u =>
+                    string.Equals(u.StokKod, sku.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         // ==================== FİYAT SATIRLARI ====================

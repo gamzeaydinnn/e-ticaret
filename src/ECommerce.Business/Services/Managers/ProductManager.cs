@@ -771,6 +771,11 @@ namespace ECommerce.Business.Services.Managers
         /// </summary>
         public async Task<ProductListDto?> GetProductByIdWithCampaignAsync(int id)
         {
+            var cacheKey = $"product_detail_{id}";
+
+            if (_cache.TryGetValue(cacheKey, out ProductListDto? cached) && cached != null)
+                return cached;
+
             var product = await _productRepository.GetByIdAsync(id);
             if (product == null) return null;
 
@@ -779,6 +784,12 @@ namespace ECommerce.Business.Services.Managers
             // Kampanya bilgilerini hesapla
             EnrichWithCampaignInfo(dto, product);
             await EnrichWithOrderLimitsAsync(dto, product);
+
+            _cache.Set(cacheKey, dto, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60)
+            });
+            TrackCacheKey(cacheKey);
             
             return dto;
         }

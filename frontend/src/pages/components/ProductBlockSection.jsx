@@ -582,7 +582,7 @@ const ProductBlockSection = ({
     ) {
       return;
     }
-    navigate(detailPath);
+    navigate(detailPath, { state: { product } });
   };
 
   // Sepete ekle - Kg bazlı ürünler için modal aç
