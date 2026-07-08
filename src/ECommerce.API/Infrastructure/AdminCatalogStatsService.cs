@@ -110,6 +110,13 @@ namespace ECommerce.API.Infrastructure
                 var overrideDefaults = await _productAdminOverrideSettingsService
                     .GetSettingsAsync(cancellationToken);
 
+                var unifiedSkuSet = new HashSet<string>(
+                    unified
+                        .Select(product => product.StokKod?.Trim())
+                        .Where(productSku => !string.IsNullOrWhiteSpace(productSku))
+                        .Cast<string>(),
+                    StringComparer.OrdinalIgnoreCase);
+
                 var mergedProducts = unified
                     .Select(mikroProduct =>
                     {
@@ -149,7 +156,10 @@ namespace ECommerce.API.Infrastructure
                     .Select(group => group.First());
 
                 var localOnlyProducts = localAll
-                    .Where(product => string.IsNullOrWhiteSpace(product.SKU))
+                    .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
+                    .Where(product =>
+                        string.IsNullOrWhiteSpace(product.SKU)
+                        || !unifiedSkuSet.Contains(product.SKU.Trim()))
                     .Select(MapLocalProductSnapshot);
 
                 return mergedProducts.Concat(localOnlyProducts).ToList();

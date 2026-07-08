@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging;
 namespace ECommerce.API.Infrastructure
 {
     /// <summary>
-    /// Eski demo/seed ürünlerini pasifleştirir ve ana sayfa bloklarından çıkarır.
-    /// Production'da bir kez çalıştırılsa yeterli; idempotent.
+    /// Eski demo/seed ürünlerini siler veya sipariş geçmişi varsa pasifleştirir.
+    /// Production'da idempotent; her deploy'da güvenle çalıştırılabilir.
     /// </summary>
     public static class LegacySeedProductCleanup
     {
@@ -22,10 +22,15 @@ namespace ECommerce.API.Infrastructure
                 .CreateLogger("LegacySeedProductCleanup");
 
             var legacySkus = LegacySeedProductSkus.All.ToList();
+            var legacySlugs = LegacySeedProductSkus.LegacySlugs.ToList();
+            var legacyNames = LegacySeedProductSkus.LegacyNames.ToList();
 
             var legacyProducts = await db.Products
-                .Where(p => p.SKU != null && legacySkus.Contains(p.SKU))
-                .Select(p => new { p.Id, p.SKU, p.IsActive })
+                .Where(product =>
+                    (product.SKU != null && legacySkus.Contains(product.SKU))
+                    || legacySlugs.Contains(product.Slug)
+                    || legacyNames.Contains(product.Name))
+                .Select(product => new { product.Id, product.SKU, product.Name, product.IsActive })
                 .ToListAsync();
 
             if (legacyProducts.Count == 0)
@@ -34,22 +39,59 @@ namespace ECommerce.API.Infrastructure
                 return;
             }
 
-            var legacyIds = legacyProducts.Select(p => p.Id).ToList();
+            var legacyIds = legacyProducts.Select(product => product.Id).ToList();
 
-            var removedLinks = await db.HomeBlockProducts
-                .Where(h => legacyIds.Contains(h.ProductId))
-                .ExecuteDeleteAsync();
+            var orderedProductIds = await db.OrderItems
+                .Where(item => legacyIds.Contains(item.ProductId))
+                .Select(item => item.ProductId)
+                .Distinct()
+                .ToListAsync();
 
-            var deactivated = await db.Products
-                .Where(p => legacyIds.Contains(p.Id) && p.IsActive)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(p => p.IsActive, false));
+            var deletableIds = legacyIds.Except(orderedProductIds).ToList();
 
-            logger.LogWarning(
-                "Legacy seed cleanup: {ProductCount} ürün pasifleştirildi ({Deactivated} yeni), {LinkCount} home block bağlantısı silindi. SKU'lar: {Skus}",
-                legacyProducts.Count,
-                deactivated,
-                removedLinks,
-                string.Join(", ", legacyProducts.Select(p => p.SKU)));
+            if (deletableIds.Count > 0)
+            {
+                await db.HomeBlockProducts
+                    .Where(link => deletableIds.Contains(link.ProductId))
+                    .ExecuteDeleteAsync();
+                await db.CartItems
+                    .Where(item => deletableIds.Contains(item.ProductId))
+                    .ExecuteDeleteAsync();
+                await db.Favorites
+                    .Where(fav => deletableIds.Contains(fav.ProductId))
+                    .ExecuteDeleteAsync();
+                await db.ProductReviews
+                    .Where(review => deletableIds.Contains(review.ProductId))
+                    .ExecuteDeleteAsync();
+                await db.ProductImages
+                    .Where(image => deletableIds.Contains(image.ProductId))
+                    .ExecuteDeleteAsync();
+                await db.CouponProducts
+                    .Where(cp => deletableIds.Contains(cp.ProductId))
+                    .ExecuteDeleteAsync();
+
+                var deleted = await db.Products
+                    .Where(product => deletableIds.Contains(product.Id))
+                    .ExecuteDeleteAsync();
+
+                logger.LogWarning(
+                    "Legacy seed cleanup: {Deleted} demo ürün silindi. SKU/ad: {Skus}",
+                    deleted,
+                    string.Join(", ", legacyProducts
+                        .Where(product => deletableIds.Contains(product.Id))
+                        .Select(product => product.SKU ?? product.Name)));
+            }
+
+            if (orderedProductIds.Count > 0)
+            {
+                var deactivated = await db.Products
+                    .Where(product => orderedProductIds.Contains(product.Id) && product.IsActive)
+                    .ExecuteUpdateAsync(setters => setters.SetProperty(product => product.IsActive, false));
+
+                logger.LogWarning(
+                    "Legacy seed cleanup: {Count} demo ürün sipariş geçmişi nedeniyle pasifleştirildi (silinmedi).",
+                    deactivated);
+            }
         }
     }
 }

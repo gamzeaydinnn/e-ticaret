@@ -271,6 +271,7 @@ namespace ECommerce.API.Controllers
                     var fallbackImageMap = await GetProductImageUrlsMapAsync(HttpContext.RequestAborted);
 
                     var filteredFallbackProducts = fallbackLocalProducts
+                        .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
                         .Where(product =>
                             string.IsNullOrWhiteSpace(sku) ||
                             (!string.IsNullOrWhiteSpace(product.SKU) && product.SKU.Contains(sku, StringComparison.OrdinalIgnoreCase)))
@@ -435,7 +436,10 @@ namespace ECommerce.API.Controllers
                     .Select(group => group.First());
 
                 var localOnlyProducts = localAll
-                    .Where(product => string.IsNullOrWhiteSpace(product.SKU))
+                    .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
+                    .Where(product =>
+                        string.IsNullOrWhiteSpace(product.SKU)
+                        || !unifiedSkuSet.Contains(product.SKU.Trim()))
                     .Select(product =>
                     {
                         var images = ResolveProductImages(product, productImageMap);
@@ -504,6 +508,7 @@ namespace ECommerce.API.Controllers
             var localImageMap = await GetProductImageUrlsMapAsync(HttpContext.RequestAborted);
 
             var filteredLocalProducts = localProducts
+                .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
                 .Where(product =>
                     string.IsNullOrWhiteSpace(sku) ||
                     (!string.IsNullOrWhiteSpace(product.SKU) && product.SKU.Contains(sku, StringComparison.OrdinalIgnoreCase)))
@@ -2421,7 +2426,7 @@ namespace ECommerce.API.Controllers
                 "urun_sablonu.xlsx");
         }
 
-        private async Task<List<object>> BuildLocalDbExportRowsAsync()
+        private async Task<List<object>> BuildLocalDbExportRowsAsync(IReadOnlySet<string>? excludeSkus = null)
         {
             var localProducts = await _dbContext.Products
                 .Include(product => product.Category)
@@ -2429,6 +2434,11 @@ namespace ECommerce.API.Controllers
                 .ToListAsync(HttpContext.RequestAborted);
 
             return localProducts
+                .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
+                .Where(product =>
+                    excludeSkus == null
+                    || string.IsNullOrWhiteSpace(product.SKU)
+                    || !excludeSkus.Contains(product.SKU.Trim()))
                 .OrderBy(product => string.IsNullOrWhiteSpace(product.SKU) ? product.Name : product.SKU)
                 .ThenBy(product => product.Name)
                 .Select(product => (object)new
@@ -2482,7 +2492,15 @@ namespace ECommerce.API.Controllers
                         .GroupBy(p => p.SKU!)
                         .ToDictionary(g => g.Key, g => g.First());
 
-                    exportRows = unified
+                    var mikroSkuSet = new HashSet<string>(
+                        unified
+                            .Where(product => product.WebeGonderilecekFl)
+                            .Select(product => product.StokKod?.Trim())
+                            .Where(sku => !string.IsNullOrWhiteSpace(sku))
+                            .Cast<string>(),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    var mikroRows = unified
                         .Where(p => p.WebeGonderilecekFl)  // sadece web aktif ürünler
                         .OrderBy(p => p.StokKod)
                         .Select(p =>
@@ -2505,6 +2523,10 @@ namespace ECommerce.API.Controllers
                             };
                         })
                         .ToList();
+
+                    // Mikro'da olmayan manuel ürünleri de ekle (demo seed hariç)
+                    var manualRows = await BuildLocalDbExportRowsAsync(mikroSkuSet);
+                    exportRows = mikroRows.Concat(manualRows).ToList();
                     }
                 }
                 else

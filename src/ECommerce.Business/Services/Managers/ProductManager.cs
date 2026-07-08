@@ -173,7 +173,8 @@ namespace ECommerce.Business.Services.Managers
                 QuantityStep = productDto.QuantityStep,
                 IsWeightBased = productDto.IsWeightBased,
                 MinOrderWeight = productDto.MinOrderWeight,
-                MaxOrderWeight = productDto.MaxOrderWeight
+                MaxOrderWeight = productDto.MaxOrderWeight,
+                IsActive = productDto.IsActive,
             };
 
             await _productRepository.AddAsync(product);
