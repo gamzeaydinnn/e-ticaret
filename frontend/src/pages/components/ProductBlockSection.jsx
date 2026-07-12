@@ -496,7 +496,22 @@ const ProductBlockSection = ({
 
     let dragStartX = 0;
     let dragStartOffset = 0;
+    let pointerActive = false;
     let dragging = false;
+    let didDrag = false;
+    const DRAG_THRESHOLD_PX = 8;
+
+    const suppressNextClick = () => {
+      const blockClick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        container.removeEventListener("click", blockClick, true);
+      };
+      container.addEventListener("click", blockClick, true);
+      window.setTimeout(() => {
+        container.removeEventListener("click", blockClick, true);
+      }, 450);
+    };
 
     const onPointerDown = (event) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -508,41 +523,63 @@ const ProductBlockSection = ({
         pauseAutoScroll(5500);
         return;
       }
-      dragging = true;
+
+      // Tıklamayı bozmamak için hemen capture/drag başlatma
+      pointerActive = true;
+      dragging = false;
+      didDrag = false;
       dragStartX = event.clientX;
       dragStartOffset = slideOffsetRef.current;
       pauseAutoScroll(6000);
-      container.classList.add("is-dragging");
-      try {
-        container.setPointerCapture?.(event.pointerId);
-      } catch {
-        /* ignore */
-      }
     };
 
     const onPointerMove = (event) => {
-      if (!dragging) return;
+      if (!pointerActive) return;
+
       const dx = event.clientX - dragStartX;
+      if (!dragging) {
+        if (Math.abs(dx) < DRAG_THRESHOLD_PX) return;
+        dragging = true;
+        didDrag = true;
+        container.classList.add("is-dragging");
+        try {
+          container.setPointerCapture?.(event.pointerId);
+        } catch {
+          /* ignore */
+        }
+      }
+
       applyOffset(dragStartOffset - dx);
+      if (event.cancelable) event.preventDefault();
     };
 
     const endDrag = (event) => {
-      if (!dragging) return;
-      dragging = false;
-      container.classList.remove("is-dragging");
-      pauseAutoScroll(2800);
-      try {
-        container.releasePointerCapture?.(event.pointerId);
-      } catch {
-        /* ignore */
+      if (!pointerActive) return;
+      pointerActive = false;
+
+      if (dragging) {
+        dragging = false;
+        container.classList.remove("is-dragging");
+        pauseAutoScroll(2800);
+        try {
+          container.releasePointerCapture?.(event.pointerId);
+        } catch {
+          /* ignore */
+        }
       }
+
+      // Sürükleme olduysa ürün tıklamasını yut; yoksa normal click çalışsın
+      if (didDrag) {
+        suppressNextClick();
+      }
+      didDrag = false;
     };
 
     container.classList.add("is-auto-scrolling");
     applyOffset(slideOffsetRef.current);
 
     container.addEventListener("pointerdown", onPointerDown);
-    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointermove", onPointerMove, { passive: false });
     container.addEventListener("pointerup", endDrag);
     container.addEventListener("pointercancel", endDrag);
     container.addEventListener("mouseenter", onMouseEnter);
@@ -606,7 +643,9 @@ const ProductBlockSection = ({
       }
       container.classList.remove("is-auto-scrolling", "is-dragging");
       container.removeEventListener("pointerdown", onPointerDown);
-      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointermove", onPointerMove, {
+        passive: false,
+      });
       container.removeEventListener("pointerup", endDrag);
       container.removeEventListener("pointercancel", endDrag);
       container.removeEventListener("mouseenter", onMouseEnter);

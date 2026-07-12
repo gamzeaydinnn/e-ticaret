@@ -409,7 +409,7 @@ video.poster-image {
   overflow: hidden;
   padding: 0 2px;
   min-height: var(--block-card-height);
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -682,7 +682,7 @@ video.poster-image {
     min-width: 0;
     max-width: 100%;
     overflow: hidden !important;
-    touch-action: pan-y;
+    touch-action: pan-x pan-y;
   }
 
   .products-scroll-track {
