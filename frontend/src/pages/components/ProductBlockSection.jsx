@@ -452,6 +452,7 @@ const ProductBlockSection = ({
   }, [blockMotionKey]);
 
   // Hafif sağa kayma — sadece aktif (bakılan) blok
+  // NOT: pointer capture / custom drag YOK — urun tiklamasini bozmamak icin native scroll
   useEffect(() => {
     const container = scrollContainerRef.current;
     const track = trackRef.current;
@@ -473,15 +474,19 @@ const ProductBlockSection = ({
     const readMaxOffset = () =>
       Math.max(0, track.scrollWidth - container.clientWidth);
 
-    const applyOffset = (value) => {
+    const applyOffset = (value, { smoothButtons = true } = {}) => {
       const maxOffset = readMaxOffset();
       const clamped = Math.max(0, Math.min(maxOffset, value));
       slideOffsetRef.current = clamped;
-      track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
-      const nextLeft = clamped > 2;
-      const nextRight = clamped < maxOffset - 2;
-      setCanScrollLeft((prev) => (prev === nextLeft ? prev : nextLeft));
-      setCanScrollRight((prev) => (prev === nextRight ? prev : nextRight));
+      if (Math.abs(container.scrollLeft - clamped) > 0.5) {
+        container.scrollLeft = clamped;
+      }
+      if (smoothButtons) {
+        const nextLeft = clamped > 2;
+        const nextRight = clamped < maxOffset - 2;
+        setCanScrollLeft((prev) => (prev === nextLeft ? prev : nextLeft));
+        setCanScrollRight((prev) => (prev === nextRight ? prev : nextRight));
+      }
       return clamped;
     };
 
@@ -494,94 +499,29 @@ const ProductBlockSection = ({
       pauseAutoScroll(1800);
     };
 
-    let dragStartX = 0;
-    let dragStartOffset = 0;
-    let pointerActive = false;
-    let dragging = false;
-    let didDrag = false;
-    const DRAG_THRESHOLD_PX = 8;
+    const onUserInteract = () => pauseAutoScroll(5500);
 
-    const suppressNextClick = () => {
-      const blockClick = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        container.removeEventListener("click", blockClick, true);
-      };
-      container.addEventListener("click", blockClick, true);
-      window.setTimeout(() => {
-        container.removeEventListener("click", blockClick, true);
-      }, 450);
-    };
-
-    const onPointerDown = (event) => {
-      if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (
-        event.target?.closest?.(
-          "button, a, input, textarea, .modern-add-btn, .btn-favorite",
-        )
-      ) {
-        pauseAutoScroll(5500);
-        return;
-      }
-
-      // Tıklamayı bozmamak için hemen capture/drag başlatma
-      pointerActive = true;
-      dragging = false;
-      didDrag = false;
-      dragStartX = event.clientX;
-      dragStartOffset = slideOffsetRef.current;
-      pauseAutoScroll(6000);
-    };
-
-    const onPointerMove = (event) => {
-      if (!pointerActive) return;
-
-      const dx = event.clientX - dragStartX;
-      if (!dragging) {
-        if (Math.abs(dx) < DRAG_THRESHOLD_PX) return;
-        dragging = true;
-        didDrag = true;
-        container.classList.add("is-dragging");
-        try {
-          container.setPointerCapture?.(event.pointerId);
-        } catch {
-          /* ignore */
-        }
-      }
-
-      applyOffset(dragStartOffset - dx);
-      if (event.cancelable) event.preventDefault();
-    };
-
-    const endDrag = (event) => {
-      if (!pointerActive) return;
-      pointerActive = false;
-
-      if (dragging) {
-        dragging = false;
-        container.classList.remove("is-dragging");
-        pauseAutoScroll(2800);
-        try {
-          container.releasePointerCapture?.(event.pointerId);
-        } catch {
-          /* ignore */
-        }
-      }
-
-      // Sürükleme olduysa ürün tıklamasını yut; yoksa normal click çalışsın
-      if (didDrag) {
-        suppressNextClick();
-      }
-      didDrag = false;
+    const onScroll = () => {
+      slideOffsetRef.current = container.scrollLeft;
+      const maxOffset = readMaxOffset();
+      const offset = container.scrollLeft;
+      setCanScrollLeft((prev) => {
+        const next = offset > 2;
+        return prev === next ? prev : next;
+      });
+      setCanScrollRight((prev) => {
+        const next = offset < maxOffset - 2;
+        return prev === next ? prev : next;
+      });
     };
 
     container.classList.add("is-auto-scrolling");
     applyOffset(slideOffsetRef.current);
 
-    container.addEventListener("pointerdown", onPointerDown);
-    container.addEventListener("pointermove", onPointerMove, { passive: false });
-    container.addEventListener("pointerup", endDrag);
-    container.addEventListener("pointercancel", endDrag);
+    container.addEventListener("pointerdown", onUserInteract, { passive: true });
+    container.addEventListener("touchstart", onUserInteract, { passive: true });
+    container.addEventListener("wheel", onUserInteract, { passive: true });
+    container.addEventListener("scroll", onScroll, { passive: true });
     container.addEventListener("mouseenter", onMouseEnter);
     container.addEventListener("mouseleave", onMouseLeave);
 
@@ -597,7 +537,6 @@ const ProductBlockSection = ({
       lastTs = ts;
 
       const canMove =
-        !dragging &&
         !autoScrollPausedRef.current &&
         Date.now() >= userInteractUntilRef.current &&
         Date.now() >= holdUntil &&
@@ -607,7 +546,7 @@ const ProductBlockSection = ({
         const maxOffset = readMaxOffset();
         if (maxOffset > 8) {
           const delta = speedPxPerSec * dt * (returning ? -2.2 : 1);
-          const next = slideOffsetRef.current + delta;
+          const next = container.scrollLeft + delta;
 
           if (!returning && next >= maxOffset - 0.5) {
             applyOffset(maxOffset);
@@ -632,7 +571,7 @@ const ProductBlockSection = ({
       autoScrollRafRef.current = requestAnimationFrame(tick);
     }, isMobile ? 250 : 180);
 
-    const onResize = () => applyOffset(slideOffsetRef.current);
+    const onResize = () => applyOffset(container.scrollLeft || slideOffsetRef.current);
     window.addEventListener("resize", onResize);
 
     return () => {
@@ -642,12 +581,10 @@ const ProductBlockSection = ({
         cancelAnimationFrame(autoScrollRafRef.current);
       }
       container.classList.remove("is-auto-scrolling", "is-dragging");
-      container.removeEventListener("pointerdown", onPointerDown);
-      container.removeEventListener("pointermove", onPointerMove, {
-        passive: false,
-      });
-      container.removeEventListener("pointerup", endDrag);
-      container.removeEventListener("pointercancel", endDrag);
+      container.removeEventListener("pointerdown", onUserInteract);
+      container.removeEventListener("touchstart", onUserInteract);
+      container.removeEventListener("wheel", onUserInteract);
+      container.removeEventListener("scroll", onScroll);
       container.removeEventListener("mouseenter", onMouseEnter);
       container.removeEventListener("mouseleave", onMouseLeave);
     };
@@ -811,7 +748,8 @@ const ProductBlockSection = ({
     const track = trackRef.current;
     if (!container || !track) return;
     const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
-    const offset = slideOffsetRef.current;
+    const offset = container.scrollLeft;
+    slideOffsetRef.current = offset;
     setCanScrollLeft(offset > 2);
     setCanScrollRight(offset < maxOffset - 2);
   };
@@ -828,16 +766,12 @@ const ProductBlockSection = ({
     const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
     const next =
       direction === "left"
-        ? slideOffsetRef.current - scrollAmount
-        : slideOffsetRef.current + scrollAmount;
+        ? container.scrollLeft - scrollAmount
+        : container.scrollLeft + scrollAmount;
     const clamped = Math.max(0, Math.min(maxOffset, next));
     slideOffsetRef.current = clamped;
-    track.style.transition = "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)";
-    track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
-    window.setTimeout(() => {
-      if (track) track.style.transition = "";
-      checkScroll();
-    }, 380);
+    container.scrollTo({ left: clamped, behavior: "smooth" });
+    window.setTimeout(checkScroll, 380);
   };
 
   const resolveProductData = (item) => {
@@ -891,15 +825,21 @@ const ProductBlockSection = ({
 
   // Ürüne tıklayınca - ProductGrid ile AYNI
   const handleProductClick = (e, product, productId, productIdRaw) => {
-    const detailPath = getProductDetailPath(product, productId, productIdRaw);
-    if (!detailPath) {
-      return;
-    }
-    // Butonlara tıklanmışsa yönlendirme yapma
     if (
       e.target.closest(".btn-favorite") ||
-      e.target.closest(".modern-add-btn")
+      e.target.closest(".modern-add-btn") ||
+      e.target.closest("button")
     ) {
+      return;
+    }
+
+    const detailPath = getProductDetailPath(product, productId, productIdRaw);
+    if (!detailPath) {
+      console.warn("[ProductBlockSection] Urun detay URL bulunamadi", {
+        productId,
+        productIdRaw,
+        name: product?.name || product?.Name,
+      });
       return;
     }
     navigate(detailPath, { state: { product } });
@@ -1291,6 +1231,19 @@ const ProductBlockSection = ({
                     onClick={(e) =>
                       handleProductClick(e, product, productId, productIdRaw)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleProductClick(
+                          e,
+                          product,
+                          productId,
+                          productIdRaw,
+                        );
+                      }
+                    }}
+                    role="link"
+                    tabIndex={0}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.transform = "translateY(-6px)";
                       e.currentTarget.style.boxShadow = hasDiscount

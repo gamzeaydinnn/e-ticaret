@@ -400,19 +400,26 @@ video.poster-image {
   opacity: 1;
 }
 
-/* Scroll Container */
+/* Scroll Container — native yatay scroll (tiklama bozulmasin) */
 .products-scroll-container {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 2px;
   min-height: var(--block-card-height);
-  touch-action: pan-x pan-y;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: default;
+}
+
+.products-scroll-container::-webkit-scrollbar {
+  display: none;
 }
 
 .products-scroll-container.is-dragging {
@@ -425,13 +432,17 @@ video.poster-image {
   align-items: stretch;
   width: max-content;
   min-height: var(--block-card-height);
-  will-change: transform;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
+  transform: none;
 }
 
 .products-scroll-container.is-auto-scrolling {
   scroll-snap-type: none !important;
+}
+
+.product-block-section .product-block-card {
+  pointer-events: auto;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(255, 107, 53, 0.15);
 }
 
 /* Kart Stilleri - eşit yükseklik */
@@ -681,8 +692,10 @@ video.poster-image {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden !important;
-    touch-action: pan-x pan-y;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
   }
 
   .products-scroll-track {
