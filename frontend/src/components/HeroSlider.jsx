@@ -19,6 +19,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import PropTypes from "prop-types";
+import BannerMedia from "./BannerMedia";
 
 // ============================================
 // SABİTLER
@@ -387,19 +388,21 @@ function HeroSlider({
                   style={styles.slideLink}
                   tabIndex={isActive ? 0 : -1}
                 >
-                  <img
+                  <BannerMedia
                     src={getImageSrc(banner)}
                     alt={banner.title || "Banner"}
                     style={styles.slideImage}
+                    active={isActive}
                     loading={index === 0 ? "eager" : "lazy"}
                     onError={() => handleImageError(banner.id)}
                   />
                 </a>
               ) : (
-                <img
+                <BannerMedia
                   src={getImageSrc(banner)}
                   alt={banner.title || "Banner"}
                   style={styles.slideImage}
+                  active={isActive}
                   loading={index === 0 ? "eager" : "lazy"}
                   onError={() => handleImageError(banner.id)}
                 />

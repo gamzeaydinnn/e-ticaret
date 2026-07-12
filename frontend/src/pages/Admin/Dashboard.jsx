@@ -1,10 +1,17 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { AdminService } from "../../services/adminService";
 import { MicroService } from "../../services/microService";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 import { PERMISSIONS } from "../../services/permissionService";
 import "./styles/AdminDashboard.css";
+
+/** Canlı yenileme: SignalR event'lerini kısa debounce ile birleştir */
+const LIVE_REFRESH_DEBOUNCE_MS = 400;
+/** Sekme açıkken periyodik güncel veri */
+const LIVE_POLL_MS = 15000;
+/** Sekme gizliyken daha seyrek */
+const HIDDEN_POLL_MS = 60000;
 
 const formatCurrency = (value) =>
   `₺${Number(value || 0).toLocaleString("tr-TR", {
@@ -165,8 +172,11 @@ export default function Dashboard() {
     setErpStatus((prev) => ({ ...prev, loading: true }));
     try {
       const result = await MicroService.testConnection();
+      const connected = Boolean(
+        result?.isConnected ?? result?.success ?? result?.mikroApiOnline,
+      );
       setErpStatus({
-        isConnected: result?.isConnected || false,
+        isConnected: connected,
         message: result?.message || "",
         lastSync: new Date().toISOString(),
         loading: false,
@@ -181,7 +191,7 @@ export default function Dashboard() {
     }
   };
 
-  const loadDashboardStats = async (isRefresh = false) => {
+  const loadDashboardStats = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
       setError(null);
@@ -194,7 +204,6 @@ export default function Dashboard() {
         0;
       const totalProducts =
         readField(data, "totalProducts", "TotalProducts") || 0;
-      // Stok sayımları: backend AdminDashboardOverviewDto'dan gelir.
       const outOfStockCount =
         readField(data, "outOfStockCount", "OutOfStockCount") || 0;
       const lowStockCount =
@@ -266,63 +275,105 @@ export default function Dashboard() {
       setLastUpdated(new Date());
     } catch (err) {
       console.error("Dashboard stats yüklenirken hata:", err);
+      const serverMsg =
+        err?.response?.data?.message ||
+        err?.data?.message ||
+        err?.message;
       setError(
-        "Dashboard verileri yüklenemedi. Sunucu bağlantısını kontrol edin.",
+        serverMsg
+          ? `Dashboard verileri yüklenemedi: ${serverMsg}`
+          : "Dashboard verileri yüklenemedi. Sunucu bağlantısını kontrol edin.",
       );
     } finally {
       setLoading(false);
       setInitialLoadDone(true);
     }
-  };
+  }, []);
+
+  const liveRefreshTimerRef = useRef(null);
+  const scheduleLiveRefresh = useCallback(() => {
+    if (liveRefreshTimerRef.current) {
+      clearTimeout(liveRefreshTimerRef.current);
+    }
+    liveRefreshTimerRef.current = setTimeout(() => {
+      loadDashboardStats(true);
+    }, LIVE_REFRESH_DEBOUNCE_MS);
+  }, [loadDashboardStats]);
 
   useEffect(() => {
-    loadDashboardStats();
-    checkErpConnection();
+    let cancelled = false;
+    let pollTimer = null;
 
-    // SignalR bağlıysa polling aralığını 60 saniyeye çıkar (fallback olarak kalır)
-    // SignalR bağlı değilse 30 saniye polling yap
-    const pollingInterval = signalRConnected ? 60000 : 30000;
-    const dashboardInterval = setInterval(
-      () => loadDashboardStats(true),
-      pollingInterval,
-    );
-    const erpInterval = setInterval(checkErpConnection, 60000);
+    const boot = async () => {
+      await loadDashboardStats();
+      if (!cancelled) {
+        setTimeout(() => {
+          if (!cancelled) checkErpConnection();
+        }, 0);
+      }
+    };
+
+    boot();
+
+    const startPolling = () => {
+      if (pollTimer) clearInterval(pollTimer);
+      const interval =
+        document.visibilityState === "hidden" ? HIDDEN_POLL_MS : LIVE_POLL_MS;
+      pollTimer = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          loadDashboardStats(true);
+        }
+      }, interval);
+    };
+
+    startPolling();
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadDashboardStats(true);
+      }
+      startPolling();
+    };
+
+    const onFocus = () => loadDashboardStats(true);
+
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", onFocus);
+
+    const erpInterval = setInterval(checkErpConnection, 120000);
 
     return () => {
-      clearInterval(dashboardInterval);
+      cancelled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      if (liveRefreshTimerRef.current) clearTimeout(liveRefreshTimerRef.current);
       clearInterval(erpInterval);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [signalRConnected]);
+  }, [loadDashboardStats]);
 
-  // ==========================================================================
-  // SIGNALR EVENT DİNLEYİCİLERİ — Real-time dashboard güncellemeleri
-  // Merkezi context global event yayınlar, Dashboard dinleyerek anında günceller.
-  // NEDEN: Polling beklemeden yeni sipariş, durum değişikliği vb. anında yansır.
-  // ==========================================================================
   useEffect(() => {
-    const handleDashboardRefresh = () => {
-      loadDashboardStats(true);
-    };
+    const handleDashboardRefresh = () => scheduleLiveRefresh();
 
-    // Backend doğrudan DashboardUpdate event'i gönderebilir
     window.addEventListener("adminDashboardUpdate", handleDashboardRefresh);
-    // Yeni sipariş geldiğinde dashboard'u güncelle
     window.addEventListener("adminNewOrder", handleDashboardRefresh);
-    // Sipariş durumu değiştiğinde güncelle
     window.addEventListener("adminOrderStatusChanged", handleDashboardRefresh);
-    // Ödeme başarılı olduğunda güncelle
     window.addEventListener("adminPaymentSuccess", handleDashboardRefresh);
-    // Sipariş iptal edildiğinde güncelle
     window.addEventListener("adminOrderCancelled", handleDashboardRefresh);
+    window.addEventListener("adminPaymentFailed", handleDashboardRefresh);
 
     return () => {
       window.removeEventListener("adminDashboardUpdate", handleDashboardRefresh);
       window.removeEventListener("adminNewOrder", handleDashboardRefresh);
-      window.removeEventListener("adminOrderStatusChanged", handleDashboardRefresh);
+      window.removeEventListener(
+        "adminOrderStatusChanged",
+        handleDashboardRefresh,
+      );
       window.removeEventListener("adminPaymentSuccess", handleDashboardRefresh);
       window.removeEventListener("adminOrderCancelled", handleDashboardRefresh);
+      window.removeEventListener("adminPaymentFailed", handleDashboardRefresh);
     };
-  }, []);
+  }, [scheduleLiveRefresh]);
 
   if (loading && !initialLoadDone) {
     return (
@@ -357,7 +408,27 @@ export default function Dashboard() {
       <div className="dashboard-hero">
         <div>
           <h1>Yönetim Dashboard</h1>
-          <p>Gerçek zamanlı iş metrikleri, sipariş akışı ve operasyon durumu</p>
+          <p>Güncel iş metrikleri — sipariş ve operasyon canlı izlenir</p>
+          <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+            <span
+              className={`badge ${signalRConnected ? "bg-success" : "bg-secondary"}`}
+              title={
+                signalRConnected
+                  ? "SignalR bağlı — anlık güncelleme aktif"
+                  : "SignalR kapalı — periyodik yenileme kullanılıyor"
+              }
+            >
+              <i
+                className={`fas ${signalRConnected ? "fa-bolt" : "fa-clock"} me-1`}
+              ></i>
+              {signalRConnected ? "Canlı" : "Periyodik"}
+            </span>
+            {lastUpdated && (
+              <small className="text-muted">
+                Son güncelleme: {lastUpdated.toLocaleTimeString("tr-TR")}
+              </small>
+            )}
+          </div>
         </div>
         <div className="dashboard-hero-actions">
           <button
@@ -370,11 +441,6 @@ export default function Dashboard() {
             ></i>
             {loading ? "Yükleniyor..." : "Yenile"}
           </button>
-          {lastUpdated && (
-            <span className="dashboard-last-update">
-              Son güncelleme: {lastUpdated.toLocaleTimeString("tr-TR")}
-            </span>
-          )}
         </div>
       </div>
 

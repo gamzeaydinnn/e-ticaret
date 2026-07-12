@@ -13,7 +13,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { isStrictVariableWeightProduct } from "../../utils/weightBasedProduct";
 import storeAttendantService from "../../services/storeAttendantService";
 import { AdminService } from "../../services/adminService";
-import { getCouriers, assignCourier } from "../../services/dispatcherService";
+import { getCouriers } from "../../services/dispatcherService";
 import { signalRService, SignalREvents } from "../../services/signalRService";
 import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 
@@ -47,6 +47,7 @@ export default function StoreAttendantDashboard({
     confirmedCount: 0,
     preparingCount: 0,
     readyCount: 0,
+    readyOrAssignedCount: 0,
     todayCompletedCount: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -58,8 +59,8 @@ export default function StoreAttendantDashboard({
   const [totalCount, setTotalCount] = useState(0);
 
   // Tab ve filtre
-  // DÜZELTME: Default tab "all" olarak değiştirildi - tüm siparişleri göster
-  const [activeTab, setActiveTab] = useState("all"); // all, confirmed, preparing, ready
+  // Ağırlık Raporları (weightOnly): varsayılan Preparing — tartı yalnız bu aşamada
+  const [activeTab, setActiveTab] = useState(weightOnly ? "preparing" : "all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Tartı modal
@@ -176,14 +177,19 @@ export default function StoreAttendantDashboard({
         }
 
         if (summaryRes.success) {
-          setSummary(
-            summaryRes.data || {
-              confirmedCount: 0,
-              preparingCount: 0,
-              readyCount: 0,
-              todayCompletedCount: 0,
-            },
-          );
+          const raw = summaryRes.data || {};
+          setSummary({
+            confirmedCount: raw.confirmedCount ?? raw.ConfirmedCount ?? raw.pendingCount ?? 0,
+            preparingCount: raw.preparingCount ?? raw.PreparingCount ?? 0,
+            readyCount: raw.readyCount ?? raw.ReadyCount ?? 0,
+            readyOrAssignedCount:
+              raw.readyOrAssignedCount ?? raw.ReadyOrAssignedCount ?? raw.readyCount ?? 0,
+            todayCompletedCount:
+              raw.todayCompletedCount ??
+              raw.TodayCompletedCount ??
+              raw.completedTodayCount ??
+              0,
+          });
         }
 
         setLastUpdated(new Date());
@@ -196,7 +202,7 @@ export default function StoreAttendantDashboard({
         setRefreshing(false);
       }
     },
-    [activeTab, page, pageSize],
+    [activeTab, page, pageSize, weightOnly],
   );
 
   // =========================================================================
@@ -204,6 +210,7 @@ export default function StoreAttendantDashboard({
   // NEDEN: Backend'e hangi durumların çekileceğini iletir.
   // "all" veya null → Tüm izin verilen siparişler (Pending, Confirmed, New, Paid, Preparing, Ready)
   // "pending" → Pending + Confirmed + New + Paid (bekleyen siparişler)
+  // "completed" → Ready + Assigned (ağırlık paneli Tamamlandı)
   // =========================================================================
   const getStatusFromTab = (tab) => {
     switch (tab) {
@@ -217,6 +224,9 @@ export default function StoreAttendantDashboard({
         return "Preparing";
       case "ready":
         return "Ready";
+      case "completed":
+        // Tartı bitti + kurye atandı — admin/müşteri ile aynı Order.Status
+        return "completed";
       default:
         return null; // Tüm siparişler
     }
@@ -396,10 +406,18 @@ export default function StoreAttendantDashboard({
     updateOrderStatus(order.id, "Preparing");
   };
 
-  // Hazır İşaretle
+  // Hazır İşaretle — kg ürünlerde tartı modalı yalnız Preparing'de açılır
   const handleMarkReady = async (order) => {
     if (!order?.hasWeightBasedItems && !order?.HasWeightBasedItems) {
       updateOrderStatus(order.id, "Ready");
+      return;
+    }
+
+    const status = normalizeStatus(order.status);
+    if (status !== "preparing") {
+      alert(
+        "Tartı girişi yalnızca Hazırlanıyor aşamasında yapılabilir. Önce siparişi onaylayıp hazırlamaya başlayın.",
+      );
       return;
     }
 
@@ -432,20 +450,52 @@ export default function StoreAttendantDashboard({
               "",
             unit: item.unit || item.Unit || "",
             weightUnit: item.weightUnit || item.WeightUnit || weightUnit,
+            isWeightBased: item.isWeightBased ?? item.IsWeightBased,
+            pricePerUnit: item.pricePerUnit ?? item.PricePerUnit ?? item.unitPrice,
           });
         })
-        .map((item) => ({
-          id: item.id || item.Id,
-          productName: item.productName || item.ProductName || "Ürün",
-          estimatedWeight:
+        .map((item) => {
+          const quantity = Number(item.quantity ?? item.Quantity ?? 1) || 1;
+          const unitPrice = Number(
+            item.unitPrice ?? item.UnitPrice ?? item.pricePerUnit ?? item.PricePerUnit ?? 0,
+          );
+          const lineTotal = Number(item.lineTotal ?? item.LineTotal ?? 0);
+          // Backend gram tutar; eski kayıtlarda 0 olabilir → quantity×1000 (1 adet ≈ 1 kg) fallback
+          let estimatedWeight = Number(
             item.estimatedWeight ?? item.EstimatedWeight ?? 0,
-          actualWeight:
-            item.actualWeight ?? item.ActualWeight ?? item.estimatedWeight ?? item.EstimatedWeight ?? 0,
-          estimatedPrice:
+          );
+          if (!estimatedWeight || estimatedWeight <= 0) {
+            estimatedWeight = quantity * 1000;
+          }
+          let estimatedPrice = Number(
             item.estimatedPrice ?? item.EstimatedPrice ?? 0,
-          actualPrice: item.actualPrice ?? item.ActualPrice ?? null,
-          priceDifference: item.priceDifference ?? item.PriceDifference ?? null,
-        }));
+          );
+          if (!estimatedPrice || estimatedPrice <= 0) {
+            estimatedPrice =
+              lineTotal > 0
+                ? lineTotal
+                : unitPrice > 0
+                  ? Math.round(unitPrice * (estimatedWeight / 1000) * 100) / 100
+                  : 0;
+          }
+          const actualWeightRaw =
+            item.actualWeight ?? item.ActualWeight ?? null;
+          const actualWeight =
+            actualWeightRaw != null && Number(actualWeightRaw) > 0
+              ? Number(actualWeightRaw)
+              : estimatedWeight;
+
+          return {
+            id: item.id || item.Id,
+            productName: item.productName || item.ProductName || "Ürün",
+            estimatedWeight,
+            actualWeight,
+            estimatedPrice,
+            unitPrice,
+            actualPrice: item.actualPrice ?? item.ActualPrice ?? null,
+            priceDifference: item.priceDifference ?? item.PriceDifference ?? null,
+          };
+        });
 
       if (editableWeightItems.length === 0) {
         updateOrderStatus(order.id, "Ready");
@@ -463,40 +513,21 @@ export default function StoreAttendantDashboard({
     }
   };
 
-  // =========================================================================
-  // TARTI GİRİŞİ
-  // =========================================================================
+  // Tartı girişi — yalnız Preparing; otomatik Onayla/Hazırlamaya Başla YOK
   const handleWeightSubmit = async () => {
     if (!selectedOrder || weightItems.length === 0) return;
+
+    const currentStatus = normalizeStatus(selectedOrder.status);
+    if (currentStatus !== "preparing") {
+      alert(
+        "Tartı girişi yalnızca Hazırlanıyor aşamasında yapılabilir. Önce siparişi onaylayıp hazırlamaya başlayın.",
+      );
+      return;
+    }
 
     setWeightLoading(true);
     try {
       let latestWeightUpdate = null;
-
-      const currentStatus = normalizeStatus(selectedOrder.status);
-      if (["new", "pending", "paid"].includes(currentStatus)) {
-        const confirmResult = await storeAttendantService.confirmOrder(
-          selectedOrder.id,
-        );
-
-        if (!confirmResult.success) {
-          alert(confirmResult.error || "Sipariş onaylanamadı");
-          return;
-        }
-      }
-
-      if (["new", "pending", "paid", "confirmed"].includes(currentStatus)) {
-        const preparingResult = await storeAttendantService.startPreparing(
-          selectedOrder.id,
-        );
-
-        if (!preparingResult.success) {
-          alert(
-            preparingResult.error || "Sipariş hazırlanıyor durumuna alınamadı",
-          );
-          return;
-        }
-      }
 
       for (const item of weightItems) {
         const actualWeight = Number(item.actualWeight);
@@ -519,22 +550,44 @@ export default function StoreAttendantDashboard({
         return;
       }
 
-      fetchData(true);
       setShowWeightModal(false);
       setSelectedOrder(null);
       setWeightItems([]);
 
-      if (latestWeightUpdate?.exceedsPreAuthLimit) {
+      // Tartı bitti → Tamamlandı sekmesi (activeTab değişince useEffect fetch eder)
+      if (weightOnly) {
+        setActiveTab("completed");
+      } else {
+        fetchData(true);
+      }
+
+      if (latestWeightUpdate?.requiresManualCollection) {
+        const flow = latestWeightUpdate.paymentFlowType || "";
+        const overage = Number(latestWeightUpdate.uncollectableOverageAmount || 0).toFixed(2);
+        const finalAmt = Number(latestWeightUpdate.finalAmount || 0).toFixed(2);
+
+        if (flow === "SaleImmediate") {
+          alert(
+            `Sipariş yeni tutarı ${finalAmt} TL oldu. Ödeme Sale (anında çekim) modunda olduğu için ${overage} TL fark karttan otomatik çekilemez — teslimatta manuel tahsilat gerekir.`,
+          );
+        } else if (latestWeightUpdate.exceedsPreAuthLimit) {
+          alert(
+            `Sipariş yeni tutarı ${finalAmt} TL oldu. Provizyon limiti (Auth×1.20) en fazla ${Number(latestWeightUpdate.maxCaptureAmountFromPreAuth || 0).toFixed(2)} TL çekime izin veriyor; kalan ${overage} TL manuel tahsilat gerektirir.`,
+          );
+        }
+      } else if (latestWeightUpdate?.requiresManualRefund) {
         alert(
-          `Sipariş yeni tutarı ${Number(latestWeightUpdate.finalAmount || 0).toFixed(2)} TL oldu. Mevcut provizyondan banka limitiyle en fazla ${Number(latestWeightUpdate.maxCaptureAmountFromPreAuth || 0).toFixed(2)} TL çekilebildiği için teslimatta ek tahsilat gerekecek.`,
+          `Tartı eksik geldi. ${Math.abs(Number(latestWeightUpdate.priceDifference || 0)).toFixed(2)} TL iade/manuel düzeltme gerekebilir (Sale modu).`,
         );
       }
     } catch (err) {
       console.error("[StoreAttendant] Tartı girişi hatası:", err);
-      alert(
+      const apiMessage =
         err?.response?.data?.message ||
-          "Ağırlık düzenlenirken bir hata oluştu",
-      );
+        err?.response?.data?.error ||
+        err?.response?.data?.title ||
+        err?.message;
+      alert(apiMessage || "Ağırlık düzenlenirken bir hata oluştu");
     } finally {
       setWeightLoading(false);
     }
@@ -573,20 +626,27 @@ export default function StoreAttendantDashboard({
     loadCouriers();
   };
 
-  // Kurye ata
+  // Kurye ata — StoreAttendant API (SignalR ile admin/kurye/müşteri senkron)
   const handleAssignCourier = async (courierId) => {
     if (!courierOrderId || !courierId) return;
 
     setAssigningCourier(true);
     try {
-      const result = await assignCourier(courierOrderId, courierId);
+      const result = await storeAttendantService.assignCourier(
+        courierOrderId,
+        courierId,
+      );
       if (result.success) {
         playSound("orderReady");
         setShowCourierModal(false);
         setCourierOrderId(null);
-        fetchData(true); // Listeyi yenile
+        if (weightOnly) {
+          setActiveTab("completed");
+        }
+        // activeTab aynı kalsa bile listeyi yenile (kurye adı görünsün)
+        fetchData(true);
       } else {
-        alert(result.message || "Kurye atanamadı");
+        alert(result.error || result.message || "Kurye atanamadı");
       }
     } catch (err) {
       console.error("[StoreAttendant] Kurye atama hatası:", err);
@@ -679,9 +739,14 @@ export default function StoreAttendantDashboard({
 
   const getStatusText = (status) => {
     const normalized = normalizeStatus(status);
+    if (weightOnly && normalized === "ready") {
+      return "Tamamlandı";
+    }
     const statusMap = {
       new: "Yeni",
       pending: "Beklemede",
+      paid: "Ödendi",
+      preauthorized: "Provizyon",
       confirmed: "Onaylandı",
       preparing: "Hazırlanıyor",
       ready: "Hazır",
@@ -698,6 +763,8 @@ export default function StoreAttendantDashboard({
     const colorMap = {
       new: "secondary",
       pending: "secondary",
+      paid: "success",
+      preauthorized: "info",
       confirmed: "primary",
       preparing: "warning",
       ready: "success",
@@ -986,6 +1053,22 @@ export default function StoreAttendantDashboard({
 
           {/* İstatistik Kartları */}
           <div className="row g-2 mb-3">
+            {weightOnly ? (
+              <div className="col-12">
+                <div
+                  className="alert alert-info py-2 mb-0 small"
+                  role="status"
+                >
+                  <i className="fas fa-weight me-2"></i>
+                  <strong>Bekleyen</strong> sekmesinde gram girin; kayıt sonrası
+                  sipariş <strong>Tamamlandı</strong>ya geçer. Oradan kurye
+                  atayın — durum Admin, kurye ve müşteri panellerinde aynı anda
+                  güncellenir.
+                </div>
+              </div>
+            ) : null}
+
+            {!weightOnly && (
             <div className="col-3">
               <div
                 className={`card border-0 shadow-sm stat-card-mobile h-100 ${activeTab === "confirmed" ? "border-primary border-2" : ""}`}
@@ -1006,8 +1089,9 @@ export default function StoreAttendantDashboard({
                 </div>
               </div>
             </div>
+            )}
 
-            <div className="col-3">
+            <div className={weightOnly ? "col-6" : "col-3"}>
               <div
                 className={`card border-0 shadow-sm stat-card-mobile h-100 ${activeTab === "preparing" ? "border-warning border-2" : ""}`}
                 onClick={() => setActiveTab("preparing")}
@@ -1022,12 +1106,35 @@ export default function StoreAttendantDashboard({
                     {summary.preparingCount || 0}
                   </h3>
                   <small className="text-muted" style={{ fontSize: "0.65rem" }}>
-                    Hazırlanıyor
+                    {weightOnly ? "Bekleyen" : "Hazırlanıyor"}
                   </small>
                 </div>
               </div>
             </div>
 
+            {weightOnly ? (
+            <div className="col-6">
+              <div
+                className={`card border-0 shadow-sm stat-card-mobile h-100 ${activeTab === "completed" ? "border-success border-2" : ""}`}
+                onClick={() => setActiveTab("completed")}
+                style={{ cursor: "pointer", borderRadius: "12px" }}
+              >
+                <div className="card-body text-center p-2">
+                  <i
+                    className="fas fa-check-circle text-success mb-1"
+                    style={{ fontSize: "1.2rem" }}
+                  ></i>
+                  <h3 className="fw-bold mb-0 text-success">
+                    {summary.readyOrAssignedCount || summary.readyCount || 0}
+                  </h3>
+                  <small className="text-muted" style={{ fontSize: "0.65rem" }}>
+                    Tamamlandı
+                  </small>
+                </div>
+              </div>
+            </div>
+            ) : (
+            <>
             <div className="col-3">
               <div
                 className={`card border-0 shadow-sm stat-card-mobile h-100 ${activeTab === "ready" ? "border-success border-2" : ""}`}
@@ -1068,6 +1175,8 @@ export default function StoreAttendantDashboard({
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* Arama - Desktop */}
@@ -1106,8 +1215,13 @@ export default function StoreAttendantDashboard({
               <i className="fas fa-inbox fa-3x text-muted mb-3"></i>
               <p className="text-muted">
                 {activeTab === "confirmed" && "Onaylanmış sipariş yok"}
-                {activeTab === "preparing" && "Hazırlanmakta olan sipariş yok"}
+                {activeTab === "preparing" &&
+                  (weightOnly
+                    ? "Tartı bekleyen sipariş yok"
+                    : "Hazırlanmakta olan sipariş yok")}
                 {activeTab === "ready" && "Hazır sipariş yok"}
+                {activeTab === "completed" &&
+                  "Tamamlanmış (tartılmış) sipariş yok"}
               </p>
             </div>
           ) : (
@@ -1172,18 +1286,39 @@ export default function StoreAttendantDashboard({
                         </span>
                       </div>
 
+                      {weightOnly &&
+                        (order.allItemsWeighed ||
+                          order.AllItemsWeighed ||
+                          ["ready", "assigned"].includes(
+                            normalizeStatus(order.status),
+                          )) && (
+                          <div className="mb-2">
+                            <span className="badge bg-success-subtle text-success border border-success-subtle">
+                              <i className="fas fa-check me-1"></i>
+                              Tartı tamamlandı
+                            </span>
+                            {(order.courierName || order.CourierName) && (
+                              <span className="badge bg-info-subtle text-info border border-info-subtle ms-1">
+                                <i className="fas fa-motorcycle me-1"></i>
+                                {order.courierName || order.CourierName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                       {/* Aksiyon Butonları */}
                       <div className="d-grid gap-2">
-                        {/* New/Pending → Confirmed (Onayla) */}
-                        {(() => {
-                          const status = normalizeStatus(order.status);
-                          return (
-                            status === "new" ||
-                            status === "pending" ||
-                            status === "paid"
-                          );
-                        })() && (
-                          <>
+                        {/* Onayla: Ağırlık Raporları panelinde YOK (admin sipariş ekranından) */}
+                        {!weightOnly &&
+                          (() => {
+                            const status = normalizeStatus(order.status);
+                            return (
+                              status === "new" ||
+                              status === "pending" ||
+                              status === "paid" ||
+                              status === "preauthorized"
+                            );
+                          })() && (
                             <button
                               className="btn btn-info mobile-action-btn fw-semibold"
                               onClick={() =>
@@ -1193,61 +1328,39 @@ export default function StoreAttendantDashboard({
                               <i className="fas fa-check me-2"></i>
                               Onayla
                             </button>
-                            {(order.hasWeightBasedItems ||
-                              order.HasWeightBasedItems) && (
-                              <button
-                                className="btn btn-outline-success mobile-action-btn fw-semibold"
-                                onClick={() => handleMarkReady(order)}
-                              >
-                                <i className="fas fa-weight me-2"></i>
-                                Tartı Düzenle
-                              </button>
-                            )}
-                          </>
+                          )}
+
+                        {/* Confirmed → Preparing (tartı yok; hazırlama panelinde — weightOnly'de gizli) */}
+                        {!weightOnly &&
+                          normalizeStatus(order.status) === "confirmed" && (
+                          <button
+                            className="btn btn-warning mobile-action-btn fw-semibold"
+                            onClick={() => handleStartPreparing(order)}
+                          >
+                            <i className="fas fa-play me-2"></i>
+                            Hazırlamaya Başla
+                          </button>
                         )}
 
-                        {/* Confirmed → Preparing / Weight Edit */}
-                        {normalizeStatus(order.status) === "confirmed" && (
-                          <>
-                            <button
-                              className="btn btn-warning mobile-action-btn fw-semibold"
-                              onClick={() => handleStartPreparing(order)}
-                            >
-                              <i className="fas fa-play me-2"></i>
-                              Hazırlamaya Başla
-                            </button>
-                            {(order.hasWeightBasedItems ||
-                              order.HasWeightBasedItems) && (
-                              <button
-                                className="btn btn-outline-success mobile-action-btn fw-semibold"
-                                onClick={() => handleMarkReady(order)}
-                              >
-                                <i className="fas fa-weight me-2"></i>
-                                Tartı Düzenle
-                              </button>
-                            )}
-                          </>
-                        )}
-
-                        {/* Preparing → Ready */}
+                        {/* Preparing → tartı + Hazır (tek tartı yolu) */}
                         {normalizeStatus(order.status) === "preparing" && (
                           <button
                             className="btn btn-success mobile-action-btn fw-semibold"
                             onClick={() => handleMarkReady(order)}
                           >
                             <i className="fas fa-check me-2"></i>
-                            Hazır
+                            {weightOnly ? "Tartı Gir" : "Hazır"}
                             {(order.hasWeightBasedItems ||
                               order.HasWeightBasedItems) && (
                               <span className="badge bg-light text-dark ms-2">
                                 <i className="fas fa-weight me-1"></i>
-                                Düzenle
+                                Tartı
                               </span>
                             )}
                           </button>
                         )}
 
-                        {/* Ready - Kurye Ata Butonu */}
+                        {/* Ready - Kurye Ata (ağırlık paneli Tamamlandı dahil) */}
                         {normalizeStatus(order.status) === "ready" && (
                           <button
                             className="btn btn-primary mobile-action-btn fw-semibold"
@@ -1258,10 +1371,24 @@ export default function StoreAttendantDashboard({
                           </button>
                         )}
 
-                        {/* Assigned/PickedUp → Yolda */}
-                        {["assigned", "picked_up"].includes(
-                          normalizeStatus(order.status),
-                        ) && (
+                        {/* Assigned: weightOnly'de sadece bilgi; teslim akışı kurye/admin'de */}
+                        {normalizeStatus(order.status) === "assigned" &&
+                          weightOnly && (
+                            <div className="alert alert-success py-2 mb-0 small">
+                              <i className="fas fa-user-check me-1"></i>
+                              Kuryeye atandı
+                              {(order.courierName || order.CourierName) &&
+                                `: ${order.courierName || order.CourierName}`}
+                              . Admin ve müşteri panellerinde de aynı durum
+                              görünür.
+                            </div>
+                          )}
+
+                        {/* Assigned/PickedUp → Yolda (ağırlık panelinde yok) */}
+                        {!weightOnly &&
+                          ["assigned", "picked_up"].includes(
+                            normalizeStatus(order.status),
+                          ) && (
                           <button
                             className="btn btn-primary mobile-action-btn fw-semibold"
                             onClick={() =>
@@ -1274,7 +1401,8 @@ export default function StoreAttendantDashboard({
                         )}
 
                         {/* Yolda → Teslim */}
-                        {normalizeStatus(order.status) ===
+                        {!weightOnly &&
+                          normalizeStatus(order.status) ===
                           "out_for_delivery" && (
                           <button
                             className="btn btn-dark mobile-action-btn fw-semibold"
@@ -1288,7 +1416,8 @@ export default function StoreAttendantDashboard({
                         )}
 
                         {/* İptal */}
-                        {!["delivered", "cancelled"].includes(
+                        {!weightOnly &&
+                          !["delivered", "cancelled"].includes(
                           normalizeStatus(order.status),
                         ) && (
                           <button
@@ -1301,6 +1430,7 @@ export default function StoreAttendantDashboard({
                         )}
 
                         {/* Sil */}
+                        {!weightOnly && (
                         <button
                           className="btn btn-outline-dark mobile-action-btn fw-semibold"
                           onClick={() => deleteOrder(order.id)}
@@ -1308,6 +1438,7 @@ export default function StoreAttendantDashboard({
                           <i className="fas fa-trash me-2"></i>
                           Sil
                         </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1361,6 +1492,7 @@ export default function StoreAttendantDashboard({
         {/* ================================================================ */}
         {/* MOBİL BOTTOM NAVİGATİON */}
         {/* ================================================================ */}
+        {!weightOnly && (
         <nav className="mobile-bottom-nav d-md-none">
           <div className="d-flex">
             <button
@@ -1432,6 +1564,7 @@ export default function StoreAttendantDashboard({
             </button>
           </div>
         </nav>
+        )}
 
         {/* ================================================================ */}
         {/* TARTI MODAL */}
@@ -1469,9 +1602,10 @@ export default function StoreAttendantDashboard({
                 </div>
                 <div className="modal-body">
                   <p className="text-muted mb-3">
-                    <strong>#{selectedOrder.orderNumber}</strong> siparişi için
-                    tartılı ürünlerin yeni gramajını girin. Sistem siparişi buna
-                    göre tekrar hesaplayacak.
+                    <strong>#{selectedOrder.orderNumber}</strong> siparişindeki{" "}
+                    <strong>tartılı (kg)</strong> ürünler aşağıda. Müşterinin
+                    sipariş ettiği miktarı görün; gerçek tartıyı <strong>gram</strong>{" "}
+                    olarak girin.
                   </p>
                   <div className="d-flex flex-column gap-3">
                     {weightItems.map((item, index) => (
@@ -1482,24 +1616,49 @@ export default function StoreAttendantDashboard({
                       >
                         <div className="d-flex justify-content-between align-items-start gap-3 mb-2">
                           <div>
-                            <div className="fw-semibold">{item.productName}</div>
-                            <small className="text-muted">
-                              Müşteri: {(Number(item.estimatedWeight) / 1000).toFixed(2)} kg
-                              {" · "}
-                              Tahmini Tutar: {Number(item.estimatedPrice || 0).toFixed(2)} ₺
-                            </small>
+                            <div className="fw-semibold d-flex align-items-center gap-2">
+                              <i className="fas fa-weight text-success"></i>
+                              {item.productName}
+                            </div>
+                            <div className="small mt-1">
+                              <span className="badge bg-success-subtle text-success border border-success-subtle me-1">
+                                Tartılı ürün
+                              </span>
+                              <span className="text-muted">Kalem #{index + 1}</span>
+                            </div>
+                            <div className="mt-2 small">
+                              <div>
+                                <strong>Sipariş:</strong>{" "}
+                                {(Number(item.estimatedWeight) / 1000).toFixed(2)} kg
+                                {" "}
+                                <span className="text-muted">
+                                  ({Math.round(Number(item.estimatedWeight))} gr)
+                                </span>
+                              </div>
+                              {Number(item.unitPrice) > 0 && (
+                                <div>
+                                  <strong>Birim fiyat:</strong>{" "}
+                                  {Number(item.unitPrice).toFixed(2)} ₺/kg
+                                </div>
+                              )}
+                              <div>
+                                <strong>Tahmini tutar:</strong>{" "}
+                                {Number(item.estimatedPrice || 0).toFixed(2)} ₺
+                              </div>
+                            </div>
                           </div>
-                          <span className="badge bg-light text-dark border">
-                            Kalem #{index + 1}
-                          </span>
                         </div>
 
+                        <label className="form-label small mb-1">
+                          Gerçek tartı (gram)
+                        </label>
                         <div className="input-group">
                           <input
                             type="number"
                             step="1"
                             min="1"
                             className="form-control"
+                            placeholder={String(Math.round(Number(item.estimatedWeight) || 0))}
                             value={item.actualWeight}
                             onChange={(e) =>
                               setWeightItems((prev) =>
@@ -1519,6 +1678,12 @@ export default function StoreAttendantDashboard({
 
                         <small className="text-muted d-block mt-2">
                           Yeni giriş: {(Number(item.actualWeight || 0) / 1000).toFixed(2)} kg
+                          {Number(item.unitPrice) > 0 && Number(item.actualWeight) > 0
+                            ? ` · Yeni tutar ≈ ${(
+                                (Number(item.actualWeight) / 1000) *
+                                Number(item.unitPrice)
+                              ).toFixed(2)} ₺`
+                            : ""}
                         </small>
                       </div>
                     ))}

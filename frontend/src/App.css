@@ -3702,6 +3702,17 @@ html {
   transition: transform 0.32s ease;
 }
 
+/* Banner videoları: sessiz, orijinal HD kalite, kontroller yok */
+.promo-grid-image video,
+video.promo-grid-image,
+.carousel-slide-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+
 .promo-grid-item:hover .promo-grid-image {
   transform: scale(1.03);
 }

@@ -28,7 +28,11 @@ import React, {
   useMemo,
 } from "react";
 import homeBlockService, { BLOCK_TYPES } from "../../services/homeBlockService";
-import bannerService, { validateFile } from "../../services/bannerService";
+import bannerService, {
+  validateFile,
+  UPLOAD_CONFIG,
+} from "../../services/bannerService";
+import BannerMedia from "../../components/BannerMedia";
 import api from "../../services/api";
 
 // ============================================
@@ -826,7 +830,7 @@ export default function AdminHomeBlocks() {
                         </td>
                         <td>
                           {block.posterImageUrl ? (
-                            <img
+                            <BannerMedia
                               src={block.posterImageUrl}
                               alt={block.name}
                               style={{
@@ -1417,7 +1421,7 @@ export default function AdminHomeBlocks() {
                           type="file"
                           ref={fileInputRef}
                           className="d-none"
-                          accept="image/*"
+                          accept={UPLOAD_CONFIG.allowedMimeTypes.join(",")}
                           onChange={handleInputFileChange}
                         />
 
@@ -1432,12 +1436,12 @@ export default function AdminHomeBlocks() {
                               </span>
                             </div>
                             <p className="text-muted mb-0">
-                              Görsel yükleniyor...
+                              Medya yükleniyor...
                             </p>
                           </div>
                         ) : imagePreview || form.posterImageUrl ? (
                           <div className="position-relative d-inline-block">
-                            <img
+                            <BannerMedia
                               src={imagePreview || form.posterImageUrl}
                               alt="Poster önizleme"
                               style={{
@@ -1467,12 +1471,13 @@ export default function AdminHomeBlocks() {
                               <strong>sürükleyip bırakın</strong>
                             </p>
                             <small className="text-muted d-block">
-                              PNG, JPG, JPEG, WebP • Maks. 5MB
+                              PNG, JPG, WebP, MP4, WebM • Maks.{" "}
+                              {UPLOAD_CONFIG.maxSizeMB}MB
                             </small>
                             <div className="alert alert-info mt-3 mb-0 py-2 px-3 small">
                               <i className="fas fa-info-circle me-1"></i>
-                              <strong>Önerilen Boyut:</strong> 220x320 piksel
-                              (dikey poster)
+                              <strong>Önerilen:</strong> 220x320 px görsel veya
+                              3–4 sn sessiz HD video (mp4/webm)
                             </div>
                           </div>
                         )}

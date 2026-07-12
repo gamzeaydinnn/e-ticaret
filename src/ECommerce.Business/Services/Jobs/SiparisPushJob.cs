@@ -286,10 +286,15 @@ namespace ECommerce.Business.Services.Jobs
             // TrackingNumber null veya "MIKRO-" ile başlamayan siparişler
             var confirmedStatuses = new[]
             {
+                Entities.Enums.OrderStatus.Paid,
+                Entities.Enums.OrderStatus.PreAuthorized,
                 Entities.Enums.OrderStatus.Confirmed,
                 Entities.Enums.OrderStatus.Preparing,
+                Entities.Enums.OrderStatus.Processing,
                 Entities.Enums.OrderStatus.Ready,
-                Entities.Enums.OrderStatus.Assigned
+                Entities.Enums.OrderStatus.ReadyForPickup,
+                Entities.Enums.OrderStatus.Assigned,
+                Entities.Enums.OrderStatus.WeightPending
             };
 
             var orders = await _orderRepository.GetAllAsync();

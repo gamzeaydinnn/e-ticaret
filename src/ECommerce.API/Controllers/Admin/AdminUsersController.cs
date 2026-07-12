@@ -557,7 +557,13 @@ namespace ECommerce.API.Controllers.Admin
                     "User",
                     id.ToString(),
                     new { UserId = id, Email = user.Email },
-                    new { PasswordChanged = true, ChangedAt = DateTime.UtcNow, SessionsInvalidated = true });
+                    new
+                    {
+                        message = $"Kullanıcı şifresi güncellendi: {user.Email} (#{id}). Mevcut oturumlar sonlandırıldı.",
+                        PasswordChanged = true,
+                        ChangedAt = DateTime.UtcNow,
+                        SessionsInvalidated = true,
+                    });
 
                 return Ok(new { 
                     success = true, 

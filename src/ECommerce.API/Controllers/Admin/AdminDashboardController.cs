@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using ECommerce.Business.Services.Interfaces;
-using ECommerce.Core.Interfaces;
 using ECommerce.API.Authorization;
 using ECommerce.Core.DTOs.Admin;
 using ECommerce.Infrastructure.Services.MicroServices;
@@ -24,147 +23,163 @@ namespace ECommerce.API.Controllers.Admin
     [Route("api/admin/dashboard")]
     public class AdminDashboardController : ControllerBase
     {
-        private readonly IUserService _userService;
-        private readonly IProductService _productService;
         private readonly IOrderService _orderService;
-        private readonly ICategoryService _categoryService;
-        private readonly ICartService _cartService;
-        private readonly IFavoriteService _favoriteService;
-        private readonly ICourierService _courierService;
-        private readonly IPaymentService _paymentService;
         private readonly ECommerceDbContext _dbContext;
         private readonly IMikroDbService _mikroDbService;
         private readonly InventorySettings _inventorySettings;
 
         public AdminDashboardController(
-            IUserService userService,
-            IProductService productService,
             IOrderService orderService,
-            ICategoryService categoryService,
-            ICartService cartService,
-            IFavoriteService favoriteService,
-            ICourierService courierService,
-            IPaymentService paymentService,
             ECommerceDbContext dbContext,
             IMikroDbService mikroDbService,
             IOptions<InventorySettings> inventoryOptions
         )
         {
-            _userService = userService;
-            _productService = productService;
             _orderService = orderService;
-            _categoryService = categoryService;
-            _cartService = cartService;
-            _favoriteService = favoriteService;
-            _courierService = courierService;
-            _paymentService = paymentService;
             _dbContext = dbContext;
             _mikroDbService = mikroDbService;
             _inventorySettings = inventoryOptions.Value;
-        }
-
-        [HttpGet("stats")]
-        [HasPermission(Permissions.Dashboard.View)]
-        public async Task<IActionResult> GetDashboardStats()
-        {
-            var overview = await BuildDashboardOverviewAsync();
-            return Ok(overview);
         }
 
         [HttpGet("overview")]
         [HasPermission(Permissions.Dashboard.View)]
         public async Task<IActionResult> GetDashboardOverview()
         {
-            var overview = await BuildDashboardOverviewAsync();
-            return Ok(overview);
+            try
+            {
+                var overview = await BuildDashboardOverviewAsync();
+                return Ok(overview);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Dashboard verileri alınamadı: " + ex.Message
+                });
+            }
+        }
+
+        [HttpGet("stats")]
+        [HasPermission(Permissions.Dashboard.View)]
+        public async Task<IActionResult> GetDashboardStats()
+        {
+            try
+            {
+                var overview = await BuildDashboardOverviewAsync();
+                return Ok(overview);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Dashboard verileri alınamadı: " + ex.Message
+                });
+            }
         }
 
         private async Task<AdminDashboardOverviewDto> BuildDashboardOverviewAsync()
         {
             var turkeyToday = OrderCancelPolicy.GetTurkeyNow().Date;
-            var last14DaysStart = turkeyToday.AddDays(-13);
+            var last14DaysStartUtc = OrderReportHelper.TurkeyToUtc(turkeyToday.AddDays(-13));
+            var todayStartUtc = OrderReportHelper.TurkeyToUtc(turkeyToday);
+            var tomorrowStartUtc = OrderReportHelper.TurkeyToUtc(turkeyToday.AddDays(1));
+            var topProductsSinceUtc = OrderReportHelper.TurkeyToUtc(turkeyToday.AddDays(-90));
+            var criticalThreshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
 
-            var totalUsers = await _userService.GetUserCountAsync();
-            // WEB AKTİF ÜRÜN SAYISI
-            // NEDEN GetUnifiedProductsAsync().Count kullanılmıyor: Cache/SQL birleşik listesi
-            //   tüm senkronize satırları döndürebilir; dashboard'da gösterilmesi gereken
-            //   metrik Mikro'daki "webe gönderilecek" (sto_webe_gonderilecek_fl=1) adedidir.
-            // Kaynak önceliği:
-            //   1) Mikro SQL COUNT (GetWebProductCountAsync) — en doğru kaynak
-            //   2) Yerel MikroProductCache.Aktif — VPN/SQL erişilemezse fallback
-            //   3) Yerel Products.IsActive — Mikro yapılandırılmamışsa
+            // Kullanıcı / kurye — doğrudan COUNT
+            var totalUsers = await _dbContext.Users.CountAsync();
+            var activeCouriers = await _dbContext.Couriers.CountAsync(c =>
+                c.IsOnline || c.Status == "active" || c.Status == "busy");
+
+            // Ürün sayısı: Mikro COUNT (hafif) → cache → yerel
             int totalProducts;
             if (_mikroDbService.IsConfigured)
             {
-                totalProducts = await _mikroDbService.GetWebProductCountAsync(
-                    HttpContext.RequestAborted);
-
-                // SQL erişimi yoksa (VPN kapalı vb.) yerel cache'teki web-aktif kayıtları say
+                totalProducts = await _mikroDbService.GetWebProductCountAsync(HttpContext.RequestAborted);
                 if (totalProducts <= 0)
                 {
-                    totalProducts = await _dbContext.MikroProductCaches
-                        .CountAsync(p => p.Aktif);
+                    totalProducts = await _dbContext.MikroProductCaches.CountAsync(p => p.Aktif);
                 }
             }
             else
             {
                 totalProducts = await _dbContext.Products.CountAsync(p => p.IsActive);
             }
-            var totalOrders = await _orderService.GetOrderCountAsync();
+
+            // Stok sayımları — ayrı COUNT (GroupBy(1) EF'de çevrilemiyor)
+            var outOfStockCount = await _dbContext.Products
+                .AsNoTracking()
+                .CountAsync(p => p.IsActive && p.StockQuantity <= 0);
+            var lowStockCount = await _dbContext.Products
+                .AsNoTracking()
+                .CountAsync(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= criticalThreshold);
+
+            // Sipariş durum dağılımı — pending/delivered/cancelled buradan türetilir
+            var orderStatusRaw = await _dbContext.Orders
+                .AsNoTracking()
+                .GroupBy(o => o.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            var totalOrders = orderStatusRaw.Sum(x => x.Count);
+            var pendingOrders = orderStatusRaw
+                .Where(x => x.Status is OrderStatus.New or OrderStatus.Pending or OrderStatus.Confirmed
+                    or OrderStatus.Preparing or OrderStatus.Ready or OrderStatus.Assigned
+                    or OrderStatus.PickedUp or OrderStatus.OutForDelivery or OrderStatus.InTransit)
+                .Sum(x => x.Count);
+            var deliveredOrders = orderStatusRaw
+                .Where(x => x.Status is OrderStatus.Delivered or OrderStatus.Completed)
+                .Sum(x => x.Count);
+            var cancelledOrders = orderStatusRaw
+                .Where(x => x.Status == OrderStatus.Cancelled)
+                .Sum(x => x.Count);
+            var refundedOrders = orderStatusRaw
+                .Where(x => x.Status is OrderStatus.Refunded or OrderStatus.PartialRefund)
+                .Sum(x => x.Count);
+
+            var orderStatusDistribution = orderStatusRaw
+                .Select(x => new AdminDashboardStatusCountDto
+                {
+                    Label = x.Status.ToString(),
+                    Count = x.Count
+                })
+                .OrderByDescending(x => x.Count)
+                .ToList();
+
+            var todayOrders = await _dbContext.Orders
+                .AsNoTracking()
+                .CountAsync(o => o.OrderDate >= todayStartUtc && o.OrderDate < tomorrowStartUtc);
+
             var totalRevenue = await _orderService.GetTotalRevenueAsync();
-            var todayOrders = await _orderService.GetTodayOrderCountAsync();
 
-            var activeCouriers = await _dbContext.Couriers.CountAsync(c =>
-                c.IsOnline || c.Status == "active" || c.Status == "busy");
-
-            // STOK SAYIMLARI
-            // Kaynak: yerel Products tablosu (aktif ürünler). Rapor sayfasındaki
-            // "stock/low" endpoint'i ile aynı kaynağı kullanarak tutarlılık sağlanır.
-            // NOT: Mikro ERP modunda TotalProducts cache'ten gelse de stok sayımı
-            //   senkronize edilen yerel kayıtlar üzerinden yapılır (mevcut rapor mantığıyla aynı).
-            // Kritik stok eşiği ayarlardan değil dashboard için sabit/yapılandırılabilir
-            //   olmadığından, rapor sayfasıyla uyum için aynı varsayılan mantığı kullanıyoruz.
-            var criticalThreshold = Math.Max(1, _inventorySettings.CriticalStockThreshold);
-            var outOfStockCount = await _dbContext.Products.CountAsync(p =>
-                p.IsActive && p.StockQuantity <= 0);
-            var lowStockCount = await _dbContext.Products.CountAsync(p =>
-                p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= criticalThreshold);
-
-            var pendingOrders = await _dbContext.Orders.CountAsync(o =>
-                o.Status == OrderStatus.New ||
-                o.Status == OrderStatus.Pending ||
-                o.Status == OrderStatus.Confirmed ||
-                o.Status == OrderStatus.Preparing ||
-                o.Status == OrderStatus.Ready ||
-                o.Status == OrderStatus.Assigned ||
-                o.Status == OrderStatus.PickedUp ||
-                o.Status == OrderStatus.OutForDelivery ||
-                o.Status == OrderStatus.InTransit);
-
-            var deliveredOrders = await _dbContext.Orders.CountAsync(o =>
-                o.Status == OrderStatus.Delivered || o.Status == OrderStatus.Completed);
-
-            // İade istatistikleri
-            var cancelledOrders = await _dbContext.Orders.CountAsync(o =>
-                o.Status == OrderStatus.Cancelled);
-
-            var refundedOrders = await _dbContext.Orders.CountAsync(o =>
-                o.Status == OrderStatus.Refunded || o.Status == OrderStatus.PartialRefund);
-
-            var pendingRefundRequests = await _dbContext.RefundRequests.CountAsync(r =>
-                r.Status == RefundRequestStatus.Pending);
-
-            var failedRefunds = await _dbContext.RefundRequests.CountAsync(r =>
-                r.Status == RefundRequestStatus.RefundFailed);
-
+            var pendingRefundRequests = await _dbContext.RefundRequests
+                .AsNoTracking()
+                .CountAsync(r => r.Status == RefundRequestStatus.Pending);
+            var failedRefunds = await _dbContext.RefundRequests
+                .AsNoTracking()
+                .CountAsync(r => r.Status == RefundRequestStatus.RefundFailed);
             var totalRefundedAmount = await _dbContext.RefundRequests
+                .AsNoTracking()
                 .Where(r => r.Status == RefundRequestStatus.Refunded ||
-                             r.Status == RefundRequestStatus.AutoCancelled)
+                            r.Status == RefundRequestStatus.AutoCancelled)
                 .SumAsync(r => (decimal?)r.RefundAmount) ?? 0;
 
+            // 14 günlük metrik — sadece gerekli kolonlar
             var dailyRaw = await _dbContext.Orders
                 .AsNoTracking()
-                .Where(o => o.OrderDate >= OrderReportHelper.TurkeyToUtc(last14DaysStart))
+                .Where(o => o.OrderDate >= last14DaysStartUtc)
+                .Select(o => new
+                {
+                    o.OrderDate,
+                    o.Status,
+                    o.PaymentStatus,
+                    o.CapturedAmount,
+                    o.FinalAmount,
+                    o.FinalPrice,
+                    o.TotalPrice
+                })
                 .ToListAsync();
 
             var dailyGrouped = dailyRaw
@@ -175,7 +190,11 @@ namespace ECommerce.API.Controllers.Admin
                     Orders = g.Count(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus)),
                     Revenue = g
                         .Where(o => OrderReportHelper.IsCountableSaleOrder(o.Status, o.PaymentStatus))
-                        .Sum(OrderReportHelper.GetSaleAmount)
+                        .Sum(o =>
+                            o.CapturedAmount > 0 ? o.CapturedAmount :
+                            o.FinalAmount > 0 ? o.FinalAmount :
+                            o.FinalPrice > 0 ? o.FinalPrice :
+                            o.TotalPrice)
                 })
                 .ToList();
 
@@ -204,41 +223,19 @@ namespace ECommerce.API.Controllers.Admin
                 }
             }
 
-            var orderStatusRaw = await _dbContext.Orders
-                .GroupBy(o => o.Status)
-                .Select(g => new
-                {
-                    Status = g.Key,
-                    Count = g.Count()
-                })
-                .ToListAsync();
-            var orderStatusDistribution = orderStatusRaw
-                .Select(x => new AdminDashboardStatusCountDto
-                {
-                    Label = x.Status.ToString(),
-                    Count = x.Count
-                })
-                .OrderByDescending(x => x.Count)
-                .ToList();
-
-            var paymentStatusRaw = await _dbContext.Orders
+            var paymentStatusDistribution = await _dbContext.Orders
+                .AsNoTracking()
                 .GroupBy(o => o.PaymentStatus)
-                .Select(g => new
+                .Select(g => new AdminDashboardStatusCountDto
                 {
-                    Status = g.Key,
+                    Label = g.Key.ToString(),
                     Count = g.Count()
                 })
-                .ToListAsync();
-            var paymentStatusDistribution = paymentStatusRaw
-                .Select(x => new AdminDashboardStatusCountDto
-                {
-                    Label = x.Status.ToString(),
-                    Count = x.Count
-                })
                 .OrderByDescending(x => x.Count)
-                .ToList();
+                .ToListAsync();
 
             var userRoleDistribution = await _dbContext.Users
+                .AsNoTracking()
                 .GroupBy(u => u.Role ?? "User")
                 .Select(g => new AdminDashboardStatusCountDto
                 {
@@ -249,17 +246,18 @@ namespace ECommerce.API.Controllers.Admin
                 .ToListAsync();
 
             var recentOrderRows = await _dbContext.Orders
+                .AsNoTracking()
                 .OrderByDescending(o => o.OrderDate)
                 .Take(8)
                 .Select(o => new
                 {
-                    Id = o.Id,
-                    OrderNumber = o.OrderNumber,
-                    CustomerName = o.CustomerName,
-                    UserId = o.UserId,
+                    o.Id,
+                    o.OrderNumber,
+                    o.CustomerName,
+                    o.UserId,
                     Amount = o.FinalPrice > 0 ? o.FinalPrice : o.TotalPrice,
-                    Status = o.Status,
-                    OrderDate = o.OrderDate
+                    o.Status,
+                    o.OrderDate
                 })
                 .ToListAsync();
 
@@ -275,46 +273,38 @@ namespace ECommerce.API.Controllers.Admin
                 Date = o.OrderDate.ToString("yyyy-MM-dd HH:mm")
             }).ToList();
 
-            var topProducts = await _dbContext.OrderItems
-                .Join(
-                    _dbContext.Products,
-                    oi => oi.ProductId,
-                    p => p.Id,
-                    (oi, p) => new { oi.ProductId, ProductName = p.Name, oi.Quantity, oi.UnitPrice }
-                )
-                .GroupBy(x => new { x.ProductId, x.ProductName })
-                .Select(g => new AdminDashboardTopProductDto
-                {
-                    ProductId = g.Key.ProductId,
-                    Name = g.Key.ProductName,
-                    Sales = g.Sum(x => x.Quantity),
-                    Revenue = g.Sum(x => x.UnitPrice * x.Quantity)
-                })
-                .OrderByDescending(x => x.Sales)
-                .Take(6)
-                .ToListAsync();
+            // En çok satanlar — son 90 gün
+            List<AdminDashboardTopProductDto> topProducts;
+            try
+            {
+                topProducts = await _dbContext.OrderItems
+                    .AsNoTracking()
+                    .Where(oi => oi.Order!.OrderDate >= topProductsSinceUtc)
+                    .GroupBy(oi => oi.ProductId)
+                    .Select(g => new AdminDashboardTopProductDto
+                    {
+                        ProductId = g.Key,
+                        Name = g.Select(x => x.Product!.Name).FirstOrDefault() ?? "Ürün",
+                        Sales = g.Sum(x => x.Quantity),
+                        Revenue = g.Sum(x => x.UnitPrice * x.Quantity)
+                    })
+                    .OrderByDescending(x => x.Sales)
+                    .Take(6)
+                    .ToListAsync();
+            }
+            catch
+            {
+                // Join çevirisi başarısız olursa boş liste — dashboard çökmesin
+                topProducts = new List<AdminDashboardTopProductDto>();
+            }
 
-            var stats = new
+            return new AdminDashboardOverviewDto
             {
                 TotalUsers = totalUsers,
                 TotalProducts = totalProducts,
                 TotalOrders = totalOrders,
-                TotalCategories = await _categoryService.GetCategoryCountAsync(),
-                TotalCarts = await _cartService.GetCartCountAsync(),
-                TotalFavorites = 0, // Geçici olarak 0 - userId parametresi gerekli
-                TotalCouriers = await _courierService.GetCourierCountAsync(),
-                TotalPayments = await _paymentService.GetPaymentCountAsync(),
+                TotalRevenue = totalRevenue,
                 TodayOrders = todayOrders,
-                Revenue = totalRevenue
-            };
-            
-            return new AdminDashboardOverviewDto
-            {
-                TotalUsers = stats.TotalUsers,
-                TotalProducts = stats.TotalProducts,
-                TotalOrders = stats.TotalOrders,
-                TotalRevenue = stats.Revenue,
-                TodayOrders = stats.TodayOrders,
                 ActiveCouriers = activeCouriers,
                 OutOfStockCount = outOfStockCount,
                 LowStockCount = lowStockCount,

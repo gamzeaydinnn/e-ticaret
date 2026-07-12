@@ -72,12 +72,13 @@ namespace ECommerce.Business.Services.Managers
                     return PaymentAuthorizationResult.Failed("Sipariş bulunamadı.", "ORDER_NOT_FOUND");
                 }
 
-                // Tolerans ile authorize tutarını hesapla
-                var authorizedAmount = CalculateAuthorizedAmount(orderAmount, tolerancePercentage);
+                // Storefront Auth marjsızdır (= sepet tutarı). %20 yalnız Capt aşımında
+                // (WeightBasedCapturePolicy). Bu yardımcı yol da aynı politikayı izler.
+                var authorizedAmount = Math.Round(orderAmount, 2, MidpointRounding.AwayFromZero);
 
                 _logger.LogInformation(
-                    "💳 Ödeme provizyonu hesaplandı. OrderId={OrderId}, OrderAmount={OrderAmount}, " +
-                    "Tolerance={Tolerance}%, AuthorizedAmount={AuthorizedAmount}",
+                    "💳 Ödeme provizyonu hesaplandı (marjsız). OrderId={OrderId}, OrderAmount={OrderAmount}, " +
+                    "ToleranceStored={Tolerance}%, AuthorizedAmount={AuthorizedAmount}",
                     orderId, orderAmount, tolerancePercentage * 100, authorizedAmount);
 
                 // Kapıda ödeme kontrolü
@@ -195,6 +196,13 @@ namespace ECommerce.Business.Services.Managers
                 if (order == null)
                 {
                     return PaymentCaptureResult.Failed("Sipariş bulunamadı.", "ORDER_NOT_FOUND");
+                }
+
+                // KG + Sale: checkout'ta tam çekim yapıldı; Capt yolu yoktur.
+                if (order.HasWeightBasedItems &&
+                    WeightBasedPaymentFlowResolver.Resolve(order) == WeightBasedPaymentFlowType.SaleImmediate)
+                {
+                    return await HandleSaleImmediateWeightCaptureAsync(order, finalAmount);
                 }
 
                 // Provizyon tutarı için tek doğruluk kaynağı (AuthorizedAmount veya PreAuthAmount).
@@ -591,6 +599,47 @@ namespace ECommerce.Business.Services.Managers
                    method == "kapida_odeme" ||
                    method == "kapıda ödeme" ||
                    method == "cod";
+        }
+
+        /// <summary>
+        /// KG + Sale: ödeme checkout'ta alındı. Tartı farkı bankadan Capt ile çekilemez.
+        /// </summary>
+        private async Task<PaymentCaptureResult> HandleSaleImmediateWeightCaptureAsync(
+            Order order, decimal finalAmount)
+        {
+            const decimal tolerance = 0.01m;
+            var paidAmount = WeightBasedPaymentFlowResolver.ResolveSaleCapturedAmount(order);
+            order.FinalAmount = finalAmount;
+
+            if (finalAmount <= paidAmount + tolerance)
+            {
+                await _context.SaveChangesAsync();
+                _logger.LogInformation(
+                    "KG Sale — tartı farkı yok veya checkout tutarı yeterli. OrderId={OrderId}, Paid={Paid}, Final={Final}",
+                    order.Id, paidAmount, finalAmount);
+                return PaymentCaptureResult.Succeeded(finalAmount, 0m);
+            }
+
+            var overage = Math.Round(finalAmount - paidAmount, 2, MidpointRounding.AwayFromZero);
+            order.Status = OrderStatus.DeliveryPaymentPending;
+            order.DeliveryProblemReason =
+                $"Sale modunda tartı farkı ({overage:N2} TL) karttan otomatik çekilemez; manuel tahsilat gerekir.";
+
+            await _context.SaveChangesAsync();
+
+            await _notificationService.NotifyPaymentFailedAsync(
+                order.Id,
+                order.OrderNumber ?? $"#{order.Id}",
+                $"KG Sale tartı farkı: {overage:N2} TL manuel tahsilat gerektirir.",
+                "Internal");
+
+            _logger.LogWarning(
+                "KG Sale — tartı farkı manuel tahsilat. OrderId={OrderId}, Paid={Paid}, Final={Final}, Overage={Overage}",
+                order.Id, paidAmount, finalAmount, overage);
+
+            return PaymentCaptureResult.Failed(
+                $"Tartı farkı {overage:N2} TL karttan otomatik çekilemez (Sale modu). Manuel tahsilat gerekir.",
+                "WEIGHT_OVERAGE_REQUIRES_MANUAL_COLLECTION");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════

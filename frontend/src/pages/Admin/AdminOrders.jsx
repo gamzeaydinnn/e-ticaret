@@ -8,10 +8,84 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useAdminSignalR } from "../../contexts/AdminSignalRContext";
 import { usePermission } from "../../hooks/usePermission";
-import { normalizeRefundStatus } from "../../utils/orderCancelPolicy";
+import { normalizeRefundStatus, getRefundTypeLabel, getRefundTransactionTypeLabel } from "../../utils/orderCancelPolicy";
+import "./AdminOrders.css";
 
 const getRefundStatusKey = (req) =>
   normalizeRefundStatus(req?.status ?? req?.statusText ?? "");
+
+/** Ödeme yöntemi kodunu Türkçe etikete çevirir */
+const getPaymentMethodLabel = (method) => {
+  const key = String(method || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  switch (key) {
+    case "cash":
+    case "cash_on_delivery":
+    case "cod":
+    case "kapida":
+    case "kapida_odeme":
+      return "💵 Kapıda Ödeme";
+    case "cash_card":
+    case "card_on_delivery":
+      return "💳 Kapıda Kart";
+    case "bank_transfer":
+    case "havale":
+    case "eft":
+      return "🏦 Havale/EFT";
+    case "card":
+    case "credit_card":
+    case "creditcard":
+    case "online":
+    case "posnet":
+      return "💳 Online Kart";
+    default:
+      return method || "Belirtilmemiş";
+  }
+};
+
+const getPaymentMethodBadgeClass = (method) => {
+  const key = String(method || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (
+    key === "cash" ||
+    key === "cash_on_delivery" ||
+    key === "cod" ||
+    key === "kapida" ||
+    key === "kapida_odeme"
+  ) {
+    return "bg-warning text-dark";
+  }
+  if (key === "cash_card" || key === "card_on_delivery") return "bg-info";
+  if (key === "bank_transfer" || key === "havale" || key === "eft") {
+    return "bg-primary";
+  }
+  if (
+    key === "card" ||
+    key === "credit_card" ||
+    key === "creditcard" ||
+    key === "online" ||
+    key === "posnet"
+  ) {
+    return "bg-success";
+  }
+  return "bg-secondary";
+};
+
+/** Adet input: boş bırakılabilir; sayıya çevirirken min/max uygular */
+const parseQtyInput = (raw, { max } = {}) => {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const num = Math.floor(Number(raw));
+  if (Number.isNaN(num)) return "";
+  let next = Math.max(0, num);
+  if (typeof max === "number") next = Math.min(next, max);
+  return next;
+};
 
 // ============================================================
 // ADMIN ORDERS - Sipariş Yönetimi
@@ -535,9 +609,59 @@ export default function AdminOrders() {
     return [];
   };
 
+  /** Kategori adı ürün adı yerine yazılmışsa (veya varyant başlığıysa) filtrele */
+  const isCategoryLikeLabel = (value, categoryName = "") => {
+    const label = String(value || "").trim();
+    if (!label) return false;
+    const norm = (s) =>
+      String(s)
+        .trim()
+        .toLocaleLowerCase("tr-TR")
+        .replace(/\s+/g, " ");
+    const n = norm(label);
+    const cat = norm(categoryName);
+    if (cat && n === cat) return true;
+    return [
+      "temel gıda",
+      "temel gida",
+      "meyve sebze",
+      "meyve & sebze",
+      "meyve ve sebze",
+      "içecek",
+      "icecek",
+      "temizlik",
+      "şarküteri",
+      "sarkuteri",
+      "süt ürünleri",
+      "sut urunleri",
+      "kahvaltılık",
+      "kahvaltilik",
+      "diğer",
+      "diger",
+    ].includes(n);
+  };
+
   const getItemDisplayName = (item) => {
-    const baseName = item?.productName || item?.name || "Ürün";
-    return item?.variantTitle ? `${baseName} / ${item.variantTitle}` : baseName;
+    const productName = String(item?.productName || item?.name || "").trim();
+    const variantTitle = String(item?.variantTitle || "").trim();
+    const categoryName = String(item?.categoryName || "").trim();
+    const norm = (s) => s.toLocaleLowerCase("tr-TR");
+
+    const cleanProduct = isCategoryLikeLabel(productName, categoryName)
+      ? ""
+      : productName;
+    const cleanVariant = isCategoryLikeLabel(variantTitle, categoryName)
+      ? ""
+      : variantTitle;
+
+    if (cleanVariant && cleanProduct) {
+      if (norm(cleanVariant) === norm(cleanProduct)) return cleanVariant;
+      if (norm(cleanVariant).includes(norm(cleanProduct))) return cleanVariant;
+      if (norm(cleanProduct).includes(norm(cleanVariant))) return cleanProduct;
+      return `${cleanProduct} / ${cleanVariant}`;
+    }
+
+    return cleanVariant || cleanProduct || productName || variantTitle || "Ürün";
   };
 
   const refreshSelectedOrderData = useCallback(async (orderId) => {
@@ -923,7 +1047,7 @@ export default function AdminOrders() {
         ...prev,
         items: prev.items.map((item) =>
           item.orderItemId === orderItemId
-            ? { ...item, quantity: Number(quantity) || 0 }
+            ? { ...item, quantity: parseQtyInput(quantity) }
             : item,
         ),
       };
@@ -968,12 +1092,12 @@ export default function AdminOrders() {
     }
   };
 
-  const handleRefundQuantityChange = (orderItemId, quantity) => {
+  const handleRefundQuantityChange = (orderItemId, quantity, maxQty) => {
     setItemRefundForm((prev) => ({
       ...prev,
       quantities: {
         ...prev.quantities,
-        [orderItemId]: Math.max(0, Number(quantity) || 0),
+        [orderItemId]: parseQtyInput(quantity, { max: maxQty }),
       },
     }));
   };
@@ -992,6 +1116,15 @@ export default function AdminOrders() {
       setActionFeedback({
         type: "danger",
         message: "Kısmi iade için sebep girişi zorunludur.",
+      });
+      return;
+    }
+
+    if (!itemRefundForm.adminNote.trim()) {
+      setActionFeedback({
+        type: "danger",
+        message:
+          "İadeyi uygulamadan önce admin notu bırakmalısınız.",
       });
       return;
     }
@@ -1089,6 +1222,8 @@ export default function AdminOrders() {
       // Ana Akış Durumları
       new: "secondary", // 🔘 Gri - Yeni sipariş
       pending: "warning", // 🟡 Sarı - Beklemede (eski için uyumluluk)
+      paid: "success",
+      preauthorized: "info", // KG Auth provizyon
       confirmed: "info", // 🔵 Mavi - Onaylanıyor
       preparing: "orange", // 🟠 Turuncu - Hazırlanıyor
       ready: "success", // 🟢 Yeşil - Hazır
@@ -1148,6 +1283,8 @@ export default function AdminOrders() {
       // Ana Akış
       new: "Yeni Sipariş",
       pending: "Beklemede",
+      paid: "Ödendi",
+      preauthorized: "Provizyon Alındı",
       confirmed: "Onaylandı",
       preparing: "Hazırlanıyor",
       ready: "Hazır - Kurye Bekliyor",
@@ -1181,7 +1318,8 @@ export default function AdminOrders() {
     if (
       normalizedStatus === "new" ||
       normalizedStatus === "pending" ||
-      normalizedStatus === "paid"
+      normalizedStatus === "paid" ||
+      normalizedStatus === "preauthorized"
     ) {
       return "Önce siparişi onaylayın, ardından hazırlık sürecini başlatın.";
     }
@@ -1443,7 +1581,8 @@ export default function AdminOrders() {
                 İade talebi bulunmuyor
               </div>
             ) : (
-              <div className="table-responsive">
+              <>
+              <div className="table-responsive admin-refund-requests-table-wrap">
                 <table
                   className="table table-hover table-sm mb-0"
                   style={{ fontSize: "0.8rem" }}
@@ -1619,6 +1758,87 @@ export default function AdminOrders() {
                   </tbody>
                 </table>
               </div>
+              <div className="admin-refund-requests-mobile p-2">
+                {refundRequests.map((req) => {
+                  const statusKey = getRefundStatusKey(req);
+                  return (
+                    <div
+                      key={`m-${req.id}`}
+                      className={`admin-refund-request-card${
+                        statusKey === "pending"
+                          ? " is-pending"
+                          : statusKey === "refundfailed"
+                            ? " is-failed"
+                            : ""
+                      }`}
+                    >
+                      <div className="admin-refund-request-card__row">
+                        <strong>{req.orderNumber || `#${req.orderId}`}</strong>
+                        <span className="badge bg-secondary">{req.statusText}</span>
+                      </div>
+                      <div className="admin-refund-request-card__row">
+                        <span>{req.customerName || "-"}</span>
+                        <strong className="text-danger">
+                          {req.refundAmount?.toFixed(2)} TL
+                        </strong>
+                      </div>
+                      <div className="admin-refund-request-card__row text-muted">
+                        <span>{req.reason}</span>
+                        <span>
+                          {req.requestedAt
+                            ? new Date(req.requestedAt).toLocaleString("tr-TR")
+                            : "-"}
+                        </span>
+                      </div>
+                      {statusKey === "refundfailed" && req.refundFailureReason && (
+                        <small className="text-danger d-block mb-1">
+                          {req.refundFailureReason}
+                        </small>
+                      )}
+                      <div className="admin-refund-request-card__actions">
+                        {statusKey === "pending" && (
+                          <>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              placeholder="Admin notu..."
+                              value={
+                                refundProcessing === req.id ? refundAdminNote : ""
+                              }
+                              onChange={(e) => {
+                                setRefundProcessing(req.id);
+                                setRefundAdminNote(e.target.value);
+                              }}
+                            />
+                            <button
+                              className="btn btn-success btn-sm"
+                              onClick={() => handleProcessRefund(req.id, true)}
+                            >
+                              Onayla
+                            </button>
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleProcessRefund(req.id, false)}
+                            >
+                              Reddet
+                            </button>
+                          </>
+                        )}
+                        {statusKey === "refundfailed" && (
+                          <button
+                            className="btn btn-warning btn-sm"
+                            onClick={() => handleRetryRefund(req.id)}
+                            disabled={refundProcessing === req.id}
+                          >
+                            Tekrar dene
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              </>
             )}
           </div>
         </div>
@@ -2249,7 +2469,8 @@ export default function AdminOrders() {
                             {/* ✅ ONAYLA - Yeni/Bekleyen sipariş için */}
                             {(normalizedStatus === "new" ||
                               normalizedStatus === "pending" ||
-                              normalizedStatus === "paid") && (
+                              normalizedStatus === "paid" ||
+                              normalizedStatus === "preauthorized") && (
                               <button
                                 onClick={() =>
                                   updateOrderStatus(order.id, "confirmed")
@@ -2363,34 +2584,32 @@ export default function AdminOrders() {
                                 onClick={() => openCancelDialog(order)}
                                 className="btn btn-outline-warning btn-sm d-inline-flex align-items-center gap-1"
                                 style={{ fontSize: "0.65rem", lineHeight: 1 }}
-                                title="↩️ Tam İade Yap"
+                                title="Tam iade yap"
                               >
                                 <i className="fas fa-undo-alt"></i>
                                 <span>İade</span>
                               </button>
                             )}
 
-                            {/* 🚫 İPTAL + PARA İADESİ - Admin ve StoreAttendant için
-                                İptal edilince POSNET üzerinden para iadesi de tetiklenir */}
+                            {/* İptal + para iadesi — Posnet reverse/return tetiklenir */}
                             {canCancelWithRefund(order.status) && (
                                 <button
                                   onClick={() => openCancelDialog(order)}
                                   className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
                                   style={{ fontSize: "0.65rem", lineHeight: 1 }}
-                                  title="🚫 İptal Et + Para İadesi"
+                                  title="İptal et ve para iadesi yap"
                                 >
                                   <i className="fas fa-times"></i>
                                   <span>İptal</span>
                                 </button>
                               )}
 
-                            {/* 🗑️ SİL - Sadece Admin */}
                             {canDeleteOrders && (
                               <button
                                 onClick={() => deleteOrder(order)}
                                 className="btn btn-outline-dark btn-sm d-inline-flex align-items-center gap-1"
                                 style={{ fontSize: "0.65rem", lineHeight: 1 }}
-                                title="🗑️ Siparişi Sil"
+                                title="Siparişi sil"
                               >
                                 <i className="fas fa-trash"></i>
                                 <span>Sil</span>
@@ -2585,31 +2804,12 @@ export default function AdminOrders() {
                         <p className="mb-1">
                           <strong>Ödeme:</strong>{" "}
                           <span
-                            className={`badge ${
-                              selectedOrder.paymentMethod === "cash"
-                                ? "bg-warning text-dark"
-                                : selectedOrder.paymentMethod === "cash_card"
-                                  ? "bg-info"
-                                  : selectedOrder.paymentMethod ===
-                                      "bank_transfer"
-                                    ? "bg-primary"
-                                    : selectedOrder.paymentMethod === "card"
-                                      ? "bg-success"
-                                      : "bg-secondary"
-                            }`}
+                            className={`badge ${getPaymentMethodBadgeClass(
+                              selectedOrder.paymentMethod,
+                            )}`}
                             style={{ fontSize: "0.6rem" }}
                           >
-                            {selectedOrder.paymentMethod === "cash"
-                              ? "💵 Kapıda Nakit"
-                              : selectedOrder.paymentMethod === "cash_card"
-                                ? "💳 Kapıda Kart"
-                                : selectedOrder.paymentMethod ===
-                                    "bank_transfer"
-                                  ? "🏦 Havale/EFT"
-                                  : selectedOrder.paymentMethod === "card"
-                                    ? "💳 Online Kart"
-                                    : selectedOrder.paymentMethod ||
-                                      "Belirtilmemiş"}
+                            {getPaymentMethodLabel(selectedOrder.paymentMethod)}
                           </span>
                         </p>
                         <p className="mb-1">
@@ -2673,7 +2873,6 @@ export default function AdminOrders() {
                                   </span>
                                   <small className="text-muted">
                                     Kalem #{item.id}
-                                    {item.categoryName ? ` • ${item.categoryName}` : ""}
                                   </small>
                                   {item.isWeightBased && (
                                     <small className="text-warning-emphasis">
@@ -2927,11 +3126,31 @@ export default function AdminOrders() {
                                               min="0"
                                               className="form-control form-control-sm"
                                               style={{ width: "90px" }}
-                                              value={editableItem?.quantity ?? item.quantity}
+                                              value={
+                                                editableItem?.quantity ===
+                                                  undefined ||
+                                                editableItem?.quantity === null
+                                                  ? item.quantity
+                                                  : editableItem.quantity
+                                              }
                                               disabled={item.isWeightBased}
                                               onChange={(e) =>
-                                                handleEditOrderItemQuantityChange(item.id, e.target.value)
+                                                handleEditOrderItemQuantityChange(
+                                                  item.id,
+                                                  e.target.value,
+                                                )
                                               }
+                                              onBlur={(e) => {
+                                                if (
+                                                  e.target.value === "" ||
+                                                  e.target.value === null
+                                                ) {
+                                                  handleEditOrderItemQuantityChange(
+                                                    item.id,
+                                                    0,
+                                                  );
+                                                }
+                                              }}
                                             />
                                           </div>
                                         );
@@ -2946,33 +3165,48 @@ export default function AdminOrders() {
                       </div>
 
                       <div className="col-12 col-lg-6">
-                        <div className="card border-0 shadow-sm h-100">
-                          <div className="card-body">
-                            <div className="alert alert-info py-2 mb-3" style={{ fontSize: "0.82rem" }}>
-                              <i className="fas fa-whatsapp me-1 text-success"></i>
-                              WhatsApp&apos;tan gelen iade taleplerinde sipariş numarası ile arama
-                              yapın; kısmi iade için aşağıdan ürün ve adet seçip uygulayın.
-                            </div>
-
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <h6 className="fw-bold mb-0" style={{ fontSize: "0.82rem" }}>
-                                <i className="fas fa-undo me-1 text-warning"></i>
-                                Ürün Bazlı Kısmi İade
+                        <div className="admin-item-refund">
+                          <div className="admin-item-refund__header">
+                            <div>
+                              <h6 className="admin-item-refund__title">
+                                Ürün bazlı kısmi iade
                               </h6>
-                              <button
-                                type="button"
-                                className="btn btn-warning btn-sm"
-                                onClick={handleItemRefund}
-                                disabled={processingItemRefund}
-                              >
-                                {processingItemRefund ? "İade İşleniyor..." : "İadeyi Uygula"}
-                              </button>
+                              <p className="admin-item-refund__hint">
+                                WhatsApp taleplerinde siparişi bulun, iade
+                                edilecek ürün ve adedi seçin. Aynı gün kalan
+                                tutar için provizyon iptali, kısmi veya sonraki
+                                gün kart iadesi uygulanır.
+                              </p>
                             </div>
+                            <button
+                              type="button"
+                              className="admin-item-refund__apply"
+                              onClick={handleItemRefund}
+                              disabled={processingItemRefund}
+                            >
+                              {processingItemRefund
+                                ? "İşleniyor..."
+                                : "İadeyi uygula"}
+                            </button>
+                          </div>
 
-                            <div className="mb-2">
-                              <label className="form-label mb-1">İade Sebebi</label>
+                          <div
+                            className="alert alert-warning py-2 px-3 mb-2"
+                            style={{ fontSize: "0.75rem" }}
+                            role="status"
+                          >
+                            <i className="fas fa-exclamation-triangle me-1"></i>
+                            <strong>İadeyi uygula demeden önce not bırakınız.</strong>{" "}
+                            İade sebebi ve admin notu zorunludur.
+                          </div>
+
+                          <div className="admin-item-refund__fields">
+                            <div className="admin-item-refund__field">
+                              <label htmlFor="item-refund-reason">
+                                İade sebebi <span className="text-danger">*</span>
+                              </label>
                               <input
-                                className="form-control form-control-sm"
+                                id="item-refund-reason"
                                 value={itemRefundForm.reason}
                                 onChange={(e) =>
                                   setItemRefundForm((prev) => ({
@@ -2980,13 +3214,15 @@ export default function AdminOrders() {
                                     reason: e.target.value,
                                   }))
                                 }
-                                placeholder="Hasarlı ürün, eksik teslimat, müşteri memnuniyeti..."
+                                placeholder="Hasarlı ürün, eksik teslimat..."
                               />
                             </div>
-                            <div className="mb-2">
-                              <label className="form-label mb-1">Admin Notu</label>
+                            <div className="admin-item-refund__field">
+                              <label htmlFor="item-refund-note">
+                                Admin notu <span className="text-danger">*</span>
+                              </label>
                               <textarea
-                                className="form-control form-control-sm"
+                                id="item-refund-note"
                                 rows="2"
                                 value={itemRefundForm.adminNote}
                                 onChange={(e) =>
@@ -2995,103 +3231,158 @@ export default function AdminOrders() {
                                     adminNote: e.target.value,
                                   }))
                                 }
+                                placeholder="İadeyi uygulamadan önce iç not yazın..."
                               />
                             </div>
+                          </div>
 
-                            <div className="border rounded p-2">
-                              <div className="fw-semibold mb-2">İade Edilecek Kalemler</div>
-                              <div className="d-flex flex-column gap-2">
-                                {enrichedItems.map((item) => {
-                                  const unitAmount =
-                                    item.quantity > 0
-                                      ? Number(item.lineTotal || 0) / Number(item.quantity || 1)
-                                      : Number(item.lineTotal || 0);
-                                  return (
-                                    <div
-                                      key={`refund-${item.id}`}
-                                      className="d-flex justify-content-between align-items-center gap-2"
-                                    >
-                                      <div className="flex-grow-1">
-                                        <div className="fw-semibold">{getItemDisplayName(item)}</div>
-                                        <small className="text-muted">
-                                          Kalan iade adedi: {item.remainingRefundableQuantity} • Birim iade:{" "}
-                                          {unitAmount.toFixed(2)} ₺
-                                        </small>
-                                      </div>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max={item.remainingRefundableQuantity}
-                                        className="form-control form-control-sm"
-                                        style={{ width: "90px" }}
-                                        value={itemRefundForm.quantities[item.id] ?? 0}
-                                        disabled={item.remainingRefundableQuantity <= 0}
-                                        onChange={(e) =>
-                                          handleRefundQuantityChange(item.id, e.target.value)
-                                        }
-                                      />
+                          <div className="admin-item-refund__list">
+                            <div className="admin-item-refund__list-head">
+                              <span>Ürün</span>
+                              <span>Adet</span>
+                              <span style={{ textAlign: "right" }}>Tutar</span>
+                            </div>
+                            {enrichedItems.map((item) => {
+                              const unitAmount =
+                                item.quantity > 0
+                                  ? Number(item.lineTotal || 0) /
+                                    Number(item.quantity || 1)
+                                  : Number(item.lineTotal || 0);
+                              const selectedQty = Number(
+                                itemRefundForm.quantities[item.id] || 0,
+                              );
+                              const lineRefund = unitAmount * selectedQty;
+                              const disabled =
+                                item.remainingRefundableQuantity <= 0;
+                              const qtyValue =
+                                itemRefundForm.quantities[item.id];
+                              return (
+                                <div
+                                  key={`refund-${item.id}`}
+                                  className={`admin-item-refund__row${
+                                    disabled ? " is-disabled" : ""
+                                  }`}
+                                >
+                                  <div className="admin-item-refund__product">
+                                    <div className="admin-item-refund__product-name">
+                                      {getItemDisplayName(item)}
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                                    <div className="admin-item-refund__product-meta">
+                                      Kalan {item.remainingRefundableQuantity}{" "}
+                                      adet · Birim {unitAmount.toFixed(2)} ₺
+                                    </div>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={item.remainingRefundableQuantity}
+                                    className="admin-item-refund__qty"
+                                    value={
+                                      qtyValue === undefined ||
+                                      qtyValue === null
+                                        ? ""
+                                        : qtyValue
+                                    }
+                                    disabled={disabled}
+                                    placeholder="0"
+                                    onChange={(e) =>
+                                      handleRefundQuantityChange(
+                                        item.id,
+                                        e.target.value,
+                                        item.remainingRefundableQuantity,
+                                      )
+                                    }
+                                    onBlur={(e) => {
+                                      if (
+                                        e.target.value === "" ||
+                                        e.target.value === null
+                                      ) {
+                                        handleRefundQuantityChange(
+                                          item.id,
+                                          0,
+                                          item.remainingRefundableQuantity,
+                                        );
+                                      }
+                                    }}
+                                    aria-label={`${getItemDisplayName(item)} iade adedi`}
+                                  />
+                                  <div className="admin-item-refund__line">
+                                    {lineRefund.toFixed(2)} ₺
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
 
-                            <div className="alert alert-light border mt-2 mb-0 py-2">
-                              <div className="d-flex justify-content-between">
-                                <span>Seçilen iade toplamı</span>
-                                <strong>{selectedRefundAmount.toFixed(2)} ₺</strong>
-                              </div>
-                              <small className="text-muted">
-                                POSNET dokümanına göre aynı gün tam iade gerekirse sistem `reverse`,
-                                kısmi veya sonraki günlerde `return` akışını kullanır.
-                              </small>
-                            </div>
+                          <div className="admin-item-refund__summary">
+                            <span className="admin-item-refund__summary-label">
+                              Seçilen iade toplamı
+                            </span>
+                            <span className="admin-item-refund__summary-amount">
+                              {selectedRefundAmount.toFixed(2)} ₺
+                            </span>
+                            <p className="admin-item-refund__summary-note">
+                              Banka iadesi başarısız olursa sipariş durumu
+                              korunur; işlemi tekrar deneyebilirsiniz.
+                            </p>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {selectedOrderRefunds.length > 0 && (
-                      <div className="mt-3">
-                        <h6 className="fw-bold mb-2" style={{ fontSize: "0.8rem" }}>
-                          <i className="fas fa-history me-1 text-secondary"></i>
-                          İade Geçmişi
+                      <div className="mt-3 admin-refund-history">
+                        <h6 className="admin-refund-history__title">
+                          İade geçmişi
                         </h6>
-                        <div className="d-flex flex-column gap-2">
-                          {selectedOrderRefunds.map((refund) => (
-                            <div key={refund.id} className="border rounded p-2 bg-light">
-                              <div className="d-flex justify-content-between align-items-start gap-2">
-                                <div>
-                                  <div className="fw-semibold">
-                                    {refund.statusText} • {Number(refund.refundAmount || 0).toFixed(2)} ₺
-                                  </div>
-                                  <small className="text-muted">
-                                    {refund.transactionType || "manual"} •{" "}
-                                    {refund.requestedAt
-                                      ? new Date(refund.requestedAt).toLocaleString("tr-TR")
-                                      : "-"}
-                                  </small>
+                        {selectedOrderRefunds.map((refund) => (
+                          <div
+                            key={refund.id}
+                            className="admin-refund-history__card"
+                          >
+                            <div className="admin-refund-history__top">
+                              <div>
+                                <div className="admin-refund-history__amount">
+                                  {refund.statusText} ·{" "}
+                                  {Number(refund.refundAmount || 0).toFixed(2)}{" "}
+                                  ₺
                                 </div>
-                                <span className="badge bg-secondary">{refund.refundType}</span>
+                                <div className="admin-refund-history__meta">
+                                  {getRefundTransactionTypeLabel(
+                                    refund.transactionType,
+                                  )}{" "}
+                                  ·{" "}
+                                  {refund.requestedAt
+                                    ? new Date(
+                                        refund.requestedAt,
+                                      ).toLocaleString("tr-TR")
+                                    : "-"}
+                                </div>
                               </div>
-                              {refund.items?.length > 0 && (
-                                <div className="mt-2">
-                                  {refund.items.map((item) => (
-                                    <div key={`${refund.id}-${item.orderItemId}`} className="small text-muted">
-                                      {item.productName || "Ürün"} • {item.quantity} adet •{" "}
-                                      {Number(item.lineAmount || 0).toFixed(2)} ₺
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              {refund.adminNote && (
-                                <div className="small mt-1">
-                                  <strong>Not:</strong> {refund.adminNote}
-                                </div>
-                              )}
+                              <span className="badge bg-secondary">
+                                {getRefundTypeLabel(refund.refundType)}
+                              </span>
                             </div>
-                          ))}
-                        </div>
+                            {refund.items?.length > 0 && (
+                              <div className="admin-refund-history__items">
+                                {refund.items.map((item) => (
+                                  <div
+                                    key={`${refund.id}-${item.orderItemId}`}
+                                  >
+                                    {getItemDisplayName(item)} ·{" "}
+                                    {item.quantity} adet ·{" "}
+                                    {Number(item.lineAmount || 0).toFixed(2)} ₺
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {refund.adminNote && (
+                              <div className="admin-refund-history__note">
+                                <strong>Not:</strong> {refund.adminNote}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
 
@@ -3769,7 +4060,8 @@ export default function AdminOrders() {
                         {/* Onayla butonu - Yeni/Bekleyen siparişler için */}
                         {(normalizedStatus === "new" ||
                           normalizedStatus === "pending" ||
-                          normalizedStatus === "paid") && (
+                          normalizedStatus === "paid" ||
+                          normalizedStatus === "preauthorized") && (
                           <button
                             className="btn btn-info btn-sm"
                             style={{ fontSize: "0.75rem" }}

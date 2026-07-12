@@ -17,6 +17,7 @@ import {
   Chip,
 } from "@mui/material";
 import { AdminService } from "../../../services/adminService";
+import { labelAction } from "./logLabels";
 
 const InventoryLogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -98,7 +99,7 @@ const InventoryLogsPage = () => {
         variant="h5"
         sx={{ fontSize: { xs: "1.25rem", md: "1.5rem" }, mb: 2 }}
       >
-        Inventory Logs
+        Stok Hareketleri
       </Typography>
 
       <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 2 }}>
@@ -257,7 +258,7 @@ const InventoryLogsPage = () => {
                     </TableCell>
                     <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                       <Chip
-                        label={log.action}
+                        label={labelAction(log.action)}
                         size="small"
                         color="primary"
                         sx={{ fontSize: "0.65rem" }}

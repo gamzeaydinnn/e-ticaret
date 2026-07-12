@@ -352,7 +352,7 @@ namespace ECommerce.Business.Services.Sync
                     if (success)
                     {
                         syncLog.Status = "Success";
-                        syncLog.Message = $"Cari oluşturuldu: {cariDto.CariKod}";
+                        syncLog.Message = $"ERP'ye müşteri kaydı oluşturuldu: {cariDto.CariKod}";
                         await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
 
                         _logger.LogDebug(
@@ -363,7 +363,8 @@ namespace ECommerce.Business.Services.Sync
                     }
                     else
                     {
-                        throw new InvalidOperationException("MikroAPI false döndürdü");
+                        throw new InvalidOperationException(
+                            $"ERP müşteri kaydı reddedildi (CariKod: {cariDto.CariKod})");
                     }
                 }
                 catch (Exception ex)
@@ -383,19 +384,17 @@ namespace ECommerce.Business.Services.Sync
                 }
             }
 
-            // Max deneme aşıldı
-            syncLog.Status = "Failed";
-            syncLog.Message = $"Max {MAX_RETRY_ATTEMPTS} deneme aşıldı";
-            await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
-
+            // Max deneme aşıldı — admin panelini gürültüden korumak için
+            // başarısız ERP cari kayıtlarını MicroSyncLogs'a yazmıyoruz.
             _logger.LogError(
-                "[CariSyncService] Cari gönderimi başarısız (max deneme). CariKod: {CariKod}",
-                cariDto.CariKod);
+                "[CariSyncService] ERP müşteri (cari) gönderimi başarısız. CariKod: {CariKod}, SonHata: {Error}",
+                cariDto.CariKod,
+                syncLog.LastError);
 
             return SyncResult.Fail(new SyncError(
                 "PushCari",
                 cariDto.CariKod,
-                syncLog.LastError ?? "Max retry exceeded"));
+                syncLog.LastError ?? "ERP müşteri kaydı birkaç denemeden sonra başarısız oldu"));
         }
 
         /// <summary>

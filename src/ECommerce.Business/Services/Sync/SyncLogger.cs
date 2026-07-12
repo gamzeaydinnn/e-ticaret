@@ -120,7 +120,7 @@ namespace ECommerce.Business.Services.Sync
             if (log.Attempts >= 3)
             {
                 log.Status = StatusDeadLetter;
-                log.Message = $"Dead Letter: {log.Attempts} başarısız deneme sonrası";
+                log.Message = $"{log.Attempts} başarısız denemeden sonra manuel müdahale bekliyor";
 
                 _logger.LogWarning(
                     "[SyncLogger] ⚠️ Dead Letter'a taşındı: {EntityType} {Direction}, " +

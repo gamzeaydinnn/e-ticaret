@@ -25,7 +25,9 @@ import bannerService, {
   BANNER_DIMENSIONS,
   UPLOAD_CONFIG,
   validateFile,
+  isVideoUrl,
 } from "../../services/bannerService";
+import BannerMedia from "../../components/BannerMedia";
 
 // ============================================
 // SABİTLER
@@ -1016,18 +1018,31 @@ export default function PosterManagement() {
                           </div>
                         ) : imagePreview ? (
                           <div>
-                            <img
-                              src={imagePreview}
-                              alt="Önizleme"
-                              style={{
-                                maxWidth: "100%",
-                                maxHeight: "180px",
-                                objectFit: "contain",
-                              }}
-                              onError={(e) => {
-                                e.target.src = "/images/placeholder.png";
-                              }}
-                            />
+                            {isVideoUrl(imagePreview) ? (
+                              <BannerMedia
+                                src={imagePreview}
+                                alt="Önizleme"
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: "180px",
+                                  objectFit: "contain",
+                                  borderRadius: "8px",
+                                }}
+                              />
+                            ) : (
+                              <img
+                                src={imagePreview}
+                                alt="Önizleme"
+                                style={{
+                                  maxWidth: "100%",
+                                  maxHeight: "180px",
+                                  objectFit: "contain",
+                                }}
+                                onError={(e) => {
+                                  e.target.src = "/images/placeholder.png";
+                                }}
+                              />
+                            )}
                             <p className="mt-2 mb-0 text-muted small">
                               Değiştirmek için tıklayın veya sürükleyin
                             </p>
@@ -1044,7 +1059,7 @@ export default function PosterManagement() {
                             <p className="mb-1">
                               {isDragging
                                 ? "Bırakın!"
-                                : "Resim yüklemek için tıklayın"}
+                                : "Görsel veya video yüklemek için tıklayın"}
                             </p>
                             <small className="text-muted">
                               veya dosyayı buraya sürükleyin (max{" "}
@@ -1083,7 +1098,7 @@ export default function PosterManagement() {
                             setForm((prev) => ({ ...prev, imageUrl: url }));
                             setImagePreview(url);
                           }}
-                          placeholder="/images/banner.png veya https://..."
+                          placeholder="/uploads/banners/... veya .mp4 / .webm"
                           disabled={uploading || saving}
                         />
                       </div>
@@ -1098,11 +1113,14 @@ export default function PosterManagement() {
                         <strong>
                           {BANNER_DIMENSIONS[form.type]?.text || "1200x400px"}
                         </strong>
+                        {" · "}
+                        Kısa sessiz video:{" "}
+                        <strong>3–4 sn, HD, mp4/webm</strong>
                       </div>
 
                       {/* Format Bilgisi */}
                       <div className="mt-2 small text-muted">
-                        <i className="fas fa-file-image me-1"></i>
+                        <i className="fas fa-photo-video me-1"></i>
                         İzin verilen formatlar:{" "}
                         {UPLOAD_CONFIG.allowedExtensions.join(", ")}
                       </div>
@@ -1186,8 +1204,8 @@ function PosterCard({ poster, type, onEdit, onToggle, onDelete }) {
           : "0 3px 10px rgba(0,0,0,0.12)";
       }}
     >
-      {/* Görsel */}
-      <img
+      {/* Görsel / Video */}
+      <BannerMedia
         src={poster.imageUrl}
         alt={poster.title}
         style={{
@@ -1197,7 +1215,9 @@ function PosterCard({ poster, type, onEdit, onToggle, onDelete }) {
           display: "block",
         }}
         onError={(e) => {
-          e.target.src = "/images/placeholder.png";
+          if (e?.target?.tagName === "IMG") {
+            e.target.src = "/images/placeholder.png";
+          }
         }}
         loading="lazy"
       />

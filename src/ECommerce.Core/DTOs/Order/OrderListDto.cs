@@ -18,7 +18,7 @@ namespace ECommerce.Core.DTOs.Order
         public string Status { get; set; } = string.Empty;
         /// <summary>Müşteri iptal modu: auto | whatsapp | none</summary>
         public string CancelMode { get; set; } = string.Empty;
-        /// <summary>Aynı gün otomatik iptal mümkün mü?</summary>
+        /// <summary>Müşteri otomatik iptal mümkün mü? (PickedUp öncesi)</summary>
         public bool CanCancel { get; set; }
         /// <summary>PDF fatura indirilebilir mi?</summary>
         public bool CanDownloadInvoice { get; set; }

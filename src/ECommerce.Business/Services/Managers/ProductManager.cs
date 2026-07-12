@@ -8,6 +8,7 @@ using ECommerce.Core.Interfaces;              // IProductRepository
 using ECommerce.Core.DTOs.Product;
 using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
+using ECommerce.Core.Helpers;
 using ECommerce.Data.Context;
 using ECommerce.Core.Interfaces;
 using ECommerce.Business.Helpers;
@@ -65,15 +66,22 @@ namespace ECommerce.Business.Services.Managers
 
             var allProducts = await _productRepository.GetAllAsync();
 
-            var filteredProducts = allProducts.Where(p =>
-                p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                (!string.IsNullOrEmpty(p.Description) && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-
-            var pagedProducts = filteredProducts
-                .OrderBy(p => p.Name)
+            var pagedProducts = allProducts
+                .Select(p => (
+                    Product: p,
+                    Score: ProductSearchMatcher.Score(
+                        p.Name,
+                        p.Description,
+                        p.Category?.Name,
+                        p.SKU,
+                        query,
+                        p.Brand?.Name)))
+                .Where(x => x.Score > 0)
+                .OrderByDescending(x => x.Score)
+                .ThenBy(x => x.Product.Name, StringComparer.CurrentCultureIgnoreCase)
                 .Skip((page - 1) * size)
-                .Take(size);
+                .Take(size)
+                .Select(x => x.Product);
 
             return pagedProducts.Select(p => new ProductListDto
             {
@@ -98,17 +106,32 @@ namespace ECommerce.Business.Services.Managers
         {
             var products = await _productRepository.GetAllAsync();
 
-            if (!string.IsNullOrEmpty(query))
-            {
-                products = products.Where(p =>
-                    p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(p.Description) && p.Description.Contains(query, StringComparison.OrdinalIgnoreCase)));
-            }
-
             if (categoryId.HasValue)
                 products = products.Where(p => p.CategoryId == categoryId.Value);
 
-            products = products.OrderBy(p => p.Name)
+            if (!string.IsNullOrEmpty(query))
+            {
+                products = products
+                    .Select(p => (
+                        Product: p,
+                        Score: ProductSearchMatcher.Score(
+                            p.Name,
+                            p.Description,
+                            p.Category?.Name,
+                            p.SKU,
+                            query,
+                            p.Brand?.Name)))
+                    .Where(x => x.Score > 0)
+                    .OrderByDescending(x => x.Score)
+                    .ThenBy(x => x.Product.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .Select(x => x.Product);
+            }
+            else
+            {
+                products = products.OrderBy(p => p.Name);
+            }
+
+            products = products
                                .Skip((page - 1) * pageSize)
                                .Take(pageSize);
 

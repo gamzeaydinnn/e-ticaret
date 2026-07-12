@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ECommerce.Entities.Concrete;
 using ECommerce.Business.Services.Interfaces;
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 
 namespace ECommerce.API.Controllers
 {
@@ -13,7 +14,7 @@ namespace ECommerce.API.Controllers
     /// </summary>
     [ApiController]
     [Route("api/account")]
-    [Authorize] // Tüm endpoint'ler authenticate olmayı gerektirir
+    [Authorize]
     public class AccountController : ControllerBase
     {
         private readonly UserManager<User> _userManager;
@@ -43,11 +44,9 @@ namespace ECommerce.API.Controllers
             if (userId == 0)
                 return Unauthorized();
 
-            var user = await _userService.GetByIdAsync(userId);
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
                 return NotFound(new { success = false, message = "Kullanıcı bulunamadı." });
-
-            var roles = await _userManager.GetRolesAsync(user);
 
             return Ok(new
             {
@@ -72,7 +71,6 @@ namespace ECommerce.API.Controllers
 
         /// <summary>
         /// Giriş yapmış kullanıcının kendi bilgilerini günceller.
-        /// Ad, Soyad, Email, Telefon, Adres, Şehir güncellenebilir.
         /// </summary>
         [HttpPut("profile")]
         public async Task<IActionResult> UpdateProfile([FromBody] ProfileUpdateDto dto)
@@ -81,7 +79,16 @@ namespace ECommerce.API.Controllers
             if (userId == 0)
                 return Unauthorized();
 
-            var user = await _userService.GetByIdAsync(userId);
+            if (dto == null)
+                return BadRequest(new { success = false, message = "Geçersiz istek." });
+
+            if (string.IsNullOrWhiteSpace(dto.FirstName) || string.IsNullOrWhiteSpace(dto.LastName))
+                return BadRequest(new { success = false, message = "Ad ve soyad zorunludur." });
+
+            if (string.IsNullOrWhiteSpace(dto.Email) || !IsValidEmail(dto.Email))
+                return BadRequest(new { success = false, message = "Geçerli bir e-posta adresi giriniz." });
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
                 return NotFound(new { success = false, message = "Kullanıcı bulunamadı." });
 
@@ -95,28 +102,63 @@ namespace ECommerce.API.Controllers
                 user.City
             };
 
-            // Profil bilgilerini güncelle
-            user.FirstName = dto.FirstName;
-            user.LastName = dto.LastName;
-            user.FullName = $"{dto.FirstName} {dto.LastName}";
-            user.Email = dto.Email;
-            user.PhoneNumber = dto.PhoneNumber;
-            user.Address = dto.Address;
-            user.City = dto.City;
-            user.UpdatedAt = DateTime.UtcNow;
+            var newEmail = dto.Email.Trim();
+            var emailChanged = !string.Equals(user.Email, newEmail, StringComparison.OrdinalIgnoreCase);
 
-            // Email değiştiğinde Identity'deki email'i de güncelle
-            if (user.Email != oldSnapshot.Email)
+            if (emailChanged)
             {
-                var emailUpdateResult = await _userManager.SetEmailAsync(user, dto.Email);
-                if (!emailUpdateResult.Succeeded)
+                var existing = await _userManager.FindByEmailAsync(newEmail);
+                if (existing != null && existing.Id != user.Id)
                 {
-                    _logger.LogWarning("Email güncelleme başarısız: {Errors}",
-                        string.Join(", ", emailUpdateResult.Errors.Select(e => e.Description)));
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Bu e-posta adresi başka bir hesap tarafından kullanılıyor."
+                    });
                 }
+
+                var emailResult = await _userManager.SetEmailAsync(user, newEmail);
+                if (!emailResult.Succeeded)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "E-posta güncellenemedi: " + FormatIdentityErrors(emailResult.Errors)
+                    });
+                }
+
+                // Giriş UserName=Email ile yapıldığı için UserName'i de senkron tut
+                var userNameResult = await _userManager.SetUserNameAsync(user, newEmail);
+                if (!userNameResult.Succeeded)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        message = "Kullanıcı adı güncellenemedi: " + FormatIdentityErrors(userNameResult.Errors)
+                    });
+                }
+
+                // Oturum açık kullanıcı e-postasını değiştirdiği için onaylı bırak
+                user.EmailConfirmed = true;
             }
 
-            await _userService.UpdateAsync(user);
+            user.FirstName = dto.FirstName.Trim();
+            user.LastName = dto.LastName.Trim();
+            user.FullName = $"{user.FirstName} {user.LastName}";
+            user.PhoneNumber = string.IsNullOrWhiteSpace(dto.PhoneNumber) ? null : dto.PhoneNumber.Trim();
+            user.Address = string.IsNullOrWhiteSpace(dto.Address) ? null : dto.Address.Trim();
+            user.City = string.IsNullOrWhiteSpace(dto.City) ? null : dto.City.Trim();
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var updateResult = await _userManager.UpdateAsync(user);
+            if (!updateResult.Succeeded)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Profil güncellenemedi: " + FormatIdentityErrors(updateResult.Errors)
+                });
+            }
 
             await _auditLogService.WriteAsync(
                 userId,
@@ -126,6 +168,7 @@ namespace ECommerce.API.Controllers
                 oldSnapshot,
                 new
                 {
+                    message = $"Profil güncellendi: {user.Email}",
                     user.FirstName,
                     user.LastName,
                     user.Email,
@@ -154,7 +197,6 @@ namespace ECommerce.API.Controllers
 
         /// <summary>
         /// Giriş yapmış kullanıcının şifresini değiştirir.
-        /// Mevcut şifre doğrulanır, ardından yeni şifre ayarlanır.
         /// </summary>
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword([FromBody] AccountChangePasswordDto dto)
@@ -163,18 +205,23 @@ namespace ECommerce.API.Controllers
             if (userId == 0)
                 return Unauthorized();
 
-            var user = await _userService.GetByIdAsync(userId);
+            if (dto == null ||
+                string.IsNullOrWhiteSpace(dto.CurrentPassword) ||
+                string.IsNullOrWhiteSpace(dto.NewPassword))
+            {
+                return BadRequest(new { success = false, message = "Mevcut şifre ve yeni şifre zorunludur." });
+            }
+
+            var user = await _userManager.FindByIdAsync(userId.ToString());
             if (user == null)
                 return NotFound(new { success = false, message = "Kullanıcı bulunamadı." });
 
-            // Mevcut şifreyi doğrula
             var checkPasswordResult = await _userManager.CheckPasswordAsync(user, dto.CurrentPassword);
             if (!checkPasswordResult)
             {
                 return BadRequest(new { success = false, message = "Mevcut şifre hatalı." });
             }
 
-            // Yeni şifreyi ayarla
             var changePasswordResult = await _userManager.ChangePasswordAsync(
                 user,
                 dto.CurrentPassword,
@@ -182,11 +229,13 @@ namespace ECommerce.API.Controllers
 
             if (!changePasswordResult.Succeeded)
             {
-                var errors = string.Join(", ", changePasswordResult.Errors.Select(e => e.Description));
-                return BadRequest(new { success = false, message = $"Şifre değiştirme başarısız: {errors}" });
+                return BadRequest(new
+                {
+                    success = false,
+                    message = "Şifre değiştirilemedi: " + FormatIdentityErrors(changePasswordResult.Errors)
+                });
             }
 
-            // SecurityStamp güncelle - tüm oturumlar invalidate edilsin
             await _userManager.UpdateSecurityStampAsync(user);
 
             await _auditLogService.WriteAsync(
@@ -195,16 +244,13 @@ namespace ECommerce.API.Controllers
                 "User",
                 userId.ToString(),
                 null,
-                null);
+                new { message = "Kullanıcı kendi şifresini değiştirdi." });
 
             _logger.LogInformation("Kullanıcı şifresini değiştirdi: {UserId}", userId);
 
             return Ok(new { success = true, message = "Şifreniz başarıyla değiştirildi." });
         }
 
-        /// <summary>
-        /// Token'dan kullanıcı ID'sini çıkarır.
-        /// </summary>
         private int GetCurrentUserId()
         {
             var userIdValue = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -213,11 +259,41 @@ namespace ECommerce.API.Controllers
 
             return int.TryParse(userIdValue, out var userId) ? userId : 0;
         }
+
+        private static bool IsValidEmail(string email)
+        {
+            return Regex.IsMatch(
+                email.Trim(),
+                @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static string FormatIdentityErrors(IEnumerable<IdentityError> errors)
+        {
+            return string.Join(" ", errors.Select(TranslateIdentityError));
+        }
+
+        private static string TranslateIdentityError(IdentityError error)
+        {
+            var code = error.Code ?? string.Empty;
+            return code switch
+            {
+                "PasswordTooShort" => "Yeni şifre en az 8 karakter olmalıdır.",
+                "PasswordRequiresDigit" => "Yeni şifrede en az bir rakam olmalıdır.",
+                "PasswordRequiresUpper" => "Yeni şifrede en az bir büyük harf olmalıdır.",
+                "PasswordRequiresLower" => "Yeni şifrede en az bir küçük harf olmalıdır.",
+                "PasswordRequiresNonAlphanumeric" => "Yeni şifrede en az bir özel karakter olmalıdır.",
+                "PasswordMismatch" => "Mevcut şifre hatalı.",
+                "DuplicateEmail" => "Bu e-posta adresi zaten kullanılıyor.",
+                "DuplicateUserName" => "Bu kullanıcı adı zaten kullanılıyor.",
+                "InvalidEmail" => "Geçersiz e-posta adresi.",
+                _ => string.IsNullOrWhiteSpace(error.Description)
+                    ? "İşlem başarısız oldu."
+                    : error.Description
+            };
+        }
     }
 
-    /// <summary>
-    /// Profil güncelleme DTO
-    /// </summary>
     public class ProfileUpdateDto
     {
         public string FirstName { get; set; } = string.Empty;
@@ -228,9 +304,6 @@ namespace ECommerce.API.Controllers
         public string? City { get; set; }
     }
 
-    /// <summary>
-    /// Şifre değiştirme DTO (AccountController için özel)
-    /// </summary>
     public class AccountChangePasswordDto
     {
         public string CurrentPassword { get; set; } = string.Empty;

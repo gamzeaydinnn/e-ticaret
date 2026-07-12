@@ -466,11 +466,32 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             }
         }
 
-        public Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders)
+        public async Task<bool> ExportOrdersToERPAsync(IEnumerable<Order> orders)
         {
-            // TODO: SiparisKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] ExportOrdersToERPAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult(false);
+            // Eski API — PushSiparisV2Async + mapper tercih edilmeli.
+            // Burada yalnızca siparişlerin boş olmadığını doğrularız; gerçek gönderim SiparisSyncService'te.
+            if (orders == null || !orders.Any())
+            {
+                return false;
+            }
+
+            _logger.LogWarning(
+                "[MicroService] ExportOrdersToERPAsync legacy çağrıldı. SiparisSyncService.PushSiparisV2 kullanın. Count={Count}",
+                orders.Count());
+            return false;
+        }
+
+        public async Task<(bool Success, string? Message, string? EvrakSeri, int? EvrakSira)> PushSiparisV2Async(
+            MikroSiparisKaydetRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await SaveSiparisV2Async(request, cancellationToken);
+            if (result.Success)
+            {
+                return (true, result.Message, result.Data?.EvrakSeri, result.Data?.EvrakSira);
+            }
+
+            return (false, result.Message ?? "SiparisKaydetV2 başarısız", null, null);
         }
 
         private static decimal ResolveProductPriceFromStok(MikroStokResponseDto stok)
@@ -1479,11 +1500,107 @@ ORDER BY S.sto_kod;";
             return fail == 0;
         }
 
-        public Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks)
+        public async Task<bool> UpsertStocksAsync(IEnumerable<MicroStockDto> stocks)
         {
-            // TODO: DahiliStokHareketKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] UpsertStocksAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult(false);
+            if (stocks == null)
+            {
+                return false;
+            }
+
+            var list = stocks.Where(s => !string.IsNullOrWhiteSpace(s.Sku)).ToList();
+            if (list.Count == 0)
+            {
+                return false;
+            }
+
+            var depoNo = _settings.DefaultDepoNo > 0 ? _settings.DefaultDepoNo : 1;
+            var today = DateTime.Now.ToString("dd.MM.yyyy");
+            var satirlar = new List<MikroDahiliStokHareketSatirDto>();
+
+            foreach (var stock in list)
+            {
+                // Outbound absolute qty gönderir. Mikro cache/eldeki miktar bilinmiyorsa
+                // miktarı hareket satırı olarak yazıyoruz (manuel düzeltme / POS).
+                // Delta yoksa (Quantity<=0) atlanır.
+                var qty = stock.Quantity > 0 ? stock.Quantity : stock.Stock;
+                if (qty <= 0)
+                {
+                    continue;
+                }
+
+                satirlar.Add(new MikroDahiliStokHareketSatirDto
+                {
+                    SthStokKod = stock.Sku.Trim(),
+                    SthMiktar = qty,
+                    SthTutar = 0,
+                    SthTip = "2",
+                    SthCins = "6",
+                    SthEvraktip = "2",
+                    SthEvraknoSeri = "WEB",
+                    // Artış: giris depo; Azalış: cikis depo (doküman transfer örneğine uyumlu alanlar)
+                    SthCikisDepoNo = stock.IsStockIncrease ? 0 : depoNo,
+                    SthGirisDepoNo = stock.IsStockIncrease ? depoNo : 0,
+                    SthTarih = today,
+                    SthNormalIade = stock.IsStockIncrease ? "1" : "0",
+                    SthVergisizFl = 1
+                });
+            }
+
+            if (satirlar.Count == 0)
+            {
+                return true;
+            }
+
+            var request = new MikroDahiliStokHareketKaydetRequestDto
+            {
+                Evraklar = new List<MikroDahiliStokHareketEvrakDto>
+                {
+                    new()
+                    {
+                        EvrakAciklamalari = new List<MikroDahiliStokHareketAciklamaDto>
+                        {
+                            new() { Aciklama = "E-ticaret stok sync" }
+                        },
+                        Satirlar = satirlar
+                    }
+                }
+            };
+
+            return await SaveDahiliStokHareketV2Async(request);
+        }
+
+        public async Task<bool> SaveDahiliStokHareketV2Async(
+            MikroDahiliStokHareketKaydetRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            const string endpoint = "/Api/APIMethods/DahiliStokHareketKaydetV2";
+
+            try
+            {
+                var requestBody = CreateMikroRequest(request);
+                var response = await SendMikroRequestAsync(endpoint, requestBody, cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                    _logger.LogError(
+                        "[MicroService] DahiliStokHareketKaydetV2 HTTP hata. Status={Status}, Body={Body}",
+                        response.StatusCode, err.Length > 300 ? err[..300] : err);
+                    return false;
+                }
+
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogInformation(
+                    "[MicroService] DahiliStokHareketKaydetV2 yanıt. Len={Len}",
+                    content.Length);
+
+                // Bazı Mikro yanıtları wrapper, bazıları düz — HTTP 200'ü başarı say
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[MicroService] DahiliStokHareketKaydetV2 hatası");
+                return false;
+            }
         }
 
         public Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices)

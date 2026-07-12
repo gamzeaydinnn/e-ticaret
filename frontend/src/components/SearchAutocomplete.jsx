@@ -29,7 +29,7 @@ const SearchAutocomplete = () => {
 
     const timer = setTimeout(async () => {
       try {
-        const filtered = await ProductService.search(query.trim(), 1, 8);
+        const filtered = await ProductService.search(query.trim(), 1, 12);
         if (cancelled) {
           return;
         }
@@ -124,11 +124,31 @@ const SearchAutocomplete = () => {
     setQuery("");
   };
 
-  // Eşleşen metni vurgula
+  // Eşleşen metni vurgula (Türkçe karakter toleranslı)
   const highlightMatch = (text, q) => {
     if (!q || !text) return text;
-    const idx = text.toLowerCase().indexOf(q.toLowerCase());
-    if (idx === -1) return text;
+    const lowerText = text.toLocaleLowerCase("tr-TR");
+    const lowerQ = q.toLocaleLowerCase("tr-TR");
+    let idx = lowerText.indexOf(lowerQ);
+    if (idx === -1) {
+      // Normalize edilmiş eşleşme (ş→s vb.) için ham indexOf yetmezse ilk kelimeyi dene
+      const asciiQ = lowerQ
+        .replace(/ı/g, "i")
+        .replace(/ğ/g, "g")
+        .replace(/ü/g, "u")
+        .replace(/ş/g, "s")
+        .replace(/ö/g, "o")
+        .replace(/ç/g, "c");
+      const asciiText = lowerText
+        .replace(/ı/g, "i")
+        .replace(/ğ/g, "g")
+        .replace(/ü/g, "u")
+        .replace(/ş/g, "s")
+        .replace(/ö/g, "o")
+        .replace(/ç/g, "c");
+      idx = asciiText.indexOf(asciiQ);
+      if (idx === -1) return text;
+    }
     return (
       <>
         {text.slice(0, idx)}
@@ -241,7 +261,7 @@ const SearchAutocomplete = () => {
               </div>
               {suggestions.map((product, idx) => (
                 <div
-                  key={product.id}
+                  key={product.id || product.sku || `sugg-${idx}`}
                   className={`search-suggestion d-flex align-items-center p-2 cursor-pointer ${
                     idx === highlightIndex ? "bg-light" : ""
                   }`}

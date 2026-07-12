@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using ECommerce.Entities.Concrete;
+using ECommerce.Core.DTOs.Inventory;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.DTOs.Cart;
 
@@ -24,6 +25,15 @@ namespace ECommerce.Core.Interfaces
         Task<bool> ReserveStockAsync(Guid clientOrderId, IEnumerable<CartItemDto> items);
         Task ReleaseReservationAsync(Guid clientOrderId);
         Task CommitReservationAsync(Guid clientOrderId);
+
+        /// <summary>
+        /// Checkout commit ile düşülen satılabilir stoku geri yükler.
+        /// Master: Product.StockQuantity; varyant varsa ProductVariant.Stock.
+        /// </summary>
+        Task RestoreOrderStockAsync(
+            IEnumerable<OrderStockRestoreLineDto> lines,
+            string logAction,
+            string reference);
     }
 }
 //stok artır/azalt.

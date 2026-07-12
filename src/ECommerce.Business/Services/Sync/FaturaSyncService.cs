@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Sync;
+using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using ECommerce.Infrastructure.Services.MicroServices;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ECommerce.Infrastructure.Config;
@@ -13,45 +16,28 @@ namespace ECommerce.Business.Services.Sync
 {
     /// <summary>
     /// Fatura senkronizasyon servisi - E-ticaret siparişleri için Mikro'da fatura keser.
-    /// 
-    /// NEDEN: E-ticaret siparişlerinin muhasebeleştirilmesi için Mikro'da fatura kesilmesi gerekiyor.
-    /// Fatura kesildiğinde:
-    /// - Stok otomatik düşer (sth_cikis_depo_no'dan)
-    /// - Cari hesaba borç yazılır
-    /// - E-arşiv zorunluysa e-arşiv fatura oluşur
-    /// 
-    /// AKIŞ:
-    /// 1. Sipariş tamamlandığında (ödeme alındı, teslim edildi)
-    /// 2. CariSyncService ile müşteri kontrol/oluştur
-    /// 3. FaturaKaydetV2 ile fatura kes
-    /// 4. Fatura numarasını e-ticaret order'ına kaydet
-    /// 
-    /// ÖNEMLİ: Varsayılan olarak DEFAULT_DEPO_NO = 1 deposundan stok düşer.
-    /// Bu ayar MikroSettings.DefaultDepoNo ile değiştirilebilir.
+    /// İade faturası gerçek SKU satırları ile Mikro stok artışını sağlar (Faz 4/5).
     /// </summary>
     public class FaturaSyncService : IFaturaSyncService
     {
-        // ==================== BAĞIMLILIKLAR ====================
-        
         private readonly MicroService _microService;
         private readonly IOrderRepository _orderRepository;
         private readonly IMikroSyncRepository _syncRepository;
         private readonly ICariSyncService _cariSyncService;
+        private readonly ECommerceDbContext _db;
         private readonly MikroSettings _settings;
         private readonly ILogger<FaturaSyncService> _logger;
 
-        // Sabitler
         private const string SYNC_TYPE = "Fatura";
         private const string DIRECTION_TO_ERP = "ToERP";
         private const int MAX_RETRY_ATTEMPTS = 3;
 
-        // ==================== CONSTRUCTOR ====================
-
         public FaturaSyncService(
-            MicroService microService, // Concrete tip çünkü SaveFaturaV2Async interface'de yok
+            MicroService microService,
             IOrderRepository orderRepository,
             IMikroSyncRepository syncRepository,
             ICariSyncService cariSyncService,
+            ECommerceDbContext db,
             IOptions<MikroSettings> settings,
             ILogger<FaturaSyncService> logger)
         {
@@ -59,6 +45,7 @@ namespace ECommerce.Business.Services.Sync
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _syncRepository = syncRepository ?? throw new ArgumentNullException(nameof(syncRepository));
             _cariSyncService = cariSyncService ?? throw new ArgumentNullException(nameof(cariSyncService));
+            _db = db ?? throw new ArgumentNullException(nameof(db));
             _settings = settings?.Value ?? throw new ArgumentNullException(nameof(settings));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -215,6 +202,30 @@ namespace ECommerce.Business.Services.Sync
 
             try
             {
+                var alreadyDone = await _db.Set<MicroSyncLog>().AsNoTracking()
+                    .AnyAsync(l =>
+                        l.EntityType == LocalInventoryPolicy.SyncEntityRefundInvoice &&
+                        l.InternalId == orderId.ToString() &&
+                        l.Status == "Success" &&
+                        l.Direction == DIRECTION_TO_ERP,
+                        cancellationToken);
+
+                if (alreadyDone)
+                {
+                    // Fatura daha önce gitti; stok artışı kalmış olabilir
+                    var orderExisting = await _orderRepository.GetByIdAsync(orderId);
+                    if (orderExisting != null)
+                    {
+                        var itemsExisting = await LoadOrderItemsWithSkuAsync(orderExisting, cancellationToken);
+                        await EnsureRefundStockIncreaseAsync(orderExisting, itemsExisting, cancellationToken);
+                    }
+
+                    _logger.LogInformation(
+                        "[FaturaSyncService] İade faturası zaten vardı. OrderId={OrderId}",
+                        orderId);
+                    return SyncResult.Ok(0);
+                }
+
                 var order = await _orderRepository.GetByIdAsync(orderId);
 
                 if (order == null)
@@ -232,7 +243,12 @@ namespace ECommerce.Business.Services.Sync
                         "CreateRefundInvoice", orderId.ToString(), "Cari kodu alınamadı"));
                 }
 
-                // İade faturası DTO oluştur
+                // İade faturası — gerçek sipariş kalemleri (SKU) ile stok artışı Mikro'da yansır
+                var orderItems = await LoadOrderItemsWithSkuAsync(order, cancellationToken);
+                var detay = BuildRefundInvoiceLines(order, orderItems, cariKod, refundAmount);
+                var usedGenericIade = detay.Any(d =>
+                    string.Equals(d.SthStokKod, "IADE", StringComparison.OrdinalIgnoreCase));
+
                 var faturaRequest = new MikroFaturaKaydetRequestDto
                 {
                     Evraklar = new List<MikroFaturaEvrakDto>
@@ -242,8 +258,8 @@ namespace ECommerce.Business.Services.Sync
                             ChaEvraknoSeri = _settings.DefaultEvrakSeri,
                             ChaTarihi = DateTime.Now.ToString("dd.MM.yyyy"),
                             ChaKod = cariKod,
-                            ChaTip = 0, // Satış (ama iade olarak işaretlenecek)
-                            ChaCinsi = 8, // Perakende Satış Faturası
+                            ChaTip = 0,
+                            ChaCinsi = 8,
                             ChaNormalIade = 1, // İADE
                             ChaDCins = 0,
                             ChaDKur = 1,
@@ -251,25 +267,7 @@ namespace ECommerce.Business.Services.Sync
                             ChaAciklama = $"E-ticaret iade: {order.OrderNumber}",
                             ChaVade = 0,
                             ChaEvrakTip = 63,
-                            Detay = new List<MikroFaturaSatirDto>
-                            {
-                                new MikroFaturaSatirDto
-                                {
-                                    SthStokKod = "IADE", // Genel iade kodu
-                                    SthMiktar = 1,
-                                    SthTutar = refundAmount,
-                                    SthVergi = 0,
-                                    SthEvraknoSeri = _settings.DefaultEvrakSeri,
-                                    SthEvraktip = 4,
-                                    SthTip = 1,
-                                    SthNormalIade = 1, // İADE
-                                    SthCikisDepoNo = _settings.DefaultDepoNo,
-                                    SthGirisDepoNo = _settings.DefaultDepoNo,
-                                    SthCariKodu = cariKod,
-                                    SthTarih = DateTime.Now.ToString("dd.MM.yyyy"),
-                                    SthAciklama = $"İade: {order.OrderNumber}"
-                                }
-                            }
+                            Detay = detay
                         }
                     }
                 };
@@ -279,16 +277,57 @@ namespace ECommerce.Business.Services.Sync
                 if (result.Success)
                 {
                     _logger.LogInformation(
-                        "[FaturaSyncService] İade faturası kesildi. OrderId: {OrderId}, Evrak: {Seri}-{Sira}",
-                        orderId, result.Data?.EvrakSeri, result.Data?.EvrakSira);
+                        "[FaturaSyncService] İade faturası kesildi. OrderId: {OrderId}, Evrak: {Seri}-{Sira}, Lines={Lines}",
+                        orderId, result.Data?.EvrakSeri, result.Data?.EvrakSira, detay.Count);
+
+                    await _syncRepository.CreateLogAsync(new MicroSyncLog
+                    {
+                        EntityType = LocalInventoryPolicy.SyncEntityRefundInvoice,
+                        Direction = DIRECTION_TO_ERP,
+                        InternalId = orderId.ToString(),
+                        ExternalId = $"{result.Data?.EvrakSeri}-{result.Data?.EvrakSira}",
+                        Status = "Success",
+                        Message = $"İade faturası: {order.OrderNumber}, tutar={refundAmount}",
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
+
+                    // Generic "IADE" satırı gerçek ürün stoğunu artırmaz → Dahili ile tamamla
+                    if (usedGenericIade)
+                    {
+                        await EnsureRefundStockIncreaseAsync(order, orderItems, cancellationToken);
+                    }
+
+                    await AlignCacheAfterRefundAsync(orderItems, cancellationToken);
 
                     return SyncResult.Ok(1);
                 }
-                else
+
+                // Fatura başarısız → eldeki stok yine de artsın (satıştaki Dahili çıkışın tersi)
+                _logger.LogWarning(
+                    "[FaturaSyncService] İade faturası başarısız, Dahili stok artışı deneniyor. OrderId={OrderId}, Msg={Msg}",
+                    orderId, result.Message);
+
+                var increased = await EnsureRefundStockIncreaseAsync(order, orderItems, cancellationToken);
+                if (increased)
                 {
-                    return SyncResult.Fail(new SyncError(
-                        "CreateRefundInvoice", orderId.ToString(), result.Message ?? "İade faturası kesilemedi"));
+                    await AlignCacheAfterRefundAsync(orderItems, cancellationToken);
+                    await _syncRepository.CreateLogAsync(new MicroSyncLog
+                    {
+                        EntityType = LocalInventoryPolicy.SyncEntityRefundInvoice,
+                        Direction = DIRECTION_TO_ERP,
+                        InternalId = orderId.ToString(),
+                        ExternalId = order.OrderNumber,
+                        Status = "Partial",
+                        Message = $"Fatura başarısız; Dahili stok artışı OK. FaturaMsg={result.Message}",
+                        CreatedAt = DateTime.UtcNow,
+                        LastError = result.Message
+                    }, cancellationToken);
+
+                    return SyncResult.Ok(1);
                 }
+
+                return SyncResult.Fail(new SyncError(
+                    "CreateRefundInvoice", orderId.ToString(), result.Message ?? "İade faturası kesilemedi"));
             }
             catch (Exception ex)
             {
@@ -450,7 +489,7 @@ namespace ECommerce.Business.Services.Sync
 
             // Max deneme aşıldı
             syncLog.Status = "Failed";
-            syncLog.Message = $"Max {MAX_RETRY_ATTEMPTS} deneme aşıldı";
+            syncLog.Message = $"{MAX_RETRY_ATTEMPTS} deneme sonrası senkronizasyon durduruldu";
             await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
 
             _logger.LogError(
@@ -460,7 +499,7 @@ namespace ECommerce.Business.Services.Sync
             return SyncResult.Fail(new SyncError(
                 "CreateInvoice",
                 order.OrderNumber,
-                syncLog.LastError ?? "Max retry exceeded"));
+                syncLog.LastError ?? "Maksimum deneme sayısına ulaşıldı"));
         }
 
         /// <summary>
@@ -560,6 +599,203 @@ namespace ECommerce.Business.Services.Sync
             }
 
             return items;
+        }
+
+        private async Task<List<(OrderItem Item, Product? Product)>> LoadOrderItemsWithSkuAsync(
+            Order order,
+            CancellationToken cancellationToken)
+        {
+            var items = await _db.OrderItems
+                .AsNoTracking()
+                .Where(oi => oi.OrderId == order.Id)
+                .ToListAsync(cancellationToken);
+
+            var productIds = items.Select(i => i.ProductId).Distinct().ToList();
+            var products = await _db.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
+
+            return items
+                .Select(i =>
+                {
+                    products.TryGetValue(i.ProductId, out var product);
+                    return (i, product);
+                })
+                .ToList();
+        }
+
+        private List<MikroFaturaSatirDto> BuildRefundInvoiceLines(
+            Order order,
+            List<(OrderItem Item, Product? Product)> orderItems,
+            string cariKod,
+            decimal refundAmount)
+        {
+            var depoNo = _settings.DefaultDepoNo > 0 ? _settings.DefaultDepoNo : 1;
+            var today = DateTime.Now.ToString("dd.MM.yyyy");
+            var lines = new List<MikroFaturaSatirDto>();
+
+            foreach (var (item, product) in orderItems)
+            {
+                var sku = MikroStockCacheAligner.ResolveSku(item, product);
+                if (string.IsNullOrWhiteSpace(sku) || item.Quantity <= 0)
+                {
+                    continue;
+                }
+
+                var lineAmount = item.UnitPrice * item.Quantity;
+                lines.Add(new MikroFaturaSatirDto
+                {
+                    SthStokKod = sku,
+                    SthMiktar = item.Quantity,
+                    SthTutar = lineAmount,
+                    SthVergi = 0,
+                    SthEvraknoSeri = _settings.DefaultEvrakSeri,
+                    SthEvraktip = 4,
+                    SthTip = 1,
+                    SthNormalIade = 1,
+                    SthCikisDepoNo = depoNo,
+                    SthGirisDepoNo = depoNo,
+                    SthCariKodu = cariKod,
+                    SthTarih = today,
+                    SthAciklama = $"İade: {order.OrderNumber} / Item {item.Id}"
+                });
+            }
+
+            if (lines.Count == 0)
+            {
+                _logger.LogWarning(
+                    "[FaturaSyncService] İade satırı SKU bulunamadı, genel IADE kalemi kullanılıyor. OrderId={OrderId}",
+                    order.Id);
+
+                lines.Add(new MikroFaturaSatirDto
+                {
+                    SthStokKod = "IADE",
+                    SthMiktar = 1,
+                    SthTutar = refundAmount,
+                    SthVergi = 0,
+                    SthEvraknoSeri = _settings.DefaultEvrakSeri,
+                    SthEvraktip = 4,
+                    SthTip = 1,
+                    SthNormalIade = 1,
+                    SthCikisDepoNo = depoNo,
+                    SthGirisDepoNo = depoNo,
+                    SthCariKodu = cariKod,
+                    SthTarih = today,
+                    SthAciklama = $"İade: {order.OrderNumber}"
+                });
+            }
+
+            return lines;
+        }
+
+        private async Task AlignCacheAfterRefundAsync(
+            List<(OrderItem Item, Product? Product)> orderItems,
+            CancellationToken cancellationToken)
+        {
+            var deltas = new List<(string Sku, decimal QuantityDelta)>();
+            foreach (var (item, product) in orderItems)
+            {
+                var sku = MikroStockCacheAligner.ResolveSku(item, product);
+                if (string.IsNullOrWhiteSpace(sku) || item.Quantity <= 0)
+                {
+                    continue;
+                }
+
+                deltas.Add((sku, item.Quantity));
+            }
+
+            if (deltas.Count > 0)
+            {
+                await MikroStockCacheAligner.ApplyDeltaAsync(_db, deltas, _logger, cancellationToken);
+            }
+        }
+
+        /// <summary>
+        /// İade miktarını Mikro'da DahiliStokHareket ile artırır (eldeki stok).
+        /// Fatura başarısız / generic IADE durumunda kullanılır. Idempotent.
+        /// </summary>
+        private async Task<bool> EnsureRefundStockIncreaseAsync(
+            Order order,
+            List<(OrderItem Item, Product? Product)> orderItems,
+            CancellationToken cancellationToken)
+        {
+            if (!LocalInventoryPolicy.PushDahiliStockIncreaseOnOnlineRefund)
+            {
+                return false;
+            }
+
+            var alreadyIncreased = await _db.Set<MicroSyncLog>().AsNoTracking()
+                .AnyAsync(l =>
+                    l.EntityType == LocalInventoryPolicy.SyncEntityOrderStockIncrease &&
+                    l.InternalId == order.Id.ToString() &&
+                    l.Status == "Success" &&
+                    l.Direction == DIRECTION_TO_ERP,
+                    cancellationToken);
+
+            if (alreadyIncreased)
+            {
+                return false;
+            }
+
+            var stockDtos = new List<MicroStockDto>();
+            foreach (var group in orderItems
+                         .Where(x => x.Item.Quantity > 0)
+                         .GroupBy(x => MikroStockCacheAligner.ResolveSku(x.Item, x.Product)))
+            {
+                if (string.IsNullOrWhiteSpace(group.Key))
+                {
+                    continue;
+                }
+
+                var qty = group.Sum(x => x.Item.Quantity);
+                stockDtos.Add(new MicroStockDto
+                {
+                    Sku = group.Key!,
+                    Quantity = qty,
+                    Stock = qty,
+                    IsStockIncrease = true
+                });
+            }
+
+            if (stockDtos.Count == 0)
+            {
+                _logger.LogWarning(
+                    "[FaturaSyncService] Dahili stok artışı atlandı — SKU yok. OrderId={OrderId}",
+                    order.Id);
+                return false;
+            }
+
+            var ok = await _microService.UpsertStocksAsync(stockDtos);
+            await _syncRepository.CreateLogAsync(new MicroSyncLog
+            {
+                EntityType = LocalInventoryPolicy.SyncEntityOrderStockIncrease,
+                Direction = DIRECTION_TO_ERP,
+                InternalId = order.Id.ToString(),
+                ExternalId = order.OrderNumber,
+                Status = ok ? "Success" : "Failed",
+                Message = ok
+                    ? $"Dahili stok girişi: {string.Join(", ", stockDtos.Select(s => $"{s.Sku}x{s.Quantity}"))}"
+                    : "DahiliStokHareketKaydetV2 artış başarısız",
+                CreatedAt = DateTime.UtcNow,
+                LastAttemptAt = DateTime.UtcNow,
+                Attempts = 1,
+                LastError = ok ? null : "UpsertStocksAsync false"
+            }, cancellationToken);
+
+            if (!ok)
+            {
+                _logger.LogError(
+                    "[FaturaSyncService] Mikro eldeki stok artışı BAŞARISIZ. OrderId={OrderId}",
+                    order.Id);
+                return false;
+            }
+
+            _logger.LogInformation(
+                "[FaturaSyncService] Mikro eldeki stok artırıldı (Dahili). OrderId={OrderId}, Lines={Lines}",
+                order.Id, stockDtos.Count);
+
+            return true;
         }
 
         /// <summary>

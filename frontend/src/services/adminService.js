@@ -94,11 +94,17 @@ export const AdminService = {
   // Dashboard
   getDashboardStats: async () => {
     ensureBackend();
+    // Cache-bust: her istek güncel KPI çeksin
+    const bust = `_t=${Date.now()}`;
     try {
-      return await api.get("/api/admin/dashboard/overview", { timeout: 10000 });
+      return await api.get(`/api/admin/dashboard/overview?${bust}`, {
+        timeout: 20000,
+      });
     } catch (error) {
       if (error?.status === 404 || error?.response?.status === 404) {
-        return api.get("/api/admin/dashboard/stats", { timeout: 10000 });
+        return api.get(`/api/admin/dashboard/stats?${bust}`, {
+          timeout: 20000,
+        });
       }
       throw error;
     }
@@ -137,13 +143,7 @@ export const AdminService = {
 
   // ============================================================================
   // Admin Profil Yönetimi - Kendi Bilgilerini Güncelleme
-  // Backend: AuthController.GetCurrentUser ve AccountController
-  // ============================================================================
-
-  /**
-   * Giriş yapmış kullanıcının kendi profil bilgilerini getirir
-   * Backend: AccountController.GetProfile endpoint'i (PhoneNumber, Address, City dahil)
-   */
+  // Backend: AccountController (/api/account/*)
   getCurrentUser: async () => {
     ensureBackend();
     return api.get("/api/account/profile");

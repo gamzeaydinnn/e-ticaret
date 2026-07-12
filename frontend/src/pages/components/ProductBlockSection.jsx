@@ -11,6 +11,7 @@ import WeightSelectionModal, {
 import CartActionToast, {
   useCartActionToast,
 } from "../../components/CartActionToast";
+import BannerMedia from "../../components/BannerMedia";
 import "./ProductBlockSection.css";
 
 const WEIGHT_FALLBACK_KEYWORDS = [
@@ -271,6 +272,35 @@ const getBlockEyebrow = (value) => {
   return "Özenle Seçildi";
 };
 
+// Aynı anda yalnızca bakılan (en görünür) blok kayar
+const blockVisibilityRegistry = new Map();
+let activeMotionBlockKey = null;
+
+const resolveActiveMotionBlock = () => {
+  let bestKey = null;
+  let bestRatio = 0;
+
+  blockVisibilityRegistry.forEach((entry, key) => {
+    if (entry.ratio > bestRatio) {
+      bestRatio = entry.ratio;
+      bestKey = key;
+    }
+  });
+
+  const nextActive = bestRatio >= 0.22 ? bestKey : null;
+  if (nextActive === activeMotionBlockKey) return;
+
+  const previousKey = activeMotionBlockKey;
+  activeMotionBlockKey = nextActive;
+
+  if (previousKey && blockVisibilityRegistry.has(previousKey)) {
+    blockVisibilityRegistry.get(previousKey).setMotionActive(false);
+  }
+  if (nextActive && blockVisibilityRegistry.has(nextActive)) {
+    blockVisibilityRegistry.get(nextActive).setMotionActive(true);
+  }
+};
+
 const ProductBlockSection = ({
   block,
   onAddToCart,
@@ -280,8 +310,26 @@ const ProductBlockSection = ({
 }) => {
   const navigate = useNavigate();
   const scrollContainerRef = useRef(null);
+  const trackRef = useRef(null);
+  const sectionRef = useRef(null);
+  const autoScrollRafRef = useRef(null);
+  const autoScrollPausedRef = useRef(false);
+  const userInteractUntilRef = useRef(0);
+  const slideOffsetRef = useRef(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [hasEntered, setHasEntered] = useState(false);
+  const [isMotionActive, setIsMotionActive] = useState(false);
+
+  const blockMotionKey = String(
+    block?.id ??
+      block?.Id ??
+      block?.slug ??
+      block?.Slug ??
+      block?.title ??
+      block?.Title ??
+      "block",
+  );
 
   const {
     notification: cartNotification,
@@ -346,6 +394,230 @@ const ProductBlockSection = ({
       );
     };
   }, []);
+
+  // Giriş animasyonu + yalnızca en görünür blokta kayma
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return undefined;
+
+    const setMotionActiveSafe = (active) => {
+      setIsMotionActive((prev) => (prev === active ? prev : active));
+    };
+
+    blockVisibilityRegistry.set(blockMotionKey, {
+      ratio: 0,
+      setMotionActive: setMotionActiveSafe,
+    });
+
+    if (typeof IntersectionObserver === "undefined") {
+      setHasEntered(true);
+      setMotionActiveSafe(true);
+      return () => {
+        blockVisibilityRegistry.delete(blockMotionKey);
+        if (activeMotionBlockKey === blockMotionKey) {
+          activeMotionBlockKey = null;
+          resolveActiveMotionBlock();
+        }
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
+        if (ratio > 0.08) {
+          setHasEntered(true);
+        }
+
+        const registryEntry = blockVisibilityRegistry.get(blockMotionKey);
+        if (registryEntry) {
+          registryEntry.ratio = ratio;
+        }
+        resolveActiveMotionBlock();
+      },
+      {
+        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 1],
+        rootMargin: "-12% 0px -18% 0px",
+      },
+    );
+
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      blockVisibilityRegistry.delete(blockMotionKey);
+      if (activeMotionBlockKey === blockMotionKey) {
+        activeMotionBlockKey = null;
+      }
+      resolveActiveMotionBlock();
+    };
+  }, [blockMotionKey]);
+
+  // Hafif sağa kayma — sadece aktif (bakılan) blok
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    const track = trackRef.current;
+    if (!container || !track || !isMotionActive) return undefined;
+
+    const prefersReducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    )?.matches;
+    if (prefersReducedMotion) return undefined;
+
+    const canHover = window.matchMedia?.(
+      "(hover: hover) and (pointer: fine)",
+    )?.matches;
+
+    const pauseAutoScroll = (ms = 4200) => {
+      userInteractUntilRef.current = Date.now() + ms;
+    };
+
+    const readMaxOffset = () =>
+      Math.max(0, track.scrollWidth - container.clientWidth);
+
+    const applyOffset = (value) => {
+      const maxOffset = readMaxOffset();
+      const clamped = Math.max(0, Math.min(maxOffset, value));
+      slideOffsetRef.current = clamped;
+      track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
+      const nextLeft = clamped > 2;
+      const nextRight = clamped < maxOffset - 2;
+      setCanScrollLeft((prev) => (prev === nextLeft ? prev : nextLeft));
+      setCanScrollRight((prev) => (prev === nextRight ? prev : nextRight));
+      return clamped;
+    };
+
+    const onMouseEnter = () => {
+      if (canHover) autoScrollPausedRef.current = true;
+    };
+    const onMouseLeave = () => {
+      if (!canHover) return;
+      autoScrollPausedRef.current = false;
+      pauseAutoScroll(1800);
+    };
+
+    let dragStartX = 0;
+    let dragStartOffset = 0;
+    let dragging = false;
+
+    const onPointerDown = (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (
+        event.target?.closest?.(
+          "button, a, input, textarea, .modern-add-btn, .btn-favorite",
+        )
+      ) {
+        pauseAutoScroll(5500);
+        return;
+      }
+      dragging = true;
+      dragStartX = event.clientX;
+      dragStartOffset = slideOffsetRef.current;
+      pauseAutoScroll(6000);
+      container.classList.add("is-dragging");
+      try {
+        container.setPointerCapture?.(event.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    const onPointerMove = (event) => {
+      if (!dragging) return;
+      const dx = event.clientX - dragStartX;
+      applyOffset(dragStartOffset - dx);
+    };
+
+    const endDrag = (event) => {
+      if (!dragging) return;
+      dragging = false;
+      container.classList.remove("is-dragging");
+      pauseAutoScroll(2800);
+      try {
+        container.releasePointerCapture?.(event.pointerId);
+      } catch {
+        /* ignore */
+      }
+    };
+
+    container.classList.add("is-auto-scrolling");
+    applyOffset(slideOffsetRef.current);
+
+    container.addEventListener("pointerdown", onPointerDown);
+    container.addEventListener("pointermove", onPointerMove);
+    container.addEventListener("pointerup", endDrag);
+    container.addEventListener("pointercancel", endDrag);
+    container.addEventListener("mouseenter", onMouseEnter);
+    container.addEventListener("mouseleave", onMouseLeave);
+
+    let lastTs = 0;
+    let holdUntil = 0;
+    let returning = false;
+    const isMobile = window.matchMedia("(max-width: 768px)")?.matches;
+    const speedPxPerSec = isMobile ? 34 : 22;
+
+    const tick = (ts) => {
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min((ts - lastTs) / 1000, 0.064);
+      lastTs = ts;
+
+      const canMove =
+        !dragging &&
+        !autoScrollPausedRef.current &&
+        Date.now() >= userInteractUntilRef.current &&
+        Date.now() >= holdUntil &&
+        !document.hidden;
+
+      if (canMove) {
+        const maxOffset = readMaxOffset();
+        if (maxOffset > 8) {
+          const delta = speedPxPerSec * dt * (returning ? -2.2 : 1);
+          const next = slideOffsetRef.current + delta;
+
+          if (!returning && next >= maxOffset - 0.5) {
+            applyOffset(maxOffset);
+            holdUntil = Date.now() + 1100;
+            returning = true;
+          } else if (returning && next <= 0.5) {
+            applyOffset(0);
+            returning = false;
+            holdUntil = Date.now() + 800;
+          } else {
+            applyOffset(next);
+          }
+        } else {
+          applyOffset(0);
+        }
+      }
+
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    const startTimer = window.setTimeout(() => {
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    }, isMobile ? 250 : 180);
+
+    const onResize = () => applyOffset(slideOffsetRef.current);
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      window.removeEventListener("resize", onResize);
+      if (autoScrollRafRef.current) {
+        cancelAnimationFrame(autoScrollRafRef.current);
+      }
+      container.classList.remove("is-auto-scrolling", "is-dragging");
+      container.removeEventListener("pointerdown", onPointerDown);
+      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointerup", endDrag);
+      container.removeEventListener("pointercancel", endDrag);
+      container.removeEventListener("mouseenter", onMouseEnter);
+      container.removeEventListener("mouseleave", onMouseLeave);
+    };
+  }, [
+    isMotionActive,
+    block?.id,
+    block?.products?.length,
+    block?.Products?.length,
+  ]);
 
   const shouldUseWeightModal = (product) => {
     if (!product) return false;
@@ -497,27 +769,36 @@ const ProductBlockSection = ({
   // Scroll kontrolü
   const checkScroll = () => {
     const container = scrollContainerRef.current;
-    if (container) {
-      setCanScrollLeft(container.scrollLeft > 0);
-      setCanScrollRight(
-        container.scrollLeft <
-          container.scrollWidth - container.clientWidth - 10,
-      );
-    }
+    const track = trackRef.current;
+    if (!container || !track) return;
+    const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
+    const offset = slideOffsetRef.current;
+    setCanScrollLeft(offset > 2);
+    setCanScrollRight(offset < maxOffset - 2);
   };
 
   const scroll = (direction) => {
     const container = scrollContainerRef.current;
-    if (container) {
-      const card = container.querySelector(".product-block-card");
-      const cardWidth = card?.offsetWidth || 132;
-      const scrollAmount = Math.max(cardWidth + 10, 120);
-      container.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth",
-      });
-      setTimeout(checkScroll, 300);
-    }
+    const track = trackRef.current;
+    if (!container || !track) return;
+
+    userInteractUntilRef.current = Date.now() + 5000;
+    const card = track.querySelector(".product-block-card");
+    const cardWidth = card?.offsetWidth || 132;
+    const scrollAmount = Math.max(cardWidth + 10, 120);
+    const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
+    const next =
+      direction === "left"
+        ? slideOffsetRef.current - scrollAmount
+        : slideOffsetRef.current + scrollAmount;
+    const clamped = Math.max(0, Math.min(maxOffset, next));
+    slideOffsetRef.current = clamped;
+    track.style.transition = "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)";
+    track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
+    window.setTimeout(() => {
+      if (track) track.style.transition = "";
+      checkScroll();
+    }, 380);
   };
 
   const resolveProductData = (item) => {
@@ -841,7 +1122,10 @@ const ProductBlockSection = ({
   };
 
   return (
-    <section className="product-block-section">
+    <section
+      ref={sectionRef}
+      className={`product-block-section ${hasEntered ? "is-in-view" : ""}${isMotionActive ? " is-motion-active" : ""}`}
+    >
       {/* ========== BAŞLIK BÖLÜMÜ (Referans: "Bu Fırsatları Kaçırmayın" gibi) ========== */}
       <div className="product-block-header">
         <div className="header-left">
@@ -866,7 +1150,7 @@ const ProductBlockSection = ({
         {/* Sol Taraf - Poster (Opsiyonel) */}
         {posterUrl && (
           <div className="product-block-poster">
-            <img
+            <BannerMedia
               src={posterUrl}
               alt={normalizedTitle || title}
               className="poster-image"
@@ -892,12 +1176,13 @@ const ProductBlockSection = ({
             <div
               className="products-scroll-container"
               ref={scrollContainerRef}
-              onScroll={checkScroll}
             >
+              <div className="products-scroll-track" ref={trackRef}>
               {products.map((item, index) => {
                 const { product, productId, productIdRaw } =
                   resolveProductData(item);
                 if (!product) return null;
+                const enterDelayMs = Math.min(index, 10) * 55;
                 const productName = product.name || product.Name || "";
                 const productImage =
                   product.imageUrl || product.ImageUrl || product.image || "";
@@ -944,7 +1229,7 @@ const ProductBlockSection = ({
                 return (
                   <div
                     key={productIdRaw || productId || index}
-                    className={`modern-product-card product-block-card ${hasDiscount ? "has-discount" : ""}`}
+                    className={`modern-product-card product-block-card product-block-card--enter ${hasDiscount ? "has-discount" : ""}`}
                     style={{
                       background: "#ffffff",
                       borderRadius: "16px",
@@ -960,13 +1245,15 @@ const ProductBlockSection = ({
                       boxShadow: hasDiscount
                         ? "0 5px 15px rgba(220, 38, 38, 0.12)"
                         : "0 5px 15px rgba(0, 0, 0, 0.08)",
-                      transition: "all 0.3s ease",
+                      transition:
+                        "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, opacity 0.45s ease",
+                      "--enter-delay": `${enterDelayMs}ms`,
                     }}
                     onClick={(e) =>
                       handleProductClick(e, product, productId, productIdRaw)
                     }
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-5px)";
+                      e.currentTarget.style.transform = "translateY(-6px)";
                       e.currentTarget.style.boxShadow = hasDiscount
                         ? "0 15px 30px rgba(220, 38, 38, 0.18)"
                         : "0 15px 30px rgba(255, 107, 53, 0.15)";
@@ -1054,7 +1341,6 @@ const ProductBlockSection = ({
                     <div
                       className="product-image-container"
                       style={{
-                        background: "#ffffff",
                         position: "relative",
                         overflow: "hidden",
                       }}
@@ -1194,6 +1480,7 @@ const ProductBlockSection = ({
                   </div>
                 );
               })}
+              </div>
             </div>
 
             {/* Sağ Ok */}

@@ -1,58 +1,50 @@
 using System.Diagnostics;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
+using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Core.Interfaces.Sync;
+using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.Business.Services.Sync
 {
     /// <summary>
     /// Sipariş senkronizasyon servisi - E-ticaret siparişlerini Mikro ERP'ye aktarır.
-    /// 
-    /// NEDEN: Online siparişlerin muhasebeleştirilmesi için Mikro'ya aktarılması gerekir.
-    /// Sipariş girildikten sonra Mikro'da stok düşer, cari borç oluşur, faturalama yapılabilir.
-    /// 
-    /// AKIŞ:
-    /// 1. E-ticaret'te sipariş onaylanır (ödeme alınır)
-    /// 2. Bu servis siparişi Mikro formatına dönüştürür
-    /// 3. MikroAPI SiparisKaydetV2 endpoint'ine gönderir
-    /// 4. Mikro'dan dönen evrak no e-ticaret'e kaydedilir
-    /// 
-    /// ÖNEMLİ: Mağaza siparişleri Mikro'da zaten var,
-    /// bu servis sadece ONLINE siparişleri Mikro'ya gönderir.
+    /// Online satış: SiparisKaydetV2 (belge) + DahiliStokHareket (eldeki stok düşüşü).
     /// </summary>
     public class SiparisSyncService : ISiparisSyncService
     {
-        // ==================== BAĞIMLILIKLAR ====================
-        
         private readonly IMicroService _microService;
         private readonly IOrderRepository _orderRepository;
         private readonly IMikroSyncRepository _syncRepository;
         private readonly ICariSyncService _cariSyncService;
+        private readonly IMikroSiparisMapper _siparisMapper;
+        private readonly ECommerceDbContext _db;
         private readonly ILogger<SiparisSyncService> _logger;
 
-        // Sabitler
         private const string SYNC_TYPE = "Siparis";
         private const string DIRECTION_TO_ERP = "ToERP";
         private const int MAX_RETRY_ATTEMPTS = 3;
-        private const string ONLINE_EVRAK_SERI = "ONL"; // Online siparişler için seri
-        private const int DEFAULT_DEPO_NO = 1;
-
-        // ==================== CONSTRUCTOR ====================
 
         public SiparisSyncService(
             IMicroService microService,
             IOrderRepository orderRepository,
             IMikroSyncRepository syncRepository,
             ICariSyncService cariSyncService,
+            IMikroSiparisMapper siparisMapper,
+            ECommerceDbContext db,
             ILogger<SiparisSyncService> logger)
         {
             _microService = microService ?? throw new ArgumentNullException(nameof(microService));
             _orderRepository = orderRepository ?? throw new ArgumentNullException(nameof(orderRepository));
             _syncRepository = syncRepository ?? throw new ArgumentNullException(nameof(syncRepository));
             _cariSyncService = cariSyncService ?? throw new ArgumentNullException(nameof(cariSyncService));
+            _siparisMapper = siparisMapper ?? throw new ArgumentNullException(nameof(siparisMapper));
+            _db = db ?? throw new ArgumentNullException(nameof(db));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -271,6 +263,47 @@ namespace ECommerce.Business.Services.Sync
                 CreatedAt = DateTime.UtcNow
             };
 
+            // Idempotency: daha önce başarılı push varsa tekrar gönderme
+            var alreadyPushed = await _db.Set<MicroSyncLog>().AsNoTracking()
+                .AnyAsync(l =>
+                    l.EntityType == "Order" &&
+                    l.InternalId == order.Id.ToString() &&
+                    l.Status == "Success" &&
+                    l.Direction == DIRECTION_TO_ERP,
+                    cancellationToken);
+
+            var items = await _db.OrderItems
+                .AsNoTracking()
+                .Where(oi => oi.OrderId == order.Id)
+                .ToListAsync(cancellationToken);
+
+            if (alreadyPushed || LocalInventoryPolicy.IsMikroSyncedTracking(order.TrackingNumber))
+            {
+                _logger.LogInformation(
+                    "[SiparisSyncService] Sipariş zaten Mikro'da. OrderId={OrderId} — stok düşüşü kontrol ediliyor",
+                    order.Id);
+
+                // Sipariş daha önce gitti ama dahili stok düşüşü kalmış olabilir
+                if (items.Count > 0)
+                {
+                    var decreased = await EnsureSaleStockDecreaseAsync(order, items, cancellationToken);
+                    if (decreased)
+                    {
+                        await AlignCacheAfterSaleAsync(items, cancellationToken);
+                    }
+                }
+
+                return SyncResult.Ok(0);
+            }
+
+            if (items.Count == 0)
+            {
+                return SyncResult.Fail(new SyncError(
+                    "PushOrder",
+                    order.OrderNumber,
+                    "Sipariş kalemleri boş — Mikro'ya gönderilemez"));
+            }
+
             for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++)
             {
                 try
@@ -278,49 +311,78 @@ namespace ECommerce.Business.Services.Sync
                     syncLog.Attempts = attempt;
                     syncLog.LastAttemptAt = DateTime.UtcNow;
 
-                    // 1. Müşteri kaydını kontrol et / oluştur
-                    var cariKod = await EnsureCariExistsAsync(order, cancellationToken);
+                    // Önceki denemede sipariş yazıldı ama stok düşüşü kaldıysa tekrar sipariş BASMA
+                    var latest = await _db.Orders.AsNoTracking()
+                        .FirstOrDefaultAsync(o => o.Id == order.Id, cancellationToken);
+                    var orderSynced = LocalInventoryPolicy.IsMikroSyncedTracking(latest?.TrackingNumber) ||
+                        await _db.Set<MicroSyncLog>().AsNoTracking().AnyAsync(l =>
+                            l.EntityType == "Order" &&
+                            l.InternalId == order.Id.ToString() &&
+                            l.Status == "Success" &&
+                            l.Direction == DIRECTION_TO_ERP,
+                            cancellationToken);
 
-                    if (string.IsNullOrEmpty(cariKod))
+                    if (orderSynced)
                     {
-                        throw new InvalidOperationException(
-                            "Müşteri cari kaydı oluşturulamadı");
+                        var decreased = await EnsureSaleStockDecreaseAsync(order, items, cancellationToken);
+                        if (decreased)
+                        {
+                            await AlignCacheAfterSaleAsync(items, cancellationToken);
+                        }
+
+                        return SyncResult.Ok(1);
                     }
 
-                    // 2. Siparişi Mikro formatına dönüştür
-                    var mikroSiparis = MapToMikroSiparis(order, cariKod);
+                    var cariKod = await EnsureCariExistsAsync(order, cancellationToken);
+                    if (string.IsNullOrEmpty(cariKod))
+                    {
+                        throw new InvalidOperationException("Müşteri cari kaydı oluşturulamadı");
+                    }
 
-                    // 3. Mikro'ya gönder
-                    var success = await _microService.ExportOrdersToERPAsync(new[] { order });
+                    var mikroSiparis = _siparisMapper.ToMikroSiparis(order, items, cariKod);
+                    var (success, message, evrakSeri, evrakSira) =
+                        await _microService.PushSiparisV2Async(mikroSiparis, cancellationToken);
 
                     if (success)
                     {
                         syncLog.Status = "Success";
-                        syncLog.Message = $"Sipariş Mikro'ya aktarıldı. OrderNo: {order.OrderNumber}";
+                        syncLog.Message =
+                            $"Sipariş Mikro'ya aktarıldı. OrderNo: {order.OrderNumber}, Evrak: {evrakSeri}-{evrakSira}. {message}";
                         await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
+
+                        var tracked = await _db.Orders.FirstOrDefaultAsync(o => o.Id == order.Id, cancellationToken);
+                        if (tracked != null)
+                        {
+                            tracked.TrackingNumber = $"{LocalInventoryPolicy.MikroTrackingPrefix}{evrakSeri}-{evrakSira}";
+                            await _db.SaveChangesAsync(cancellationToken);
+                        }
+
+                        // Eldeki stok: sipariş belgesi düşürmez → DahiliStokHareket çıkışı
+                        var decreased = await EnsureSaleStockDecreaseAsync(order, items, cancellationToken);
+                        if (decreased)
+                        {
+                            await AlignCacheAfterSaleAsync(items, cancellationToken);
+                        }
 
                         _logger.LogInformation(
                             "[SiparisSyncService] Sipariş başarıyla gönderildi. " +
-                            "OrderNo: {OrderNo}, CariKod: {CariKod}",
-                            order.OrderNumber, cariKod);
+                            "OrderNo: {OrderNo}, CariKod: {CariKod}, Evrak: {Seri}-{Sira}",
+                            order.OrderNumber, cariKod, evrakSeri, evrakSira);
 
                         return SyncResult.Ok(1);
                     }
-                    else
-                    {
-                        throw new InvalidOperationException("MikroAPI false döndürdü");
-                    }
+
+                    throw new InvalidOperationException(message ?? "SiparisKaydetV2 başarısız");
                 }
                 catch (Exception ex)
                 {
                     syncLog.LastError = ex.Message;
 
                     _logger.LogWarning(
-                        "[SiparisSyncService] Sipariş gönderimi başarısız. " +
+                        "[SiparisSyncService] Sipariş/stok senkronu başarısız. " +
                         "OrderNo: {OrderNo}, Deneme: {Attempt}/{Max}, Hata: {Error}",
                         order.OrderNumber, attempt, MAX_RETRY_ATTEMPTS, ex.Message);
 
-                    // Son deneme değilse bekle
                     if (attempt < MAX_RETRY_ATTEMPTS)
                     {
                         var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
@@ -329,20 +391,29 @@ namespace ECommerce.Business.Services.Sync
                 }
             }
 
-            // Max deneme aşıldı
-            syncLog.Status = "Failed";
-            syncLog.Message = $"Max {MAX_RETRY_ATTEMPTS} deneme aşıldı";
-            await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
+            // Sipariş Success log zaten yazıldıysa tekrar Failed Order logu basma
+            var hasOrderSuccess = await _db.Set<MicroSyncLog>().AsNoTracking()
+                .AnyAsync(l =>
+                    l.EntityType == "Order" &&
+                    l.InternalId == order.Id.ToString() &&
+                    l.Status == "Success",
+                    cancellationToken);
+
+            if (!hasOrderSuccess)
+            {
+                syncLog.Status = "Failed";
+                syncLog.Message = $"{MAX_RETRY_ATTEMPTS} deneme sonrası senkronizasyon durduruldu";
+                await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
+            }
 
             _logger.LogError(
-                "[SiparisSyncService] Sipariş gönderimi başarısız (max deneme). " +
-                "OrderNo: {OrderNo}",
+                "[SiparisSyncService] Sipariş gönderimi başarısız (max deneme). OrderNo: {OrderNo}",
                 order.OrderNumber);
 
             return SyncResult.Fail(new SyncError(
                 "PushOrder",
                 order.OrderNumber,
-                syncLog.LastError ?? "Max retry exceeded"));
+                syncLog.LastError ?? "Maksimum deneme sayısına ulaşıldı"));
         }
 
         /// <summary>
@@ -397,93 +468,128 @@ namespace ECommerce.Business.Services.Sync
         }
 
         /// <summary>
-        /// E-ticaret siparişini Mikro sipariş formatına dönüştürür.
-        /// 
-        /// MAPPING:
-        /// - OrderNumber → sip_ozel_kod (referans)
-        /// - TotalPrice → sip_tutar
-        /// - VatAmount → sip_vergi
-        /// - FinalPrice → sip_genel_toplam
-        /// - OrderItems → satirlar
+        /// Satış miktarını Mikro'da DahiliStokHareket ile düşürür (eldeki stok).
+        /// Idempotent: OrderStockDecrease Success log varsa tekrar göndermez.
         /// </summary>
-        private MikroSiparisKaydetRequestDto MapToMikroSiparis(
+        /// <returns>Bu çağrıda yeni stok düşüşü yapıldıysa true.</returns>
+        private async Task<bool> EnsureSaleStockDecreaseAsync(
             Order order,
-            string cariKod)
+            List<OrderItem> items,
+            CancellationToken cancellationToken)
         {
-            var siparis = new MikroSiparisKaydetRequestDto
+            if (!LocalInventoryPolicy.PushDahiliStockDecreaseOnOnlineSale)
             {
-                SipEvraknoSeri = ONLINE_EVRAK_SERI,
-                SipTarih = order.OrderDate.ToString("yyyy-MM-dd"),
-                SipTeslimTarih = order.EstimatedDeliveryDate?.ToString("yyyy-MM-dd"),
-                SipMusteriKod = cariKod,
-                SipTip = 0, // Satış siparişi
-                SipCins = 0, // Normal
-                SipDepoNo = DEFAULT_DEPO_NO,
-                SipDurum = MapOrderStatus(order.Status),
-                SipOdemeKod = MapPaymentMethod(order.PaymentMethod),
-                SipDovizCinsi = 0, // TL
-                SipTutar = order.TotalPrice,
-                SipVergi = order.VatAmount,
-                SipIskonto = order.DiscountAmount,
-                SipGenelToplam = order.FinalPrice,
-                SipKargoTutar = order.ShippingCost,
-                SipOzelKod = order.OrderNumber, // E-ticaret referans
-                SipAciklama = $"E-ticaret sipariş: {order.OrderNumber}",
-                Satirlar = new List<MikroSiparisSatirDto>()
-            };
-
-            // Teslimat adresi
-            if (!string.IsNullOrEmpty(order.ShippingAddress))
-            {
-                siparis.TeslimatAdresi = new MikroSiparisTeslimatAdresiDto
-                {
-                    AdresAlici = order.CustomerName ?? "",
-                    AdresCadde = order.ShippingAddress,
-                    AdresIl = order.ShippingCity,
-                    AdresTelefon = order.CustomerPhone,
-                    AdresNot = order.DeliveryNotes
-                };
+                return false;
             }
 
-            // Sipariş kalemleri
-            // NOT: Order.OrderItems navigation property'si kullanılmalı
-            // Şu an OrderItems yüklenmediği için boş kalacak
-            // Gerçek implementasyonda Include ile yüklenmeli
+            var alreadyDecreased = await _db.Set<MicroSyncLog>().AsNoTracking()
+                .AnyAsync(l =>
+                    l.EntityType == LocalInventoryPolicy.SyncEntityOrderStockDecrease &&
+                    l.InternalId == order.Id.ToString() &&
+                    l.Status == "Success" &&
+                    l.Direction == DIRECTION_TO_ERP,
+                    cancellationToken);
 
-            return siparis;
+            if (alreadyDecreased)
+            {
+                return false;
+            }
+
+            var productIds = items.Select(i => i.ProductId).Distinct().ToList();
+            var products = await _db.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
+
+            var stockDtos = new List<MicroStockDto>();
+            foreach (var group in items.Where(i => i.Quantity > 0)
+                         .GroupBy(i => MikroStockCacheAligner.ResolveSku(
+                             i,
+                             products.TryGetValue(i.ProductId, out var p) ? p : null)))
+            {
+                if (string.IsNullOrWhiteSpace(group.Key))
+                {
+                    continue;
+                }
+
+                var qty = group.Sum(i => i.Quantity);
+                stockDtos.Add(new MicroStockDto
+                {
+                    Sku = group.Key!,
+                    Quantity = qty,
+                    Stock = qty,
+                    IsStockIncrease = false
+                });
+            }
+
+            if (stockDtos.Count == 0)
+            {
+                _logger.LogWarning(
+                    "[SiparisSyncService] Stok düşüşü atlandı — SKU yok. OrderId={OrderId}",
+                    order.Id);
+                return false;
+            }
+
+            var ok = await _microService.UpsertStocksAsync(stockDtos);
+            await _syncRepository.CreateLogAsync(new MicroSyncLog
+            {
+                EntityType = LocalInventoryPolicy.SyncEntityOrderStockDecrease,
+                Direction = DIRECTION_TO_ERP,
+                InternalId = order.Id.ToString(),
+                ExternalId = order.OrderNumber,
+                Status = ok ? "Success" : "Failed",
+                Message = ok
+                    ? $"Dahili stok çıkışı: {string.Join(", ", stockDtos.Select(s => $"{s.Sku}x{s.Quantity}"))}"
+                    : "DahiliStokHareketKaydetV2 başarısız — eldeki stok düşmedi",
+                CreatedAt = DateTime.UtcNow,
+                LastAttemptAt = DateTime.UtcNow,
+                Attempts = 1,
+                LastError = ok ? null : "UpsertStocksAsync false"
+            }, cancellationToken);
+
+            if (!ok)
+            {
+                _logger.LogError(
+                    "[SiparisSyncService] Mikro eldeki stok düşüşü BAŞARISIZ. OrderId={OrderId}, OrderNo={OrderNo}",
+                    order.Id, order.OrderNumber);
+                throw new InvalidOperationException(
+                    $"Sipariş Mikro'da ama stok düşüşü başarısız. OrderId={order.Id}");
+            }
+
+            _logger.LogInformation(
+                "[SiparisSyncService] Mikro eldeki stok düşürüldü (Dahili). OrderId={OrderId}, Lines={Lines}",
+                order.Id, stockDtos.Count);
+
+            return true;
         }
 
-        /// <summary>
-        /// E-ticaret sipariş durumunu Mikro durumuna çevirir.
-        /// </summary>
-        private int MapOrderStatus(OrderStatus status)
+        private async Task AlignCacheAfterSaleAsync(
+            List<OrderItem> items,
+            CancellationToken cancellationToken)
         {
-            return status switch
-            {
-                OrderStatus.Pending => 0,      // Açık
-                OrderStatus.Confirmed => 0,    // Açık
-                OrderStatus.Preparing => 0,    // Açık
-                OrderStatus.Ready => 0,        // Açık
-                OrderStatus.Shipped => 1,      // Kısmi Teslim
-                OrderStatus.Delivered => 2,    // Kapalı
-                OrderStatus.Cancelled => 3,    // İptal
-                _ => 0
-            };
-        }
+            var productIds = items.Select(i => i.ProductId).Distinct().ToList();
+            var products = await _db.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, cancellationToken);
 
-        /// <summary>
-        /// E-ticaret ödeme yöntemini Mikro koduna çevirir.
-        /// </summary>
-        private string MapPaymentMethod(string paymentMethod)
-        {
-            return paymentMethod?.ToLower() switch
+            var deltas = new List<(string Sku, decimal QuantityDelta)>();
+            foreach (var item in items)
             {
-                "credit_card" => "KK",      // Kredi Kartı
-                "cash_on_delivery" => "NAK", // Nakit (Kapıda Ödeme)
-                "bank_transfer" => "HVL",    // Havale
-                "debit_card" => "KK",        // Banka Kartı
-                _ => "NAK"
-            };
+                products.TryGetValue(item.ProductId, out var product);
+                var sku = MikroStockCacheAligner.ResolveSku(item, product);
+                if (string.IsNullOrWhiteSpace(sku) || item.Quantity <= 0)
+                {
+                    continue;
+                }
+
+                deltas.Add((sku, -item.Quantity));
+            }
+
+            if (deltas.Count > 0)
+            {
+                await MikroStockCacheAligner.ApplyDeltaAsync(_db, deltas, _logger, cancellationToken);
+            }
         }
 
         /// <summary>

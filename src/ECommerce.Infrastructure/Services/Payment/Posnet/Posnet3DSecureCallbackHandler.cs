@@ -14,6 +14,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
@@ -64,19 +65,22 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         private readonly ECommerceDbContext _dbContext;
         private readonly PaymentSettings _settings;
         private readonly ILogger<Posnet3DSecureCallbackHandler> _logger;
+        private readonly IOrderInventorySettlementService? _inventorySettlement;
 
         public Posnet3DSecureCallbackHandler(
             IPosnetMacValidator macValidator,
             IPosnetPaymentService posnetService,
             ECommerceDbContext dbContext,
             IOptions<PaymentSettings> options,
-            ILogger<Posnet3DSecureCallbackHandler> logger)
+            ILogger<Posnet3DSecureCallbackHandler> logger,
+            IOrderInventorySettlementService? inventorySettlement = null)
         {
             _macValidator = macValidator ?? throw new ArgumentNullException(nameof(macValidator));
             _posnetService = posnetService ?? throw new ArgumentNullException(nameof(posnetService));
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _settings = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _inventorySettlement = inventorySettlement;
         }
 
         /// <inheritdoc/>
@@ -594,6 +598,12 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     }
                     
                     await _dbContext.SaveChangesAsync();
+
+                    if (_inventorySettlement != null &&
+                        status.Contains("FAILED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        await _inventorySettlement.SettlePaymentFailureAsync(orderId);
+                    }
                 }
             }
             catch (Exception ex)
@@ -674,6 +684,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         order.PreAuthAmount = processedAmount;
                         order.AuthorizedAmount = processedAmount;
                         order.PreAuthDate = DateTime.UtcNow;
+                        order.CaptureStatus = CaptureStatus.Pending;
                         order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                             ? WeightAdjustmentStatus.PendingWeighing
                             : order.WeightAdjustmentStatus;
@@ -699,6 +710,8 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         order.PaymentStatus = PaymentStatus.Paid;
                         order.CapturedAmount = processedAmount;
                         order.CapturedAt = DateTime.UtcNow;
+                        // Sale = anında çekim; Capt beklenmez. SaleImmediate akışı bunu kullanır.
+                        order.CaptureStatus = CaptureStatus.Success;
 
                         // NEDEN: 3D sale işleminde de iade/reverse için bankanın orijinal referansı saklanmalı.
                         if (!string.IsNullOrWhiteSpace(hostLogKey))
@@ -722,6 +735,11 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 }
 
                 await _dbContext.SaveChangesAsync();
+
+                if (_inventorySettlement != null)
+                {
+                    await _inventorySettlement.SettlePaymentSuccessAsync(orderId);
+                }
 
                 _logger.LogInformation(
                     "[POSNET-3DS] Sipariş durumu güncellendi - OrderId: {OrderId}, Flow: {Flow}, Status: {Status}",

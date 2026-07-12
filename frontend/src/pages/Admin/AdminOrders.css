@@ -1,0 +1,313 @@
+/* Admin sipariş detay — kısmi iade paneli (web + mobil) */
+
+.admin-item-refund {
+  --air-border: #e5e7eb;
+  --air-muted: #6b7280;
+  --air-text: #111827;
+  --air-accent: #b45309;
+  --air-accent-bg: #fffbeb;
+  --air-surface: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.admin-item-refund__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.admin-item-refund__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--air-text);
+  letter-spacing: -0.01em;
+}
+
+.admin-item-refund__hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  color: var(--air-muted);
+  line-height: 1.35;
+  max-width: 36rem;
+}
+
+.admin-item-refund__apply {
+  flex-shrink: 0;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--air-accent);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.admin-item-refund__apply:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-item-refund__fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+}
+
+@media (min-width: 768px) {
+  .admin-item-refund__fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.admin-item-refund__field label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--air-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-item-refund__field input,
+.admin-item-refund__field textarea {
+  width: 100%;
+  border: 1px solid var(--air-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.875rem;
+  background: #fff;
+}
+
+.admin-item-refund__field textarea {
+  min-height: 2.75rem;
+  resize: vertical;
+}
+
+.admin-item-refund__list {
+  border: 1px solid var(--air-border);
+  border-radius: 0.65rem;
+  overflow: hidden;
+  background: #fff;
+}
+
+.admin-item-refund__list-head {
+  display: none;
+  grid-template-columns: 1fr 5.5rem 6.5rem;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--air-surface);
+  border-bottom: 1px solid var(--air-border);
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--air-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+@media (min-width: 576px) {
+  .admin-item-refund__list-head {
+    display: grid;
+  }
+}
+
+.admin-item-refund__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--air-border);
+}
+
+.admin-item-refund__row:last-child {
+  border-bottom: none;
+}
+
+@media (min-width: 576px) {
+  .admin-item-refund__row {
+    grid-template-columns: 1fr 5.5rem 6.5rem;
+  }
+}
+
+.admin-item-refund__product {
+  min-width: 0;
+}
+
+.admin-item-refund__product-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--air-text);
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.admin-item-refund__product-meta {
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--air-muted);
+}
+
+.admin-item-refund__qty {
+  width: 5.25rem;
+  max-width: 100%;
+  border: 1px solid var(--air-border);
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.45rem;
+  font-size: 0.875rem;
+  text-align: center;
+  justify-self: end;
+}
+
+@media (min-width: 576px) {
+  .admin-item-refund__qty {
+    justify-self: stretch;
+    width: 100%;
+  }
+}
+
+.admin-item-refund__line {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--air-text);
+  text-align: right;
+  justify-self: end;
+}
+
+.admin-item-refund__row.is-disabled {
+  opacity: 0.5;
+}
+
+.admin-item-refund__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.65rem;
+  background: var(--air-accent-bg);
+  border: 1px solid #fde68a;
+}
+
+.admin-item-refund__summary-label {
+  font-size: 0.8rem;
+  color: #92400e;
+}
+
+.admin-item-refund__summary-amount {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.admin-item-refund__summary-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.72rem;
+  color: #a16207;
+  line-height: 1.35;
+}
+
+.admin-refund-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.admin-refund-history__title {
+  margin: 0 0 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--air-text);
+}
+
+.admin-refund-history__card {
+  border: 1px solid var(--air-border);
+  border-radius: 0.55rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--air-surface);
+}
+
+.admin-refund-history__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+}
+
+.admin-refund-history__amount {
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.admin-refund-history__meta {
+  font-size: 0.72rem;
+  color: var(--air-muted);
+}
+
+.admin-refund-history__items {
+  margin-top: 0.45rem;
+  font-size: 0.75rem;
+  color: var(--air-muted);
+}
+
+.admin-refund-history__note {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.admin-refund-requests-mobile {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .admin-refund-requests-table-wrap {
+    display: none;
+  }
+
+  .admin-refund-requests-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .admin-refund-request-card {
+    border: 1px solid var(--air-border);
+    border-radius: 0.65rem;
+    padding: 0.85rem;
+    background: #fff;
+  }
+
+  .admin-refund-request-card.is-pending {
+    border-color: #fbbf24;
+    background: #fffbeb;
+  }
+
+  .admin-refund-request-card.is-failed {
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
+
+  .admin-refund-request-card__row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.82rem;
+  }
+
+  .admin-refund-request-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.65rem;
+  }
+}

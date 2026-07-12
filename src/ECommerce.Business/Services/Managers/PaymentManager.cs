@@ -981,9 +981,9 @@ namespace ECommerce.Business.Services.Managers
                         payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
 
-                        if (order != null)
+                        // Sipariş durumunu burada değiştirme — RefundManager / çağıran akış karar verir.
+                        if (order != null && order.CaptureStatus != CaptureStatus.Voided)
                         {
-                            order.Status = OrderStatus.Cancelled;
                             order.CaptureStatus = CaptureStatus.Voided;
                         }
 
@@ -1003,9 +1003,12 @@ namespace ECommerce.Business.Services.Managers
                     else
                     {
                         var errorText = result.Error ?? string.Empty;
-                        var isGroupClosed = errorText.Contains("0211", StringComparison.OrdinalIgnoreCase)
+                        var isGroupClosed = result.ErrorCode == PosnetErrorCode.GroupClosedUseRefund
+                            || errorText.Contains("0211", StringComparison.OrdinalIgnoreCase)
                             || errorText.Contains("211", StringComparison.OrdinalIgnoreCase)
-                            || ((int)result.ErrorCode).ToString().Contains("211", StringComparison.Ordinal);
+                            || ((int)result.ErrorCode).ToString().Contains("211", StringComparison.Ordinal)
+                            || result.ErrorCode == PosnetErrorCode.PreviousDayCaptureUseRefund
+                            || errorText.Contains("0229", StringComparison.OrdinalIgnoreCase);
 
                         if (isGroupClosed)
                         {
@@ -1102,15 +1105,10 @@ namespace ECommerce.Business.Services.Managers
                         payment.RefundedAt = DateTime.UtcNow;
                         payment.UpdatedAt = DateTime.UtcNow;
 
-                        // Tam iade olduysa status güncelle
+                        // Tam iade olduysa payment status güncelle (sipariş durumu RefundManager'da)
                         if (payment.RefundedAmount >= payment.Amount)
                         {
                             payment.Status = "Refunded";
-                            var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == payment.OrderId);
-                            if (order != null)
-                            {
-                                order.Status = OrderStatus.Refunded;
-                            }
                         }
                         else
                         {

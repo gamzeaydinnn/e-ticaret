@@ -16,6 +16,18 @@ namespace ECommerce.Data.Repositories
         {
         }
 
+        public override async Task<Order?> GetByIdAsync(int id)
+        {
+            // NEDEN: Base FindAsync OrderItems'ı yüklemez; tartı/manuel ağırlık
+            // "Sipariş kalemi bulunamadı" hatasına düşer. Ağırlık ve durum akışları
+            // kalem + ürün + kategori ister.
+            return await _dbSet
+                .Include(o => o.OrderItems)
+                .ThenInclude(oi => oi.Product)
+                .ThenInclude(p => p!.Category)
+                .FirstOrDefaultAsync(o => o.Id == id);
+        }
+
         public async Task<IEnumerable<Order>> GetByUserIdAsync(int userId)
         {
             return await _dbSet

@@ -882,8 +882,10 @@ namespace ECommerce.Business.Services.Managers
                     CapturedAmount = captureResult.CapturedAmount,
                     AdditionalAmount = finalAmount - order.FinalPrice,
                     CaptureMessage = captureResult.Message,
-                    RequiresAdminAction = !captureResult.Success && 
-                        captureResult.ErrorCode == "AMOUNT_EXCEEDS_AUTHORIZED"
+                    RequiresAdminAction = !captureResult.Success &&
+                        (captureResult.ErrorCode == "EXCEEDED_AUTHORIZATION" ||
+                         captureResult.ErrorCode == "WEIGHT_OVERAGE_REQUIRES_MANUAL_COLLECTION" ||
+                         captureResult.ErrorCode == "AMOUNT_EXCEEDS_AUTHORIZED")
                 };
             }
             catch (Exception ex)

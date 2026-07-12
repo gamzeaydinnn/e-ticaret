@@ -505,6 +505,16 @@ namespace ECommerce.API.Services
                 
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("NewOrder", notification);
                 
+                // Dashboard KPI'larını anında yenile
+                await _adminHub.Clients.Group(AdminGroupName).SendAsync("DashboardUpdate", new
+                {
+                    type = "DashboardUpdate",
+                    reason = "NewOrder",
+                    orderId,
+                    orderNumber,
+                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                });
+                
                 _logger.LogDebug(
                     "📤 [NotifyNewOrderAsync] Admin grubuna 'PlaySound' eventi gönderiliyor.");
                 
@@ -543,6 +553,14 @@ namespace ECommerce.API.Services
                 };
                 
                 await _adminHub.Clients.Group(AdminGroupName).SendAsync("PaymentSuccess", notification);
+                await _adminHub.Clients.Group(AdminGroupName).SendAsync("DashboardUpdate", new
+                {
+                    type = "DashboardUpdate",
+                    reason = "PaymentSuccess",
+                    orderId,
+                    orderNumber,
+                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                });
                 
                 _logger.LogInformation(
                     "📢 Ödeme başarılı bildirimi gönderildi. OrderId={OrderId}, Amount={Amount}", 
@@ -1271,7 +1289,16 @@ namespace ECommerce.API.Services
                 };
                 
                 // 1. Admin'lere bildirim
-                await _adminHub.Clients.Group("admin-notifications").SendAsync("OrderStatusChanged", notification);
+                await _adminHub.Clients.Group(AdminGroupName).SendAsync("OrderStatusChanged", notification);
+                await _adminHub.Clients.Group(AdminGroupName).SendAsync("DashboardUpdate", new
+                {
+                    type = "DashboardUpdate",
+                    reason = "OrderStatusChanged",
+                    orderId,
+                    orderNumber,
+                    newStatus,
+                    timestamp
+                });
                 
                 // 2. Market görevlilerine bildirim
                 await _storeHub.Clients.Group(StoreAttendantHub.GetStoreRoomGroupName())

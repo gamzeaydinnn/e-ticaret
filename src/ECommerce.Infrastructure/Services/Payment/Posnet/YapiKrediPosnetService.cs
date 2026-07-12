@@ -1449,38 +1449,95 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     ?? order?.PosnetTransactionId
                     ?? GeneratePosnetOrderId(orderId);
 
-                // ── MADDE 15: KGL siparişlerde iade için doğru HostLogKey seçimi ──────────
-                // POSNET dok: "Finansallaştırma (Capt) sonrası iade için Capture HostLogKey
-                // kullanılmalıdır." KGL ürün için önce 'capt' kaydı aranir; yoksa
-                // orijinal 'auth'/'sale' kaydına fallback yapılır.
-                var isWeightBasedOrder = order?.HasWeightBasedItems == true;
+                // POSNET dok: auth+capt zincirinde iade için Capture HostLogKey kullanılmalı.
+                // Satış (sale) sonrası iadede orijinal sale HostLogKey korunur.
                 string effectiveHostLogKey = hostLogKey;
+                var captPayment = await _db.Payments
+                    .AsNoTracking()
+                    .Where(p => p.OrderId == orderId &&
+                                p.TransactionType == "capt" &&
+                                (p.Status == "Paid" || p.Status == "Success" || p.Status == "PartiallyRefunded") &&
+                                !string.IsNullOrWhiteSpace(p.HostLogKey))
+                    .OrderByDescending(p => p.CreatedAt)
+                    .FirstOrDefaultAsync(cancellationToken);
 
-                if (isWeightBasedOrder)
+                if (captPayment != null && !string.IsNullOrWhiteSpace(captPayment.HostLogKey))
                 {
-                    var captPayment = await _db.Payments
+                    effectiveHostLogKey = captPayment.HostLogKey!;
+                    _logger.LogInformation(
+                        "[POSNET] İade: Capture HostLogKey kullanılıyor. OrderId: {OrderId}, CaptHostLogKey: {Key}",
+                        orderId, effectiveHostLogKey);
+                }
+
+                // Toplam iade tutarı orijinal tutarı geçemez (bankaapi)
+                var originalAmountPayment = captPayment
+                    ?? await _db.Payments
                         .AsNoTracking()
                         .Where(p => p.OrderId == orderId &&
-                                    p.TransactionType == "capt" &&
-                                    p.Status == "Paid" &&
-                                    !string.IsNullOrWhiteSpace(p.HostLogKey))
+                                    (p.TransactionType == "sale" || p.TransactionType == "capt") &&
+                                    (p.Status == "Paid" || p.Status == "Success" ||
+                                     p.Status == "PartiallyRefunded" || p.Status == "Refunded"))
                         .OrderByDescending(p => p.CreatedAt)
                         .FirstOrDefaultAsync(cancellationToken);
 
-                    if (captPayment != null && !string.IsNullOrWhiteSpace(captPayment.HostLogKey))
+                var originalAmount = originalAmountPayment?.Amount
+                    ?? order?.CapturedAmount
+                    ?? order?.TotalPrice
+                    ?? 0m;
+
+                var previousRefunds = await _db.Payments
+                    .AsNoTracking()
+                    .Where(p => p.OrderId == orderId &&
+                                p.TransactionType == "return" &&
+                                p.Status == "Refunded")
+                    .SumAsync(p => (decimal?)p.Amount, cancellationToken) ?? 0m;
+
+                if (amount <= 0)
+                {
+                    return PosnetResult<PosnetReturnResponse>.Failure(
+                        "İade tutarı sıfırdan büyük olmalıdır.",
+                        PosnetErrorCode.InvalidAmount,
+                        elapsedMs: stopwatch.ElapsedMilliseconds);
+                }
+
+                if (originalAmount > 0 && previousRefunds + amount > originalAmount + 0.01m)
+                {
+                    _logger.LogWarning(
+                        "[POSNET] İade tutarı aşıldı. OrderId={OrderId}, Original={Original}, Previous={Previous}, Request={Request}",
+                        orderId, originalAmount, previousRefunds, amount);
+                    return PosnetResult<PosnetReturnResponse>.Failure(
+                        $"Toplam iade tutarı orijinal tutarı aşamaz. Orijinal: {originalAmount:N2} TL, Önceki: {previousRefunds:N2} TL, Talep: {amount:N2} TL",
+                        PosnetErrorCode.RefundExceedsSaleAmount,
+                        elapsedMs: stopwatch.ElapsedMilliseconds);
+                }
+
+                // HostLogKey yoksa OrderID ile iade: 3DS için TDS_ prefix (bankaapi)
+                if (string.IsNullOrWhiteSpace(effectiveHostLogKey) &&
+                    !string.IsNullOrWhiteSpace(originalPosnetOrderId))
+                {
+                    var is3DSecure = await _db.PosnetTransactionLogs
+                        .AsNoTracking()
+                        .AnyAsync(l => l.OrderId == orderId && l.Is3DSecure, cancellationToken);
+
+                    if (!is3DSecure)
                     {
-                        effectiveHostLogKey = captPayment.HostLogKey!;
-                        _logger.LogInformation(
-                            "[POSNET] KGL iade: Capture HostLogKey kullanılıyor. " +
-                            "OrderId: {OrderId}, CaptHostLogKey: {Key}",
-                            orderId, effectiveHostLogKey);
+                        is3DSecure = await _db.Payments
+                            .AsNoTracking()
+                            .AnyAsync(p => p.OrderId == orderId &&
+                                           p.RawResponse != null &&
+                                           (p.RawResponse.Contains("oosTranData", StringComparison.OrdinalIgnoreCase) ||
+                                            p.RawResponse.Contains("3D", StringComparison.OrdinalIgnoreCase)),
+                                      cancellationToken);
                     }
-                    else
+
+                    if (is3DSecure &&
+                        !originalPosnetOrderId.StartsWith("TDS_", StringComparison.OrdinalIgnoreCase) &&
+                        originalPosnetOrderId.Length == 20)
                     {
-                        _logger.LogWarning(
-                            "[POSNET] KGL iade: Capture HostLogKey bulunamadı, parametre olarak gelen key kullanılıyor. " +
-                            "OrderId: {OrderId}, FallbackKey: {Key}",
-                            orderId, effectiveHostLogKey);
+                        originalPosnetOrderId = "TDS_" + originalPosnetOrderId;
+                        _logger.LogInformation(
+                            "[POSNET] 3DS iade: TDS_ prefix eklendi. OrderId: {OrderId}",
+                            originalPosnetOrderId);
                     }
                 }
 

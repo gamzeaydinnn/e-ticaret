@@ -138,6 +138,11 @@ namespace ECommerce.Business.Services.Managers
         {
             var query = _dbContext.MicroSyncLogs.AsNoTracking();
 
+            // ERP cari (müşteri) başarısız denemeleri admin loglarını kirletmesin
+            query = query.Where(l =>
+                !(l.EntityType == "Cari" &&
+                  (l.Status == "Failed" || l.Status == "DeadLetter")));
+
             if (parameters.StartDate.HasValue)
             {
                 var start = parameters.StartDate.Value;

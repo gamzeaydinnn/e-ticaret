@@ -20,6 +20,11 @@ import {
   DialogContent,
 } from "@mui/material";
 import { AdminService } from "../../../services/adminService";
+import {
+  extractAuditDescription,
+  labelAction,
+  labelEntity,
+} from "./logLabels";
 
 const AuditLogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -112,7 +117,7 @@ const AuditLogsPage = () => {
         variant="h5"
         sx={{ fontSize: { xs: "1.25rem", md: "1.5rem" }, mb: 2 }}
       >
-        Audit Logs
+        Denetim Kayıtları
       </Typography>
       <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 2 }}>
         <Stack
@@ -121,14 +126,14 @@ const AuditLogsPage = () => {
           sx={{ flexWrap: "wrap", gap: { xs: 1, md: 2 } }}
         >
           <TextField
-            label="Entity Type"
+            label="Kayıt tipi"
             value={filters.entityType}
             onChange={(e) => handleFilterChange("entityType", e.target.value)}
             size="small"
             sx={{ minWidth: { xs: "100%", sm: 120 }, flex: { sm: 1 } }}
           />
           <TextField
-            label="Action"
+            label="İşlem"
             value={filters.action}
             onChange={(e) => handleFilterChange("action", e.target.value)}
             size="small"
@@ -190,7 +195,10 @@ const AuditLogsPage = () => {
                   Aksiyon
                 </TableCell>
                 <TableCell sx={{ fontSize: "0.75rem", px: { xs: 1, md: 2 } }}>
-                  Entity
+                  Açıklama
+                </TableCell>
+                <TableCell sx={{ fontSize: "0.75rem", px: { xs: 1, md: 2 } }}>
+                  Kayıt tipi
                 </TableCell>
                 <TableCell
                   sx={{
@@ -226,16 +234,28 @@ const AuditLogsPage = () => {
                   </TableCell>
                   <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                     <Chip
-                      label={log.action}
+                      label={labelAction(log.action)}
                       size="small"
                       color="warning"
-                      sx={{ fontSize: "0.65rem" }}
+                      sx={{ fontSize: "0.65rem", maxWidth: 180 }}
                     />
+                  </TableCell>
+                  <TableCell sx={{ px: { xs: 1, md: 2 }, maxWidth: 320 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontSize: "0.75rem",
+                        lineHeight: 1.35,
+                        whiteSpace: "normal",
+                      }}
+                    >
+                      {extractAuditDescription(log)}
+                    </Typography>
                   </TableCell>
                   <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                     <Stack spacing={0.25}>
                       <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
-                        {log.entityType}
+                        {labelEntity(log.entityType)}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -294,7 +314,7 @@ const AuditLogsPage = () => {
               {!loading && logs.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     align="center"
                     sx={{ fontSize: "0.85rem" }}
                   >

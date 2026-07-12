@@ -497,7 +497,7 @@ namespace ECommerce.Business.Services.Sync
                     }
                     else
                     {
-                        throw new InvalidOperationException("MikroAPI false döndürdü");
+                        throw new InvalidOperationException("ERP fiyat güncellemesi reddedildi");
                     }
                 }
                 catch (Exception ex)
@@ -519,7 +519,7 @@ namespace ECommerce.Business.Services.Sync
 
             // Max deneme aşıldı
             syncLog.Status = "Failed";
-            syncLog.Message = $"Max {MAX_RETRY_ATTEMPTS} deneme aşıldı";
+            syncLog.Message = $"{MAX_RETRY_ATTEMPTS} deneme sonrası senkronizasyon durduruldu";
             await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
 
             _logger.LogError(
@@ -529,7 +529,7 @@ namespace ECommerce.Business.Services.Sync
             return SyncResult.Fail(new SyncError(
                 "PushPrice",
                 product.SKU,
-                syncLog.LastError ?? "Max retry exceeded"));
+                syncLog.LastError ?? "Maksimum deneme sayısına ulaşıldı"));
         }
     }
 }

@@ -20,6 +20,13 @@ import {
   Box,
 } from "@mui/material";
 import { AdminService } from "../../../services/adminService";
+import {
+  humanizeLogMessage,
+  labelDirection,
+  labelEntity,
+  labelStatus,
+  statusChipColor,
+} from "./logLabels";
 
 const SystemLogsPage = () => {
   const [logs, setLogs] = useState([]);
@@ -60,7 +67,7 @@ const SystemLogsPage = () => {
       setPagination((prev) => ({ ...prev, total: payload?.total || 0 }));
     } catch (err) {
       console.error("System log fetch error", err);
-      setError("Sistem logları getirilemedi");
+      setError("ERP senkron kayıtları getirilemedi");
     } finally {
       setLoading(false);
     }
@@ -93,7 +100,11 @@ const SystemLogsPage = () => {
         variant="h5"
         sx={{ fontSize: { xs: "1.25rem", md: "1.5rem" }, mb: 2 }}
       >
-        System Logs
+        ERP Senkron Kayıtları
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Sipariş, stok ve fiyat gibi ERP aktarımlarının özeti. Başarısız müşteri
+        (cari) denemeleri bu listede gösterilmez.
       </Typography>
       <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 2 }}>
         <Stack
@@ -102,21 +113,24 @@ const SystemLogsPage = () => {
           sx={{ flexWrap: "wrap", gap: { xs: 1, md: 2 } }}
         >
           <TextField
-            label="Entity"
+            label="Kayıt tipi"
+            placeholder="Order, Stok, Fiyat..."
             value={filters.entityType}
             onChange={(e) => handleFilterChange("entityType", e.target.value)}
             size="small"
             sx={{ minWidth: { xs: "100%", sm: 100 }, flex: { sm: 1 } }}
           />
           <TextField
-            label="Status"
+            label="Durum"
+            placeholder="Success, Failed..."
             value={filters.status}
             onChange={(e) => handleFilterChange("status", e.target.value)}
             size="small"
             sx={{ minWidth: { xs: "48%", sm: 80 }, flex: { sm: 1 } }}
           />
           <TextField
-            label="Direction"
+            label="Yön"
+            placeholder="ToERP, FromERP..."
             value={filters.direction}
             onChange={(e) => handleFilterChange("direction", e.target.value)}
             size="small"
@@ -175,7 +189,7 @@ const SystemLogsPage = () => {
                   ID
                 </TableCell>
                 <TableCell sx={{ fontSize: "0.75rem", px: { xs: 1, md: 2 } }}>
-                  Entity
+                  Kayıt tipi
                 </TableCell>
                 <TableCell
                   sx={{
@@ -183,10 +197,10 @@ const SystemLogsPage = () => {
                     fontSize: "0.75rem",
                   }}
                 >
-                  Direction
+                  Yön
                 </TableCell>
                 <TableCell sx={{ fontSize: "0.75rem", px: { xs: 1, md: 2 } }}>
-                  Status
+                  Durum
                 </TableCell>
                 <TableCell
                   sx={{
@@ -194,7 +208,7 @@ const SystemLogsPage = () => {
                     fontSize: "0.75rem",
                   }}
                 >
-                  Attempts
+                  Deneme
                 </TableCell>
                 <TableCell
                   sx={{
@@ -202,7 +216,7 @@ const SystemLogsPage = () => {
                     fontSize: "0.75rem",
                   }}
                 >
-                  Mesaj
+                  Açıklama
                 </TableCell>
                 <TableCell sx={{ fontSize: "0.75rem", px: { xs: 1, md: 2 } }}>
                   Detay
@@ -223,7 +237,7 @@ const SystemLogsPage = () => {
                   <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                     <Stack spacing={0.25}>
                       <Typography variant="body2" sx={{ fontSize: "0.75rem" }}>
-                        {log.entityType}
+                        {labelEntity(log.entityType)}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -236,16 +250,16 @@ const SystemLogsPage = () => {
                   </TableCell>
                   <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                     <Chip
-                      label={log.direction}
+                      label={labelDirection(log.direction)}
                       size="small"
                       sx={{ fontSize: "0.65rem" }}
                     />
                   </TableCell>
                   <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                     <Chip
-                      label={log.status}
+                      label={labelStatus(log.status)}
                       size="small"
-                      color="success"
+                      color={statusChipColor(log.status)}
                       sx={{ fontSize: "0.65rem" }}
                     />
                   </TableCell>
@@ -261,13 +275,13 @@ const SystemLogsPage = () => {
                     sx={{
                       display: { xs: "none", md: "table-cell" },
                       fontSize: "0.7rem",
-                      maxWidth: 150,
+                      maxWidth: 220,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {log.message}
+                    {humanizeLogMessage(log.message) || "-"}
                   </TableCell>
                   <TableCell sx={{ px: { xs: 1, md: 2 } }}>
                     <Button
@@ -307,6 +321,7 @@ const SystemLogsPage = () => {
           rowsPerPage={pagination.pageSize}
           onRowsPerPageChange={handleRowsPerPage}
           rowsPerPageOptions={[10, 20, 50]}
+          labelRowsPerPage="Sayfa boyutu"
           sx={{
             ".MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows":
               {
@@ -345,28 +360,35 @@ const SystemLogsPage = () => {
             py: { xs: 1.5, md: 2 },
           }}
         >
-          Log Detayı
+          Senkron Kaydı Detayı
         </DialogTitle>
         <DialogContent sx={{ p: { xs: 1.5, md: 3 } }}>
           <Stack spacing={1}>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-              <strong>Status:</strong> {detailLog?.status}
+              <strong>Kayıt tipi:</strong> {labelEntity(detailLog?.entityType)}
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-              <strong>Attempts:</strong> {detailLog?.attempts}
+              <strong>Yön:</strong> {labelDirection(detailLog?.direction)}
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-              <strong>Son Deneme:</strong>{" "}
+              <strong>Durum:</strong> {labelStatus(detailLog?.status)}
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
+              <strong>Deneme sayısı:</strong> {detailLog?.attempts}
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
+              <strong>Son deneme:</strong>{" "}
               {formatDate(detailLog?.lastAttemptAt)}
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
               <strong>Oluşturma:</strong> {formatDate(detailLog?.createdAt)}
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-              <strong>Mesaj:</strong> {detailLog?.message}
+              <strong>Açıklama:</strong>{" "}
+              {humanizeLogMessage(detailLog?.message) || "-"}
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-              <strong>Son Hata:</strong>
+              <strong>Hata ayrıntısı:</strong>
             </Typography>
             <pre
               style={{
@@ -376,7 +398,7 @@ const SystemLogsPage = () => {
                 maxHeight: 200,
               }}
             >
-              {detailLog?.lastError || "(boş)"}
+              {humanizeLogMessage(detailLog?.lastError) || "(yok)"}
             </pre>
           </Stack>
         </DialogContent>

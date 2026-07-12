@@ -47,12 +47,35 @@ export const BANNER_DIMENSIONS = {
 
 /**
  * Dosya yükleme için izin verilen formatlar ve boyut limiti
+ * Kısa (3–4 sn) sessiz HD döngü videoları için mp4/webm desteklenir.
  */
 export const UPLOAD_CONFIG = {
-  maxSizeBytes: 10 * 1024 * 1024, // 10 MB
-  maxSizeMB: 10,
-  allowedExtensions: [".jpg", ".jpeg", ".png", ".gif", ".webp"],
-  allowedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  maxSizeBytes: 50 * 1024 * 1024, // 50 MB
+  maxSizeMB: 50,
+  allowedExtensions: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm"],
+  allowedMimeTypes: [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "video/mp4",
+    "video/webm",
+  ],
+  videoExtensions: [".mp4", ".webm"],
+  videoMimeTypes: ["video/mp4", "video/webm"],
+};
+
+/**
+ * URL veya dosya adının video olup olmadığını kontrol eder
+ * @param {string} urlOrName
+ * @returns {boolean}
+ */
+export const isVideoUrl = (urlOrName) => {
+  if (!urlOrName || typeof urlOrName !== "string") return false;
+  // data:video/... veya blob sonrası uzantı yoksa mime'dan anla
+  if (urlOrName.startsWith("data:video/")) return true;
+  const clean = urlOrName.split("?")[0].split("#")[0].toLowerCase();
+  return UPLOAD_CONFIG.videoExtensions.some((ext) => clean.endsWith(ext));
 };
 
 // ============================================
@@ -115,7 +138,10 @@ export const isValidFileSize = (sizeInBytes) => {
  * @returns {boolean} Geçerli ise true
  */
 export const isValidMimeType = (mimeType) => {
-  return UPLOAD_CONFIG.allowedMimeTypes.includes(mimeType);
+  if (!mimeType) return true; // uzantı kontrolü yeterli (bazı OS boş gönderir)
+  if (UPLOAD_CONFIG.allowedMimeTypes.includes(mimeType)) return true;
+  // Bazı tarayıcılar video için generic MIME gönderir
+  return mimeType === "application/octet-stream";
 };
 
 /**
@@ -624,6 +650,8 @@ const bannerService = {
   isValidFileExtension,
   isValidFileSize,
   isValidMimeType,
+  isVideoUrl,
+  normalizeImageUrl,
 
   // Sabitler
   BANNER_DIMENSIONS,

@@ -128,7 +128,8 @@ import SearchAutocomplete from "./components/SearchAutocomplete";
 import categoryServiceReal, {
   normalizeCategorySlug,
 } from "./services/categoryServiceReal";
-import bannerService from "./services/bannerService";
+import bannerService, { isVideoUrl } from "./services/bannerService";
+import BannerMedia from "./components/BannerMedia";
 import homeBlockService from "./services/homeBlockService";
 import ProductBlockSection from "./pages/components/ProductBlockSection";
 import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
@@ -1676,10 +1677,14 @@ function HomePage() {
                     opacity: index === currentSlide ? 1 : 0,
                     transition: "opacity 0.8s ease-in-out",
                     zIndex: index === currentSlide ? 2 : 1,
-                    backgroundImage: `url(${slide.image})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center center",
-                    backgroundRepeat: "no-repeat",
+                    ...(isVideoUrl(slide.image)
+                      ? { backgroundColor: "#000" }
+                      : {
+                          backgroundImage: `url(${slide.image})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center center",
+                          backgroundRepeat: "no-repeat",
+                        }),
                   }}
                   role="group"
                   aria-label={`Slayt ${index + 1} / ${slides.length}: ${
@@ -1687,7 +1692,22 @@ function HomePage() {
                   }`}
                   aria-hidden={index !== currentSlide}
                 >
-                  {/* Slide content (title, subtitle, etc.) eklenebilir */}
+                  {isVideoUrl(slide.image) && (
+                    <BannerMedia
+                      src={slide.image}
+                      alt={slide.title || "Slayt"}
+                      className="carousel-slide-media"
+                      active={index === currentSlide}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        objectPosition: "center",
+                      }}
+                    />
+                  )}
                 </div>
               ))}
               {/* Slide Indicators */}
@@ -1753,12 +1773,14 @@ function HomePage() {
                   promo.link && (window.location.href = promo.link)
                 }
               >
-                <img
+                <BannerMedia
                   src={promo.image}
                   alt={promo.title}
                   className="promo-grid-image"
                   onError={(e) => {
-                    e.target.src = "/images/placeholder.png";
+                    if (e?.target?.tagName === "IMG") {
+                      e.target.src = "/images/placeholder.png";
+                    }
                   }}
                 />
               </div>
@@ -1898,9 +1920,10 @@ function HomePage() {
                     recipe.link && (window.location.href = recipe.link)
                   }
                 >
-                  <img
+                  <BannerMedia
                     src={recipe.image}
                     alt={recipe.title || "Şef Önerisi"}
+                    className="recipe-card-media"
                     style={{
                       width: "100%",
                       height: "140px",
@@ -1908,7 +1931,9 @@ function HomePage() {
                       display: "block",
                     }}
                     onError={(e) => {
-                      e.target.src = "/images/placeholder.png";
+                      if (e?.target?.tagName === "IMG") {
+                        e.target.src = "/images/placeholder.png";
+                      }
                     }}
                   />
                 </div>
@@ -1922,7 +1947,8 @@ function HomePage() {
                   gap: 8px !important;
                   max-width: 100% !important;
                 }
-                .recipe-card img {
+                .recipe-card img,
+                .recipe-card video {
                   height: 110px !important;
                 }
                 .recipe-card {

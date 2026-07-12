@@ -43,6 +43,7 @@ namespace ECommerce.API.Controllers.Admin
         private readonly IMemoryCache _memoryCache;
         private readonly ILogger<AdminMicroController> _logger;
         private readonly ECommerceDbContext _context;
+        private readonly IMikroDbService _mikroDbService;
         private const long MaxImportFileSizeBytes = 5 * 1024 * 1024; // 5 MB
         private const int MaxImportRowCount = 10000;
         private static readonly TimeSpan AdminReadCacheTtl = TimeSpan.FromSeconds(10);
@@ -57,7 +58,8 @@ namespace ECommerce.API.Controllers.Admin
             IMikroSyncRepository syncRepository,
             IMemoryCache memoryCache,
             ILogger<AdminMicroController> logger,
-            ECommerceDbContext context)
+            ECommerceDbContext context,
+            IMikroDbService mikroDbService)
         {
             _microSyncManager = microSyncManager;
             _microService = microService;
@@ -69,6 +71,7 @@ namespace ECommerce.API.Controllers.Admin
             _memoryCache = memoryCache;
             _logger = logger;
             _context = context;
+            _mikroDbService = mikroDbService;
         }
 
         //--- Yönetici Yetkisi Gerektiren İşlemler (Mutating/Triggering) ---
@@ -592,49 +595,56 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         /// <summary>
-        /// Mikro API bağlantı testi.
-        /// SQL direkt bağlantı ile hızlı doğrulama yapar. StokListesiV2 HTTP API timeout
-        /// sorunlarını bypass eder.
+        /// Mikro SQL bağlantı testi — hafif COUNT, tüm katalog çekilmez.
         /// </summary>
         [HttpGet("test-connection")]
         public async Task<IActionResult> TestConnection()
         {
             try
             {
-                _logger.LogInformation("[AdminMicroController] Mikro bağlantı testi başlatılıyor (SQL direkt)");
+                _logger.LogInformation("[AdminMicroController] Mikro bağlantı testi (hafif COUNT)");
 
-                // SQL direkt bağlantı ile test — StokListesiV2 HTTP timeout sorununu bypass eder
-                var products = await _mikroApiService.GetProductsWithSqlAsync(
-                    sayfaNo: 1,
-                    sayfaBuyuklugu: 1,
-                    sadeceAktif: true);
+                if (!_mikroDbService.IsConfigured)
+                {
+                    var localCount = await _context.Products.CountAsync(p => p.IsActive);
+                    return Ok(new
+                    {
+                        success = false,
+                        isConnected = false,
+                        mikroApiOnline = false,
+                        databaseOnline = true,
+                        message = "Mikro SQL yapılandırılmamış. Yerel ürünler kullanılıyor.",
+                        veritabaniUrunSayisi = localCount,
+                        toplamUrunSayisi = localCount,
+                        timestamp = DateTime.UtcNow
+                    });
+                }
 
-                var totalCount = products.FirstOrDefault()?.ToplamKayit ?? products.Count;
-
+                var totalCount = await _mikroDbService.GetWebProductCountAsync(HttpContext.RequestAborted);
                 if (totalCount > 0)
                 {
                     return Ok(new
                     {
                         success = true,
+                        isConnected = true,
+                        mikroApiOnline = true,
+                        databaseOnline = true,
                         message = "Mikro SQL bağlantısı başarılı!",
                         toplamUrunSayisi = totalCount,
-                        cekilenKayitSayisi = products.Count,
-                        apiVersion = "SQL_DIRECT",
+                        apiVersion = "SQL_COUNT",
                         timestamp = DateTime.UtcNow
                     });
                 }
 
-                _logger.LogWarning(
-                    "[AdminMicroController] Bağlantı testi SQL tarafında 0 ürün döndürdü. " +
-                    "Offline DB fallback bilgisi döndürülüyor.");
-
-                var dbFallbackCount = (await _productRepository.GetAllAsync()).Count();
+                // COUNT 0 veya SQL erişilemedi — yerel fallback (CountAsync, GetAll değil)
+                var dbFallbackCount = await _context.Products.CountAsync(p => p.IsActive);
                 return Ok(new
                 {
+                    success = false,
                     isConnected = false,
                     mikroApiOnline = false,
                     databaseOnline = true,
-                    message = "Mikro SQL erişilemiyor. Veritabanındaki ürünler gösteriliyor.",
+                    message = "Mikro SQL erişilemiyor veya web ürünü yok. Yerel ürünler gösteriliyor.",
                     veritabaniUrunSayisi = dbFallbackCount,
                     toplamUrunSayisi = dbFallbackCount,
                     timestamp = DateTime.UtcNow
@@ -643,13 +653,13 @@ namespace ECommerce.API.Controllers.Admin
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[AdminMicroController] Bağlantı testi hatası");
-                
-                // Mikro API offline - veritabanı durumunu kontrol et
+
                 try
                 {
-                    var dbProductCount = (await _productRepository.GetAllAsync()).Count();
+                    var dbProductCount = await _context.Products.CountAsync(p => p.IsActive);
                     return Ok(new
                     {
+                        success = false,
                         isConnected = false,
                         mikroApiOnline = false,
                         databaseOnline = true,
@@ -662,6 +672,7 @@ namespace ECommerce.API.Controllers.Admin
                 {
                     return Ok(new
                     {
+                        success = false,
                         isConnected = false,
                         mikroApiOnline = false,
                         databaseOnline = false,

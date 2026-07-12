@@ -3,7 +3,7 @@
 // Admin Profil Yönetimi - Backend Entegre
 // =============================================================================
 // Admin kullanıcısının kendi profil bilgilerini görüntüleme ve güncelleme sayfası.
-// Backend: AuthController.GetCurrentUser ve AccountController.UpdateProfile
+// Backend: AccountController (/api/account/profile, /api/account/change-password)
 // =============================================================================
 
 import React, { useState, useEffect } from "react";
@@ -13,7 +13,7 @@ import { ROLE_LABELS } from "../../services/permissionService";
 import "./AdminProfile.css";
 
 const AdminProfile = () => {
-  const { user: currentUser, setUser } = useAuth();
+  const { user: currentUser, updateUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -44,6 +44,12 @@ const AdminProfile = () => {
   const [passwordError, setPasswordError] = useState(null);
   const [passwordSuccess, setPasswordSuccess] = useState(null);
   const [changingPassword, setChangingPassword] = useState(false);
+
+  const isStrongPassword = (value) =>
+    /[a-z]/.test(value) &&
+    /[A-Z]/.test(value) &&
+    /\d/.test(value) &&
+    value.length >= 8;
 
   useEffect(() => {
     loadProfile();
@@ -96,13 +102,21 @@ const AdminProfile = () => {
           lastLoginAt: resolvedLastLoginAt,
         });
 
-        if (setUser && currentUser) {
-          setUser({
-            ...currentUser,
+        if (updateUser) {
+          updateUser({
+            firstName: userData.firstName || userData.FirstName || "",
+            lastName: userData.lastName || userData.LastName || "",
+            email: userData.email || userData.Email || "",
+            phoneNumber: userData.phoneNumber || userData.PhoneNumber || "",
+            address: userData.address || userData.Address || "",
+            city: userData.city || userData.City || "",
             role: resolvedRole,
             isActive: resolvedIsActive,
             createdAt: resolvedCreatedAt,
             lastLoginAt: resolvedLastLoginAt,
+            name: `${userData.firstName || userData.FirstName || ""} ${
+              userData.lastName || userData.LastName || ""
+            }`.trim(),
           });
         }
       }
@@ -161,12 +175,11 @@ const AdminProfile = () => {
 
       await AdminService.updateProfile(payload);
 
-      // Context'teki user'ı güncelle
-      if (setUser && currentUser) {
-        setUser({
-          ...currentUser,
+      if (updateUser) {
+        updateUser({
           ...payload,
-          fullName: `${payload.firstName} ${payload.lastName}`,
+          name: `${payload.firstName} ${payload.lastName}`.trim(),
+          fullName: `${payload.firstName} ${payload.lastName}`.trim(),
         });
       }
 
@@ -204,8 +217,15 @@ const AdminProfile = () => {
       return;
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      setPasswordError("Yeni şifre en az 6 karakter olmalıdır.");
+    if (passwordForm.newPassword.length < 8) {
+      setPasswordError("Yeni şifre en az 8 karakter olmalıdır.");
+      return;
+    }
+
+    if (!isStrongPassword(passwordForm.newPassword)) {
+      setPasswordError(
+        "Yeni şifre en az 1 büyük harf, 1 küçük harf ve 1 rakam içermelidir.",
+      );
       return;
     }
 
@@ -424,10 +444,12 @@ const AdminProfile = () => {
                     value={passwordForm.newPassword}
                     onChange={handlePasswordChange}
                     required
-                    minLength="6"
+                    minLength="8"
                     disabled={changingPassword}
                   />
-                  <small className="text-muted">En az 6 karakter</small>
+                  <small className="text-muted">
+                    En az 8 karakter, 1 büyük harf, 1 küçük harf ve 1 rakam
+                  </small>
                 </div>
                 <div className="mb-3">
                   <label className="form-label">Yeni Şifre Tekrar *</label>

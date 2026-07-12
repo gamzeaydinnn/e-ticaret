@@ -12,6 +12,12 @@ import signalRService from "../services/signalRService";
 import { isStrictVariableWeightProduct } from "../utils/weightBasedProduct";
 import OrderActions from "../components/orders/OrderActions";
 import OrderStatusBadge from "../components/orders/OrderStatusBadge";
+import {
+  getOrderItemLineTotal,
+  getOrderItemUnitLabel,
+  getOrderDisplayTotals,
+  formatTry,
+} from "../utils/orderDisplayTotals";
 
 /**
  * Durum badge'ini render et
@@ -365,6 +371,7 @@ export default function OrderDetailModal({
         weightUnit: item.weightUnit || item.product?.weightUnit || null,
       }),
   );
+  const totals = getOrderDisplayTotals(localOrder);
 
   return (
     <div
@@ -474,7 +481,7 @@ export default function OrderDetailModal({
                   <div className="product-info">
                     <span className="product-name">{item.productName}</span>
                     <div className="product-meta">
-                      <span className="quantity">x{item.quantity}</span>
+                      <span className="quantity">{getOrderItemUnitLabel(item)}</span>
                       {item.isWeightBased && (
                         <span className="weight-badge-sm">
                           <i className="fas fa-balance-scale"></i>
@@ -483,7 +490,9 @@ export default function OrderDetailModal({
                       )}
                     </div>
                   </div>
-                  <span className="product-price">₺{item.unitPrice}</span>
+                  <span className="product-price">
+                    {formatTry(getOrderItemLineTotal(item))}
+                  </span>
                 </div>
               ))}
             </div>
@@ -492,8 +501,24 @@ export default function OrderDetailModal({
           {/* Özet */}
           <div className="order-summary">
             <div className="summary-row">
+              <span>Ürünler</span>
+              <span>{formatTry(totals.itemsSubtotal)}</span>
+            </div>
+            {totals.hasShipping && (
+              <div className="summary-row">
+                <span>Kargo</span>
+                <span>{formatTry(totals.shippingCost)}</span>
+              </div>
+            )}
+            {totals.hasDiscount && (
+              <div className="summary-row text-success">
+                <span>İndirim</span>
+                <span>-{formatTry(totals.totalDiscount)}</span>
+              </div>
+            )}
+            <div className="summary-row">
               <span>Toplam</span>
-              <span className="total-price">₺{localOrder.totalAmount}</span>
+              <span className="total-price">{formatTry(totals.total)}</span>
             </div>
           </div>
 

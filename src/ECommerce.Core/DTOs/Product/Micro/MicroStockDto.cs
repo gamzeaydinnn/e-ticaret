@@ -20,5 +20,11 @@ namespace ECommerce.Core.DTOs.Micro
         public int ReservedQuantity { get; set; }
         public string WarehouseCode { get; set; } = "DEPO1";
         public DateTime LastUpdated { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// true: stok artışı (iade/giriş), false: stok azalışı (çıkış/düzeltme).
+        /// UpsertStocksAsync delta hareketi için kullanır.
+        /// </summary>
+        public bool IsStockIncrease { get; set; }
     }
 }

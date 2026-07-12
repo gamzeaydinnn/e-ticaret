@@ -534,6 +534,7 @@ builder.Services.AddScoped<ECommerce.Business.Services.Interfaces.INotificationS
 builder.Services.AddScoped<IOrderStateMachine, OrderStateMachine>();
 
 // RefundManager - İade talebi yönetim servisi
+builder.Services.AddScoped<IOrderInventorySettlementService, OrderInventorySettlementService>();
 builder.Services.AddScoped<IOrderCancellationHandler, OrderCancellationHandler>();
 builder.Services.AddScoped<IRefundService, RefundManager>();
 

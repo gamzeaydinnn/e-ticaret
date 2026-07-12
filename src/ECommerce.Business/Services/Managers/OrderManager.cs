@@ -10,6 +10,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using ECommerce.Entities.Concrete;
 using ECommerce.Core.DTOs.Cart;
+using ECommerce.Core.DTOs.Inventory;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.DTOs.Order;
 using ECommerce.Core.DTOs.Pricing;
@@ -27,6 +28,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly IInventoryService _inventoryService;
         private readonly IInventoryLogService _inventoryLogService;
         private readonly IPricingEngine _pricingEngine;
+        private readonly IOrderInventorySettlementService? _inventorySettlement;
         private readonly ECommerce.Business.Services.Interfaces.INotificationService? _notificationService;
         private readonly ECommerce.Business.Services.Interfaces.IPushService? _pushService;
         private readonly ECommerce.Business.Services.Interfaces.ISmsService? _smsService;
@@ -132,6 +134,21 @@ namespace ECommerce.Business.Services.Managers
                     OrderStatus.Cancelled
                 },
 
+                // KG Auth: 3DS provizyon sonrası → Admin onayı veya iptal
+                [OrderStatus.PreAuthorized] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Confirmed,
+                    OrderStatus.Cancelled
+                },
+
+                // Tartı sonrası (legacy) → Ready / kurye / iptal
+                [OrderStatus.WeightPending] = new HashSet<OrderStatus>
+                {
+                    OrderStatus.Ready,
+                    OrderStatus.Assigned,
+                    OrderStatus.Cancelled
+                },
+
                 // Shipped → OutForDelivery veya Delivered (eski kargo akışı için)
                 [OrderStatus.Shipped] = new HashSet<OrderStatus>
                 {
@@ -177,7 +194,8 @@ namespace ECommerce.Business.Services.Managers
             ECommerce.Business.Services.Interfaces.ISmsService? smsService = null,
             IHttpContextAccessor? httpContextAccessor = null,
             IShippingService? shippingService = null,
-            ILogger<OrderManager>? logger = null)
+            ILogger<OrderManager>? logger = null,
+            IOrderInventorySettlementService? inventorySettlement = null)
         {
             _context = context;
             _inventoryService = inventoryService;
@@ -189,6 +207,7 @@ namespace ECommerce.Business.Services.Managers
             _httpContextAccessor = httpContextAccessor;
             _shippingService = shippingService;
             _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<OrderManager>.Instance;
+            _inventorySettlement = inventorySettlement;
         }
 
         private static string NormalizeCheckoutPaymentMethod(string? paymentMethod)
@@ -770,7 +789,17 @@ namespace ECommerce.Business.Services.Managers
                     var items = new List<OrderItem>();
                     foreach (var item in dto.OrderItems)
                     {
-                        checkoutProducts.TryGetValue(item.ProductId, out var product);
+                        if (!checkoutProducts.TryGetValue(item.ProductId, out var product) || product == null)
+                        {
+                            product = await _context.Products
+                                .Include(p => p.Category)
+                                .FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                            if (product != null)
+                            {
+                                checkoutProducts[item.ProductId] = product;
+                            }
+                        }
+
                         if (product == null)
                             throw new Exception($"Ürün bulunamadı: {item.ProductId}");
 
@@ -1015,7 +1044,15 @@ namespace ECommerce.Business.Services.Managers
                     }
                 }
 
-                await _inventoryService.CommitReservationAsync(clientOrderId);
+                // Faz0: Kart → sadece rezervasyon; COD → checkout'ta commit
+                var paymentMethod = NormalizeCheckoutPaymentMethod(dto.PaymentMethod);
+                if (LocalInventoryPolicy.IsCashOnDelivery(paymentMethod))
+                {
+                    await _inventoryService.CommitReservationAsync(clientOrderId);
+                    order.IsInventoryCommitted = true;
+                    await _context.SaveChangesAsync();
+                }
+
                 await transaction.CommitAsync();
 
                 return order.Id;
@@ -1035,6 +1072,13 @@ namespace ECommerce.Business.Services.Managers
             if (_notificationService != null)
             {
                 await _notificationService.SendOrderConfirmationAsync(createdOrderId);
+            }
+
+            // COD: stok commit checkout'ta yapıldı — Mikro sipariş push kuyruğa al
+            if (_inventorySettlement != null &&
+                LocalInventoryPolicy.IsCashOnDelivery(NormalizeCheckoutPaymentMethod(dto.PaymentMethod)))
+            {
+                await _inventorySettlement.SettlePaymentSuccessAsync(createdOrderId);
             }
 
             return await GetByIdAsync(createdOrderId) ?? throw new Exception("Sipariş oluşturulamadı.");
@@ -1086,13 +1130,47 @@ namespace ECommerce.Business.Services.Managers
                 return false;
             }
 
-            // Ödeme başarısız olduğunda sipariş Paid durumunda olmamalı
             if (order.Status == OrderStatus.PaymentFailed || order.Status == OrderStatus.Cancelled)
             {
                 return true;
             }
 
+            if (_inventorySettlement != null)
+            {
+                await _inventorySettlement.SettlePaymentFailureAsync(orderId);
+                return true;
+            }
+
+            // Fallback (test / DI eksik): release veya restore
             var previous = order.Status;
+            if (order.IsInventoryCommitted)
+            {
+                await EnsureOrderItemsLoadedAsync(order);
+                var lines = (order.OrderItems ?? Array.Empty<OrderItem>())
+                    .Where(i => i.Quantity > 0)
+                    .Select(i => new OrderStockRestoreLineDto
+                    {
+                        ProductId = i.ProductId,
+                        ProductVariantId = i.ProductVariantId,
+                        Quantity = i.Quantity
+                    })
+                    .ToList();
+
+                if (lines.Count > 0)
+                {
+                    await _inventoryService.RestoreOrderStockAsync(
+                        lines,
+                        LocalInventoryPolicy.LogActionPaymentFailed,
+                        order.OrderNumber ?? order.Id.ToString());
+                }
+
+                order.IsInventoryCommitted = false;
+            }
+            else if (order.ClientOrderId.HasValue)
+            {
+                await _inventoryService.ReleaseReservationAsync(order.ClientOrderId.Value);
+            }
+
             order.Status = OrderStatus.PaymentFailed;
             AddStatusHistory(order, previous, OrderStatus.PaymentFailed);
             await _context.SaveChangesAsync();
@@ -1133,29 +1211,36 @@ namespace ECommerce.Business.Services.Managers
 
             await EnsureOrderItemsLoadedAsync(order);
 
-            if (order.OrderItems != null && order.OrderItems.Count > 0)
+            var previous = order.Status;
+            if (LocalInventoryPolicy.HoldsCommittedSellableStock(previous, order.IsInventoryCommitted) &&
+                order.OrderItems != null &&
+                order.OrderItems.Count > 0)
             {
-                foreach (var item in order.OrderItems)
-                {
-                    var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId);
-                    if (product == null)
+                var lines = order.OrderItems
+                    .Where(i => i.Quantity > 0)
+                    .Select(i => new OrderStockRestoreLineDto
                     {
-                        continue;
-                    }
+                        ProductId = i.ProductId,
+                        ProductVariantId = i.ProductVariantId,
+                        Quantity = i.Quantity
+                    })
+                    .ToList();
 
-                    var oldStock = product.StockQuantity;
-                    product.StockQuantity += item.Quantity;
-                    await _inventoryLogService.WriteAsync(
-                        product.Id,
-                        "OrderCancelled",
-                        item.Quantity,
-                        oldStock,
-                        product.StockQuantity,
+                if (lines.Count > 0)
+                {
+                    await _inventoryService.RestoreOrderStockAsync(
+                        lines,
+                        LocalInventoryPolicy.LogActionOrderCancelled,
                         order.OrderNumber ?? order.Id.ToString());
                 }
+
+                order.IsInventoryCommitted = false;
+            }
+            else if (!order.IsInventoryCommitted && order.ClientOrderId.HasValue)
+            {
+                await _inventoryService.ReleaseReservationAsync(order.ClientOrderId.Value);
             }
 
-            var previous = order.Status;
             order.Status = OrderStatus.Cancelled;
             AddStatusHistory(order, previous, OrderStatus.Cancelled);
             await _context.SaveChangesAsync();
@@ -1178,8 +1263,11 @@ namespace ECommerce.Business.Services.Managers
 
         public async Task<int> GetTodayOrderCountAsync()
         {
-            var today = DateTime.UtcNow.Date;
-            return await _context.Orders.CountAsync(o => o.OrderDate.Date == today);
+            var turkeyToday = OrderCancelPolicy.GetTurkeyNow().Date;
+            var todayStartUtc = OrderReportHelper.TurkeyToUtc(turkeyToday);
+            var tomorrowStartUtc = OrderReportHelper.TurkeyToUtc(turkeyToday.AddDays(1));
+            return await _context.Orders.CountAsync(o =>
+                o.OrderDate >= todayStartUtc && o.OrderDate < tomorrowStartUtc);
         }
 
         public async Task<decimal> GetTotalRevenueAsync()
@@ -1580,8 +1668,13 @@ namespace ECommerce.Business.Services.Managers
                 return null;
             }
 
-            // Sadece New durumundan Confirmed'a geçiş yapılabilir
-            if (order.Status != OrderStatus.New && order.Status != OrderStatus.Pending && order.Status != OrderStatus.Paid)
+            // New/Pending/Paid (Sale) veya PreAuthorized (KG Auth provizyon) → Confirmed.
+            // NEDEN PreAuthorized: PosnetUseAuthForWeightBasedItems açıkken 3DS sonrası sipariş
+            // PreAuthorized olur; admin onayı bu durumdan da yapılabilmelidir.
+            if (order.Status != OrderStatus.New &&
+                order.Status != OrderStatus.Pending &&
+                order.Status != OrderStatus.Paid &&
+                order.Status != OrderStatus.PreAuthorized)
             {
                 throw new InvalidOperationException($"Sipariş onaylanamaz. Mevcut durum: {order.Status}");
             }
@@ -1719,13 +1812,23 @@ namespace ECommerce.Business.Services.Managers
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
                 .ThenInclude(p => p!.Category)
+                .Include(o => o.Courier)
+                .ThenInclude(c => c!.User)
                 .Where(o => allowedStatuses.Contains(o.Status))
                 .AsQueryable();
 
             // Durum filtresi
             if (!string.IsNullOrWhiteSpace(filter.Status))
             {
-                if (Enum.TryParse<OrderStatus>(filter.Status, true, out var statusFilter))
+                if (filter.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) ||
+                    filter.Status.Equals("weighed", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Ağırlık paneli "Tamamlandı": tartı bitti (Ready) + kurye atandı (Assigned)
+                    query = query.Where(o =>
+                        o.Status == OrderStatus.Ready ||
+                        o.Status == OrderStatus.Assigned);
+                }
+                else if (Enum.TryParse<OrderStatus>(filter.Status, true, out var statusFilter))
                 {
                     query = query.Where(o => o.Status == statusFilter);
                 }
@@ -1789,6 +1892,11 @@ namespace ECommerce.Business.Services.Managers
             var readyCount = await _context.Orders
                 .CountAsync(o => o.Status == OrderStatus.Ready);
 
+            var readyOrAssignedCount = await _context.Orders
+                .CountAsync(o =>
+                    o.Status == OrderStatus.Ready ||
+                    o.Status == OrderStatus.Assigned);
+
             // Bugün tamamlanan (Ready, Assigned, OutForDelivery, Delivered olan)
             var completedTodayCount = await _context.Orders
                 .CountAsync(o => o.ReadyAt.HasValue &&
@@ -1811,6 +1919,7 @@ namespace ECommerce.Business.Services.Managers
                 PendingCount = pendingCount,
                 PreparingCount = preparingCount,
                 ReadyCount = readyCount,
+                ReadyOrAssignedCount = readyOrAssignedCount,
                 CompletedTodayCount = completedTodayCount,
                 TodayTotalAmount = todayTotalAmount,
                 AveragePreparationTimeMinutes = avgPrepTime,
@@ -2249,7 +2358,14 @@ namespace ECommerce.Business.Services.Managers
                         ? order.FinalPrice
                         : order.TotalPrice,
                 HasWeightBasedItems = order.HasWeightBasedItems
-                    || (order.OrderItems?.Any(IsEffectivelyWeightBased) ?? false)
+                    || (order.OrderItems?.Any(IsEffectivelyWeightBased) ?? false),
+                AllItemsWeighed = (order.OrderItems?
+                        .Where(IsEffectivelyWeightBased)
+                        .ToList() is { Count: > 0 } weightItems)
+                    && weightItems.All(oi =>
+                        oi.IsWeighed || (oi.ActualWeight.HasValue && oi.ActualWeight.Value > 0)),
+                CourierId = order.CourierId,
+                CourierName = order.Courier?.User?.FullName
             };
         }
 

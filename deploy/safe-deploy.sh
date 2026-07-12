@@ -91,6 +91,7 @@ done
 
 git fetch origin main
 git reset --hard origin/main
+echo "  -> Aktif commit: $(git log -1 --oneline)"
 # Proje icindeki eski uploads/ klasorune dokunma (gercek veri /srv/ecommerce/uploads'ta)
 git clean -fd -e uploads -e logs -e backups || true
 

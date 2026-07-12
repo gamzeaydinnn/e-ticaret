@@ -2,6 +2,7 @@ using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.Helpers;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using Microsoft.Extensions.Logging;
@@ -29,14 +30,21 @@ namespace ECommerce.Business.Services.Managers
         {
             try
             {
+                var enrichedNewValue = AuditActionCatalog.EnsureTurkishPayload(
+                    action ?? string.Empty,
+                    entityType ?? string.Empty,
+                    entityId,
+                    newValue);
+
                 var entry = new AuditLogs
                 {
                     UserId = adminUserId,
-                    Action = action ?? string.Empty,
-                    EntityName = entityType ?? string.Empty,
+                    // DB'de Türkçe başlık sakla — admin panelinde doğrudan okunur
+                    Action = AuditActionCatalog.LabelAction(action),
+                    EntityName = AuditActionCatalog.LabelEntity(entityType),
                     EntityId = TryParseEntityId(entityId),
                     OldValues = Serialize(oldValue),
-                    NewValues = Serialize(newValue),
+                    NewValues = Serialize(enrichedNewValue),
                     PerformedBy = adminUserId > 0 ? adminUserId.ToString() : null,
                     CreatedAt = DateTime.UtcNow,
                     IsActive = true
@@ -47,7 +55,12 @@ namespace ECommerce.Business.Services.Managers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Audit log could not be written for {Action} on {EntityType} ({EntityId})", action, entityType, entityId);
+                _logger.LogError(
+                    ex,
+                    "Denetim kaydı yazılamadı. İşlem: {Action}, Kayıt: {EntityType} ({EntityId})",
+                    action,
+                    entityType,
+                    entityId);
             }
         }
 

@@ -16,7 +16,16 @@ import OrderStatusBadge from "../components/orders/OrderStatusBadge";
 import {
   isActiveOrder,
   isCompletedOrder,
+  isCancelledOrRefundedOrder,
+  countActiveOrders,
+  countHistoryOrders,
+  countCancelledOrders,
+  normalizeStatus,
 } from "../utils/orderCancelPolicy";
+import {
+  getOrderDisplayTotals,
+  formatTry,
+} from "../utils/orderDisplayTotals";
 import "../components/orders/OrderActions.css";
 
 // GÜVENLİK: Production'da debug log'ları kapalı
@@ -192,6 +201,18 @@ export default function OrderHistory() {
     loadOrders();
   }, [loadOrders]);
 
+  // Aktif kalmadığında Geçmiş sekmesine geç (iptal edilen siparişler görünsün)
+  useEffect(() => {
+    if (orders.length === 0) return;
+    if (countActiveOrders(orders) === 0 && countHistoryOrders(orders) > 0 && activeTab === "active") {
+      setActiveTab("history");
+    }
+  }, [orders, activeTab]);
+
+  const activeOrderCount = countActiveOrders(orders);
+  const historyOrderCount = countHistoryOrders(orders);
+  const cancelledOrderCount = countCancelledOrders(orders);
+
   // ============================================================================
   // SIGNALR REAL-TIME BAĞLANTI VE EVENT DİNLEME
   // Sipariş durumu değişikliklerini anlık olarak günceller
@@ -240,24 +261,30 @@ export default function OrderHistory() {
       DEBUG && console.log("[OrderHistory] SignalR: OrderStatusChanged", data);
       
       // Gelen sipariş ID'si ile eşleşen siparişi güncelle
-      setOrders(prevOrders => 
-        prevOrders.map(order => {
-          // ID eşleşmesi kontrol et (hem string hem number olabilir)
-          const matchesId = String(order.id) === String(data.orderId) || 
-                           order.orderNumber === data.orderNumber;
-          
+      setOrders((prev) =>
+        prev.map((order) => {
+          const matchesId =
+            String(order.id) === String(data.orderId) ||
+            order.orderNumber === data.orderNumber;
+
           if (matchesId) {
             DEBUG && console.log("[OrderHistory] Sipariş güncellendi:", order.orderNumber, "->", data.status);
+            const newStatus = (data.status || data.newStatus || order.status).toLowerCase();
             return {
               ...order,
-              status: data.status || data.newStatus,
+              status: newStatus,
               statusText: data.statusText,
               updatedAt: data.timestamp || new Date().toISOString(),
             };
           }
           return order;
-        })
+        }),
       );
+
+      const incomingStatus = normalizeStatus(data.status || data.newStatus);
+      if (isCancelledOrRefundedOrder({ status: incomingStatus })) {
+        setActiveTab("history");
+      }
 
       // Eğer modal açıksa ve bu sipariş gösteriliyorsa, onu da güncelle
       setSelectedOrder(prev => {
@@ -462,6 +489,7 @@ export default function OrderHistory() {
             o.id === orderId ? { ...o, status: "cancelled", canCancel: false, cancelMode: "none" } : o,
           ),
         );
+        setActiveTab("history");
         setActionMessage({
           type: "success",
           text: response.message || "Siparişiniz iptal edildi.",
@@ -510,6 +538,9 @@ export default function OrderHistory() {
             onClick={() => setActiveTab("active")}
           >
             Aktif Siparişler
+            {activeOrderCount > 0 && (
+              <span className="orders-tab__count">{activeOrderCount}</span>
+            )}
           </button>
           <button
             type="button"
@@ -517,6 +548,9 @@ export default function OrderHistory() {
             onClick={() => setActiveTab("history")}
           >
             Geçmiş
+            {historyOrderCount > 0 && (
+              <span className="orders-tab__count">{historyOrderCount}</span>
+            )}
           </button>
         </div>
       )}
@@ -819,7 +853,29 @@ export default function OrderHistory() {
               </div>
             )}
             <div className="orders-list">
-              {filteredOrders.map((order) => (
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-4 text-muted">
+                  {activeTab === "active" && historyOrderCount > 0 ? (
+                    <>
+                      <p className="mb-2">
+                        Devam eden siparişiniz yok.
+                        {cancelledOrderCount > 0 &&
+                          ` ${cancelledOrderCount} iptal/iade kaydı Geçmiş sekmesinde.`}
+                      </p>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => setActiveTab("history")}
+                      >
+                        Geçmiş siparişleri göster
+                      </button>
+                    </>
+                  ) : (
+                    <p>Bu sekmede sipariş bulunmuyor.</p>
+                  )}
+                </div>
+              ) : (
+              filteredOrders.map((order) => (
                 <div
                   key={order.id || order.orderNumber}
                   className="order-card"
@@ -836,13 +892,7 @@ export default function OrderHistory() {
                             ).toLocaleDateString("tr-TR")
                           : ""}
                         {" · "}
-                        ₺
-                        {(
-                          order.totalAmount ||
-                          order.finalPrice ||
-                          order.totalPrice ||
-                          0
-                        ).toFixed(2)}
+                        {formatTry(getOrderDisplayTotals(order).total)}
                       </div>
                     </div>
                     <OrderStatusBadge status={order.status} />
@@ -868,7 +918,8 @@ export default function OrderHistory() {
                     />
                   </div>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </>
         )

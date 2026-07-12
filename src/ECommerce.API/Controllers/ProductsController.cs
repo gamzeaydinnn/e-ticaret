@@ -215,8 +215,46 @@ namespace ECommerce.API.Controllers
             page = Math.Max(page, 1);
             size = Math.Min(Math.Max(size, 1), 250);
 
-            // PERFORMANS: Local DB'den arama yap
-            _logger.LogInformation("[SearchProducts] Local DB'den arama yapılıyor - Query: {Query}, Page: {Page}, Size: {Size}", query, page, size);
+            _logger.LogInformation("[SearchProducts] Query: {Query}, Page: {Page}, Size: {Size}", query, page, size);
+
+            // Mikro web kataloğu: vitrin ile aynı ürün seti + alaka sıralaması
+            if (_mikroDbService.IsConfigured)
+            {
+                var mergedProducts = await BuildMergedPublicProductsAsync(HttpContext.RequestAborted);
+                if (mergedProducts.Count > 0)
+                {
+                    IEnumerable<MergedProductRow> filtered = mergedProducts;
+
+                    if (!string.IsNullOrWhiteSpace(query))
+                    {
+                        filtered = filtered
+                            .Select(row => (
+                                Row: row,
+                                Score: ProductSearchMatcher.Score(
+                                    row.Product.Name,
+                                    row.Product.Description,
+                                    row.Product.CategoryName,
+                                    row.Product.Sku,
+                                    query)))
+                            .Where(x => x.Score > 0)
+                            .OrderByDescending(x => x.Score)
+                            .ThenBy(x => x.Row.Product.Name, StringComparer.CurrentCultureIgnoreCase)
+                            .Select(x => x.Row);
+                    }
+                    else
+                    {
+                        filtered = filtered.OrderBy(row => row.Product.Name, StringComparer.CurrentCultureIgnoreCase);
+                    }
+
+                    var items = filtered
+                        .Skip((page - 1) * size)
+                        .Take(size)
+                        .Select(row => row.Product)
+                        .ToList();
+
+                    return Ok(items);
+                }
+            }
 
             if (string.IsNullOrWhiteSpace(query))
             {
@@ -989,22 +1027,12 @@ namespace ECommerce.API.Controllers
 
         private static bool MatchesSearchQuery(ProductListDto product, string query)
         {
-            var normalizedQuery = GenerateSlug(query);
-            if (string.IsNullOrWhiteSpace(normalizedQuery))
-                return true;
-
-            return ContainsNormalizedSearchTerm(product.Name, normalizedQuery)
-                || ContainsNormalizedSearchTerm(product.Description, normalizedQuery)
-                || ContainsNormalizedSearchTerm(product.CategoryName, normalizedQuery)
-                || ContainsNormalizedSearchTerm(product.Sku, normalizedQuery);
-        }
-
-        private static bool ContainsNormalizedSearchTerm(string? value, string normalizedQuery)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            return GenerateSlug(value).Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase);
+            return ProductSearchMatcher.Matches(
+                product.Name,
+                product.Description,
+                product.CategoryName,
+                product.Sku,
+                query);
         }
 
         private static IEnumerable<MergedProductRow> ApplyMergedProductSort(

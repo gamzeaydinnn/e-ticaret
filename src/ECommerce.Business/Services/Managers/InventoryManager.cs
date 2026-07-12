@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Sync;
 using ECommerce.Core.DTOs.Cart;
+using ECommerce.Core.DTOs.Inventory;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -471,12 +473,35 @@ namespace ECommerce.Business.Services.Managers
                         : $"Client:{clientOrderId}";
                     await _inventoryLogService.WriteAsync(
                         product.Id,
-                        "Commit",
+                        LocalInventoryPolicy.LogActionCommit,
                         totalQuantity,
                         oldStock,
                         newStock,
                         reference);
                     await CheckThresholdAndNotifyAsync(product);
+                }
+
+                // Varyant stokunu sipariş kalemlerinden hizala (validate variant.Stock kullanıyor)
+                if (order?.OrderItems != null)
+                {
+                    foreach (var item in order.OrderItems.Where(i => i.ProductVariantId.HasValue && i.ProductVariantId > 0 && i.Quantity > 0))
+                    {
+                        var variant = await _context.ProductVariants
+                            .FirstOrDefaultAsync(v => v.Id == item.ProductVariantId!.Value && v.ProductId == item.ProductId);
+                        if (variant == null)
+                        {
+                            continue;
+                        }
+
+                        variant.Stock = Math.Max(0, variant.Stock - item.Quantity);
+
+                        var warehouseStock = await _context.Stocks
+                            .FirstOrDefaultAsync(s => s.ProductVariantId == variant.Id);
+                        if (warehouseStock != null)
+                        {
+                            warehouseStock.Quantity = Math.Max(0, warehouseStock.Quantity - item.Quantity);
+                        }
+                    }
                 }
 
                 foreach (var reservation in reservations)
@@ -514,6 +539,85 @@ namespace ECommerce.Business.Services.Managers
 
             var strategy = _context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(() => DoWorkAsync(true));
+        }
+
+        public async Task RestoreOrderStockAsync(
+            IEnumerable<OrderStockRestoreLineDto> lines,
+            string logAction,
+            string reference)
+        {
+            if (lines == null)
+            {
+                throw new ArgumentNullException(nameof(lines));
+            }
+
+            var materialized = lines
+                .Where(l => l != null && l.ProductId > 0 && l.Quantity > 0)
+                .GroupBy(l => new { l.ProductId, l.ProductVariantId })
+                .Select(g => new OrderStockRestoreLineDto
+                {
+                    ProductId = g.Key.ProductId,
+                    ProductVariantId = g.Key.ProductVariantId,
+                    Quantity = g.Sum(x => x.Quantity)
+                })
+                .ToList();
+
+            if (materialized.Count == 0)
+            {
+                return;
+            }
+
+            var action = string.IsNullOrWhiteSpace(logAction)
+                ? LocalInventoryPolicy.LogActionRefund
+                : logAction.Trim();
+            var refText = string.IsNullOrWhiteSpace(reference) ? "OrderStockRestore" : reference.Trim();
+
+            foreach (var line in materialized)
+            {
+                await EnsureProductRowLockedAsync(line.ProductId);
+
+                var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == line.ProductId);
+                if (product == null)
+                {
+                    continue;
+                }
+
+                var oldStock = product.StockQuantity;
+                product.StockQuantity += line.Quantity;
+
+                await _inventoryLogService.WriteAsync(
+                    product.Id,
+                    action,
+                    line.Quantity,
+                    oldStock,
+                    product.StockQuantity,
+                    refText);
+
+                if (line.ProductVariantId.HasValue && line.ProductVariantId.Value > 0)
+                {
+                    var variant = await _context.ProductVariants
+                        .FirstOrDefaultAsync(v =>
+                            v.Id == line.ProductVariantId.Value &&
+                            v.ProductId == line.ProductId);
+
+                    if (variant != null)
+                    {
+                        variant.Stock += line.Quantity;
+
+                        var warehouseStock = await _context.Stocks
+                            .FirstOrDefaultAsync(s => s.ProductVariantId == variant.Id);
+                        if (warehouseStock != null)
+                        {
+                            warehouseStock.Quantity += line.Quantity;
+                        }
+                    }
+                }
+
+                // Faz 2: LocalInventoryPolicy.PushOutboundOnOrderStockRestore true olunca
+                // MikroOutboundPushTrigger.EnqueueStockPush buraya bağlanacak.
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         private async Task<decimal> GetActiveReservedQuantityAsync(int productId, DateTime utcNow)

@@ -1,6 +1,6 @@
 /**
  * Müşteri iptal/iade kuralları — backend OrderCancelPolicy ile hizalı.
- * Kurye teslim alana kadar otomatik iptal; sonrasında WhatsApp.
+ * Kurye teslim alana kadar otomatik iptal + banka reverse/return; sonrasında WhatsApp.
  */
 
 export const CANCEL_MODE = {
@@ -35,7 +35,7 @@ const WHATSAPP_STATUSES = new Set([
   "partialrefund",
 ]);
 
-const TERMINAL_STATUSES = new Set(["cancelled", "refunded"]);
+const TERMINAL_STATUSES = new Set(["cancelled", "canceled", "refunded"]);
 
 const INVOICE_BLOCKED_STATUSES = new Set([
   "new",
@@ -86,13 +86,12 @@ export function isSameBusinessDay(orderDate) {
 
 export function getCancelMode(order) {
   const status = normalizeStatus(order?.status);
-  const orderDate = order?.orderDate || order?.createdAt;
 
   if (TERMINAL_STATUSES.has(status)) {
     return CANCEL_MODE.NONE;
   }
 
-  // Backend canCancel: aynı gün + PickedUp öncesi durumları içerir
+  // Backend canCancel: PickedUp öncesi durumları içerir (gün sınırına bağlı değil)
   if (typeof order?.canCancel === "boolean") {
     if (order.canCancel) {
       return CANCEL_MODE.AUTO;
@@ -107,8 +106,12 @@ export function getCancelMode(order) {
     return CANCEL_MODE.NONE;
   }
 
+  if (order?.cancelMode === CANCEL_MODE.AUTO) {
+    return CANCEL_MODE.AUTO;
+  }
+
   if (AUTO_CANCEL_STATUSES.has(status)) {
-    return isSameBusinessDay(orderDate) ? CANCEL_MODE.AUTO : CANCEL_MODE.WHATSAPP;
+    return CANCEL_MODE.AUTO;
   }
 
   if (WHATSAPP_STATUSES.has(status)) {
@@ -138,13 +141,9 @@ export function getOrderActions(order, { isAuthenticated = true } = {}) {
   }
 
   if (cancelMode === CANCEL_MODE.WHATSAPP || cancelMode === CANCEL_MODE.AUTO) {
-    const orderDate = order?.orderDate || order?.createdAt;
     let disabledReason;
 
-    if (AUTO_CANCEL_STATUSES.has(status) && !isSameBusinessDay(orderDate)) {
-      disabledReason =
-        "Otomatik iptal süresi doldu (yalnızca sipariş günü). İade için WhatsApp ile müşteri hizmetlerine yazın; onay sonrası para iadesi yapılır.";
-    } else if (WHATSAPP_STATUSES.has(status)) {
+    if (WHATSAPP_STATUSES.has(status)) {
       disabledReason =
         "Kurye teslim aldıktan sonra otomatik iptal yapılamaz. İade talebiniz müşteri hizmetleri tarafından incelenir.";
     } else {
@@ -190,6 +189,24 @@ export function isCompletedOrder(order) {
   );
 }
 
+/** İptal / iade — Geçmiş sekmesinde vurgulanır */
+export function isCancelledOrRefundedOrder(order) {
+  const status = normalizeStatus(order?.status);
+  return TERMINAL_STATUSES.has(status);
+}
+
+export function countActiveOrders(orders = []) {
+  return orders.filter(isActiveOrder).length;
+}
+
+export function countHistoryOrders(orders = []) {
+  return orders.filter(isCompletedOrder).length;
+}
+
+export function countCancelledOrders(orders = []) {
+  return orders.filter(isCancelledOrRefundedOrder).length;
+}
+
 export const REFUND_STATUS_LABELS = {
   pending: "İncelemede",
   approved: "Onaylandı",
@@ -201,6 +218,40 @@ export const REFUND_STATUS_LABELS = {
 
 export function getRefundStatusLabel(status) {
   return REFUND_STATUS_LABELS[normalizeRefundStatus(status)] || status;
+}
+
+export const REFUND_TYPE_LABELS = {
+  partial: "Kısmi",
+  full: "Tam",
+  cancel: "İptal",
+  item: "Ürün bazlı",
+};
+
+export function getRefundTypeLabel(type) {
+  const key = String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return REFUND_TYPE_LABELS[key] || type || "İade";
+}
+
+export const REFUND_TRANSACTION_TYPE_LABELS = {
+  none: "Manuel",
+  manual: "Manuel",
+  cod: "Kapıda ödeme",
+  reverse: "Provizyon iptali",
+  return: "Kart iadesi",
+  sale: "Satış",
+  capt: "Tahsilat",
+};
+
+export function getRefundTransactionTypeLabel(type) {
+  const key = String(type || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (!key) return "Manuel";
+  return REFUND_TRANSACTION_TYPE_LABELS[key] || type;
 }
 
 const COD_METHODS = new Set([

@@ -20,6 +20,7 @@
 
 import React, { useState, useCallback, memo, useRef, useEffect } from "react";
 import PropTypes from "prop-types";
+import BannerMedia from "./BannerMedia";
 import "./PromoCards.css";
 
 // ============================================
@@ -237,12 +238,12 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
     >
       {/* Görsel Container */}
       <div className="promo-card-image-container" style={styles.imageContainer}>
-        <img
+        <BannerMedia
           src={imageSrc}
           alt={promo.title || "Promosyon görseli"}
           className="promo-card-image"
           style={imageStyle}
-          loading={index < 4 ? "eager" : "lazy"} // İlk 4 görsel hemen yükle
+          loading={index < 4 ? "eager" : "lazy"}
           onError={handleImageError}
         />
 

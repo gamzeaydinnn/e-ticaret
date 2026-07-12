@@ -10,7 +10,22 @@ import { OrderService } from "../services/orderService";
 import signalRService, { ConnectionState } from "../services/signalRService";
 import OrderActions from "./orders/OrderActions";
 import { openWhatsAppSupportAsync } from "../utils/customerSupport";
-import { isActiveOrder, isCompletedOrder } from "../utils/orderCancelPolicy";
+import {
+  isActiveOrder,
+  isCompletedOrder,
+  isCancelledOrRefundedOrder,
+  countActiveOrders,
+  countHistoryOrders,
+  countCancelledOrders,
+  normalizeStatus,
+} from "../utils/orderCancelPolicy";
+import {
+  getOrderItemsList,
+  getOrderItemLineTotal,
+  getOrderItemUnitLabel,
+  getOrderDisplayTotals,
+  formatTry,
+} from "../utils/orderDisplayTotals";
 import "./orders/OrderActions.css";
 import "./OrderTracking.css";
 
@@ -245,11 +260,16 @@ const STEPPER_STEPS = [
 // ==========================================================================
 
 const getStatusInfo = (status) => {
-  const normalizedStatus = (status || "pending")
-    .toLowerCase()
-    .replace(/ /g, "_");
+  const normalizedStatus = normalizeStatus(status) || "pending";
   return ORDER_STATUSES[normalizedStatus] || ORDER_STATUSES.pending;
 };
+
+/** SignalR / API id eşleştirmesi (string/number güvenli) */
+const orderMatchesEvent = (order, data) =>
+  String(order?.id ?? order?.orderId ?? "") === String(data?.orderId ?? "") ||
+  (order?.orderNumber &&
+    data?.orderNumber &&
+    order.orderNumber === data.orderNumber);
 
 const getStepperProgress = (status) => {
   const info = getStatusInfo(status);
@@ -297,25 +317,6 @@ const getOrderAddress = (order) => {
     (candidate) => typeof candidate === "string" && candidate.trim(),
   );
   return address ? address.trim() : "Belirtilmedi";
-};
-
-const getOrderItems = (order) => {
-  if (Array.isArray(order?.items) && order.items.length > 0) {
-    return order.items;
-  }
-  if (Array.isArray(order?.orderItems) && order.orderItems.length > 0) {
-    return order.orderItems;
-  }
-  if (
-    Array.isArray(order?.raw?.orderItems) &&
-    order.raw.orderItems.length > 0
-  ) {
-    return order.raw.orderItems;
-  }
-  if (Array.isArray(order?.raw?.items) && order.raw.items.length > 0) {
-    return order.raw.items;
-  }
-  return [];
 };
 
 // ==========================================================================
@@ -422,6 +423,37 @@ const OrderTracking = () => {
                 (a, b) => new Date(b.orderDate) - new Date(a.orderDate),
               ),
             );
+
+            // Storage'daki durum bayat olabilir (admin iptali vb.) — API ile tazele
+            try {
+              const refreshPhone =
+                guestOrders[0]?.phone || guestOrders[0]?.customerPhone;
+              const refreshOrderNo = guestOrders[0]?.orderNumber;
+              let refreshed = [];
+              if (refreshPhone) {
+                refreshed = await OrderService.trackGuestOrder({
+                  phone: refreshPhone,
+                });
+              } else if (refreshOrderNo) {
+                refreshed = await OrderService.trackGuestOrder({
+                  orderNumber: refreshOrderNo,
+                });
+              }
+              if (refreshed.length > 0) {
+                setOrders(
+                  refreshed.sort(
+                    (a, b) =>
+                      new Date(b.orderDate || b.createdAt) -
+                      new Date(a.orderDate || a.createdAt),
+                  ),
+                );
+              }
+            } catch (refreshErr) {
+              console.warn(
+                "[OrderTracking] Misafir sipariş durumu yenilenemedi:",
+                refreshErr,
+              );
+            }
           } else {
             setOrders([]);
           }
@@ -630,6 +662,7 @@ const OrderTracking = () => {
             bgColor: "#d4edda",
           });
 
+          setActiveTab("history");
           await loadOrders();
           try {
             const refunds = await OrderService.getMyRefundRequests();
@@ -974,21 +1007,25 @@ const OrderTracking = () => {
       });
 
       // Sipariş listesini güncelle
+      const newStatus = data.newStatus || data.status;
       setOrders((prev) =>
         prev.map((order) =>
-          order.id === data.orderId || order.orderNumber === data.orderNumber
-            ? { ...order, status: data.newStatus || data.status }
+          orderMatchesEvent(order, data)
+            ? { ...order, status: newStatus }
             : order,
         ),
       );
 
       // Seçili sipariş güncellemesi
       setSelectedOrder((prev) =>
-        prev &&
-        (prev.id === data.orderId || prev.orderNumber === data.orderNumber)
-          ? { ...prev, status: data.newStatus || data.status }
+        prev && orderMatchesEvent(prev, data)
+          ? { ...prev, status: newStatus }
           : prev,
       );
+
+      if (isCancelledOrRefundedOrder({ status: newStatus })) {
+        setActiveTab("history");
+      }
 
       // Header'daki aktif sipariş rozetinin de güncellenmesi için global olay yay
       try {
@@ -1220,6 +1257,20 @@ const OrderTracking = () => {
       </span>
     );
   };
+
+  // Aktif sipariş kalmadığında Geçmiş sekmesine geç (iptal/teslim görünür kalsın)
+  useEffect(() => {
+    if (orders.length === 0) return;
+    const activeCount = countActiveOrders(orders);
+    const historyCount = countHistoryOrders(orders);
+    if (activeCount === 0 && historyCount > 0 && activeTab === "active") {
+      setActiveTab("history");
+    }
+  }, [orders, activeTab]);
+
+  const activeOrderCount = countActiveOrders(orders);
+  const historyOrderCount = countHistoryOrders(orders);
+  const cancelledOrderCount = countCancelledOrders(orders);
 
   const displayedOrders = orders.filter((order) =>
     activeTab === "active" ? isActiveOrder(order) : isCompletedOrder(order),
@@ -1464,6 +1515,9 @@ const OrderTracking = () => {
                     onClick={() => setActiveTab("active")}
                   >
                     Aktif
+                    {activeOrderCount > 0 && (
+                      <span className="orders-tab__count">{activeOrderCount}</span>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -1471,10 +1525,31 @@ const OrderTracking = () => {
                     onClick={() => setActiveTab("history")}
                   >
                     Geçmiş
+                    {historyOrderCount > 0 && (
+                      <span className="orders-tab__count">{historyOrderCount}</span>
+                    )}
                   </button>
                 </div>
                 {displayedOrders.length === 0 ? (
-                  <EmptyOrdersState />
+                  activeTab === "active" && historyOrderCount > 0 ? (
+                    <div className="text-center py-4 px-2">
+                      <i className="fas fa-ban fa-2x text-muted mb-2" />
+                      <p className="text-muted mb-2">
+                        Devam eden siparişiniz yok.
+                        {cancelledOrderCount > 0 &&
+                          ` ${cancelledOrderCount} iptal/iade kaydı Geçmiş sekmesinde.`}
+                      </p>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => setActiveTab("history")}
+                      >
+                        Geçmiş siparişleri göster
+                      </button>
+                    </div>
+                  ) : (
+                    <EmptyOrdersState />
+                  )
                 ) : (
                   <div className="orders-list">
                     {displayedOrders.map((order) => (
@@ -1602,7 +1677,7 @@ const OrderCard = ({ order, onClick, isSelected = false }) => {
           {orderDateText}
         </span>
         <span className="order-list-card__price">
-          ₺{Number(order.totalAmount || order.totalPrice || 0).toFixed(2)}
+          {formatTry(getOrderDisplayTotals(order).total)}
         </span>
       </div>
 
@@ -1655,7 +1730,8 @@ const OrderDetailCard = ({
     order.orderDate || order.createdAt,
   );
   const address = getOrderAddress(order);
-  const items = getOrderItems(order);
+  const items = getOrderItemsList(order);
+  const totals = getOrderDisplayTotals(order);
 
   return (
     <div className="order-detail-card card shadow-lg border-0">
@@ -1719,7 +1795,7 @@ const OrderDetailCard = ({
             <p className="mb-2">
               <strong>Toplam Tutar:</strong>{" "}
               <span className="order-detail-card__price">
-                ₺{Number(order.totalAmount || order.totalPrice || 0).toFixed(2)}
+                {formatTry(totals.total)}
               </span>
             </p>
             <p className="mb-2">
@@ -1768,22 +1844,44 @@ const OrderDetailCard = ({
                       {item.name || item.productName}
                     </h4>
                     <p className="order-detail-product__qty">
-                      {item.quantity} adet × ₺
-                      {Number(item.unitPrice || item.price || 0).toFixed(2)}
+                      {getOrderItemUnitLabel(item)}
                     </p>
                   </div>
                   <span className="order-detail-product__total">
-                    ₺
-                    {Number(
-                      (item.quantity || 1) *
-                        (item.unitPrice || item.price || 0),
-                    ).toFixed(2)}
+                    {formatTry(getOrderItemLineTotal(item))}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
             <div className="text-muted small">Ürün detayları bulunamadı.</div>
+          )}
+
+          {items.length > 0 && (
+            <div className="order-detail-card__summary mt-3 pt-3 border-top">
+              <div className="d-flex justify-content-between small mb-1">
+                <span>Ürünler</span>
+                <span>{formatTry(totals.itemsSubtotal)}</span>
+              </div>
+              {totals.hasShipping && (
+                <div className="d-flex justify-content-between small mb-1">
+                  <span>Kargo</span>
+                  <span>{formatTry(totals.shippingCost)}</span>
+                </div>
+              )}
+              {totals.hasDiscount && (
+                <div className="d-flex justify-content-between small mb-1 text-success">
+                  <span>İndirim</span>
+                  <span>-{formatTry(totals.totalDiscount)}</span>
+                </div>
+              )}
+              <div className="d-flex justify-content-between fw-bold mt-2">
+                <span>Toplam</span>
+                <span className="order-detail-card__price">
+                  {formatTry(totals.total)}
+                </span>
+              </div>
+            </div>
           )}
         </div>
 

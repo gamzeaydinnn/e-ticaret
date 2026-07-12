@@ -71,7 +71,7 @@ namespace ECommerce.Core.DTOs.Micro
         /// NEDEN: Stok hangi depodan düşecek.
         /// Online satışlar için ayrı depo olabilir.
         /// </summary>
-        [JsonPropertyName("sip_depession")]
+        [JsonPropertyName("sip_depo_no")]
         public int SipDepoNo { get; set; }
 
         /// <summary>

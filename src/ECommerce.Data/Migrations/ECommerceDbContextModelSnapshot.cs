@@ -1690,6 +1690,9 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsGuestOrder")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsInventoryCommitted")
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("OrderDate")
                         .HasColumnType("datetime2");
 

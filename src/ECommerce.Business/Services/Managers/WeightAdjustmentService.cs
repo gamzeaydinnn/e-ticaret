@@ -446,20 +446,11 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                // NEDEN: Tartım, hazırlık aşamasında VEYA KGL provizyon akışında yapılır.
-                // KGL akışı (OrderStatus dokümantasyonu): New → PreAuthorized → Confirmed →
-                // Preparing → WeightPending → ... Provizyon (Auth) alınmış siparişte kart bloke
-                // edilmiş ama tutar henüz çekilmemiştir; admin/mağaza görevlisi gerçek tartımı
-                // bu aşamada girer, finansallaştırma (Capt) sonra yapılır. Bu yüzden PreAuthorized
-                // ve WeightPending durumları da izinli olmalı.
-                if (order.Status != OrderStatus.Pending &&
-                    order.Status != OrderStatus.Confirmed &&
-                    order.Status != OrderStatus.Preparing &&
-                    order.Status != OrderStatus.Ready &&
-                    order.Status != OrderStatus.PreAuthorized &&
-                    order.Status != OrderStatus.WeightPending)
+                // Tek tartı yolu: yalnızca Preparing. Sipariş onayı Admin sipariş ekranından;
+                // banka Capt teslimatta. Erken tartı (Pending/Confirmed) ve Ready sonrası düzenleme kapalı.
+                if (!WeightBasedWeighingGate.CanEnterManualWeight(order.Status))
                 {
-                    result.ErrorMessage = "Bu siparişin ağırlığı mevcut durumunda manuel güncellenemez";
+                    result.ErrorMessage = WeightBasedWeighingGate.DeniedMessage;
                     return result;
                 }
 
@@ -470,7 +461,8 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
-                var product = await _productRepository.GetByIdAsync(orderItem.ProductId);
+                // GetByIdAsync artık Product+Category include eder; ayrı fetch Category'siz kalabilir.
+                var product = orderItem.Product ?? await _productRepository.GetByIdAsync(orderItem.ProductId);
                 if (product == null)
                 {
                     result.ErrorMessage = "Ürün bulunamadı";
@@ -483,16 +475,39 @@ namespace ECommerce.Business.Services.Managers
                     return result;
                 }
 
+                // Eski siparişlerde bayrak/gram boş kalabiliyor; tartı anında kalıcılaştır.
+                orderItem.IsWeightBased = true;
+                if (orderItem.EstimatedWeight <= 0)
+                {
+                    orderItem.EstimatedWeight = orderItem.Quantity > 0
+                        ? orderItem.Quantity * 1000m
+                        : 1000m;
+                }
+
                 var pricePerUnit = orderItem.PricePerUnit > 0
                     ? orderItem.PricePerUnit
                     : (product.PricePerUnit > 0 ? product.PricePerUnit : product.Price);
+                if (pricePerUnit <= 0 && orderItem.UnitPrice > 0)
+                {
+                    pricePerUnit = orderItem.UnitPrice;
+                }
 
                 var estimatedWeight = orderItem.EstimatedWeight;
                 var weightDifference = actualWeight - estimatedWeight;
                 var estimatedPrice = orderItem.EstimatedPrice > 0
                     ? orderItem.EstimatedPrice
-                    : CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit);
-                var actualPrice = CalculateWeightedPrice(actualWeight, pricePerUnit, product.WeightUnit);
+                    : CalculateWeightedPrice(estimatedWeight, pricePerUnit, ResolvePricingWeightUnit(orderItem, product));
+                if (orderItem.EstimatedPrice <= 0 && estimatedPrice > 0)
+                {
+                    orderItem.EstimatedPrice = estimatedPrice;
+                }
+                if (orderItem.PricePerUnit <= 0 && pricePerUnit > 0)
+                {
+                    orderItem.PricePerUnit = pricePerUnit;
+                }
+
+                var pricingUnit = ResolvePricingWeightUnit(orderItem, product);
+                var actualPrice = CalculateWeightedPrice(actualWeight, pricePerUnit, pricingUnit);
                 var priceDifference = actualPrice - estimatedPrice;
                 var differencePercent = estimatedWeight > 0
                     ? (weightDifference / estimatedWeight) * 100
@@ -559,9 +574,37 @@ namespace ECommerce.Business.Services.Managers
                 var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
                 result.FinalAmount = order.FinalAmount;
                 result.PreAuthAmount = authorizedAmount;
-                result.ExceedsPreAuthLimit = authorizedAmount > 0 &&
-                    order.FinalAmount > CalculateMaxCapturableAmount(authorizedAmount);
-                result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(authorizedAmount);
+
+                var flow = WeightBasedPaymentFlowResolver.Resolve(order);
+                result.PaymentFlowType = flow.ToString();
+
+                switch (flow)
+                {
+                    case WeightBasedPaymentFlowType.AuthCapture:
+                        result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(authorizedAmount);
+                        result.ExceedsPreAuthLimit = authorizedAmount > 0 &&
+                            order.FinalAmount > result.MaxCaptureAmountFromPreAuth;
+                        result.RequiresManualCollection = result.ExceedsPreAuthLimit;
+                        result.UncollectableOverageAmount = result.ExceedsPreAuthLimit
+                            ? Math.Round(order.FinalAmount - result.MaxCaptureAmountFromPreAuth, 2, MidpointRounding.AwayFromZero)
+                            : 0m;
+                        result.RequiresManualRefund = priceDifference < 0;
+                        break;
+
+                    case WeightBasedPaymentFlowType.SaleImmediate:
+                        result.MaxCaptureAmountFromPreAuth = 0m;
+                        result.ExceedsPreAuthLimit = false;
+                        result.RequiresManualCollection = priceDifference > 0;
+                        result.UncollectableOverageAmount = Math.Max(0m, Math.Round(priceDifference, 2, MidpointRounding.AwayFromZero));
+                        result.RequiresManualRefund = priceDifference < 0;
+                        break;
+
+                    default:
+                        result.MaxCaptureAmountFromPreAuth = CalculateMaxCapturableAmount(authorizedAmount);
+                        result.ExceedsPreAuthLimit = false;
+                        break;
+                }
+
                 result.AdjustmentStatus = adjustment.Status;
 
                 // Kurye atanmışsa anlık bildirim gönder (tartı güncellendi)
@@ -829,6 +872,25 @@ namespace ECommerce.Business.Services.Managers
             return WeightBasedProductResolver.ResolveIsWeightBased(product);
         }
 
+        /// <summary>
+        /// Fiyat hesabında kullanılacak birim. Piece kayıtlı ama kg satılan ürünlerde gram→kg.
+        /// </summary>
+        private static WeightUnit ResolvePricingWeightUnit(OrderItem orderItem, Product product)
+        {
+            if (orderItem.WeightUnit is WeightUnit.Kilogram or WeightUnit.Gram)
+            {
+                return orderItem.WeightUnit;
+            }
+
+            if (product.WeightUnit is WeightUnit.Kilogram or WeightUnit.Gram)
+            {
+                return product.WeightUnit;
+            }
+
+            // Heuristik kg ürünlerde WeightUnit Piece kalmış olabilir; gram girişi → /1000.
+            return WeightUnit.Kilogram;
+        }
+
         #endregion
 
         #region Sorgulama
@@ -1036,13 +1098,10 @@ namespace ECommerce.Business.Services.Managers
         /// <summary>
         /// Kart ödemeli ağırlık bazlı sipariş için POSNET capture işlemini yürütür.
         ///
-        /// SENARYOLAR:
-        /// 1. FinalAmount &lt;= PreAuthAmount → capt(FinalAmount): Banka gerçek tutarı çeker, kalan blokeyi kaldırır.
-        /// 2. FinalAmount &gt; PreAuthAmount → capt(PreAuthAmount): Limit aşılamaz! Admin uyarısı oluşturulur, fark el ile çözülür.
-        /// 3. PreAuthHostLogKey yoksa → WeightAdjustmentStatus.Failed set edilir, admin müdahalesi beklenir.
-        ///
-        /// Banka Dokümantasyonu:
-        ///   "Finansallaştırma tutarı provizyon tutarını geçemez."
+        /// SENARYOLAR (WeightBasedCapturePolicy — Capt ≤ Auth × 1.20):
+        /// 1. FinalAmount ≤ Auth×1.20 → capt(FinalAmount); kalan bloke bankada serbest kalır.
+        /// 2. FinalAmount &gt; Auth×1.20 → capt(Auth×1.20); kalan fark admin/ek tahsilat.
+        /// 3. PreAuthHostLogKey yoksa → WeightAdjustmentStatus.Failed, admin müdahalesi.
         /// </summary>
         private async Task<CardCaptureResult> ExecuteCardPaymentCaptureAsync(
             Order order, decimal finalAmount, WeightDifferenceCalculationDto calculation, int courierId)
@@ -1245,7 +1304,9 @@ namespace ECommerce.Business.Services.Managers
         {
             if (order?.OrderItems == null) return;
 
-            var weightBasedItems = order.OrderItems.Where(oi => oi.IsWeightBased);
+            var weightBasedItems = order.OrderItems
+                .Where(oi => oi.IsWeightBased || oi.IsWeighed)
+                .ToList();
 
             decimal totalWeightDiff = 0;
             decimal totalPriceDiff = 0;

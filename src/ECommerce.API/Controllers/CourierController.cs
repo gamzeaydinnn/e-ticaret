@@ -538,63 +538,30 @@ namespace ECommerce.API.Controllers
                         .Where(r => r.Status == WeightReportStatus.Approved && r.OverageAmount > 0)
                         .ToList();
 
+                    // Tek tahsilat yolu: MarkDelivered → PaymentCaptureService.CapturePaymentAsync
+                    // (Auth × 1.20). WeightReport üzerinden ayrı ChargeOverage çift çekim riski yaratır.
                     if (approvedReports.Any())
                     {
-                        _logger.LogInformation("Sipariş #{OrderId} için {Count} adet onaylı ağırlık raporu bulundu. Ödeme tahsilatı başlatılıyor...", 
-                            orderId, approvedReports.Count);
-
-                        decimal totalCharged = 0;
-                        var paymentDetailsList = new List<string>();
-                        var allPaymentsSuccessful = true;
-
-                        foreach (var report in approvedReports)
-                        {
-                            try
-                            {
-                                _logger.LogInformation("Ağırlık raporu #{ReportId} için ödeme tahsilatı yapılıyor...", report.Id);
-                                
-                                // Ödeme servisini çağır
-                                var charged = await _weightService.ChargeOverageAsync(report.Id);
-                                
-                                if (charged)
-                                {
-                                    totalCharged += report.OverageAmount;
-                                    paymentDetailsList.Add($"Rapor #{report.Id}: +{report.OverageAmount:F2} ₺ tahsil edildi");
-                                    _logger.LogInformation("✅ Ağırlık raporu #{ReportId} için {Amount:C} başarıyla tahsil edildi.", 
-                                        report.Id, report.OverageAmount);
-                                }
-                                else
-                                {
-                                    allPaymentsSuccessful = false;
-                                    paymentDetailsList.Add($"Rapor #{report.Id}: Ödeme başarısız");
-                                    _logger.LogWarning("⚠️ Ağırlık raporu #{ReportId} için ödeme başarısız oldu.", report.Id);
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                allPaymentsSuccessful = false;
-                                _logger.LogError(ex, "❌ Ağırlık raporu #{ReportId} için ödeme alınırken hata oluştu.", report.Id);
-                                paymentDetailsList.Add($"Rapor #{report.Id}: Hata - {ex.Message}");
-                            }
-                        }
+                        _logger.LogInformation(
+                            "Sipariş #{OrderId}: {Count} onaylı WeightReport var; ayrı ChargeOverage atlandı (Capt teslimatta). Overage toplamı={Total:F2}",
+                            orderId,
+                            approvedReports.Count,
+                            approvedReports.Sum(r => r.OverageAmount));
 
                         response = new
                         {
-                            success = allPaymentsSuccessful,
+                            success = true,
                             orderId,
                             status = request.Status,
                             notes = request.Notes,
                             updatedAt = DateTime.Now,
-                            paymentProcessed = true,
-                            paymentAmount = totalCharged,
-                            paymentDetails = paymentDetailsList,
-                            message = allPaymentsSuccessful 
-                                ? $"✅ Teslimat tamamlandı. Toplam {totalCharged:F2} ₺ ek ücret tahsil edildi."
-                                : $"⚠️ Teslimat tamamlandı ancak bazı ödemeler başarısız oldu. Toplam {totalCharged:F2} ₺ tahsil edildi."
+                            paymentProcessed = false,
+                            paymentAmount = 0m,
+                            paymentDetails = approvedReports
+                                .Select(r => $"Rapor #{r.Id}: +{r.OverageAmount:F2} ₺ (Capt teslimatta)")
+                                .ToList(),
+                            message = "Teslimat tamamlandı. Ağırlık farkı sipariş tutarına yansıtıldı; banka çekimi Capt ile yapılır."
                         };
-
-                        _logger.LogInformation("Sipariş #{OrderId} teslimat ve ödeme işlemi tamamlandı. Toplam tahsilat: {Amount:C}", 
-                            orderId, totalCharged);
                     }
                     else
                     {

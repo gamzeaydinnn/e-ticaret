@@ -27,11 +27,29 @@ namespace ECommerce.API.Controllers.Admin
         private readonly IServiceProvider _serviceProvider;
 
         // İzin verilen dosya türleri (güvenlik için whitelist yaklaşımı)
-        private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-        private static readonly string[] AllowedMimeTypes = { "image/jpeg", "image/png", "image/gif", "image/webp" };
+        // Görsel + kısa sessiz HD döngü videoları (mp4/webm)
+        private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".webm" };
+        private static readonly string[] AllowedMimeTypes =
+        {
+            "image/jpeg", "image/png", "image/gif", "image/webp",
+            "video/mp4", "video/webm"
+        };
         
-        // Maksimum dosya boyutu: 10MB (sunucu yapılandırmasıyla uyumlu)
-        private const long MaxFileSize = 10 * 1024 * 1024;
+        // Maksimum dosya boyutu: 50MB (kısa HD video için)
+        private const long MaxFileSize = 50 * 1024 * 1024;
+
+        private static bool IsAllowedMime(string? contentType, string extension)
+        {
+            var mime = (contentType ?? string.Empty).ToLowerInvariant();
+            if (AllowedMimeTypes.Contains(mime))
+                return true;
+
+            // Bazı tarayıcılar/OS'ler video için octet-stream veya boş MIME gönderir
+            if (string.IsNullOrWhiteSpace(mime) || mime == "application/octet-stream")
+                return AllowedExtensions.Contains(extension);
+
+            return false;
+        }
 
         public AdminBannersController(
             IBannerService bannerService,
@@ -177,9 +195,9 @@ namespace ECommerce.API.Controllers.Admin
                 }
 
                 // MIME type kontrolü (güvenlik için ek katman)
-                if (!AllowedMimeTypes.Contains(image.ContentType.ToLowerInvariant()))
+                if (!IsAllowedMime(image.ContentType, extension))
                 {
-                    return BadRequest(new { message = "Geçersiz dosya türü. Sadece resim dosyaları kabul edilir." });
+                    return BadRequest(new { message = "Geçersiz dosya türü. Desteklenen: jpg, png, gif, webp, mp4, webm." });
                 }
 
                 // Dosyayı yükle
@@ -192,7 +210,7 @@ namespace ECommerce.API.Controllers.Admin
                     imageUrl = await _fileStorage.UploadAsync(stream, fileName, image.ContentType);
                 }
 
-                _logger.LogInformation("✅ Görsel yüklendi: {ImageUrl}", imageUrl);
+                _logger.LogInformation("✅ Medya yüklendi: {ImageUrl}", imageUrl);
 
                 // Banner'ı veritabanına kaydet
                 var dto = new BannerDto
@@ -233,17 +251,17 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         /// <summary>
-        /// Sadece resim dosyası yükler (banner oluşturmadan)
-        /// Bilgisayardan resim seçilip yüklendikten sonra dönen URL, banner formunda kullanılır.
+        /// Sadece medya dosyası yükler (banner oluşturmadan).
+        /// Görsel (jpg/png/gif/webp) veya kısa sessiz video (mp4/webm) kabul eder.
         /// </summary>
-        /// <param name="image">Yüklenecek resim dosyası (jpg, jpeg, png, gif, webp)</param>
+        /// <param name="image">Yüklenecek dosya</param>
         /// <returns>Yüklenen dosyanın URL'ini döner</returns>
         [HttpPost("upload-image")]
         [HasPermission(Permissions.Banners.Create)]
         [RequestSizeLimit(MaxFileSize)]
         public async Task<IActionResult> UploadImageOnly(IFormFile image)
         {
-            _logger.LogInformation("📤 Banner resmi yükleme başlatılıyor (sadece resim)");
+            _logger.LogInformation("📤 Banner medya yükleme başlatılıyor");
             
             try
             {
@@ -251,7 +269,7 @@ namespace ECommerce.API.Controllers.Admin
                 if (image == null || image.Length == 0)
                 {
                     _logger.LogWarning("⚠️ Dosya seçilmedi");
-                    return BadRequest(new { message = "Lütfen bir resim dosyası seçin." });
+                    return BadRequest(new { message = "Lütfen bir görsel veya video dosyası seçin." });
                 }
 
                 // Dosya boyutu kontrolü
@@ -271,10 +289,10 @@ namespace ECommerce.API.Controllers.Admin
 
                 // MIME type kontrolü (güvenlik için ek katman)
                 var mimeType = image.ContentType.ToLowerInvariant();
-                if (!AllowedMimeTypes.Contains(mimeType))
+                if (!IsAllowedMime(image.ContentType, extension))
                 {
                     _logger.LogWarning("⚠️ Geçersiz MIME type: {MimeType}", mimeType);
-                    return BadRequest(new { message = "Geçersiz dosya türü. Sadece resim dosyaları kabul edilir." });
+                    return BadRequest(new { message = "Geçersiz dosya türü. Desteklenen: jpg, png, gif, webp, mp4, webm." });
                 }
 
                 // Dosyayı LocalFileStorage üzerinden yükle
@@ -286,7 +304,7 @@ namespace ECommerce.API.Controllers.Admin
                     imageUrl = await _fileStorage.UploadAsync(stream, fileName, image.ContentType);
                 }
 
-                _logger.LogInformation("✅ Banner resmi yüklendi: {ImageUrl}", imageUrl);
+                _logger.LogInformation("✅ Banner medyası yüklendi: {ImageUrl}", imageUrl);
 
                 // Audit log
                 await _auditLogService.WriteAsync(
@@ -302,13 +320,13 @@ namespace ECommerce.API.Controllers.Admin
                 return Ok(new { 
                     success = true,
                     imageUrl = imageUrl,
-                    message = "Resim başarıyla yüklendi."
+                    message = "Medya başarıyla yüklendi."
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Banner resmi yüklenirken hata oluştu");
-                return StatusCode(500, new { message = "Resim yüklenirken bir hata oluştu. Lütfen tekrar deneyin." });
+                _logger.LogError(ex, "❌ Banner medyası yüklenirken hata oluştu");
+                return StatusCode(500, new { message = "Dosya yüklenirken bir hata oluştu. Lütfen tekrar deneyin." });
             }
         }
 
@@ -404,9 +422,9 @@ namespace ECommerce.API.Controllers.Admin
                         return BadRequest(new { message = $"Desteklenen dosya türleri: {string.Join(", ", AllowedExtensions)}" });
                     }
 
-                    if (!AllowedMimeTypes.Contains(image.ContentType.ToLowerInvariant()))
+                    if (!IsAllowedMime(image.ContentType, extension))
                     {
-                        return BadRequest(new { message = "Geçersiz dosya türü" });
+                        return BadRequest(new { message = "Geçersiz dosya türü. Desteklenen: jpg, png, gif, webp, mp4, webm." });
                     }
 
                     // Eski resmi sil (eğer uploads klasöründeyse)

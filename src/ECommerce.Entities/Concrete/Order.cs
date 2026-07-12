@@ -37,6 +37,12 @@ namespace ECommerce.Entities.Concrete
         public string Currency { get; set; } = "TRY";
         public OrderStatus Status { get; set; } = OrderStatus.Pending;
 
+        /// <summary>
+        /// Checkout commit sonrası true. Ödeme öncesi sadece rezervasyon varsa false.
+        /// COD checkout'ta, kart ödemesinde Paid/PreAuthorized settle'da set edilir.
+        /// </summary>
+        public bool IsInventoryCommitted { get; set; }
+
         // Kargo bilgileri
         public string ShippingMethod { get; set; } = "car"; // car veya motorcycle
         public decimal ShippingCost { get; set; } = 30m; // Kargo ücreti

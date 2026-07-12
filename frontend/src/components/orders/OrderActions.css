@@ -190,6 +190,26 @@
   border-bottom-color: #f57c00;
 }
 
+.orders-tab__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  background: #f57c00;
+  color: #fff;
+}
+
+.orders-tab:not(.active) .orders-tab__count {
+  background: #adb5bd;
+}
+
 .order-card {
   background: #fff;
   border: 1px solid #e9ecef;

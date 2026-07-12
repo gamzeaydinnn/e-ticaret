@@ -1,53 +1,47 @@
 using System.Diagnostics;
 using ECommerce.Core.DTOs.Micro;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Core.Interfaces.Sync;
+using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
+using ECommerce.Entities.Enums;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.Business.Services.Sync
 {
     /// <summary>
     /// Stok senkronizasyon servisi - Mikro ERP ile e-ticaret arası stok akışı.
-    /// 
-    /// NEDEN: Mağaza ve online satışlardan kaynaklanan stok değişiklikleri
-    /// her iki sistemde de güncel tutulmalı. Bu servis çift yönlü akışı yönetir.
-    /// 
-    /// SORUMLULUKLAR:
-    /// - Mikro'dan stok çekme (FromERP) - mağaza satışları, alışlar, sayımlar
-    /// - Mikro'ya stok gönderme (ToERP) - online satışlar, rezervasyonlar
-    /// 
-    /// İLKELER:
-    /// - Single Responsibility: Sadece stok senkronizasyonu
-    /// - Delta sync: Sadece değişenler, performans için kritik
-    /// - Retry: Max 3 deneme, exponential backoff
+    /// FromERP: mağaza satışları. ToERP: manuel/POS (online satış belge ile gider).
     /// </summary>
     public class StokSyncService : IStokSyncService
     {
-        // ==================== BAĞIMLILIKLAR ====================
-        
         private readonly IMicroService _microService;
         private readonly IProductRepository _productRepository;
         private readonly IMikroSyncRepository _syncRepository;
+        private readonly ECommerceDbContext _db;
+        private readonly SyncConflictCoordinator _conflictCoordinator;
         private readonly ILogger<StokSyncService> _logger;
         
-        // Sabitler
         private const string SYNC_TYPE = "Stok";
         private const string DIRECTION_FROM_ERP = "FromERP";
         private const string DIRECTION_TO_ERP = "ToERP";
         private const int MAX_RETRY_ATTEMPTS = 3;
 
-        // ==================== CONSTRUCTOR ====================
-        
         public StokSyncService(
             IMicroService microService,
             IProductRepository productRepository,
             IMikroSyncRepository syncRepository,
+            ECommerceDbContext db,
+            SyncConflictCoordinator conflictCoordinator,
             ILogger<StokSyncService> logger)
         {
             _microService = microService ?? throw new ArgumentNullException(nameof(microService));
             _productRepository = productRepository ?? throw new ArgumentNullException(nameof(productRepository));
             _syncRepository = syncRepository ?? throw new ArgumentNullException(nameof(syncRepository));
+            _db = db ?? throw new ArgumentNullException(nameof(db));
+            _conflictCoordinator = conflictCoordinator ?? throw new ArgumentNullException(nameof(conflictCoordinator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -449,27 +443,72 @@ namespace ECommerce.Business.Services.Sync
             var newQuantity = stock.Quantity > 0 ? stock.Quantity : stock.Stock;
             var oldQuantity = product.StockQuantity;
 
+            // Çatışma koruması: Mikro henüz online satışı görmediyse web stokunu yukarı çekme
+            if (newQuantity > oldQuantity)
+            {
+                var hasPendingOnlineSale = await _db.Orders
+                    .AsNoTracking()
+                    .Where(o => o.IsInventoryCommitted &&
+                                o.Status != OrderStatus.Cancelled &&
+                                o.Status != OrderStatus.Refunded &&
+                                o.Status != OrderStatus.PaymentFailed &&
+                                (o.TrackingNumber == null ||
+                                 !o.TrackingNumber.StartsWith(LocalInventoryPolicy.MikroTrackingPrefix)))
+                    .AnyAsync(o => o.OrderItems.Any(oi => oi.ProductId == product.Id), cancellationToken);
+
+                if (LocalInventoryPolicy.ShouldSkipInboundStockIncrease(
+                        oldQuantity, newQuantity, hasPendingOnlineSale))
+                {
+                    await _syncRepository.CreateLogAsync(new MicroSyncLog
+                    {
+                        EntityType = "Stock",
+                        Direction = DIRECTION_FROM_ERP,
+                        ExternalId = stock.Sku,
+                        InternalId = product.Id.ToString(),
+                        Status = "Skipped",
+                        Message = $"Inbound artış atlandı (bekleyen online satış). Local={oldQuantity}, Mikro={newQuantity}",
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
+
+                    _logger.LogInformation(
+                        "[StokSyncService] Inbound stok artışı atlandı (pending online sale). SKU={Sku}, Local={Local}, Mikro={Mikro}",
+                        stock.Sku, oldQuantity, newQuantity);
+
+                    return SyncResult.Ok(0);
+                }
+            }
+
+            // Faz 4: SyncConflictCoordinator — muhafazakar min (aşırı satış engeli)
             if (oldQuantity != newQuantity)
             {
-                product.StockQuantity = newQuantity;
-                await _productRepository.UpdateAsync(product);
+                var conflict = _conflictCoordinator.ResolveStockConflict(
+                    stock.Sku,
+                    mikroValue: newQuantity,
+                    ecommerceValue: oldQuantity,
+                    mikroLastUpdate: DateTime.UtcNow,
+                    ecommerceLastUpdate: product.UpdatedAt);
 
-                // Log başarılı güncelleme
-                await _syncRepository.CreateLogAsync(new MicroSyncLog
+                var resolved = (int)Math.Max(0, Math.Floor(conflict.ResolvedValue));
+                if (resolved != oldQuantity)
                 {
-                    EntityType = "Stock",
-                    Direction = DIRECTION_FROM_ERP,
-                    ExternalId = stock.Sku,
-                    InternalId = product.Id.ToString(),
-                    Status = "Success",
-                    Message = $"Stok güncellendi: {oldQuantity} → {newQuantity}",
-                    CreatedAt = DateTime.UtcNow
-                }, cancellationToken);
+                    product.StockQuantity = resolved;
+                    await _productRepository.UpdateAsync(product);
 
-                _logger.LogDebug(
-                    "[StokSyncService] Stok güncellendi. SKU: {Sku}, " +
-                    "Önceki: {Old}, Yeni: {New}",
-                    stock.Sku, oldQuantity, newQuantity);
+                    await _syncRepository.CreateLogAsync(new MicroSyncLog
+                    {
+                        EntityType = "Stock",
+                        Direction = DIRECTION_FROM_ERP,
+                        ExternalId = stock.Sku,
+                        InternalId = product.Id.ToString(),
+                        Status = "Success",
+                        Message = $"Stok güncellendi: {oldQuantity} → {resolved} (strategy={conflict.Strategy})",
+                        CreatedAt = DateTime.UtcNow
+                    }, cancellationToken);
+
+                    _logger.LogDebug(
+                        "[StokSyncService] Stok güncellendi. SKU: {Sku}, Önceki: {Old}, Yeni: {New}, Strategy: {Strategy}",
+                        stock.Sku, oldQuantity, resolved, conflict.Strategy);
+                }
             }
 
             return SyncResult.Ok(1);
@@ -530,7 +569,7 @@ namespace ECommerce.Business.Services.Sync
                     }
                     else
                     {
-                        throw new InvalidOperationException("MikroAPI false döndürdü");
+                        throw new InvalidOperationException("ERP stok güncellemesi reddedildi");
                     }
                 }
                 catch (Exception ex)
@@ -553,7 +592,7 @@ namespace ECommerce.Business.Services.Sync
 
             // Max deneme aşıldı
             syncLog.Status = "Failed";
-            syncLog.Message = $"Max {MAX_RETRY_ATTEMPTS} deneme aşıldı";
+            syncLog.Message = $"{MAX_RETRY_ATTEMPTS} deneme sonrası senkronizasyon durduruldu";
             await _syncRepository.CreateLogAsync(syncLog, cancellationToken);
 
             _logger.LogError(
@@ -563,7 +602,7 @@ namespace ECommerce.Business.Services.Sync
             return SyncResult.Fail(new SyncError(
                 "PushStock",
                 product.SKU,
-                syncLog.LastError ?? "Max retry exceeded"));
+                syncLog.LastError ?? "Maksimum deneme sayısına ulaşıldı"));
         }
     }
 }

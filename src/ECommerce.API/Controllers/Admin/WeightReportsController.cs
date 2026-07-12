@@ -115,29 +115,22 @@ namespace ECommerce.API.Controllers.Admin
         }
 
         /// <summary>
-        /// Raporu onayla
+        /// Eski WeightReport "Onayla" yolu kapatıldı.
+        /// Tek tartı yolu: Preparing aşamasında manual-weight; banka Capt teslimatta.
         /// </summary>
         [HttpPost("{id}/approve")]
-        public async Task<IActionResult> ApproveReport(int id, [FromBody] WeightReportActionDto dto)
+        public IActionResult ApproveReport(int id, [FromBody] WeightReportActionDto? dto)
         {
-            try
-            {
-                var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-                var success = await _weightService.ApproveReportAsync(id, userId, dto.Note);
+            _logger.LogWarning(
+                "WeightReport approve reddedildi (tek tartı yolu). ReportId={ReportId}", id);
 
-                if (!success)
-                {
-                    return BadRequest(new { error = "Rapor onaylanamadı" });
-                }
-
-                _logger.LogInformation($"Rapor onaylandı: {id}, Yönetici: {userId}");
-                return Ok(new { message = "Rapor başarıyla onaylandı" });
-            }
-            catch (Exception ex)
+            return BadRequest(new
             {
-                _logger.LogError(ex, $"Rapor onaylanırken hata: {id}");
-                return StatusCode(500, new { error = "Rapor onaylanamadı" });
-            }
+                error = "Ağırlık raporu üzerinden ayrı onay/tahsilat kapatıldı. " +
+                        "Tartıyı Hazırlanıyor aşamasında Ağırlık Raporları panelinden girin; " +
+                        "banka kesin çekimi teslimatta Capt ile yapılır.",
+                useInstead = "PATCH /api/weight-adjustment/admin/orders/{orderId}/items/{orderItemId}/manual-weight"
+            });
         }
 
         /// <summary>
@@ -208,13 +201,11 @@ namespace ECommerce.API.Controllers.Admin
 
         private async Task<List<WeightReportResponseDto>> GetManualWeighingOrderDtosAsync(int page, int pageSize)
         {
-            var activeStatuses = new[]
+            // Tek tartı yolu: yalnız Preparing. Auth akışında PaymentStatus=Authorized olabilir.
+            var paidOrAuthorized = new[]
             {
-                OrderStatus.Pending,
-                OrderStatus.New,
-                OrderStatus.Paid,
-                OrderStatus.Confirmed,
-                OrderStatus.Preparing
+                PaymentStatus.Paid,
+                PaymentStatus.Authorized
             };
 
             var orders = await _dbContext.Orders
@@ -222,8 +213,8 @@ namespace ECommerce.API.Controllers.Admin
                 .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.Product)
                 .Where(o => o.HasWeightBasedItems &&
-                    activeStatuses.Contains(o.Status) &&
-                    o.PaymentStatus == PaymentStatus.Paid)
+                    o.Status == OrderStatus.Preparing &&
+                    paidOrAuthorized.Contains(o.PaymentStatus))
                 .OrderByDescending(o => o.OrderDate)
                 .Skip((Math.Max(page, 1) - 1) * Math.Max(pageSize, 1))
                 .Take(Math.Clamp(pageSize, 1, 100))

@@ -301,22 +301,22 @@ function AdminLayoutInner({ children }) {
         children: [
           {
             path: "/admin/logs/audit",
-            label: "Audit Logs",
+            label: "Denetim Kayıtları",
             permission: PERMISSIONS.LOGS_AUDIT,
           },
           {
             path: "/admin/logs/errors",
-            label: "Error Logs",
+            label: "Hata Kayıtları",
             permission: PERMISSIONS.LOGS_ERROR,
           },
           {
             path: "/admin/logs/system",
-            label: "System Logs",
+            label: "ERP Senkron Kayıtları",
             permission: PERMISSIONS.LOGS_VIEW,
           },
           {
             path: "/admin/logs/inventory",
-            label: "Inventory Logs",
+            label: "Stok Hareketleri",
             permission: PERMISSIONS.LOGS_VIEW,
           },
         ],

@@ -6,7 +6,7 @@ namespace ECommerce.Core.Helpers
 {
     /// <summary>
     /// Müşteri iptal/iade kurallarının tek kaynağı.
-    /// Kurye paketi teslim alana kadar (PickedUp öncesi) otomatik iptal;
+    /// Kurye paketi teslim alana kadar (PickedUp öncesi) otomatik iptal + banka reverse/return;
     /// sonrasında WhatsApp + admin onayı.
     /// </summary>
     public static class OrderCancelPolicy
@@ -97,11 +97,10 @@ namespace ECommerce.Core.Helpers
                 return CancelModeNone;
             }
 
+            // PickedUp öncesi: gün farkı olmadan otomatik iptal (aynı gün reverse, sonrası return)
             if (AutoCancellableStatuses.Contains(status))
             {
-                return IsSameBusinessDay(orderDateUtc, turkeyNow ?? GetTurkeyNow())
-                    ? CancelModeAuto
-                    : CancelModeWhatsApp;
+                return CancelModeAuto;
             }
 
             if (WhatsAppRequiredStatuses.Contains(status))

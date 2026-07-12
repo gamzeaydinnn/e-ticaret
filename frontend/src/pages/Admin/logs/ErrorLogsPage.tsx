@@ -87,18 +87,18 @@ const ErrorLogsPage = () => {
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        Error Logs
+        Hata Kayıtları
       </Typography>
       <Paper sx={{ p: 3, mb: 3 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <TextField
-            label="Path"
+            label="Yol (URL)"
             value={filters.path}
             onChange={(e) => handleFilterChange("path", e.target.value)}
             size="small"
           />
           <TextField
-            label="Method"
+            label="HTTP metodu"
             value={filters.method}
             onChange={(e) => handleFilterChange("method", e.target.value)}
             size="small"
@@ -142,11 +142,11 @@ const ErrorLogsPage = () => {
               <TableRow>
                 <TableCell>ID</TableCell>
                 <TableCell>Mesaj</TableCell>
-                <TableCell>Path</TableCell>
-                <TableCell>Method</TableCell>
+                <TableCell>Yol (URL)</TableCell>
+                <TableCell>HTTP metodu</TableCell>
                 <TableCell>User</TableCell>
                 <TableCell>Tarih</TableCell>
-                <TableCell>Stack Trace</TableCell>
+                <TableCell>Hata izi</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -208,7 +208,7 @@ const ErrorLogsPage = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Stack Trace</DialogTitle>
+        <DialogTitle>Hata izi</DialogTitle>
         <DialogContent>
           <pre style={{ whiteSpace: "pre-wrap" }}>
             {selectedLog?.stackTrace || "(boş)"}

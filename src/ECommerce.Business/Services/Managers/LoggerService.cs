@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -60,14 +61,22 @@ namespace ECommerce.Business.Services.Managers
         {
             try
             {
+                var enriched = AuditActionCatalog.EnsureTurkishPayload(
+                    action ?? string.Empty,
+                    entityName ?? string.Empty,
+                    entityId?.ToString(),
+                    newValues);
+
                 var audit = new AuditLogs
                 {
-                    Action = action ?? string.Empty,
-                    EntityName = entityName ?? string.Empty,
+                    Action = AuditActionCatalog.LabelAction(action),
+                    EntityName = AuditActionCatalog.LabelEntity(entityName),
                     EntityId = entityId,
                     OldValues = SerializeSafely(oldValues),
-                    NewValues = SerializeSafely(newValues),
+                    NewValues = SerializeSafely(enriched),
                     PerformedBy = performedBy,
+                    CreatedAt = DateTime.UtcNow,
+                    IsActive = true,
                 };
 
                 _dbContext.AuditLogs.Add(audit);
@@ -76,7 +85,7 @@ namespace ECommerce.Business.Services.Managers
             catch (Exception ex)
             {
                 // Audit yazarken hata olsa bile ana akışı bozmamak için sadece logla
-                _logger.LogError(ex, "Audit log yazılırken hata oluştu");
+                _logger.LogError(ex, "Denetim kaydı yazılırken hata oluştu");
             }
         }
 

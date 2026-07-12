@@ -168,13 +168,12 @@ namespace ECommerce.Business.Services.Managers
 
                 await _weightReportRepository.UpdateAsync(report);
 
-                // Ödeme tahsilatını başlat
-                if (report.OverageAmount > 0)
-                {
-                    await ChargeOverageAsync(reportId);
-                }
-
-                _logger.LogInformation($"Rapor onaylandı: {reportId}, Onaylayan: {approvedByUserId}");
+                // NEDEN ChargeOverage YOK: Tek tahsilat yolu teslimatta Capt (PaymentCaptureService).
+                // Ayrı "rapor onayla → anında çek" yolu Sale/çift çekim riski yaratıyordu.
+                // Tartı girişi Preparing'de manual-weight ile yapılır.
+                _logger.LogInformation(
+                    "Rapor onaylandı (tahsilat ertelendi/teslimat Capt). ReportId={ReportId}, Approver={Approver}",
+                    reportId, approvedByUserId);
                 return true;
             }
             catch (Exception ex)

@@ -109,14 +109,28 @@ namespace ECommerce.Business.Services.Sync
                     return OutboundPushResult.Fail($"Cache'de bulunamadı: {product.SKU}", 1);
                 }
 
-                // Mikro'ya stok güncelleme gönder (SaveStokV2Async)
+                var currentQty = (int)Math.Max(
+                    0,
+                    Math.Floor(cache.SatilabilirMiktar > 0 ? cache.SatilabilirMiktar : cache.DepoMiktari));
+                var delta = newQuantity - currentQty;
+                if (delta == 0)
+                {
+                    await _syncLogger.CompleteOperationAsync(
+                        log.Id,
+                        $"Stok zaten senkron: {product.SKU} = {newQuantity}",
+                        cancellationToken);
+                    return OutboundPushResult.Ok(1, sw.ElapsedMilliseconds);
+                }
+
                 var result = await _microService.UpsertStocksAsync(
                     new[]
                     {
                         new MicroStockDto
                         {
                             Sku = product.SKU,
-                            Quantity = newQuantity
+                            Quantity = Math.Abs(delta),
+                            Stock = Math.Abs(delta),
+                            IsStockIncrease = delta > 0
                         }
                     });
 

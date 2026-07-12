@@ -160,6 +160,21 @@ namespace ECommerce.Core.DTOs.Order
         /// Ağırlık bazlı ürün var mı?
         /// </summary>
         public bool HasWeightBasedItems { get; set; }
+
+        /// <summary>
+        /// Tüm tartılı kalemler tartıldı mı?
+        /// </summary>
+        public bool AllItemsWeighed { get; set; }
+
+        /// <summary>
+        /// Atanan kurye ID (senkron: admin / ağırlık paneli / müşteri aynı kaynak)
+        /// </summary>
+        public int? CourierId { get; set; }
+
+        /// <summary>
+        /// Atanan kurye adı
+        /// </summary>
+        public string? CourierName { get; set; }
     }
 
     /// <summary>
@@ -227,6 +242,12 @@ namespace ECommerce.Core.DTOs.Order
         /// Hazır sipariş sayısı (Ready durumunda, kurye bekliyor)
         /// </summary>
         public int ReadyCount { get; set; }
+
+        /// <summary>
+        /// Tartısı bitmiş / kurye aşamasındaki siparişler (Ready + Assigned).
+        /// Ağırlık Raporları "Tamamlandı" sekmesi için.
+        /// </summary>
+        public int ReadyOrAssignedCount { get; set; }
         
         /// <summary>
         /// Bugün tamamlanan sipariş sayısı

@@ -239,66 +239,39 @@ export default function WeightPendingList({
                   </div>
                 )}
 
-                {/* Aksiyon Butonları */}
+                {/* Aksiyon — ayrı rapor onayı kapatıldı; tartı Preparing panelinden */}
                 <div className="action-buttons">
-                  <button
-                    className="btn btn-success btn-action"
-                    onClick={() => handleApprove(item.id)}
-                    disabled={processingId === item.id}
-                  >
-                    {processingId === item.id ? (
-                      <span className="spinner-border spinner-border-sm"></span>
-                    ) : (
-                      <>
-                        <i className="fas fa-check me-2"></i>
-                        Onayla
-                      </>
-                    )}
-                  </button>
-                  <button
-                    className="btn btn-danger btn-action"
-                    onClick={() => handleReject(item.id)}
-                    disabled={processingId === item.id}
-                  >
-                    <i className="fas fa-times me-2"></i>
-                    Reddet
-                  </button>
+                  <div className="alert alert-secondary py-2 mb-2 small w-100">
+                    <i className="fas fa-info-circle me-1"></i>
+                    Ayrı &quot;Onayla&quot; kaldırıldı. Tartıyı{" "}
+                    <strong>Admin → Ağırlık Raporları</strong> ekranında,
+                    sipariş <strong>Hazırlanıyor</strong> iken girin.
+                  </div>
                   <button
                     className="btn btn-outline-primary btn-action"
                     onClick={() => onManualAdjust(item)}
                     disabled={processingId === item.id}
                   >
                     <i className="fas fa-edit me-2"></i>
-                    Düzenle
+                    Tartı Detayı
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Hızlı Aksiyon (Daraltılmış Durumda) */}
+            {/* Hızlı aksiyon — onay/red kaldırıldı */}
             {expandedId !== item.id && (
               <div className="quick-actions">
                 <button
-                  className="btn btn-sm btn-success"
+                  className="btn btn-sm btn-outline-primary"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleApprove(item.id);
+                    onManualAdjust(item);
                   }}
                   disabled={processingId === item.id}
-                  title="Onayla"
+                  title="Tartı detayı"
                 >
-                  <i className="fas fa-check"></i>
-                </button>
-                <button
-                  className="btn btn-sm btn-danger"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReject(item.id);
-                  }}
-                  disabled={processingId === item.id}
-                  title="Reddet"
-                >
-                  <i className="fas fa-times"></i>
+                  <i className="fas fa-weight"></i>
                 </button>
               </div>
             )}

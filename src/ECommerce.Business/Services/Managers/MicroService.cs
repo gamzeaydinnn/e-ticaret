@@ -60,6 +60,14 @@ namespace ECommerce.Business.Services.Managers
         public Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)
             => Task.FromResult(true);
 
+        public async Task<(bool Success, string? Message, string? EvrakSeri, int? EvrakSira)> PushSiparisV2Async(
+            MikroSiparisKaydetRequestDto request,
+            CancellationToken cancellationToken = default)
+        {
+            await Task.CompletedTask;
+            return (true, "stub", "ONL", 1);
+        }
+
         // Mikro'dan sipariş teslim miktarlarını çeker (stub - gerçek implementasyon Infrastructure katmanında)
         public Task<MikroDeliveryWeightsResult?> GetOrderDeliveryWeightsAsync(
             string orderNumber, CancellationToken cancellationToken = default)

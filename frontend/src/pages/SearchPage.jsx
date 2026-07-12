@@ -11,6 +11,60 @@ import { useCompare } from "../contexts/CompareContext";
 import CartActionToast, { useCartActionToast } from "../components/CartActionToast";
 import { useAuth } from "../contexts/AuthContext";
 
+/** Backend ProductSearchMatcher ile uyumlu Türkçe arama normalizasyonu */
+const normalizeSearchText = (text) =>
+  String(text || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const WATER_LEMMAS = new Set(["su", "suyu", "sular"]);
+const SODA_LEMMAS = new Set(["soda", "sodasi", "sodalar"]);
+
+const getQueryLemmas = (token) => {
+  if (token === "su") return WATER_LEMMAS;
+  if (token === "soda") return SODA_LEMMAS;
+  return new Set([token]);
+};
+
+const matchesClientSearch = (product, query) => {
+  const queryTokens = normalizeSearchText(query)
+    .split("-")
+    .filter(Boolean);
+  if (queryTokens.length === 0) return true;
+
+  const fields = [
+    product.name,
+    product.brand,
+    product.sku,
+    product.categoryName,
+    product.description,
+  ];
+
+  return queryTokens.every((qt) => {
+    const lemmas = getQueryLemmas(qt);
+    return fields.some((field) => {
+      const slug = normalizeSearchText(field);
+      if (!slug) return false;
+      const tokens = slug.split("-").filter(Boolean);
+      if (tokens.some((t) => lemmas.has(t))) return true;
+      // Önek: "el" → "elma"
+      if (tokens.some((t) => t.startsWith(qt))) return true;
+      if (qt.length >= 3 && slug.includes(qt)) return true;
+      return false;
+    });
+  });
+};
+
 const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
@@ -70,14 +124,13 @@ const SearchPage = () => {
 
   const filteredProducts = useMemo(() => {
     let result = [...products];
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name?.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q) ||
-          p.categoryName?.toLowerCase().includes(q),
-      );
+    // API zaten urlQuery ile aradı; yalnızca yan panelde henüz uygulanmamış metin için yeniden filtrele
+    if (
+      searchQuery.trim() &&
+      searchQuery.trim().toLocaleLowerCase("tr-TR") !==
+        urlQuery.trim().toLocaleLowerCase("tr-TR")
+    ) {
+      result = result.filter((p) => matchesClientSearch(p, searchQuery));
     }
     if (selectedCategory)
       result = result.filter((p) => p.categoryName === selectedCategory);
@@ -121,6 +174,7 @@ const SearchPage = () => {
   }, [
     products,
     searchQuery,
+    urlQuery,
     selectedCategory,
     priceMin,
     priceMax,

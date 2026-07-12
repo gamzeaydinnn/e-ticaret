@@ -507,6 +507,101 @@ namespace ECommerce.Tests.Controllers
         }
 
         [Fact]
+        public async Task SearchProducts_ShouldRankDrinkingWaterAbovePrefixNoise()
+        {
+            await using var context = CreateContext();
+
+            var category = new Category
+            {
+                Id = 9,
+                Name = "İçecek",
+                Slug = "icecek",
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            context.Categories.Add(category);
+            context.MikroCategoryMappings.Add(new MikroCategoryMapping
+            {
+                MikroAnagrupKod = "600",
+                MikroAltgrupKod = "601",
+                CategoryId = category.Id,
+                Priority = 100,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var controller = CreateController(context, new List<MikroUnifiedProductDto>
+            {
+                new()
+                {
+                    StokKod = "SU-1",
+                    StokAd = "Erikli Dogal Kaynak Suyu 1.5L",
+                    Fiyat = 25m,
+                    StokMiktar = 40,
+                    Birim = "ADET",
+                    AnagrupKod = "600",
+                    GrupKod = "601",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "SUCUK-1",
+                    StokAd = "Kangal Sucuk 300gr",
+                    Fiyat = 180m,
+                    StokMiktar = 12,
+                    Birim = "ADET",
+                    AnagrupKod = "600",
+                    GrupKod = "601",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "NIVEA-SU",
+                    StokAd = "NIVEA SU KORUMA FERAHLIK 200 ML",
+                    Fiyat = 1100m,
+                    StokMiktar = 5,
+                    Birim = "ADET",
+                    AnagrupKod = "600",
+                    GrupKod = "601",
+                    WebeGonderilecekFl = true
+                },
+                new()
+                {
+                    StokKod = "SODA-1",
+                    StokAd = "Uludag Gazoz Soda 330ml",
+                    Fiyat = 18m,
+                    StokMiktar = 50,
+                    Birim = "ADET",
+                    AnagrupKod = "600",
+                    GrupKod = "601",
+                    WebeGonderilecekFl = true
+                }
+            });
+
+            var suResult = await controller.SearchProducts("su", 1, 20);
+            var suOk = Assert.IsType<OkObjectResult>(suResult);
+            var suProducts = Assert.IsAssignableFrom<IEnumerable<ProductListDto>>(suOk.Value).ToList();
+
+            Assert.Contains(suProducts, p => p.Sku == "SU-1");
+            Assert.Equal("SU-1", suProducts[0].Sku);
+            // Sucuk önek ile gelebilir ama içme suyundan sonra sıralanmalı
+            var sucukIndex = suProducts.FindIndex(p => p.Sku == "SUCUK-1");
+            if (sucukIndex >= 0)
+                Assert.True(sucukIndex > 0);
+
+            var sodaResult = await controller.SearchProducts("soda", 1, 20);
+            var sodaOk = Assert.IsType<OkObjectResult>(sodaResult);
+            var sodaProducts = Assert.IsAssignableFrom<IEnumerable<ProductListDto>>(sodaOk.Value).ToList();
+
+            Assert.Single(sodaProducts);
+            Assert.Equal("SODA-1", sodaProducts[0].Sku);
+        }
+
+        [Fact]
         public async Task GetProducts_ShouldExcludeOutOfStockAndZeroPriceMikroProducts()
         {
             await using var context = CreateContext();

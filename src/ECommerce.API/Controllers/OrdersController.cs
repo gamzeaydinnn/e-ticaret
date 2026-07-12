@@ -428,8 +428,7 @@ namespace ECommerce.API.Controllers
         /// <summary>
         /// Sipariş iptali (kullanıcı kendi siparişini iptal eder)
         /// MARKET KURALLARI:
-        /// - Sadece aynı gün içinde iptal edilebilir
-        /// - Kurye teslim alana kadar (Assigned dahil) otomatik iptal edilebilir
+        /// - Kurye teslim alana kadar (Assigned dahil) otomatik iptal + Posnet reverse/return
         /// - PickedUp sonrası müşteri hizmetleriyle iletişime geçilmeli
         /// </summary>
         [HttpPost("{orderId}/cancel")]
@@ -453,19 +452,6 @@ namespace ECommerce.API.Controllers
                 return Forbid();
             }
 
-            var currentBusinessDate = GetTurkeyNow().Date;
-            if (ConvertUtcToTurkey(order.OrderDate).Date != currentBusinessDate)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Sipariş iptali yalnızca siparişin verildiği gün yapılabilir.",
-                    errorCode = "SAME_DAY_CANCEL_ONLY",
-                    cancelMode = OrderCancelPolicy.CancelModeWhatsApp,
-                    contactInfo = BuildContactInfo()
-                });
-            }
-
             if (!OrderCancelPolicy.TryParseOrderStatus(order.Status, out var orderStatus) ||
                 !OrderCancelPolicy.AutoCancellableStatuses.Contains(orderStatus))
             {
@@ -484,7 +470,7 @@ namespace ECommerce.API.Controllers
                 userId,
                 new CreateRefundRequestDto
                 {
-                    Reason = "Müşteri tarafından aynı gün iptal edildi",
+                    Reason = "Müşteri tarafından iptal edildi (kurye teslim almadan)",
                     RefundType = "full"
                 });
 
@@ -494,7 +480,9 @@ namespace ECommerce.API.Controllers
                     success = false,
                     message = result.Message ?? "Sipariş iptal edilemedi.",
                     errorCode = result.ErrorCode,
-                    cancelMode = OrderCancelPolicy.CancelModeWhatsApp,
+                    cancelMode = result.ErrorCode == "PAYMENT_REFUND_FAILED"
+                        ? OrderCancelPolicy.CancelModeAuto
+                        : OrderCancelPolicy.CancelModeWhatsApp,
                     contactInfo = BuildContactInfo()
                 });
             }

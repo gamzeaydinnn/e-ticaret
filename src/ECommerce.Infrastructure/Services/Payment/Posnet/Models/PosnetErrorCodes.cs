@@ -200,6 +200,12 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         [Description("oosTranData işlemi başarısız")]
         OosTranDataFailed = 143,
 
+        [Description("Grup kapanmış - reverse yerine return (iade) yapılmalı")]
+        GroupClosedUseRefund = 211,
+
+        [Description("Önceki güne ait finansallaştırma reverse edilemez - return kullanın")]
+        PreviousDayCaptureUseRefund = 229,
+
         // ═══════════════════════════════════════════════════════════════════════
         // UNKNOWN - Tanımlanmamış hata kodu
         // ═══════════════════════════════════════════════════════════════════════

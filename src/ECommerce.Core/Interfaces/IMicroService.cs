@@ -19,13 +19,16 @@ namespace ECommerce.Core.Interfaces
         Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices);
         Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers);
 
+        /// <summary>
+        /// Online siparişi SiparisKaydetV2 ile Mikro'ya yazar.
+        /// </summary>
+        Task<(bool Success, string? Message, string? EvrakSeri, int? EvrakSira)> PushSiparisV2Async(
+            MikroSiparisKaydetRequestDto request,
+            CancellationToken cancellationToken = default);
+
         // Mikro'dan sipariş teslim miktarlarını (tartı sonuçları) çeker.
-        // NEDEN: Mağaza personeli ürünleri tartıp Mikro'ya girdiğinde,
-        // sip_teslim_miktar alanından gerçek miktarlar çekilir.
         Task<MikroDeliveryWeightsResult?> GetOrderDeliveryWeightsAsync(
             string orderNumber, CancellationToken cancellationToken = default);
-
-        // İhtiyaca göre diğer metodlar eklenebilir
 	}
 }
 /*Mikro ERP ile entegrasyon

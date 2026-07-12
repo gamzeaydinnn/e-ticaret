@@ -37,10 +37,28 @@ const normalizeOrder = (order = {}) => {
     id: item.id ?? item.productId ?? index,
     productId: item.productId ?? item.id ?? index,
     name: item.productName || item.name || "Ürün",
+    productName: item.productName || item.name || "Ürün",
     quantity: item.quantity ?? 0,
     unitPrice: item.unitPrice ?? item.price ?? 0,
     price: item.unitPrice ?? item.price ?? 0,
+    lineTotal: item.lineTotal ?? item.LineTotal ?? 0,
+    actualPrice: item.actualPrice ?? item.ActualPrice ?? null,
+    estimatedPrice: item.estimatedPrice ?? item.EstimatedPrice ?? null,
+    actualWeight: item.actualWeight ?? item.ActualWeight ?? null,
+    estimatedWeight: item.estimatedWeight ?? item.EstimatedWeight ?? null,
+    isWeightBased: item.isWeightBased ?? item.IsWeightBased ?? false,
+    weightUnit: item.weightUnit ?? item.WeightUnit ?? null,
   }));
+
+  const finalAmount = order.finalAmount ?? order.FinalAmount ?? 0;
+  const finalPrice = order.finalPrice ?? order.FinalPrice ?? 0;
+  const totalPrice = order.totalPrice ?? order.TotalPrice ?? 0;
+  const resolvedTotal =
+    finalAmount > 0
+      ? finalAmount
+      : finalPrice > 0
+        ? finalPrice
+        : totalPrice;
 
   const fallbackOrderNo = order.id ? `ORD-${order.id}` : "ORD-0000";
 
@@ -60,9 +78,12 @@ const normalizeOrder = (order = {}) => {
       fallbackOrderNo,
     status: (order.status || "").toLowerCase(),
     orderDate: order.orderDate || new Date().toISOString(),
-    totalAmount: order.totalAmount ?? order.totalPrice ?? 0,
-    totalPrice: order.totalPrice ?? order.totalAmount ?? 0,
-    finalPrice: order.finalPrice ?? order.totalPrice ?? order.totalAmount ?? 0,
+    totalAmount: resolvedTotal,
+    totalPrice,
+    finalPrice: finalPrice > 0 ? finalPrice : resolvedTotal,
+    finalAmount: finalAmount > 0 ? finalAmount : resolvedTotal,
+    totalPriceDifference:
+      order.totalPriceDifference ?? order.TotalPriceDifference ?? 0,
     discountAmount: order.discountAmount ?? 0,
     couponDiscountAmount: order.couponDiscountAmount ?? 0,
     campaignDiscountAmount: order.campaignDiscountAmount ?? 0,
