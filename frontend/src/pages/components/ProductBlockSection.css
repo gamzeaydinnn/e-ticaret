@@ -400,30 +400,16 @@ video.poster-image {
   opacity: 1;
 }
 
-/* Scroll Container — native yatay scroll (tiklama bozulmasin) */
+/* Scroll Container — transform kayma; overflow hidden (tiklama serbest) */
 .products-scroll-container {
   display: block;
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   padding: 0 2px;
   min-height: var(--block-card-height);
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   cursor: default;
-}
-
-.products-scroll-container::-webkit-scrollbar {
-  display: none;
-}
-
-.products-scroll-container.is-dragging {
-  cursor: grabbing;
 }
 
 .products-scroll-track {
@@ -432,7 +418,9 @@ video.poster-image {
   align-items: stretch;
   width: max-content;
   min-height: var(--block-card-height);
-  transform: none;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .products-scroll-container.is-auto-scrolling {
@@ -692,10 +680,7 @@ video.poster-image {
     width: 100%;
     min-width: 0;
     max-width: 100%;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
+    overflow: hidden !important;
   }
 
   .products-scroll-track {

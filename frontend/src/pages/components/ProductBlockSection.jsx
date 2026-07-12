@@ -287,7 +287,7 @@ const resolveActiveMotionBlock = () => {
     }
   });
 
-  const nextActive = bestRatio >= 0.22 ? bestKey : null;
+  const nextActive = bestRatio >= 0.12 ? bestKey : null;
   if (nextActive === activeMotionBlockKey) return;
 
   const previousKey = activeMotionBlockKey;
@@ -313,7 +313,6 @@ const ProductBlockSection = ({
   const trackRef = useRef(null);
   const sectionRef = useRef(null);
   const autoScrollRafRef = useRef(null);
-  const autoScrollPausedRef = useRef(false);
   const userInteractUntilRef = useRef(0);
   const slideOffsetRef = useRef(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -435,8 +434,8 @@ const ProductBlockSection = ({
         resolveActiveMotionBlock();
       },
       {
-        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.65, 0.8, 1],
-        rootMargin: "-12% 0px -18% 0px",
+        threshold: [0, 0.08, 0.12, 0.2, 0.35, 0.5, 0.7, 1],
+        rootMargin: "-5% 0px -10% 0px",
       },
     );
 
@@ -451,8 +450,7 @@ const ProductBlockSection = ({
     };
   }, [blockMotionKey]);
 
-  // Hafif sağa kayma — sadece aktif (bakılan) blok
-  // NOT: pointer capture / custom drag YOK — urun tiklamasini bozmamak icin native scroll
+  // Hafif sağa kayma — transform (guvenilir) + tiklamayi bozmayan pause
   useEffect(() => {
     const container = scrollContainerRef.current;
     const track = trackRef.current;
@@ -463,10 +461,6 @@ const ProductBlockSection = ({
     )?.matches;
     if (prefersReducedMotion) return undefined;
 
-    const canHover = window.matchMedia?.(
-      "(hover: hover) and (pointer: fine)",
-    )?.matches;
-
     const pauseAutoScroll = (ms = 4200) => {
       userInteractUntilRef.current = Date.now() + ms;
     };
@@ -474,62 +468,40 @@ const ProductBlockSection = ({
     const readMaxOffset = () =>
       Math.max(0, track.scrollWidth - container.clientWidth);
 
-    const applyOffset = (value, { smoothButtons = true } = {}) => {
+    const applyOffset = (value) => {
       const maxOffset = readMaxOffset();
       const clamped = Math.max(0, Math.min(maxOffset, value));
       slideOffsetRef.current = clamped;
-      if (Math.abs(container.scrollLeft - clamped) > 0.5) {
-        container.scrollLeft = clamped;
-      }
-      if (smoothButtons) {
-        const nextLeft = clamped > 2;
-        const nextRight = clamped < maxOffset - 2;
-        setCanScrollLeft((prev) => (prev === nextLeft ? prev : nextLeft));
-        setCanScrollRight((prev) => (prev === nextRight ? prev : nextRight));
-      }
+      track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
+      const nextLeft = clamped > 2;
+      const nextRight = clamped < maxOffset - 2;
+      setCanScrollLeft((prev) => (prev === nextLeft ? prev : nextLeft));
+      setCanScrollRight((prev) => (prev === nextRight ? prev : nextRight));
       return clamped;
     };
 
-    const onMouseEnter = () => {
-      if (canHover) autoScrollPausedRef.current = true;
-    };
-    const onMouseLeave = () => {
-      if (!canHover) return;
-      autoScrollPausedRef.current = false;
-      pauseAutoScroll(1800);
-    };
-
-    const onUserInteract = () => pauseAutoScroll(5500);
-
-    const onScroll = () => {
-      slideOffsetRef.current = container.scrollLeft;
-      const maxOffset = readMaxOffset();
-      const offset = container.scrollLeft;
-      setCanScrollLeft((prev) => {
-        const next = offset > 2;
-        return prev === next ? prev : next;
-      });
-      setCanScrollRight((prev) => {
-        const next = offset < maxOffset - 2;
-        return prev === next ? prev : next;
-      });
+    // Sadece gercek etkilesimde dur; hover'da durma (bakinca kayma gorunsun)
+    const onUserInteract = (event) => {
+      if (event.target?.closest?.("button, a, .modern-add-btn, .btn-favorite")) {
+        pauseAutoScroll(5500);
+        return;
+      }
+      pauseAutoScroll(4500);
     };
 
     container.classList.add("is-auto-scrolling");
+    track.style.willChange = "transform";
     applyOffset(slideOffsetRef.current);
 
     container.addEventListener("pointerdown", onUserInteract, { passive: true });
-    container.addEventListener("touchstart", onUserInteract, { passive: true });
     container.addEventListener("wheel", onUserInteract, { passive: true });
-    container.addEventListener("scroll", onScroll, { passive: true });
-    container.addEventListener("mouseenter", onMouseEnter);
-    container.addEventListener("mouseleave", onMouseLeave);
+    container.addEventListener("touchstart", onUserInteract, { passive: true });
 
     let lastTs = 0;
     let holdUntil = 0;
     let returning = false;
     const isMobile = window.matchMedia("(max-width: 768px)")?.matches;
-    const speedPxPerSec = isMobile ? 34 : 22;
+    const speedPxPerSec = isMobile ? 28 : 22;
 
     const tick = (ts) => {
       if (!lastTs) lastTs = ts;
@@ -537,7 +509,6 @@ const ProductBlockSection = ({
       lastTs = ts;
 
       const canMove =
-        !autoScrollPausedRef.current &&
         Date.now() >= userInteractUntilRef.current &&
         Date.now() >= holdUntil &&
         !document.hidden;
@@ -546,7 +517,7 @@ const ProductBlockSection = ({
         const maxOffset = readMaxOffset();
         if (maxOffset > 8) {
           const delta = speedPxPerSec * dt * (returning ? -2.2 : 1);
-          const next = container.scrollLeft + delta;
+          const next = slideOffsetRef.current + delta;
 
           if (!returning && next >= maxOffset - 0.5) {
             applyOffset(maxOffset);
@@ -559,8 +530,6 @@ const ProductBlockSection = ({
           } else {
             applyOffset(next);
           }
-        } else {
-          applyOffset(0);
         }
       }
 
@@ -569,9 +538,9 @@ const ProductBlockSection = ({
 
     const startTimer = window.setTimeout(() => {
       autoScrollRafRef.current = requestAnimationFrame(tick);
-    }, isMobile ? 250 : 180);
+    }, 200);
 
-    const onResize = () => applyOffset(container.scrollLeft || slideOffsetRef.current);
+    const onResize = () => applyOffset(slideOffsetRef.current);
     window.addEventListener("resize", onResize);
 
     return () => {
@@ -580,13 +549,11 @@ const ProductBlockSection = ({
       if (autoScrollRafRef.current) {
         cancelAnimationFrame(autoScrollRafRef.current);
       }
-      container.classList.remove("is-auto-scrolling", "is-dragging");
+      container.classList.remove("is-auto-scrolling");
+      track.style.willChange = "";
       container.removeEventListener("pointerdown", onUserInteract);
-      container.removeEventListener("touchstart", onUserInteract);
       container.removeEventListener("wheel", onUserInteract);
-      container.removeEventListener("scroll", onScroll);
-      container.removeEventListener("mouseenter", onMouseEnter);
-      container.removeEventListener("mouseleave", onMouseLeave);
+      container.removeEventListener("touchstart", onUserInteract);
     };
   }, [
     isMotionActive,
@@ -748,8 +715,7 @@ const ProductBlockSection = ({
     const track = trackRef.current;
     if (!container || !track) return;
     const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
-    const offset = container.scrollLeft;
-    slideOffsetRef.current = offset;
+    const offset = slideOffsetRef.current;
     setCanScrollLeft(offset > 2);
     setCanScrollRight(offset < maxOffset - 2);
   };
@@ -766,12 +732,18 @@ const ProductBlockSection = ({
     const maxOffset = Math.max(0, track.scrollWidth - container.clientWidth);
     const next =
       direction === "left"
-        ? container.scrollLeft - scrollAmount
-        : container.scrollLeft + scrollAmount;
+        ? slideOffsetRef.current - scrollAmount
+        : slideOffsetRef.current + scrollAmount;
     const clamped = Math.max(0, Math.min(maxOffset, next));
     slideOffsetRef.current = clamped;
-    container.scrollTo({ left: clamped, behavior: "smooth" });
-    window.setTimeout(checkScroll, 380);
+    track.style.transition = "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)";
+    track.style.transform = `translate3d(${-clamped}px, 0, 0)`;
+    setCanScrollLeft(clamped > 2);
+    setCanScrollRight(clamped < maxOffset - 2);
+    window.setTimeout(() => {
+      if (track) track.style.transition = "";
+      checkScroll();
+    }, 380);
   };
 
   const resolveProductData = (item) => {
