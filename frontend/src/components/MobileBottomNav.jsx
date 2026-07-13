@@ -1,7 +1,7 @@
 /**
  * MobileBottomNav - Mobil Alt Navigasyon Bileşeni
  *
- * Mobil cihazlarda (768px ve altı) ekranın altında sabit konumda görünen
+ * Mobil cihazlarda ve tabletlerde (1024px ve altı) ekranın altında sabit konumda görünen
  * navigasyon çubuğu. 5 ana sayfa için hızlı erişim sağlar.
  *
  * Özellikler:
@@ -131,14 +131,31 @@ const MobileBottomNav = () => {
   const [showCategories, setShowCategories] = useState(false);
   const [categories, setCategories] = useState([]);
 
-  // Kategorileri API'den yükle
+  // Kategorileri API'den yükle (yalnızca ana kategoriler)
   useEffect(() => {
     const loadCategories = async () => {
       try {
+        const tree = await categoryServiceReal.getCategoryTree();
+        const rootCats = Array.isArray(tree)
+          ? tree.filter((cat) => cat.isActive !== false)
+          : [];
+
+        if (rootCats.length > 0) {
+          setCategories(rootCats);
+          return;
+        }
+
         const cats = await categoryServiceReal.getActive();
-        setCategories(cats || []);
+        const rootsOnly = (cats || []).filter((cat) => !cat.parentId);
+        setCategories(rootsOnly.length > 0 ? rootsOnly : cats || []);
       } catch (error) {
         console.error("Kategoriler yüklenemedi:", error);
+        try {
+          const cats = await categoryServiceReal.getActive();
+          setCategories((cats || []).filter((cat) => !cat.parentId));
+        } catch {
+          setCategories([]);
+        }
       }
     };
     loadCategories();
@@ -149,11 +166,11 @@ const MobileBottomNav = () => {
    */
   const handleNavClick = (item) => {
     if (item.isCategories) {
-      setShowCategories(!showCategories);
-    } else {
-      setShowCategories(false);
-      navigate(item.path);
+      setShowCategories((prev) => !prev);
+      return;
     }
+    setShowCategories(false);
+    navigate(item.path);
   };
 
   /**
@@ -193,6 +210,7 @@ const MobileBottomNav = () => {
                 categories.map((cat) => (
                   <button
                     key={cat.id}
+                    type="button"
                     className="category-panel-item"
                     onClick={() => handleCategoryClick(cat)}
                   >
@@ -224,6 +242,7 @@ const MobileBottomNav = () => {
             return (
               <button
                 key={item.id}
+                type="button"
                 className={`mobile-nav-item ${isActive ? "active" : ""}`}
                 onClick={() => handleNavClick(item)}
                 aria-label={item.label}

@@ -24,6 +24,7 @@ jest.mock("../services/categoryServiceReal", () => ({
   __esModule: true,
   default: {
     getActive: jest.fn().mockResolvedValue([]),
+    getCategoryTree: jest.fn().mockResolvedValue([]),
   },
   normalizeCategorySlug: (slug) => slug,
 }));

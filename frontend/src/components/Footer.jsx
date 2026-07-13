@@ -105,7 +105,7 @@ export default function Footer() {
 
   return (
     <footer
-      className="modern-footer desktop-only-footer d-none d-md-block"
+      className="modern-footer desktop-only-footer d-none d-lg-block"
       style={{
         background: "linear-gradient(135deg, #2c3e50 0%, #34495e 100%)",
         color: "white",

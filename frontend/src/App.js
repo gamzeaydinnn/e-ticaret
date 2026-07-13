@@ -169,7 +169,57 @@ function Header() {
   const [hoveredCat, setHoveredCat] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const navRef = React.useRef(null);
-  const closeTimerRef = React.useRef(null); // kapanma gecikmesi — gap'te gelinince kapanmamasın
+  const categoryScrollRef = React.useRef(null);
+  const closeTimerRef = React.useRef(null);
+  const [categoryScrollLeft, setCategoryScrollLeft] = useState(false);
+  const [categoryScrollRight, setCategoryScrollRight] = useState(false);
+
+  const updateCategoryScrollState = React.useCallback(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 4) {
+      setCategoryScrollLeft(false);
+      setCategoryScrollRight(false);
+      return;
+    }
+    setCategoryScrollLeft(el.scrollLeft > 4);
+    setCategoryScrollRight(el.scrollLeft < maxScroll - 4);
+  }, []);
+
+  const scrollCategories = React.useCallback((direction) => {
+    const el = categoryScrollRef.current;
+    if (!el) return;
+    const amount = Math.max(180, Math.round(el.clientWidth * 0.55));
+    el.scrollBy({
+      left: direction === "left" ? -amount : amount,
+      behavior: "smooth",
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const el = categoryScrollRef.current;
+    if (!el) return undefined;
+
+    const handleScroll = () => updateCategoryScrollState();
+    const handleResize = () => updateCategoryScrollState();
+
+    handleScroll();
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleResize);
+
+    let resizeObserver;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(el);
+    }
+
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
+    };
+  }, [categories.length, updateCategoryScrollState]);
 
   // Dropdown'u geçikmeyle kapat (mouse gap'ten geçerken iptal edebiliriz)
   const scheduleClose = () => {
@@ -608,7 +658,7 @@ function Header() {
           </div>
 
           {/* Mobil Arama - Sadece mobilde görünür */}
-          <div className="row d-md-none mobile-search-row">
+          <div className="row d-lg-none mobile-search-row">
             <div className="col-12">
               <div className="mobile-search-shell">
                 <SearchAutocomplete />
@@ -619,9 +669,25 @@ function Header() {
       </header>
 
       {/* Kategori Navbar */}
-      <nav ref={navRef} className="single-line-categories d-none d-md-block">
+      <nav ref={navRef} className="single-line-categories d-none d-lg-block">
         <div className="container-fluid">
-          <div className="category-scroll-container">
+          <div
+            className={`category-nav-shell${categoryScrollLeft ? " can-scroll-left" : ""}${categoryScrollRight ? " can-scroll-right" : ""}`}
+          >
+            {categoryScrollLeft && (
+              <button
+                type="button"
+                className="category-nav-arrow category-nav-arrow-left"
+                aria-label="Kategorileri sola kaydır"
+                onClick={() => scrollCategories("left")}
+              >
+                <i className="fas fa-chevron-left"></i>
+              </button>
+            )}
+            <div
+              ref={categoryScrollRef}
+              className="category-scroll-container"
+            >
             <button
               className={
                 "category-btn" + (location.pathname === "/" ? " active" : "")
@@ -643,7 +709,7 @@ function Header() {
               return (
                 <div
                   key={cat.id}
-                  style={{ position: "relative", display: "inline-flex" }}
+                  className="category-item-wrap"
                   onMouseEnter={(e) => {
                     cancelClose();
                     if (!hasSubCats) return;
@@ -755,6 +821,17 @@ function Header() {
             >
               KAMPANYALAR
             </button>
+            </div>
+            {categoryScrollRight && (
+              <button
+                type="button"
+                className="category-nav-arrow category-nav-arrow-right"
+                aria-label="Kategorileri sağa kaydır"
+                onClick={() => scrollCategories("right")}
+              >
+                <i className="fas fa-chevron-right"></i>
+              </button>
+            )}
           </div>
         </div>
       </nav>

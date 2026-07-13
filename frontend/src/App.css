@@ -3292,12 +3292,104 @@ html {
 .single-line-categories {
   position: sticky;
   top: 0;
-  z-index: 1000;          /* popup'ın sayfa içeriğinin üzerinde görünmesi için yüksek tutuldu */
+  z-index: 1000;
   background: linear-gradient(180deg, #ffffff 0%, #fffdfb 100%);
   border-bottom: 1px solid rgba(255, 107, 53, 0.1);
-  overflow: visible;      /* popup aşağıya taşıyabilmesi için hidden kaldırıldı */
+  overflow-x: hidden;
+  overflow-y: visible;
+  max-height: none;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
   backdrop-filter: blur(10px);
+}
+
+.single-line-categories .container-fluid {
+  max-width: 100%;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.category-nav-shell {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+.category-nav-shell::before,
+.category-nav-shell::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.category-nav-shell::before {
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.category-nav-shell::after {
+  right: 0;
+  background: linear-gradient(
+    270deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.category-nav-shell.can-scroll-left::before,
+.category-nav-shell.can-scroll-right::after {
+  opacity: 1;
+}
+
+.category-item-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.category-nav-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 107, 53, 0.25);
+  background: rgba(255, 255, 255, 0.96);
+  color: #ff6b35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  padding: 0;
+  font-size: 11px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
+  transition: all 0.2s ease;
+}
+
+.category-nav-arrow:hover {
+  background: #ff6b35;
+  color: #fff;
+  border-color: #ff6b35;
+}
+
+.category-nav-arrow-left {
+  left: 2px;
+}
+
+.category-nav-arrow-right {
+  right: 2px;
 }
 
 .category-scroll-container {
@@ -3305,51 +3397,138 @@ html {
   align-items: center;
   justify-content: flex-start;
   flex-wrap: nowrap;
-  gap: 3px;
-  padding: 6px 10px 8px;
+  gap: 6px;
+  padding: 7px 36px 8px;
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
   background: transparent;
-  min-height: 42px;
+  min-height: 40px;
+  max-height: 46px;
   width: 100%;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
-@media (max-width: 1400px) {
+.category-scroll-container > .category-item-wrap {
+  flex: 0 0 auto;
+  min-width: auto;
+  max-width: none;
+  margin-right: 0;
+}
+
+/* Eski Safari / margin fallback (gap desteklemeyen tarayıcılar) */
+.category-scroll-container > .category-btn,
+.category-scroll-container > .category-item-wrap {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  min-width: auto;
+  margin-right: 6px;
+}
+
+.category-scroll-container > .category-btn:last-child,
+.category-scroll-container > .category-item-wrap:last-child {
+  margin-right: 0;
+}
+
+/* Tablet (Surface Pro, iPad vb.): tek satır, küçük punto */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .single-line-categories {
+    max-height: 40px;
+  }
+
   .category-scroll-container {
-    gap: 2px;
-    padding: 5px 8px 7px;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 1px;
+    padding: 4px 24px 5px;
+    max-height: 36px;
+    min-height: 32px;
   }
 
   .category-btn {
-    font-size: 10px;
-    padding: 6px 10px;
-  }
-}
-
-@media (max-width: 1200px) {
-  .category-scroll-container {
-    gap: 2px;
-    padding: 6px 10px 8px;
+    font-size: 7px !important;
+    padding: 2px 5px !important;
+    min-height: 24px !important;
+    letter-spacing: 0 !important;
+    font-weight: 600 !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
   }
 
-  .category-btn {
-    font-size: 10px;
-    padding: 6px 9px;
-  }
-}
-
-@media (max-width: 768px) {
-  .category-scroll-container {
-    gap: 6px;
-    padding: 8px 10px 10px;
+  .category-btn.active {
+    font-weight: 700 !important;
+    box-shadow: 0 6px 12px rgba(255, 107, 53, 0.18);
   }
 
-  .category-btn {
+  .category-btn .fa-chevron-down {
+    font-size: 5px !important;
+    margin-left: 2px !important;
+  }
+
+  .category-nav-arrow {
+    width: 22px;
+    height: 22px;
     font-size: 9px;
-    padding: 6px 10px;
-    min-width: auto;
+  }
+}
+
+/* Küçük laptop / dar masaüstü: küçültme YOK — yatay kaydır */
+@media (min-width: 1025px) and (max-width: 1199px) {
+  .category-scroll-container {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 6px 34px 7px;
+    max-height: 44px;
+    min-height: 38px;
+  }
+
+  .category-btn {
+    font-size: 10px !important;
+    padding: 6px 10px !important;
+    min-height: 30px !important;
+    letter-spacing: 0.01em;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+  }
+}
+
+/* Orta genişlik masaüstü */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .category-scroll-container {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 7px 36px 8px;
+  }
+
+  .category-btn {
+    font-size: 10.5px !important;
+    padding: 6px 11px !important;
+    min-height: 32px !important;
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+  }
+}
+
+/* Geniş ekran */
+@media (min-width: 1400px) {
+  .category-scroll-container {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    gap: 6px;
+    padding: 7px 36px 9px;
+    max-height: 46px;
+  }
+
+  .category-btn {
+    flex: 0 0 auto !important;
+    flex-shrink: 0 !important;
+    font-size: 11px !important;
+    padding: 7px 12px !important;
   }
 }
 
@@ -3364,23 +3543,27 @@ html {
   color: #ff6b35;
   font-size: 11px;
   font-weight: 700;
-  padding: 7px 11px;
+  padding: 7px 12px;
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.22s ease;
+  transition: background 0.22s ease, border-color 0.22s ease, color 0.22s ease,
+    box-shadow 0.22s ease;
   text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   position: relative;
   overflow: hidden;
   box-shadow: none;
   text-align: center;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 1 auto;
-  flex-shrink: 1;
-  max-width: 100%;
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;
+  width: auto;
+  max-width: none;
+  min-width: auto;
   min-height: 34px;
+  box-sizing: border-box;
 }
 
 /* Tüm kategori butonları aynı stil kullanacak */
@@ -3424,25 +3607,6 @@ html {
   transform: none;
 }
 
-@media (max-width: 1200px) {
-  .category-scroll-container {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-
-  .category-btn {
-    font-size: 10.75px;
-    padding: 8px 14px;
-  }
-}
-
-@media (max-width: 768px) {
-  .category-btn {
-    font-size: 9px;
-    padding: 6px 10px;
-    min-width: auto;
-  }
-}
 
 @keyframes activeGlow {
   0% {
@@ -4296,7 +4460,7 @@ video.promo-grid-image,
 }
 
 .modern-action-btn:hover .action-icon {
-  transform: scale(1.1) translateY(-2px);
+  transform: scale(1.08) translateY(-1px);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
@@ -4305,17 +4469,31 @@ video.promo-grid-image,
 }
 
 .modern-action-btn:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
 }
 
 /* Ensure header action items look consistent (icons + labels) */
+.header-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
 .header-actions .modern-action-btn {
-  min-width: 92px; /* prevents label wrapping (e.g., "Giriş Yap") */
+  min-width: 92px;
+  flex: 0 0 auto;
 }
 
 .header-actions .modern-action-btn small {
-  white-space: nowrap; /* keep label in one line */
+  white-space: nowrap;
   display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-actions .action-icon {
@@ -4325,6 +4503,227 @@ video.promo-grid-image,
   align-items: center;
   justify-content: center;
   overflow: visible;
+  flex-shrink: 0;
+}
+
+/* Tablet / orta ekran: header aksiyonları sıkışmasın */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .main-header--storefront .container-fluid {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .main-header--storefront .mobile-header-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-3:first-child {
+    flex: 0 0 auto;
+    width: auto !important;
+    max-width: 120px;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-6 {
+    flex: 1 1 auto;
+    width: auto !important;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-3.ms-auto {
+    flex: 0 0 auto;
+    width: auto !important;
+    max-width: none;
+    margin-left: 4px !important;
+  }
+
+  .main-header--storefront .brand-logo-shell {
+    width: 118px;
+    min-width: 118px;
+    height: 50px;
+  }
+
+  .main-header--storefront .brand-logo-crop {
+    width: 118px;
+    height: 50px;
+  }
+
+  .main-header--storefront .brand-logo-image {
+    width: 168px;
+    transform: translate(-22px, -48px);
+  }
+
+  .main-header--storefront .modern-search-container .input-group,
+  .main-header--storefront .search-container .input-group {
+    min-width: 0;
+  }
+
+  .main-header--storefront .modern-search-container .form-control,
+  .main-header--storefront .search-container .form-control {
+    font-size: 0.78rem !important;
+    padding: 8px 12px !important;
+  }
+
+  .main-header--storefront .modern-search-container .form-control::placeholder,
+  .main-header--storefront .search-container .form-control::placeholder {
+    font-size: 0.78rem !important;
+  }
+
+  .main-header--storefront .header-actions {
+    gap: 3px;
+    margin-left: 2px;
+  }
+
+  .main-header--storefront .header-actions > .position-relative,
+  .main-header--storefront .header-actions > .modern-action-btn {
+    flex: 0 0 auto;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn {
+    min-width: 52px;
+    max-width: 58px;
+    padding: 1px 2px !important;
+  }
+
+  .main-header--storefront .header-actions .action-icon {
+    width: 30px !important;
+    height: 30px !important;
+    padding: 5px !important;
+  }
+
+  .main-header--storefront .header-actions .action-icon i {
+    font-size: 0.65rem !important;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn small {
+    font-size: 0.5rem !important;
+    margin-top: 1px !important;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+
+  .main-header--storefront .header-action-badge {
+    top: -3px;
+    right: -4px;
+    min-width: 14px;
+    height: 14px;
+    font-size: 0.5rem;
+    padding: 0 3px;
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1199px) {
+  .main-header--storefront .container-fluid {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .main-header--storefront .mobile-header-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 10px;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-3:first-child {
+    flex: 0 0 auto;
+    width: auto !important;
+    max-width: 148px;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-6 {
+    flex: 1 1 auto;
+    width: auto !important;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .main-header--storefront .mobile-header-row > .col-md-3.ms-auto {
+    flex: 0 0 auto;
+    width: auto !important;
+    max-width: none;
+    margin-left: 0 !important;
+  }
+
+  .main-header--storefront .brand-logo-shell {
+    width: 132px;
+    min-width: 132px;
+    height: 56px;
+  }
+
+  .main-header--storefront .brand-logo-crop {
+    width: 132px;
+    height: 56px;
+  }
+
+  .main-header--storefront .brand-logo-image {
+    width: 185px;
+    transform: translate(-24px, -52px);
+  }
+
+  .main-header--storefront .modern-search-container .form-control,
+  .main-header--storefront .search-container .form-control {
+    font-size: 0.85rem;
+    padding: 10px 14px;
+  }
+
+  .main-header--storefront .header-actions {
+    gap: 4px;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn {
+    min-width: 62px;
+    max-width: 72px;
+    padding: 2px 3px !important;
+  }
+
+  .main-header--storefront .header-actions .action-icon {
+    width: 34px !important;
+    height: 34px !important;
+    padding: 6px !important;
+  }
+
+  .main-header--storefront .header-actions .action-icon i {
+    font-size: 0.72rem !important;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn small {
+    font-size: 0.58rem !important;
+    margin-top: 2px !important;
+    line-height: 1.05;
+  }
+
+  .main-header--storefront .header-action-badge {
+    top: -3px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 0.55rem;
+    padding: 0 4px;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .main-header--storefront .header-actions {
+    gap: 6px;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn {
+    min-width: 78px;
+    padding: 2px 4px !important;
+  }
+
+  .main-header--storefront .header-actions .action-icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .main-header--storefront .header-actions .modern-action-btn small {
+    font-size: 0.64rem !important;
+  }
 }
 
 .header-action-badge {
@@ -4511,20 +4910,6 @@ video.promo-grid-image,
     top: 0;
   }
 
-  .category-scroll-container {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .category-btn {
-    min-width: 120px;
-    padding: 9px 16px;
-    font-size: 11px;
-  }
-
   .campaign-carousel .carousel-slide {
     height: min(200px, 52vw) !important;
     min-height: 140px !important;
@@ -4560,11 +4945,6 @@ video.promo-grid-image,
 }
 
 @media (max-width: 480px) {
-  .category-btn {
-    min-width: 90px;
-    padding: 7px 12px;
-    font-size: 10px;
-  }
   .category-scroll-container {
     justify-content: flex-start;
     padding-left: 10px;
@@ -4680,6 +5060,243 @@ video.promo-grid-image,
 /* ============================================
    MOBILE RESPONSIVE - PROFESYONEL
    ============================================ */
+
+/* ============================================
+   TABLET = MOBİL GÖRÜNÜM (768px – 1024px)
+   iPad Mini, Surface Pro vb. — üst kategori yok, alt nav var
+   ============================================ */
+@media (max-width: 1024px) {
+  /* Üst kategori çubuğunu gizle */
+  .single-line-categories {
+    display: none !important;
+  }
+
+  /* Desktop header satırını gizle (logo + masaüstü arama + aksiyonlar) */
+  .main-header--storefront .mobile-header-row {
+    display: none !important;
+  }
+
+  /* Mobil arama satırını göster */
+  .main-header--storefront .mobile-search-row {
+    display: flex !important;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .main-header--storefront .mobile-search-row > .col-12 {
+    padding: 0;
+  }
+
+  .main-header--storefront {
+    padding: 0 !important;
+    background: linear-gradient(180deg, #fffaf5 0%, #ffffff 72%) !important;
+    border-bottom: 1px solid rgba(225, 103, 49, 0.12) !important;
+    box-shadow: 0 10px 28px rgba(26, 32, 44, 0.08) !important;
+  }
+
+  .main-header--storefront .container-fluid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    padding: 6px 12px 10px !important;
+  }
+
+  .main-header--storefront .mobile-search-shell {
+    position: relative;
+    padding: 2px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 244, 236, 0.96));
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+    border: 1px solid rgba(255, 126, 72, 0.12);
+  }
+
+  .main-header--storefront .mobile-search-shell input.form-control {
+    height: 42px !important;
+    padding-left: 16px !important;
+    padding-right: 40px !important;
+    font-size: 0.88rem !important;
+    border-radius: 14px !important;
+  }
+
+  /* Mobil footer şeridi göster, tam footer gizle */
+  .mobile-footer-strip.d-lg-none {
+    display: block !important;
+  }
+
+  .desktop-only-footer.d-none.d-lg-block {
+    display: none !important;
+  }
+
+  /* Özellik kartları — tablet için 2x2 kompakt */
+  .features-section {
+    padding: 12px 0 16px !important;
+  }
+
+  .features-section .row {
+    --bs-gutter-y: 0.75rem;
+  }
+
+  .features-section .feature-card {
+    padding: 16px 12px !important;
+    margin: 0 !important;
+  }
+}
+
+/* =====================================================
+   KATEGORİ SAYFASI — layout + responsive
+   ===================================================== */
+.category-page-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.category-page-desc {
+  max-width: 720px;
+}
+
+.category-subcats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 1200px) {
+  .category-page-inner {
+    padding: 0 40px;
+  }
+}
+
+@media (max-width: 767px) {
+  .category-page {
+    padding-top: 8px !important;
+    padding-bottom: 12px !important;
+  }
+
+  .category-page-inner {
+    padding: 0 12px;
+  }
+
+  .category-page .h3 {
+    font-size: 1.2rem !important;
+  }
+
+  .category-page-desc {
+    font-size: 0.85rem;
+  }
+
+  .category-subcats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+  }
+
+  .category-page .product-grid-grid-container {
+    padding: 0 12px !important;
+  }
+}
+
+/* Tablet (768–1024): ana banner büyük, promolar kompakt */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .campaign-carousel,
+  .campaign-carousel.py-4 {
+    padding: 8px 0 10px !important;
+  }
+
+  .campaign-carousel .carousel-container {
+    margin: 0 10px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+  }
+
+  .campaign-carousel .carousel-slide {
+    min-height: 280px !important;
+    height: min(380px, 44vw) !important;
+    max-height: 400px !important;
+  }
+
+  .campaign-carousel .carousel-nav {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .campaign-carousel .carousel-nav i {
+    font-size: 15px !important;
+  }
+
+  .promo-section,
+  .promo-section.py-3 {
+    padding: 6px 0 10px !important;
+  }
+
+  .promo-section .container-fluid {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .promo-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    scroll-snap-type: x mandatory !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .promo-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .promo-grid-item {
+    flex: 0 0 30% !important;
+    min-width: 140px !important;
+    max-width: 185px !important;
+    aspect-ratio: 16 / 10 !important;
+    scroll-snap-align: start;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07) !important;
+  }
+
+  .promo-grid-item:hover {
+    transform: translateY(-2px) !important;
+  }
+
+  /* Kategori sayfası — yan boşlukları kapat, 3 sütun */
+  .category-page {
+    padding-top: 12px !important;
+    padding-bottom: 16px !important;
+  }
+
+  .category-page-inner {
+    max-width: none;
+    margin: 0 auto;
+    padding: 0 12px !important;
+  }
+
+  .category-page .h3 {
+    font-size: 1.35rem !important;
+  }
+
+  .category-page-desc {
+    max-width: 100%;
+    font-size: 0.9rem;
+  }
+
+  .category-subcats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+
+  .category-page .product-grid-section {
+    padding: 8px 0 16px !important;
+  }
+
+  .category-page .product-grid-grid-container {
+    padding: 0 12px !important;
+    max-width: none !important;
+  }
+}
 
 @media (max-width: 768px) {
   .mobile-header-row {

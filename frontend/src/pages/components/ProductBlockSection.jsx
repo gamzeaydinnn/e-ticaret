@@ -287,7 +287,7 @@ const resolveActiveMotionBlock = () => {
     }
   });
 
-  const nextActive = bestRatio >= 0.12 ? bestKey : null;
+  const nextActive = bestRatio >= 0.08 ? bestKey : null;
   if (nextActive === activeMotionBlockKey) return;
 
   const previousKey = activeMotionBlockKey;
@@ -423,7 +423,7 @@ const ProductBlockSection = ({
     const observer = new IntersectionObserver(
       ([entry]) => {
         const ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
-        if (ratio > 0.08) {
+        if (ratio > 0.05) {
           setHasEntered(true);
         }
 
@@ -434,8 +434,8 @@ const ProductBlockSection = ({
         resolveActiveMotionBlock();
       },
       {
-        threshold: [0, 0.08, 0.12, 0.2, 0.35, 0.5, 0.7, 1],
-        rootMargin: "-5% 0px -10% 0px",
+        threshold: [0, 0.05, 0.1, 0.15, 0.25, 0.4, 0.6, 1],
+        rootMargin: "0px 0px -4% 0px",
       },
     );
 
@@ -500,8 +500,10 @@ const ProductBlockSection = ({
     let lastTs = 0;
     let holdUntil = 0;
     let returning = false;
-    const isMobile = window.matchMedia("(max-width: 768px)")?.matches;
-    const speedPxPerSec = isMobile ? 28 : 22;
+    const viewportWidth = window.innerWidth || 0;
+    const isMobile = viewportWidth <= 768;
+    const isTablet = viewportWidth > 768 && viewportWidth <= 1024;
+    const speedPxPerSec = isMobile ? 28 : isTablet ? 24 : 22;
 
     const tick = (ts) => {
       if (!lastTs) lastTs = ts;
@@ -557,6 +559,7 @@ const ProductBlockSection = ({
     };
   }, [
     isMotionActive,
+    hasEntered,
     block?.id,
     block?.products?.length,
     block?.Products?.length,
@@ -1196,8 +1199,6 @@ const ProductBlockSection = ({
                       boxShadow: hasDiscount
                         ? "0 5px 15px rgba(220, 38, 38, 0.12)"
                         : "0 5px 15px rgba(0, 0, 0, 0.08)",
-                      transition:
-                        "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease, opacity 0.45s ease",
                       "--enter-delay": `${enterDelayMs}ms`,
                     }}
                     onClick={(e) =>
@@ -1216,18 +1217,6 @@ const ProductBlockSection = ({
                     }}
                     role="link"
                     tabIndex={0}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-6px)";
-                      e.currentTarget.style.boxShadow = hasDiscount
-                        ? "0 15px 30px rgba(220, 38, 38, 0.18)"
-                        : "0 15px 30px rgba(255, 107, 53, 0.15)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow = hasDiscount
-                        ? "0 5px 15px rgba(220, 38, 38, 0.12)"
-                        : "0 5px 15px rgba(0, 0, 0, 0.08)";
-                    }}
                   >
                     {/* ========== FIRSAT BADGE - SOL ÜST (Minimalist) ========== */}
                     {hasDiscount && discountPercent > 0 && (

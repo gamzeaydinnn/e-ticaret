@@ -140,8 +140,60 @@
   gap: 16px;
 }
 
-/* Responsive grid ayarları */
-@media (max-width: 768px) {
+/* Tablet: 3 sütun, yan boşlukları kapat */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .product-grid-section {
+    padding: 12px 0 20px;
+  }
+
+  .product-grid-grid-container {
+    padding: 0 12px;
+    max-width: none;
+  }
+
+  .product-grid-grid-inner {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 8px 0;
+  }
+
+  .product-grid-grid-inner .product-grid-card {
+    min-height: auto;
+  }
+
+  .product-grid-grid-inner .product-grid-card .product-image-container {
+    height: 140px;
+    min-height: 140px;
+  }
+
+  .product-grid-grid-inner .product-grid-card .card-body {
+    padding: 10px !important;
+  }
+
+  .product-grid-grid-inner .product-grid-card .product-title {
+    font-size: 0.78rem;
+    line-height: 1.25;
+    height: 2.5em;
+    -webkit-line-clamp: 2;
+  }
+
+  .product-grid-grid-inner .product-grid-card .current-price {
+    font-size: 0.95rem;
+  }
+
+  .product-grid-grid-inner .product-grid-card .modern-add-btn {
+    padding: 8px 10px;
+    font-size: 0.72rem;
+  }
+
+  .category-products-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Telefon: 2 sütun */
+@media (max-width: 767px) {
   .product-grid-grid-inner {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;

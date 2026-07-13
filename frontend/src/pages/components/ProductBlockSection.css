@@ -73,11 +73,37 @@
 .product-block-section .product-block-card--enter {
   opacity: 0;
   transform: translateX(-28px);
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
 }
 
 .product-block-section.is-in-view .product-block-card--enter {
   animation: productCardSlideRight 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
   animation-delay: var(--enter-delay, 0ms);
+}
+
+/* Hover — inline style yerine CSS (giriş animasyonu ile çakışmaz) */
+@media (hover: hover) and (pointer: fine) {
+  .product-block-section.is-in-view .product-block-card--enter:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 15px 30px rgba(255, 107, 53, 0.15);
+  }
+
+  .product-block-section.is-in-view .product-block-card--enter.has-discount:hover {
+    box-shadow: 0 15px 30px rgba(220, 38, 38, 0.18);
+  }
+}
+
+.product-block-section.is-motion-active .products-slider-wrapper::before,
+.product-block-section.is-motion-active .products-slider-wrapper::after {
+  opacity: 1;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .product-block-section.is-in-view .product-block-card--enter:active {
+    transform: scale(0.98);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -536,6 +562,34 @@ video.poster-image {
 }
 
 /* =====================================================
+   RESPONSIVE - TABLET (iPad / küçük laptop)
+   ===================================================== */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .product-block-section {
+    --block-card-width: 185px;
+    --block-image-height: 135px;
+    --block-card-height: 330px;
+  }
+
+  .product-block-header {
+    padding: 0 16px 14px;
+  }
+
+  .block-title {
+    font-size: 1.3rem;
+  }
+
+  .product-block-container {
+    padding: 0 16px;
+    gap: 14px;
+  }
+
+  .product-block-container.with-poster {
+    grid-template-columns: var(--block-card-width) minmax(0, 1fr);
+  }
+}
+
+/* =====================================================
    RESPONSIVE - TABLET
    ===================================================== */
 @media (max-width: 992px) {
@@ -597,7 +651,7 @@ video.poster-image {
     --block-card-width: 128px;
     --block-image-height: 72px;
     --block-card-height: 208px;
-    overflow: visible !important;
+    overflow: hidden;
   }
 
   .product-block-header {
@@ -780,7 +834,7 @@ video.poster-image {
     --block-card-width: 118px;
     --block-image-height: 66px;
     --block-card-height: 196px;
-    overflow: visible !important;
+    overflow: hidden;
   }
 
   .product-block-header {

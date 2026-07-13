@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
  */
 export default function MobileFooterStrip() {
   return (
-    <footer className="mobile-footer-strip d-md-none" aria-label="Mobil site linkleri">
+    <footer className="mobile-footer-strip d-lg-none" aria-label="Mobil site linkleri">
       <div className="mobile-footer-strip-inner">
         <nav className="mobile-footer-nav" aria-label="Hızlı linkler">
           <Link to="/favorites" className="mobile-footer-link">

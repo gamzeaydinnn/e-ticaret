@@ -159,7 +159,7 @@ export default function Category() {
   }, [loadCategory]);
 
   return (
-    <div className="py-4">
+    <div className="category-page py-4">
       <Helmet>
         {(() => {
           const siteUrl =
@@ -200,9 +200,7 @@ export default function Category() {
         })()}
       </Helmet>
 
-      {/* Başlık - ProductGrid ile aynı hizada */}
-      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "0 60px" }}>
-        {/* ✨ YENİ: Breadcrumb navigasyon */}
+      <div className="category-page-inner">
         {breadcrumb.length > 0 && (
           <nav className="mb-3" aria-label="breadcrumb">
             <ol className="breadcrumb" style={{ fontSize: "0.9rem" }}>
@@ -239,7 +237,7 @@ export default function Category() {
           </nav>
         )}
 
-        <div className="d-flex align-items-center justify-content-between mb-4">
+        <div className="d-flex align-items-center justify-content-between mb-3 mb-md-4">
           <div>
             <h1 className="h3 fw-bold mb-1" style={{ color: "#2d3748" }}>
               <i
@@ -249,7 +247,7 @@ export default function Category() {
               {category?.name || "Kategori"}
             </h1>
             {category?.description ? (
-              <div className="text-muted" style={{ maxWidth: 720 }}>
+              <div className="text-muted category-page-desc">
                 {category.description}
               </div>
             ) : null}
@@ -262,7 +260,6 @@ export default function Category() {
           </div>
         )}
 
-        {/* ✨ YENİ: Alt Kategoriler Gösterimi */}
         {subCategories.length > 0 && (
           <section className="mb-4">
             <h2 className="h5 fw-semibold mb-3" style={{ color: "#2d3748" }}>
@@ -272,13 +269,7 @@ export default function Category() {
               ></i>
               Alt Kategoriler
             </h2>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
-                gap: 12,
-              }}
-            >
+            <div className="category-subcats-grid">
               {subCategories.map((subCat) => (
                 <CategoryTile key={subCat.id} category={subCat} />
               ))}

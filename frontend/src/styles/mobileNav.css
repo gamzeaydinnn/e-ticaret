@@ -1,7 +1,7 @@
 /**
  * Mobile Bottom Navigation Styles
  * 
- * Mobil cihazlarda (768px ve altı) ekranın altında sabit konumda
+ * Mobil cihazlarda ve tabletlerde (1024px ve altı) ekranın altında sabit konumda
  * görünen navigasyon çubuğu stilleri.
  * 
  * Özellikler:
@@ -55,8 +55,8 @@
   display: block;
 }
 
-/* Desktop'ta gizle (768px üzeri) */
-@media (min-width: 769px) {
+/* Desktop'ta gizle (1025px ve üzeri) */
+@media (min-width: 1025px) {
   .mobile-bottom-nav {
     display: none !important;
   }
@@ -218,7 +218,7 @@
    Sayfa İçeriği için Bottom Padding
    Mobilde bottom nav ile çakışmayı önler
    ============================================ */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   /* Tüm sayfa içeriklerinin alt nav ile çakışmaması için body'e padding */
   body {
     padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
@@ -255,7 +255,7 @@
 /* ============================================
    Landscape Modu Optimizasyonu
    ============================================ */
-@media (max-width: 768px) and (orientation: landscape) {
+@media (max-width: 1024px) and (orientation: landscape) {
   .mobile-bottom-nav {
     height: 50px;
   }
@@ -284,7 +284,7 @@
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1040;
+  z-index: 1060;
   animation: fadeIn 0.2s ease;
 }
 
@@ -305,11 +305,12 @@
   background: #fff;
   border-radius: 20px 20px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
-  z-index: 1045;
+  z-index: 1065;
   max-height: 70vh;
   overflow-y: auto;
   animation: slideUp 0.3s ease;
   padding-bottom: env(safe-area-inset-bottom, 0);
+  -webkit-overflow-scrolling: touch;
 }
 
 @keyframes slideUp {
@@ -379,11 +380,46 @@
   font-size: 12px;
 }
 
-/* Desktop'ta kategori panelini gizle */
-@media (min-width: 769px) {
+/* Masaüstünde kategori panelini gizle (alt nav yok) */
+@media (min-width: 1025px) {
   .mobile-category-panel,
   .category-overlay {
     display: none !important;
+  }
+}
+
+/* Tablet (iPad Mini / Air vb.): tam genişlik, eşit aralıklı butonlar */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .mobile-bottom-nav {
+    height: 68px;
+  }
+
+  .mobile-nav-container {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0 4px;
+    justify-content: space-between;
+  }
+
+  .mobile-nav-item {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
+    padding: 6px 4px;
+  }
+
+  .mobile-nav-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mobile-nav-icon i {
+    font-size: 20px;
+  }
+
+  .mobile-nav-label {
+    font-size: 11px;
   }
 }
 
@@ -449,7 +485,7 @@
   color: #ff6b35;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .mobile-footer-strip {
     padding-bottom: calc(var(--mobile-nav-height) + 0.75rem);
   }
