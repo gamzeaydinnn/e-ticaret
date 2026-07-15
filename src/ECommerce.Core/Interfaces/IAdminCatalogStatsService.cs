@@ -13,5 +13,12 @@ namespace ECommerce.Core.Interfaces
 
         Task<IReadOnlyDictionary<int, int>> GetActiveProductCountsByCategoryAsync(
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Yerel DB üzerinden hızlı ürün sayımı (Mikro ERP birleştirme yok).
+        /// Admin kategori listesi/ağacı için kullanılır.
+        /// </summary>
+        Task<IReadOnlyDictionary<int, int>> GetLocalActiveProductCountsByCategoryAsync(
+            CancellationToken cancellationToken = default);
     }
 }

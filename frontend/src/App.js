@@ -98,7 +98,7 @@ import CampaignDetail from "./pages/CampaignDetail.jsx";
 import Campaigns from "./pages/Campaigns.jsx";
 import Career from "./pages/Career.jsx";
 import Category from "./pages/Category";
-import CategoryDetail from "./pages/CategoryDetail"; // ✨ YENİ: Hiyerarşik kategori detay sayfası
+import DiscountedProductsPage from "./pages/DiscountedProductsPage";
 import CollectionPage from "./pages/CollectionPage"; // Koleksiyon/Blok Ürün Sayfası
 import ComparePage from "./pages/ComparePage";
 import Contact from "./pages/Contact.jsx";
@@ -132,6 +132,8 @@ import bannerService, { isVideoUrl } from "./services/bannerService";
 import BannerMedia from "./components/BannerMedia";
 import homeBlockService from "./services/homeBlockService";
 import ProductBlockSection from "./pages/components/ProductBlockSection";
+import PromoBannerSection from "./components/PromoBannerSection";
+import CategoryDiscoverSection from "./components/CategoryDiscoverSection";
 import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
 import { CampaignService } from "./services/campaignService";
 // 3D Secure Ödeme Callback Sayfaları
@@ -875,8 +877,13 @@ function App() {
         <Route path="/pages/cart" element={<Navigate to="/cart" replace />} />
         <Route path="/category/:slug" element={<Category />} />
         <Route path="/kategori/:slug" element={<Category />} />
-        <Route path="/kategoriler/:slug" element={<CategoryDetail />} />{" "}
-        {/* ✨ YENİ: Hiyerarşik kategori detay */}
+        {/* Eski /kategoriler yolu da aynı gerçek ürün listesine gider */}
+        <Route path="/kategoriler/:slug" element={<Category />} />
+        <Route path="/indirimli-urunler" element={<DiscountedProductsPage />} />
+        <Route
+          path="/kampanya/indirimli-urunler"
+          element={<DiscountedProductsPage />}
+        />
         <Route path="/collection/:slug" element={<CollectionPage />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:slug" element={<CampaignDetail />} />
@@ -1421,6 +1428,8 @@ function HomePage() {
   // Ana Sayfa Blokları State'leri (Admin panelden yönetilen poster + ürün blokları)
   const [homeBlocks, setHomeBlocks] = React.useState([]);
   const [blocksLoading, setBlocksLoading] = React.useState(true);
+  const [discoverCategories, setDiscoverCategories] = React.useState([]);
+  const [categoriesLoading, setCategoriesLoading] = React.useState(true);
 
   // Ana Sayfa Bloklarını API'den çek - homeBlockService kullanarak
   React.useEffect(() => {
@@ -1444,6 +1453,141 @@ function HomePage() {
       }
     };
     fetchHomeBlocks();
+  }, []);
+
+  // Ana sayfa kategori keşif alanı — ana + alt kategoriler
+  React.useEffect(() => {
+    let mounted = true;
+
+    const flattenTree = (nodes = [], depth = 0) => {
+      const result = [];
+      const sorted = [...(nodes || [])].sort((a, b) => {
+        const orderA = Number(a?.sortOrder ?? a?.SortOrder ?? 0);
+        const orderB = Number(b?.sortOrder ?? b?.SortOrder ?? 0);
+        if (orderA !== orderB) return orderA - orderB;
+        return String(a?.name || a?.Name || "").localeCompare(
+          String(b?.name || b?.Name || ""),
+          "tr",
+        );
+      });
+
+      for (const cat of sorted) {
+        if (!cat || cat.isActive === false) continue;
+        const slug = String(cat.slug || cat.Slug || "").toLowerCase();
+        if (slug === "kategorisiz" || slug === "uncategorized") continue;
+
+        result.push({
+          id: cat.id ?? cat.Id,
+          name: cat.name ?? cat.Name,
+          slug: cat.slug ?? cat.Slug,
+          imageUrl: cat.imageUrl ?? cat.ImageUrl ?? "",
+          parentId: cat.parentId ?? cat.ParentId ?? null,
+          sortOrder: cat.sortOrder ?? cat.SortOrder ?? 0,
+          isActive: cat.isActive !== false,
+          depth,
+        });
+
+        const children =
+          cat.children || cat.Children || cat.subCategories || [];
+        if (children.length > 0) {
+          result.push(...flattenTree(children, depth + 1));
+        }
+      }
+      return result;
+    };
+
+    const normalizeFlat = (list = []) =>
+      (list || [])
+        .filter((cat) => {
+          if (!cat || cat.isActive === false) return false;
+          const slug = String(cat.slug || cat.Slug || "").toLowerCase();
+          return slug !== "kategorisiz" && slug !== "uncategorized";
+        })
+        .map((cat) => ({
+          id: cat.id ?? cat.Id,
+          name: cat.name ?? cat.Name,
+          slug: cat.slug ?? cat.Slug,
+          imageUrl: cat.imageUrl ?? cat.ImageUrl ?? "",
+          parentId: cat.parentId ?? cat.ParentId ?? null,
+          sortOrder: cat.sortOrder ?? cat.SortOrder ?? 0,
+          isActive: cat.isActive !== false,
+          depth: cat.parentId || cat.ParentId ? 1 : 0,
+        }));
+
+    const mergeUniqueById = (lists) => {
+      const byId = new Map();
+      for (const list of lists) {
+        for (const cat of list || []) {
+          if (cat?.id == null) continue;
+          if (!byId.has(cat.id)) byId.set(cat.id, cat);
+        }
+      }
+      return Array.from(byId.values()).sort((a, b) => {
+        const orderA = Number(a?.sortOrder ?? 0);
+        const orderB = Number(b?.sortOrder ?? 0);
+        if (orderA !== orderB) return orderA - orderB;
+        if ((a.depth || 0) !== (b.depth || 0)) {
+          return (a.depth || 0) - (b.depth || 0);
+        }
+        return String(a?.name || "").localeCompare(String(b?.name || ""), "tr");
+      });
+    };
+
+    const fetchDiscoverCategories = async () => {
+      setCategoriesLoading(true);
+      try {
+        const [tree, allActive] = await Promise.all([
+          categoryServiceReal.getCategoryTree(),
+          categoryServiceReal.getActive(),
+        ]);
+        if (!mounted) return;
+
+        const fromTree = flattenTree(
+          Array.isArray(tree) ? tree.filter((c) => c?.isActive !== false) : [],
+        );
+        const fromFlat = normalizeFlat(allActive);
+        // Ağaç + düz liste birleşimi: yeni eklenen ana/alt hepsi gelsin
+        const merged = mergeUniqueById([fromTree, fromFlat]);
+
+        setDiscoverCategories(merged);
+        console.log("[HomePage] Keşif kategorileri (ana+alt):", merged.length);
+      } catch (err) {
+        console.error(
+          "[HomePage] Kategoriler yüklenemedi:",
+          err?.message || err,
+        );
+        try {
+          const fallback = await categoryServiceReal.getActive();
+          if (mounted) setDiscoverCategories(normalizeFlat(fallback));
+        } catch {
+          if (mounted) setDiscoverCategories([]);
+        }
+      } finally {
+        if (mounted) setCategoriesLoading(false);
+      }
+    };
+
+    fetchDiscoverCategories();
+
+    const unsubscribe = categoryServiceReal.subscribe?.(() => {
+      fetchDiscoverCategories();
+    });
+
+    // Sekmeye dönünce / görünür olunca yenile (admin'de ekledikten sonra)
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        fetchDiscoverCategories();
+      }
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+
+    return () => {
+      mounted = false;
+      if (typeof unsubscribe === "function") unsubscribe();
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
   }, []);
 
   // Posterleri API'den çek - bannerService kullanarak
@@ -1825,46 +1969,15 @@ function HomePage() {
         </div>
       </section>
 
-      {/* ========== PROMOSYON BANNER'LARI (2x2 Grid) ========== */}
-      <section className="promo-section py-3" style={{ background: "#f8f9fa" }}>
-        <div className="container-fluid px-4">
-          <div className="promo-grid">
-            {promoImages.map((promo) => (
-              <div
-                key={promo.id}
-                className="promo-grid-item"
-                style={{
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-                  cursor: "pointer",
-                  transition: "transform 0.3s ease",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.transform = "translateY(-5px)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.transform = "translateY(0)")
-                }
-                onClick={() =>
-                  promo.link && (window.location.href = promo.link)
-                }
-              >
-                <BannerMedia
-                  src={promo.image}
-                  alt={promo.title}
-                  className="promo-grid-image"
-                  onError={(e) => {
-                    if (e?.target?.tagName === "IMG") {
-                      e.target.src = "/images/placeholder.png";
-                    }
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ========== PROMOSYON BANNER'LARI — Kaydırmalı animasyon ========== */}
+      <PromoBannerSection promos={promoImages} />
+
+      {/* ========== KATEGORİ KEŞFET — Promo altı, ürün blokları üstü ========== */}
+      <CategoryDiscoverSection
+        categories={discoverCategories}
+        loading={categoriesLoading}
+        title="Gölköy Gurme'yi Keşfet"
+      />
 
       {/* ========== ANA SAYFA ÜRÜN BLOKLARI SECTION (Poster + Ürünler) ========== */}
       {/* 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Interfaces;
@@ -9,6 +10,10 @@ using ECommerce.API.Authorization;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
+using System;
+using System.IO;
+using System.Threading;
+using Microsoft.Extensions.Logging;
 
 namespace ECommerce.API.Controllers.Admin
 {
@@ -19,13 +24,26 @@ namespace ECommerce.API.Controllers.Admin
     {
         private readonly ICategoryService _categoryService;
         private readonly IAdminCatalogStatsService _adminCatalogStatsService;
+        private readonly IFileStorage _fileStorage;
+        private readonly ILogger<AdminCategoriesController> _logger;
+
+        private static readonly string[] AllowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        private static readonly string[] AllowedMimeTypes =
+        {
+            "image/jpeg", "image/png", "image/gif", "image/webp"
+        };
+        private const long MaxFileSize = 10 * 1024 * 1024;
 
         public AdminCategoriesController(
             ICategoryService categoryService,
-            IAdminCatalogStatsService adminCatalogStatsService)
+            IAdminCatalogStatsService adminCatalogStatsService,
+            IFileStorage fileStorage,
+            ILogger<AdminCategoriesController> logger)
         {
             _categoryService = categoryService;
             _adminCatalogStatsService = adminCatalogStatsService;
+            _fileStorage = fileStorage;
+            _logger = logger;
         }
 
         // GET /api/admin/categories
@@ -34,8 +52,25 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetCategories()
         {
             var categories = await _categoryService.GetAllAdminAsync();
-            var productCounts = await _adminCatalogStatsService.GetActiveProductCountsByCategoryAsync(
-                HttpContext.RequestAborted);
+
+            // Ürün sayımı opsiyonel — asla listeyi bloke etmesin (VPN/DB gecikmesi)
+            IReadOnlyDictionary<int, int> productCounts = new Dictionary<int, int>();
+            try
+            {
+                using var countCts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+                countCts.CancelAfter(TimeSpan.FromSeconds(4));
+                productCounts = await _adminCatalogStatsService.GetLocalActiveProductCountsByCategoryAsync(
+                    countCts.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+            {
+                _logger.LogWarning("Admin kategori ürün sayımı atlandı (timeout/iptal).");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Admin kategori ürün sayımı başarısız; liste sayısız dönüyor.");
+            }
+
             var result = new List<object>();
             foreach (var c in categories)
             {
@@ -135,8 +170,20 @@ namespace ECommerce.API.Controllers.Admin
         public async Task<IActionResult> GetCategoryTree()
         {
             var tree = await _categoryService.GetCategoryTreeAsync();
-            var productCounts = await _adminCatalogStatsService.GetActiveProductCountsByCategoryAsync(
-                HttpContext.RequestAborted);
+
+            IReadOnlyDictionary<int, int> productCounts = new Dictionary<int, int>();
+            try
+            {
+                using var countCts = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+                countCts.CancelAfter(TimeSpan.FromSeconds(4));
+                productCounts = await _adminCatalogStatsService.GetLocalActiveProductCountsByCategoryAsync(
+                    countCts.Token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Admin kategori ağacı ürün sayımı atlandı.");
+            }
+
             ApplyCatalogProductCounts(tree, productCounts);
             return Ok(tree);
         }
@@ -180,6 +227,55 @@ namespace ECommerce.API.Controllers.Admin
         {
             var path = await _categoryService.GetCategoryPathAsync(id);
             return Ok(path);
+        }
+
+        /// <summary>
+        /// Kategori görseli yükler (ana sayfa keşif grid'i için).
+        /// </summary>
+        [HttpPost("upload-image")]
+        [HasPermission(Permissions.Categories.Create)]
+        [RequestSizeLimit(MaxFileSize)]
+        public async Task<IActionResult> UploadCategoryImage(IFormFile image)
+        {
+            try
+            {
+                if (image == null || image.Length == 0)
+                {
+                    return BadRequest(new { message = "Lütfen bir görsel dosyası seçin." });
+                }
+
+                if (image.Length > MaxFileSize)
+                {
+                    return BadRequest(new { message = $"Dosya boyutu maksimum {MaxFileSize / (1024 * 1024)}MB olabilir." });
+                }
+
+                var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
+                if (!AllowedExtensions.Contains(extension))
+                {
+                    return BadRequest(new { message = $"Desteklenen dosya türleri: {string.Join(", ", AllowedExtensions)}" });
+                }
+
+                var mimeType = (image.ContentType ?? string.Empty).ToLowerInvariant();
+                if (!AllowedMimeTypes.Contains(mimeType))
+                {
+                    return BadRequest(new { message = "Geçersiz dosya türü. Sadece resim dosyaları kabul edilir." });
+                }
+
+                string imageUrl;
+                using (var stream = image.OpenReadStream())
+                {
+                    var safeName = $"category_{Path.GetFileNameWithoutExtension(image.FileName)}_{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}{extension}";
+                    imageUrl = await _fileStorage.UploadAsync(stream, safeName, image.ContentType);
+                }
+
+                _logger.LogInformation("Kategori görseli yüklendi: {ImageUrl}", imageUrl);
+                return Ok(new { success = true, imageUrl, message = "Görsel başarıyla yüklendi." });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Kategori görseli yüklenirken hata oluştu");
+                return StatusCode(500, new { message = "Görsel yüklenirken bir hata oluştu." });
+            }
         }
     }
 }

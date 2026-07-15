@@ -62,10 +62,41 @@ export default function Category() {
 
     // Gerçek Backend API'den kategori al
     try {
+      const normalizeCat = (c) => {
+        if (!c) return null;
+        return {
+          ...c,
+          id: c.id ?? c.Id,
+          name: c.name ?? c.Name,
+          slug: c.slug ?? c.Slug,
+          description: c.description ?? c.Description,
+          imageUrl: c.imageUrl ?? c.ImageUrl,
+          parentId: c.parentId ?? c.ParentId,
+          isActive: c.isActive ?? c.IsActive,
+        };
+      };
+
       // Önce slug ile dene
-      const cat = await categoryServiceReal.getBySlug(slug);
-      if (cat) {
+      const cat = normalizeCat(await categoryServiceReal.getBySlug(slug));
+      if (cat?.id) {
         setCategory(cat);
+
+        try {
+          const subs = await categoryServiceReal.getSubCategories(cat.id);
+          setSubCategories((subs || []).filter((c) => c.isActive !== false));
+        } catch (err) {
+          console.error("Alt kategoriler yüklenemedi:", err);
+          setSubCategories([]);
+        }
+
+        try {
+          const path = await categoryServiceReal.getCategoryPath(cat.id);
+          setBreadcrumb(path || []);
+        } catch (err) {
+          console.error("Kategori yolu yüklenemedi:", err);
+          setBreadcrumb([]);
+        }
+
         setLoading(false);
         return;
       }
@@ -76,7 +107,9 @@ export default function Category() {
       // Önce ID ile eşleşme dene (slug sayısal ise)
       const numericSlug = parseInt(slug, 10);
       if (!isNaN(numericSlug)) {
-        const foundById = allCategories.find((c) => c.id === numericSlug);
+        const foundById = normalizeCat(
+          allCategories.find((c) => (c.id ?? c.Id) === numericSlug),
+        );
         if (foundById) {
           setCategory(foundById);
           setLoading(false);
@@ -85,34 +118,30 @@ export default function Category() {
       }
 
       // Sonra slug ile eşleşme dene
-      const foundCat = allCategories.find((c) => {
-        const catSlug = c.slug || createSlug(c.name);
-        return matchesCategorySlug(catSlug, slug);
-      });
+      const foundCat = normalizeCat(
+        allCategories.find((c) => {
+          const catSlug = c.slug || c.Slug || createSlug(c.name || c.Name);
+          return matchesCategorySlug(catSlug, slug);
+        }),
+      );
 
-      if (foundCat) {
+      if (foundCat?.id) {
         setCategory(foundCat);
 
-        // ✨ YENİ: Alt kategorileri yükle
-        if (foundCat.id) {
-          try {
-            const subs = await categoryServiceReal.getSubCategories(
-              foundCat.id,
-            );
-            setSubCategories(subs.filter((c) => c.isActive !== false));
-          } catch (err) {
-            console.error("Alt kategoriler yüklenemedi:", err);
-            setSubCategories([]);
-          }
+        try {
+          const subs = await categoryServiceReal.getSubCategories(foundCat.id);
+          setSubCategories((subs || []).filter((c) => c.isActive !== false));
+        } catch (err) {
+          console.error("Alt kategoriler yüklenemedi:", err);
+          setSubCategories([]);
+        }
 
-          // ✨ YENİ: Breadcrumb yolunu yükle
-          try {
-            const path = await categoryServiceReal.getCategoryPath(foundCat.id);
-            setBreadcrumb(path || []);
-          } catch (err) {
-            console.error("Kategori yolu yüklenemedi:", err);
-            setBreadcrumb([]);
-          }
+        try {
+          const path = await categoryServiceReal.getCategoryPath(foundCat.id);
+          setBreadcrumb(path || []);
+        } catch (err) {
+          console.error("Kategori yolu yüklenemedi:", err);
+          setBreadcrumb([]);
         }
       } else {
         setError("Kategori bulunamadı.");
@@ -225,7 +254,7 @@ export default function Category() {
                     cat.name
                   ) : (
                     <Link
-                      to={`/kategoriler/${cat.slug || createSlug(cat.name)}`}
+                      to={`/category/${cat.slug || createSlug(cat.name)}`}
                       style={{ color: "#f57c00", textDecoration: "none" }}
                     >
                       {cat.name}
@@ -279,9 +308,9 @@ export default function Category() {
       </div>
 
       {/* Ürün listesi — grid modda (satır-sütun) */}
-      {category && (
+      {category && (category.id || category.Id) && (
         <ProductGrid
-          categoryId={category.id}
+          categoryId={category.id || category.Id}
           showTitle={false}
           displayMode="grid"
           initialPage={currentPage}

@@ -102,6 +102,27 @@ namespace ECommerce.Tests.Weight
         }
 
         [Fact]
+        public void Badem_PieceBirim_isimHinti_ileKgKabulEder()
+        {
+            var product = MakeProduct(name: "BADEM İÇİ", weightUnit: WeightUnit.Piece, categoryName: "ATIŞTIRMALIK");
+            Assert.True(WeightBasedProductResolver.ResolveIsWeightBased(product));
+        }
+
+        [Fact]
+        public void KuruyemisKategorisi_PieceBirim_kgKabulEder()
+        {
+            var product = MakeProduct(name: "KARIŞIK", weightUnit: WeightUnit.Piece, categoryName: "Kuruyemiş");
+            Assert.True(WeightBasedProductResolver.ResolveIsWeightBased(product));
+        }
+
+        [Fact]
+        public void Badem_paketli250Gr_adetKalir()
+        {
+            var product = MakeProduct(name: "BADEM 250 GR", weightUnit: WeightUnit.Gram, categoryName: "Kuruyemiş");
+            Assert.False(WeightBasedProductResolver.ResolveIsWeightBased(product));
+        }
+
+        [Fact]
         public void AdetUrun_hicbirSinyalYok_false()
         {
             var product = MakeProduct(name: "KALEM", weightUnit: WeightUnit.Piece, categoryName: "KIRTASIYE");

@@ -406,6 +406,51 @@ export const ProductService = {
   },
 
   /**
+   * İndirimli ürünleri getirir (specialPrice < price).
+   * En yüksek indirim oranından düşüğe sıralar.
+   */
+  getDiscounted: async () => {
+    try {
+      const all = await ProductService.list();
+      return (all || [])
+        .filter((p) => {
+          const base = parseFloat(p.price ?? p.originalPrice ?? 0) || 0;
+          const special = parseFloat(
+            p.specialPrice ?? p.discountPrice ?? p.discountedPrice ?? 0,
+          );
+          return (
+            base > 0 &&
+            special > 0 &&
+            special < base &&
+            (p.isActive !== false)
+          );
+        })
+        .sort((a, b) => {
+          const pctA =
+            a.discountPercentage ||
+            Math.round(
+              (1 -
+                (parseFloat(a.specialPrice) || 0) /
+                  (parseFloat(a.price) || 1)) *
+                100,
+            );
+          const pctB =
+            b.discountPercentage ||
+            Math.round(
+              (1 -
+                (parseFloat(b.specialPrice) || 0) /
+                  (parseFloat(b.price) || 1)) *
+                100,
+            );
+          return pctB - pctA;
+        });
+    } catch (err) {
+      console.error("❌ İndirimli ürünler yüklenemedi:", err);
+      return [];
+    }
+  },
+
+  /**
    * Tek bir ürünü ID ile getirir
    * @param {number} id - Ürün ID
    * @returns {Promise<object|null>} Ürün objesi veya null
@@ -549,21 +594,38 @@ export const ProductService = {
    * @param {number} size - Sayfa başına ürün sayısı
    * @returns {Promise<Array>} Arama sonuçları
    */
-  search: async (query, page = 1, size = 20) => {
+  search: async (query, page = 1, size = 20, options = {}) => {
     try {
       if (!query || !query.trim()) {
         return [];
       }
 
+      const suggest = options.suggest === true ? "&suggest=true" : "";
+      const config = {};
+      if (options.signal) {
+        config.signal = options.signal;
+      }
+      if (options.timeout) {
+        config.timeout = options.timeout;
+      }
+
       const response = await api.get(
         `/api/products/search?query=${encodeURIComponent(
           query,
-        )}&page=${page}&size=${size}`,
+        )}&page=${page}&size=${size}${suggest}`,
+        config,
       );
       const items = extractItems(response);
 
       return items.map(mapProduct).filter((p) => p !== null);
     } catch (err) {
+      if (
+        err?.name === "CanceledError" ||
+        err?.code === "ERR_CANCELED" ||
+        err?.message === "canceled"
+      ) {
+        throw err;
+      }
       console.error(`❌ Ürün araması başarısız (query: ${query}):`, err);
       return [];
     }
@@ -654,6 +716,7 @@ export const ProductService = {
     name = "",
     status = "all",
     stockStatus = "all",
+    signal,
   } = {}) => {
     try {
       const params = new URLSearchParams({
@@ -677,7 +740,9 @@ export const ProductService = {
         params.set("stockStatus", stockStatus);
       }
 
-      const response = await api.get(`/api/products/admin/all?${params.toString()}`);
+      const response = await api.get(`/api/products/admin/all?${params.toString()}`, {
+        signal,
+      });
       const paged = extractPagedData(response, size);
 
       return {
@@ -685,6 +750,9 @@ export const ProductService = {
         items: paged.items.map(mapProduct).filter((product) => product !== null),
       };
     } catch (err) {
+      if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED") {
+        throw err;
+      }
       console.error("❌ Admin ürün sayfası yüklenemedi:", err);
       return {
         items: [],

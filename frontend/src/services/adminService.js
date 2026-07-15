@@ -354,11 +354,22 @@ export const AdminService = {
       `/api/admin/reports/sales?period=${encodeURIComponent(period)}`,
       { timeout: 30000 },
     );
-    const topProducts = (res?.topProducts || res?.TopProducts || []).map(
+    const mapProduct = (product) => ({
+      productId: product.productId ?? product.ProductId,
+      productName: product.productName ?? product.ProductName ?? "",
+      quantity: Number(product.quantity ?? product.Quantity ?? 0),
+      revenue: Number(product.revenue ?? product.Revenue ?? 0),
+      orderCount: Number(product.orderCount ?? product.OrderCount ?? 0),
+    });
+    const topProducts = (res?.topProducts || res?.TopProducts || []).map(mapProduct);
+    const leastProducts = (res?.leastProducts || res?.LeastProducts || []).map(mapProduct);
+    const refundedProducts = (res?.refundedProducts || res?.RefundedProducts || []).map(
       (product) => ({
         productId: product.productId ?? product.ProductId,
         productName: product.productName ?? product.ProductName ?? "",
         quantity: Number(product.quantity ?? product.Quantity ?? 0),
+        amount: Number(product.amount ?? product.Amount ?? product.revenue ?? 0),
+        orderCount: Number(product.orderCount ?? product.OrderCount ?? 0),
       }),
     );
 
@@ -374,7 +385,27 @@ export const AdminService = {
       ),
       revenue: Number(res?.revenue ?? res?.Revenue ?? 0),
       itemsSold: Number(res?.itemsSold ?? res?.ItemsSold ?? 0),
+      soldProductCount: Number(
+        res?.soldProductCount ?? res?.SoldProductCount ?? topProducts.length,
+      ),
+      zeroSalesProductCount: Number(
+        res?.zeroSalesProductCount ?? res?.ZeroSalesProductCount ?? 0,
+      ),
+      activeProductCount: Number(
+        res?.activeProductCount ?? res?.ActiveProductCount ?? 0,
+      ),
+      refundOrdersCount: Number(
+        res?.refundOrdersCount ?? res?.RefundOrdersCount ?? 0,
+      ),
+      refundAmountTotal: Number(
+        res?.refundAmountTotal ?? res?.RefundAmountTotal ?? 0,
+      ),
+      refundedItemCount: Number(
+        res?.refundedItemCount ?? res?.RefundedItemCount ?? 0,
+      ),
       topProducts,
+      leastProducts,
+      refundedProducts,
     };
   },
   getErpSyncStatus: async ({ from, to } = {}) => {

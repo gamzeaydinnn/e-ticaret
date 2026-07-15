@@ -1,5 +1,6 @@
 const FIXED_WEIGHT_PATTERN = /\b\d+(?:[.,]\d+)?\s*(GR|KG|LT|ML|CL|L)\b/i;
 const STANDALONE_KG_PATTERN = /\bKG\b/i;
+
 const VARIABLE_WEIGHT_CATEGORY_HINTS = [
   "MANAV",
   "MEYVE",
@@ -19,10 +20,76 @@ const VARIABLE_WEIGHT_CATEGORY_HINTS = [
   "ŞARKÜTERİ",
   "ZEYTIN",
   "ZEYTİN",
+  "KURUYEMIS",
+  "KURUYEMİŞ",
+  "KURU YEMIS",
+  "KURU YEMİŞ",
+  "BAKLIYAT",
+  "BAKLİYAT",
+  "BAHARAT",
 ];
+
+/** Açık tartımlı ürün adları (paketli "250 GR" hariç) — backend ile aynı */
+const VARIABLE_WEIGHT_NAME_HINTS = [
+  "BADEM",
+  "FINDIK",
+  "FINDİK",
+  "FISTIK",
+  "FISTİK",
+  "FISTIG",
+  "FISTIĞ",
+  "CEVIZ",
+  "CEVİZ",
+  "KAJU",
+  "ANTEP",
+  "LEBLEBI",
+  "LEBLEBİ",
+  "KABAK CEKIRDEK",
+  "KABAK ÇEKİRDEK",
+  "AY CEKIRDEK",
+  "AY ÇEKİRDEK",
+  "CEKIRDEK",
+  "ÇEKİRDEK",
+  "KURU UZUM",
+  "KURU ÜZÜM",
+  "KURU INCIR",
+  "KURU İNCİR",
+  "KURU KAYISI",
+  "HURMA",
+  "KIRMIZI PUL",
+  "TOZ BIBER",
+  "TOZ BİBER",
+  "KIMYON",
+  "KİMYON",
+  "SUMAC",
+  "SUMAK",
+  "NANE",
+  "REZEN",
+  "NOHUT",
+  "MERCIMEK",
+  "MERCİMEK",
+  "FASULYE",
+  "BÖRÜLCE",
+  "BULGUR",
+  "PIRINC",
+  "PİRİNÇ",
+  "IRMIK",
+  "İRMİK",
+];
+
+function normalizeForHintMatch(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleUpperCase("tr-TR")
+    .replace(/İ/g, "I")
+    .replace(/Ş/g, "S")
+    .replace(/Ğ/g, "G")
+    .replace(/Ü/g, "U")
+    .replace(/Ö/g, "O")
+    .replace(/Ç/g, "C");
+}
+
 // Kütle birimi mi? Backend WeightUnit enum'una karşılık gelir (Gram=1, Kilogram=2).
-// Frontend'e bu değer string ("Kilogram"/"Gram") veya sayısal (1/2) gelebilir; ayrıca
-// bazı ürünlerde yalnız serbest metin `unit` ("KG") bulunur.
 function isMassWeightUnit(weightUnit, unit) {
   if (
     weightUnit === "Kilogram" ||
@@ -44,18 +111,11 @@ function isPieceWeightUnit(weightUnit, unit) {
 /**
  * Bir ürünün değişken ağırlıklı (kg) olup olmadığını belirler.
  *
- * ÖNEMLİ: Bu fonksiyon backend'deki tek doğruluk kaynağı `WeightBasedProductResolver`
- * ile BİREBİR aynı öncelik sırasını uygular. Böylece sepet (frontend) ile sipariş/3DS
- * (backend) aynı ürünü aynı şekilde sınıflandırır; tutar uyuşmazlığı önlenir.
- *
- * Öncelik: 1) açık `isWeightBased` bayrağı → kg, 2) paketli isim sinyali ("500 GR"/"ADET") → adet,
- * 3) kütle birimi (kg/gram) → kg, 4) PricePerUnit>0 ve birim adet değilse → kg,
- * 5) son çare heuristik: isimde "KG" + uygun kategori → kg, 6) aksi halde adet.
+ * Backend `WeightBasedProductResolver` ile aynı öncelik sırası.
  */
 export function isStrictVariableWeightProduct(product) {
   if (!product) return false;
 
-  // 1) Backend'in açık bayrağı en yüksek güven kaynağıdır (tek doğruluk kaynağı).
   if (product.isWeightBased === true || product.IsWeightBased === true) {
     return true;
   }
@@ -64,7 +124,7 @@ export function isStrictVariableWeightProduct(product) {
     product.name || product.Name || product.productName || "",
   ).trim();
 
-  // 2) Paketli ürün negatif sinyali yapısal tahminleri ezer.
+  // Paketli ürün negatif sinyali (isimde "500 GR" / "ADET")
   if (productName) {
     if (FIXED_WEIGHT_PATTERN.test(productName)) return false;
     if (/\bADET\b/i.test(productName)) return false;
@@ -73,17 +133,12 @@ export function isStrictVariableWeightProduct(product) {
   const weightUnit = product.weightUnit;
   const unit = String(product.unit || "").trim().toUpperCase();
 
-  // Serbest metin birim açıkça "ADET" ise değişken ağırlıklı değildir.
-  if (unit === "ADET") return false;
-
-  // 3) Kütle birimi (kg/gram) tanımlıysa kg.
+  // Kütle birimi (kg/gram) tanımlıysa kg.
   if (isMassWeightUnit(weightUnit, unit)) return true;
 
-  // 4) Birim fiyat (TL/kg) tanımlı ve birim AÇIKÇA adet değilse kg.
-  //    weightUnit bilinmiyorsa yanlış pozitiften kaçınmak için bu adımı atlarız.
+  // Birim fiyat (TL/kg) tanımlı ve birim AÇIKÇA adet değilse kg.
   const pricePerUnit = Number(product.pricePerUnit ?? product.PricePerUnit ?? 0);
-  const hasKnownWeightUnit =
-    weightUnit != null && weightUnit !== "";
+  const hasKnownWeightUnit = weightUnit != null && weightUnit !== "";
   if (
     pricePerUnit > 0 &&
     hasKnownWeightUnit &&
@@ -92,25 +147,40 @@ export function isStrictVariableWeightProduct(product) {
     return true;
   }
 
-  // 5) Taze ürün kategorisi (meyve/sebze/kasap vb.) — isimde "KG" şart değil.
-  const categoryName = String(
-    product.categoryName || product.category?.name || "",
-  )
-    .trim()
-    .toUpperCase();
+  const categoryName = normalizeForHintMatch(
+    product.categoryName ||
+      product.CategoryName ||
+      product.category?.name ||
+      product.Category?.Name ||
+      "",
+  );
+  const normalizedName = normalizeForHintMatch(productName);
 
+  // Taze / kuruyemiş / bakliyat kategorileri
   if (
-    VARIABLE_WEIGHT_CATEGORY_HINTS.some((hint) => categoryName.includes(hint))
+    VARIABLE_WEIGHT_CATEGORY_HINTS.some((hint) =>
+      categoryName.includes(normalizeForHintMatch(hint)),
+    )
   ) {
     return true;
   }
 
-  // 6) Yapısal veri yetersiz: isimde "KG" + kategori ipucu (son çare).
+  // Badem, fındık vb. — Mikro birimi ADET olsa bile açık tartım
+  // (serbest metin unit=ADET heuristiği engellemez; backend ile aynı)
+  if (
+    VARIABLE_WEIGHT_NAME_HINTS.some((hint) =>
+      normalizedName.includes(normalizeForHintMatch(hint)),
+    )
+  ) {
+    return true;
+  }
+
+  // Son çare: isimde "KG" + kategori ipucu
   if (!productName) return false;
   if (!STANDALONE_KG_PATTERN.test(productName)) return false;
 
   return VARIABLE_WEIGHT_CATEGORY_HINTS.some((hint) =>
-    categoryName.includes(hint),
+    categoryName.includes(normalizeForHintMatch(hint)),
   );
 }
 
@@ -134,7 +204,6 @@ export function toWeightBasedProductCandidate(item, product) {
     unit: product?.unit || item?.product?.unit || "",
     weightUnit:
       item?.weightUnit ?? product?.weightUnit ?? item?.product?.weightUnit ?? null,
-    // Yapısal sinyaller resolver ile aynı kararı verebilmek için açıkça taşınır.
     pricePerUnit:
       item?.pricePerUnit ??
       product?.pricePerUnit ??

@@ -4,7 +4,7 @@ using ECommerce.Core.Constants;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.API.Authorization;
 using ECommerce.Core.DTOs.Admin;
-using ECommerce.Infrastructure.Services.MicroServices;
+using ECommerce.Core.Interfaces;
 using ECommerce.Infrastructure.Config;
 using Microsoft.Extensions.Options;
 using Microsoft.EntityFrameworkCore;
@@ -25,19 +25,19 @@ namespace ECommerce.API.Controllers.Admin
     {
         private readonly IOrderService _orderService;
         private readonly ECommerceDbContext _dbContext;
-        private readonly IMikroDbService _mikroDbService;
+        private readonly IAdminCatalogStatsService _adminCatalogStatsService;
         private readonly InventorySettings _inventorySettings;
 
         public AdminDashboardController(
             IOrderService orderService,
             ECommerceDbContext dbContext,
-            IMikroDbService mikroDbService,
+            IAdminCatalogStatsService adminCatalogStatsService,
             IOptions<InventorySettings> inventoryOptions
         )
         {
             _orderService = orderService;
             _dbContext = dbContext;
-            _mikroDbService = mikroDbService;
+            _adminCatalogStatsService = adminCatalogStatsService;
             _inventorySettings = inventoryOptions.Value;
         }
 
@@ -93,28 +93,16 @@ namespace ECommerce.API.Controllers.Admin
             var activeCouriers = await _dbContext.Couriers.CountAsync(c =>
                 c.IsOnline || c.Status == "active" || c.Status == "busy");
 
-            // Ürün sayısı: Mikro COUNT (hafif) → cache → yerel
-            int totalProducts;
-            if (_mikroDbService.IsConfigured)
-            {
-                totalProducts = await _mikroDbService.GetWebProductCountAsync(HttpContext.RequestAborted);
-                if (totalProducts <= 0)
-                {
-                    totalProducts = await _dbContext.MikroProductCaches.CountAsync(p => p.Aktif);
-                }
-            }
-            else
-            {
-                totalProducts = await _dbContext.Products.CountAsync(p => p.IsActive);
-            }
-
-            // Stok sayımları — ayrı COUNT (GroupBy(1) EF'de çevrilemiyor)
-            var outOfStockCount = await _dbContext.Products
-                .AsNoTracking()
-                .CountAsync(p => p.IsActive && p.StockQuantity <= 0);
-            var lowStockCount = await _dbContext.Products
-                .AsNoTracking()
-                .CountAsync(p => p.IsActive && p.StockQuantity > 0 && p.StockQuantity <= criticalThreshold);
+            // Ürün / stok sayıları: Ürünler ile aynı kaynak (web aktif + fiyatlı katalog)
+            var productSnapshots = await _adminCatalogStatsService.GetProductSnapshotsAsync(
+                HttpContext.RequestAborted);
+            var pricedActive = productSnapshots
+                .Where(p => p.IsActive && p.Price > 0m)
+                .ToList();
+            var totalProducts = pricedActive.Count;
+            var outOfStockCount = pricedActive.Count(p => p.StockQuantity <= 0);
+            var lowStockCount = pricedActive.Count(p =>
+                p.StockQuantity > 0 && p.StockQuantity <= criticalThreshold);
 
             // Sipariş durum dağılımı — pending/delivered/cancelled buradan türetilir
             var orderStatusRaw = await _dbContext.Orders

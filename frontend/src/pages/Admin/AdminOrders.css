@@ -1,3 +1,71 @@
+/* AdminOrders — mobil / masaüstü ayırımı (Bootstrap utility’den bağımsız) */
+.admin-orders-desktop-only {
+  display: flex;
+}
+
+.admin-orders-mobile-only {
+  display: none;
+}
+
+@media (max-width: 991.98px) {
+  .admin-orders-desktop-only {
+    display: none !important;
+  }
+
+  .admin-orders-mobile-only {
+    display: block !important;
+  }
+
+  .admin-orders-header-controls {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-orders-header-controls .btn {
+    font-size: 0.7rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  .admin-orders-bulk-hint {
+    display: none !important;
+  }
+
+  .admin-orders-page-size {
+    width: 5.75rem !important;
+    min-width: 5.75rem;
+    max-width: 5.75rem;
+    padding-left: 0.4rem;
+    padding-right: 1.5rem;
+    font-size: 0.72rem !important;
+  }
+}
+
+.admin-orders-page-size {
+  width: 6.5rem;
+  min-width: 6.5rem;
+}
+
+/* Masaüstü varsayılan ölçü */
+.admin-orders-id,
+.admin-orders-amount {
+  font-size: 0.75rem;
+}
+
+.admin-orders-date {
+  font-size: 0.7rem;
+}
+
+.admin-orders-status {
+  font-size: 0.7rem;
+  padding: 0.3em 0.5em;
+  white-space: nowrap;
+}
+
+.admin-orders-actions .btn {
+  font-size: 0.72rem;
+}
+
 /* Admin sipariş detay — kısmi iade paneli (web + mobil) */
 
 .admin-item-refund {
@@ -309,5 +377,73 @@
     flex-wrap: wrap;
     gap: 0.4rem;
     margin-top: 0.65rem;
+  }
+
+  /* Sipariş listesi — mobil toparlama */
+  .admin-orders-mobile-toolbar .form-select,
+  .admin-orders-mobile-toolbar .form-control {
+    font-size: 0.8rem;
+    min-height: 2.15rem;
+  }
+
+  /* Yazı boyutu dengesi: sipariş / tutar / durum / buton aynı ölçek */
+  .admin-orders-table {
+    font-size: 0.72rem !important;
+  }
+
+  .admin-orders-table th {
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .admin-orders-id,
+  .admin-orders-amount {
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+  }
+
+  .admin-orders-date {
+    font-size: 0.68rem !important;
+  }
+
+  .admin-orders-status {
+    font-size: 0.68rem !important;
+    font-weight: 500;
+    padding: 0.3em 0.45em !important;
+    white-space: normal;
+    max-width: 5.75rem;
+    display: inline-block;
+    line-height: 1.25;
+  }
+
+  .admin-orders-actions {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    max-width: none;
+    min-width: 5.5rem;
+    gap: 0.25rem !important;
+  }
+
+  .admin-orders-actions .btn {
+    padding: 0.32rem 0.5rem !important;
+    min-width: 0;
+    width: 100%;
+    justify-content: flex-start;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    white-space: nowrap;
+    line-height: 1.25;
+  }
+
+  .admin-orders-actions .btn span {
+    display: inline !important;
+  }
+
+  .admin-orders-actions .btn .fas {
+    margin-right: 0.3rem !important;
+    width: 0.9rem;
+    text-align: center;
+    font-size: 0.7rem;
   }
 }

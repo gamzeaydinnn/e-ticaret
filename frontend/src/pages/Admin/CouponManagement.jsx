@@ -169,7 +169,12 @@ export default function CouponManagement() {
             Kupon Yönetimi
           </h1>
           <div className="text-muted" style={{ fontSize: "0.8rem" }}>
-            İndirim kuponlarını oluşturun, düzenleyin ve yönetin
+            İndirim kuponlarını oluşturun, düzenleyin ve yönetin.
+            <span className="d-none d-md-inline">
+              {" "}
+              <strong>Düzenle</strong> ayarları değiştirir · <strong>Sil</strong>{" "}
+              kuponu kaldırır.
+            </span>
           </div>
         </div>
         <div className="d-flex flex-column flex-sm-row gap-2 w-100 w-md-auto">
@@ -180,18 +185,21 @@ export default function CouponManagement() {
             placeholder="Ara: kod, aktif/pasif"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Kupon ara"
           />
           <button
-            className="btn btn-sm text-white fw-semibold"
+            type="button"
+            className="btn btn-sm text-white fw-semibold d-inline-flex align-items-center justify-content-center gap-2"
             style={{
               background: "linear-gradient(135deg, #f57c00, #ff9800)",
               minHeight: "44px",
               whiteSpace: "nowrap",
             }}
             onClick={openCreate}
+            title="Yeni indirim kuponu oluştur"
           >
-            <i className="fas fa-plus me-2"></i>
-            Yeni Kupon
+            <i className="fas fa-plus" aria-hidden="true"></i>
+            Yeni Kupon Oluştur
           </button>
         </div>
       </div>
@@ -219,12 +227,15 @@ export default function CouponManagement() {
                 </small>
               </div>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
                 onClick={loadCoupons}
                 disabled={loading}
                 style={{ minHeight: "36px" }}
+                title="Kupon listesini yenile"
               >
-                Yenile
+                <i className={`fas fa-sync-alt${loading ? " fa-spin" : ""}`} aria-hidden="true"></i>
+                Listeyi Yenile
               </button>
             </div>
             <div className="card-body p-2 p-md-3">
@@ -246,7 +257,7 @@ export default function CouponManagement() {
                         <th className="d-none d-md-table-cell">Min Tutar</th>
                         <th className="d-none d-lg-table-cell">Kullanım</th>
                         <th>Durum</th>
-                        <th style={{ width: 100 }}>İşlem</th>
+                        <th style={{ width: 180 }}>İşlem</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -306,26 +317,26 @@ export default function CouponManagement() {
                               </span>
                             </td>
                             <td data-label="İşlem">
-                              <div className="d-flex gap-1 justify-content-end">
+                              <div className="d-flex flex-wrap gap-1 justify-content-end">
                                 <button
-                                  className="btn btn-outline-primary btn-sm"
+                                  type="button"
+                                  className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                                   onClick={() => openEdit(c)}
-                                  style={{
-                                    minWidth: "36px",
-                                    minHeight: "36px",
-                                  }}
+                                  style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                                  title="Kuponu düzenle"
                                 >
-                                  <i className="fas fa-edit"></i>
+                                  <i className="fas fa-edit" aria-hidden="true"></i>
+                                  <span>Düzenle</span>
                                 </button>
                                 <button
-                                  className="btn btn-outline-danger btn-sm"
+                                  type="button"
+                                  className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
                                   onClick={() => onDelete(c.id)}
-                                  style={{
-                                    minWidth: "36px",
-                                    minHeight: "36px",
-                                  }}
+                                  style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                                  title="Kuponu sil"
                                 >
-                                  <i className="fas fa-trash"></i>
+                                  <i className="fas fa-trash" aria-hidden="true"></i>
+                                  <span>Sil</span>
                                 </button>
                               </div>
                             </td>
@@ -538,22 +549,27 @@ export default function CouponManagement() {
                 <div className="modal-footer border-0 p-3 p-md-4">
                   <button
                     type="button"
-                    className="btn btn-light"
+                    className="btn btn-light d-inline-flex align-items-center gap-1"
                     onClick={closeModal}
                     style={{ minHeight: "44px" }}
                   >
-                    İptal
+                    <i className="fas fa-times" aria-hidden="true"></i>
+                    Vazgeç
                   </button>
                   <button
                     type="submit"
-                    className="btn text-white fw-semibold px-4"
+                    className="btn text-white fw-semibold px-4 d-inline-flex align-items-center gap-2"
                     style={{
                       background: "linear-gradient(135deg, #f57c00, #ff9800)",
                       borderRadius: 8,
                       minHeight: "44px",
                     }}
                   >
-                    {editing ? "Güncelle" : "Kaydet"}
+                    <i
+                      className={`fas ${editing ? "fa-save" : "fa-plus"}`}
+                      aria-hidden="true"
+                    ></i>
+                    {editing ? "Kuponu Güncelle" : "Kuponu Kaydet"}
                   </button>
                 </div>
               </form>

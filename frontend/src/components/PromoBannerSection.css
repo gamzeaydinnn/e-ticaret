@@ -1,0 +1,307 @@
+/* =====================================================
+   PROMO BANNER SECTION — Kaydırmalı animasyonlu promo alanı
+   ===================================================== */
+
+@keyframes promoCardSlideRight {
+  from {
+    opacity: 0.35;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.promo-banner-section {
+  overflow: hidden;
+  /* Sabit px — % genişlik satıra sığınca kayma mesafe 0 olur */
+  --promo-card-width: 200px;
+  --promo-card-height: 125px;
+}
+
+.promo-banner-slider-wrapper {
+  position: relative;
+  max-width: 1400px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.promo-banner-slider-wrapper::before,
+.promo-banner-slider-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 28px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.promo-banner-slider-wrapper::before {
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(248, 249, 250, 0.98) 0%,
+    rgba(248, 249, 250, 0) 100%
+  );
+}
+
+.promo-banner-slider-wrapper::after {
+  right: 0;
+  background: linear-gradient(
+    270deg,
+    rgba(248, 249, 250, 0.98) 0%,
+    rgba(248, 249, 250, 0) 100%
+  );
+}
+
+.promo-banner-section.is-in-view .promo-banner-slider-wrapper::before,
+.promo-banner-section.is-in-view .promo-banner-slider-wrapper::after,
+.promo-banner-section.is-motion-active .promo-banner-slider-wrapper::before,
+.promo-banner-section.is-motion-active .promo-banner-slider-wrapper::after {
+  opacity: 1;
+}
+
+.promo-banner-scroll-container {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 4px 2px 8px;
+}
+
+.promo-banner-scroll-container.is-auto-scrolling {
+  scroll-snap-type: none !important;
+}
+
+/* Kart — sabit px ölçü; App.css %/5 kuralını ezer (aksi halde kayma yok) */
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item {
+  position: relative !important;
+  flex: 0 0 var(--promo-card-width) !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  flex-basis: var(--promo-card-width) !important;
+  width: var(--promo-card-width) !important;
+  min-width: var(--promo-card-width) !important;
+  max-width: var(--promo-card-width) !important;
+  height: var(--promo-card-height) !important;
+  min-height: var(--promo-card-height) !important;
+  max-height: var(--promo-card-height) !important;
+  aspect-ratio: auto !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  background: #fff;
+  border: 1px solid rgba(255, 107, 53, 0.08);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  transition:
+    box-shadow 0.28s ease,
+    border-color 0.28s ease;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.promo-banner-scroll-track {
+  display: flex;
+  flex-wrap: nowrap !important;
+  align-items: stretch;
+  gap: 12px;
+  width: max-content !important;
+  min-width: max-content !important;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item.promo-banner-item--enter.is-animated {
+  animation: promoCardSlideRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item .promo-grid-image,
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item video.promo-grid-image,
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item img.promo-grid-image {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  margin: 0 !important;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .promo-banner-section .promo-banner-scroll-track .promo-grid-item:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 107, 53, 0.18);
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.14);
+  }
+
+  .promo-banner-section .promo-banner-scroll-track .promo-grid-item:hover .promo-grid-image {
+    transform: scale(1.03);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .promo-banner-section .promo-banner-scroll-track .promo-grid-item:active {
+    transform: scale(0.98);
+  }
+}
+
+.promo-banner-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 12;
+  transition: all 0.2s ease;
+  color: #333;
+  font-size: 14px;
+  padding: 0;
+}
+
+.promo-banner-arrow:hover {
+  background: #ff6b35;
+  border-color: #ff6b35;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.promo-banner-arrow-left {
+  left: 6px;
+}
+
+.promo-banner-arrow-right {
+  right: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .promo-banner-section .promo-banner-scroll-track .promo-grid-item.promo-banner-item--enter.is-animated {
+    animation: none;
+  }
+
+  .promo-banner-scroll-track {
+    will-change: auto;
+  }
+}
+
+/* Desktop — sabit kart (genişlik % olursa taşma yok → animasyon yok) */
+@media (min-width: 1200px) {
+  .promo-banner-section {
+    --promo-card-width: 220px;
+    --promo-card-height: 138px;
+  }
+
+  .promo-banner-scroll-track {
+    gap: 14px;
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1199px) {
+  .promo-banner-section {
+    --promo-card-width: 220px;
+    --promo-card-height: 132px;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .promo-banner-section {
+    --promo-card-width: 168px;
+    --promo-card-height: 105px;
+  }
+
+  .promo-banner-scroll-track {
+    gap: 10px;
+  }
+
+  .promo-banner-arrow {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+}
+
+/* Mobil — kompakt ama görünür */
+@media (max-width: 768px) {
+  .promo-banner-section {
+    --promo-card-width: min(42vw, 156px);
+    --promo-card-height: 98px;
+  }
+
+  .promo-banner-section.py-3,
+  .promo-banner-section {
+    padding-top: 6px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .promo-banner-section .container-fluid {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .promo-banner-scroll-container {
+    padding: 2px 0 4px;
+  }
+
+  .promo-banner-scroll-track {
+    gap: 8px;
+  }
+
+  .promo-banner-section .promo-banner-scroll-track .promo-grid-item {
+    border-radius: 12px !important;
+  }
+
+  .promo-banner-arrow {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+
+  .promo-banner-arrow-left {
+    left: 2px;
+  }
+
+  .promo-banner-arrow-right {
+    right: 2px;
+  }
+
+  .promo-banner-slider-wrapper::before,
+  .promo-banner-slider-wrapper::after {
+    width: 16px;
+  }
+}
+
+@media (max-width: 576px) {
+  .promo-banner-section {
+    --promo-card-width: min(40vw, 144px);
+    --promo-card-height: 90px;
+  }
+
+  .promo-banner-scroll-track {
+    gap: 6px;
+  }
+
+  .promo-banner-arrow {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
+}

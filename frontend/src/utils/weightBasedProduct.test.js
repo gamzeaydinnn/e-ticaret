@@ -86,7 +86,38 @@ describe("isStrictVariableWeightProduct", () => {
     ).toBe(false);
   });
 
-  test("serbest metin unit 'ADET' ise false", () => {
+  test("badem isim hinti ile kg (Mikro ADET olsa bile)", () => {
+    expect(
+      isStrictVariableWeightProduct({
+        name: "BADEM İÇİ",
+        weightUnit: "Piece",
+        unit: "ADET",
+        categoryName: "ATIŞTIRMALIK",
+      }),
+    ).toBe(true);
+  });
+
+  test("kuruyemiş kategorisi kg", () => {
+    expect(
+      isStrictVariableWeightProduct({
+        name: "KARIŞIK",
+        weightUnit: "Piece",
+        categoryName: "Kuruyemiş",
+      }),
+    ).toBe(true);
+  });
+
+  test("badem 250 GR paketli adet kalır", () => {
+    expect(
+      isStrictVariableWeightProduct({
+        name: "BADEM 250 GR",
+        weightUnit: "Gram",
+        categoryName: "Kuruyemiş",
+      }),
+    ).toBe(false);
+  });
+
+  test("serbest metin unit 'ADET' — kuruyemis olmayan basit ürün false", () => {
     expect(
       isStrictVariableWeightProduct({ name: "YUMURTA", unit: "ADET" }),
     ).toBe(false);

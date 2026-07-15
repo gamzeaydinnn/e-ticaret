@@ -44,6 +44,9 @@ namespace ECommerce.Tests.Controllers
             service
                 .Setup(stats => stats.GetActiveProductCountsByCategoryAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new Dictionary<int, int>());
+            service
+                .Setup(stats => stats.GetLocalActiveProductCountsByCategoryAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new Dictionary<int, int>());
             return service;
         }
 

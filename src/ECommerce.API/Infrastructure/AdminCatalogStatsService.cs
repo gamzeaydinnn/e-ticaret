@@ -10,27 +10,34 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace ECommerce.API.Infrastructure
 {
     /// <summary>
-    /// Admin katalog istatistikleri — Mikro ERP + yerel DB birleşik ürün sayımları.
-    /// Kategori yönetimi ekranındaki ürün adetleri bu servisten gelmelidir.
+    /// Admin katalog istatistikleri — Mikro web aktif + fiyatlı ürünler
+    /// (sto_webe_gonderilecek_fl=1 ve çözümlenmiş fiyat &gt; 0). Dashboard ile aynı kaynak.
     /// </summary>
     public sealed class AdminCatalogStatsService : IAdminCatalogStatsService
     {
+        private const string SnapshotCacheKey = "admin:catalog:snapshots:v3-web-priced";
+        private static readonly TimeSpan SnapshotCacheTtl = TimeSpan.FromSeconds(60);
+
         private readonly IMikroDbService _mikroDbService;
         private readonly ECommerceDbContext _dbContext;
         private readonly IProductAdminOverrideSettingsService _productAdminOverrideSettingsService;
+        private readonly IMemoryCache? _memoryCache;
 
         public AdminCatalogStatsService(
             IMikroDbService mikroDbService,
             ECommerceDbContext dbContext,
-            IProductAdminOverrideSettingsService productAdminOverrideSettingsService)
+            IProductAdminOverrideSettingsService productAdminOverrideSettingsService,
+            IMemoryCache? memoryCache = null)
         {
             _mikroDbService = mikroDbService;
             _dbContext = dbContext;
             _productAdminOverrideSettingsService = productAdminOverrideSettingsService;
+            _memoryCache = memoryCache;
         }
 
         public async Task<IReadOnlyDictionary<int, int>> GetActiveProductCountsByCategoryAsync(
@@ -44,10 +51,42 @@ namespace ECommerce.API.Infrastructure
                 .ToDictionary(group => group.Key, group => group.Count());
         }
 
-        public Task<IReadOnlyList<AdminCatalogProductSnapshot>> GetProductSnapshotsAsync(
+        public async Task<IReadOnlyDictionary<int, int>> GetLocalActiveProductCountsByCategoryAsync(
             CancellationToken cancellationToken = default)
         {
-            return BuildProductSnapshotsAsync(cancellationToken);
+            const string cacheKey = "admin:catalog:local-category-counts:v1";
+            if (_memoryCache != null &&
+                _memoryCache.TryGetValue(cacheKey, out IReadOnlyDictionary<int, int>? cached) &&
+                cached != null)
+            {
+                return cached;
+            }
+
+            var rows = await _dbContext.Products
+                .AsNoTracking()
+                .Where(product => product.IsActive && product.CategoryId > 0)
+                .GroupBy(product => product.CategoryId)
+                .Select(group => new { CategoryId = group.Key, Count = group.Count() })
+                .ToListAsync(cancellationToken);
+
+            IReadOnlyDictionary<int, int> result = rows.ToDictionary(row => row.CategoryId, row => row.Count);
+            _memoryCache?.Set(cacheKey, result, TimeSpan.FromSeconds(30));
+            return result;
+        }
+
+        public async Task<IReadOnlyList<AdminCatalogProductSnapshot>> GetProductSnapshotsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            if (_memoryCache != null &&
+                _memoryCache.TryGetValue(SnapshotCacheKey, out IReadOnlyList<AdminCatalogProductSnapshot>? cached) &&
+                cached != null)
+            {
+                return cached;
+            }
+
+            var snapshots = await BuildProductSnapshotsAsync(cancellationToken);
+            _memoryCache?.Set(SnapshotCacheKey, snapshots, SnapshotCacheTtl);
+            return snapshots;
         }
 
         private async Task<IReadOnlyList<AdminCatalogProductSnapshot>> BuildProductSnapshotsAsync(
@@ -59,13 +98,8 @@ namespace ECommerce.API.Infrastructure
                     await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken));
                 if (unified.Count == 0)
                 {
-                    var fallbackLocalProducts = await _dbContext.Products
-                        .AsNoTracking()
-                        .ToListAsync(cancellationToken);
-
-                    return fallbackLocalProducts
-                        .Select(MapLocalProductSnapshot)
-                        .ToList();
+                    // Mikro bağlıyken web aktif ürün yoksa yerel katalogu doldurma.
+                    return Array.Empty<AdminCatalogProductSnapshot>();
                 }
 
                 var localAll = await _dbContext.Products
@@ -110,14 +144,7 @@ namespace ECommerce.API.Infrastructure
                 var overrideDefaults = await _productAdminOverrideSettingsService
                     .GetSettingsAsync(cancellationToken);
 
-                var unifiedSkuSet = new HashSet<string>(
-                    unified
-                        .Select(product => product.StokKod?.Trim())
-                        .Where(productSku => !string.IsNullOrWhiteSpace(productSku))
-                        .Cast<string>(),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var mergedProducts = unified
+                return unified
                     .Select(mikroProduct =>
                     {
                         var normalizedSku = mikroProduct.StokKod?.Trim() ?? string.Empty;
@@ -143,6 +170,10 @@ namespace ECommerce.API.Infrastructure
                                 mikroProduct.StokAd,
                                 hasLocal ? local : null,
                                 overrideDefaults),
+                            Price = ProductAdminOverridePolicy.ResolvePrice(
+                                mikroProduct.Fiyat,
+                                hasLocal ? local : null,
+                                overrideDefaults),
                             StockQuantity = (int)Math.Max(0, mikroProduct.StokMiktar),
                             IsActive = MikroWebCatalogFilter.ResolveIsActive(mikroProduct, hasLocal ? local : null),
                             CategoryId = resolvedCategoryId,
@@ -153,20 +184,15 @@ namespace ECommerce.API.Infrastructure
                             ? product.Sku.Trim()
                             : $"local:{product.Id}",
                         StringComparer.OrdinalIgnoreCase)
-                    .Select(group => group.First());
-
-                var localOnlyProducts = localAll
-                    .Where(product => !LegacySeedProductSkus.IsLegacyProduct(product.SKU, product.Slug, product.Name))
-                    .Where(product =>
-                        string.IsNullOrWhiteSpace(product.SKU)
-                        || !unifiedSkuSet.Contains(product.SKU.Trim()))
-                    .Select(MapLocalProductSnapshot);
-
-                return mergedProducts.Concat(localOnlyProducts).ToList();
+                    .Select(group => group.First())
+                    // Vitrin ile aynı fiyat kuralı: fiyatı 0 olan web bayraklı stoklar sayılmaz (~2bin küsür).
+                    .Where(product => product.Price > 0m)
+                    .ToList();
             }
 
             var localProducts = await _dbContext.Products
                 .AsNoTracking()
+                .Where(product => product.Price > 0)
                 .ToListAsync(cancellationToken);
 
             return localProducts.Select(MapLocalProductSnapshot).ToList();
@@ -179,6 +205,7 @@ namespace ECommerce.API.Infrastructure
                 Id = product.Id,
                 Sku = product.SKU ?? string.Empty,
                 Name = product.Name ?? string.Empty,
+                Price = product.Price,
                 StockQuantity = product.StockQuantity,
                 IsActive = product.IsActive,
                 CategoryId = product.CategoryId > 0 ? product.CategoryId : null,

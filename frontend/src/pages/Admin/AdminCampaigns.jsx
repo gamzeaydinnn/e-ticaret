@@ -831,15 +831,16 @@ export default function AdminCampaigns() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="d-flex gap-2">
+          <div className="d-flex gap-2 flex-wrap">
             <button
-              className="btn btn-sm btn-outline-secondary"
-              style={{ minHeight: "44px", minWidth: "44px" }}
+              className="btn btn-sm btn-outline-secondary px-2"
+              style={{ minHeight: "44px" }}
               onClick={loadCampaigns}
               disabled={loading}
-              title="Yenile"
+              title="Listeyi yenile"
             >
-              <i className={`fas fa-sync-alt ${loading ? "fa-spin" : ""}`}></i>
+              <i className={`fas fa-sync-alt me-1 ${loading ? "fa-spin" : ""}`}></i>
+              Yenile
             </button>
             <button
               className="btn btn-sm text-white fw-semibold flex-grow-1"
@@ -854,6 +855,19 @@ export default function AdminCampaigns() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div
+        className="mb-3 px-2 py-2 rounded-2"
+        style={{ background: "#f8fafc", fontSize: "0.72rem", color: "#64748b" }}
+      >
+        <strong style={{ color: "#334155" }}>Butonlar:</strong>{" "}
+        <strong>Yenile</strong> listeyi günceller ·{" "}
+        <strong>Yeni Kampanya</strong> oluşturur ·{" "}
+        <strong>Aktif/Pasif</strong> tıklayınca durumu değiştirir ·{" "}
+        <strong>Önizle</strong> görünümü açar ·{" "}
+        <strong>Düzenle</strong> ayarları değiştirir ·{" "}
+        <strong>Sil</strong> kampanyayı kaldırır.
       </div>
 
       {/* Mesajlar */}
@@ -1116,36 +1130,39 @@ export default function AdminCampaigns() {
                             }}
                             aria-label={`Kampanya durumunu ${c.isActive ? "pasif" : "aktif"} yap`}
                             aria-pressed={c.isActive}
-                            title="Durumu değiştirmek için tıklayın"
+                            title="Tıklayınca aktif/pasif değiştirir"
                           >
-                            {c.isActive ? "Aktif" : "Pasif"}
+                            {c.isActive ? "Aktif (değiştir)" : "Pasif (değiştir)"}
                           </button>
                         </td>
                         <td data-label="İşlem" className="px-2">
-                          <div className="d-flex gap-1 justify-content-end">
+                          <div className="d-flex gap-1 justify-content-end flex-wrap">
                             <button
-                              className="btn btn-outline-info btn-sm"
-                              style={{ minWidth: "36px", minHeight: "36px" }}
+                              className="btn btn-outline-info btn-sm d-inline-flex align-items-center gap-1"
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
                               onClick={() => handlePreviewCampaign(c.id)}
-                              title="Önizle"
+                              title="Kampanyayı önizle"
                             >
                               <i className="fas fa-eye"></i>
+                              <span>Önizle</span>
                             </button>
                             <button
-                              className="btn btn-outline-primary btn-sm"
-                              style={{ minWidth: "36px", minHeight: "36px" }}
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
                               onClick={() => openEditModal(c)}
-                              title="Düzenle"
+                              title="Kampanyayı düzenle"
                             >
                               <i className="fas fa-edit"></i>
+                              <span>Düzenle</span>
                             </button>
                             <button
-                              className="btn btn-outline-danger btn-sm"
-                              style={{ minWidth: "36px", minHeight: "36px" }}
+                              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
                               onClick={() => handleDelete(c.id)}
-                              title="Sil"
+                              title="Kampanyayı sil"
                             >
                               <i className="fas fa-trash"></i>
+                              <span>Sil</span>
                             </button>
                           </div>
                         </td>

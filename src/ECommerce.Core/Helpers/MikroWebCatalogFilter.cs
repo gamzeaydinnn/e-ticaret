@@ -6,8 +6,8 @@ using ECommerce.Entities.Concrete;
 namespace ECommerce.Core.Helpers
 {
     /// <summary>
-    /// Mikro ERP'den web kataloğuna yalnızca "webe gönderilecek" (sto_webe_gonderilecek_fl=1)
-    /// ürünlerin alınmasını sağlar. Tüm Mikro stok kartları değil, web aktif subset kullanılır.
+    /// Mikro web kataloğu: sto_webe_gonderilecek_fl=1.
+    /// Satılabilir web kataloğu (admin/dashboard sayısı): ayrıca fiyat &gt; 0.
     /// </summary>
     public static class MikroWebCatalogFilter
     {
@@ -16,6 +16,14 @@ namespace ECommerce.Core.Helpers
             return products
                 .Where(product => product.WebeGonderilecekFl)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Admin/Dashboard ile vitrin stok dışı sayım için: web bayrağı + fiyatlı ürün.
+        /// </summary>
+        public static bool IsPricedWebCatalogProduct(decimal resolvedPrice, bool isWebActive)
+        {
+            return isWebActive && resolvedPrice > 0m;
         }
 
         /// <summary>

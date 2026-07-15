@@ -16,43 +16,54 @@ const SearchAutocomplete = () => {
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Debounce ile arama
+  // Debounce + iptal edilebilir arama (Mikro ERP'ye her tuşta gitmesin)
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
       setSuggestions([]);
       setShowDropdown(false);
-      return;
+      setLoading(false);
+      return undefined;
     }
 
     setLoading(true);
+    const controller = new AbortController();
     let cancelled = false;
 
     const timer = setTimeout(async () => {
       try {
-        const filtered = await ProductService.search(query.trim(), 1, 12);
-        if (cancelled) {
-          return;
-        }
+        const filtered = await ProductService.search(query.trim(), 1, 12, {
+          suggest: true,
+          signal: controller.signal,
+          timeout: 8000,
+        });
+        if (cancelled) return;
 
         setSuggestions(filtered);
-        setShowDropdown(filtered.length > 0 || query.length >= 2);
+        setShowDropdown(true);
       } catch (err) {
-        if (!cancelled) {
-          console.error("Arama önerileri yüklenemedi:", err);
-          setSuggestions([]);
-          setShowDropdown(query.length >= 2);
+        if (
+          cancelled ||
+          err?.name === "CanceledError" ||
+          err?.code === "ERR_CANCELED" ||
+          err?.message === "canceled"
+        ) {
+          return;
         }
+        console.error("Arama önerileri yüklenemedi:", err);
+        setSuggestions([]);
+        setShowDropdown(query.length >= 2);
       } finally {
         if (!cancelled) {
           setLoading(false);
           setHighlightIndex(-1);
         }
       }
-    }, 150);
+    }, 350);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      controller.abort();
     };
   }, [query]);
 

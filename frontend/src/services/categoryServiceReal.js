@@ -195,12 +195,16 @@ const categoryServiceReal = {
       const raw = Array.isArray(response) ? response : [];
       // Backend "Children" alanı döndürüyor, CategoryTile "subCategories" bekliyor
       // Her kategoriyi normalize et
-      const normalize = (cat) => ({
-        ...normalizeCategoryEntity(cat),
-        subCategories: dedupeCategoriesBySlug(
+      const normalize = (cat) => {
+        const kids = dedupeCategoriesBySlug(
           (cat.children || cat.Children || cat.subCategories || []).map(normalize),
-        ),
-      });
+        );
+        return {
+          ...normalizeCategoryEntity(cat),
+          children: kids,
+          subCategories: kids,
+        };
+      };
       return dedupeCategoriesBySlug(raw.map(normalize));
     } catch (error) {
       console.error(
@@ -241,14 +245,14 @@ const categoryServiceReal = {
    */
   async getAllAdmin() {
     try {
-      const response = await api.get("/api/admin/categories");
+      const response = await api.get("/api/admin/categories", { timeout: 20000 });
       return Array.isArray(response) ? response : [];
     } catch (error) {
       console.error(
         "[CategoryService] Admin kategoriler alınamadı:",
         error.message,
       );
-      return [];
+      throw error;
     }
   },
 
@@ -396,6 +400,18 @@ const categoryServiceReal = {
       );
       return [];
     }
+  },
+
+  /**
+   * Admin: Kategori görseli yükler
+   */
+  async uploadCategoryImage(file) {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await api.post("/api/admin/categories/upload-image", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response?.imageUrl || response?.data?.imageUrl || null;
   },
 
   // ==================== SUBSCRIPTION SİSTEMİ ====================

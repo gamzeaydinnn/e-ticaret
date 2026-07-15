@@ -64,9 +64,14 @@ namespace ECommerce.Business.Services.Managers
             if (string.IsNullOrWhiteSpace(query))
                 return Enumerable.Empty<ProductListDto>();
 
-            var allProducts = await _productRepository.GetAllAsync();
+            page = Math.Max(page, 1);
+            size = Math.Clamp(size, 1, 250);
+            var term = query.Trim();
 
-            var pagedProducts = allProducts
+            // Tüm kataloğu RAM'e çekme — DB filtre + skorlama (autocomplete hızı)
+            var candidates = await _productRepository.SearchAsync(term);
+
+            var pagedProducts = candidates
                 .Select(p => (
                     Product: p,
                     Score: ProductSearchMatcher.Score(
@@ -74,7 +79,7 @@ namespace ECommerce.Business.Services.Managers
                         p.Description,
                         p.Category?.Name,
                         p.SKU,
-                        query,
+                        term,
                         p.Brand?.Name)))
                 .Where(x => x.Score > 0)
                 .OrderByDescending(x => x.Score)

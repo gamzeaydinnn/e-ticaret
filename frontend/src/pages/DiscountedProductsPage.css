@@ -1,0 +1,116 @@
+.discounted-page {
+  background: #fafafa;
+  min-height: 60vh;
+}
+
+.discounted-page-hero {
+  background: linear-gradient(135deg, #fff4eb 0%, #ffe8d6 48%, #ffd7c2 100%);
+  border-bottom: 1px solid rgba(255, 107, 53, 0.12);
+  padding: 20px 0 28px;
+}
+
+.discounted-page-hero-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.discounted-page-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 14px;
+}
+
+.discounted-page-breadcrumb a {
+  color: #ff6b35;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.discounted-page-hero-content {
+  max-width: 640px;
+}
+
+.discounted-page-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ff6b35;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+
+.discounted-page-title {
+  margin: 0 0 6px;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #1a1a2e;
+  letter-spacing: -0.02em;
+}
+
+.discounted-page-subtitle {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.discounted-page-body {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px 12px 40px;
+}
+
+.discounted-page-loading,
+.discounted-page-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: #6b7280;
+}
+
+.discounted-page-empty i {
+  font-size: 2.5rem;
+  color: #ff6b35;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.discounted-page-empty h2 {
+  font-size: 1.25rem;
+  color: #1a1a2e;
+  margin-bottom: 6px;
+}
+
+.discounted-page-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .discounted-page-hero {
+    padding: 14px 0 18px;
+  }
+
+  .discounted-page-title {
+    font-size: 1.35rem;
+  }
+
+  .discounted-page-hero-inner,
+  .discounted-page-body {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}

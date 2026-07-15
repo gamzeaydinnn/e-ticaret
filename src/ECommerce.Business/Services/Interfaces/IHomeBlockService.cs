@@ -61,6 +61,11 @@ namespace ECommerce.Business.Services.Interfaces
         Task<HomeProductBlockDto?> UpdateBlockAsync(int id, UpdateHomeBlockDto dto);
 
         /// <summary>
+        /// Bloğun aktif/pasif durumunu tersine çevirir (yalnızca IsActive).
+        /// </summary>
+        Task<HomeProductBlockDto?> ToggleBlockActiveAsync(int id);
+
+        /// <summary>
         /// Bloğu siler
         /// </summary>
         Task<bool> DeleteBlockAsync(int id);

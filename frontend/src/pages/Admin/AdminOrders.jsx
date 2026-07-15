@@ -1454,7 +1454,7 @@ export default function AdminOrders() {
         </div>
 
         {/* Kontrol Butonları */}
-        <div className="d-flex align-items-center gap-2">
+        <div className="admin-orders-header-controls d-flex align-items-center gap-2">
           {/* Otomatik Yenileme Toggle */}
           <div className="form-check form-switch mb-0">
             <input
@@ -1870,10 +1870,9 @@ export default function AdminOrders() {
       )}
 
       {/* ================================================================
-          ÖZET KARTLAR - Sipariş Akış Durumları
-          New → Confirmed → Preparing → Ready → Assigned → PickedUp → Delivered
+          ÖZET KARTLAR - masaüstü (mobilde select kullanılır)
           ================================================================ */}
-      <div className="row g-2 mb-3 px-1">
+      <div className="row g-2 mb-3 px-1 admin-orders-desktop-only admin-orders-stats">
         {/* Yeni/Onay Bekleyen */}
         <div className="col-4 col-md-2">
           <div
@@ -2020,13 +2019,13 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* Sorunlu Siparişler Satırı */}
+      {/* Sorunlu Siparişler Satırı — masaüstü */}
       {(orders.filter((o) => normalizeStatus(o.status) === "delivery_failed")
         .length > 0 ||
         orders.filter(
           (o) => normalizeStatus(o.status) === "delivery_payment_pending",
         ).length > 0) && (
-        <div className="row g-2 mb-3 px-1">
+        <div className="row g-2 mb-3 px-1 admin-orders-desktop-only">
           {/* Teslimat Başarısız */}
           <div className="col-6 col-md-3">
             <div
@@ -2079,11 +2078,183 @@ export default function AdminOrders() {
         </div>
       )}
 
+      {/* Mobil filtre — tek satır dropdown'lar */}
+      <div className="admin-orders-mobile-only admin-orders-mobile-toolbar mb-3 px-1">
+        <div className="row g-2">
+          <div className="col-6">
+            <label className="form-label mb-0 text-muted" style={{ fontSize: "0.65rem" }}>
+              Durum
+            </label>
+            <select
+              className="form-select form-select-sm"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Sipariş durumu filtrele"
+            >
+              <option value="all">Tümü ({orders.length})</option>
+              <option value="pending">
+                Yeni (
+                {
+                  orders.filter((o) =>
+                    ["pending", "new"].includes(normalizeStatus(o.status)),
+                  ).length
+                }
+                )
+              </option>
+              <option value="confirmed">
+                Onaylı (
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "confirmed",
+                  ).length
+                }
+                )
+              </option>
+              <option value="preparing">
+                Hazırlanan (
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "preparing",
+                  ).length
+                }
+                )
+              </option>
+              <option value="ready">
+                Hazır (
+                {
+                  orders.filter((o) => normalizeStatus(o.status) === "ready")
+                    .length
+                }
+                )
+              </option>
+              <option value="assigned">
+                Atandı (
+                {
+                  orders.filter((o) => normalizeStatus(o.status) === "assigned")
+                    .length
+                }
+                )
+              </option>
+              <option value="out_for_delivery">
+                Yolda (
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "out_for_delivery",
+                  ).length
+                }
+                )
+              </option>
+              <option value="delivered">
+                Teslim (
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "delivered",
+                  ).length
+                }
+                )
+              </option>
+              <option value="delivery_failed">
+                Başarısız (
+                {
+                  orders.filter(
+                    (o) => normalizeStatus(o.status) === "delivery_failed",
+                  ).length
+                }
+                )
+              </option>
+              <option value="delivery_payment_pending">
+                Ödeme Bekl. (
+                {
+                  orders.filter(
+                    (o) =>
+                      normalizeStatus(o.status) === "delivery_payment_pending",
+                  ).length
+                }
+                )
+              </option>
+            </select>
+          </div>
+          <div className="col-6">
+            <label className="form-label mb-0 text-muted" style={{ fontSize: "0.65rem" }}>
+              Ödeme
+            </label>
+            <select
+              className="form-select form-select-sm"
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              aria-label="Ödeme durumu filtrele"
+            >
+              <option value="all">Tüm ödemeler</option>
+              <option value="pending">
+                Ödeme bekleyen (
+                {
+                  orders.filter((o) => {
+                    const ps = (o.paymentStatus || "").toString().toLowerCase();
+                    return ps !== "paid" && o.isPaid !== true;
+                  }).length
+                }
+                )
+              </option>
+              <option value="paid">
+                Ödendi (
+                {
+                  orders.filter((o) => {
+                    const ps = (o.paymentStatus || "").toString().toLowerCase();
+                    return ps === "paid" || o.isPaid === true;
+                  }).length
+                }
+                )
+              </option>
+            </select>
+          </div>
+          <div className="col-6">
+            <label className="form-label mb-0 text-muted" style={{ fontSize: "0.65rem" }}>
+              Başlangıç
+            </label>
+            <input
+              type="date"
+              className="form-control form-control-sm"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="Başlangıç tarihi"
+            />
+          </div>
+          <div className="col-6">
+            <label className="form-label mb-0 text-muted" style={{ fontSize: "0.65rem" }}>
+              Bitiş
+            </label>
+            <div className="d-flex gap-1">
+              <input
+                type="date"
+                className="form-control form-control-sm"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => setDateTo(e.target.value)}
+                aria-label="Bitiş tarihi"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  title="Tarihi temizle"
+                >
+                  <i className="fas fa-times"></i>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ================================================================
-          FİLTRE BUTONLARI - Sipariş Akış Durumları
-          Yeni akış: New → Confirmed → Preparing → Ready → Assigned → PickedUp → OutForDelivery → Delivered
+          FİLTRE BUTONLARI — masaüstü
           ================================================================ */}
-      <div className="d-flex flex-wrap gap-2 mb-3 px-1">
+      <div className="admin-orders-desktop-only flex-wrap gap-2 mb-3 px-1">
         {/* Ana Durum Filtresi */}
         <div className="btn-group btn-group-sm flex-wrap" role="group">
           <button
@@ -2266,7 +2437,7 @@ export default function AdminOrders() {
 
             {canDeleteOrders && (
               <div className="d-flex flex-wrap align-items-center gap-2">
-                <span className="text-muted" style={{ fontSize: "0.68rem" }}>
+                <span className="text-muted admin-orders-bulk-hint" style={{ fontSize: "0.68rem" }}>
                   {selectedCount === 0
                     ? "Toplu silme için sipariş seçin"
                     : `${selectedCount} sipariş seçildi`}
@@ -2300,7 +2471,7 @@ export default function AdminOrders() {
         <div className="card-body p-0">
           <div className="table-responsive" style={{ margin: "0" }}>
             <table
-              className="table table-sm mb-0"
+              className="table table-sm mb-0 admin-orders-table"
               style={{ fontSize: "0.7rem" }}
             >
               <thead className="bg-light">
@@ -2356,13 +2527,12 @@ export default function AdminOrders() {
                           </td>
                         )}
                         <td className="px-1 py-2">
-                          <span className="fw-bold">#{order.id}</span>
+                          <span className="admin-orders-id fw-semibold">#{order.id}</span>
                           <br />
                           {/* Mobil/küçük ekranlarda ayrı Tarih sütunu gizli olduğundan
                               tarih+saat burada gösterilir (md altı). */}
                           <small
-                            className="text-muted d-md-none"
-                            style={{ fontSize: "0.6rem" }}
+                            className="text-muted d-md-none admin-orders-date"
                           >
                             {formatOrderDateTime(order.orderDate)}
                           </small>
@@ -2370,8 +2540,8 @@ export default function AdminOrders() {
                         {/* Tarih sütunu (md ve üzeri): siparişin verildiği gün + saat */}
                         <td className="px-1 py-2 d-none d-md-table-cell">
                           <span
-                            className="text-muted d-block"
-                            style={{ fontSize: "0.62rem", whiteSpace: "nowrap" }}
+                            className="text-muted d-block admin-orders-date"
+                            style={{ whiteSpace: "nowrap" }}
                           >
                             {formatOrderDateTime(order.orderDate)}
                           </span>
@@ -2385,22 +2555,16 @@ export default function AdminOrders() {
                           </span>
                         </td>
                         <td className="px-1 py-2">
-                          <span
-                            className="fw-bold text-success"
-                            style={{ fontSize: "0.7rem" }}
-                          >
+                          <span className="admin-orders-amount fw-semibold text-success">
                             {amount.toFixed(0)}₺
                           </span>
                         </td>
                         <td className="px-1 py-2">
                           <span
-                            className={`badge`}
+                            className="badge admin-orders-status"
                             style={{
-                              fontSize: "0.55rem",
-                              padding: "0.25em 0.5em",
                               backgroundColor: getStatusHexColor(order.status),
                               color: "white",
-                              whiteSpace: "nowrap",
                             }}
                           >
                             <i
@@ -2449,7 +2613,7 @@ export default function AdminOrders() {
                           )}
                         </td>
                         <td className="px-1 py-2">
-                          <div className="d-flex gap-1 flex-wrap">
+                          <div className="admin-orders-actions d-flex gap-1 flex-wrap">
                             {/* Detay Butonu */}
                             <button
                               onClick={() => openOrderDetail(order)}
@@ -2625,20 +2789,20 @@ export default function AdminOrders() {
             </table>
           </div>
           {totalPages > 1 && (
-            <div className="d-flex flex-wrap align-items-center justify-content-between px-3 py-2 border-top">
+            <div className="admin-orders-pagination d-flex flex-wrap align-items-center justify-content-between gap-2 px-2 px-md-3 py-2 border-top">
               <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                Toplam {totalFiltered} sipariş • Sayfa {page}/{totalPages}
+                Toplam {totalFiltered} • Sayfa {page}/{totalPages}
               </div>
-              <div className="d-flex align-items-center gap-2">
+              <div className="d-flex align-items-center gap-2 flex-shrink-0">
                 <select
-                  className="form-select form-select-sm"
-                  style={{ width: "90px" }}
+                  className="form-select form-select-sm admin-orders-page-size"
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
+                  aria-label="Sayfa başına sipariş"
                 >
                   {[10, 20, 30, 50].map((size) => (
                     <option key={size} value={size}>
-                      {size} / sayfa
+                      {size}/sayfa
                     </option>
                   ))}
                 </select>
@@ -2647,6 +2811,7 @@ export default function AdminOrders() {
                     className="btn btn-outline-secondary"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                     disabled={page <= 1}
+                    aria-label="Önceki sayfa"
                   >
                     ‹
                   </button>
@@ -2654,6 +2819,7 @@ export default function AdminOrders() {
                     className="btn btn-outline-secondary"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                     disabled={page >= totalPages}
+                    aria-label="Sonraki sayfa"
                   >
                     ›
                   </button>

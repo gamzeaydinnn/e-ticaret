@@ -96,6 +96,8 @@ const AdminProducts = () => {
   const replacingImageIndexRef = useRef(null);
   const dropZoneRef = useRef(null);
   const fetchProductsRef = useRef(null);
+  const fetchAbortRef = useRef(null);
+  const fetchRequestIdRef = useRef(0);
 
   const resolveEffectiveOverride = (fieldName, explicitValue) => {
     if (explicitValue === true || explicitValue === false) {
@@ -173,6 +175,11 @@ const AdminProducts = () => {
   }, []);
 
   const fetchProducts = useCallback(async () => {
+    const requestId = ++fetchRequestIdRef.current;
+    const controller = new AbortController();
+    fetchAbortRef.current?.abort();
+    fetchAbortRef.current = controller;
+
     try {
       setLoading(true);
       setError(null);
@@ -183,15 +190,29 @@ const AdminProducts = () => {
         name: searchFilters.name,
         status: searchFilters.status,
         stockStatus: searchFilters.stockStatus,
+        signal: controller.signal,
       });
+
+      if (requestId !== fetchRequestIdRef.current) {
+        return;
+      }
+
       setProducts(response.items || []);
       setTotalProductsCount(response.total || 0);
       setServerTotalPages(Math.max(1, response.totalPages || 1));
     } catch (err) {
+      if (err?.name === "CanceledError" || err?.code === "ERR_CANCELED" || controller.signal.aborted) {
+        return;
+      }
+      if (requestId !== fetchRequestIdRef.current) {
+        return;
+      }
       setError("Ürünler yüklenirken hata oluştu");
       console.error("Ürünler yükleme hatası:", err);
     } finally {
-      setLoading(false);
+      if (requestId === fetchRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [currentPage, pageSize, searchFilters]);
 
@@ -216,7 +237,7 @@ const AdminProducts = () => {
         };
       });
       setCurrentPage(1);
-    }, 350);
+    }, 500);
 
     return () => {
       window.clearTimeout(debounceTimer);
@@ -226,7 +247,6 @@ const AdminProducts = () => {
   useEffect(() => {
     fetchCategories();
     fetchCatalogStats();
-    fetchDuplicateGroups();
     fetchGlobalOverrideSettings();
 
     // ProductService subscription - CRUD değişikliklerinde otomatik refetch
@@ -243,6 +263,7 @@ const AdminProducts = () => {
 
     // Cleanup on unmount
     return () => {
+      fetchAbortRef.current?.abort();
       unsubscribe();
     };
   }, []);
@@ -271,6 +292,16 @@ const AdminProducts = () => {
     } finally {
       setDuplicateLoading(false);
     }
+  };
+
+  const handleToggleDuplicatePanel = () => {
+    setShowDuplicatePanel((prev) => {
+      const next = !prev;
+      if (next && duplicateGroups.length === 0 && !duplicateLoading) {
+        fetchDuplicateGroups();
+      }
+      return next;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -1069,7 +1100,7 @@ const AdminProducts = () => {
   const formatStatValue = (value) =>
     catalogStatsLoading ? "…" : Number(value || 0).toLocaleString("tr-TR");
 
-  const totalProducts = catalogStats.totalProducts || totalProductsCount;
+  const totalProducts = catalogStats.totalProducts ?? totalProductsCount;
   const activeProducts = catalogStats.activeProducts;
   const lowStockProducts = catalogStats.lowStockProducts;
   const totalCategories = catalogStats.totalCategories || categories.length;
@@ -1538,7 +1569,7 @@ const AdminProducts = () => {
                 borderRadius: "6px",
                 fontSize: "0.75rem",
               }}
-              onClick={() => setShowDuplicatePanel((prev) => !prev)}
+              onClick={handleToggleDuplicatePanel}
               disabled={duplicateLoading && duplicateGroups.length === 0}
             >
               {duplicateLoading && duplicateGroups.length === 0 ? (

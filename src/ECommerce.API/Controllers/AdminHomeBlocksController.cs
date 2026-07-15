@@ -186,6 +186,25 @@ namespace ECommerce.API.Controllers
             return Ok(new { message = "Sıralama güncellendi" });
         }
 
+        /// <summary>
+        /// Bloğun aktif/pasif durumunu tersine çevirir
+        /// </summary>
+        [HttpPut("{id:int}/toggle-active")]
+        [ProducesResponseType(typeof(HomeProductBlockDto), 200)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> ToggleBlockActive(int id)
+        {
+            _logger.LogInformation("🔄 Admin: Blok durumu değiştiriliyor: #{Id}", id);
+
+            var updated = await _homeBlockService.ToggleBlockActiveAsync(id);
+            if (updated == null)
+            {
+                return NotFound(new { message = $"Blok #{id} bulunamadı" });
+            }
+
+            return Ok(updated);
+        }
+
         #endregion
 
         #region Block Products (Ürün Yönetimi)

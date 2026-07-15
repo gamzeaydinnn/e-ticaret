@@ -7,7 +7,15 @@ const EMPTY_SALES = {
   netOrdersCount: 0,
   revenue: 0,
   itemsSold: 0,
+  soldProductCount: 0,
+  zeroSalesProductCount: 0,
+  activeProductCount: 0,
   topProducts: [],
+  leastProducts: [],
+  refundedProducts: [],
+  refundOrdersCount: 0,
+  refundAmountTotal: 0,
+  refundedItemCount: 0,
 };
 
 export default function AdminReports() {
@@ -132,23 +140,46 @@ export default function AdminReports() {
     if (!sales || sales.ordersCount === 0) {
       return;
     }
-    const topProducts = sales.topProducts?.length
-      ? sales.topProducts
-          .map((p) => `${p.productName || `#${p.productId}`} (${p.quantity})`)
-          .join(", ")
-      : "-";
+    const topRows = (sales.topProducts || []).map((p, index) => [
+      "En Çok Satan",
+      index + 1,
+      p.productName || `#${p.productId}`,
+      p.quantity ?? 0,
+      p.revenue ?? 0,
+      p.orderCount ?? 0,
+    ]);
+    const leastRows = (sales.leastProducts || []).map((p, index) => [
+      "En Az Satan",
+      index + 1,
+      p.productName || `#${p.productId}`,
+      p.quantity ?? 0,
+      p.revenue ?? 0,
+      p.orderCount ?? 0,
+    ]);
+    const refundRows = (sales.refundedProducts || []).map((p, index) => [
+      "İade Edilen",
+      index + 1,
+      p.productName || `#${p.productId}`,
+      p.quantity ?? 0,
+      p.amount ?? 0,
+      p.orderCount ?? 0,
+    ]);
     downloadCsv(
-      `satis-ozeti-${salesPeriod}-${isoDate(new Date())}.csv`,
-      ["Dönem", "Sipariş", "Gelir", "Adet", "En Çok Satanlar"],
+      `satis-urun-analizi-${salesPeriod}-${isoDate(new Date())}.csv`,
+      ["Liste", "Sıra", "Ürün", "Adet", "Ciro/İade", "Sipariş"],
       [
         [
-          periodLabel[salesPeriod] || salesPeriod,
-          sales.ordersCount ?? 0,
-          sales.revenue ?? 0,
+          "Özet",
+          "-",
+          `Sipariş ${sales.ordersCount} / İade sipariş ${sales.refundOrdersCount ?? 0} / İade tutar ${sales.refundAmountTotal ?? 0}`,
           sales.itemsSold ?? 0,
-          topProducts,
+          sales.revenue ?? 0,
+          "-",
         ],
-      ]
+        ...topRows,
+        ...leastRows,
+        ...refundRows,
+      ],
     );
   };
 
@@ -304,16 +335,162 @@ export default function AdminReports() {
                 <span className="report-metric__value">{sales.itemsSold}</span>
               </div>
               <div className="report-metric">
-                <span className="report-metric__label">En Çok</span>
-                <span className="report-metric__value report-metric__value--muted">
-                  {sales.topProducts?.length
-                    ? sales.topProducts
-                        .slice(0, 2)
-                        .map((p) => p.productName || `#${p.productId}`)
-                        .join(", ")
-                    : "Bu dönemde satış yok"}
+                <span className="report-metric__label">Satılan Ürün</span>
+                <span className="report-metric__value">
+                  {sales.soldProductCount ?? sales.topProducts?.length ?? 0}
                 </span>
+                {(sales.zeroSalesProductCount ?? 0) > 0 && (
+                  <small
+                    className="text-muted d-block"
+                    style={{ fontSize: "0.65rem" }}
+                  >
+                    Satışı yok: {sales.zeroSalesProductCount}
+                  </small>
+                )}
               </div>
+            </div>
+          )}
+
+          {!loadingSales && !salesError && (
+            <div className="report-product-analysis">
+              <div className="report-product-panel">
+                <div className="report-product-panel__title">
+                  <i className="fas fa-arrow-up text-success"></i>
+                  En çok satan ürünler
+                </div>
+                {(sales.topProducts || []).length === 0 ? (
+                  <div className="text-muted small">Bu dönemde satış yok.</div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-sm mb-0 report-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Ürün</th>
+                          <th className="text-end">Adet</th>
+                          <th className="text-end">Ciro</th>
+                          <th className="text-end">Sipariş</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sales.topProducts.map((p, index) => (
+                          <tr key={`top-${p.productId}`}>
+                            <td>{index + 1}</td>
+                            <td title={p.productName}>
+                              {p.productName || `#${p.productId}`}
+                            </td>
+                            <td className="text-end fw-semibold">{p.quantity}</td>
+                            <td className="text-end">
+                              ₺{Number(p.revenue || 0).toLocaleString("tr-TR")}
+                            </td>
+                            <td className="text-end">{p.orderCount || "-"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="report-product-panel">
+                <div className="report-product-panel__title">
+                  <i className="fas fa-arrow-down text-danger"></i>
+                  En az satılan ürünler
+                </div>
+                {(sales.leastProducts || []).length === 0 ? (
+                  <div className="text-muted small">Bu dönemde satış yok.</div>
+                ) : (
+                  <>
+                    <div className="table-responsive">
+                      <table className="table table-sm mb-0 report-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Ürün</th>
+                            <th className="text-end">Adet</th>
+                            <th className="text-end">Ciro</th>
+                            <th className="text-end">Sipariş</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sales.leastProducts.map((p, index) => (
+                            <tr key={`least-${p.productId}`}>
+                              <td>{index + 1}</td>
+                              <td title={p.productName}>
+                                {p.productName || `#${p.productId}`}
+                              </td>
+                              <td className="text-end fw-semibold">{p.quantity}</td>
+                              <td className="text-end">
+                                ₺{Number(p.revenue || 0).toLocaleString("tr-TR")}
+                              </td>
+                              <td className="text-end">{p.orderCount || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(sales.zeroSalesProductCount ?? 0) > 0 && (
+                      <p className="report-product-panel__hint mb-0">
+                        Dönemde hiç satılmayan aktif ürün:{" "}
+                        <strong>{sales.zeroSalesProductCount}</strong>
+                        {sales.activeProductCount
+                          ? ` / ${sales.activeProductCount} aktif`
+                          : ""}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!loadingSales && !salesError && (
+            <div className="report-product-panel report-product-panel--refund mt-3">
+              <div className="report-product-panel__title">
+                <i className="fas fa-undo text-warning"></i>
+                İade edilen ürünler
+                {(sales.refundOrdersCount ?? 0) > 0 && (
+                  <small className="text-muted ms-2 fw-normal">
+                    {sales.refundOrdersCount} sipariş ·{" "}
+                    {sales.refundedItemCount ?? 0} adet · ₺
+                    {Number(sales.refundAmountTotal || 0).toLocaleString("tr-TR")}
+                  </small>
+                )}
+              </div>
+              {(sales.refundedProducts || []).length === 0 ? (
+                <div className="text-muted small">
+                  Bu dönemde iade edilen ürün kaydı yok.
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-sm mb-0 report-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Ürün</th>
+                        <th className="text-end">Adet</th>
+                        <th className="text-end">İade tutarı</th>
+                        <th className="text-end">Sipariş</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sales.refundedProducts.map((p, index) => (
+                        <tr key={`refund-${p.productId}`}>
+                          <td>{index + 1}</td>
+                          <td title={p.productName}>
+                            {p.productName || `#${p.productId}`}
+                          </td>
+                          <td className="text-end fw-semibold">{p.quantity}</td>
+                          <td className="text-end">
+                            ₺{Number(p.amount || 0).toLocaleString("tr-TR")}
+                          </td>
+                          <td className="text-end">{p.orderCount || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -71,18 +71,176 @@ namespace ECommerce.API.Controllers.Admin
                     .Where(p => productIds.Contains(p.Id))
                     .ToDictionaryAsync(p => p.Id, p => p.Name);
 
-            var topProducts = saleOrders
+            var productStats = saleOrders
                 .SelectMany(o => o.OrderItems ?? Enumerable.Empty<OrderItem>())
                 .GroupBy(i => i.ProductId)
                 .Select(g => new
                 {
                     productId = g.Key,
                     productName = productNameMap.TryGetValue(g.Key, out var name) ? name : $"Ürün #{g.Key}",
-                    quantity = g.Sum(x => x.Quantity)
+                    quantity = g.Sum(x => x.Quantity),
+                    revenue = g.Sum(x => x.UnitPrice * x.Quantity),
+                    orderCount = g.Select(x => x.OrderId).Distinct().Count()
+                })
+                .ToList();
+
+            var topProducts = productStats
+                .OrderByDescending(x => x.quantity)
+                .ThenByDescending(x => x.revenue)
+                .Take(10)
+                .ToList();
+
+            var leastProducts = productStats
+                .OrderBy(x => x.quantity)
+                .ThenBy(x => x.revenue)
+                .Take(10)
+                .ToList();
+
+            var soldProductIds = productStats.Select(x => x.productId).ToHashSet();
+            var activeProductCount = await _context.Products
+                .AsNoTracking()
+                .CountAsync(p => p.IsActive);
+            var zeroSalesProductCount = await _context.Products
+                .AsNoTracking()
+                .CountAsync(p => p.IsActive && !soldProductIds.Contains(p.Id));
+
+            // İade edilen ürünler — dönem içinde iade olmuş siparişlerden
+            var refundedOrders = await _context.Orders
+                .AsNoTracking()
+                .Include(o => o.OrderItems)
+                .Where(o =>
+                    (o.Status == OrderStatus.Refunded || o.Status == OrderStatus.PartialRefund)
+                    && (
+                        (o.RefundedAt != null && o.RefundedAt >= fromUtc && o.RefundedAt < toUtcExclusive)
+                        || (o.RefundedAt == null && o.OrderDate >= fromUtc && o.OrderDate < toUtcExclusive)
+                    ))
+                .ToListAsync();
+
+            var refundRequestRows = await _context.RefundRequests
+                .AsNoTracking()
+                .Where(r =>
+                    r.Status == RefundRequestStatus.Refunded
+                    && (
+                        (r.RefundedAt != null && r.RefundedAt >= fromUtc && r.RefundedAt < toUtcExclusive)
+                        || (r.RefundedAt == null && r.ProcessedAt != null && r.ProcessedAt >= fromUtc && r.ProcessedAt < toUtcExclusive)
+                        || (r.RefundedAt == null && r.ProcessedAt == null && r.RequestedAt >= fromUtc && r.RequestedAt < toUtcExclusive)
+                    ))
+                .Select(r => new { r.OrderId, r.RefundAmount })
+                .ToListAsync();
+
+            var refundRequestOrderIds = refundRequestRows
+                .Select(r => r.OrderId)
+                .Distinct()
+                .ToList();
+
+            if (refundRequestOrderIds.Count > 0)
+            {
+                var missingOrderIds = refundRequestOrderIds
+                    .Where(id => refundedOrders.All(o => o.Id != id))
+                    .ToList();
+                if (missingOrderIds.Count > 0)
+                {
+                    var extraOrders = await _context.Orders
+                        .AsNoTracking()
+                        .Include(o => o.OrderItems)
+                        .Where(o => missingOrderIds.Contains(o.Id))
+                        .ToListAsync();
+                    refundedOrders.AddRange(extraOrders);
+                }
+            }
+
+            // Stok iade logları — kısmi iade satır detayı için
+            var refundInventoryLogs = await _context.InventoryLogs
+                .AsNoTracking()
+                .Where(l =>
+                    l.CreatedAt >= fromUtc
+                    && l.CreatedAt < toUtcExclusive
+                    && l.Action == LocalInventoryPolicy.LogActionRefund)
+                .ToListAsync();
+
+            var refundAgg = new Dictionary<int, (decimal Quantity, decimal Amount, HashSet<int> OrderIds)>();
+
+            void AddRefund(int productId, decimal qty, decimal amount, int? orderId)
+            {
+                if (productId <= 0 || qty <= 0) return;
+                if (!refundAgg.TryGetValue(productId, out var current))
+                {
+                    current = (0m, 0m, new HashSet<int>());
+                }
+
+                current.Quantity += qty;
+                current.Amount += amount;
+                if (orderId.HasValue && orderId.Value > 0)
+                {
+                    current.OrderIds.Add(orderId.Value);
+                }
+
+                refundAgg[productId] = current;
+            }
+
+            foreach (var order in refundedOrders)
+            {
+                var isFullRefund = order.Status == OrderStatus.Refunded;
+                foreach (var item in order.OrderItems ?? Enumerable.Empty<OrderItem>())
+                {
+                    // Kısmi iadede stok logu varsa satırları oradan al; yoksa tüm kalemleri göster
+                    if (!isFullRefund && refundInventoryLogs.Count > 0)
+                    {
+                        continue;
+                    }
+
+                    var qty = Math.Abs(item.Quantity);
+                    AddRefund(item.ProductId, qty, item.UnitPrice * qty, order.Id);
+                }
+            }
+
+            foreach (var log in refundInventoryLogs)
+            {
+                var qty = Math.Abs(log.Quantity);
+                int? orderId = null;
+                if (int.TryParse(log.ReferenceId, out var parsedOrderId))
+                {
+                    orderId = parsedOrderId;
+                }
+
+                // Aynı siparişte tam iade satırları zaten eklendiyse çift sayımı azalt
+                if (orderId.HasValue
+                    && refundedOrders.Any(o => o.Id == orderId.Value && o.Status == OrderStatus.Refunded)
+                    && refundAgg.ContainsKey(log.ProductId))
+                {
+                    continue;
+                }
+
+                AddRefund(log.ProductId, qty, 0m, orderId);
+            }
+
+            var refundProductIds = refundAgg.Keys.ToList();
+            var refundNameMap = refundProductIds.Count == 0
+                ? new Dictionary<int, string>()
+                : await _context.Products
+                    .AsNoTracking()
+                    .Where(p => refundProductIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => p.Name);
+
+            var refundedProducts = refundAgg
+                .Select(kvp => new
+                {
+                    productId = kvp.Key,
+                    productName = refundNameMap.TryGetValue(kvp.Key, out var name) ? name : $"Ürün #{kvp.Key}",
+                    quantity = (int)Math.Round(kvp.Value.Quantity),
+                    amount = Math.Round(kvp.Value.Amount, 2),
+                    orderCount = kvp.Value.OrderIds.Count
                 })
                 .OrderByDescending(x => x.quantity)
-                .Take(5)
+                .ThenByDescending(x => x.amount)
+                .Take(20)
                 .ToList();
+
+            var refundAmountTotal = refundRequestRows.Sum(r => r.RefundAmount);
+            if (refundAmountTotal <= 0)
+            {
+                refundAmountTotal = refundAgg.Values.Sum(v => v.Amount);
+            }
 
             return Ok(new
             {
@@ -95,7 +253,15 @@ namespace ECommerce.API.Controllers.Admin
                 netOrdersCount = saleOrders.Count,
                 revenue,
                 itemsSold,
-                topProducts
+                soldProductCount = productStats.Count,
+                zeroSalesProductCount,
+                activeProductCount,
+                refundOrdersCount = refundedOrders.Count,
+                refundAmountTotal,
+                refundedItemCount = refundedProducts.Sum(x => x.quantity),
+                topProducts,
+                leastProducts,
+                refundedProducts
             });
         }
 

@@ -1,227 +1,96 @@
-# 🏋️ Ağırlık Farkına Göre Ödeme Sistemi
+# Ağırlık Farkına Göre Ödeme Sistemi
 
-## 📋 Genel Bakış
+> **OTORİTER POLİTİKA (11 Temmuz 2026 — önceki “%20 marjlı PreAuth” açıklamalarının yerine geçer)**
+>
+> - **3DS tutarı = sepet `FinalPrice`** (marj/şişirme yok).
+> - KG ürünlerde işlem tipi config ile belirlenir: `PosnetUseAuthForWeightBasedItems`.
+>   - `true` (VpnTest/Dev): **Auth** → tartı sonrası **Capt ≤ Auth × 1.20**
+>   - `false` (Production varsayılan): **Sale** → checkout’ta tam çekim; tartı farkı karttan otomatik çekilemez (manuel tahsilat).
+> - Manuel tartı **yalnız `Preparing`** aşamasında (`WeightBasedWeighingGate`).
+> - Sipariş onayı **Admin → Siparişler**; Ağırlık Raporları panelinde **Onayla yok**.
+> - Tek banka çekim yolu: `PaymentCaptureService.CapturePaymentAsync` (teslimatta).
+> - Politika tek kaynak: `WeightBasedCapturePolicy`, akış ayrımı: `WeightBasedPaymentFlowResolver`.
 
-Bu sistem, kg/gram bazlı satılan ürünler için kurye tesliminde gerçek tartı ile tahmini ağırlık arasındaki farka göre ek ödeme veya iade işlemlerini otomatik olarak yönetir.
+## Genel Bakış
 
-## 🔄 İş Akışı
+Kg/gram ürünlerde tahmini ağırlık ile gerçek tartı farkına göre sipariş tutarı güncellenir; banka tahsilatı Auth→Capt veya Sale+manuel akışına göre yapılır.
+
+## İş Akışı (hedef)
 
 ```
-[Sipariş] → [Tahmini Ağırlık] → [Kurye Tartımı] → [Fark Hesaplama] → [Admin Onay?] → [Ödeme İşlemi]
+[Checkout FinalPrice]
+    → [3DS Amount = FinalPrice]
+    → [Auth (VpnTest) | Sale (Prod)]
+    → [Admin Onayla → Confirmed]
+    → [Hazırlamaya Başla → Preparing]
+    → [Ağırlık Raporları: tartı gir]
+    → [Hazır → Kurye → Teslim]
+    → [Capt final | Sale’de fark varsa manuel]
 ```
 
 ### 1. Sipariş Oluşturma
 
-- Müşteri kg/gram bazlı ürün siparişi verir
-- Sistem tahmini ağırlık üzerinden fiyat hesaplar
-- %20 marjlı ön provizyon (pre-auth) alınır
+- Tahmini ağırlık üzerinden fiyat hesaplanır
+- `PreAuthAmount = FinalPrice` (marjsız)
+- `TolerancePercentage = 0.20` yalnız Capt aşımı için saklanır
 
-### 2. Kurye Tartım İşlemi
+### 2. Tartım (Preparing)
 
-- Kurye teslimat sırasında ürünü tartar
-- Gerçek ağırlık sisteme girilir
-- Otomatik fark hesaplaması yapılır
+- Admin/mağaza görevlisi gerçek gramı girer (`PATCH .../manual-weight`)
+- `ActualPrice` / `PriceDifference` / `FinalAmount` güncellenir
+- Auth×1.20 aşımı veya Sale farkı → UI’da manuel tahsilat uyarısı
 
-### 3. Fark Değerlendirme
+### 3. Ödeme Finalizasyonu
 
-- **%20'nin altı veya 50 TL altı**: Otomatik işlem
-- **%20'nin üzeri veya 50 TL üzeri**: Admin onayı gerekir
+| Akış | Davranış |
+|------|----------|
+| **AuthCapture** | Teslimatta `Capt(min(final, Auth×1.20))`; aşım → `DeliveryPaymentPending` |
+| **SaleImmediate** | Checkout’ta çekilmiş; fazla gram → manuel tahsilat; Capt overage yok |
 
-### 4. Ödeme İşlemi
+### 4. Admin Onayı
 
-- **Fazla geldiyse**: Müşteriden ek ödeme
-- **Eksik geldiyse**: Müşteriye iade
+- Sipariş onayı: Admin sipariş ekranı
+- WeightReport `/approve` kapalı (çift çekim önlemi)
+- Auth×1.20 üstü / Sale farkı: `DeliveryPaymentPending` + admin müdahalesi
 
-## 📊 Durum Akışı (Status Flow)
+## Durum Akışı
 
 ```
-PendingWeighing (Tartım Bekliyor)
-    ↓
-Weighed (Tartıldı)
-    ↓
-┌───────────────────────────────────────────┐
-│ Fark > %20 veya > 50 TL?                  │
-├───────────────────────────────────────────┤
-│ HAYIR                      │ EVET         │
-│   ↓                        │   ↓          │
-│ NoDifference               │ PendingAdmin │
-│ PendingAdditionalPayment   │   Approval   │
-│ PendingRefund              │   ↓          │
-│   ↓                        │ ┌────────┐   │
-│   ↓                        │ │Onayla? │   │
-│   ↓                        │ └────────┘   │
-│   ↓                        │ EVET │ HAYIR │
-│   ↓                        │   ↓  │   ↓   │
-│   ↓                        │ Eski │ Reject│
-│   ↓                        │Durum │ ByAdm │
-└───────────────────────────────────────────┘
-    ↓
-Completed / Failed
+KG Auth:  Pending → PreAuthorized → Confirmed → Preparing → Ready → … → Delivered (+Capt)
+KG Sale:  Pending → Paid → Confirmed → Preparing → Ready → … → Delivered (Sale; fark manuel)
 ```
 
-## 🛠️ API Endpoints
+**WeightAdjustmentStatus:** `PendingWeighing` → tartı sonrası `Weighed` / `NoDifference` / `PendingAdditionalPayment` / …
 
-### Kurye İşlemleri
+## API (canlı yol)
 
-| Method | Endpoint                                      | Açıklama               |
-| ------ | --------------------------------------------- | ---------------------- |
-| POST   | `/api/courier/weight-report`                  | Yeni tartım bildirimi  |
-| GET    | `/api/courier/pending-weights`                | Bekleyen tartımlar     |
-| GET    | `/api/courier/orders/{orderId}/weight-status` | Sipariş ağırlık durumu |
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| PATCH | `/api/weight-adjustment/admin/orders/{orderId}/items/{orderItemId}/manual-weight` | Preparing’de tartı |
+| POST | `/api/store-attendant/orders/{id}/confirm` | Sipariş onayla |
+| POST | `/api/store-attendant/orders/{id}/start-preparing` | Hazırlamaya başla |
+| POST | `/api/store-attendant/orders/{id}/mark-ready` | Hazır |
 
-### Admin İşlemleri
+## Frontend
 
-| Method | Endpoint                                     | Açıklama                 |
-| ------ | -------------------------------------------- | ------------------------ |
-| GET    | `/api/admin/weight-adjustments`              | Tüm ağırlık ayarlamaları |
-| GET    | `/api/admin/weight-adjustments/pending`      | Onay bekleyenler         |
-| POST   | `/api/admin/weight-adjustments/{id}/approve` | Onayla                   |
-| POST   | `/api/admin/weight-adjustments/{id}/reject`  | Reddet                   |
+- `/admin/weight-management` → `StoreAttendantDashboard` (`weightOnly`) — yalnız Preparing tartı
+- `/admin/orders` — Onayla / Hazırlamaya Başla
 
-### Müşteri İşlemleri
-
-| Method | Endpoint                                    | Açıklama            |
-| ------ | ------------------------------------------- | ------------------- |
-| GET    | `/api/customer/weight-adjustments`          | Benim ayarlamalarım |
-| POST   | `/api/customer/weight-adjustments/{id}/pay` | Ek ödeme yap        |
-
-## 📱 Frontend Bileşenleri
-
-### Kurye Paneli (`/kurye/agirlik-raporu`)
-
-- Tartım giriş formu
-- Bekleyen tartımlar listesi
-- Fark önizleme
-
-### Admin Paneli (`/admin/agirlik-yonetimi`)
-
-- Onay bekleyen işlemler
-- İstatistik kartları
-- Detay modalı
-
-### Müşteri Sayfası
-
-- Sipariş detayında ağırlık farkı bilgisi
-- Ek ödeme butonu (gerekirse)
-
-## 🔧 Konfigürasyon
-
-`appsettings.json`:
+## Konfigürasyon
 
 ```json
 {
-  "WeightAdjustment": {
-    "AutoApproveThresholdPercent": 20.0,
-    "AutoApproveThresholdAmount": 50.0,
-    "PreAuthMarginPercent": 20.0,
-    "PreAuthExpiryHours": 48
+  "PaymentSettings": {
+    "PosnetUseAuthForWeightBasedItems": true
   }
 }
 ```
 
-## 💾 Veritabanı Yapısı
+- VpnTest / Development: `true`
+- Production: banka Auth yetkisi teyit edilmeden `false` bırakın
 
-### WeightAdjustments Tablosu
+## İlgili kod
 
-```sql
-CREATE TABLE WeightAdjustments (
-    Id INT PRIMARY KEY IDENTITY,
-    OrderId INT NOT NULL,
-    OrderItemId INT NOT NULL,
-    ProductId INT NOT NULL,
-    ProductName NVARCHAR(255),
-
-    -- Ağırlık Bilgileri
-    WeightUnit INT DEFAULT 1,
-    EstimatedWeight DECIMAL(18,4) NOT NULL,
-    ActualWeight DECIMAL(18,4),
-    WeightDifference DECIMAL(18,4),
-    DifferencePercent DECIMAL(18,4),
-
-    -- Fiyat Bilgileri
-    PricePerUnit DECIMAL(18,2) NOT NULL,
-    EstimatedPrice DECIMAL(18,2) NOT NULL,
-    ActualPrice DECIMAL(18,2),
-    PriceDifference DECIMAL(18,2),
-
-    -- Durum
-    Status INT NOT NULL DEFAULT 1,
-
-    -- Kurye Bilgileri
-    CourierId NVARCHAR(450),
-    CourierName NVARCHAR(256),
-    WeighedAt DATETIME2,
-
-    -- Admin Bilgileri
-    AdminId NVARCHAR(450),
-    AdminName NVARCHAR(256),
-    AdminComment NVARCHAR(1000),
-    AdminActionAt DATETIME2,
-
-    -- Ödeme Bilgileri
-    PaymentStatus INT DEFAULT 0,
-    PaymentTransactionId NVARCHAR(256),
-    PaymentCompletedAt DATETIME2,
-
-    -- Audit
-    CreatedAt DATETIME2 DEFAULT GETUTCDATE(),
-    UpdatedAt DATETIME2,
-    IsActive BIT DEFAULT 1,
-
-    FOREIGN KEY (OrderId) REFERENCES Orders(Id),
-    FOREIGN KEY (OrderItemId) REFERENCES OrderItems(Id)
-);
-```
-
-## 🧪 Test Senaryoları
-
-### Senaryo 1: Normal Fark (Otomatik)
-
-1. Sipariş: 2 kg elma = 50 TL
-2. Gerçek: 2.1 kg elma = 52.50 TL
-3. Fark: %5, +2.50 TL → Otomatik ek ödeme
-
-### Senaryo 2: Büyük Fark (Admin Onay)
-
-1. Sipariş: 1 kg bal = 200 TL
-2. Gerçek: 1.5 kg bal = 300 TL
-3. Fark: %50, +100 TL → Admin onayı gerekli
-
-### Senaryo 3: Eksik Geldiyse
-
-1. Sipariş: 3 kg portakal = 45 TL
-2. Gerçek: 2.8 kg portakal = 42 TL
-3. Fark: %-7, -3 TL → Otomatik iade
-
-## 📊 Raporlama
-
-Admin panelinde mevcut istatistikler:
-
-- Toplam ayarlama sayısı
-- Bekleyen onay sayısı
-- Günlük/haftalık/aylık fark toplamları
-- Ortalama fark yüzdesi
-
-## 🔒 Güvenlik
-
-- JWT token doğrulama tüm endpoint'lerde zorunlu
-- Kurye endpoint'leri `Courier` rolü gerektirir
-- Admin endpoint'leri `Admin` rolü gerektirir
-- CORS politikaları uygulanır
-
-## 🚀 Deployment Notları
-
-1. Migration çalıştır: `dotnet ef database update`
-2. Seed data'yı kontrol et
-3. Ön provizyon süresi konfigüre et
-4. Test siparişi ver ve akışı doğrula
-
-## 📝 Versiyon Geçmişi
-
-| Versiyon | Tarih     | Değişiklikler |
-| -------- | --------- | ------------- |
-| 1.0.0    | Ocak 2026 | İlk sürüm     |
-
----
-
-**Sorular için:** [Proje Dokümantasyonu](./README.md)
+- `WeightBasedCapturePolicy`, `WeightBasedWeighingGate`, `WeightBasedPaymentFlowResolver`
+- `OrderManager.CheckoutAsync`, `PaymentsControllers.PosnetInitiate3DSecure`
+- `PaymentCaptureService.CapturePaymentAsync`, `CourierOrderManager.MarkDeliveredAsync`

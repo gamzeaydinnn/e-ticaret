@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using ECommerce.Entities.Enums;
 
@@ -9,6 +10,10 @@ namespace ECommerce.Business.Helpers
             new(@"\b\d+(?:[.,]\d+)?\s*(GR|KG|LT|ML|CL|L)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex StandaloneKgPattern =
             new(@"\bKG\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Açık tartımla satılan kategori ipuçları (isimde "KG" olmasa da kg).
+        /// </summary>
         private static readonly string[] VariableWeightCategoryHints =
         {
             "MANAV",
@@ -28,7 +33,68 @@ namespace ECommerce.Business.Helpers
             "SARKUTERI",
             "ŞARKÜTERİ",
             "ZEYTIN",
-            "ZEYTİN"
+            "ZEYTİN",
+            // Kuruyemiş / bakliyat (açık satılan)
+            "KURUYEMIS",
+            "KURUYEMİŞ",
+            "KURU YEMIS",
+            "KURU YEMİŞ",
+            "BAKLIYAT",
+            "BAKLİYAT",
+            "BAHARAT",
+        };
+
+        /// <summary>
+        /// Açık kg/gr ile satılan ürün adı anahtarları (paketli "250 GR" hariç).
+        /// Mikro birimi ADET olsa bile badem/fındık vb. tartılı ürün sayılır.
+        /// </summary>
+        private static readonly string[] VariableWeightNameHints =
+        {
+            "BADEM",
+            "FINDIK",
+            "FINDİK",
+            "FISTIK",
+            "FISTİK",
+            "FISTIG",
+            "FISTIĞ",
+            "CEVIZ",
+            "CEVİZ",
+            "KAJU",
+            "ANTEP",
+            "LEBLEBI",
+            "LEBLEBİ",
+            "KABAK CEKIRDEK",
+            "KABAK ÇEKİRDEK",
+            "AY CEKIRDEK",
+            "AY ÇEKİRDEK",
+            "CEKIRDEK",
+            "ÇEKİRDEK",
+            "KURU UZUM",
+            "KURU ÜZÜM",
+            "KURU INCIR",
+            "KURU İNCİR",
+            "KURU KAYISI",
+            "HURMA",
+            "KIRMIZI PUL",
+            "TOZ BIBER",
+            "TOZ BİBER",
+            "KIMYON",
+            "KİMYON",
+            "SUMAC",
+            "SUMÁK",
+            "SUMAK",
+            "NANE",
+            "REZEN",
+            "NOHUT",
+            "MERCIMEK",
+            "MERCİMEK",
+            "FASULYE",
+            "BÖRÜLCE",
+            "BULGUR",
+            "PIRINC",
+            "PİRİNÇ",
+            "IRMIK",
+            "İRMİK",
         };
 
         /// <summary>
@@ -37,10 +103,6 @@ namespace ECommerce.Business.Helpers
         /// <see cref="WeightBasedProductResolver"/>'dan farkı: mevcut (muhtemelen bayat) bayrağa GÜVENMEZ;
         /// kararı yalnızca kaynak sistemin yapısal verisinden (WeightUnit) ve üründen üretir. Böylece bir
         /// ürün Mikro'da kg→adet değişirse bayrak doğru biçimde 'false'a güncellenir.
-        ///
-        /// NEDEN GEREKLİ: Eski popülasyon yalnız isim-heuristiğini (<see cref="IsVariableWeightKgProduct"/>)
-        /// kullanıyordu; Mikro birimi KG (WeightUnit=Kilogram) olsa bile adında "KG" token'ı geçmeyen
-        /// ürünleri yanlışlıkla 'adet' işaretliyor ve PricePerUnit'i 0 bırakıyordu.
         ///
         /// Kural: Paketli isim sinyali ("500 GR"/"ADET") yoksa VE (kütle birimi Kilogram/Gram VEYA
         /// isim+kategori heuristiği doğruysa) → tartılı (kg).
@@ -63,11 +125,6 @@ namespace ECommerce.Business.Helpers
         /// <summary>
         /// İsimde sabit gramaj/hacim ("500 GR", "1 LT") veya "ADET" geçiyor mu?
         /// true → ürün paketli/adet bazlıdır ve değişken ağırlıklı (kg) DEĞİLDİR.
-        ///
-        /// NEDEN: <see cref="WeightBasedProductResolver"/>, yanlış set edilmiş WeightUnit/PricePerUnit
-        /// gibi yapısal alanların paketli bir ürünü kg'ya çevirmesini engellemek için bu negatif
-        /// sinyali yapısal tahminlerden ÖNCE kullanır. Regex'ler tek noktada (bu sınıfta) tutulduğundan
-        /// kural çoğaltması (spagetti) önlenir.
         /// </summary>
         public static bool HasPackagedNameSignal(string? productName)
         {
@@ -83,22 +140,14 @@ namespace ECommerce.Business.Helpers
 
         /// <summary>
         /// İsim + birim + kategori bilgisine dayalı HEURİSTİK kg tespiti.
-        ///
-        /// ⚠️ KULLANIM: Çalışma zamanında kg tespiti için doğrudan bu metodu ÇAĞIRMAYIN.
-        /// Bunun yerine tek doğruluk kaynağı olan <see cref="WeightBasedProductResolver"/> kullanın;
-        /// o, açık yapısal verilere (IsWeightBased/WeightUnit/PricePerUnit) öncelik verir ve yalnızca
-        /// yapısal veri yoksa SON ÇARE olarak bu heuristiğe düşer.
-        ///
-        /// Bu metodun meşru doğrudan kullanım yerleri yalnızca: (1) <see cref="WeightBasedProductResolver"/>
-        /// içindeki fallback, (2) Mikro senkron/import katmanının <c>Product.IsWeightBased</c> bayrağını
-        /// ilk kez doldurması (popülasyon).
+        /// Çalışma zamanı için <see cref="WeightBasedProductResolver"/> kullanın.
         /// </summary>
         public static bool IsVariableWeightKgProduct(
             string? productName,
             WeightUnit weightUnit,
             string? categoryNameOrCode)
         {
-            var normalizedName = (productName ?? string.Empty).Trim();
+            var normalizedName = NormalizeForHintMatch(productName);
             if (string.IsNullOrWhiteSpace(normalizedName))
             {
                 return false;
@@ -109,15 +158,23 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            var normalizedCategory = (categoryNameOrCode ?? string.Empty).Trim().ToUpperInvariant();
+            var normalizedCategory = NormalizeForHintMatch(categoryNameOrCode);
             if (!string.IsNullOrWhiteSpace(normalizedCategory)
-                && VariableWeightCategoryHints.Any(h => normalizedCategory.Contains(h)))
+                && VariableWeightCategoryHints.Any(h =>
+                    normalizedCategory.Contains(NormalizeForHintMatch(h))))
             {
-                // Meyve/sebze/kasap gibi kategorilerde isimde "KG" olmasa da tartılı satılır.
+                // Meyve/sebze/kasap/kuruyemiş gibi kategorilerde isimde "KG" olmasa da tartılı satılır.
                 return true;
             }
 
-            if (!StandaloneKgPattern.IsMatch(normalizedName))
+            // Badem, fındık vb. — kategori "Atıştırmalık" olsa da açık tartımlıdır.
+            if (VariableWeightNameHints.Any(h =>
+                    normalizedName.Contains(NormalizeForHintMatch(h))))
+            {
+                return true;
+            }
+
+            if (!StandaloneKgPattern.IsMatch(productName ?? string.Empty))
             {
                 return false;
             }
@@ -137,7 +194,28 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            return VariableWeightCategoryHints.Any(normalizedCategory.Contains);
+            return VariableWeightCategoryHints.Any(h =>
+                normalizedCategory.Contains(NormalizeForHintMatch(h)));
+        }
+
+        /// <summary>
+        /// Türkçe karakterleri karşılaştırma için normalize eder (İ→I, Ş→S, …).
+        /// </summary>
+        private static string NormalizeForHintMatch(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var upper = value.Trim().ToUpper(CultureInfo.GetCultureInfo("tr-TR"));
+            return upper
+                .Replace('İ', 'I')
+                .Replace('Ş', 'S')
+                .Replace('Ğ', 'G')
+                .Replace('Ü', 'U')
+                .Replace('Ö', 'O')
+                .Replace('Ç', 'C');
         }
     }
 }

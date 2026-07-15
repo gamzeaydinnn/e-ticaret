@@ -722,22 +722,36 @@ export default function AdminHomeBlocks() {
             Ana Sayfa Blokları
           </h4>
           <p className="text-muted mb-0 small">
-            Ana sayfada görünen poster + ürün bloklarını yönetin
+            Ana sayfada görünen poster + ürün bloklarını yönetin.
+            <span className="d-none d-md-inline">
+              {" "}
+              <strong>Düzenle</strong> ayarları değiştirir ·{" "}
+              <strong>Gizle/Göster</strong> yayını açıp kapatır ·{" "}
+              <strong>Sil</strong> bloğu kaldırır.
+            </span>
           </p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="d-flex gap-2 flex-wrap">
           <button
-            className="btn btn-outline-secondary"
+            type="button"
+            className="btn btn-outline-secondary d-inline-flex align-items-center gap-1"
             onClick={fetchBlocks}
             disabled={loading}
+            title="Blok listesini yenile"
           >
-            <i className={`fas fa-sync-alt ${loading ? "fa-spin" : ""}`}></i>
+            <i
+              className={`fas fa-sync-alt${loading ? " fa-spin" : ""}`}
+              aria-hidden="true"
+            ></i>
+            Listeyi Yenile
           </button>
           <button
-            className="btn btn-primary d-flex align-items-center gap-2"
+            type="button"
+            className="btn btn-primary d-inline-flex align-items-center gap-2"
             onClick={openCreateModal}
+            title="Yeni ana sayfa bloğu oluştur"
           >
-            <i className="fas fa-plus"></i>
+            <i className="fas fa-plus" aria-hidden="true"></i>
             Yeni Blok Ekle
           </button>
         </div>
@@ -812,7 +826,7 @@ export default function AdminHomeBlocks() {
                     <th style={{ width: "140px" }}>Tip</th>
                     <th style={{ width: "100px" }}>Ürün Sayısı</th>
                     <th style={{ width: "100px" }}>Durum</th>
-                    <th style={{ width: "180px" }}>İşlemler</th>
+                    <th style={{ minWidth: "280px" }}>İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -896,39 +910,55 @@ export default function AdminHomeBlocks() {
                           </span>
                         </td>
                         <td>
-                          <div className="btn-group btn-group-sm">
+                          <div className="d-flex flex-wrap gap-1 justify-content-end">
                             <button
-                              className="btn btn-outline-primary"
+                              type="button"
+                              className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
                               onClick={() => openEditModal(block)}
-                              title="Düzenle"
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                              title="Bloğu düzenle"
                             >
-                              <i className="fas fa-edit"></i>
+                              <i className="fas fa-edit" aria-hidden="true"></i>
+                              <span>Düzenle</span>
                             </button>
                             {block.blockType === "manual" && (
                               <button
-                                className="btn btn-info text-white fw-bold"
+                                type="button"
+                                className="btn btn-info btn-sm text-white fw-bold d-inline-flex align-items-center gap-1"
                                 onClick={() => openProductModal(block.id)}
-                                title="Ürünleri Seç/Düzenle - Manuel seçim için gerekli"
+                                style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                                title="Bloğa ürün seç veya düzenle"
                               >
-                                <i className="fas fa-boxes me-1"></i>
-                                Ürün Seç
+                                <i className="fas fa-boxes" aria-hidden="true"></i>
+                                <span>Ürün Seç</span>
                               </button>
                             )}
                             <button
-                              className={`btn ${block.isActive ? "btn-outline-warning" : "btn-outline-success"}`}
+                              type="button"
+                              className={`btn btn-sm d-inline-flex align-items-center gap-1 ${block.isActive ? "btn-outline-warning" : "btn-outline-success"}`}
                               onClick={() => toggleActive(block)}
-                              title={block.isActive ? "Pasif Yap" : "Aktif Yap"}
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                              title={
+                                block.isActive
+                                  ? "Bloğu ana sayfada gizle"
+                                  : "Bloğu ana sayfada göster"
+                              }
                             >
                               <i
                                 className={`fas ${block.isActive ? "fa-eye-slash" : "fa-eye"}`}
+                                aria-hidden="true"
                               ></i>
+                              <span>{block.isActive ? "Gizle" : "Göster"}</span>
                             </button>
                             <button
-                              className="btn btn-outline-danger"
+                              type="button"
+                              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1"
                               onClick={() => handleDelete(block.id)}
-                              title="Sil"
+                              style={{ fontSize: "0.7rem", minHeight: "36px" }}
+                              title="Bloğu sil"
                             >
-                              <i className="fas fa-trash"></i>
+                              <i className="fas fa-trash" aria-hidden="true"></i>
+                              <span>Sil</span>
                             </button>
                           </div>
                         </td>

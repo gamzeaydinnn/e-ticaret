@@ -417,21 +417,18 @@ const findCategoryRuleMatch = (product, rules) => {
 
 
   if (!match && unitLimitCats.some((tok) => pcat.includes(tok))) {
+    // Açık tartımlı kuruyemiş (badem vb.) atıştırmalık kategorisinde bile kg olmalı
+    if (isStrictVariableWeightProduct(product)) {
+      return null;
+    }
 
     match = {
-
       category: "Kategori adedi sınırı",
-
       unit: "adet",
-
       min_quantity: 1,
-
       max_quantity: 5,
-
       step: 1,
-
     };
-
   }
 
 

@@ -164,10 +164,57 @@
   color: #64748b;
 }
 
+.report-product-analysis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.report-product-panel {
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.report-product-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+
+.report-product-panel__hint {
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.report-product-panel--refund {
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 70%);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.report-product-panel td {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .reports-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .report-product-analysis {
+    grid-template-columns: 1fr;
   }
 
   .report-date {

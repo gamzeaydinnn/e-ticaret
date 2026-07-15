@@ -304,14 +304,26 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 return 0;
             }
 
-            // Basit COUNT(*) — tüm veriyi çekmekten çok daha verimli
+            // Basit COUNT(*) — web bayrağı + satış fiyatı > 0 (admin/dashboard ile aynı tanım)
             const string sql = @"
                 SELECT COUNT(*)
-                FROM   STOKLAR
-                WHERE  sto_webe_gonderilecek_fl = 1
-                  AND  ISNULL(sto_iptal, 0) = 0
-                  AND  sto_kod IS NOT NULL
-                  AND  LTRIM(RTRIM(sto_kod)) <> ''";
+                FROM   STOKLAR S
+                WHERE  S.sto_webe_gonderilecek_fl = 1
+                  AND  ISNULL(S.sto_iptal, 0) = 0
+                  AND  S.sto_kod IS NOT NULL
+                  AND  LTRIM(RTRIM(S.sto_kod)) <> ''
+                  AND  EXISTS (
+                        SELECT 1
+                        FROM (
+                            SELECT TOP 1 F.sfiyat_fiyati
+                            FROM STOK_SATIS_FIYAT_LISTELERI F
+                            WHERE F.sfiyat_stokkod = S.sto_kod
+                              AND F.sfiyat_listesirano IN (11, 1)
+                              AND F.sfiyat_fiyati > 0
+                            ORDER BY CASE WHEN F.sfiyat_listesirano = 11 THEN 0 ELSE 1 END,
+                                     F.sfiyat_fiyati DESC
+                        ) PX
+                      )";
 
             try
             {

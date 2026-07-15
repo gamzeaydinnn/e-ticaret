@@ -46,6 +46,25 @@ const WEIGHT_FALLBACK_KEYWORDS = [
   "kiraz",
   "çilek",
   "cilek",
+  // Açık tartımlı kuruyemiş / bakliyat
+  "badem",
+  "fındık",
+  "findik",
+  "fıstık",
+  "fistik",
+  "ceviz",
+  "kaju",
+  "leblebi",
+  "kuruyemiş",
+  "kuruyemis",
+  "çekirdek",
+  "cekirdek",
+  "nohut",
+  "mercimek",
+  "fasulye",
+  "bulgur",
+  "pirinç",
+  "pirinc",
 ];
 
 const PLACEHOLDER_PRODUCT_IMAGE = "/images/placeholder.png";
@@ -662,7 +681,8 @@ const ProductBlockSection = ({
   };
 
   // Block yoksa veya aktif değilse gösterme
-  if (!block || !block.isActive) return null;
+  const blockIsActive = block?.isActive ?? block?.IsActive;
+  if (!block || blockIsActive === false) return null;
 
   // Ürünleri al (camelCase veya PascalCase)
   const rawProducts = block.products || block.Products || [];

@@ -156,7 +156,22 @@ namespace ECommerce.Business.Services.Managers
         public async Task<IEnumerable<HomeProductBlockDto>> GetAllBlocksAsync()
         {
             var blocks = await _repository.GetAllAsync();
-            return blocks.Select(MapToDto);
+            var result = new List<HomeProductBlockDto>();
+
+            foreach (var block in blocks)
+            {
+                var dto = MapToDto(block);
+                // Admin ürün sayısı: storefront filtresi olmadan (fiyat/stok Mikro ile zenginleştirilir)
+                dto.Products = await GetProductsForBlockAsync(
+                    block,
+                    includeAll: true,
+                    onlyInStock: false,
+                    onlyPositivePrice: false,
+                    applyStorefrontFilter: false);
+                result.Add(dto);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -278,6 +293,26 @@ namespace ECommerce.Business.Services.Managers
                 _logger.LogError(ex, "❌ Blok güncellenirken hata: #{Id}", id);
                 throw;
             }
+        }
+
+        public async Task<HomeProductBlockDto?> ToggleBlockActiveAsync(int id)
+        {
+            var block = await _repository.GetByIdAsync(id);
+            if (block == null)
+            {
+                _logger.LogWarning("⚠️ Toggle: blok bulunamadı #{Id}", id);
+                return null;
+            }
+
+            block.IsActive = !block.IsActive;
+            await _repository.UpdateAsync(block);
+
+            _logger.LogInformation(
+                "🔄 Blok durumu değişti: #{Id} → {Status}",
+                id,
+                block.IsActive ? "Aktif" : "Pasif");
+
+            return MapToDto(block);
         }
 
         /// <summary>
@@ -488,19 +523,24 @@ namespace ECommerce.Business.Services.Managers
             switch (block.BlockType.ToLower())
             {
                 case "manual":
-                    // Manuel seçim - HomeBlockProduct tablosundan
-                    return block.BlockProducts
-                        .Where(bp =>
-                            bp.IsActive &&
-                            bp.Product != null &&
-                            bp.Product.IsActive &&
-                            (!onlyInStock || bp.Product.StockQuantity > 0) &&
-                            (!onlyPositivePrice || HasPositiveDisplayPrice(bp.Product)) &&
-                            (!applyStorefrontFilter || StorefrontProductVisibility.IsVisible(bp.Product, mikroVisibleSkus)))
+                {
+                    var manualProducts = block.BlockProducts
+                        .Where(bp => bp.IsActive && bp.Product != null && bp.Product.IsActive)
                         .OrderBy(bp => bp.DisplayOrder)
-                        .Take(maxCount)
-                        .Select((bp, index) => MapProductToDto(bp.Product, index))
+                        .Select(bp => bp.Product!)
                         .ToList();
+
+                    await ApplyMikroPriceAndStockAsync(manualProducts);
+
+                    return manualProducts
+                        .Where(p =>
+                            (!onlyInStock || p.StockQuantity > 0) &&
+                            (!onlyPositivePrice || HasPositiveDisplayPrice(p)) &&
+                            (!applyStorefrontFilter || StorefrontProductVisibility.IsVisible(p, mikroVisibleSkus)))
+                        .Take(maxCount)
+                        .Select((p, index) => MapProductToDto(p, index))
+                        .ToList();
+                }
 
                 case "category":
                     // Kategori bazlı
@@ -553,10 +593,8 @@ namespace ECommerce.Business.Services.Managers
                 .Include(p => p.Category)
                 .Where(p => p.IsActive);
 
-            if (onlyInStock)
-            {
-                query = query.Where(p => p.StockQuantity > 0);
-            }
+            // Stok / fiyat filtresi Mikro zenginleştirmeden SONRA uygulanır
+            // (yerel Product.StockQuantity=0 olsa bile Mikro'da stok olabilir)
 
             switch (blockType.ToLower())
             {
@@ -651,20 +689,40 @@ namespace ECommerce.Business.Services.Managers
                         orderedBestSellerProducts.AddRange(remainingProducts);
                     }
 
-                    var bestSellerResult = onlyPositivePrice
-                        ? orderedBestSellerProducts.Where(HasPositiveDisplayPrice).Take(maxCount).ToList()
-                        : orderedBestSellerProducts;
+                    await ApplyMikroPriceAndStockAsync(orderedBestSellerProducts);
+
+                    var bestSellerResult = orderedBestSellerProducts.AsEnumerable();
+
+                    if (onlyPositivePrice)
+                    {
+                        bestSellerResult = bestSellerResult.Where(HasPositiveDisplayPrice);
+                    }
+
+                    if (onlyInStock)
+                    {
+                        bestSellerResult = bestSellerResult.Where(p => p.StockQuantity > 0);
+                    }
+
+                    var bestSellerList = bestSellerResult.Take(maxCount).ToList();
 
                     return applyStorefrontFilter
-                        ? FilterStorefrontProducts(bestSellerResult, mikroVisibleSkus!, maxCount)
-                        : bestSellerResult;
+                        ? FilterStorefrontProducts(bestSellerList, mikroVisibleSkus!, maxCount)
+                        : bestSellerList;
 
                 default:
                     query = query.OrderBy(p => p.Name);
                     break;
             }
 
-            var products = await query.AsNoTracking().ToListAsync();
+            // Aday havuzunu geniş tut; Mikro stok/fiyat sonrası kes
+            var fetchCount = Math.Max(maxCount * 8, 48);
+            var products = await query.AsNoTracking().Take(fetchCount).ToListAsync();
+            await ApplyMikroPriceAndStockAsync(products);
+
+            if (onlyInStock)
+            {
+                products = products.Where(p => p.StockQuantity > 0).ToList();
+            }
 
             if (onlyPositivePrice)
             {
@@ -678,11 +736,81 @@ namespace ECommerce.Business.Services.Managers
                 : products;
         }
 
+        /// <summary>
+        /// Yerel Product fiyat/stok 0 olsa bile Mikro cache'deki güncel değerleri uygula.
+        /// Ana sayfa bloklarının boş görünmesini engeller.
+        /// </summary>
+        private async Task ApplyMikroPriceAndStockAsync(IList<Product> products)
+        {
+            if (products == null || products.Count == 0)
+            {
+                return;
+            }
+
+            var skus = products
+                .Select(p => p.SKU?.Trim())
+                .Where(sku => !string.IsNullOrWhiteSpace(sku))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (skus.Count == 0)
+            {
+                return;
+            }
+
+            var cacheRows = await _context.MikroProductCaches
+                .AsNoTracking()
+                .Where(c => c.Aktif && skus.Contains(c.StokKod))
+                .Select(c => new
+                {
+                    c.StokKod,
+                    c.SatisFiyati,
+                    c.DepoMiktari,
+                    c.SatilabilirMiktar
+                })
+                .ToListAsync();
+
+            if (cacheRows.Count == 0)
+            {
+                return;
+            }
+
+            var map = cacheRows
+                .GroupBy(c => c.StokKod, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var product in products)
+            {
+                var sku = product.SKU?.Trim();
+                if (string.IsNullOrEmpty(sku) || !map.TryGetValue(sku, out var cache))
+                {
+                    continue;
+                }
+
+                if (cache.SatisFiyati > 0)
+                {
+                    product.Price = cache.SatisFiyati;
+                }
+
+                var mikroStock = (int)Math.Max(
+                    0,
+                    Math.Floor(cache.SatilabilirMiktar > 0 ? cache.SatilabilirMiktar : cache.DepoMiktari));
+                if (mikroStock > 0)
+                {
+                    product.StockQuantity = mikroStock;
+                }
+            }
+        }
+
         private async Task<HashSet<string>> GetMikroVisibleSkusAsync()
         {
             var skus = await _context.MikroProductCaches
                 .AsNoTracking()
-                .Where(c => c.Aktif && c.SatisFiyati > 0 && c.SatilabilirMiktar > 0)
+                .Where(c =>
+                    c.Aktif &&
+                    c.SatisFiyati > 0 &&
+                    (c.SatilabilirMiktar > 0 || c.DepoMiktari > 0))
                 .Select(c => c.StokKod)
                 .ToListAsync();
 

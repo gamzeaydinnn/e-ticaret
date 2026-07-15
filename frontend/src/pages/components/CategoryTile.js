@@ -55,7 +55,7 @@ export default function CategoryTile({ category }) {
 
   const handleClick = (e) => {
     if (!hasSubcategories) {
-      navigate(`/kategoriler/${slug}`);
+      navigate(`/category/${slug}`);
       return;
     }
     if (isMobile) {
@@ -70,7 +70,7 @@ export default function CategoryTile({ category }) {
       if (hasSubcategories) {
         setShowMegamenu(true);
       } else {
-        navigate(`/kategoriler/${slug}`);
+        navigate(`/category/${slug}`);
       }
     }
     if (e.key === "Escape") {
@@ -196,7 +196,7 @@ export default function CategoryTile({ category }) {
                 return (
                   <Link
                     key={sub.id}
-                    to={`/kategoriler/${subSlug}`}
+                    to={`/category/${subSlug}`}
                     onClick={() => setShowMegamenu(false)}
                     style={{
                       textDecoration: "none",

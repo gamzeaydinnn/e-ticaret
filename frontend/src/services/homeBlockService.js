@@ -528,38 +528,12 @@ export const getBlockProducts = async (blockId) => {
  */
 export const toggleBlock = async (blockId) => {
   try {
-    // Önce mevcut bloğu al
-    const block = await getBlockById(blockId);
-    if (!block) {
-      throw new Error("Blok bulunamadı");
-    }
-
-    // isActive durumunu tersine çevir (hem camelCase hem PascalCase desteği)
-    const currentIsActive = block.isActive ?? block.IsActive ?? true;
-    const newIsActive = !currentIsActive;
-
-    // Sadece camelCase property'lerle güncelleme yap (backend camelCase bekliyor)
-    const updateData = {
-      id: blockId,
-      name: block.name || block.Name || "",
-      blockType: block.blockType || block.BlockType || "manual",
-      categoryId: block.categoryId ?? block.CategoryId ?? null,
-      posterImageUrl: block.posterImageUrl || block.PosterImageUrl || "",
-      backgroundColor:
-        block.backgroundColor || block.BackgroundColor || "#00BCD4",
-      displayOrder: block.displayOrder ?? block.DisplayOrder ?? 0,
-      maxProductCount: block.maxProductCount ?? block.MaxProductCount ?? 6,
-      viewAllUrl: block.viewAllUrl || block.ViewAllUrl || "",
-      viewAllText: block.viewAllText || block.ViewAllText || "Tümünü Gör",
-      isActive: newIsActive,
-    };
-
-    const updatedBlock = await updateBlock(blockId, updateData);
-
+    const response = await api.put(`/api/admin/homeblocks/${blockId}/toggle-active`);
+    const isActive = response?.isActive ?? response?.IsActive;
     console.log(
-      `✅ Blok durumu güncellendi: ${blockId} → ${newIsActive ? "Aktif" : "Pasif"}`,
+      `✅ Blok durumu güncellendi: ${blockId} → ${isActive ? "Aktif" : "Pasif"}`,
     );
-    return updatedBlock;
+    return response;
   } catch (error) {
     console.error(`❌ Blok durumu güncellenemedi (${blockId}):`, error);
     throw error;

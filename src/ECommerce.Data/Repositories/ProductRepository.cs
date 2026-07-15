@@ -125,15 +125,28 @@ namespace ECommerce.Data.Repositories
                 .ToListAsync();
         }
         public async Task<IEnumerable<Product>> SearchAsync(string searchTerm)
-{
-    return await _dbSet.Include(p => p.Categories)
-                       .Include(p => p.Brand) // Brand entity’sini yükle
-                       .Where(p => p.IsActive &&
-                                   (p.Name.Contains(searchTerm) ||
-                                    p.Description.Contains(searchTerm) ||
-                                    (p.Brand != null && p.Brand.Name.Contains(searchTerm))))
-                       .ToListAsync();
-}
+        {
+            var term = (searchTerm ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return Array.Empty<Product>();
+            }
+
+            // İçerik + prefix: kısa sorgular için de (ör. "su") indeks dostu değil ama GetAll'dan hızlı
+            return await _dbSet
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Brand)
+                .Where(p => p.IsActive &&
+                            (p.Name.Contains(term) ||
+                             (p.SKU != null && p.SKU.Contains(term)) ||
+                             (p.Description != null && p.Description.Contains(term)) ||
+                             (p.Brand != null && p.Brand.Name.Contains(term)) ||
+                             (p.Category != null && p.Category.Name.Contains(term))))
+                .OrderBy(p => p.Name)
+                .Take(200)
+                .ToListAsync();
+        }
 
 
 
