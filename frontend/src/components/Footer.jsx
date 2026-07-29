@@ -151,11 +151,66 @@ export default function Footer() {
                   ))}
                 </div>
               )}
+              <div className="social-media mt-4">
+                <h6 className="footer-title">Sosyal Medya</h6>
+                <div className="social-links">
+                  {socialMedia.facebook && (
+                    <a
+                      href={socialMedia.facebook}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="social-link"
+                    >
+                      <i className="fab fa-facebook-f"></i>
+                    </a>
+                  )}
+                  {socialMedia.instagram && (
+                    <a
+                      href={socialMedia.instagram}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="social-link"
+                    >
+                      <i className="fab fa-instagram"></i>
+                    </a>
+                  )}
+                  {socialMedia.twitter && (
+                    <a
+                      href={socialMedia.twitter}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="social-link"
+                    >
+                      <i className="fab fa-twitter"></i>
+                    </a>
+                  )}
+                  {socialMedia.youTube && (
+                    <a
+                      href={socialMedia.youTube}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="social-link"
+                    >
+                      <i className="fab fa-youtube"></i>
+                    </a>
+                  )}
+                  {socialMedia.linkedIn && (
+                    <a
+                      href={socialMedia.linkedIn}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="social-link"
+                    >
+                      <i className="fab fa-linkedin-in"></i>
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Categories */}
-          <div className="col-lg-2 col-md-6 footer-col">
+          <div className="col-lg-3 col-md-6 footer-col">
             <h6 className="footer-title">Kategoriler</h6>
             <ul className="footer-links">
               {categories.length > 0 ? (
@@ -298,88 +353,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Eski "Kurumsal" alanı: Markalar kaldirildi, yerine Kategoriler */}
-          <div className="col-lg-2 col-md-6 footer-col footer-col-corporate">
-            <ul className="footer-links">
-              <li>
-                <Link to="/kategoriler" className="footer-link">
-                  Kategoriler
-                </Link>
-              </li>
-              <li>
-                <Link to="/hakkimizda" className="footer-link">
-                  Hakkımızda
-                </Link>
-              </li>
-              <li>
-                <Link to="/vizyon-misyon" className="footer-link">
-                  Vizyonumuz
-                </Link>
-              </li>
-              <li>
-                <Link to="/surdurulebilirlik" className="footer-link">
-                  Sürdürülebilirlik
-                </Link>
-              </li>
-            </ul>
-
-            {/* Social Media */}
-            <div className="social-media mt-4">
-              <h6 className="footer-title">Sosyal Medya</h6>
-              <div className="social-links">
-                {socialMedia.facebook && (
-                  <a
-                    href={socialMedia.facebook}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-facebook-f"></i>
-                  </a>
-                )}
-                {socialMedia.instagram && (
-                  <a
-                    href={socialMedia.instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-instagram"></i>
-                  </a>
-                )}
-                {socialMedia.twitter && (
-                  <a
-                    href={socialMedia.twitter}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-twitter"></i>
-                  </a>
-                )}
-                {socialMedia.youTube && (
-                  <a
-                    href={socialMedia.youTube}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-youtube"></i>
-                  </a>
-                )}
-                {socialMedia.linkedIn && (
-                  <a
-                    href={socialMedia.linkedIn}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="social-link"
-                  >
-                    <i className="fab fa-linkedin-in"></i>
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

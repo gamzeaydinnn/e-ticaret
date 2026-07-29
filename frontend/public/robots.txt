@@ -6,6 +6,8 @@ Disallow: /kurumsal
 Disallow: /markalar
 Disallow: /media
 Disallow: /medya
+Disallow: /basin-kiti
+Disallow: /product/dececco
 Disallow: /admin
 Disallow: /courier
 Disallow: /dispatch

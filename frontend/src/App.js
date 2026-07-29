@@ -108,7 +108,6 @@ import Feedback from "./pages/Feedback.jsx";
 import HelpCenter from "./pages/HelpCenter.jsx";
 import Home from "./pages/Home";
 import PaymentOptions from "./pages/PaymentOptions.jsx";
-import PressKit from "./pages/PressKit.jsx";
 import Product from "./pages/Product";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword.jsx";
@@ -906,7 +905,14 @@ function App() {
         <Route path="/vizyonumuz" element={<Navigate to="/vizyon-misyon" replace />} />
         <Route path="/media" element={<Navigate to="/" replace />} />
         <Route path="/medya" element={<Navigate to="/" replace />} />
+        <Route path="/basin-kiti" element={<Navigate to="/" replace />} />
         <Route path="/markalar" element={<Navigate to="/kategoriler" replace />} />
+        {/* Eski Google sitelink / kalkmis urun URL'leri */}
+        <Route path="/product/dececco-special" element={<Navigate to="/" replace />} />
+        <Route
+          path="/product/dececco-special-patatesli-gnocchi"
+          element={<Navigate to="/" replace />}
+        />
         {/* Destek / Bilgi sayfaları */}
         <Route path="/yardim" element={<HelpCenter />} />
         <Route path="/iletisim" element={<Contact />} />
@@ -920,7 +926,6 @@ function App() {
         <Route path="/hakkimizda" element={<About />} />
         <Route path="/vizyon-misyon" element={<VisionMission />} />
         <Route path="/kariyer" element={<Career />} />
-        <Route path="/basin-kiti" element={<PressKit />} />
         <Route path="/surdurulebilirlik" element={<Sustainability />} />
         <Route path="/gizlilik-politikasi" element={<PrivacyPolicy />} />
         <Route path="/kullanim-sartlari" element={<TermsOfUse />} />
