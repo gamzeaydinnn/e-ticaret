@@ -1,5 +1,13 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Disallow: /tarif
+Disallow: /tarifler
+Disallow: /kurumsal
+Disallow: /markalar
+Disallow: /media
+Disallow: /medya
+Disallow: /admin
+Disallow: /courier
+Disallow: /dispatch
 
 Sitemap: https://golkoygurme.com.tr/sitemap.xml

@@ -100,12 +100,13 @@ RUN echo 'server { \
     } \
     \
     # Google sitelink / eski SEO URL'leri -> dogru sayfalar (301) \
-    location = /kurumsal { return 301 /hakkimizda; } \
+    location = /kurumsal { return 301 /; } \
     location = /vizyonumuz { return 301 /vizyon-misyon; } \
-    location = /media { return 301 /basin-kiti; } \
-    location = /medya { return 301 /basin-kiti; } \
-    location = /tarifler { return 301 /tarif; } \
-    location = /markalar { return 301 /campaigns; } \
+    location = /media { return 301 /; } \
+    location = /medya { return 301 /; } \
+    location = /tarifler { return 301 /; } \
+    location ~ ^/tarif(/|$) { return 301 /; } \
+    location = /markalar { return 301 /kategoriler; } \
     \
     # Favicon / marka ikonlari - eski React ikonu cache'te kalmasin \
     location = /favicon.ico { \

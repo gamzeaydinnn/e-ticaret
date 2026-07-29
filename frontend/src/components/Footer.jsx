@@ -298,10 +298,15 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Corporate */}
+          {/* Bilgi */}
           <div className="col-lg-2 col-md-6 footer-col footer-col-corporate">
-            <h6 className="footer-title">Kurumsal</h6>
+            <h6 className="footer-title">Keşfet</h6>
             <ul className="footer-links">
+              <li>
+                <Link to="/kategoriler" className="footer-link">
+                  Kategoriler
+                </Link>
+              </li>
               <li>
                 <Link to="/hakkimizda" className="footer-link">
                   Hakkımızda
@@ -310,21 +315,6 @@ export default function Footer() {
               <li>
                 <Link to="/vizyon-misyon" className="footer-link">
                   Vizyonumuz
-                </Link>
-              </li>
-              <li>
-                <Link to="/basin-kiti" className="footer-link">
-                  Media
-                </Link>
-              </li>
-              <li>
-                <Link to="/tarif" className="footer-link">
-                  Tarifler
-                </Link>
-              </li>
-              <li>
-                <Link to="/campaigns" className="footer-link">
-                  Markalar
                 </Link>
               </li>
               <li>

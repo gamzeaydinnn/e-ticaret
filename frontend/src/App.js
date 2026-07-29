@@ -98,6 +98,7 @@ import CampaignDetail from "./pages/CampaignDetail.jsx";
 import Campaigns from "./pages/Campaigns.jsx";
 import Career from "./pages/Career.jsx";
 import Category from "./pages/Category";
+import CategoriesPage from "./pages/CategoriesPage.jsx";
 import DiscountedProductsPage from "./pages/DiscountedProductsPage";
 import CollectionPage from "./pages/CollectionPage"; // Koleksiyon/Blok Ürün Sayfası
 import ComparePage from "./pages/ComparePage";
@@ -110,7 +111,6 @@ import PaymentOptions from "./pages/PaymentOptions.jsx";
 import PressKit from "./pages/PressKit.jsx";
 import Product from "./pages/Product";
 import Profile from "./pages/Profile";
-import RecipePage from "./pages/RecipePage"; // Şef Tavsiyesi Tarif Sayfası
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Returns from "./pages/Returns.jsx";
 import SearchPage from "./pages/SearchPage";
@@ -897,16 +897,16 @@ function App() {
         />
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
-        {/* Şef Tavsiyesi / Yemek Tarifi Sayfası */}
-        <Route path="/tarif" element={<RecipePage />} />
-        <Route path="/tarif/:id" element={<RecipePage />} />
-        <Route path="/tarifler" element={<Navigate to="/tarif" replace />} />
-        {/* Google sitelink / eski SEO URL yönlendirmeleri */}
-        <Route path="/kurumsal" element={<Navigate to="/hakkimizda" replace />} />
+        {/* Eski tarif / Google sitelink URL'leri — sitede olmayan içerik yok */}
+        <Route path="/tarif" element={<Navigate to="/" replace />} />
+        <Route path="/tarif/:id" element={<Navigate to="/" replace />} />
+        <Route path="/tarifler" element={<Navigate to="/" replace />} />
+        <Route path="/kurumsal" element={<Navigate to="/" replace />} />
+        <Route path="/kategoriler" element={<CategoriesPage />} />
         <Route path="/vizyonumuz" element={<Navigate to="/vizyon-misyon" replace />} />
-        <Route path="/media" element={<Navigate to="/basin-kiti" replace />} />
-        <Route path="/medya" element={<Navigate to="/basin-kiti" replace />} />
-        <Route path="/markalar" element={<Navigate to="/campaigns" replace />} />
+        <Route path="/media" element={<Navigate to="/" replace />} />
+        <Route path="/medya" element={<Navigate to="/" replace />} />
+        <Route path="/markalar" element={<Navigate to="/kategoriler" replace />} />
         {/* Destek / Bilgi sayfaları */}
         <Route path="/yardim" element={<HelpCenter />} />
         <Route path="/iletisim" element={<Contact />} />
@@ -2034,123 +2034,6 @@ function HomePage() {
           </div>
         </section>
       ) : null}
-
-      {/* ========== ŞEF ÖNERİSİ SECTION ========== */}
-      {recipeBanners.length > 0 && (
-        <section
-          className="recipe-section py-4"
-          style={{
-            background: "#f8f9fa",
-          }}
-        >
-          <div className="container-fluid px-4" style={{ maxWidth: "1100px" }}>
-            <div className="recipe-section-header mb-2">
-              <h3
-                className="fw-bold mb-0"
-                style={{
-                  fontSize: "1.5rem",
-                  color: "#333",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                Şef Önerisi
-                <span
-                  className="badge"
-                  style={{
-                    backgroundColor: "#10b981",
-                    color: "white",
-                    fontSize: "0.6rem",
-                    fontWeight: "600",
-                    padding: "3px 8px",
-                    borderRadius: "10px",
-                  }}
-                >
-                  YENİ
-                </span>
-              </h3>
-            </div>
-
-            <div
-              className="recipe-grid"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                justifyContent: "center",
-                gap: "16px",
-                maxWidth: "1100px",
-                margin: "0 auto",
-              }}
-            >
-              {recipeBanners.slice(0, 4).map((recipe) => (
-                <div
-                  key={recipe.id}
-                  className="recipe-card"
-                  style={{
-                    borderRadius: "16px",
-                    overflow: "hidden",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-                    transition: "transform 0.3s ease, box-shadow 0.3s ease",
-                    cursor: "pointer",
-                    backgroundColor: "#fff",
-                    position: "relative",
-                    flex: "1 1 280px",
-                    maxWidth: "500px",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-4px)";
-                    e.currentTarget.style.boxShadow =
-                      "0 8px 24px rgba(0,0,0,0.12)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)";
-                    e.currentTarget.style.boxShadow =
-                      "0 4px 12px rgba(0,0,0,0.08)";
-                  }}
-                  onClick={() =>
-                    recipe.link && (window.location.href = recipe.link)
-                  }
-                >
-                  <BannerMedia
-                    src={recipe.image}
-                    alt={recipe.title || "Şef Önerisi"}
-                    className="recipe-card-media"
-                    style={{
-                      width: "100%",
-                      height: "140px",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                    onError={(e) => {
-                      if (e?.target?.tagName === "IMG") {
-                        e.target.src = "/images/placeholder.png";
-                      }
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Mobil responsive */}
-            <style>{`
-              @media (max-width: 576px) {
-                .recipe-grid {
-                  gap: 8px !important;
-                  max-width: 100% !important;
-                }
-                .recipe-card img,
-                .recipe-card video {
-                  height: 110px !important;
-                }
-                .recipe-card {
-                  border-radius: 10px !important;
-                }
-              }
-            `}</style>
-          </div>
-        </section>
-      )}
 
       {/* Features Section - 4 Özellik Kartları */}
       <section className="features-section py-5">
