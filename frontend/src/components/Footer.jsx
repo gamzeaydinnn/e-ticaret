@@ -209,10 +209,19 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Categories */}
+          {/* Categories — eski "Markalar" yerine Kategoriler */}
           <div className="col-lg-3 col-md-6 footer-col">
-            <h6 className="footer-title">Kategoriler</h6>
+            <h6 className="footer-title">
+              <Link to="/kategoriler" className="footer-link text-white">
+                Kategoriler
+              </Link>
+            </h6>
             <ul className="footer-links">
+              <li>
+                <Link to="/kategoriler" className="footer-link">
+                  Tüm Kategoriler
+                </Link>
+              </li>
               {categories.length > 0 ? (
                 categories.map((category) => (
                   <li key={category.id || category.slug || category.name}>
@@ -234,6 +243,16 @@ export default function Footer() {
               <li>
                 <Link to="/favorites" className="footer-link">
                   Favorilerim
+                </Link>
+              </li>
+              <li>
+                <Link to="/hakkimizda" className="footer-link">
+                  Hakkımızda
+                </Link>
+              </li>
+              <li>
+                <Link to="/vizyon-misyon" className="footer-link">
+                  Vizyonumuz
                 </Link>
               </li>
             </ul>
