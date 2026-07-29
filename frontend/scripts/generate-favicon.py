@@ -4,49 +4,39 @@ from pathlib import Path
 public = Path(__file__).resolve().parents[1] / "public"
 images = public / "images"
 
-src = Image.open(images / "golkoy-logo-new.png").convert("RGBA")
-pixels = src.load()
-w, h = src.size
-minx, miny, maxx, maxy = w, h, 0, 0
-for y in range(h):
-    for x in range(w):
-        r, g, b, a = pixels[x, y]
-        if a < 20:
-            continue
-        if r < 20 and g < 20 and b < 20:
-            continue
-        minx = min(minx, x)
-        miny = min(miny, y)
-        maxx = max(maxx, x)
-        maxy = max(maxy, y)
+src = Image.open(images / "golkoy-header-logo.png").convert("RGBA")
 
-pad = 8
-cropped = src.crop(
-    (max(0, minx - pad), max(0, miny - pad), min(w, maxx + 1 + pad), min(h, maxy + 1 + pad))
-)
-cropped.save(images / "golkoy-header-logo.png", format="PNG", optimize=True)
 
-cw, ch = cropped.size
-side = max(cw, ch)
-pad2 = int(side * 0.12)
-canvas = Image.new("RGBA", (side + pad2 * 2, side + pad2 * 2), (0, 0, 0, 0))
-canvas.paste(cropped, (pad2 + (side - cw) // 2, pad2 + (side - ch) // 2), cropped)
+def make_square(size, pad_ratio=0.08):
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    margin = max(1, int(size * pad_ratio))
+    max_w = size - 2 * margin
+    max_h = size - 2 * margin
+    ratio = min(max_w / src.width, max_h / src.height)
+    nw = max(1, int(src.width * ratio))
+    nh = max(1, int(src.height * ratio))
+    logo = src.resize((nw, nh), Image.Resampling.LANCZOS)
+    canvas.paste(logo, ((size - nw) // 2, (size - nh) // 2), logo)
+    return canvas
 
-for name, size in [("logo192.png", 192), ("logo512.png", 512)]:
-    canvas.resize((size, size), Image.Resampling.LANCZOS).save(
-        public / name, format="PNG", optimize=True
-    )
 
-canvas.resize((32, 32), Image.Resampling.LANCZOS).save(
-    images / "favicon-32.png", format="PNG", optimize=True
-)
-canvas.resize((180, 180), Image.Resampling.LANCZOS).save(
-    images / "apple-touch-icon.png", format="PNG", optimize=True
-)
-canvas.save(images / "golkoy-favicon.png", format="PNG", optimize=True)
+for size, name in [
+    (32, "favicon-32.png"),
+    (48, "favicon-48.png"),
+    (96, "favicon-96.png"),
+    (180, "apple-touch-icon.png"),
+    (192, "favicon-192.png"),
+    (192, "golkoy-favicon.png"),
+    (72, "icon-72.png"),
+    (192, "icon-192.png"),
+]:
+    make_square(size).save(images / name, format="PNG", optimize=True)
 
-ico_sizes = [(16, 16), (32, 32), (48, 48), (64, 64)]
-ico_images = [canvas.resize(s, Image.Resampling.LANCZOS) for s in ico_sizes]
-ico_images[-1].save(public / "favicon.ico", format="ICO", sizes=ico_sizes)
+make_square(192).save(public / "logo192.png", format="PNG", optimize=True)
+make_square(512, 0.1).save(public / "logo512.png", format="PNG", optimize=True)
 
-print("arka plansiz yesil Golkoy header + favicon hazir")
+sizes = [16, 32, 48, 64]
+ico_images = [make_square(s) for s in sizes]
+ico_images[-1].save(public / "favicon.ico", format="ICO", sizes=[(s, s) for s in sizes])
+
+print("seffaf Golkoy Gurme ikonlari hazir")

@@ -99,6 +99,20 @@ RUN echo 'server { \
         try_files $uri =404; \
     } \
     \
+    # Favicon / marka ikonlari - eski React ikonu cache'te kalmasin \
+    location = /favicon.ico { \
+        add_header Cache-Control "no-cache, must-revalidate"; \
+        try_files $uri =404; \
+    } \
+    location ~* ^/(logo192|logo512)\.png$ { \
+        add_header Cache-Control "no-cache, must-revalidate"; \
+        try_files $uri =404; \
+    } \
+    location ~* ^/images/(favicon|apple-touch|golkoy-favicon|golkoy-header|icon-) { \
+        add_header Cache-Control "no-cache, must-revalidate"; \
+        try_files $uri =404; \
+    } \
+    \
     # Ana sayfa ve diğer rotalar - SPA Fallback \
     location / { \
         try_files $uri $uri/ /index.html; \
