@@ -381,32 +381,15 @@ function HeroSlider({
               }`}
               aria-hidden={!isActive}
             >
-              {/* Banner Link veya Div */}
-              {banner.linkUrl ? (
-                <a
-                  href={banner.linkUrl}
-                  style={styles.slideLink}
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  <BannerMedia
-                    src={getImageSrc(banner)}
-                    alt={banner.title || "Banner"}
-                    style={styles.slideImage}
-                    active={isActive}
-                    loading={index === 0 ? "eager" : "lazy"}
-                    onError={() => handleImageError(banner.id)}
-                  />
-                </a>
-              ) : (
-                <BannerMedia
-                  src={getImageSrc(banner)}
-                  alt={banner.title || "Banner"}
-                  style={styles.slideImage}
-                  active={isActive}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  onError={() => handleImageError(banner.id)}
-                />
-              )}
+              {/* Banner görseli — tıklanabilir değil (bozuk link / 404 önleme) */}
+              <BannerMedia
+                src={getImageSrc(banner)}
+                alt={banner.title || "Banner"}
+                style={styles.slideImage}
+                active={isActive}
+                loading={index === 0 ? "eager" : "lazy"}
+                onError={() => handleImageError(banner.id)}
+              />
 
               {/* Slider Content (opsiyonel) */}
               {showContent && (banner.title || banner.subTitle) && (
@@ -416,15 +399,6 @@ function HeroSlider({
                   )}
                   {banner.subTitle && (
                     <p style={styles.slideSubtitle}>{banner.subTitle}</p>
-                  )}
-                  {banner.buttonText && banner.linkUrl && (
-                    <a
-                      href={banner.linkUrl}
-                      style={styles.slideButton}
-                      tabIndex={isActive ? 0 : -1}
-                    >
-                      {banner.buttonText}
-                    </a>
                   )}
                 </div>
               )}

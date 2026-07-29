@@ -86,30 +86,13 @@ function PromoBannerSection({ promos = [], className = "" }) {
             <div className="promo-banner-scroll-track" ref={trackRef}>
               {slidePromos.map((promo, index) => {
                 const enterDelayMs = Math.min(index, 10) * 45;
-                const handleClick = () => {
-                  if (promo.link) {
-                    window.location.href = promo.link;
-                  }
-                };
-                const handleKeyDown = (event) => {
-                  if (
-                    (event.key === "Enter" || event.key === " ") &&
-                    promo.link
-                  ) {
-                    event.preventDefault();
-                    window.location.href = promo.link;
-                  }
-                };
 
                 return (
                   <div
                     key={`${promo.id}-${index}`}
                     className={`promo-grid-item carousel-slide-card${hasEntered ? " promo-banner-item--enter is-animated" : ""}`}
                     style={{ "--enter-delay": `${enterDelayMs}ms` }}
-                    role={promo.link ? "link" : "presentation"}
-                    tabIndex={promo.link ? 0 : undefined}
-                    onClick={handleClick}
-                    onKeyDown={handleKeyDown}
+                    role="presentation"
                   >
                     <BannerMedia
                       src={promo.image}

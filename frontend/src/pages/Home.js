@@ -431,18 +431,18 @@ export default function Home() {
     <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "16px" }}>
       {/* SEO Helmet */}
       <Helmet>
-        <title>Gölköy Gurme — Taze ve doğal market ürünleri</title>
+        <title>Gölköy Gurme Market — Taze ve Doğal Ürünler</title>
         <meta
           name="description"
-          content="Gölköy Gurme: Taze meyve, sebze, süt ürünleri ve günlük ihtiyaçlarınızı güvenle sipariş edin."
+          content="2009'dan beri Bodrum'un sofrasına taze, doğal ve özenle seçilmiş lezzetler. Sipariş verin; Gölköy Gurme kapınıza gelsin."
         />
         <meta
           property="og:title"
-          content="Gölköy Gurme — Taze ve doğal market ürünleri"
+          content="Gölköy Gurme Market — Taze ve Doğal Ürünler"
         />
         <meta
           property="og:description"
-          content="Taze ve doğal ürünleri kapınıza getiren yerel market"
+          content="2009'dan beri Bodrum'un sofrasına taze, doğal ve özenle seçilmiş lezzetler. Sipariş verin; Gölköy Gurme kapınıza gelsin."
         />
         <meta
           property="og:image"

@@ -29,14 +29,9 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
     : promo.imageUrl || PLACEHOLDER_IMAGE;
 
   const enterDelayMs = Math.min(index, 10) * 55;
-  const CardWrapper = promo.linkUrl ? "a" : "div";
-  const linkProps = promo.linkUrl
-    ? { href: promo.linkUrl, onClick: (e) => e.stopPropagation() }
-    : {};
 
   return (
-    <CardWrapper
-      {...linkProps}
+    <div
       className={`promo-card-item carousel-slide-card promo-card-item--enter${isHovered ? " is-hovered" : ""}`}
       style={{ "--enter-delay": `${enterDelayMs}ms` }}
       onMouseEnter={() => setIsHovered(true)}
@@ -62,7 +57,7 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
           </h3>
         </div>
       )}
-    </CardWrapper>
+    </div>
   );
 });
 

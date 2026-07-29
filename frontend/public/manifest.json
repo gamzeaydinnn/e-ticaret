@@ -1,25 +1,26 @@
 {
   "short_name": "Gölköy Gurme",
-  "name": "Gölköy Gurme Market - Taze ve Doğal Ürünler",
+  "name": "Gölköy Gurme Market — Taze ve Doğal Ürünler",
+  "description": "2009'dan beri Bodrum'un sofrasına taze, doğal ve özenle seçilmiş lezzetler.",
   "icons": [
     {
-      "src": "images/golkoy-logo.png",
+      "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/png"
+      "type": "image/x-icon"
     },
     {
-      "src": "images/golkoy-logo.png",
+      "src": "logo192.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "images/golkoy-logo.png",
+      "src": "logo512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#2d5a3d",
   "background_color": "#ffffff"
 }
