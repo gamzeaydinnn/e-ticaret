@@ -298,9 +298,8 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Bilgi */}
+          {/* Eski "Kurumsal" alanı: Markalar kaldirildi, yerine Kategoriler */}
           <div className="col-lg-2 col-md-6 footer-col footer-col-corporate">
-            <h6 className="footer-title">Keşfet</h6>
             <ul className="footer-links">
               <li>
                 <Link to="/kategoriler" className="footer-link">
