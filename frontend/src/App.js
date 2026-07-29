@@ -900,6 +900,13 @@ function App() {
         {/* Şef Tavsiyesi / Yemek Tarifi Sayfası */}
         <Route path="/tarif" element={<RecipePage />} />
         <Route path="/tarif/:id" element={<RecipePage />} />
+        <Route path="/tarifler" element={<Navigate to="/tarif" replace />} />
+        {/* Google sitelink / eski SEO URL yönlendirmeleri */}
+        <Route path="/kurumsal" element={<Navigate to="/hakkimizda" replace />} />
+        <Route path="/vizyonumuz" element={<Navigate to="/vizyon-misyon" replace />} />
+        <Route path="/media" element={<Navigate to="/basin-kiti" replace />} />
+        <Route path="/medya" element={<Navigate to="/basin-kiti" replace />} />
+        <Route path="/markalar" element={<Navigate to="/campaigns" replace />} />
         {/* Destek / Bilgi sayfaları */}
         <Route path="/yardim" element={<HelpCenter />} />
         <Route path="/iletisim" element={<Contact />} />

@@ -309,7 +309,22 @@ export default function Footer() {
               </li>
               <li>
                 <Link to="/vizyon-misyon" className="footer-link">
-                  Vizyon & Misyon
+                  Vizyonumuz
+                </Link>
+              </li>
+              <li>
+                <Link to="/basin-kiti" className="footer-link">
+                  Media
+                </Link>
+              </li>
+              <li>
+                <Link to="/tarif" className="footer-link">
+                  Tarifler
+                </Link>
+              </li>
+              <li>
+                <Link to="/campaigns" className="footer-link">
+                  Markalar
                 </Link>
               </li>
               <li>

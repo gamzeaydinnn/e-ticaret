@@ -99,6 +99,14 @@ RUN echo 'server { \
         try_files $uri =404; \
     } \
     \
+    # Google sitelink / eski SEO URL'leri -> dogru sayfalar (301) \
+    location = /kurumsal { return 301 /hakkimizda; } \
+    location = /vizyonumuz { return 301 /vizyon-misyon; } \
+    location = /media { return 301 /basin-kiti; } \
+    location = /medya { return 301 /basin-kiti; } \
+    location = /tarifler { return 301 /tarif; } \
+    location = /markalar { return 301 /campaigns; } \
+    \
     # Favicon / marka ikonlari - eski React ikonu cache'te kalmasin \
     location = /favicon.ico { \
         add_header Cache-Control "no-cache, must-revalidate"; \
