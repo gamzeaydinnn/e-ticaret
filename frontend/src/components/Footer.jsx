@@ -97,7 +97,7 @@ export default function Footer() {
     ? `https://wa.me/${contact.whatsAppNumber}?text=${encodeURIComponent(contact.whatsAppMessage || "")}`
     : "#";
 
-  const footerLogoSrc = "/images/golkoy-logo-new.png";
+  const footerLogoSrc = "/images/golkoy-header-logo.png";
 
   const phoneDisplay = contact.phoneDisplay || contact.phone;
   const hasPhone = Boolean(contact.whatsAppNumber || phoneDisplay);
@@ -118,13 +118,11 @@ export default function Footer() {
             <div className="footer-brand">
               <div className="footer-brand-logos mb-3">
                 <Link to="/" className="footer-brand-link" aria-label="Ana sayfa">
-                  <div className="footer-logo-crop">
-                    <img
-                      src={footerLogoSrc}
-                      alt={company.name || "Gölköy Gurme"}
-                      className="footer-brand-logo-image"
-                    />
-                  </div>
+                  <img
+                    src={footerLogoSrc}
+                    alt={company.name || "Gölköy Gurme"}
+                    className="footer-brand-logo-image"
+                  />
                 </Link>
               </div>
               {company.description && (

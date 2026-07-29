@@ -97,43 +97,32 @@
 }
 
 .logo-container img {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: opacity 0.2s ease;
 }
 
 .brand-logo-shell {
   display: flex;
   align-items: center;
-  width: 188px;
-  min-width: 188px;
-  height: 78px;
+  width: auto;
+  min-width: 0;
+  height: 56px;
   justify-content: flex-start;
 }
 
 .brand-logo-main {
   display: flex;
   align-items: center;
-  width: 100%;
+  width: auto;
   height: 100%;
 }
 
-.brand-logo-crop {
-  width: 188px;
-  height: 78px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  overflow: hidden;
-  filter: drop-shadow(0 3px 8px rgba(23, 37, 84, 0.12));
-}
-
 .brand-logo-image {
-  width: 263px;
-  max-width: none;
-  height: auto;
+  height: 56px;
+  width: auto;
+  max-width: 200px;
   display: block;
-  transform: translate(-32px, -74px);
-  transform-origin: top left;
+  object-fit: contain;
+  background: transparent;
   pointer-events: none;
   user-select: none;
 }
@@ -164,24 +153,13 @@
   flex-shrink: 0;
 }
 
-.footer-logo-crop {
-  width: 162px;
-  height: 78px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  overflow: hidden;
-  flex-shrink: 0;
-  margin-left: 0;
-}
-
 .footer-brand-logo-image {
-  width: 263px;
-  max-width: none;
-  height: auto;
+  height: 56px;
+  width: auto;
+  max-width: 200px;
   display: block;
-  transform: translate(-50px, -74px);
-  transform-origin: top left;
+  object-fit: contain;
+  background: transparent;
   pointer-events: none;
   user-select: none;
 }
@@ -4544,19 +4522,12 @@ video.promo-grid-image,
   }
 
   .main-header--storefront .brand-logo-shell {
-    width: 118px;
-    min-width: 118px;
-    height: 50px;
-  }
-
-  .main-header--storefront .brand-logo-crop {
-    width: 118px;
-    height: 50px;
+    height: 44px;
   }
 
   .main-header--storefront .brand-logo-image {
-    width: 168px;
-    transform: translate(-22px, -48px);
+    height: 44px;
+    max-width: 150px;
   }
 
   .main-header--storefront .modern-search-container .input-group,
@@ -4652,19 +4623,12 @@ video.promo-grid-image,
   }
 
   .main-header--storefront .brand-logo-shell {
-    width: 132px;
-    min-width: 132px;
-    height: 56px;
-  }
-
-  .main-header--storefront .brand-logo-crop {
-    width: 132px;
-    height: 56px;
+    height: 50px;
   }
 
   .main-header--storefront .brand-logo-image {
-    width: 185px;
-    transform: translate(-24px, -52px);
+    height: 50px;
+    max-width: 170px;
   }
 
   .main-header--storefront .modern-search-container .form-control,
@@ -5347,31 +5311,21 @@ video.promo-grid-image,
   }
 
   .brand-logo-shell {
-    width: 132px !important;
-    min-width: 132px !important;
-    height: 46px !important;
-  }
-
-  .brand-logo-crop {
-    width: 132px !important;
-    height: 46px !important;
-    overflow: hidden !important;
+    height: 42px !important;
   }
 
   .brand-logo-image {
-    width: 194px !important;
-    max-width: none !important;
-    transform: translate(-23px, -54px) !important;
-  }
-
-  .footer-logo-crop {
-    width: 132px !important;
-    height: 46px !important;
+    height: 42px !important;
+    max-width: 148px !important;
+    width: auto !important;
+    transform: none !important;
   }
 
   .footer-brand-logo-image {
-    width: 194px !important;
-    transform: translate(-23px, -54px) !important;
+    height: 42px !important;
+    max-width: 148px !important;
+    width: auto !important;
+    transform: none !important;
   }
 
   .footer-brand-secondary-image {
@@ -5699,24 +5653,22 @@ video.promo-grid-image,
     height: 70px !important;
   }
 
-  .brand-logo-crop {
-    width: 160px !important;
-    height: 62px !important;
+  .brand-logo-shell {
+    height: 50px !important;
   }
 
   .brand-logo-image {
-    width: 234px !important;
-    transform: translate(-30px, -70px) !important;
-  }
-
-  .footer-logo-crop {
-    width: 138px !important;
-    height: 62px !important;
+    height: 50px !important;
+    max-width: 170px !important;
+    width: auto !important;
+    transform: none !important;
   }
 
   .footer-brand-logo-image {
-    width: 234px !important;
-    transform: translate(-44px, -70px) !important;
+    height: 50px !important;
+    max-width: 170px !important;
+    width: auto !important;
+    transform: none !important;
   }
 
   .secondary-logo {

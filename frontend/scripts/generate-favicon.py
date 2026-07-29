@@ -4,7 +4,6 @@ from pathlib import Path
 public = Path(__file__).resolve().parents[1] / "public"
 images = public / "images"
 
-# Yeşil Gölköy logosu (kullanıcının gönderdiği marka)
 src = Image.open(images / "golkoy-logo-new.png").convert("RGBA")
 pixels = src.load()
 w, h = src.size
@@ -21,27 +20,17 @@ for y in range(h):
         maxx = max(maxx, x)
         maxy = max(maxy, y)
 
-cropped = src.crop((minx, miny, maxx + 1, maxy + 1))
+pad = 8
+cropped = src.crop(
+    (max(0, minx - pad), max(0, miny - pad), min(w, maxx + 1 + pad), min(h, maxy + 1 + pad))
+)
+cropped.save(images / "golkoy-header-logo.png", format="PNG", optimize=True)
+
 cw, ch = cropped.size
-out = Image.new("RGBA", (cw, ch), (255, 255, 255, 255))
-cp = cropped.load()
-op = out.load()
-for y in range(ch):
-    for x in range(cw):
-        r, g, b, a = cp[x, y]
-        if a < 20 or (r < 25 and g < 25 and b < 25):
-            continue
-        op[x, y] = (r, g, b, 255)
-
 side = max(cw, ch)
-pad = int(side * 0.10)
-canvas_side = side + pad * 2
-canvas = Image.new("RGBA", (canvas_side, canvas_side), (255, 255, 255, 255))
-canvas.paste(out, (pad + (side - cw) // 2, pad + (side - ch) // 2), out)
-
-ico_sizes = [(16, 16), (32, 32), (48, 48), (64, 64)]
-ico_images = [canvas.resize(s, Image.Resampling.LANCZOS) for s in ico_sizes]
-ico_images[-1].save(public / "favicon.ico", format="ICO", sizes=ico_sizes)
+pad2 = int(side * 0.12)
+canvas = Image.new("RGBA", (side + pad2 * 2, side + pad2 * 2), (0, 0, 0, 0))
+canvas.paste(cropped, (pad2 + (side - cw) // 2, pad2 + (side - ch) // 2), cropped)
 
 for name, size in [("logo192.png", 192), ("logo512.png", 512)]:
     canvas.resize((size, size), Image.Resampling.LANCZOS).save(
@@ -56,9 +45,8 @@ canvas.resize((180, 180), Image.Resampling.LANCZOS).save(
 )
 canvas.save(images / "golkoy-favicon.png", format="PNG", optimize=True)
 
-og = Image.new("RGB", (1200, 630), (255, 255, 255))
-logo_og = canvas.resize((460, 460), Image.Resampling.LANCZOS).convert("RGBA")
-og.paste(logo_og, ((1200 - 460) // 2, (630 - 460) // 2), logo_og)
-og.save(images / "og-default.jpg", format="JPEG", quality=92, optimize=True)
+ico_sizes = [(16, 16), (32, 32), (48, 48), (64, 64)]
+ico_images = [canvas.resize(s, Image.Resampling.LANCZOS) for s in ico_sizes]
+ico_images[-1].save(public / "favicon.ico", format="ICO", sizes=ico_sizes)
 
-print("yeşil Gölköy favicon hazır")
+print("arka plansiz yesil Golkoy header + favicon hazir")

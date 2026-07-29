@@ -320,16 +320,11 @@ function Header() {
               <Link to="/" className="text-decoration-none">
                 <div className="d-flex align-items-center logo-stack brand-logo-shell">
                   <div className="logo-container brand-logo-main">
-                    <div
-                      className="main-logo brand-logo-crop"
-                      aria-label="Gölköy Gurme"
-                    >
-                      <img
-                        className="brand-logo-image"
-                        src="/images/golkoy-logo-new.png"
-                        alt="Gölköy Gurme"
-                      />
-                    </div>
+                    <img
+                      className="brand-logo-image"
+                      src="/images/golkoy-header-logo.png"
+                      alt="Gölköy Gurme"
+                    />
                   </div>
                 </div>
               </Link>

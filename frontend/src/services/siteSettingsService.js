@@ -143,7 +143,7 @@ const getDefaultSiteSettings = () => ({
     legalName: "Gölköy Gurme Market",
     description:
       "Bodrum Gölköy'de taze meyve-sebze, et, süt ürünleri ve günlük market ihtiyaçlarınızı kendi kuryemizle kapınıza getiriyoruz. Yerel lezzetler, soğuk zincir ve güvenli alışveriş.",
-    logoUrl: "/images/golkoy-logo1.png",
+    logoUrl: "/images/golkoy-header-logo.png",
     secondaryLogoUrl: "/images/dogadan-sofranza-logo.png",
     copyrightText: "Tüm haklar Gölköy Gurme Markete aittir.",
   },
