@@ -575,17 +575,18 @@ export default function CourierOrders() {
                       </div>
                     </div>
 
-                    {/* Uyarı Badges */}
-                    {(hasPendingWeight || hasApprovedWeight || isPaymentPending) && (
+                    {/* Uyarı Badges — tartı kapısı WeightAdjustment (AllItemsWeighed) üzerinden */}
+                    {(kgUnweighed || hasWeightDiff || isPaymentPending) && (
                       <div className="mb-2">
-                        {hasPendingWeight && (
+                        {kgUnweighed && (
                           <span className="badge bg-warning text-dark me-1">
-                            <i className="fas fa-clock me-1"></i>Onay Bekliyor
+                            <i className="fas fa-clock me-1"></i>Tartı Bekleniyor
                           </span>
                         )}
-                        {hasApprovedWeight && (
+                        {hasWeightDiff && !kgUnweighed && (
                           <span className="badge bg-success me-1">
-                            <i className="fas fa-check me-1"></i>+{weightReport.overageGrams}g
+                            <i className="fas fa-check me-1"></i>
+                            {priceDiff > 0 ? "+" : ""}{priceDiff.toFixed(2)} ₺
                           </span>
                         )}
                         {isPaymentPending && (
@@ -656,11 +657,11 @@ export default function CourierOrders() {
                            order.status?.toLowerCase() === "in_transit") && !isPaymentPending ? (
                         <button
                           onClick={() => updateOrderStatus(order.id, "delivered")}
-                          disabled={updating || hasPendingWeight}
-                          className={`btn btn-sm flex-grow-1 ${hasPendingWeight || hasWeightDiff ? "btn-warning" : "btn-success"}`}
+                          disabled={updating || kgUnweighed}
+                          className={`btn btn-sm flex-grow-1 ${kgUnweighed || hasWeightDiff ? "btn-warning" : "btn-success"}`}
                         >
-                          <i className={`fas ${hasPendingWeight ? "fa-clock" : "fa-check-circle"} me-1`}></i>
-                          {hasPendingWeight ? "ONAY BEKLİYOR" : "TESLİM ET"}
+                          <i className={`fas ${kgUnweighed ? "fa-clock" : "fa-check-circle"} me-1`}></i>
+                          {kgUnweighed ? "TARTI BEKLENİYOR" : "TESLİM ET"}
                         </button>
                       ) : null}
                     </div>
