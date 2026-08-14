@@ -110,6 +110,37 @@ namespace ECommerce.Business.Helpers
             var reference = nowUtc ?? DateTime.UtcNow;
             return authorizedAt.Value.AddHours(PreAuthValidityHours) < reference;
         }
+
+        /// <summary>
+        /// Checkout / 3DS Auth tutarı. %20 şişirme YOK.
+        /// NEDEN: Müşteri 3DS ekranında sepet tutarını görmeli. Banka Capt tavanı
+        /// (Auth × 1.20) ayrı kuraldır; provizyonu şişirmek MAC/tutar uyumsuzluğu üretir.
+        /// Öncelik: PreAuthAmount (checkout'ta yazılır) → FinalPrice → TotalPrice → fallback.
+        /// </summary>
+        public static decimal ResolveCheckoutAuthAmount(Order? order, decimal fallbackAmount = 0m)
+        {
+            if (order is null)
+            {
+                return Math.Round(Math.Max(0m, fallbackAmount), 2, MidpointRounding.AwayFromZero);
+            }
+
+            if (order.PreAuthAmount > 0m)
+            {
+                return order.PreAuthAmount;
+            }
+
+            if (order.FinalPrice > 0m)
+            {
+                return Math.Round(order.FinalPrice, 2, MidpointRounding.AwayFromZero);
+            }
+
+            if (order.TotalPrice > 0m)
+            {
+                return Math.Round(order.TotalPrice, 2, MidpointRounding.AwayFromZero);
+            }
+
+            return Math.Round(Math.Max(0m, fallbackAmount), 2, MidpointRounding.AwayFromZero);
+        }
     }
 
     /// <summary>

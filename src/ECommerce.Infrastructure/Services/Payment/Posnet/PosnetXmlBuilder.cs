@@ -271,6 +271,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             sb.Append(POSNET_OPEN);
             
             AppendCredentials(sb, request.MerchantId, request.TerminalId);
+
+            // Banka dok: iade/iptal isteklerinde tranDateRequired destek sürecini hızlandırır
+            AppendTranDateRequired(sb);
             
             // İptal işlem bloğu - "reverse" tag'i
             sb.Append("<reverse>");
@@ -318,6 +321,9 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             sb.Append(POSNET_OPEN);
             
             AppendCredentials(sb, request.MerchantId, request.TerminalId);
+
+            // Banka dok: return isteklerinde tranDateRequired önerilir
+            AppendTranDateRequired(sb);
             
             // İade işlem bloğu - "return" tag'i
             sb.Append("<return>");
@@ -732,6 +738,14 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
             
             // tid: Terminal numarası (8 hane)
             AppendElement(sb, "tid", terminalId);
+        }
+
+        /// <summary>
+        /// POSNET destek logları için işlem tarihi alanını ekler (banka dok. önerisi).
+        /// </summary>
+        private static void AppendTranDateRequired(StringBuilder sb)
+        {
+            AppendElement(sb, "tranDateRequired", "1");
         }
 
         /// <summary>

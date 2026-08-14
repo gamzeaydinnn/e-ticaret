@@ -98,14 +98,19 @@ namespace ECommerce.Tests.Weight
         }
 
         [Fact]
-        public void IsPreAuthExpired_DetectsExpiry_BasedOnValidityHours()
+        public void ResolveCheckoutAuthAmount_DoesNotInflateByTwentyPercent()
         {
-            var now = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
-            var fresh = now.AddHours(-(WeightBasedCapturePolicy.PreAuthValidityHours - 1));
-            var stale = now.AddHours(-(WeightBasedCapturePolicy.PreAuthValidityHours + 1));
+            // NEDEN: 3DS tutarı sepet toplamıdır; %20 yalnız Capt tavanıdır.
+            var order = new Order { PreAuthAmount = 100m, FinalPrice = 100m, TotalPrice = 100m };
+            Assert.Equal(100m, WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, 999m));
+            Assert.Equal(120m, WeightBasedCapturePolicy.CalculateMaxCapturableAmount(100m));
+        }
 
-            Assert.False(WeightBasedCapturePolicy.IsPreAuthExpired(fresh, now));
-            Assert.True(WeightBasedCapturePolicy.IsPreAuthExpired(stale, now));
+        [Fact]
+        public void ResolveCheckoutAuthAmount_FallsBackToFinalPrice_WhenPreAuthZero()
+        {
+            var order = new Order { PreAuthAmount = 0m, FinalPrice = 85.50m, TotalPrice = 80m };
+            Assert.Equal(85.50m, WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order));
         }
     }
 }

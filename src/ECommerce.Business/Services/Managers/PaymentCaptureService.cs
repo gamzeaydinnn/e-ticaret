@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using ECommerce.Core.DTOs.Payment;
 using ECommerce.Business.Helpers;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Data.Context;
@@ -36,6 +37,9 @@ namespace ECommerce.Business.Services.Managers
         // Infrastructure katmanında tanımlı olduğu için null olabilir (DI'da kayıtlı değilse)
         private readonly IPosnetPaymentService? _posnetService;
 
+        // Birleşik POSNET iade yürütücüsü — reverse/return/fallback (Faz 4)
+        private readonly IExtendedPaymentService? _extendedPaymentService;
+
         // Varsayılan tolerans yüzdesi (ilk provizyon tutarı için)
         private const decimal DefaultTolerancePercentage = 0.20m;
 
@@ -47,12 +51,14 @@ namespace ECommerce.Business.Services.Managers
             ECommerceDbContext context,
             IRealTimeNotificationService notificationService,
             ILogger<PaymentCaptureService> logger,
-            IPosnetPaymentService? posnetService = null)
+            IPosnetPaymentService? posnetService = null,
+            IExtendedPaymentService? extendedPaymentService = null)
         {
             _context = context ?? throw new ArgumentNullException(nameof(context));
             _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _posnetService = posnetService;
+            _extendedPaymentService = extendedPaymentService;
 
             if (_posnetService != null)
                 _logger.LogInformation("PaymentCaptureService: POSNET servisi aktif, gerçek API çağrıları yapılacak.");
@@ -224,37 +230,33 @@ namespace ECommerce.Business.Services.Managers
                         "ALREADY_CAPTURED");
                 }
 
-                // Final tutar kontrolü: banka aşım sınırı (Auth × 1.20) içinde mi?
-                var maxCapturableAmount = CalculateMaxCapturableAmount(authorizedAmount);
-                if (finalAmount > maxCapturableAmount)
+                // Final tutar: banka Capt tavanına (Auth × 1.20) kırp.
+                // NEDEN fail-all yok: 130 TL tartıda 0 çekmek teslimatı kilitler.
+                // Politika: tavan kadar Capt, kalan leftover admin/manuel tahsilat.
+                var captureDecision = WeightBasedCapturePolicy.ClampToCaptureLimit(authorizedAmount, finalAmount);
+                var captureAmount = captureDecision.CaptureAmount;
+                var leftoverAmount = captureDecision.ExceedsLimit
+                    ? Math.Round(finalAmount - captureAmount, 2, MidpointRounding.AwayFromZero)
+                    : 0m;
+
+                if (captureDecision.ExceedsLimit)
                 {
                     _logger.LogWarning(
-                        "⚠️ Final tutar authorize edilen tutar + banka aşım limitini aşıyor. " +
-                        "OrderId={OrderId}, FinalAmount={FinalAmount}, AuthorizedAmount={AuthorizedAmount}, MaxCapturable={MaxCapturableAmount}",
-                        orderId, finalAmount, authorizedAmount, maxCapturableAmount);
+                        "Final tutar Capt tavanını aşıyor; tavan kadar çekilecek. " +
+                        "OrderId={OrderId}, FinalAmount={FinalAmount}, AuthorizedAmount={AuthorizedAmount}, " +
+                        "CaptureAmount={CaptureAmount}, Leftover={Leftover}",
+                        orderId, finalAmount, authorizedAmount, captureAmount, leftoverAmount);
 
-                    // Sipariş durumunu güncelle - admin müdahalesi gerekli
-                    order.CaptureStatus = CaptureStatus.Failed;
-                    order.Status = OrderStatus.DeliveryPaymentPending;
-                    order.DeliveryProblemReason = $"Final tutar ({finalAmount:N2} TL), authorize edilen tutar + %20 banka aşım limitini ({maxCapturableAmount:N2} TL) aşıyor.";
-
-                    await _context.SaveChangesAsync();
-
-                    // Admin'e bildirim gönder
-                    await _notificationService.NotifyPaymentFailedAsync(
-                        orderId,
-                        order.OrderNumber,
-                        $"Final tutar provizyon + %20 limitini aşıyor. Fark: {(finalAmount - maxCapturableAmount):N2} TL",
-                        "Internal");
-
-                    return PaymentCaptureResult.ExceededAuth(finalAmount, maxCapturableAmount);
+                    order.DeliveryProblemReason =
+                        $"Final tutar ({finalAmount:N2} TL), Capt tavanını ({captureAmount:N2} TL) aştı. " +
+                        $"Kalan {leftoverAmount:N2} TL manuel tahsilat.";
                 }
 
                 // Kapıda ödeme kontrolü
                 if (IsCashOnDelivery(order.PaymentMethod))
                 {
                     // Kapıda ödeme için capture simüle et
-                    order.CapturedAmount = finalAmount;
+                    order.CapturedAmount = captureAmount;
                     order.CapturedAt = DateTime.UtcNow;
                     order.CaptureStatus = CaptureStatus.Success;
                     order.FinalAmount = finalAmount;
@@ -263,11 +265,12 @@ namespace ECommerce.Business.Services.Managers
 
                     _logger.LogInformation(
                         "✅ Kapıda ödeme capture edildi. OrderId={OrderId}, Amount={Amount}",
-                        orderId, finalAmount);
+                        orderId, captureAmount);
 
                     return PaymentCaptureResult.Succeeded(
-                        finalAmount,
-                        order.AuthorizedAmount - finalAmount);
+                        captureAmount,
+                        Math.Max(0m, authorizedAmount - captureAmount),
+                        leftoverAmount: leftoverAmount);
                 }
 
                 // Kredi kartı için gerçek capture işlemi
@@ -283,7 +286,7 @@ namespace ECommerce.Business.Services.Managers
 
                 // Kredi kartı için gerçek capture işlemi
                 // POSNET servisi mevcutsa gerçek API çağrısı, yoksa simülasyon
-                var captureResult = await ExecuteCaptureAsync(payment, finalAmount);
+                var captureResult = await ExecuteCaptureAsync(payment, captureAmount);
 
                 if (!captureResult.success)
                 {
@@ -309,14 +312,14 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // Başarılı capture - güncelle
-                var releasedAmount = order.AuthorizedAmount - finalAmount;
+                var releasedAmount = Math.Max(0m, authorizedAmount - captureAmount);
 
-                order.CapturedAmount = finalAmount;
+                order.CapturedAmount = captureAmount;
                 order.CapturedAt = DateTime.UtcNow;
                 order.CaptureStatus = CaptureStatus.Success;
                 order.FinalAmount = finalAmount;
 
-                payment.CapturedAmount = finalAmount;
+                payment.CapturedAmount = captureAmount;
                 payment.CapturedAt = DateTime.UtcNow;
                 payment.CaptureStatus = CaptureStatus.Success;
                 payment.Status = "Paid";
@@ -325,20 +328,31 @@ namespace ECommerce.Business.Services.Managers
                 await _context.SaveChangesAsync();
 
                 _logger.LogInformation(
-                    "✅ Capture başarılı. OrderId={OrderId}, Captured={Captured}, Released={Released}",
-                    orderId, finalAmount, releasedAmount);
+                    "✅ Capture başarılı. OrderId={OrderId}, Captured={Captured}, Released={Released}, Leftover={Leftover}",
+                    orderId, captureAmount, releasedAmount, leftoverAmount);
 
-                // Admin'e bildirim
-                await _notificationService.NotifyPaymentSuccessAsync(
-                    orderId,
-                    order.OrderNumber,
-                    finalAmount,
-                    payment.Provider);
+                if (leftoverAmount > 0.01m)
+                {
+                    await _notificationService.NotifyPaymentFailedAsync(
+                        orderId,
+                        order.OrderNumber,
+                        $"Capt tavanı sonrası kalan {leftoverAmount:N2} TL manuel tahsilat gerektirir.",
+                        payment.Provider);
+                }
+                else
+                {
+                    await _notificationService.NotifyPaymentSuccessAsync(
+                        orderId,
+                        order.OrderNumber,
+                        captureAmount,
+                        payment.Provider);
+                }
 
                 return PaymentCaptureResult.Succeeded(
-                    finalAmount,
+                    captureAmount,
                     releasedAmount,
-                    captureResult.captureReference);
+                    captureResult.captureReference,
+                    leftoverAmount);
             }
             catch (Exception ex)
             {
@@ -780,7 +794,39 @@ namespace ECommerce.Business.Services.Managers
             if (_posnetService == null)
                 return await SimulateRefundAsync(payment, refundAmount);
 
-            // İade için HostLogKey gerekli
+            // Faz 4: Birleşik yürütücü — 0211/0411/0220 fallback tek noktada
+            if (_extendedPaymentService != null)
+            {
+                var order = await _context.Orders.FindAsync(payment.OrderId);
+                var maxRefundable = order?.CapturedAmount > 0
+                    ? order!.CapturedAmount
+                    : payment.Amount;
+
+                _logger.LogInformation(
+                    "Birleşik POSNET iade yürütücüsü çağrılıyor. OrderId={OrderId}, PaymentId={PaymentId}, Amount={Amount}",
+                    payment.OrderId, payment.Id, refundAmount);
+
+                var execResult = await _extendedPaymentService.ExecutePosnetRefundAsync(
+                    new PosnetRefundExecutionRequest
+                    {
+                        OrderId = payment.OrderId,
+                        PaymentId = payment.Id,
+                        RefundAmount = refundAmount,
+                        MaxRefundableAmount = maxRefundable,
+                        IsAuthOnly = false,
+                        PreAuthHostLogKey = order?.PreAuthHostLogKey,
+                        Reason = "PaymentCaptureService iade"
+                    });
+
+                if (execResult.Success)
+                {
+                    return (true, execResult.HostLogKey, null);
+                }
+
+                return (false, null, execResult.FailureReason ?? "POSNET iade işlemi başarısız");
+            }
+
+            // Geriye dönük uyumluluk: doğrudan return API
             var hostLogKey = payment.HostLogKey ?? payment.AuthorizationReference;
             if (string.IsNullOrEmpty(hostLogKey))
             {
@@ -790,7 +836,6 @@ namespace ECommerce.Business.Services.Managers
                 return (false, null, "HostLogKey bulunamadı. Provizyon kaydı eksik.");
             }
 
-            // POSNET üzerinden gerçek iade (return) API çağrısı
             _logger.LogInformation(
                 "POSNET ProcessRefundAsync çağrılıyor. OrderId={OrderId}, HostLogKey={HostLogKey}, Amount={Amount}",
                 payment.OrderId, hostLogKey, refundAmount);

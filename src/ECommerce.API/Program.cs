@@ -537,6 +537,7 @@ builder.Services.AddScoped<IOrderStateMachine, OrderStateMachine>();
 builder.Services.AddScoped<IOrderInventorySettlementService, OrderInventorySettlementService>();
 builder.Services.AddScoped<IOrderCancellationHandler, OrderCancellationHandler>();
 builder.Services.AddScoped<IRefundService, RefundManager>();
+builder.Services.AddScoped<IRefundDiagnosticService, RefundDiagnosticService>();
 
 // PaymentCaptureService - Authorize/Capture ödeme akışını yönetir
 builder.Services.AddScoped<IPaymentCaptureService, PaymentCaptureService>();

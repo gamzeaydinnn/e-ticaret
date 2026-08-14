@@ -508,9 +508,8 @@ namespace ECommerce.API.Controllers
                 var hasWeightBasedItems = order.HasWeightBasedItems ||
                     (order.OrderItems?.Any(oi => oi.IsWeightBased) == true);
 
-                // Canlı POS'ta Auth yetkisi açık değilse Yapı Kredi finalizasyonda
-                // 0058 "POSa İzin Verilmeyen İşlem" döndürür. Bu yüzden provizyon akışı
-                // config ile bilinçli açılmadıkça kg ürünler de Sale olarak ilerler.
+                // Canlı POS'ta Auth yetkisi açık değilse Yapı Kredi 0058 döner.
+                // Yetki açıldı: kg siparişler Auth (provizyon) → teslimatta Capt.
                 var settings = _paymentOptions.Value;
                 var useAuthForWeightItems = hasWeightBasedItems && settings.PosnetUseAuthForWeightBasedItems;
                 var txnType = useAuthForWeightItems ? "Auth" : "Sale";

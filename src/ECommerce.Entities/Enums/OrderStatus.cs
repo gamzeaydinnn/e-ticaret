@@ -101,26 +101,24 @@ namespace ECommerce.Entities.Enums
         // KGL (AĞIRLIK BAZLI) SİPARİŞ DURUMLARI (v3.0) — MADDE 17
         //
         // Normal ürün akışı  : New → Confirmed → Preparing → Assigned → OutForDelivery → Delivered → Paid
-        // KGL ürün akışı     : New → PreAuthorized → Confirmed → Preparing → WeightPending → Assigned
-        //                           → OutForDelivery → Delivered → Paid
+        // KGL ürün akışı     : New → PreAuthorized → Confirmed → Preparing → Ready → Assigned
+        //                           → PickedUp → OutForDelivery → Delivered (Capt teslimatta)
         //
         // PreAuthorized : 3D Secure + Auth başarılı, kart bloke, tartım henüz yapılmadı
-        // WeightPending : Tartım tamamlandı, gerçek tutar belirlendi, Post-Auth (Capt) bekleniyor
+        // WeightPending : LEGACY — canlı akışta kullanılmaz. Tartı Preparing'de, Capt teslimatta.
         // ═══════════════════════════════════════════════════════════════════════════════
         
         /// <summary>
         /// KGL sipariş: 3D Secure + Auth (provizyon) başarıyla tamamlandı.
         /// Kart bloke edildi, gerçek tutar henüz çekilmedi.
         /// PaymentStatus = Authorized, PreAuthHostLogKey dolu olmalı.
-        /// Sonraki adım: Admin onayı → Confirmed → Preparing → WeightPending
+        /// Sonraki adım: Admin onayı → Confirmed → Preparing (tartı) → Ready
         /// </summary>
         PreAuthorized,
         
         /// <summary>
-        /// KGL sipariş: Tartım yapıldı, gerçek tutar belirlendi.
-        /// Post-Auth (Finansallaştırma / Capt) bekleniyor.
-        /// Kurye teslimat sonrası WeightBasedPaymentService.ProcessPostAuthorizationAsync çağrılır.
-        /// Sonraki adım: Post-Auth başarılı → Paid
+        /// LEGACY durum. Canlı akışta tartı Preparing'de yapılır; Capt kurye teslimatındadır.
+        /// Eski kayıtlarda kalabilir; yeni siparişler bu duruma alınmaz.
         /// </summary>
         WeightPending
     }

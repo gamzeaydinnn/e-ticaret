@@ -104,8 +104,10 @@ namespace ECommerce.Infrastructure.Config
         public bool PosnetWorldPointEnabled { get; set; } = false;
 
         /// <summary>
-        /// Kg bazlı ürünlerde 3D Secure'u Auth/Capture akışıyla başlatır.
-        /// Canlı POS Auth yetkisi açık değilse Yapı Kredi 0058 "POSa İzin Verilmeyen İşlem" döner.
+        /// Kg bazlı ürünlerde 3D Secure Auth (provizyon) → teslimatta Capt.
+        /// NEDEN varsayılan false (kod): config yüklenmezse yanlışlıkla Auth denemesini engeller.
+        /// Canlı POS Auth yetkisi açıldıktan sonra appsettings/docker ile true yapılır.
+        /// Eski 0058 "POSa İzin Verilmeyen İşlem" bu yetki yokken oluşuyordu.
         /// </summary>
         public bool PosnetUseAuthForWeightBasedItems { get; set; } = false;
 

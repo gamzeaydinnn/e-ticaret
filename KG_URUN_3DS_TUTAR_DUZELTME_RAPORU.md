@@ -1,13 +1,16 @@
-> ⚠️ **GÜNCEL OTORİTER POLİTİKA (27 Haziran 2026 — bu belgenin altındaki eski açıklamaların yerine geçer):**
+> ⚠️ **GÜNCEL OTORİTER POLİTİKA (11 Temmuz 2026 — bu belgenin altındaki eski açıklamaların yerine geçer):**
 >
-> Aşağıdaki bölümlerde geçen "PreAuthAmount = finalPrice × 1.20 (%20 marj)" ifadesi **artık geçerli değildir**.
+> Aşağıdaki bölümlerde geçen "PreAuthAmount = finalPrice × 1.20 (%20 marj)" ve "marj eklendi ✅" ifadeleri **geçersizdir / tarihseldir**.
 > Mevcut ve doğru davranış:
-> - **3DS ekranına gönderilen tutar = sipariş toplamı (`FinalPrice`/`PreAuthAmount`), marj/şişirme YOKTUR.** Müşteriye gösterilen tutar sepetteki tutarla birebir aynıdır.
-> - KG ürünlerde işlem tipi **`Auth`** (provizyon), normal ürünlerde **`Sale`**'dir.
-> - Tartı sonrası oluşabilecek fark, **capture/post-auth** aşamasında `TolerancePercentage` (%20) ile yönetilir; bu marj başlangıç provizyonuna eklenmez.
-> - Bankaya gönderilen tutar **yalnızca sunucudaki sipariş kaydından** türetilir; istemciden gelen `request.Amount` değerine güvenilmez (yalnızca tutarsızlık tespiti için karşılaştırılır).
+> - **3DS tutarı = sepet `FinalPrice`/`PreAuthAmount`, marj YOK.**
+> - KG txn tipi: `PosnetUseAuthForWeightBasedItems` → VpnTest/Dev **Auth**, Production varsayılan **Sale**.
+> - Capt ≤ Auth × 1.20 (`WeightBasedCapturePolicy`). Sale’de overage Capt yok → manuel tahsilat.
+> - Tartı yalnız **Preparing**; Ağırlık Raporları’nda **Onayla yok**.
+> - Banka tutarı yalnız sunucu sipariş kaydından; istemci `request.Amount` güvenilmez.
 >
-> İlgili kod: `OrderManager.CheckoutAsync` (PreAuthAmount), `PaymentsControllers.PosnetInitiate3DSecure` (bankAmount), `WeightBasedPaymentService` (capture/tolerance).
+> İlgili kod: `OrderManager.CheckoutAsync`, `PaymentsControllers.PosnetInitiate3DSecure`,
+> `WeightBasedCapturePolicy`, `WeightBasedPaymentFlowResolver`, `WeightBasedWeighingGate`,
+> `PaymentCaptureService.CapturePaymentAsync`.
 
 ---
 

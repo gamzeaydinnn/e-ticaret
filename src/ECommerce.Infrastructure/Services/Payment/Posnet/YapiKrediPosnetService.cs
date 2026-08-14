@@ -1352,6 +1352,26 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
             try
             {
+                // ── MADDE Faz3: Kısmi iade varsa reverse bankadan reddedilir (0218) ──
+                var hasPartialReturns = await _db.Payments
+                    .AsNoTracking()
+                    .AnyAsync(p => p.OrderId == orderId &&
+                                   p.TransactionType == "return" &&
+                                   (p.Status == "Refunded" || p.Status == "Success"),
+                              cancellationToken);
+
+                if (hasPartialReturns)
+                {
+                    _logger.LogWarning(
+                        "[POSNET] Reverse engellendi — işlem üzerinde kısmi iade mevcut. OrderId={OrderId}",
+                        orderId);
+
+                    return PosnetResult<PosnetReverseResponse>.Failure(
+                        "İşlem üzerinde kısmi iade olduğu için iptal edilemez. Kalan tutar için return kullanın.",
+                        PosnetErrorCode.CannotReverseAfterRefund,
+                        elapsedMs: stopwatch.ElapsedMilliseconds);
+                }
+
                 var order = await _db.Orders
                     .AsNoTracking()
                     .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);

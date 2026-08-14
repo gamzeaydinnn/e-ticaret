@@ -162,5 +162,53 @@ namespace ECommerce.Tests.Weight
             Assert.Equal(20m, WeightBasedCapturePolicy.CaptureOveragePercent);
             Assert.Equal(168, WeightBasedCapturePolicy.PreAuthValidityHours);
         }
+
+        [Fact]
+        public void ReadyAndPickupGate_BlocksUnweighedKgItems()
+        {
+            var order = new Order
+            {
+                HasWeightBasedItems = true,
+                AllItemsWeighed = false,
+                OrderItems = new List<OrderItem>
+                {
+                    new() { IsWeightBased = true, IsWeighed = false }
+                }
+            };
+
+            Assert.True(WeightBasedWeighingGate.HasUnweighedWeightItems(order));
+            Assert.False(WeightBasedWeighingGate.CanMarkReady(order));
+            Assert.False(WeightBasedWeighingGate.CanCourierPickup(order));
+        }
+
+        [Fact]
+        public void ReadyGate_AllowsWhenAllKgItemsWeighed()
+        {
+            var order = new Order
+            {
+                HasWeightBasedItems = true,
+                AllItemsWeighed = true,
+                OrderItems = new List<OrderItem>
+                {
+                    new() { IsWeightBased = true, IsWeighed = true }
+                }
+            };
+
+            Assert.False(WeightBasedWeighingGate.HasUnweighedWeightItems(order));
+            Assert.True(WeightBasedWeighingGate.CanMarkReady(order));
+            Assert.True(WeightBasedWeighingGate.CanCourierPickup(order));
+        }
+
+        [Fact]
+        public void StoreDelivery_BlocksKgCard_AllowsCash()
+        {
+            var card = new Order { HasWeightBasedItems = true, PaymentMethod = "posnet" };
+            var cash = new Order { HasWeightBasedItems = true, PaymentMethod = "cash_on_delivery" };
+            var normal = new Order { HasWeightBasedItems = false, PaymentMethod = "posnet" };
+
+            Assert.True(WeightBasedWeighingGate.ShouldBlockStoreDelivery(card));
+            Assert.False(WeightBasedWeighingGate.ShouldBlockStoreDelivery(cash));
+            Assert.False(WeightBasedWeighingGate.ShouldBlockStoreDelivery(normal));
+        }
     }
 }

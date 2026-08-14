@@ -7,12 +7,19 @@ import { CourierService, formatPhoneDisplay, formatPhoneReadable, getPhoneTelUri
 import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 import "./CourierOrders.css";
 
+/** Market tartısı (WeightAdjustment) tamamlanmamış kg sipariş. */
+const isKgUnweighed = (order) => {
+  if (!order) return false;
+  const hasKg = order.hasWeightBasedItems || order.HasWeightBasedItems;
+  if (!hasKg) return false;
+  return !(order.allItemsWeighed === true || order.AllItemsWeighed === true);
+};
+
 export default function CourierOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updating, setUpdating] = useState(false);
-  const [weightReports, setWeightReports] = useState({});
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -95,23 +102,6 @@ export default function CourierOrders() {
       console.log("🔍 [CourierOrders] Gelen siparişler:", orderData);
 
       setOrders(orderData);
-
-      // Her sipariş için ağırlık raporlarını yükle
-      const reportsMap = {};
-      for (const order of orderData) {
-        try {
-          const reports = await CourierService.getOrderWeightReports(order.id);
-          if (reports && reports.length > 0) {
-            reportsMap[order.id] = reports[0]; // İlk raporu al
-          }
-        } catch (error) {
-          console.error(
-            `Sipariş ${order.id} için ağırlık raporu yüklenemedi:`,
-            error,
-          );
-        }
-      }
-      setWeightReports(reportsMap);
     } catch (error) {
       // Auth hatası ise sessizce geç (kullanıcı zaten login'e yönlendiriliyor)
       if (error?.isCourierAuthError) return;
@@ -122,16 +112,14 @@ export default function CourierOrders() {
   };
 
   const handleDeliveryAttempt = (order) => {
-    const report = weightReports[order.id];
-
-    // Ağırlık raporu varsa ve onay bekleniyorsa uyarı göster
-    if (report && report.status === "Pending") {
-      setPendingDeliveryOrder(order);
-      setShowWeightModal(true);
+    // Faz E: Market tartısı (AllItemsWeighed) teslimat kapısı — WeightReport değil.
+    if (isKgUnweighed(order)) {
+      alert(
+        "Kg ürünler market görevlisi tarafından tartılmadan teslim edilemez.\n\nSiparişi mağazaya iade edin.",
+      );
       return;
     }
 
-    // Onaylı rapor varsa veya rapor yoksa modal ile bilgilendirip onayla
     setPendingDeliveryOrder(order);
     setShowWeightModal(true);
   };
@@ -254,6 +242,16 @@ export default function CourierOrders() {
       const order = orders.find((o) => o.id === orderId);
       if (order) {
         handleDeliveryAttempt(order);
+        return;
+      }
+    }
+
+    if (newStatus === "picked_up" || newStatus === "out_for_delivery") {
+      const order = orders.find((o) => o.id === orderId);
+      if (order && isKgUnweighed(order)) {
+        alert(
+          "Kg ürünler tartılmadan teslim alınamaz / yola çıkılamaz. Market görevlisinin tartımı tamamlanmalıdır.",
+        );
         return;
       }
     }
@@ -513,9 +511,7 @@ export default function CourierOrders() {
         ) : (
           <div className="d-flex flex-column gap-2">
             {orders.map((order) => {
-              const weightReport = weightReports[order.id];
-              const hasPendingWeight = weightReport?.status === "Pending";
-              const hasApprovedWeight = weightReport?.status === "Approved";
+              const kgUnweighed = isKgUnweighed(order);
               const isPaymentPending = isDeliveryPaymentPending(order.status);
               const hasWeightDiff = order.hasWeightDifference || order.totalPriceDifference > 0;
               const finalAmount = order.finalAmount || order.totalAmount;
@@ -527,9 +523,9 @@ export default function CourierOrders() {
                   className={`card border-0 shadow-sm ${
                     isPaymentPending
                       ? "border-start border-danger border-4"
-                      : hasPendingWeight
+                      : kgUnweighed
                         ? "border-start border-warning border-4"
-                        : hasApprovedWeight
+                        : hasWeightDiff
                           ? "border-start border-success border-4"
                           : ""
                   }`}
@@ -714,25 +710,29 @@ export default function CourierOrders() {
                 )}
                 {/* Uyarı Badges */}
                 {(() => {
-                  const report = weightReports[selectedOrder.id];
-                  if (report?.status === "Pending") {
+                  if (isKgUnweighed(selectedOrder)) {
                     return (
                       <div className="alert alert-warning py-2 mb-3">
-                        <i className="fas fa-clock me-2"></i>
-                        <strong>Admin Onayı Bekleniyor</strong>
+                        <i className="fas fa-weight me-2"></i>
+                        <strong>Market tartımı eksik</strong>
                         <div className="small mt-1">
-                          Fazlalık: +{report.overageGrams}g | Ek: +{report.overageAmount} ₺
+                          Kg ürünler tartılmadan teslim alınamaz / teslim edilemez.
                         </div>
                       </div>
                     );
-                  } else if (report?.status === "Approved") {
+                  }
+                  const priceDiff = selectedOrder.totalPriceDifference || 0;
+                  if (selectedOrder.hasWeightBasedItems && (selectedOrder.allItemsWeighed || selectedOrder.AllItemsWeighed)) {
                     return (
                       <div className="alert alert-success py-2 mb-3">
                         <i className="fas fa-check-circle me-2"></i>
-                        <strong>Onaylandı</strong>
-                        <div className="small mt-1">
-                          Fazlalık: +{report.overageGrams}g | Tahsil: +{report.overageAmount} ₺
-                        </div>
+                        <strong>Market tartımı tamam</strong>
+                        {priceDiff !== 0 && (
+                          <div className="small mt-1">
+                            Tartı farkı: {priceDiff > 0 ? "+" : ""}
+                            {Number(priceDiff).toFixed(2)} ₺
+                          </div>
+                        )}
                       </div>
                     );
                   }
@@ -923,7 +923,7 @@ export default function CourierOrders() {
                         setSelectedOrder(null);
                         updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status));
                       }}
-                      disabled={updating || (getNextStatus(selectedOrder.status) === "delivered" && weightReports[selectedOrder.id]?.status === "Pending")}
+                      disabled={updating || (getNextStatus(selectedOrder.status) === "delivered" && isKgUnweighed(selectedOrder))}
                       className={`btn courier-modal-main-btn ${
                         getNextStatus(selectedOrder.status) === "delivered"
                           ? "btn-success"
@@ -969,9 +969,7 @@ export default function CourierOrders() {
         }}
         onConfirm={confirmDelivery}
         orderData={pendingDeliveryOrder}
-        weightReport={
-          pendingDeliveryOrder ? weightReports[pendingDeliveryOrder.id] : null
-        }
+        weightReport={null}
       />
     </div>
   );

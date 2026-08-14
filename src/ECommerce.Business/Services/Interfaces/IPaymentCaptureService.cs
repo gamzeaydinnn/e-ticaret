@@ -17,7 +17,7 @@ namespace ECommerce.Business.Services.Interfaces
     {
         /// <summary>
         /// Sipariş için provizyon (authorize) işlemi yapar.
-        /// Sipariş tutarının %20 tolerans fazlası kadar provizyon alır.
+        /// KG siparişlerde tutar sepet toplamıdır; %20 yalnız Capt tavanıdır.
         /// </summary>
         /// <param name="orderId">Sipariş ID</param>
         /// <param name="orderAmount">Sipariş tutarı (TL)</param>
@@ -163,12 +163,17 @@ namespace ECommerce.Business.Services.Interfaces
 
         /// <summary>
         /// Final tutar authorize edilen tutarı aştı mı?
-        /// Bu durumda ek işlem gerekebilir.
+        /// Clamp sonrası Success=true olsa bile leftover varsa true kalır.
         /// </summary>
         public bool ExceededAuthorization { get; set; }
 
+        /// <summary>
+        /// Banka Capt tavanı sonrası kalan (manuel tahsilat) tutar.
+        /// </summary>
+        public decimal LeftoverAmount { get; set; }
+
         public static PaymentCaptureResult Succeeded(decimal capturedAmount, decimal releasedAmount,
-            string? captureRef = null)
+            string? captureRef = null, decimal leftoverAmount = 0m)
         {
             return new PaymentCaptureResult
             {
@@ -177,7 +182,11 @@ namespace ECommerce.Business.Services.Interfaces
                 ReleasedAmount = releasedAmount,
                 CaptureReference = captureRef,
                 CapturedAt = DateTime.UtcNow,
-                Message = "Ödeme başarıyla çekildi."
+                LeftoverAmount = leftoverAmount,
+                ExceededAuthorization = leftoverAmount > 0.01m,
+                Message = leftoverAmount > 0.01m
+                    ? $"Ödeme çekildi. Kalan {leftoverAmount:N2} TL manuel tahsilat gerektirir."
+                    : "Ödeme başarıyla çekildi."
             };
         }
 

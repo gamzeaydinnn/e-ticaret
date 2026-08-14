@@ -464,22 +464,40 @@ export default function AdminOrders() {
 
     setRefundProcessing(refundRequestId);
     try {
-      await AdminService.processRefundRequest(refundRequestId, {
+      const response = await AdminService.processRefundRequest(refundRequestId, {
         approve,
         adminNote: refundAdminNote || null,
       });
-      alert(
-        approve
-          ? "İade onaylandı ve para iadesi başlatıldı."
-          : "İade talebi reddedildi.",
-      );
+      const refundStatus =
+        response?.refundRequest?.status ||
+        response?.data?.refundRequest?.status;
+      const apiMessage =
+        response?.message || response?.data?.message;
+
+      if (approve && refundStatus === "RefundFailed") {
+        alert(
+          apiMessage ||
+            "İade onaylandı ancak para iadesi başarısız oldu. POSNET Tekrar Dene ile yeniden deneyin.",
+        );
+      } else {
+        alert(
+          approve
+            ? apiMessage || "İade onaylandı ve para iadesi yapıldı."
+            : apiMessage || "İade talebi reddedildi.",
+        );
+      }
       setRefundAdminNote("");
       await loadRefundRequests();
       await loadData(false);
     } catch (err) {
       const msg =
-        err?.response?.data?.message || err?.message || "İşlem başarısız.";
-      alert("Hata: " + msg);
+        err?.message ||
+        err?.raw?.response?.data?.message ||
+        err?.response?.data?.message ||
+        "İşlem başarısız.";
+      alert(msg);
+      await loadRefundRequests();
+      await loadData(false);
     } finally {
       setRefundProcessing(null);
     }
@@ -498,17 +516,30 @@ export default function AdminOrders() {
     setRefundProcessing(refundRequestId);
     try {
       const result = await AdminService.retryRefund(refundRequestId);
+      const refundStatus =
+        result?.refundRequest?.status ||
+        result?.data?.refundRequest?.status;
       const msg =
-        result?.data?.message ||
         result?.message ||
+        result?.data?.message ||
         "Para iadesi yeniden denendi.";
-      alert(msg);
+
+      if (refundStatus === "RefundFailed") {
+        alert(msg + " (Başarısız — teşhis için destek ekibine başvurun.)");
+      } else {
+        alert(msg);
+      }
       await loadRefundRequests();
       await loadData(false);
     } catch (err) {
       const msg =
-        err?.response?.data?.message || err?.message || "İşlem başarısız.";
-      alert("Hata: " + msg);
+        err?.message ||
+        err?.raw?.response?.data?.message ||
+        err?.response?.data?.message ||
+        "İşlem başarısız.";
+      alert(msg);
+      await loadRefundRequests();
+      await loadData(false);
     } finally {
       setRefundProcessing(null);
     }

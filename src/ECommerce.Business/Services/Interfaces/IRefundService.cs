@@ -156,13 +156,17 @@ namespace ECommerce.Business.Services.Interfaces
             };
         }
 
-        public static RefundRequestResult Failed(string message, string? errorCode = null)
+        public static RefundRequestResult Failed(
+            string message,
+            string? errorCode = null,
+            RefundRequestListDto? refundRequest = null)
         {
             return new RefundRequestResult
             {
                 Success = false,
                 Message = message,
-                ErrorCode = errorCode
+                ErrorCode = errorCode,
+                RefundRequest = refundRequest
             };
         }
     }

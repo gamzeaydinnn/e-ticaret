@@ -11,6 +11,7 @@ using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+using ECommerce.Business.Helpers;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -221,6 +222,12 @@ namespace ECommerce.Business.Services.Managers
 
                 var previousStatus = order.Status;
 
+                // Faz D: Tartılmamış kg sipariş mağazadan çıkmasın.
+                if (!WeightBasedWeighingGate.CanCourierPickup(order))
+                {
+                    return CreateFailResponse(orderId, WeightBasedWeighingGate.UnweighedPickupMessage);
+                }
+
                 // 2. Durum geçiş kontrolü (ASSIGNED → PICKED_UP)
                 if (!_orderStateMachine.CanTransition(order.Status, OrderStatus.PickedUp))
                 {
@@ -305,6 +312,12 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 var previousStatus = order.Status;
+
+                // Faz D: Pickup atlanırsa (Assigned → OutForDelivery) aynı tartı kapısı geçerli.
+                if (!WeightBasedWeighingGate.CanCourierPickup(order))
+                {
+                    return CreateFailResponse(orderId, WeightBasedWeighingGate.UnweighedPickupMessage);
+                }
 
                 // 2. Durum geçiş kontrolü (ASSIGNED → OUT_FOR_DELIVERY)
                 if (!_orderStateMachine.CanTransition(order.Status, OrderStatus.OutForDelivery))
@@ -881,7 +894,10 @@ namespace ECommerce.Business.Services.Managers
                     CaptureSuccess = captureResult.Success,
                     CapturedAmount = captureResult.CapturedAmount,
                     AdditionalAmount = finalAmount - order.FinalPrice,
-                    CaptureMessage = captureResult.Message,
+                    CaptureMessage = captureResult.LeftoverAmount > 0.01m
+                        ? $"{captureResult.Message} (kalan {captureResult.LeftoverAmount:N2} TL)"
+                        : captureResult.Message,
+                    // Leftover Capt başarıdır; teslimatı kilitleme. Yalnız gerçek Capt hatası admin bekler.
                     RequiresAdminAction = !captureResult.Success &&
                         (captureResult.ErrorCode == "EXCEEDED_AUTHORIZATION" ||
                          captureResult.ErrorCode == "WEIGHT_OVERAGE_REQUIRES_MANUAL_COLLECTION" ||

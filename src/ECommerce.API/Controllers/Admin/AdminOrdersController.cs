@@ -35,6 +35,7 @@ namespace ECommerce.API.Controllers.Admin
 
         private readonly IOrderService _orderService;
         private readonly IRefundService _refundService;
+        private readonly IRefundDiagnosticService _refundDiagnosticService;
         private readonly IAuditLogService _auditLogService;
         private readonly IRealTimeNotificationService _notificationService;
         private readonly ILogger<AdminOrdersController> _logger;
@@ -42,12 +43,14 @@ namespace ECommerce.API.Controllers.Admin
         public AdminOrdersController(
             IOrderService orderService,
             IRefundService refundService,
+            IRefundDiagnosticService refundDiagnosticService,
             IAuditLogService auditLogService,
             IRealTimeNotificationService notificationService,
             ILogger<AdminOrdersController> logger)
         {
             _orderService = orderService;
             _refundService = refundService;
+            _refundDiagnosticService = refundDiagnosticService;
             _auditLogService = auditLogService;
             _notificationService = notificationService;
             _logger = logger;
@@ -653,6 +656,32 @@ namespace ECommerce.API.Controllers.Admin
                 message = result.Message,
                 refundRequest = result.RefundRequest
             });
+        }
+
+        /// <summary>
+        /// Başarısız iade taleplerinin teşhis raporu (Faz 0).
+        /// HostLogKey, tutar uyumu ve önerilen banka operasyonunu döner.
+        /// </summary>
+        [HttpGet("refund-requests/diagnostics/failed")]
+        public async Task<IActionResult> GetFailedRefundDiagnostics()
+        {
+            var report = await _refundDiagnosticService.GetFailedRefundsDiagnosticAsync();
+            return Ok(new { success = true, data = report });
+        }
+
+        /// <summary>
+        /// Tek sipariş için iade teşhis raporu (Faz 0).
+        /// </summary>
+        [HttpGet("{orderId:int}/refund-diagnostics")]
+        public async Task<IActionResult> GetOrderRefundDiagnostics(int orderId)
+        {
+            var report = await _refundDiagnosticService.GetOrderDiagnosticAsync(orderId);
+            if (report == null)
+            {
+                return NotFound(new { success = false, message = "Sipariş bulunamadı." });
+            }
+
+            return Ok(new { success = true, data = report });
         }
 
         /// <summary>

@@ -63,6 +63,24 @@ namespace ECommerce.Business.Services.Managers
                 OrderStatus.Refunded       // Tam iade
             },
 
+            // KG Auth: 3DS provizyon sonrası (para henüz çekilmedi)
+            [OrderStatus.PreAuthorized] = new HashSet<OrderStatus>
+            {
+                OrderStatus.Confirmed,
+                OrderStatus.Cancelled,
+                OrderStatus.Refunded
+            },
+
+            // Legacy WeightPending: canlı akışta kullanılmaz (tartı Preparing'de).
+            // Eski kayıtlara takılmamak için Ready/Assigned/iptal bırakılır.
+            [OrderStatus.WeightPending] = new HashSet<OrderStatus>
+            {
+                OrderStatus.Ready,
+                OrderStatus.Assigned,
+                OrderStatus.Cancelled,
+                OrderStatus.Refunded
+            },
+
             // ═══════════════════════════════════════════════════════════════════════════
             // HAZIRLAMA AŞAMASI (Store Attendant)
             // ═══════════════════════════════════════════════════════════════════════════
@@ -297,7 +315,9 @@ namespace ECommerce.Business.Services.Managers
             [OrderStatus.PartialRefund] = "Kısmi İade Yapıldı",
             [OrderStatus.Cancelled] = "İptal Edildi",
             [OrderStatus.PaymentFailed] = "Ödeme Başarısız",
-            [OrderStatus.ChargebackPending] = "Chargeback Bekleniyor"
+            [OrderStatus.ChargebackPending] = "Chargeback Bekleniyor",
+            [OrderStatus.PreAuthorized] = "Provizyon Alındı",
+            [OrderStatus.WeightPending] = "Tartı Bekleniyor (eski)"
         };
 
         public OrderStateMachine(

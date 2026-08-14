@@ -206,6 +206,24 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet.Models
         [Description("Önceki güne ait finansallaştırma reverse edilemez - return kullanın")]
         PreviousDayCaptureUseRefund = 229,
 
+        [Description("İşlem henüz finansallaşmamış - return yerine finansallaştırma iptali (0411)")]
+        NotYetFinanciallySettled = 411,
+
+        [Description("Orijinal işlem bulunamadı (0123)")]
+        OriginalTransactionNotFound = 123,
+
+        [Description("İade edilmiş işlem iptal edilemez (0218)")]
+        CannotReverseAfterRefund = 218,
+
+        [Description("İptal işlemi daha önce yapılmış (0220)")]
+        AlreadyReversed = 220,
+
+        [Description("Banka timeout - tekrar denenebilir (0091)")]
+        BankTimeout091 = 91,
+
+        [Description("İade işlemi yapılamıyor (0450)")]
+        RefundNotAllowed = 450,
+
         // ═══════════════════════════════════════════════════════════════════════
         // UNKNOWN - Tanımlanmamış hata kodu
         // ═══════════════════════════════════════════════════════════════════════

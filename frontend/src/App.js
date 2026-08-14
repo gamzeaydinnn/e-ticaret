@@ -1265,6 +1265,9 @@ function App() {
             </CourierGuard>
           }
         />
+        {/* Eski kurye tartı sayfaları kapatıldı — tartı market görevlisinde */}
+        <Route path="/courier/weight-entry" element={<Navigate to="/courier/dashboard" replace />} />
+        <Route path="/courier/orders/:orderId/weight" element={<Navigate to="/courier/dashboard" replace />} />
         {/* Dispatcher (Sevkiyat Görevlisi) Panel Rotaları */}
         <Route
           path="/dispatch/login"

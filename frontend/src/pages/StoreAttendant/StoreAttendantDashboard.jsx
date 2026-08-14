@@ -737,6 +737,26 @@ export default function StoreAttendantDashboard({
     return Number(fallback) || 0;
   };
 
+  /** Kg + kart: store Teslim Edildi Capt atlar; kurye teslimi zorunlu. */
+  const isKgCardOrder = (order) => {
+    const hasKg = order?.hasWeightBasedItems || order?.HasWeightBasedItems;
+    if (!hasKg) return false;
+    const method = (
+      order.paymentMethod ||
+      order.PaymentMethod ||
+      ""
+    )
+      .toString()
+      .toLowerCase();
+    return ![
+      "cash",
+      "nakit",
+      "cash_on_delivery",
+      "kapida_odeme",
+      "cod",
+    ].some((m) => method === m || method.includes(m));
+  };
+
   const getStatusText = (status) => {
     const normalized = normalizeStatus(status);
     if (weightOnly && normalized === "ready") {
@@ -1400,10 +1420,16 @@ export default function StoreAttendantDashboard({
                           </button>
                         )}
 
-                        {/* Yolda → Teslim */}
+                        {/* Yolda → Teslim (kg kart: kurye Capt yolu) */}
                         {!weightOnly &&
                           normalizeStatus(order.status) ===
                           "out_for_delivery" && (
+                          isKgCardOrder(order) ? (
+                            <div className="alert alert-info py-2 mb-0 small">
+                              <i className="fas fa-info-circle me-1"></i>
+                              Kg kart siparişi kurye teslimatında Capt ile kapanır.
+                            </div>
+                          ) : (
                           <button
                             className="btn btn-dark mobile-action-btn fw-semibold"
                             onClick={() =>
@@ -1413,6 +1439,7 @@ export default function StoreAttendantDashboard({
                             <i className="fas fa-check-double me-2"></i>
                             Teslim Edildi
                           </button>
+                          )
                         )}
 
                         {/* İptal */}

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Services.Managers;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.DTOs.Payment;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -46,6 +47,22 @@ namespace ECommerce.Tests.Services
                 notify.Object,
                 Mock.Of<IInventoryService>(),
                 NullLogger<RefundManager>.Instance);
+        }
+
+        private static void SetupPosnetSuccess(
+            Mock<IExtendedPaymentService> paymentMock,
+            string transactionType = "return")
+        {
+            paymentMock
+                .Setup(p => p.ExecutePosnetRefundAsync(It.IsAny<PosnetRefundExecutionRequest>()))
+                .ReturnsAsync(PosnetRefundExecutionResult.Ok(transactionType, "HLK123456789"));
+        }
+
+        private static void SetupPosnetFailure(Mock<IExtendedPaymentService> paymentMock)
+        {
+            paymentMock
+                .Setup(p => p.ExecutePosnetRefundAsync(It.IsAny<PosnetRefundExecutionRequest>()))
+                .ReturnsAsync(PosnetRefundExecutionResult.Fail("POSNET işlemi başarısız.", "return"));
         }
 
         private static async Task<(Order order, Payments payment)> SeedCardOrderAsync(
@@ -98,14 +115,11 @@ namespace ECommerce.Tests.Services
         public async Task AdminCancel_WhenPosnetFails_DoesNotCancelOrder()
         {
             using var db = CreateDb();
-            var (order, payment) = await SeedCardOrderAsync(
+            var (order, _) = await SeedCardOrderAsync(
                 db, OrderStatus.Preparing, "Paid", "sale");
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.CancelPaymentAsync(It.IsAny<int>(), It.IsAny<string?>()))
-                .ReturnsAsync(false);
-            paymentMock.Setup(p => p.PartialRefundAsync(It.IsAny<int>(), It.IsAny<decimal>()))
-                .ReturnsAsync(false);
+            SetupPosnetFailure(paymentMock);
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.AdminCancelOrderWithRefundAsync(order.Id, 1, "test fail");
@@ -129,15 +143,17 @@ namespace ECommerce.Tests.Services
                 paymentCreatedAt: DateTime.UtcNow.AddDays(-2));
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.PartialRefundAsync(payment.Id, 100m))
-                .ReturnsAsync(true);
+            SetupPosnetSuccess(paymentMock, "return");
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.AdminCancelOrderWithRefundAsync(order.Id, 1, "test ok");
 
             Assert.True(result.Success);
-            paymentMock.Verify(p => p.PartialRefundAsync(payment.Id, 100m), Times.Once);
-            paymentMock.Verify(p => p.CancelPaymentAsync(It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
+            paymentMock.Verify(
+                p => p.ExecutePosnetRefundAsync(
+                    It.Is<PosnetRefundExecutionRequest>(r =>
+                        r.PaymentId == payment.Id && r.RefundAmount == 100m)),
+                Times.Once);
 
             var reloaded = await db.Orders.FindAsync(order.Id);
             Assert.Equal(OrderStatus.Cancelled, reloaded!.Status);
@@ -153,15 +169,16 @@ namespace ECommerce.Tests.Services
                 paymentCreatedAt: DateTime.UtcNow.AddDays(-1));
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.CancelPaymentAsync(payment.Id, It.IsAny<string?>()))
-                .ReturnsAsync(true);
+            SetupPosnetSuccess(paymentMock, "reverse");
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.AdminCancelOrderWithRefundAsync(order.Id, 1, "auth reverse");
 
             Assert.True(result.Success);
-            paymentMock.Verify(p => p.CancelPaymentAsync(payment.Id, It.IsAny<string?>()), Times.Once);
-            paymentMock.Verify(p => p.PartialRefundAsync(It.IsAny<int>(), It.IsAny<decimal>()), Times.Never);
+            paymentMock.Verify(
+                p => p.ExecutePosnetRefundAsync(
+                    It.Is<PosnetRefundExecutionRequest>(r => r.IsAuthOnly && r.PaymentId == payment.Id)),
+                Times.Once);
 
             var reloaded = await db.Orders.FindAsync(order.Id);
             Assert.Equal(OrderStatus.Cancelled, reloaded!.Status);
@@ -174,14 +191,13 @@ namespace ECommerce.Tests.Services
         public async Task CustomerAutoCancel_NextDayBeforePickup_StillAllowed()
         {
             using var db = CreateDb();
-            var (order, payment) = await SeedCardOrderAsync(
+            var (order, _) = await SeedCardOrderAsync(
                 db, OrderStatus.Preparing, "Paid", "sale",
                 orderDateUtc: DateTime.UtcNow.AddDays(-5),
                 paymentCreatedAt: DateTime.UtcNow.AddDays(-5));
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.PartialRefundAsync(payment.Id, 100m))
-                .ReturnsAsync(true);
+            SetupPosnetSuccess(paymentMock);
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.CreateRefundRequestAsync(order.Id, 42, new CreateRefundRequestDto
@@ -203,10 +219,7 @@ namespace ECommerce.Tests.Services
                 db, OrderStatus.Ready, "Paid", "sale");
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.CancelPaymentAsync(It.IsAny<int>(), It.IsAny<string?>()))
-                .ReturnsAsync(false);
-            paymentMock.Setup(p => p.PartialRefundAsync(It.IsAny<int>(), It.IsAny<decimal>()))
-                .ReturnsAsync(false);
+            SetupPosnetFailure(paymentMock);
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.CreateRefundRequestAsync(order.Id, 42, new CreateRefundRequestDto
@@ -243,8 +256,9 @@ namespace ECommerce.Tests.Services
             Assert.Equal(OrderStatus.PickedUp, (await db.Orders.FindAsync(order.Id))!.Status);
             Assert.Equal(RefundRequestStatus.Pending,
                 (await db.RefundRequests.SingleAsync(r => r.OrderId == order.Id)).Status);
-            paymentMock.Verify(p => p.CancelPaymentAsync(It.IsAny<int>(), It.IsAny<string?>()), Times.Never);
-            paymentMock.Verify(p => p.PartialRefundAsync(It.IsAny<int>(), It.IsAny<decimal>()), Times.Never);
+            paymentMock.Verify(
+                p => p.ExecutePosnetRefundAsync(It.IsAny<PosnetRefundExecutionRequest>()),
+                Times.Never);
         }
 
         [Fact]
@@ -257,18 +271,55 @@ namespace ECommerce.Tests.Services
                 paymentCreatedAt: DateTime.UtcNow);
 
             var paymentMock = new Mock<IExtendedPaymentService>();
-            paymentMock.Setup(p => p.CancelPaymentAsync(payment.Id, It.IsAny<string?>()))
-                .ReturnsAsync(true);
+            SetupPosnetSuccess(paymentMock, "reverse");
 
             var sut = CreateSut(db, paymentMock);
             var result = await sut.AdminCancelOrderWithRefundAsync(order.Id, 1, "same day");
 
             Assert.True(result.Success);
-            paymentMock.Verify(p => p.CancelPaymentAsync(payment.Id, It.IsAny<string?>()), Times.Once);
-            paymentMock.Verify(p => p.PartialRefundAsync(It.IsAny<int>(), It.IsAny<decimal>()), Times.Never);
+            paymentMock.Verify(
+                p => p.ExecutePosnetRefundAsync(
+                    It.Is<PosnetRefundExecutionRequest>(r => r.PaymentId == payment.Id)),
+                Times.Once);
 
             var req = await db.RefundRequests.SingleAsync(r => r.OrderId == order.Id);
             Assert.Equal("reverse", req.TransactionType);
+        }
+
+        [Fact]
+        public async Task ProcessRefundRequest_WhenBankFails_ReturnsFailedResult()
+        {
+            using var db = CreateDb();
+            var (order, _) = await SeedCardOrderAsync(
+                db, OrderStatus.PickedUp, "Paid", "sale",
+                paymentCreatedAt: DateTime.UtcNow.AddDays(-2));
+
+            var refundRequest = new RefundRequest
+            {
+                OrderId = order.Id,
+                UserId = 42,
+                Reason = "ürün hasarlı",
+                RefundType = "full",
+                RefundAmount = 100m,
+                OrderStatusAtRequest = order.Status.ToString(),
+                Status = RefundRequestStatus.Pending
+            };
+            db.RefundRequests.Add(refundRequest);
+            await db.SaveChangesAsync();
+
+            var paymentMock = new Mock<IExtendedPaymentService>();
+            SetupPosnetFailure(paymentMock);
+
+            var sut = CreateSut(db, paymentMock);
+            var result = await sut.ProcessRefundRequestAsync(
+                refundRequest.Id,
+                1,
+                new ProcessRefundDto { Approve = true, AdminNote = "onay" });
+
+            Assert.False(result.Success);
+            Assert.Equal("PAYMENT_REFUND_FAILED", result.ErrorCode);
+            Assert.Equal(RefundRequestStatus.RefundFailed,
+                (await db.RefundRequests.FindAsync(refundRequest.Id))!.Status);
         }
     }
 }

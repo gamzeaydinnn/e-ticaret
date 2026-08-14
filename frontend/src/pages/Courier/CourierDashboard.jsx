@@ -1075,7 +1075,7 @@ export default function CourierDashboard() {
                                       ? `⚠️ Bu siparişte tartı farkı var!\n\nToplam Tutar: ${finalAmt.toFixed(2)} ₺\nEk Tahsilat: +${priceDiff.toFixed(2)} ₺\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`
                                       : `Bu siparişte ağırlık bazlı ürün var.\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`;
                                     if (window.confirm(msg)) {
-                                      navigate(`/courier/orders`);
+                                      navigate(`/courier/orders/${order.id}`);
                                     }
                                     return;
                                   }

@@ -26,6 +26,11 @@ namespace ECommerce.Core.DTOs.Admin
         public int PendingRefundRequests { get; set; }
         public int FailedRefunds { get; set; }
         public decimal TotalRefundedAmount { get; set; }
+        /// <summary>
+        /// Başarısız iadelerin banka respCode dağılımı (0211, 0411, 0220 vb.).
+        /// Operasyon ekibinin kök neden analizi için kullanılır.
+        /// </summary>
+        public List<AdminDashboardStatusCountDto> RefundFailureBreakdown { get; set; } = new();
         public List<AdminDashboardMetricPointDto> DailyMetrics { get; set; } = new();
         public List<AdminDashboardStatusCountDto> OrderStatusDistribution { get; set; } = new();
         public List<AdminDashboardStatusCountDto> PaymentStatusDistribution { get; set; } = new();

@@ -1187,9 +1187,25 @@ namespace ECommerce.Business.Services.Managers
             return MoveOrderToStatusAsync(orderId, OrderStatus.OutForDelivery);
         }
 
-        public Task<OrderListDto?> MarkOrderAsDeliveredAsync(int orderId)
+        public async Task<OrderListDto?> MarkOrderAsDeliveredAsync(int orderId)
         {
-            return MoveOrderToStatusAsync(orderId, OrderStatus.Delivered);
+            var order = await _context.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(o => o.Id == orderId);
+
+            if (order == null)
+            {
+                return null;
+            }
+
+            // Faz D: Kg kart siparişinde store Teslim Edildi Capt'i atlar.
+            // NEDEN kurye yolu: MarkDelivered → CapturePaymentAsync tek Capt noktası.
+            if (WeightBasedWeighingGate.ShouldBlockStoreDelivery(order))
+            {
+                throw new InvalidOperationException(WeightBasedWeighingGate.StoreDeliveryDeniedMessage);
+            }
+
+            return await MoveOrderToStatusAsync(orderId, OrderStatus.Delivered);
         }
 
         public Task<OrderListDto?> CancelOrderByAdminAsync(int orderId)
@@ -1745,6 +1761,12 @@ namespace ECommerce.Business.Services.Managers
                 throw new InvalidOperationException($"Sipariş hazır olarak işaretlenemez. Mevcut durum: {order.Status}");
             }
 
+            // Faz D: Kg kalemler tartılmadan Ready yok — Capt tahmini tutarı çekmesin.
+            if (!WeightBasedWeighingGate.CanMarkReady(order))
+            {
+                throw new InvalidOperationException(WeightBasedWeighingGate.UnweighedReadyMessage);
+            }
+
             var previousStatus = order.Status;
             order.Status = OrderStatus.Ready;
             order.ReadyAt = DateTime.UtcNow;
@@ -1797,6 +1819,7 @@ namespace ECommerce.Business.Services.Managers
                 OrderStatus.DeliveryPaymentPending,
                 OrderStatus.New,        // Admin panelinden yeni siparişler de görünsün
                 OrderStatus.Paid,
+                OrderStatus.PreAuthorized,
                 OrderStatus.Cancelled,
                 OrderStatus.Processing,
                 OrderStatus.Shipped,

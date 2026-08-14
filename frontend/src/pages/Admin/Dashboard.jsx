@@ -136,6 +136,7 @@ export default function Dashboard() {
     pendingRefundRequests: 0,
     failedRefunds: 0,
     totalRefundedAmount: 0,
+    refundFailureBreakdown: [],
     recentOrders: [],
     topProducts: [],
     dailyMetrics: [],
@@ -246,6 +247,8 @@ export default function Dashboard() {
         readField(data, "pendingRefundRequests", "PendingRefundRequests") || 0;
       const failedRefunds =
         readField(data, "failedRefunds", "FailedRefunds") || 0;
+      const refundFailureBreakdown =
+        readField(data, "refundFailureBreakdown", "RefundFailureBreakdown") || [];
       const totalRefundedAmount =
         readField(data, "totalRefundedAmount", "TotalRefundedAmount") || 0;
 
@@ -265,6 +268,7 @@ export default function Dashboard() {
         pendingRefundRequests,
         failedRefunds,
         totalRefundedAmount,
+        refundFailureBreakdown,
         recentOrders,
         topProducts,
         dailyMetrics,
@@ -555,6 +559,15 @@ export default function Dashboard() {
                 <div className="dashboard-kpi kpi-pink" style={{borderLeft: '4px solid #ef4444'}}>
                   <span>Başarısız İade</span>
                   <strong>{stats.failedRefunds.toLocaleString("tr-TR")}</strong>
+                  {stats.refundFailureBreakdown?.length > 0 && (
+                    <small className="d-block mt-1 text-muted" style={{fontSize: '0.75rem', lineHeight: 1.3}}>
+                      {stats.refundFailureBreakdown.slice(0, 3).map((item) => (
+                        <span key={item.label || item.Label} className="d-block">
+                          {item.label || item.Label}: {(item.count ?? item.Count ?? 0).toLocaleString("tr-TR")}
+                        </span>
+                      ))}
+                    </small>
+                  )}
                 </div>
               </div>
             )}

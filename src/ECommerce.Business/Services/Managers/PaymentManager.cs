@@ -19,6 +19,7 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Services.Payment;
 using ECommerce.Infrastructure.Services.Payment.Posnet;
 using ECommerce.Infrastructure.Services.Payment.Posnet.Models;
+using ECommerce.Business.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -44,6 +45,12 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>Kısmi iade işlemi</summary>
         Task<bool> PartialRefundAsync(int paymentId, decimal amount);
+
+        /// <summary>
+        /// POSNET iade/iptal birleşik yürütücü.
+        /// reverse/return seçimi, 0211 ve 0411 fallback tek noktada yapılır.
+        /// </summary>
+        Task<PosnetRefundExecutionResult> ExecutePosnetRefundAsync(PosnetRefundExecutionRequest request);
 
         /// <summary>World Puan sorgulama (POSNET)</summary>
         Task<WorldPointsResult?> QueryWorldPointsAsync(string cardNumber, string expireDate, string cvv);
@@ -133,6 +140,13 @@ namespace ECommerce.Business.Services.Managers
                 _ => false
             };
         }
+
+        /// <summary>
+        /// KG siparişlerde POSNET Auth kullanılsın mı?
+        /// Tek config kaynağı: PaymentSettings:PosnetUseAuthForWeightBasedItems.
+        /// </summary>
+        private bool IsPosnetAuthEnabledForWeightItems()
+            => _configuration.GetValue("PaymentSettings:PosnetUseAuthForWeightBasedItems", false);
 
         /// <summary>
         /// Payment method string'ine göre uygun provider'ı seçer
@@ -586,23 +600,20 @@ namespace ECommerce.Business.Services.Managers
                 };
             }
 
-            // NEDEN: Tartılı siparişte capture öncesi bankaya doğrudan sale gönderilemez.
-            // Bu yüzden tahmini tutar + marj üzerinden auth alınır.
-            const decimal preAuthMarginPercentage = 0.20m;
-            var estimatedAmount = dto.Amount > 0 ? dto.Amount : order.FinalPrice;
-            var preAuthAmount = order.PreAuthAmount > 0
-                ? order.PreAuthAmount
-                : Math.Round(estimatedAmount * (1 + preAuthMarginPercentage), 2, MidpointRounding.AwayFromZero);
+            // NEDEN: Tartılı siparişte checkout Sale yapılamaz; Capt teslimatta gerçek tartıya göre çekilir.
+            // Auth tutarı sepet toplamıdır (+%20 şişirme yok). %20 yalnız banka Capt tavanıdır.
+            var preAuthAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, dto.Amount);
+            var useAuth = IsPosnetAuthEnabledForWeightItems();
+            var txnType = useAuth ? "Auth" : "Sale";
 
             try
             {
-                // NEDEN: Tartılı ürünlerde 3D açık ise akışı direkt auth ile başlatmamız gerekir.
-                // Aksi halde callback sonunda finansal satış oluşur ve capture akışı anlamsız hale gelir.
+                // Flag kapalıysa (eski 0058) Sale'e düş; açıkken Auth zorunlu.
                 if (dto.Use3DSecure)
                 {
                     order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
                     order.PreAuthAmount = preAuthAmount;
-                    order.TolerancePercentage = preAuthMarginPercentage;
+                    order.TolerancePercentage = WeightBasedCapturePolicy.CaptureOveragePercent / 100m;
                     order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                         ? WeightAdjustmentStatus.PendingWeighing
                         : order.WeightAdjustmentStatus;
@@ -615,7 +626,7 @@ namespace ECommerce.Business.Services.Managers
                         dto.ExpireDate!,
                         dto.Cvv!,
                         preAuthAmount,
-                        "Auth",
+                        txnType,
                         dto.GetNormalizedInstallment(),
                         CancellationToken.None);
 
@@ -689,7 +700,7 @@ namespace ECommerce.Business.Services.Managers
                 order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
                 order.PreAuthAmount = preAuthAmount;
                 order.AuthorizedAmount = preAuthAmount;
-                order.TolerancePercentage = preAuthMarginPercentage;
+                order.TolerancePercentage = WeightBasedCapturePolicy.CaptureOveragePercent / 100m;
                 order.PreAuthDate = DateTime.UtcNow;
                 order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                     ? WeightAdjustmentStatus.PendingWeighing
@@ -760,26 +771,24 @@ namespace ECommerce.Business.Services.Managers
 
             try
             {
-                // ── KG ÜRÜN FIX: PreAuthAmount kontrolü ────────────────────────────
-                // KG bazlı ürünlerde Order.PreAuthAmount kullan (121 TL gibi hesaplanmış tutar)
-                // Normal ürünlerde dto.Amount veya Order.FinalPrice kullan
                 var order = await _db.Orders
                     .Include(o => o.OrderItems)
                     .FirstOrDefaultAsync(o => o.Id == dto.OrderId, cancellationToken);
-                
+
+                // KG: Auth tutarı sepet toplamı (PreAuthAmount). txnType config flag'ine bağlı.
+                // NEDEN flag: Eski 0058 (Auth yetkisi yok) Sale'e düşürüyordu; yetki açılınca Auth zorunlu.
                 decimal effectiveAmount;
                 string txnType = "Sale";
                 
-                if (order != null && order.HasWeightBasedItems && order.PreAuthAmount > 0)
+                if (order != null && (order.HasWeightBasedItems || order.OrderItems?.Any(oi => oi.IsWeightBased) == true))
                 {
-                    // KG ürün var VE PreAuthAmount hesaplanmış → Auth işlemi yap
-                    effectiveAmount = order.PreAuthAmount;
-                    txnType = "Auth"; // KG ürünlerde provizyon, tartı sonrası capture
+                    effectiveAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, dto.Amount);
+                    txnType = IsPosnetAuthEnabledForWeightItems() ? "Auth" : "Sale";
                     
                     _logger?.LogInformation(
                         "[PAYMENT] KG ürün 3DS başlatılıyor. OrderId: {OrderId}, " +
-                        "PreAuthAmount: {PreAuthAmount} TL (dto.Amount: {DtoAmount} TL)",
-                        dto.OrderId, effectiveAmount, dto.Amount);
+                        "Amount: {Amount} TL, TxnType: {TxnType}",
+                        dto.OrderId, effectiveAmount, txnType);
                 }
                 else
                 {
@@ -953,7 +962,9 @@ namespace ECommerce.Business.Services.Managers
                         _logger?.LogWarning(
                             "POSNET reverse engellendi: Siparişte kısmi iade mevcut. PaymentId: {PaymentId}, OrderId: {OrderId}",
                             paymentId, payment.OrderId);
-                        return await PartialRefundAsync(paymentId, payment.Amount - (payment.RefundedAmount ?? 0m));
+                        var orderForPartial = await GetOrderForPaymentAsync(payment.OrderId);
+                        var maxRef = ResolveMaxRefundableAmount(orderForPartial, payment);
+                        return await PartialRefundAsync(paymentId, maxRef - (payment.RefundedAmount ?? 0m));
                     }
 
                     var result = await _posnet.ProcessReverseAsync(payment.OrderId, hostLogKey);
@@ -1015,7 +1026,9 @@ namespace ECommerce.Business.Services.Managers
                             _logger?.LogWarning(
                                 "POSNET reverse grup kapama (0211) - return fallback deneniyor. PaymentId: {PaymentId}",
                                 paymentId);
-                            return await PartialRefundAsync(paymentId, payment.Amount - (payment.RefundedAmount ?? 0m));
+                            var orderForFallback = await GetOrderForPaymentAsync(payment.OrderId);
+                            var maxRef = ResolveMaxRefundableAmount(orderForFallback, payment);
+                            return await PartialRefundAsync(paymentId, maxRef - (payment.RefundedAmount ?? 0m));
                         }
 
                         _logger?.LogError("POSNET para iadesi başarısız. PaymentId: {PaymentId}, Hata: {Error}", paymentId, result.Error);
@@ -1059,13 +1072,15 @@ namespace ECommerce.Business.Services.Managers
                 return false;
             }
 
+            var order = await GetOrderForPaymentAsync(payment.OrderId);
+            var maxRefundableAmount = ResolveMaxRefundableAmount(order, payment);
             var alreadyRefundedAmount = payment.RefundedAmount ?? 0m;
-            var remainingRefundableAmount = payment.Amount - alreadyRefundedAmount;
-            if (amount <= 0 || amount > remainingRefundableAmount)
+            var remainingRefundableAmount = maxRefundableAmount - alreadyRefundedAmount;
+            if (amount <= 0 || amount > remainingRefundableAmount + 0.01m)
             {
                 _logger?.LogWarning(
-                    "Partial refund failed: Invalid amount. Id: {PaymentId}, Amount: {Amount}, RemainingRefundable: {RemainingRefundable}",
-                    paymentId, amount, remainingRefundableAmount);
+                    "Partial refund failed: Invalid amount. Id: {PaymentId}, Amount: {Amount}, RemainingRefundable: {RemainingRefundable}, MaxRefundable: {MaxRefundable}",
+                    paymentId, amount, remainingRefundableAmount, maxRefundableAmount);
                 return false;
             }
 
@@ -1106,7 +1121,7 @@ namespace ECommerce.Business.Services.Managers
                         payment.UpdatedAt = DateTime.UtcNow;
 
                         // Tam iade olduysa payment status güncelle (sipariş durumu RefundManager'da)
-                        if (payment.RefundedAmount >= payment.Amount)
+                        if (payment.RefundedAmount >= maxRefundableAmount - 0.01m)
                         {
                             payment.Status = "Refunded";
                         }
@@ -1130,7 +1145,21 @@ namespace ECommerce.Business.Services.Managers
                     }
                     else
                     {
-                        _logger?.LogError("POSNET kısmi iade başarısız. PaymentId: {PaymentId}, Hata: {Error}", paymentId, result.Error);
+                        var errorText = result.Error ?? string.Empty;
+                        _logger?.LogError(
+                            "POSNET kısmi iade başarısız. PaymentId: {PaymentId}, Hata: {Error}, Code: {Code}",
+                            paymentId, result.Error, result.ErrorCode);
+
+                        // 0411: Henüz finansallaşmamış — banka return yerine capt reverse ister
+                        if (PosnetRefundBankErrorHelper.IsNotYetSettledError(result.ErrorCode, errorText) &&
+                            amount >= remainingRefundableAmount - 0.01m)
+                        {
+                            _logger?.LogWarning(
+                                "POSNET 0411 — capt reverse fallback deneniyor. PaymentId: {PaymentId}",
+                                paymentId);
+                            return await CancelPaymentAsync(paymentId, "0411 fallback - capt reverse");
+                        }
+
                         return false;
                     }
                 }
@@ -1361,6 +1390,419 @@ namespace ECommerce.Business.Services.Managers
                     p.Status == "PartiallyRefunded" ||
                     ((p.RefundedAmount ?? 0m) > 0m && p.Status != "Cancelled")
                 ));
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // POSNET BİRLEŞİK İADE YÜRÜTÜCÜ (Faz 1 + Faz 3/4)
+        // Retry, idempotency (0220), banka respCode ve fallback tek noktada.
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /// <summary>Geçici banka hatalarında otomatik retry üst sınırı.</summary>
+        private const int MaxPosnetTransientRetryAttempts = 2;
+
+        private sealed record PosnetBankCallResult(
+            bool Success,
+            PosnetErrorCode ErrorCode,
+            string? RawErrorCode,
+            string? ErrorMessage,
+            string? HostLogKey);
+
+        /// <inheritdoc />
+        public async Task<PosnetRefundExecutionResult> ExecutePosnetRefundAsync(
+            PosnetRefundExecutionRequest request)
+        {
+            if (request == null)
+            {
+                return PosnetRefundExecutionResult.Fail("Geçersiz iade isteği.");
+            }
+
+            if (request.RefundAmount <= 0)
+            {
+                return PosnetRefundExecutionResult.Fail("İade tutarı sıfırdan büyük olmalıdır.");
+            }
+
+            var payment = await _db.Payments.FirstOrDefaultAsync(p => p.Id == request.PaymentId);
+            if (payment == null)
+            {
+                return PosnetRefundExecutionResult.Fail(
+                    $"Ödeme kaydı bulunamadı. PaymentId={request.PaymentId}");
+            }
+
+            if (_posnet == null)
+            {
+                return PosnetRefundExecutionResult.Fail("POSNET servisi kayıtlı değil.");
+            }
+
+            var order = await GetOrderForPaymentAsync(request.OrderId);
+            var maxRefundable = request.MaxRefundableAmount > 0
+                ? request.MaxRefundableAmount
+                : ResolveMaxRefundableAmount(order, payment);
+            var remaining = maxRefundable - (payment.RefundedAmount ?? 0m);
+
+            if (request.RefundAmount > remaining + 0.01m)
+            {
+                return PosnetRefundExecutionResult.Fail(
+                    $"İade tutarı kalan iade edilebilir tutarı ({remaining:N2} TL) aşıyor.");
+            }
+
+            var hostLogKey = ResolvePosnetReference(payment) ?? request.PreAuthHostLogKey;
+
+            try
+            {
+                if (request.IsAuthOnly)
+                {
+                    var authPaymentId = string.Equals(payment.Status, "Authorized", StringComparison.OrdinalIgnoreCase)
+                        ? payment.Id
+                        : request.PaymentId;
+
+                    var authResult = await RunPosnetReverseFlowAsync(
+                        payment, order, authPaymentId, request.RefundAmount, remaining, maxRefundable,
+                        $"{request.Reason} (provizyon reverse)");
+
+                    return ToExecutionResult(authResult, "reverse", hostLogKey);
+                }
+
+                if (ShouldUsePosnetSameDayReverse(payment, request.RefundAmount, remaining))
+                {
+                    var reverseResult = await RunPosnetReverseFlowAsync(
+                        payment, order, request.PaymentId, request.RefundAmount, remaining, maxRefundable,
+                        $"{request.Reason} (aynı gün reverse)");
+
+                    if (reverseResult.Success)
+                    {
+                        return ToExecutionResult(reverseResult, "reverse", hostLogKey);
+                    }
+
+                    // 0211/0229 fallback: return dene
+                    if (PosnetRefundBankErrorHelper.IsGroupClosedError(reverseResult.ErrorCode, reverseResult.ErrorMessage))
+                    {
+                        _logger?.LogWarning(
+                            "[POSNET-EXEC] Grup kapama — return fallback. OrderId={OrderId}",
+                            request.OrderId);
+                    }
+
+                    var returnFallback = await RunPosnetReturnFlowAsync(
+                        payment, order, request.RefundAmount, remaining, maxRefundable,
+                        $"{request.Reason} (reverse fallback return)");
+
+                    return ToExecutionResult(returnFallback, "return", hostLogKey);
+                }
+
+                var returnResult = await RunPosnetReturnFlowAsync(
+                    payment, order, request.RefundAmount, remaining, maxRefundable,
+                    request.Reason);
+
+                if (!returnResult.Success &&
+                    PosnetRefundBankErrorHelper.IsNotYetSettledError(returnResult.ErrorCode, returnResult.ErrorMessage) &&
+                    request.RefundAmount >= remaining - 0.01m)
+                {
+                    _logger?.LogWarning(
+                        "[POSNET-EXEC] 0411 — capt reverse fallback. OrderId={OrderId}",
+                        request.OrderId);
+
+                    var captReverse = await RunPosnetReverseFlowAsync(
+                        payment, order, request.PaymentId, request.RefundAmount, remaining, maxRefundable,
+                        $"{request.Reason} (0411 capt reverse)");
+
+                    return ToExecutionResult(captReverse, "reverse", hostLogKey);
+                }
+
+                return ToExecutionResult(returnResult, "return", hostLogKey);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex,
+                    "[POSNET-EXEC] İade yürütme hatası. OrderId={OrderId}, PaymentId={PaymentId}",
+                    request.OrderId, request.PaymentId);
+
+                return PosnetRefundExecutionResult.Fail($"POSNET hatası: {ex.Message}");
+            }
+        }
+
+        private static PosnetRefundExecutionResult ToExecutionResult(
+            PosnetBankCallResult bankResult,
+            string transactionType,
+            string? fallbackHostLogKey)
+        {
+            if (bankResult.Success)
+            {
+                return PosnetRefundExecutionResult.Ok(
+                    transactionType,
+                    bankResult.HostLogKey ?? fallbackHostLogKey);
+            }
+
+            var rawCode = PosnetRefundBankErrorHelper.NormalizeResponseCode(bankResult.RawErrorCode);
+            return PosnetRefundExecutionResult.Fail(
+                PosnetRefundBankErrorHelper.FormatFailureReason(rawCode, bankResult.ErrorMessage),
+                transactionType,
+                rawCode,
+                bankResult.ErrorMessage);
+        }
+
+        /// <summary>
+        /// POSNET reverse + DB güncelleme. 0220 idempotency: ödeme zaten iptalse başarı say.
+        /// </summary>
+        private async Task<PosnetBankCallResult> RunPosnetReverseFlowAsync(
+            Payments payment,
+            Order? order,
+            int paymentId,
+            decimal refundAmount,
+            decimal remaining,
+            decimal maxRefundable,
+            string? reason)
+        {
+            if (_posnet == null)
+            {
+                return new PosnetBankCallResult(false, PosnetErrorCode.SystemError, null, "POSNET servisi yok", null);
+            }
+
+            if (await HasCompletedPartialRefundAsync(payment.OrderId, paymentId))
+            {
+                var partialOk = await PartialRefundAsync(paymentId, remaining);
+                return partialOk
+                    ? new PosnetBankCallResult(true, PosnetErrorCode.Success, "0", null, payment.HostLogKey)
+                    : new PosnetBankCallResult(false, PosnetErrorCode.CannotReverseAfterRefund, "0218",
+                        "Kısmi iade sonrası reverse yerine return başarısız.", null);
+            }
+
+            var hostLogKey = ResolvePosnetReference(payment);
+            if (string.IsNullOrEmpty(hostLogKey))
+            {
+                return new PosnetBankCallResult(false, PosnetErrorCode.InvalidOrderId, null,
+                    "HostLogKey bulunamadı.", null);
+            }
+
+            var bankResult = await CallPosnetReverseWithRetryAsync(payment.OrderId, hostLogKey);
+
+            // 0220 idempotency — banka zaten iptal etmiş, DB senkron değilse başarı kabul et
+            if (!bankResult.Success &&
+                PosnetRefundBankErrorHelper.IsAlreadyReversedError(bankResult.ErrorCode, bankResult.ErrorMessage) &&
+                IsPaymentAlreadyReversed(payment))
+            {
+                _logger?.LogWarning(
+                    "[POSNET-EXEC] 0220 idempotency — ödeme zaten iptal. PaymentId={PaymentId}",
+                    paymentId);
+                bankResult = bankResult with { Success = true };
+            }
+
+            if (!bankResult.Success)
+            {
+                return bankResult;
+            }
+
+            if (string.Equals(payment.TransactionType, "capt", StringComparison.OrdinalIgnoreCase))
+            {
+                var authReverseOk = await ReverseLinkedPosnetAuthAsync(order, payment.OrderId, reason);
+                if (!authReverseOk)
+                {
+                    payment.Status = "ReversePendingAuthReverse";
+                    payment.UpdatedAt = DateTime.UtcNow;
+                    await _db.SaveChangesAsync();
+                    return new PosnetBankCallResult(false, PosnetErrorCode.SystemError, null,
+                        "Capt reverse OK ancak auth reverse başarısız.", hostLogKey);
+                }
+            }
+
+            payment.Status = "Cancelled";
+            payment.RefundedAmount = maxRefundable;
+            payment.RefundedAt = DateTime.UtcNow;
+            payment.UpdatedAt = DateTime.UtcNow;
+
+            if (order != null && order.CaptureStatus != CaptureStatus.Voided)
+            {
+                order.CaptureStatus = CaptureStatus.Voided;
+            }
+
+            await _db.SaveChangesAsync();
+
+            _logService.Audit(
+                action: "PAYMENT_CANCELLED_REFUNDED",
+                entityName: "Payments",
+                entityId: paymentId,
+                oldValues: new { Status = "Paid" },
+                newValues: new { Status = "Cancelled", RefundedAmount = maxRefundable, Reason = reason },
+                performedBy: null);
+
+            return bankResult with { HostLogKey = hostLogKey };
+        }
+
+        /// <summary>
+        /// POSNET return + DB güncelleme.
+        /// </summary>
+        private async Task<PosnetBankCallResult> RunPosnetReturnFlowAsync(
+            Payments payment,
+            Order? order,
+            decimal amount,
+            decimal remaining,
+            decimal maxRefundable,
+            string? reason)
+        {
+            if (_posnet == null)
+            {
+                return new PosnetBankCallResult(false, PosnetErrorCode.SystemError, null, "POSNET servisi yok", null);
+            }
+
+            var hostLogKey = ResolvePosnetReference(payment);
+            if (string.IsNullOrEmpty(hostLogKey))
+            {
+                return new PosnetBankCallResult(false, PosnetErrorCode.InvalidOrderId, null,
+                    "HostLogKey bulunamadı.", null);
+            }
+
+            var bankResult = await CallPosnetReturnWithRetryAsync(payment.OrderId, hostLogKey, amount);
+
+            if (!bankResult.Success)
+            {
+                return bankResult;
+            }
+
+            payment.RefundedAmount = (payment.RefundedAmount ?? 0) + amount;
+            payment.RefundedAt = DateTime.UtcNow;
+            payment.UpdatedAt = DateTime.UtcNow;
+            payment.Status = payment.RefundedAmount >= maxRefundable - 0.01m
+                ? "Refunded"
+                : "PartiallyRefunded";
+
+            await _db.SaveChangesAsync();
+
+            _logService.Audit(
+                action: "PAYMENT_REFUNDED",
+                entityName: "Payments",
+                entityId: payment.Id,
+                oldValues: new { RefundedAmount = (payment.RefundedAmount ?? 0) - amount },
+                newValues: new { RefundedAmount = payment.RefundedAmount, Amount = amount, Reason = reason },
+                performedBy: null);
+
+            return bankResult with { HostLogKey = hostLogKey };
+        }
+
+        private async Task<PosnetBankCallResult> CallPosnetReverseWithRetryAsync(int orderId, string hostLogKey)
+        {
+            PosnetBankCallResult? lastResult = null;
+
+            for (var attempt = 1; attempt <= MaxPosnetTransientRetryAttempts; attempt++)
+            {
+                var result = await _posnet!.ProcessReverseAsync(orderId, hostLogKey);
+                if (result.IsSuccess)
+                {
+                    // Reverse yanıtında HostLogKey dönmez; referans orijinal hostLogKey'dir
+                    return new PosnetBankCallResult(
+                        true,
+                        PosnetErrorCode.Success,
+                        "0",
+                        null,
+                        hostLogKey);
+                }
+
+                var rawCode = ResolvePosnetResultRawCode(result);
+                var errorCode = PosnetRefundBankErrorHelper.ResolveErrorCode(rawCode, result.Error);
+                lastResult = new PosnetBankCallResult(false, errorCode, rawCode, result.Error, null);
+
+                if (!PosnetRefundBankErrorHelper.IsTransientRetryableError(errorCode, result.Error) ||
+                    attempt >= MaxPosnetTransientRetryAttempts)
+                {
+                    break;
+                }
+
+                _logger?.LogWarning(
+                    "[POSNET-EXEC] Reverse retry {Attempt}/{Max}. OrderId={OrderId}, Code={Code}",
+                    attempt, MaxPosnetTransientRetryAttempts, orderId, rawCode);
+
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt));
+            }
+
+            return lastResult ?? new PosnetBankCallResult(false, PosnetErrorCode.Unknown, null, "Reverse başarısız", null);
+        }
+
+        private async Task<PosnetBankCallResult> CallPosnetReturnWithRetryAsync(
+            int orderId,
+            string hostLogKey,
+            decimal amount)
+        {
+            PosnetBankCallResult? lastResult = null;
+
+            for (var attempt = 1; attempt <= MaxPosnetTransientRetryAttempts; attempt++)
+            {
+                var result = await _posnet!.ProcessRefundAsync(orderId, hostLogKey, amount);
+                if (result.IsSuccess)
+                {
+                    return new PosnetBankCallResult(
+                        true,
+                        PosnetErrorCode.Success,
+                        "0",
+                        null,
+                        result.Data?.HostLogKey ?? hostLogKey);
+                }
+
+                var rawCode = ResolvePosnetResultRawCode(result);
+                var errorCode = PosnetRefundBankErrorHelper.ResolveErrorCode(rawCode, result.Error);
+                lastResult = new PosnetBankCallResult(false, errorCode, rawCode, result.Error, null);
+
+                if (!PosnetRefundBankErrorHelper.IsTransientRetryableError(errorCode, result.Error) ||
+                    attempt >= MaxPosnetTransientRetryAttempts)
+                {
+                    break;
+                }
+
+                _logger?.LogWarning(
+                    "[POSNET-EXEC] Return retry {Attempt}/{Max}. OrderId={OrderId}, Code={Code}",
+                    attempt, MaxPosnetTransientRetryAttempts, orderId, rawCode);
+
+                await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt));
+            }
+
+            return lastResult ?? new PosnetBankCallResult(false, PosnetErrorCode.Unknown, null, "Return başarısız", null);
+        }
+
+        /// <summary>
+        /// POSNET Result wrapper'ından ham respCode çıkarır.
+        /// Başarısız yanıtta Data dolu olabilir; yoksa ErrorCode enum'undan türetilir.
+        /// </summary>
+        private static string? ResolvePosnetResultRawCode<T>(PosnetResult<T> result)
+            where T : PosnetBaseResponse
+        {
+            if (!string.IsNullOrWhiteSpace(result.Data?.RawErrorCode))
+            {
+                return result.Data.RawErrorCode;
+            }
+
+            if (result.ErrorCode != PosnetErrorCode.Unknown && result.ErrorCode != PosnetErrorCode.Success)
+            {
+                return ((int)result.ErrorCode).ToString("D4");
+            }
+
+            return null;
+        }
+
+        private static bool IsPaymentAlreadyReversed(Payments payment)
+        {
+            return string.Equals(payment.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(payment.Status, "Refunded", StringComparison.OrdinalIgnoreCase)
+                || (payment.RefundedAmount ?? 0m) >= payment.Amount - 0.01m;
+        }
+
+        /// <summary>
+        /// Sipariş + ödeme kaydına göre iade edilebilir üst limit.
+        /// KG/ağırlıklı siparişlerde payment.Amount yerine CapturedAmount kullanılır.
+        /// </summary>
+        private static decimal ResolveMaxRefundableAmount(Order? order, Payments payment)
+        {
+            if (order?.CapturedAmount > 0)
+            {
+                return order.CapturedAmount;
+            }
+
+            if (order?.FinalAmount > 0)
+            {
+                return order.FinalAmount;
+            }
+
+            if (payment.CapturedAmount > 0)
+            {
+                return payment.CapturedAmount;
+            }
+
+            return payment.Amount;
         }
     }
 }

@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Core.DTOs.Inventory;
 using ECommerce.Core.DTOs.Order;
+using ECommerce.Core.DTOs.Payment;
 using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
@@ -265,54 +266,8 @@ namespace ECommerce.Business.Services.Managers
             }
         }
 
-        private static DateTime ConvertUtcToTurkey(DateTime utcDateTime)
-        {
-            var normalizedUtc = utcDateTime.Kind == DateTimeKind.Utc
-                ? utcDateTime
-                : DateTime.SpecifyKind(utcDateTime, DateTimeKind.Utc);
-
-            foreach (var timeZoneId in new[] { "Turkey Standard Time", "Europe/Istanbul" })
-            {
-                try
-                {
-                    var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-                    return TimeZoneInfo.ConvertTimeFromUtc(normalizedUtc, timeZone);
-                }
-                catch (TimeZoneNotFoundException)
-                {
-                }
-                catch (InvalidTimeZoneException)
-                {
-                }
-            }
-
-            return normalizedUtc;
-        }
-
-        private static bool IsSameBusinessDay(DateTime utcDateTime)
-        {
-            return ConvertUtcToTurkey(utcDateTime).Date == ConvertUtcToTurkey(DateTime.UtcNow).Date;
-        }
-
-        private static bool IsFullRemainingRefund(decimal refundAmount, decimal maxRefundableAmount)
-        {
-            return refundAmount >= maxRefundableAmount - 0.01m;
-        }
-
-        private static bool ShouldUseSameDayReverseForCapturedPayment(
-            Payments paymentForRefund,
-            decimal refundAmount,
-            decimal maxRefundableAmount)
-        {
-            return (paymentForRefund.TransactionType == "capt" || paymentForRefund.TransactionType == "sale")
-                && IsFullRemainingRefund(refundAmount, maxRefundableAmount)
-                && IsSameBusinessDay(paymentForRefund.CreatedAt);
-        }
-
         /// <summary>
-        /// Kart iptal/iade: auth-only → reverse(auth);
-        /// aynı gün tam kalan capt/sale → reverse (+0211 fallback return);
-        /// aksi halde return.
+        /// Kart iptal/iade — tüm banka kararları PaymentManager.ExecutePosnetRefundAsync üzerinden.
         /// </summary>
         private async Task<(bool Success, string TransactionType, string? HostLogKey, string? FailureReason)>
             TryProcessCardCancelOrRefundAsync(
@@ -323,67 +278,111 @@ namespace ECommerce.Business.Services.Managers
         {
             var originalPayment = await GetOriginalSaleOrCaptPaymentAsync(order.Id);
             var paymentForRefund = originalPayment ?? payment;
+            var maxRefundable = CalculateRefundAmount(order, paymentForRefund);
 
             try
             {
-                if (IsPaymentInAuthOnlyState(order, payment))
-                {
-                    var authPaymentId = string.Equals(payment.Status, "Authorized", StringComparison.OrdinalIgnoreCase)
-                        ? payment.Id
-                        : paymentForRefund.Id;
-
-                    _logger.LogInformation(
-                        "[İADE] Auth-only reverse. OrderId={OrderId}, PaymentId={PaymentId}",
-                        order.Id, authPaymentId);
-
-                    var cancelResult = await _paymentService.CancelPaymentAsync(
-                        authPaymentId, $"{reason} (provizyon reverse)");
-                    if (cancelResult)
+                var execResult = await _paymentService.ExecutePosnetRefundAsync(
+                    new PosnetRefundExecutionRequest
                     {
-                        return (true, "reverse", order.PreAuthHostLogKey ?? payment.HostLogKey ?? paymentForRefund.HostLogKey, null);
-                    }
+                        OrderId = order.Id,
+                        PaymentId = paymentForRefund.Id,
+                        RefundAmount = refundAmount,
+                        MaxRefundableAmount = maxRefundable,
+                        IsAuthOnly = IsPaymentInAuthOnlyState(order, payment),
+                        PreAuthHostLogKey = order.PreAuthHostLogKey,
+                        Reason = reason
+                    });
 
-                    return (false, "none", null, "Provizyon iptali (reverse auth) başarısız.");
+                var hostLogKey = execResult.HostLogKey
+                    ?? order.PreAuthHostLogKey
+                    ?? paymentForRefund.HostLogKey;
+
+                if (!execResult.Success)
+                {
+                    var failureDetail = BuildBankFailureReason(execResult);
+                    _logger.LogWarning(
+                        "[İADE] POSNET yürütme başarısız. OrderId={OrderId}, Tx={Tx}, Reason={Reason}",
+                        order.Id, execResult.TransactionType, failureDetail);
+
+                    return (false, execResult.TransactionType, hostLogKey, failureDetail);
                 }
 
-                var useSameDayReverse = ShouldUseSameDayReverseForCapturedPayment(
-                    paymentForRefund,
-                    refundAmount,
-                    refundAmount);
-
-                if (useSameDayReverse)
-                {
-                    var cancelResult = await _paymentService.CancelPaymentAsync(
-                        paymentForRefund.Id, $"{reason} (aynı gün reverse)");
-                    if (cancelResult)
-                    {
-                        return (true, "reverse", paymentForRefund.HostLogKey, null);
-                    }
-
-                    var refundFallback = await _paymentService.PartialRefundAsync(
-                        paymentForRefund.Id, refundAmount);
-                    if (refundFallback)
-                    {
-                        return (true, "return", paymentForRefund.HostLogKey, null);
-                    }
-
-                    return (false, "none", null, "POSNET reverse ve return başarısız.");
-                }
-
-                var refundResult = await _paymentService.PartialRefundAsync(
-                    paymentForRefund.Id, refundAmount);
-                if (refundResult)
-                {
-                    return (true, "return", paymentForRefund.HostLogKey, null);
-                }
-
-                return (false, "none", null, "POSNET return başarısız.");
+                return (true, execResult.TransactionType, hostLogKey, null);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[İADE] Kart iade/iptal hatası. OrderId={OrderId}", order.Id);
                 return (false, "none", null, $"POSNET hatası: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Banka hata kodunu RefundFailureReason alanına yazılabilir metne çevirir.
+        /// </summary>
+        private static string BuildBankFailureReason(PosnetRefundExecutionResult result)
+        {
+            // PaymentManager zaten respCode ile formatlanmış FailureReason üretir — tekrar birleştirme
+            if (!string.IsNullOrWhiteSpace(result.FailureReason))
+            {
+                return result.FailureReason;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.BankResponseCode))
+            {
+                return $"{result.BankResponseCode} - {result.BankResponseText ?? "POSNET iade işlemi başarısız oldu."}";
+            }
+
+            return "POSNET iade işlemi başarısız oldu.";
+        }
+
+        /// <summary>
+        /// ExecutePosnetRefundAsync sonucunu RefundRequest alanlarına yansıtır.
+        /// </summary>
+        private static void ApplyPosnetResultToRefundRequest(
+            RefundRequest refundRequest,
+            PosnetRefundExecutionResult execResult,
+            Payments paymentForRefund)
+        {
+            refundRequest.TransactionType = execResult.TransactionType;
+
+            if (execResult.Success)
+            {
+                refundRequest.PosnetHostLogKey = execResult.HostLogKey ?? paymentForRefund.HostLogKey;
+                refundRequest.RefundedAt = DateTime.UtcNow;
+                refundRequest.Status = RefundRequestStatus.Refunded;
+                refundRequest.RefundFailureReason = null;
+                return;
+            }
+
+            refundRequest.Status = RefundRequestStatus.RefundFailed;
+            refundRequest.RefundFailureReason = BuildBankFailureReason(execResult);
+        }
+
+        /// <summary>
+        /// Kart ödemesi için birleşik POSNET yürütme — tüm admin/müşteri akışları bunu kullanır.
+        /// </summary>
+        private async Task<PosnetRefundExecutionResult> ExecuteOrderPosnetRefundAsync(
+            Order order,
+            Payments payment,
+            decimal refundAmount,
+            string reason)
+        {
+            var originalPayment = await GetOriginalSaleOrCaptPaymentAsync(order.Id);
+            var paymentForRefund = originalPayment ?? payment;
+            var maxRefundable = CalculateRefundAmount(order, paymentForRefund);
+
+            return await _paymentService.ExecutePosnetRefundAsync(
+                new PosnetRefundExecutionRequest
+                {
+                    OrderId = order.Id,
+                    PaymentId = paymentForRefund.Id,
+                    RefundAmount = refundAmount,
+                    MaxRefundableAmount = maxRefundable,
+                    IsAuthOnly = IsPaymentInAuthOnlyState(order, payment),
+                    PreAuthHostLogKey = order.PreAuthHostLogKey,
+                    Reason = reason
+                });
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -715,85 +714,37 @@ namespace ECommerce.Business.Services.Managers
             }
 
             bool refundSuccess = false;
+            string transactionType = "none";
 
             if (payment != null && order.PaymentMethod?.ToLower() != "cash_on_delivery"
                                 && order.PaymentMethod?.ToLower() != "kapida_odeme")
             {
-                // MADDE 10: Orijinal sale/capt ödeme kaydını al
                 var originalPayment = await GetOriginalSaleOrCaptPaymentAsync(order.Id);
                 var paymentForRefund = originalPayment ?? payment;
 
                 try
                 {
-                    if (IsPaymentInAuthOnlyState(order, payment))
-                    {
-                        // Provizyon durumu → return yerine reverse(auth)
-                        _logger.LogInformation(
-                            "[İADE-ADMIN] Sipariş Auth durumunda - reverse(auth) yapılıyor. " +
-                            "OrderId={OrderId}", order.Id);
+                    var execResult = await ExecuteOrderPosnetRefundAsync(
+                        order,
+                        payment,
+                        refundAmount,
+                        $"Admin iade onayı: {dto.AdminNote ?? refundRequest.Reason}");
 
-                        var cancelResult = await _paymentService.CancelPaymentAsync(
-                            paymentForRefund.Id, $"Admin iptal (provizyon reverse): {dto.AdminNote}");
-                        if (cancelResult)
-                        {
-                            refundSuccess = true;
-                            refundRequest.TransactionType = "reverse";
-                            refundRequest.PosnetHostLogKey = order.PreAuthHostLogKey ?? paymentForRefund.HostLogKey;
-                            refundRequest.RefundedAt = DateTime.UtcNow;
-                            refundRequest.Status = RefundRequestStatus.Refunded;
-                        }
-                        else
-                        {
-                            refundRequest.Status = RefundRequestStatus.RefundFailed;
-                            refundRequest.RefundFailureReason = "Provizyon iptali (reverse auth) başarısız.";
-                        }
+                    ApplyPosnetResultToRefundRequest(refundRequest, execResult, paymentForRefund);
+                    refundSuccess = execResult.Success;
+                    transactionType = execResult.TransactionType;
+
+                    if (execResult.Success)
+                    {
+                        _logger.LogInformation(
+                            "[İADE] POSNET {Tx} başarılı. OrderId={OrderId}, Amount={Amount}",
+                            execResult.TransactionType, order.Id, refundAmount);
                     }
                     else
                     {
-                        var useSameDayReverse = ShouldUseSameDayReverseForCapturedPayment(
-                            paymentForRefund,
-                            refundAmount,
-                            maxRefundableAmount);
-
-                        bool result;
-                        if (useSameDayReverse)
-                        {
-                            result = await _paymentService.CancelPaymentAsync(
-                                paymentForRefund.Id,
-                                $"Admin iade (aynı gün reverse): {dto.AdminNote}");
-                            refundRequest.TransactionType = result ? "reverse" : "none";
-                        }
-                        else
-                        {
-                            result = await _paymentService.PartialRefundAsync(paymentForRefund.Id, refundAmount);
-                            refundRequest.TransactionType = result ? "return" : "none";
-                        }
-
-                        if (result)
-                        {
-                            refundSuccess = true;
-                            refundRequest.PosnetHostLogKey = paymentForRefund.HostLogKey;
-                            refundRequest.RefundedAt = DateTime.UtcNow;
-                            refundRequest.Status = RefundRequestStatus.Refunded;
-
-                            _logger.LogInformation(
-                                useSameDayReverse
-                                    ? "[İADE] POSNET reverse başarılı. OrderId={OrderId}, Amount={Amount}, OriginalPaymentId={PaymentId}"
-                                    : "[İADE] POSNET return başarılı. OrderId={OrderId}, Amount={Amount}, OriginalPaymentId={PaymentId}",
-                                order.Id, refundAmount, paymentForRefund.Id);
-                        }
-                        else
-                        {
-                            refundRequest.Status = RefundRequestStatus.RefundFailed;
-                            refundRequest.RefundFailureReason = useSameDayReverse
-                                ? "POSNET aynı gün reverse işlemi başarısız oldu."
-                                : "POSNET iade işlemi başarısız oldu.";
-                            _logger.LogWarning(
-                                useSameDayReverse
-                                    ? "[İADE] POSNET reverse başarısız. OrderId={OrderId}"
-                                    : "[İADE] POSNET return başarısız. OrderId={OrderId}",
-                                order.Id);
-                        }
+                        _logger.LogWarning(
+                            "[İADE] POSNET başarısız. OrderId={OrderId}, Reason={Reason}",
+                            order.Id, refundRequest.RefundFailureReason);
                     }
                 }
                 catch (Exception ex)
@@ -813,8 +764,8 @@ namespace ECommerce.Business.Services.Managers
                 refundRequest.Status = RefundRequestStatus.Refunded;
             }
 
-            // Sipariş durumunu güncelle (tam iade ise)
-            if (refundSuccess && refundAmount >= order.FinalPrice)
+            // Sipariş durumunu güncelle (tam iade ise — CapturedAmount bazlı karar)
+            if (refundSuccess && refundAmount >= maxRefundableAmount - 0.01m)
             {
                 var previousStatus = order.Status;
                 order.Status = OrderStatus.Refunded;
@@ -834,7 +785,7 @@ namespace ECommerce.Business.Services.Managers
                     ChangedAt = DateTime.UtcNow
                 });
             }
-            else if (refundSuccess && refundAmount < order.FinalPrice)
+            else if (refundSuccess && refundAmount < maxRefundableAmount - 0.01m)
             {
                 // Kısmi iade
                 var previousStatus = order.Status;
@@ -873,11 +824,19 @@ namespace ECommerce.Business.Services.Managers
             }
 
             var resultDto = MapToDto(refundRequest, order);
-            var message = refundSuccess
-                ? "İade onaylandı ve para iadesi yapıldı."
-                : "İade onaylandı ancak para iadesi başarısız oldu. Lütfen tekrar deneyin.";
 
-            return RefundRequestResult.Succeeded(resultDto, message);
+            if (!refundSuccess)
+            {
+                return RefundRequestResult.Failed(
+                    refundRequest.RefundFailureReason
+                        ?? "İade onaylandı ancak para iadesi başarısız oldu. Lütfen tekrar deneyin.",
+                    "PAYMENT_REFUND_FAILED",
+                    resultDto);
+            }
+
+            return RefundRequestResult.Succeeded(
+                resultDto,
+                "İade onaylandı ve para iadesi yapıldı.");
         }
 
         /// <inheritdoc />
@@ -1119,47 +1078,16 @@ namespace ECommerce.Business.Services.Managers
                 {
                     var originalPayment = await GetOriginalSaleOrCaptPaymentAsync(orderId);
                     var paymentForRefund = originalPayment ?? payment;
-                    var hasCapture = order.CapturedAmount > 0 || paymentForRefund.CapturedAmount > 0 || paymentForRefund.Status != "Authorized";
 
-                    if (!hasCapture)
-                    {
-                        refundSuccess = await _paymentService.CancelPaymentAsync(
-                            paymentForRefund.Id,
-                            $"Admin refund: {reason}");
-                        transactionType = refundSuccess ? "reverse" : "none";
-                    }
-                    else
-                    {
-                        var useSameDayReverse = ShouldUseSameDayReverseForCapturedPayment(
-                            paymentForRefund,
-                            refundAmount,
-                            refundAmount);
+                    var execResult = await ExecuteOrderPosnetRefundAsync(
+                        order,
+                        payment,
+                        refundAmount,
+                        $"Admin tam iade: {reason}");
 
-                        if (useSameDayReverse)
-                        {
-                            refundSuccess = await _paymentService.CancelPaymentAsync(
-                                paymentForRefund.Id,
-                                $"Admin refund same-day reverse: {reason}");
-                            transactionType = refundSuccess ? "reverse" : "none";
-                        }
-                        else
-                        {
-                            refundSuccess = await _paymentService.PartialRefundAsync(paymentForRefund.Id, refundAmount);
-                            transactionType = refundSuccess ? "return" : "none";
-                        }
-                    }
-
-                    if (refundSuccess)
-                    {
-                        refundRequest.PosnetHostLogKey = paymentForRefund.HostLogKey;
-                        refundRequest.RefundedAt = DateTime.UtcNow;
-                        refundRequest.Status = RefundRequestStatus.Refunded;
-                    }
-                    else
-                    {
-                        refundRequest.Status = RefundRequestStatus.RefundFailed;
-                        refundRequest.RefundFailureReason = "POSNET iade işlemi başarısız oldu.";
-                    }
+                    ApplyPosnetResultToRefundRequest(refundRequest, execResult, paymentForRefund);
+                    refundSuccess = execResult.Success;
+                    transactionType = execResult.TransactionType;
                 }
                 catch (Exception ex)
                 {
@@ -1222,11 +1150,16 @@ namespace ECommerce.Business.Services.Managers
             }
 
             var resultDto = MapToDto(refundRequest, order);
-            var message = refundSuccess
-                ? "Sipariş için para iadesi tamamlandı."
-                : "Para iadesi başarısız oldu. Tekrar denenebilir.";
 
-            return RefundRequestResult.Succeeded(resultDto, message);
+            if (!refundSuccess)
+            {
+                return RefundRequestResult.Failed(
+                    refundRequest.RefundFailureReason ?? "Para iadesi başarısız oldu. Tekrar denenebilir.",
+                    "PAYMENT_REFUND_FAILED",
+                    resultDto);
+            }
+
+            return RefundRequestResult.Succeeded(resultDto, "Sipariş için para iadesi tamamlandı.");
         }
 
         /// <inheritdoc />
@@ -1358,29 +1291,19 @@ namespace ECommerce.Business.Services.Managers
                     var originalPayment = await GetOriginalSaleOrCaptPaymentAsync(orderId);
                     var paymentForRefund = originalPayment ?? payment;
 
-                    if (IsPaymentInAuthOnlyState(order, payment))
-                    {
-                        refundSuccess = await _paymentService.CancelPaymentAsync(
-                            paymentForRefund.Id,
-                            $"Admin ürün bazlı tam reverse: {dto.Reason}");
-                        transactionType = refundSuccess ? "reverse" : "none";
-                    }
-                    else
-                    {
-                        refundSuccess = await _paymentService.PartialRefundAsync(paymentForRefund.Id, refundAmount);
-                        transactionType = refundSuccess ? "return" : "none";
-                    }
+                    var execResult = await ExecuteOrderPosnetRefundAsync(
+                        order,
+                        payment,
+                        refundAmount,
+                        $"Admin ürün bazlı iade: {dto.Reason}");
 
-                    if (refundSuccess)
+                    ApplyPosnetResultToRefundRequest(refundRequest, execResult, paymentForRefund);
+                    refundSuccess = execResult.Success;
+                    transactionType = execResult.TransactionType;
+
+                    if (!refundSuccess)
                     {
-                        refundRequest.PosnetHostLogKey = paymentForRefund.HostLogKey;
-                        refundRequest.RefundedAt = DateTime.UtcNow;
-                        refundRequest.Status = RefundRequestStatus.Refunded;
-                    }
-                    else
-                    {
-                        refundRequest.Status = RefundRequestStatus.RefundFailed;
-                        refundRequest.RefundFailureReason = "POSNET ürün bazlı iade işlemi başarısız oldu.";
+                        refundRequest.RefundFailureReason ??= "POSNET ürün bazlı iade işlemi başarısız oldu.";
                     }
                 }
                 catch (Exception ex)
@@ -1433,11 +1356,16 @@ namespace ECommerce.Business.Services.Managers
             await _db.SaveChangesAsync();
 
             var resultDto = MapToDto(refundRequest, order);
-            var message = refundSuccess
-                ? "Seçilen ürünler için kısmi iade tamamlandı."
-                : "Ürün bazlı iade başarısız oldu. Tekrar denenebilir.";
 
-            return RefundRequestResult.Succeeded(resultDto, message);
+            if (!refundSuccess)
+            {
+                return RefundRequestResult.Failed(
+                    refundRequest.RefundFailureReason ?? "Ürün bazlı iade başarısız oldu. Tekrar denenebilir.",
+                    "PAYMENT_REFUND_FAILED",
+                    resultDto);
+            }
+
+            return RefundRequestResult.Succeeded(resultDto, "Seçilen ürünler için kısmi iade tamamlandı.");
         }
 
         /// <inheritdoc />

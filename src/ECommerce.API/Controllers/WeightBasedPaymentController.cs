@@ -133,10 +133,11 @@ namespace ECommerce.API.Controllers
                 // Ödeme durumunu kontrol et
                 var paymentStatus = await _paymentService.GetPaymentStatusAsync(orderId, cancellationToken);
 
-                // Kart ödemesi ise Post-Authorization yap
+                // Kart ödemesi: Capt tek noktada FinalizeWeightBasedPaymentAsync → CapturePaymentAsync.
+                // NEDEN ProcessPostAuthorization burada yok: aynı Capt'i iki kez çağırırdı
+                // (ikinci çağrı ALREADY_CAPTURED ile teslimatı kırardı).
                 if (paymentStatus.IsCardPayment)
                 {
-                    // Provizyon hala geçerli mi?
                     if (paymentStatus.PreAuthorizationExpired)
                     {
                         return BadRequest(new {
@@ -147,57 +148,36 @@ namespace ECommerce.API.Controllers
                         });
                     }
 
-                    // Post-Authorization (kesin çekim)
-                    var postAuthResult = await _paymentService.ProcessPostAuthorizationAsync(
-                        orderId,
-                        summary.ActualTotal,
-                        paymentStatus.PreAuthorizationHostLogKey!,
-                        cancellationToken);
-
-                    if (!postAuthResult.IsSuccess)
-                    {
-                        _logger?.LogWarning(
-                            "[WEIGHT-PAYMENT-API] Post-Auth başarısız. OrderId: {OrderId}, Error: {Error}",
-                            orderId, postAuthResult.ErrorMessage);
-
-                        return BadRequest(new {
-                            success = false,
-                            message = postAuthResult.ErrorMessage,
-                            data = postAuthResult
-                        });
-                    }
-
-                    // ── İADE/KAPAMA MODELİ: TEK MODEL (kısmi capture) ──────────────────
-                    // NEDEN ayrı iade YOK: POSNET'te Capt < Auth yapıldığında banka kalan provizyon
-                    // blokesini ZATEN otomatik serbest bırakır. Üstüne ProcessPartialRefund çağırmak
-                    // aynı farkı İKİ KEZ iade ederdi (çift iade / negatif bakiye riski). Bu yüzden
-                    // tartım azaldığında yalnız düşük tutar capture edilir; ek iade yapılmaz.
-                    if (postAuthResult.DifferenceAmount > 0)
-                    {
-                        _logger?.LogInformation(
-                            "[WEIGHT-PAYMENT-API] Tartım azaldı; kısmi capture ile kalan {Amount:F2} TL banka tarafından " +
-                            "otomatik serbest bırakıldı (ayrı iade yapılmadı). OrderId: {OrderId}",
-                            postAuthResult.DifferenceAmount, orderId);
-                    }
-
-                    // WeightAdjustmentService ile teslimatı tamamla
                     var finalizeResult = await _adjustmentService.FinalizeWeightBasedPaymentAsync(
                         orderId, courierId.Value, request?.CourierNotes);
 
+                    if (!finalizeResult.IsSuccess)
+                    {
+                        _logger?.LogWarning(
+                            "[WEIGHT-PAYMENT-API] Kart Capt/finalize başarısız. OrderId: {OrderId}, Error: {Error}",
+                            orderId, finalizeResult.ErrorMessage);
+
+                        return BadRequest(new {
+                            success = false,
+                            message = finalizeResult.ErrorMessage ?? "Ödeme çekilemedi",
+                            data = finalizeResult
+                        });
+                    }
+
                     _logger?.LogInformation(
                         "[WEIGHT-PAYMENT-API] Kart ödemeli teslimat tamamlandı. OrderId: {OrderId}, FinalAmount: {Amount}",
-                        orderId, postAuthResult.CapturedAmount);
+                        orderId, finalizeResult.FinalAmount);
 
                     return Ok(new {
                         success = true,
                         message = "Teslimat ve ödeme başarıyla tamamlandı",
                         paymentType = "card",
                         data = new {
-                            originalAmount = postAuthResult.OriginalBlockedAmount,
-                            finalAmount = postAuthResult.CapturedAmount,
-                            differenceAmount = postAuthResult.DifferenceAmount,
-                            refunded = postAuthResult.RefundProcessed,
-                            refundedAmount = postAuthResult.RefundedAmount
+                            originalAmount = finalizeResult.PreAuthAmount,
+                            finalAmount = finalizeResult.FinalAmount,
+                            differenceAmount = finalizeResult.DifferenceAmount,
+                            refunded = false,
+                            refundedAmount = 0m
                         }
                     });
                 }

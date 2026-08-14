@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Enums;
 using ECommerce.Core.Helpers;
+using ECommerce.Infrastructure.Services.Payment.Posnet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -148,6 +149,22 @@ namespace ECommerce.API.Controllers.Admin
             var failedRefunds = await _dbContext.RefundRequests
                 .AsNoTracking()
                 .CountAsync(r => r.Status == RefundRequestStatus.RefundFailed);
+            var failedRefundReasons = await _dbContext.RefundRequests
+                .AsNoTracking()
+                .Where(r => r.Status == RefundRequestStatus.RefundFailed &&
+                            r.RefundFailureReason != null)
+                .Select(r => r.RefundFailureReason!)
+                .ToListAsync();
+            var refundFailureBreakdown = failedRefundReasons
+                .GroupBy(ExtractRefundFailureBankCode)
+                .Select(g => new AdminDashboardStatusCountDto
+                {
+                    Label = g.Key,
+                    Count = g.Count()
+                })
+                .OrderByDescending(x => x.Count)
+                .Take(8)
+                .ToList();
             var totalRefundedAmount = await _dbContext.RefundRequests
                 .AsNoTracking()
                 .Where(r => r.Status == RefundRequestStatus.Refunded ||
@@ -303,6 +320,7 @@ namespace ECommerce.API.Controllers.Admin
                 PendingRefundRequests = pendingRefundRequests,
                 FailedRefunds = failedRefunds,
                 TotalRefundedAmount = totalRefundedAmount,
+                RefundFailureBreakdown = refundFailureBreakdown,
                 DailyMetrics = dailyMetrics,
                 OrderStatusDistribution = orderStatusDistribution,
                 PaymentStatusDistribution = paymentStatusDistribution,
@@ -310,6 +328,25 @@ namespace ECommerce.API.Controllers.Admin
                 RecentOrders = recentOrders,
                 TopProducts = topProducts
             };
+        }
+
+        /// <summary>
+        /// RefundFailureReason metninden banka respCode çıkarır.
+        /// Format: "0211 - Grup kapalı, iade kullanın" → "0211"
+        /// </summary>
+        private static string ExtractRefundFailureBankCode(string? failureReason)
+        {
+            if (string.IsNullOrWhiteSpace(failureReason))
+            {
+                return "BILINMEYEN";
+            }
+
+            var trimmed = failureReason.Trim();
+            var dashIndex = trimmed.IndexOf(" - ", StringComparison.Ordinal);
+            var codeCandidate = dashIndex > 0 ? trimmed[..dashIndex].Trim() : trimmed;
+
+            var normalized = PosnetRefundBankErrorHelper.NormalizeResponseCode(codeCandidate);
+            return string.IsNullOrWhiteSpace(normalized) ? "BILINMEYEN" : normalized;
         }
     }
 }

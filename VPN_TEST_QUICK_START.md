@@ -10,6 +10,9 @@ dotnet run --project src\ECommerce.API\ECommerce.API.csproj --launch-profile Vpn
 
 Ardından: `http://localhost:5153/api/mikroapitest/config` ziyaret et
 
+**KG Auth (provizyon):** VpnTest'te `PaymentSettings:PosnetUseAuthForWeightBasedItems=true` olmalı.
+Capt üst sınırı: `Auth × 1.20` (`WeightBasedCapturePolicy`). Production'da banka Auth yetkisi olmadan açmayın.
+
 Not: Uygulama calisirken ayni komutu tekrar verirseniz `address already in use (5153)` hatasi alirsiniz. Bu durumda eski sureci durdurup tekrar baslatin.
 
 ---

@@ -785,6 +785,18 @@ export const AdminService = {
     );
   },
 
+  /** Başarısız iade taleplerinin teşhis raporu (Faz 0) */
+  getFailedRefundDiagnostics: async () => {
+    ensureBackend();
+    return api.get("/api/admin/orders/refund-requests/diagnostics/failed");
+  },
+
+  /** Tek sipariş iade teşhis raporu (Faz 0) */
+  getOrderRefundDiagnostics: async (orderId) => {
+    ensureBackend();
+    return api.get(`/api/admin/orders/${orderId}/refund-diagnostics`);
+  },
+
   /**
    * Belirli bir siparişin iade taleplerini getirir
    * @param {number} orderId - Sipariş ID

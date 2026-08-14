@@ -16,6 +16,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ECommerce.Business.Helpers;
+using ECommerce.Business.Services.Interfaces;
+using ECommerce.Core.DTOs.Payment;
 using ECommerce.Core.Interfaces;
 using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
@@ -35,8 +37,10 @@ namespace ECommerce.Business.Services.Managers
     /// AKIŞ DETAYI:
     ///
     /// KART ÖDEMELERİ:
-    /// 1. Sipariş → Tahmini tutar + %20 güvenlik marjı ile Pre-Auth
-    /// 2. Kurye tartım → Gerçek tutar hesaplanır
+    /// 1. Sipariş → sepet tutarı ile Pre-Auth (3DS Auth). %20 şişirme yok.
+    /// 2. Market tartım → gerçek tutar hesaplanır
+    /// 3. Teslimat → Capt gerçek tutar üzerinden (≤ Auth × 1.20)
+    /// 4. Fark Auth tavanını aşarsa → kalan admin/manuel tahsilat
     /// 3. Teslimat → Post-Auth (kesin çekim) gerçek tutar üzerinden
     /// 4. Fark varsa → Kısmi iade veya admin onaylı ek tahsilat
     ///
@@ -53,6 +57,8 @@ namespace ECommerce.Business.Services.Managers
         // ═══════════════════════════════════════════════════════════════════════
 
         private readonly IPosnetPaymentService? _posnetService;
+        private readonly IExtendedPaymentService? _extendedPaymentService;
+        private readonly IPaymentCaptureService? _paymentCaptureService;
         private readonly ECommerceDbContext _db;
         private readonly ILogger<WeightBasedPaymentService>? _logger;
 
@@ -60,8 +66,12 @@ namespace ECommerce.Business.Services.Managers
         // CONSTANTS
         // ═══════════════════════════════════════════════════════════════════════
 
-        /// <summary>Varsayılan güvenlik marjı yüzdesi (dokümanla uyumlu)</summary>
-        private const decimal DEFAULT_SECURITY_MARGIN_PERCENT = 20m;
+        /// <summary>
+        /// Varsayılan güvenlik marjı parametresi geriye dönük imza için durur.
+        /// NEDEN 0: Auth tutarı sepet toplamıdır. %20 yalnız Capt tavanıdır
+        /// (<see cref="WeightBasedCapturePolicy.CaptureOveragePercent"/>).
+        /// </summary>
+        private const decimal DEFAULT_SECURITY_MARGIN_PERCENT = 0m;
 
         /// <summary>
         /// Provizyon geçerlilik süresi (saat) — tek doğruluk kaynağı: WeightBasedCapturePolicy.
@@ -75,15 +85,20 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>
         /// WeightBasedPaymentService constructor
-        /// POSNET servisi opsiyonel - olmadığında sadece nakit ödemeler desteklenir
+        /// POSNET servisi opsiyonel - olmadığında sadece nakit ödemeler desteklenir.
+        /// IExtendedPaymentService ile birleşik iade yürütücüsüne bağlanır (Faz 4).
         /// </summary>
         public WeightBasedPaymentService(
             ECommerceDbContext db,
             IPosnetPaymentService? posnetService = null,
+            IExtendedPaymentService? extendedPaymentService = null,
+            IPaymentCaptureService? paymentCaptureService = null,
             ILogger<WeightBasedPaymentService>? logger = null)
         {
             _db = db ?? throw new ArgumentNullException(nameof(db));
             _posnetService = posnetService;
+            _extendedPaymentService = extendedPaymentService;
+            _paymentCaptureService = paymentCaptureService;
             _logger = logger;
 
             if (_posnetService == null)
@@ -137,13 +152,12 @@ namespace ECommerce.Business.Services.Managers
                     return PreAuthorizationResult.Failure(orderId, "Siparişte ağırlık bazlı ürün bulunmuyor");
                 }
 
-                // Güvenlik marjı ile bloke tutarı hesapla
-                // Örnek: 100 TL tahmini + %20 margin = 120 TL bloke
-                var marginMultiplier = 1 + (securityMarginPercent / 100);
-                var blockAmount = Math.Round(estimatedAmount * marginMultiplier, 2);
+                // Auth tutarı = tahmini/sepet tutarı. securityMarginPercent yok sayılır.
+                // NEDEN: %20 banka Capt tavanıdır; 3DS tutarını şişirmek müşteriye yanlış tutar gösterir.
+                var blockAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, estimatedAmount);
 
                 _logger?.LogInformation(
-                    "[WEIGHT-PAYMENT] Bloke tutarı hesaplandı. Tahmini: {Estimated}, Bloke: {Block}",
+                    "[WEIGHT-PAYMENT] Provizyon tutarı (marjsız). Tahmini: {Estimated}, Auth: {Block}",
                     estimatedAmount, blockAmount);
 
                 // POSNET servisi yoksa sadece kaydı oluştur (nakit ödemeler için)
@@ -250,9 +264,8 @@ namespace ECommerce.Business.Services.Managers
                     return PreAuthorizationResult.Failure(orderId, "Sipariş bulunamadı");
                 }
 
-                // Güvenlik marjı ile bloke tutarı hesapla
-                var marginMultiplier = 1 + (securityMarginPercent / 100);
-                var blockAmount = Math.Round(estimatedAmount * marginMultiplier, 2);
+                // Auth tutarı marjsız — %20 Capt tavanı teslimatta uygulanır
+                var blockAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, estimatedAmount);
 
                 // POSNET Pre-Auth çağır
                 var authResult = await _posnetService.ProcessAuthAsync(
@@ -344,10 +357,37 @@ namespace ECommerce.Business.Services.Managers
                     return PostAuthorizationResult.Failure(orderId, "Sipariş bulunamadı");
                 }
 
-                // ── İDEMPOTENCY: Çift çekim koruması ───────────────────────────────────
-                // NEDEN: Bu yol POSNET'i doğrudan çağırıyor (PaymentCaptureService guard'ını atlar).
-                // Sipariş zaten başarıyla capture edilmişse bankaya tekrar istek göndermeyiz;
-                // mevcut sonucu (fark=0 → controller'da tekrar iade tetiklenmez) idempotent döneriz.
+                // Faz C: Tek Capt orkestratörü — PaymentCaptureService.Clamp + POSNET.
+                // NEDEN: Bu metot eskiden bankayı doğrudan çağırıyordu; MarkDelivered ile çift çekim
+                // ve limit aşımında "hiç çekme" tutarsızlığı üretiyordu.
+                if (_paymentCaptureService != null)
+                {
+                    var unified = await _paymentCaptureService.CapturePaymentAsync(orderId, actualAmount);
+                    stopwatch.Stop();
+
+                    if (!unified.Success)
+                    {
+                        return PostAuthorizationResult.Failure(
+                            orderId,
+                            unified.Message ?? "Kesin çekim başarısız",
+                            unified.ErrorCode);
+                    }
+
+                    var authorized = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
+                    return new PostAuthorizationResult
+                    {
+                        IsSuccess = true,
+                        OrderId = orderId,
+                        OriginalBlockedAmount = authorized,
+                        CapturedAmount = unified.CapturedAmount,
+                        DifferenceAmount = authorized - unified.CapturedAmount,
+                        HostLogKey = unified.CaptureReference ?? hostLogKey,
+                        TransactionDate = unified.CapturedAt,
+                        ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                // ── İDEMPOTENCY: Çift çekim koruması (fallback yol) ───────────────────
                 if (order.CaptureStatus == CaptureStatus.Success)
                 {
                     _logger?.LogWarning(
@@ -410,36 +450,23 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 var maxCapturableAmount = CalculateMaxCapturableAmount(preAuthAmount);
+                var captureDecision = WeightBasedCapturePolicy.ClampToCaptureLimit(preAuthAmount, actualAmount);
+                var captureAmount = captureDecision.CaptureAmount;
 
-                // Gerçek tutar, bankadaki tanımlı aşım limitini geçiyorsa kalan fark için manuel müdahale gerekir.
-                if (actualAmount > maxCapturableAmount)
+                // Limit aşımında hiç çekmek yerine tavan kadar Capt (tek politika).
+                if (captureDecision.ExceedsLimit)
                 {
                     _logger?.LogWarning(
-                        "[WEIGHT-PAYMENT] Gerçek tutar bankadaki provizyon aşım limitini aşıyor! " +
-                        "OrderId: {OrderId}, PreAuth: {PreAuth}, MaxCapturable: {MaxCapturable}, Actual: {Actual}",
-                        orderId, preAuthAmount, maxCapturableAmount, actualAmount);
-                    order.FinalAmount = actualAmount;
-                    order.WeightDifference = maxCapturableAmount - actualAmount;
-                    await _db.SaveChangesAsync(cancellationToken);
-
-                    stopwatch.Stop();
-                    return new PostAuthorizationResult
-                    {
-                        IsSuccess = false,
-                        OrderId = orderId,
-                        OriginalBlockedAmount = preAuthAmount,
-                        CapturedAmount = 0,
-                        DifferenceAmount = actualAmount - maxCapturableAmount,
-                        ErrorMessage = "Gerçek tutar, bankadaki provizyon + %20 aşım limitini aşıyor. Ek tahsilat için admin müdahalesi gerekiyor.",
-                        ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
-                    };
+                        "[WEIGHT-PAYMENT] Final tutar Capt tavanını aşıyor; tavan kadar çekilecek. " +
+                        "OrderId: {OrderId}, PreAuth: {PreAuth}, MaxCapturable: {MaxCapturable}, Actual: {Actual}, Capture: {Capture}",
+                        orderId, preAuthAmount, maxCapturableAmount, actualAmount, captureAmount);
                 }
 
-                // POSNET Capture (finansallaştırma) çağır
+                // POSNET Capture (finansallaştırma) çağır — kırpılmış tutar
                 var captureResult = await _posnetService.ProcessCaptureAsync(
                     orderId,
                     preAuthHostLogKey,
-                    actualAmount,
+                    captureAmount,
                     cancellationToken);
 
                 stopwatch.Stop();
@@ -456,14 +483,21 @@ namespace ECommerce.Business.Services.Managers
                         captureResult.ErrorCode.ToString());
                 }
 
-                // Siparişi güncelle
-                var differenceAmount = preAuthAmount - actualAmount;
+                // Siparişi güncelle — Capt kırpılmış tutar, FinalAmount gerçek tartı
+                var differenceAmount = preAuthAmount - captureAmount;
                 order.FinalAmount = actualAmount;
+                order.CapturedAmount = captureAmount;
                 order.WeightDifference = differenceAmount;
                 order.TotalPrice = actualAmount;
                 order.WeightAdjustmentStatus = differenceAmount == 0
                     ? WeightAdjustmentStatus.NoDifference
                     : WeightAdjustmentStatus.Completed;
+
+                if (captureDecision.ExceedsLimit)
+                {
+                    order.DeliveryProblemReason =
+                        $"Final tutar ({actualAmount:N2} TL) Capt tavanını ({captureAmount:N2} TL) aştı. Kalan manuel tahsilat.";
+                }
 
                 // ── MADDE 17: Post-Auth (Capt) başarılı → sipariş Paid olarak işaretle ─
                 // WeightPending (tartım bitti, capt bekleniyor) → Paid (finansallaştırma tamam)
@@ -477,14 +511,14 @@ namespace ECommerce.Business.Services.Managers
                 _logger?.LogInformation(
                     "[WEIGHT-PAYMENT] Kesin çekim başarılı. OrderId: {OrderId}, " +
                     "Captured: {Captured}, Difference: {Diff}, ElapsedMs: {Elapsed}",
-                    orderId, actualAmount, differenceAmount, stopwatch.ElapsedMilliseconds);
+                    orderId, captureAmount, differenceAmount, stopwatch.ElapsedMilliseconds);
 
                 return new PostAuthorizationResult
                 {
                     IsSuccess = true,
                     OrderId = orderId,
                     OriginalBlockedAmount = preAuthAmount,
-                    CapturedAmount = actualAmount,
+                    CapturedAmount = captureAmount,
                     DifferenceAmount = differenceAmount,
                     HostLogKey = captureResult.Data?.HostLogKey,
                     TransactionDate = DateTime.UtcNow,
@@ -637,7 +671,68 @@ namespace ECommerce.Business.Services.Managers
                         $"SIMULATED_REFUND_{orderId}_{DateTime.UtcNow:yyyyMMddHHmmss}");
                 }
 
-                // POSNET Refund çağır
+                // Faz 4: Doğrudan ProcessRefundAsync yerine birleşik yürütücü — reverse/return/fallback tek noktada
+                if (_extendedPaymentService != null)
+                {
+                    var payment = await _db.Payments
+                        .Where(p => p.OrderId == orderId &&
+                                    (p.TransactionType == "sale" || p.TransactionType == "capt" ||
+                                     p.TransactionType == "auth"))
+                        .OrderByDescending(p => p.CreatedAt)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (payment == null)
+                    {
+                        return PartialRefundResult.Failure(orderId, "İade için ödeme kaydı bulunamadı.");
+                    }
+
+                    var maxRefundable = order.CapturedAmount > 0
+                        ? order.CapturedAmount
+                        : (order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice);
+
+                    var execResult = await _extendedPaymentService.ExecutePosnetRefundAsync(
+                        new PosnetRefundExecutionRequest
+                        {
+                            OrderId = orderId,
+                            PaymentId = payment.Id,
+                            RefundAmount = refundAmount,
+                            MaxRefundableAmount = maxRefundable,
+                            IsAuthOnly = false,
+                            PreAuthHostLogKey = order.PreAuthHostLogKey ?? hostLogKey,
+                            Reason = reason ?? "Ağırlık farkı iadesi"
+                        });
+
+                    stopwatch.Stop();
+
+                    if (!execResult.Success)
+                    {
+                        _logger?.LogWarning(
+                            "[WEIGHT-PAYMENT] Birleşik POSNET iade başarısız. OrderId: {OrderId}, Reason: {Reason}",
+                            orderId, execResult.FailureReason);
+
+                        return PartialRefundResult.Failure(
+                            orderId,
+                            execResult.FailureReason ?? "İade başarısız",
+                            execResult.BankResponseCode);
+                    }
+
+                    _logger?.LogInformation(
+                        "[WEIGHT-PAYMENT] Birleşik kısmi iade başarılı. OrderId: {OrderId}, Type: {Type}, ElapsedMs: {Elapsed}",
+                        orderId, execResult.TransactionType, stopwatch.ElapsedMilliseconds);
+
+                    return new PartialRefundResult
+                    {
+                        IsSuccess = true,
+                        OrderId = orderId,
+                        RefundedAmount = refundAmount,
+                        OriginalAmount = order.TotalPrice,
+                        RefundHostLogKey = execResult.HostLogKey ?? hostLogKey,
+                        TransactionDate = DateTime.UtcNow,
+                        ElapsedMilliseconds = stopwatch.ElapsedMilliseconds
+                    };
+                }
+
+                // Geriye dönük uyumluluk: extended service yoksa eski doğrudan return çağrısı
                 var refundResult = await _posnetService.ProcessRefundAsync(
                     orderId,
                     hostLogKey,
