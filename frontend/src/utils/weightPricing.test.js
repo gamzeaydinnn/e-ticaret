@@ -42,9 +42,10 @@ describe("normalizeWeightStepQuantity", () => {
 });
 
 describe("getEffectiveUnitPrice", () => {
-  test("kg ürünlerde pricePerUnit (TL/kg) önceliklidir", () => {
+  test("kg ürünlerde özel fiyat veya normal fiyat kullanılır, eski pricePerUnit yok sayılır", () => {
     const product = { isWeightBased: true, pricePerUnit: 120, price: 50 };
-    expect(getEffectiveUnitPrice(null, product)).toBe(120);
+    // 🔴 ARTIK pricePerUnit YOK SAYILIYOR, price KAZANIR
+    expect(getEffectiveUnitPrice(null, product)).toBe(50);
   });
 
   test("adet ürünlerde özel fiyat/normal fiyat kullanılır", () => {
@@ -52,9 +53,9 @@ describe("getEffectiveUnitPrice", () => {
     expect(getEffectiveUnitPrice(null, product)).toBe(50);
   });
 
-  test("kalem üzerindeki pricePerUnit, üründekinden önce gelir", () => {
-    const item = { isWeightBased: true, pricePerUnit: 99 };
-    const product = { isWeightBased: true, pricePerUnit: 120 };
+  test("kalem üzerindeki unitPrice her zaman en önceliklidir", () => {
+    const item = { isWeightBased: true, unitPrice: 99 };
+    const product = { isWeightBased: true, price: 120 };
     expect(getEffectiveUnitPrice(item, product)).toBe(99);
   });
 });

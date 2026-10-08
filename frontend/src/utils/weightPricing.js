@@ -50,17 +50,8 @@ export const isResolvedWeightBasedProduct = (item, product) => {
 export const getEffectiveUnitPrice = (item, product) => {
   const mergedProduct = product || item?.product || {};
   const isWeightBased = isResolvedWeightBasedProduct(item, mergedProduct);
-  const pricePerUnit = pickPositiveNumber(
-    item?.pricePerUnit,
-    item?.PricePerUnit,
-    mergedProduct?.pricePerUnit,
-    mergedProduct?.PricePerUnit,
-  );
-
-  if (isWeightBased && pricePerUnit > 0) {
-    return pricePerUnit;
-  }
-
+  // 🔴 KRİTİK DÜZELTME: Eskimiş pricePerUnit değerlerini tamamen yok sayıyoruz.
+  // Her zaman güncel olan unitPrice, specialPrice veya price alanları baz alınacak.
   return pickPositiveNumber(
     item?.unitPrice,
     item?.UnitPrice,

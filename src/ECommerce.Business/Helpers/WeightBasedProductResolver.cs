@@ -88,14 +88,8 @@ namespace ECommerce.Business.Helpers
                 return 0m;
             }
 
-            if (isWeightBased)
-            {
-                // 🔴 KRİTİK DÜZELTME: SpecialPrice her zaman önceliklidir!
-                return product.SpecialPrice ?? (product.PricePerUnit > 0m
-                    ? product.PricePerUnit
-                    : product.Price);
-            }
-
+            // 🔴 KRİTİK DÜZELTME: Veritabanındaki eski PricePerUnit kayıtları hatalı olduğu için,
+            // tartılı ürünlerde de her zaman güncel olan Price veya SpecialPrice alanını baz alıyoruz.
             return product.SpecialPrice ?? product.Price;
         }
 

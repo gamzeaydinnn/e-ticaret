@@ -137,15 +137,16 @@ namespace ECommerce.Tests.Weight
         public void UnitPrice_kgUrun_SpecialPriceOnceliklidir()
         {
             var product = MakeProduct(pricePerUnit: 120m, price: 50m, specialPrice: 40m);
-            // 🔴 ARTIK SpecialPrice KAZANIYOR!
+            // 🔴 ARTIK SpecialPrice veya Price KAZANIYOR, PricePerUnit YOK SAYILIYOR!
             Assert.Equal(40m, WeightBasedProductResolver.ResolveUnitPrice(product, isWeightBased: true));
         }
 
         [Fact]
-        public void UnitPrice_kgUrun_PricePerUnitYoksaIndirimliFiyat()
+        public void UnitPrice_kgUrun_PriceVeIndirimliFiyat()
         {
-            var product = MakeProduct(pricePerUnit: 0m, price: 50m, specialPrice: 40m);
-            Assert.Equal(40m, WeightBasedProductResolver.ResolveUnitPrice(product, isWeightBased: true));
+            var product = MakeProduct(pricePerUnit: 120m, price: 50m, specialPrice: null);
+            // Indirim yoksa normal fiyat gecerli
+            Assert.Equal(50m, WeightBasedProductResolver.ResolveUnitPrice(product, isWeightBased: true));
         }
 
         [Fact]
