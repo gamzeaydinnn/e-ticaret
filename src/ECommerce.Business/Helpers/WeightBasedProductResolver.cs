@@ -90,9 +90,10 @@ namespace ECommerce.Business.Helpers
 
             if (isWeightBased)
             {
-                return product.PricePerUnit > 0m
+                // 🔴 KRİTİK DÜZELTME: SpecialPrice her zaman önceliklidir!
+                return product.SpecialPrice ?? (product.PricePerUnit > 0m
                     ? product.PricePerUnit
-                    : (product.SpecialPrice ?? product.Price);
+                    : product.Price);
             }
 
             return product.SpecialPrice ?? product.Price;

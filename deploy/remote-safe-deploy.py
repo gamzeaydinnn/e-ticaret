@@ -46,7 +46,7 @@ def run(client, cmd, timeout=900):
         line = stdout.readline()
         if not line:
             break
-        print(line, end="")
+        print(line, end="", flush=True)
     err = stderr.read().decode(errors="replace")
     if err.strip():
         print(err, file=sys.stderr)
@@ -107,6 +107,9 @@ git log -1 --oneline 2>/dev/null || true
 docker-compose -f docker-compose.prod.yml ps 2>/dev/null || true
 UPLOADS="${{UPLOADS_HOST_PATH:-/srv/ecommerce/uploads}}"
 echo "Uploads: $UPLOADS ($(find "$UPLOADS" -type f 2>/dev/null | wc -l) dosya)"
+echo "=== ESKİ DEPLOY TEMİZLENİYOR ==="
+pkill -f 'safe-deploy.sh' || true
+sleep 2
 """,
         timeout=60,
     )

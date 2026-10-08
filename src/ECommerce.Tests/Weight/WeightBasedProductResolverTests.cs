@@ -134,10 +134,11 @@ namespace ECommerce.Tests.Weight
         // ─────────────────────────────────────────────────────────────────────────
 
         [Fact]
-        public void UnitPrice_kgUrun_PricePerUnitOnceliklidir()
+        public void UnitPrice_kgUrun_SpecialPriceOnceliklidir()
         {
             var product = MakeProduct(pricePerUnit: 120m, price: 50m, specialPrice: 40m);
-            Assert.Equal(120m, WeightBasedProductResolver.ResolveUnitPrice(product, isWeightBased: true));
+            // 🔴 ARTIK SpecialPrice KAZANIYOR!
+            Assert.Equal(40m, WeightBasedProductResolver.ResolveUnitPrice(product, isWeightBased: true));
         }
 
         [Fact]

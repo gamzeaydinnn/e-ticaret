@@ -430,6 +430,14 @@ namespace ECommerce.Business.Services.Sync
             if (oldPrice != newPrice)
             {
                 product.Price = newPrice;
+                
+                // 🔴 KRİTİK DÜZELTME: Tartılı ürünlerde PricePerUnit de güncellenmelidir, 
+                // aksi halde Sepet eski fiyattan (PricePerUnit) hesaplar!
+                if (product.IsWeightBased)
+                {
+                    product.PricePerUnit = newPrice;
+                }
+
                 await _productRepository.UpdateAsync(product);
 
                 // Log başarılı güncelleme

@@ -7,7 +7,7 @@ HOST = "31.186.24.78"
 USER = "huseyinadm"
 PROJECT = "/home/huseyinadm/eticaret"
 PASSWORDS = ["Passwd1122%!d", "Passwd1122FFGG"]
-EXPECTED_SHORT = "cad2133"
+EXPECTED_SHORT = "1515b53"
 
 
 def out(msg):

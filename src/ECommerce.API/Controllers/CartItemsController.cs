@@ -119,9 +119,8 @@ namespace ECommerce.API.Controllers
             int? resolvedVariantId = request.VariantId;
             decimal availableStock = product.StockQuantity;
             var isWeightBasedProduct = IsWeightBasedProduct(product);
-            decimal unitPrice = isWeightBasedProduct
-                ? (product.PricePerUnit > 0 ? product.PricePerUnit : (product.SpecialPrice ?? product.Price))
-                : (product.SpecialPrice ?? product.Price);
+            // 🔴 KRİTİK DÜZELTME: SpecialPrice her zaman (kampanya/Liste11) öncelikli olmalıdır!
+            decimal unitPrice = product.SpecialPrice ?? (isWeightBasedProduct && product.PricePerUnit > 0 ? product.PricePerUnit : product.Price);
 
             if (resolvedVariantId.HasValue)
             {
