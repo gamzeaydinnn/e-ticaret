@@ -51,6 +51,7 @@ const PaymentPage = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAddressModal, setShowAddressModal] = useState(false);
 
   // Teslimat
   const [shippingMethod, setShippingMethod] = useState(() => {
@@ -702,6 +703,41 @@ const PaymentPage = () => {
                 </div>
               )}
 
+              {/* Teslimat Özeti */}
+              <div className="form-card">
+                <div className="form-card-header card-header-purple">
+                  <i className="fas fa-truck"></i>
+                  <span>Teslimat Bilgileri</span>
+                </div>
+                <div className="form-card-body">
+                  <div className="delivery-summary">
+                    {formData.address && formData.firstName ? (
+                      <div className="delivery-summary-details">
+                        <p><strong>{formData.firstName} {formData.lastName}</strong></p>
+                        <p>{formData.phone}</p>
+                        <p>{formData.address}, {formData.district}/{formData.city}</p>
+                        <button type="button" className="btn-edit-address" onClick={() => setShowAddressModal(true)}>
+                          <i className="fas fa-edit"></i> Adresi Düzenle
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="delivery-summary-empty">
+                        <div className="empty-icon"><i className="fas fa-map-marker-alt"></i></div>
+                        <p>Henüz teslimat adresi girmediniz.</p>
+                        <button type="button" className="btn-add-address" onClick={() => setShowAddressModal(true)}>
+                          <i className="fas fa-plus"></i> Adres Gir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {(errors.firstName || errors.lastName || errors.address || errors.city || errors.phone || errors.email) && (
+                    <div className="summary-error-text" style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.875rem' }}>
+                      <i className="fas fa-exclamation-circle me-1"></i> Lütfen geçerli bir teslimat adresi girin.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Kart Bilgileri */}
               <div className="form-card">
                 <div className="form-card-header card-header-teal">
@@ -825,6 +861,73 @@ const PaymentPage = () => {
                 </div>
               </div>
 
+              {/* Ödeme Butonu Container */}
+              <div className="payment-button-container">
+                <button type="submit" className="btn-pay" disabled={processing}>
+                  {processing ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i>
+                      <span>İşleniyor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-lock"></i>
+                      <span>Güvenli Ödeme Yap</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="payment-security">
+                  <i className="fas fa-shield-alt"></i>
+                  <span>256-bit SSL ile güvende</span>
+                </div>
+              </div>
+
+              {/* Teslimat Özeti */}
+              {false && <div className="form-card">
+                <div className="form-card-header card-header-purple">
+                  <i className="fas fa-truck"></i>
+                  <span>Teslimat Bilgileri</span>
+                </div>
+                <div className="form-card-body">
+                  <div className="delivery-summary">
+                    {formData.address && formData.firstName ? (
+                      <div className="delivery-summary-details">
+                        <p><strong>{formData.firstName} {formData.lastName}</strong></p>
+                        <p>{formData.phone}</p>
+                        <p>{formData.address}, {formData.district}/{formData.city}</p>
+                        <button type="button" className="btn-edit-address" onClick={() => setShowAddressModal(true)}>
+                          <i className="fas fa-edit"></i> Adresi Düzenle
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="delivery-summary-empty">
+                        <div className="empty-icon"><i className="fas fa-map-marker-alt"></i></div>
+                        <p>Henüz teslimat adresi girmediniz.</p>
+                        <button type="button" className="btn-add-address" onClick={() => setShowAddressModal(true)}>
+                          <i className="fas fa-plus"></i> Adres Gir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {(errors.firstName || errors.lastName || errors.address || errors.city || errors.phone || errors.email) && (
+                    <div className="summary-error-text" style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.875rem' }}>
+                      <i className="fas fa-exclamation-circle me-1"></i> Lütfen geçerli bir teslimat adresi girin.
+                    </div>
+                  )}
+                </div>
+              </div>}
+
+      {showAddressModal && (
+        <div className="address-modal-overlay" onClick={() => setShowAddressModal(false)}>
+          <div className="address-modal-container" onClick={e => e.stopPropagation()}>
+            <div className="address-modal-header">
+              <h3>Teslimat Adresi ve Zamanı</h3>
+              <button type="button" onClick={() => setShowAddressModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="address-modal-content">
               {/* Teslimat Bilgileri */}
               <div className="form-card">
                 <div className="form-card-header card-header-purple">
@@ -979,6 +1082,15 @@ const PaymentPage = () => {
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="address-modal-footer">
+              <button type="button" className="btn-save-address" onClick={() => setShowAddressModal(false)}>
+                Kaydet ve Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
             </div>
 
             {/* Sağ Taraf - Sipariş Özeti */}
@@ -1245,25 +1357,25 @@ const PaymentPage = () => {
                   </div>
                 </div>
 
-                {/* Ödeme Butonu */}
-                <button type="submit" className="btn-pay" disabled={processing}>
-                  {processing ? (
-                    <>
-                      <i className="fas fa-spinner fa-spin"></i>
-                      <span>İşleniyor...</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fas fa-lock"></i>
-                      <span>Güvenli Ödeme Yap</span>
-                    </>
-                  )}
-                </button>
 
-                <div className="payment-security">
-                  <i className="fas fa-shield-alt"></i>
-                  <span>256-bit SSL ile güvende</span>
-                </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
               </div>
             </div>
           </div>

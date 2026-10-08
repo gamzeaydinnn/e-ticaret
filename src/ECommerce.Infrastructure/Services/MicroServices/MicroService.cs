@@ -665,7 +665,8 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                         StoPerakendeVergi = productDto.VatRate,
                         StoAnagrupKod = productDto.CategoryCode,
                         SatisFiyatlari = productDto.Price > 0
-                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = productDto.Price, SfiyatNo = 1 } }
+                            // 🔴 KRİTİK: Web'den güncellenen fiyatlar Liste 11'e yazılmalı (Web Fiyat Listesi)
+                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = productDto.Price, SfiyatNo = 11 } }
                             : new List<MikroStokFiyatDto>()
                     };
                     var result = await SaveStokV2Async(request);
@@ -1019,23 +1020,20 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         /// <summary>
-        /// Stok miktarını çekmek için SQL sorgusu oluşturur.
-        /// Bu sorgu Mikro'daki stok kartlarından doğrudan stok miktarını çeker.
+        /// Depo bazlı anlık stok miktarı sorgusunu oluşturur.
+        /// dbo.fn_TeknikPc_Anlik_Stok_Miktari scalar fonksiyonu kullanılır:
+        /// — STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW'dan farklı olarak Enpos (POS) satışları
+        ///   anlık olarak stok miktarından düşülür → web sitesi doğru stok gösterir.
         /// </summary>
         private static string BuildSqlStockQuery(int? depoNo)
         {
-            _ = depoNo; // View toplam stok döner — depo filtresi uygulanmıyor
+            var hedefDepo = depoNo.HasValue ? depoNo.Value : 0;
 
-            return @"SELECT
-    S.sto_kod                                    AS stokkod,
-    ISNULL(ST.stok_miktar, 0)                    AS stok_miktar
+            return $@"SELECT
+    S.sto_kod                                                              AS stokkod,
+    -- ANLIK STOK: fn_TeknikPc_Anlik_Stok_Miktari Enpos satışlarını düşer.
+    ISNULL(dbo.fn_TeknikPc_Anlik_Stok_Miktari(S.sto_kod, {hedefDepo}), 0) AS stok_miktar
 FROM STOKLAR S
-LEFT JOIN (
-    SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
-    GROUP BY sth_stok_kod
-) ST ON ST.sth_stok_kod = S.sto_kod
 WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
   AND ISNULL(S.sto_iptal, 0) = 0
   AND S.sto_kod IS NOT NULL
@@ -1350,7 +1348,7 @@ ORDER BY S.sto_kod;";
             return string.Empty;
         }
 
-        private static decimal ParseDecimalFlexible(string? input)
+        public static decimal ParseDecimalFlexible(string? input)
         {
             if (string.IsNullOrWhiteSpace(input))
             {
@@ -1390,7 +1388,7 @@ ORDER BY S.sto_kod;";
                 : 0m;
         }
 
-        private static bool? ParseBoolFlexible(string? input)
+        public static bool? ParseBoolFlexible(string? input)
         {
             if (string.IsNullOrWhiteSpace(input))
             {
@@ -1477,7 +1475,9 @@ ORDER BY S.sto_kod;";
                             ? new List<MikroStokBarkodDto> { new() { BarBarkodNo = product.Barcode, BarCarpan = 1 } }
                             : new List<MikroStokBarkodDto>(),
                         SatisFiyatlari = product.Price > 0
-                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = product.Price, SfiyatNo = 1 } }
+                            // ⚠️ DÜZELTİLDİ: Web'den girilen fiyatlar doğrudan Liste 11'e (Web listesine) gitmeli!
+                            // Eskiden SfiyatNo = 1 (Mağaza fiyatı) olarak gidiyor ve kasanın fiyatını bozuyordu.
+                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = product.Price, SfiyatNo = 11 } }
                             : new List<MikroStokFiyatDto>()
                     };
 
@@ -2997,16 +2997,23 @@ ORDER BY S.sto_kod;";
     1                                             AS webe_gonderilecek_fl,
     NULL                                          AS son_hareket_tarihi
 FROM STOKLAR S
-LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
-       ON  Hedef.sfiyat_stokkod     = S.sto_kod
-       AND Hedef.sfiyat_listesirano = {hedefListe}
-       AND Hedef.sfiyat_deposirano  = {hedefDepo}
--- Fallback: Orijinal fiyat listesi (1), Depo 1 — PrepareWebPriceListAsync çalışmadıysa buradan oku
+-- 🔴 KRİTİK DEĞİŞİKLİK (Task 0.2.2): Depo filtresi kaldırıldı
+-- NEDEN: Liste 11'deki TÜM kayıtlar kullanılmalı (Enpos dahil tüm depolar)
+-- Liste 11'de olmayan ürünler web'de görünmez (single source of truth)
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = {hedefListe}
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
+-- Fallback: Orijinal fiyat listesi (1) — PrepareWebPriceListAsync çalışmadıysa buradan oku
+-- 🔴 Depo filtresi kaldırıldı: Liste 1'den de tüm depoların kayıtları kullanılır
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
     FROM   STOK_SATIS_FIYAT_LISTELERI
     WHERE  sfiyat_listesirano = 1
-      AND  sfiyat_deposirano  = 1
+      AND  sfiyat_fiyati      > 0
     GROUP BY sfiyat_stokkod
 ) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
 LEFT JOIN (

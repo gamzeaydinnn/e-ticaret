@@ -9,6 +9,11 @@ export const CANCEL_MODE = {
   NONE: "none",
 };
 
+/**
+ * Otomatik iptal edilebilen durumlar:
+ * Kurye henüz atanmamış veya siparişi teslim almamışsa otomatik iptal.
+ * 'assigned' → kurye atandı ama henüz teslim almadı: WhatsApp grubuna taşındı.
+ */
 const AUTO_CANCEL_STATUSES = new Set([
   "new",
   "pending",
@@ -18,12 +23,17 @@ const AUTO_CANCEL_STATUSES = new Set([
   "processing",
   "ready",
   "readyforpickup",
-  "assigned",
   "preauthorized",
   "weightpending",
+  "weightadjusted",
 ]);
 
+/**
+ * Kurye devredeyse WhatsApp ile iletişim:
+ * 'assigned' (kurye atandı), 'pickedup' (kurye teslim aldı) ve sonrası.
+ */
 const WHATSAPP_STATUSES = new Set([
+  "assigned",     // Kurye atandı — otomatik iptal kapandı
   "pickedup",
   "intransit",
   "outfordelivery",
@@ -35,7 +45,15 @@ const WHATSAPP_STATUSES = new Set([
   "partialrefund",
 ]);
 
-const TERMINAL_STATUSES = new Set(["cancelled", "canceled", "refunded"]);
+const TERMINAL_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "refunded",
+  // Ödeme başarısız — normalizeStatus _ kaldırır (payment_failed → paymentfailed)
+  "paymentfailed",
+  "failed",
+  "paymenterror",
+]);
 
 const INVOICE_BLOCKED_STATUSES = new Set([
   "new",
@@ -127,7 +145,24 @@ export function getOrderActions(order, { isAuthenticated = true } = {}) {
   const orderNumber =
     order?.orderNumber || (order?.id ? `#${order.id}` : "Sipariş");
 
-  if (cancelMode === CANCEL_MODE.AUTO && isAuthenticated) {
+  // Ödeme başarısız siparışlerde hiçbir işlem gösterilmez
+  // (getCancelMode zaten TERMINAL_STATUSES nedeniyle NONE döndürüyor)
+  if (cancelMode === CANCEL_MODE.NONE) {
+    return {
+      cancelMode,
+      showCancel: false,
+      showWhatsApp: false,
+      whatsAppPrimary: false,
+      cancelLabel: null,
+      disabledReason: null,
+      orderNumber,
+      status,
+    };
+  }
+
+  // Otomatik iptal: kurye henüz devrede değil
+  // Hem misafir hem kayıtlı kullanıcı iptal edebilir
+  if (cancelMode === CANCEL_MODE.AUTO) {
     return {
       cancelMode,
       showCancel: true,
@@ -140,10 +175,13 @@ export function getOrderActions(order, { isAuthenticated = true } = {}) {
     };
   }
 
-  if (cancelMode === CANCEL_MODE.WHATSAPP || cancelMode === CANCEL_MODE.AUTO) {
+  // WhatsApp: kurye atandı veya siparışi teslim aldı
+  if (cancelMode === CANCEL_MODE.WHATSAPP) {
     let disabledReason;
-
-    if (WHATSAPP_STATUSES.has(status)) {
+    if (status === "assigned") {
+      disabledReason =
+        "Kuryeniz atandı. Otomatik iptal mümkün değil, WhatsApp üzerinden ulaşın.";
+    } else if (WHATSAPP_STATUSES.has(status)) {
       disabledReason =
         "Kurye teslim aldıktan sonra otomatik iptal yapılamaz. İade talebiniz müşteri hizmetleri tarafından incelenir.";
     } else {

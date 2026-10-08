@@ -1776,30 +1776,44 @@ export default function AdminMicro() {
                         <td>
                           <code>{s.stokKod}</code>
                         </td>
-                        <td>{s.stokAd}</td>
+                        <td>
+                          {s.stokAd}
+                          {/* Web aktiflik badge eklendi */}
+                          <span className={`ms-2 badge ${s.aktif ? "bg-success" : "bg-secondary"}`}>
+                            {s.aktif ? "Web'de Aktif" : "Pasif"}
+                          </span>
+                        </td>
                         <td>
                           <small className="text-muted">
                             {s.barkod || "-"}
                           </small>
                         </td>
                         <td className="text-end">
-                          ₺
-                          {typeof (s.satisFiyati ?? s.fiyat) === "number"
-                            ? (s.satisFiyati ?? s.fiyat).toLocaleString(
-                                "tr-TR",
-                                {
-                                  minimumFractionDigits: 2,
-                                },
-                              )
-                            : (s.satisFiyati ?? s.fiyat) || "0.00"}
+                          {(!(s.satisFiyati ?? s.fiyat) || (s.satisFiyati ?? s.fiyat) <= 0) ? (
+                            <span className="badge bg-danger text-white">
+                              <i className="fas fa-exclamation-triangle me-1"></i>
+                              Fiyat Yok
+                            </span>
+                          ) : (
+                            <span className="fw-semibold text-success">
+                              ₺
+                              {typeof (s.satisFiyati ?? s.fiyat) === "number"
+                                ? (s.satisFiyati ?? s.fiyat).toLocaleString(
+                                    "tr-TR",
+                                    {
+                                      minimumFractionDigits: 2,
+                                    },
+                                  )
+                                : (s.satisFiyati ?? s.fiyat)}
+                            </span>
+                          )}
                         </td>
                         <td
-                          className={`text-end ${Number(s.depoMiktari ?? s.satilabilirMiktar ?? s.stokMiktar) <= 0 ? "text-danger fw-bold" : ""}`}
+                          className={`text-end ${Number(s.stokMiktar ?? s.depoMiktari ?? s.satilabilirMiktar ?? 0) <= 0 ? "text-danger fw-bold" : ""}`}
                         >
-                          {s.depoMiktari ??
-                            s.satilabilirMiktar ??
-                            s.stokMiktar ??
-                            0}
+                          {Number(s.stokMiktar ?? s.depoMiktari ?? s.satilabilirMiktar ?? 0) > 0 
+                            ? (s.stokMiktar ?? s.depoMiktari ?? s.satilabilirMiktar ?? 0) 
+                            : <span className="badge bg-danger">Stokta Yok</span>}
                         </td>
                         <td>{s.birim || "-"}</td>
                         <td>
@@ -2491,6 +2505,7 @@ export default function AdminMicro() {
                           ) : (
                             paginatedBulkProducts.map((product, index) => {
                               const stokMiktari =
+                                product.stokMiktar ??
                                 product.depoMiktari ??
                                 product.satilabilirMiktar ??
                                 0;
@@ -2524,6 +2539,10 @@ export default function AdminMicro() {
                                     >
                                       {urunAdi}
                                     </span>
+                                    {/* Web aktiflik badge eklendi */}
+                                    <span className={`ms-2 badge ${product.aktif ? "bg-success" : "bg-secondary"}`}>
+                                      {product.aktif ? "Web'de Aktif" : "Pasif"}
+                                    </span>
                                   </td>
                                   <td className="py-2">
                                     <span className="badge bg-secondary-subtle text-dark">
@@ -2542,15 +2561,22 @@ export default function AdminMicro() {
                                     <span
                                       className={`badge ${stokMiktari > 0 ? "bg-success" : "bg-danger"}`}
                                     >
-                                      {stokMiktari}
+                                      {stokMiktari > 0 ? stokMiktari : "Stokta Yok"}
                                     </span>
                                   </td>
                                   <td className="py-2">
-                                    <span className="fw-semibold text-success">
-                                      {typeof product.satisFiyati === "number"
-                                        ? `${product.satisFiyati.toFixed(2)} ₺`
-                                        : product.satisFiyati || "0.00 ₺"}
-                                    </span>
+                                    {(!product.satisFiyati || product.satisFiyati <= 0) ? (
+                                      <span className="badge bg-danger text-white">
+                                        <i className="fas fa-exclamation-triangle me-1"></i>
+                                        Fiyat Yok
+                                      </span>
+                                    ) : (
+                                      <span className="fw-semibold text-success">
+                                        {typeof product.satisFiyati === "number"
+                                          ? `${product.satisFiyati.toFixed(2)} ₺`
+                                          : `${product.satisFiyati} ₺`}
+                                      </span>
+                                    )}
                                   </td>
                                   <td className="py-2">
                                     <span className="badge bg-warning text-dark">

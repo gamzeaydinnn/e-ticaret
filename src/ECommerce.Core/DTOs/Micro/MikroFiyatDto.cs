@@ -21,12 +21,13 @@ namespace ECommerce.Core.DTOs.Micro
         public string StoKod { get; set; } = string.Empty;
 
         /// <summary>
-        /// Fiyat listesi numarası (1-10).
+        /// Fiyat listesi numarası (1-11).
         /// NEDEN: Hangi fiyat listesinin güncelleneceği.
-        /// 1 = Perakende (genelde e-ticaret bu listeyi kullanır)
+        /// 🔴 KRİTİK: 11 = Web Fiyat Listesi (Single Source of Truth)
+        /// Web'den yapılan tüm fiyat güncellemeleri Liste 11'e yazılmalı
         /// </summary>
         [JsonPropertyName("fiyat_no")]
-        public int FiyatNo { get; set; } = 1;
+        public int FiyatNo { get; set; } = 11;
 
         /// <summary>
         /// Yeni fiyat değeri.

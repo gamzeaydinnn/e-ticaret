@@ -1000,76 +1000,48 @@ var app = builder.Build();
 // //     job => job.RunOnce(), // StockSyncJob'da public async Task RunOnce() olmalı
 //     // Cron.Hourly);
 
-// DB init + Seed Roles/Admin User (ilk çalıştırmada)
-Console.WriteLine("🚀🚀🚀 SEED BLOĞU BAŞLIYOR 🚀🚀🚀");
+// ═══════════════════════════════════════════════════════════════════════════════
+// UYGULAMA BAŞLANGIÇ: DB Migration + Seed
+// ─────────────────────────────────────────────────────────────────────────────
+// NEDEN bu blok var:
+//   • EF Core Migrate(), DB zaten mevcutsa SQL 1801 ("already exists") hatası fırlatır.
+//   • Pending migration yoksa Migrate() artık hiç çağrılmaz → log gürültüsü sıfır.
+//   • Her seeder idempotent: zaten var olan kaydı tekrar eklemez.
+// ═══════════════════════════════════════════════════════════════════════════════
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    Console.WriteLine("✅ ServiceScope oluşturuldu");
+    var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
     try
     {
-        Console.WriteLine("🔍 DbContext alınıyor...");
         var db = services.GetRequiredService<ECommerceDbContext>();
-        Console.WriteLine("✅ DbContext alındı");
-        
-        Console.WriteLine("🔍 Logger oluşturuluyor...");
-        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-        Console.WriteLine("✅ Logger oluşturuldu");
-        
-        logger.LogInformation("🔍🔍🔍 Database initialization başlıyor...");
-        Console.WriteLine("🔍🔍🔍 Database initialization başlıyor...");
-        
-        // Apply migrations (production-safe: works with existing databases)
-        // NEDEN özel akış: Veritabanı sunucuda zaten varken __EFMigrationsHistory tablosu
-        //   yoksa EF Core önce CREATE DATABASE dener → SQL 1801 hatası. History tablosunu
-        //   önceden oluşturarak bu adım atlanır ve sadece bekleyen migration'lar uygulanır.
-        Console.WriteLine("🔍 Database existence kontrol ediliyor...");
+
+        // Migration — pending yoksa DB'ye dokunmaz
         ApplyDatabaseMigrations(db, logger);
-        logger.LogInformation("✅ Database migrations uygulandı");
-        Console.WriteLine("✅ Database migrations uygulandı");
 
-        logger.LogInformation("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
-        Console.WriteLine("🔍 IdentitySeeder başlatılıyor (sadece DB boşsa çalışır)...");
+        // Seeder'lar — hepsi idempotent (zaten var ise atlanır)
+        logger.LogInformation("[SEED] IdentitySeeder başlatılıyor...");
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
-        logger.LogInformation("✅ IdentitySeeder tamamlandı");
-        Console.WriteLine("✅ IdentitySeeder tamamlandı");
-        
-        logger.LogInformation("🔍 ProductSeeder başlatılıyor (sadece DB boşsa çalışır)...");
-        Console.WriteLine("🔍 ProductSeeder başlatılıyor (sadece DB boşsa çalışır)...");
-        ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
-        logger.LogInformation("✅ ProductSeeder tamamlandı");
-        Console.WriteLine("✅ ProductSeeder tamamlandı");
-        
-        // Banner seed - varsayılan ana sayfa görselleri (sadece DB boşsa)
-        logger.LogInformation("🖼️ BannerSeeder başlatılıyor (sadece DB boşsa çalışır)...");
-        Console.WriteLine("🖼️ BannerSeeder başlatılıyor (sadece DB boşsa çalışır)...");
-        BannerSeeder.SeedAsync(services).GetAwaiter().GetResult();
-        logger.LogInformation("✅ BannerSeeder tamamlandı");
-        Console.WriteLine("✅ BannerSeeder tamamlandı");
-        
-        // Kategori + wildcard mapping seed — "Diğer" kategorisi ve fallback mapping'i garanti eder
-        logger.LogInformation("🔍 CategorySeeder başlatılıyor...");
-        Console.WriteLine("🔍 CategorySeeder başlatılıyor...");
-        CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
-        logger.LogInformation("✅ CategorySeeder tamamlandı");
-        Console.WriteLine("✅ CategorySeeder tamamlandı");
 
-        logger.LogInformation("🧹 Legacy seed ürün cleanup başlatılıyor...");
-        Console.WriteLine("🧹 Legacy seed ürün cleanup başlatılıyor...");
+        logger.LogInformation("[SEED] ProductSeeder başlatılıyor...");
+        ProductSeeder.SeedAsync(services).GetAwaiter().GetResult();
+
+        logger.LogInformation("[SEED] BannerSeeder başlatılıyor...");
+        BannerSeeder.SeedAsync(services).GetAwaiter().GetResult();
+
+        logger.LogInformation("[SEED] CategorySeeder başlatılıyor...");
+        CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
+
+        logger.LogInformation("[SEED] LegacySeedProductCleanup başlatılıyor...");
         LegacySeedProductCleanup.RunAsync(services).GetAwaiter().GetResult();
-        logger.LogInformation("✅ Legacy seed cleanup tamamlandı");
-        Console.WriteLine("✅ Legacy seed cleanup tamamlandı");
-        
-        logger.LogInformation("✅ Tüm seed işlemleri başarıyla tamamlandı!");
-        Console.WriteLine("✅✅✅ TÜM SEED İŞLEMLERİ BAŞARIYLA TAMAMLANDI! ✅✅✅");
+
+        logger.LogInformation("[SEED] ✅ Tüm başlangıç işlemleri tamamlandı.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"❌❌❌ SEED HATASI: {ex.Message}");
-        Console.WriteLine($"❌ StackTrace: {ex.StackTrace}");
-        var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-        logger.LogError(ex, "❌ Database migration veya seed sırasında hata oluştu");
-        throw; // Hatayı yeniden fırlat - uygulama başlamasın
+        logger.LogError(ex, "[SEED] ❌ Migration veya seed sırasında kritik hata oluştu. Uygulama durduruluyor.");
+        throw; // Uygulama hatalı başlamasın
     }
 }
 
@@ -1265,54 +1237,75 @@ app.MapControllers();
 app.Run();
 
 /// <summary>
-/// Veritabanı migration'larını güvenli şekilde uygular.
-/// Mevcut veritabanlarında __EFMigrationsHistory eksikse CREATE DATABASE hatasını (1801) önler.
+/// Veritabanı migration'larını güvenli ve idempotent şekilde uygular.
+/// 
+/// KORUMALAR:
+/// 1. DB bağlantısı varsa ve bekleyen migration yoksa Migrate() HİÇ ÇAĞRILMAZ → "already exists" hatası olmaz.
+/// 2. __EFMigrationsHistory yoksa önce oluşturulur → SQL 1801 (CREATE DATABASE hatası) önlenir.
+/// 3. 1801 SqlException'ı yakalanır, pending migration varsa yalnızca tablolar migrate edilir.
 /// </summary>
 static void ApplyDatabaseMigrations(ECommerceDbContext db, ILogger logger)
 {
     var canConnect = db.Database.CanConnect();
 
-    if (canConnect)
+    if (!canConnect)
     {
-        Console.WriteLine("✅ Veritabanı bağlantısı başarılı.");
-        // History tablosu yoksa EF Migrate() önce CREATE DATABASE dener — 1801 riski.
-        // Tabloyu önceden oluşturarak doğrudan pending migration'lara geçilir.
-        EnsureMigrationHistoryTable(db, logger);
+        // DB henüz yok — EF tam Migrate() akışını kullanarak hem DB'yi hem tabloları oluşturur
+        logger.LogInformation("[DB-INIT] Veritabanına bağlanılamadı; ilk kurulum başlatılıyor...");
+        try
+        {
+            db.Database.Migrate();
+            logger.LogInformation("[DB-INIT] ✅ Veritabanı ve tablolar oluşturuldu.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[DB-INIT] ❌ İlk kurulum sırasında hata oluştu.");
+            throw;
+        }
+        return;
     }
-    else
+
+    // DB var — önce history tablosunu garantile, sonra pending migration kontrolü yap
+    logger.LogInformation("[DB-INIT] ✅ Veritabanı bağlantısı başarılı. Pending migration kontrol ediliyor...");
+    EnsureMigrationHistoryTable(db, logger);
+
+    List<string> pending;
+    try
     {
-        Console.WriteLine("⚠️ Veritabanına bağlanılamadı; oluşturma + migration denenecek...");
+        pending = db.Database.GetPendingMigrations().ToList();
     }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "[DB-INIT] Pending migration listesi alınamadı; yine de Migrate() deneniyor.");
+        pending = ["(bilinmiyor — zorla çalıştır)"];
+    }
+
+    if (pending.Count == 0)
+    {
+        // Tüm migration'lar zaten uygulanmış — DB'ye dokunma!
+        logger.LogInformation("[DB-INIT] ✅ Tüm migration'lar güncel. Migration atlanıyor.");
+        return;
+    }
+
+    logger.LogInformation(
+        "[DB-INIT] 📦 {Count} bekleyen migration uygulanıyor: {Migrations}",
+        pending.Count,
+        string.Join(", ", pending));
 
     try
     {
         db.Database.Migrate();
+        logger.LogInformation("[DB-INIT] ✅ Migration'lar başarıyla uygulandı.");
     }
     catch (SqlException ex) when (ex.Number == 1801)
     {
-        // Sunucuda veritabanı zaten var — CREATE DATABASE atlandı, tablo migration'ları devam eder.
+        // Nadir durum: Paralel başlatma veya race condition nedeniyle CREATE DATABASE çakışması
         logger.LogWarning(
-            "Veritabanı zaten mevcut (SQL 1801). CREATE DATABASE atlanıyor, migration history kontrol ediliyor.");
-        Console.WriteLine("⚠️ Veritabanı zaten mevcut (1801) — tablo migration'ları uygulanıyor...");
-
+            "[DB-INIT] Veritabanı zaten mevcut (SQL 1801 - race condition). " +
+            "Migration history kontrol ediliyor ve yeniden deneniyor...");
         EnsureMigrationHistoryTable(db, logger);
-
-        var pending = db.Database.GetPendingMigrations().ToList();
-        if (pending.Count == 0)
-        {
-            logger.LogInformation("Uygulanacak bekleyen migration yok.");
-            Console.WriteLine("ℹ️ Uygulanacak bekleyen migration yok.");
-            return;
-        }
-
-        logger.LogInformation(
-            "Bekleyen {Count} migration uygulanacak: {Migrations}",
-            pending.Count,
-            string.Join(", ", pending));
-        Console.WriteLine($"📦 {pending.Count} bekleyen migration uygulanıyor...");
-
-        // History tablosu artık var — Migrate() CREATE DATABASE çağırmadan devam eder.
         db.Database.Migrate();
+        logger.LogInformation("[DB-INIT] ✅ Migration'lar 1801 sonrası başarıyla uygulandı.");
     }
 }
 
@@ -1325,8 +1318,7 @@ static void EnsureMigrationHistoryTable(ECommerceDbContext db, ILogger logger)
     var historyRepository = db.GetInfrastructure().GetRequiredService<IHistoryRepository>();
     if (!historyRepository.Exists())
     {
-        logger.LogInformation("__EFMigrationsHistory tablosu oluşturuluyor...");
-        Console.WriteLine("📋 __EFMigrationsHistory tablosu oluşturuluyor...");
+        logger.LogInformation("[DB-INIT] __EFMigrationsHistory tablosu oluşturuluyor...");
         historyRepository.CreateIfNotExists();
     }
 }

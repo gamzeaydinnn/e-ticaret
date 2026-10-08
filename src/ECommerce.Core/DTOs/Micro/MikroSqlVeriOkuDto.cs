@@ -18,6 +18,15 @@ namespace ECommerce.Core.DTOs.Micro
         /// </summary>
         [JsonPropertyName("SQLSorgu")]
         public string SQLSorgu { get; set; } = string.Empty;
+
+        /// <summary>
+        /// SQL sorgu parametreleri (SQL injection koruması için).
+        /// Not: MikroAPI doğrudan parametre desteklemiyorsa,
+        /// istek oluşturulmadan önce bu parametreler güvenli şekilde query'ye gömülebilir
+        /// veya Dapper gibi ORM araçlarıyla doğrudan veritabanına bağlanırken kullanılabilir.
+        /// </summary>
+        [JsonIgnore] // Mikro API'ye gitmez
+        public Dictionary<string, object> Parameters { get; set; } = new();
     }
 
     /// <summary>

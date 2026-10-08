@@ -223,6 +223,69 @@ const ORDER_STATUSES = {
     color: "#dc3545",
     bgColor: "#f8d7da",
   },
+  // normalizeStatus _ kaldırır: delivery_failed → deliveryfailed
+  deliveryfailed: {
+    step: -1,
+    label: "Teslimat Başarısız",
+    shortLabel: "Başarısız",
+    description:
+      "Teslimat gerçekleştirilemedi. Lütfen bizimle iletişime geçin.",
+    icon: "fa-exclamation-triangle",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
+  // Ödeme başarısız durumları
+  // (normalizeStatus _ kaldırır: payment_failed → paymentfailed, vb.)
+  payment_failed: {
+    step: -1,
+    label: "Ödeme Başarısız",
+    shortLabel: "Ödeme Hatası",
+    description:
+      "Ödeme işlemi başarısız oldu. Lütfen ödeme bilgilerinizi kontrol edin veya bizimle iletişime geçin.",
+    icon: "fa-credit-card",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
+  paymentfailed: {
+    step: -1,
+    label: "Ödeme Başarısız",
+    shortLabel: "Ödeme Hatası",
+    description:
+      "Ödeme işlemi başarısız oldu. Lütfen ödeme bilgilerinizi kontrol edin veya bizimle iletişime geçin.",
+    icon: "fa-credit-card",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
+  failed: {
+    step: -1,
+    label: "Ödeme Başarısız",
+    shortLabel: "Ödeme Hatası",
+    description:
+      "Ödeme işlemi başarısız oldu. Lütfen ödeme bilgilerinizi kontrol edin veya bizimle iletişime geçin.",
+    icon: "fa-credit-card",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
+  payment_error: {
+    step: -1,
+    label: "Ödeme Başarısız",
+    shortLabel: "Ödeme Hatası",
+    description:
+      "Ödeme işlemi sırasında bir hata oluştu. Lütfen bizimle iletişime geçin.",
+    icon: "fa-credit-card",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
+  paymenterror: {
+    step: -1,
+    label: "Ödeme Başarısız",
+    shortLabel: "Ödeme Hatası",
+    description:
+      "Ödeme işlemi sırasında bir hata oluştu. Lütfen bizimle iletişime geçin.",
+    icon: "fa-credit-card",
+    color: "#dc3545",
+    bgColor: "#f8d7da",
+  },
   delivery_payment_pending: {
     step: 4, // Teslim edildi ama ödeme bekliyor
     label: "Ödeme Bekleniyor",
@@ -296,6 +359,7 @@ const getOrderDateTimeText = (dateValue) => {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Istanbul",
   });
 };
 
@@ -639,10 +703,11 @@ const OrderTracking = () => {
   }, [selectedOrder]);
 
   // =========================================================================
-  // SİPARİŞ İPTAL FONKSİYONU - MARKET KURALLARI
-  // 1. Sadece aynı gün içinde iptal edilebilir
-  // 2. Sadece kurye teslim süreci başlamadan önce iptal edilebilir
-  // 3. Diğer durumlarda müşteri hizmetleriyle iletişime yönlendirilir
+  // SİPARİŞ İPTAL FONKSİYONU - PAZAR KURALLARI
+  // 1. Kurye atanmadan önce (assigned durumu dahil değil): otomatik iptal
+  // 2. Hem misafir hem kayıtlı kullanıcı iptal edebilir
+  // 3. Kurye atandıysa / teslim aldıysa: WhatsApp ile iletisim
+  // 4. Ödeme başarısız siparışlerde iptal butonu gösterilmez
   // =========================================================================
   const handleCancelOrder = useCallback(
     async (orderId, orderNumber) => {
@@ -664,11 +729,12 @@ const OrderTracking = () => {
 
           setActiveTab("history");
           await loadOrders();
+          // Misafir kullanıcıda refund request API'si 401 dönebilir, hata yutulur
           try {
             const refunds = await OrderService.getMyRefundRequests();
             setRefundRequests(Array.isArray(refunds) ? refunds : []);
           } catch {
-            // no-op
+            // no-op: misafir için beklenen durum
           }
           setSelectedOrder(null);
         } else {
@@ -687,13 +753,20 @@ const OrderTracking = () => {
         }
       } catch (error) {
         console.error("[OrderTracking] Sipariş iptal hatası:", error);
-        const errorMessage =
-          error.response?.data?.message || "Bir hata oluştu.";
+
+        // Misafir kullanıcı veya oturum süresi dolmuşsa 401/403 alabilir
+        // Bu durumda WhatsApp destek satırını göster
+        const isAuthError = error?.status === 401 || error?.status === 403 ||
+          error?.response?.status === 401 || error?.response?.status === 403;
+
+        const errorMessage = isAuthError
+          ? "Bu siparişi iptal etmek için yetkili değilsiniz. Lütfen WhatsApp üzerinden bizimle iletişime geçin."
+          : (error.response?.data?.message || "Bir hata oluştu. Müşteri hizmetleriyle iletişime geçiniz.");
 
         setNotification({
           type: "error",
           title: "İptal Edilemedi",
-          message: `${errorMessage} Müşteri hizmetleriyle iletişime geçiniz.`,
+          message: errorMessage,
           color: "#dc3545",
           bgColor: "#f8d7da",
           showWhatsApp: true,
@@ -1585,7 +1658,7 @@ const OrderTracking = () => {
                   (selectedOrder.id || selectedOrder.orderId)
                 }
                 refundRequests={refundRequests}
-                isAuthenticated={!isGuest}
+                isAuthenticated={true}
               />
             ) : (
               <div className="order-detail-placeholder">

@@ -319,6 +319,8 @@
 .form-group input,
 .form-group select,
 .form-group textarea {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.875rem 1rem;
   border: 2px solid #e2e8f0;
   border-radius: 12px;
@@ -893,4 +895,306 @@
 /* mt-3 utility */
 .mt-3 {
   margin-top: 1rem;
+}
+
+/* Payment Button Container - positioned after card form */
+.payment-button-container {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+/* Adjust button for left column placement */
+.payment-form-section .btn-pay {
+  width: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+/* Security badge positioning */
+.payment-button-container .payment-security {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  padding-bottom: 0;
+}
+
+.payment-button-container .payment-security i {
+  color: #10b981;
+}
+
+/* Mobile: button full width with margins */
+@media (max-width: 767px) {
+  .payment-button-container {
+    margin: 1rem 0;
+  }
+
+  .payment-form-section .btn-pay {
+    width: 100%;
+    margin: 0;
+    font-size: 1rem;
+    padding: 0.875rem 1.5rem;
+  }
+}
+
+/* Tablet: maintain full width in left column */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .payment-button-container {
+    margin: 1.5rem 0;
+  }
+}
+
+/* Desktop: full width in left column */
+@media (min-width: 1024px) {
+  .payment-button-container {
+    margin: 2rem 0;
+  }
+}
+
+/* Delivery Summary Box */
+.delivery-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0;
+  text-align: center;
+}
+
+.delivery-summary-details {
+  width: 100%;
+  text-align: left;
+  background: #f8fafc;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.delivery-summary-details p {
+  margin: 0 0 0.5rem 0;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.delivery-summary-details p strong {
+  color: #1e293b;
+  font-size: 1.05rem;
+}
+
+.delivery-summary-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.delivery-summary-empty .empty-icon {
+  width: 60px;
+  height: 60px;
+  background: #f1f5f9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 1.5rem;
+}
+
+.delivery-summary-empty p {
+  color: #64748b;
+  margin: 0;
+}
+
+.btn-add-address, .btn-edit-address {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid #8b5cf6;
+  color: #8b5cf6;
+  font-weight: 600;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-add-address:hover, .btn-edit-address:hover {
+  background: #8b5cf6;
+  color: white;
+}
+
+/* Address Modal Overlay */
+.address-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.address-modal-overlay *,
+.address-modal-overlay *::before,
+.address-modal-overlay *::after {
+  box-sizing: border-box !important;
+  max-width: 100%;
+}
+
+.address-modal-container {
+  background: white;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s ease-out;
+  overflow: hidden;
+}
+
+.address-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+  z-index: 10;
+}
+
+.address-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.address-modal-header button {
+  background: #f1f5f9;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.address-modal-header button:hover {
+  background: #e2e8f0;
+  color: #ef4444;
+}
+
+.address-modal-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: block;
+}
+
+.address-modal-content .form-card {
+  margin-bottom: 1.5rem;
+}
+
+.address-modal-content .form-card:last-child {
+  margin-bottom: 0;
+}
+
+.address-modal-content .form-card {
+  box-shadow: none;
+  border: 1px solid #e2e8f0;
+}
+
+.address-modal-footer {
+  padding: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  background: white;
+  z-index: 10;
+}
+
+.btn-save-address {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-save-address:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.3);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 767px) {
+  .address-modal-overlay {
+    padding: 0;
+    display: block;
+  }
+  .address-modal-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    max-height: 100%;
+    width: 100%;
+    border-radius: 0;
+  }
+  .address-modal-content {
+    padding: 1rem;
+  }
+  .address-modal-content .form-card {
+    margin-bottom: 1rem;
+    width: 100%;
+  }
 }

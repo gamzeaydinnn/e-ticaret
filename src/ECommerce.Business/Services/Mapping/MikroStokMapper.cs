@@ -208,13 +208,14 @@ namespace ECommerce.Business.Services.Mapping
             };
 
             // Fiyat bilgisi
+            // 🔴 KRİTİK: Web'den eklenen ürünlerin fiyatları Liste 11'e yazılmalı (Web Fiyat Listesi)
             if (product.Price > 0)
             {
                 mikroStok.SatisFiyatlari = new List<MikroStokFiyatDto>
                 {
                     new MikroStokFiyatDto
                     {
-                        SfiyatNo = 1,
+                        SfiyatNo = 11,  // ⚠️ DÜZELTİLDİ: Liste 1 → Liste 11 (Web Fiyat Listesi)
                         SfiyatFiyati = product.Price,
                         SfiyatDovizCinsi = 0 // TL
                     }

@@ -175,13 +175,13 @@ namespace ECommerce.Core.DTOs.Micro
     public class MikroStokFiyatDto
     {
         /// <summary>
-        /// Fiyat numarası (1-10 arası).
-        /// NEDEN: Mikro'da 10 farklı fiyat tipi var:
-        /// 1 = Perakende, 2 = Toptan, 3 = Bayi vb.
-        /// E-ticaret için genelde 1 (Perakende) kullanılır.
+        /// Fiyat numarası (1-11 arası).
+        /// NEDEN: Mikro'da farklı fiyat tipleri var:
+        /// 11 = Web fiyat listesi (Single Source of Truth)
+        /// E-ticaret için 11 kullanılır.
         /// </summary>
         [JsonPropertyName("sfiyat_no")]
-        public int SfiyatNo { get; set; } = 1;
+        public int SfiyatNo { get; set; } = 11;
 
         /// <summary>
         /// Fiyat değeri (KDV hariç).

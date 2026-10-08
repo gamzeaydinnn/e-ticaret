@@ -384,10 +384,10 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 _logger.LogInformation("[POSNET-3DS-CALLBACK] {CorrelationId} - oosTranData (Finansallaştırma) başlatılıyor...",
                     correlationId);
 
-                // DEBUG: BankData ve MAC değerlerini logla
-                _logger.LogDebug("[POSNET-3DS-CALLBACK] {CorrelationId} - BankData: {BankData}, XID: {Xid}, Amount: {Amount}",
-                    correlationId, 
-                    callbackRequest.EffectiveBankData?.Substring(0, Math.Min(100, callbackRequest.EffectiveBankData?.Length ?? 0)) ?? "null",
+                // Finansallaştırma detaylarını WARNING seviyesinde logla — production'da görünür
+                _logger.LogWarning("[POSNET-3DS-CALLBACK] {CorrelationId} - BankData uzunluğu: {BankDataLen}, XID: {Xid}, Amount (kuruş): {Amount}",
+                    correlationId,
+                    callbackRequest.EffectiveBankData?.Length ?? 0,
                     resolveResponse.Xid,
                     resolveResponse.Amount);
 
@@ -400,16 +400,20 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     _settings.PosnetTerminalId,
                     _settings.PosnetEncKey);
 
-                _logger.LogDebug("[POSNET-3DS-CALLBACK] {CorrelationId} - Hesaplanan MAC: {Mac}",
-                    correlationId, tranDataMac);
+                _logger.LogWarning("[POSNET-3DS-CALLBACK] {CorrelationId} - Hesaplanan oosTranData MAC (ilk 8 karakter): {MacPrefix}",
+                    correlationId, tranDataMac?.Length >= 8 ? tranDataMac[..8] + "..." : tranDataMac);
 
                 var tranDataRequest = new Models.PosnetOosTranDataRequest
                 {
-                    BankData = callbackRequest.EffectiveBankData,
-                    WpAmount = 0, // World Puan kullanılmıyorsa 0
-                    Mac = tranDataMac,
-                    OrderId = orderId.Value.ToString(),
-                    Amount = resolveResponse.Amount
+                    // KRİTİK: MerchantId ve TerminalId XML'de <mid> ve <tid> olarak gönderilmeli
+                    // Eksik olursa banka "Üye işyeri bilgisi hatalı" (RespCode 0034) döner
+                    MerchantId = _settings.PosnetMerchantId,
+                    TerminalId  = _settings.PosnetTerminalId,
+                    BankData  = callbackRequest.EffectiveBankData,
+                    WpAmount  = 0, // World Puan kullanılmıyorsa 0
+                    Mac       = tranDataMac,
+                    OrderId   = orderId.Value.ToString(),
+                    Amount    = resolveResponse.Amount
                 };
 
                 var tranDataResult = await _posnetService.ProcessOosTranDataAsync(tranDataRequest);
@@ -417,12 +421,23 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 if (!tranDataResult.IsSuccess || tranDataResult.Data == null)
                 {
                     var tranDataError = tranDataResult.Error ?? "Finansallaştırma başarısız";
-                    
-                    _logger.LogWarning("[POSNET-3DS-CALLBACK] {CorrelationId} - Finansallaştırma BAŞARISIZ: {Error}",
-                        correlationId, tranDataError);
+                    var respCode = tranDataResult.Data?.RawErrorCode ?? "bilinmiyor";
+
+                    // ❌ ERROR seviyesinde logla — production'da kesinlikle görünmeli
+                    _logger.LogError(
+                        "[POSNET-FINALIZATION-FAILED] CorrelationId={CorrelationId} | OrderId={OrderId} | " +
+                        "Hata: {Error} | BankaRespCode: {RespCode} | " +
+                        "XID: {Xid} | Amount(kuruş): {Amount} | MdStatus: {MdStatus}",
+                        correlationId,
+                        orderId.Value,
+                        tranDataError,
+                        respCode,
+                        resolveResponse.Xid,
+                        resolveResponse.Amount,
+                        callbackRequest.MdStatus);
 
                     await UpdatePaymentStatusAsync(orderId.Value, "FINALIZATION_FAILED",
-                        $"oosTranData hatası: {tranDataError}");
+                        $"oosTranData hatası: {tranDataError} | RespCode: {respCode}");
 
                     return Posnet3DSecureResultDto.FailureResult(
                         "Ödeme tamamlanamadı",
@@ -575,40 +590,77 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         // ═══════════════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Payment tablosunu günceller (hata durumları için)
+        /// Payment tablosunu günceller (hata durumları için).
+        /// Payment kaydı bulunamasa bile Order tablosunu günceller —
+        /// böylece sipariş asla yanlış "Ödeme Bekliyor" durumunda kalmaz.
         /// </summary>
         private async Task UpdatePaymentStatusAsync(int orderId, string status, string? rawResponse)
         {
             try
             {
+                var isFailed = status.Contains("FAILED", StringComparison.OrdinalIgnoreCase) ||
+                               status.Contains("ERROR", StringComparison.OrdinalIgnoreCase);
+
                 var payment = await GetLatestPosnetPaymentAsync(orderId);
 
                 if (payment != null)
                 {
                     payment.Status = status;
                     payment.UpdatedAt = DateTime.UtcNow;
-                    payment.RawResponse = (payment.RawResponse ?? "") + 
+                    payment.RawResponse = (payment.RawResponse ?? "") +
                         $"\n[3DS-Callback-{DateTime.UtcNow:HH:mm:ss}] {rawResponse}";
+                }
+                else
+                {
+                    // Payment kaydı yok — en azından Order'ı güncelleyebilmek için uyarı ver
+                    _logger.LogWarning(
+                        "[POSNET-3DS] OrderId={OrderId} için POSNET payment kaydı bulunamadı. " +
+                        "Yalnızca Order tablosu güncellenecek. Status: {Status}",
+                        orderId, status);
+                }
 
-                    var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
-                    if (order != null && status.Contains("FAILED", StringComparison.OrdinalIgnoreCase))
-                    {
-                        order.PaymentStatus = PaymentStatus.Failed;
-                        order.Status = OrderStatus.PaymentFailed;
-                    }
-                    
-                    await _dbContext.SaveChangesAsync();
+                // Order durumu: Payment kaydından bağımsız olarak her zaman güncelle
+                var order = await _dbContext.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order != null && isFailed)
+                {
+                    var previousStatus = order.Status;
+                    order.PaymentStatus = PaymentStatus.Failed;
+                    order.Status = OrderStatus.PaymentFailed;
 
-                    if (_inventorySettlement != null &&
-                        status.Contains("FAILED", StringComparison.OrdinalIgnoreCase))
+                    _dbContext.OrderStatusHistories.Add(new OrderStatusHistory
                     {
-                        await _inventorySettlement.SettlePaymentFailureAsync(orderId);
-                    }
+                        OrderId = orderId,
+                        PreviousStatus = previousStatus,
+                        NewStatus = OrderStatus.PaymentFailed,
+                        ChangedAt = DateTime.UtcNow,
+                        ChangedBy = "POSNET-3DSecure",
+                        Reason = $"Ödeme başarısız: {status} — {rawResponse?.Substring(0, Math.Min(200, rawResponse?.Length ?? 0))}"
+                    });
+
+                    _logger.LogError(
+                        "[POSNET-3DS] ❌ Sipariş PaymentFailed olarak işaretlendi. " +
+                        "OrderId={OrderId} | Önceki durum={PreviousStatus} | Hata={Status} | Detay={Detail}",
+                        orderId, previousStatus, status, rawResponse);
+                }
+                else if (order == null)
+                {
+                    _logger.LogError(
+                        "[POSNET-3DS] ❌ OrderId={OrderId} için sipariş de bulunamadı! " +
+                        "Ne payment ne order güncellenebildi. Status={Status}",
+                        orderId, status);
+                }
+
+                await _dbContext.SaveChangesAsync();
+
+                if (_inventorySettlement != null && isFailed)
+                {
+                    await _inventorySettlement.SettlePaymentFailureAsync(orderId);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[POSNET-3DS] Payment status güncelleme hatası - OrderId: {OrderId}", orderId);
+                _logger.LogError(ex, "[POSNET-3DS] Payment/Order status güncelleme hatası - OrderId: {OrderId}, Status: {Status}",
+                    orderId, status);
             }
         }
 

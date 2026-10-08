@@ -282,7 +282,14 @@ namespace ECommerce.Business.Services.Managers
                 .ThenInclude(c => c!.User)
                 .AsQueryable();
             if (userId.HasValue)
+            {
                 query = query.Where(o => o.UserId == userId.Value);
+                // Müşteri görünümünde başarısız ödeme siparişleri gösterilmez.
+                // NEDEN: Ödeme tamamlanmadan sipariş "aktif sipariş" gibi görünmemeli.
+                query = query.Where(o =>
+                    o.Status != OrderStatus.PaymentFailed &&
+                    o.PaymentStatus != PaymentStatus.Failed);
+            }
 
             // TARİH ARALIĞI FİLTRESİ (OrderDate üzerinden)
             // NEDEN OrderDate: Admin "siparişin verildiği tarih"e göre arama yapmak ister;
@@ -404,6 +411,8 @@ namespace ECommerce.Business.Services.Managers
                         : orderPhone;
                     return phoneSuffix == orderPhoneSuffix;
                 })
+                // Misafir görünümünde de başarısız ödeme siparişlerini gizle.
+                .Where(o => o.Status != OrderStatus.PaymentFailed && o.PaymentStatus != PaymentStatus.Failed)
                 .OrderByDescending(o => o.CreatedAt)
                 .Take(20) // Performans: En fazla 20 sipariş döndür
                 .ToList();

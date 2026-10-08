@@ -1847,9 +1847,9 @@ namespace ECommerce.API.Controllers.Admin
                     return BadRequest(new { success = false, message = "Geçerli bir fiyat girilmeli" });
                 }
 
-                if (request.FiyatListesiNo.HasValue && (request.FiyatListesiNo < 1 || request.FiyatListesiNo > 10))
+                if (request.FiyatListesiNo.HasValue && (request.FiyatListesiNo < 1 || request.FiyatListesiNo > 11))
                 {
-                    return BadRequest(new { success = false, message = "Fiyat listesi 1 ile 10 arasında olmalı" });
+                    return BadRequest(new { success = false, message = "Fiyat listesi 1 ile 11 arasında olmalı" });
                 }
 
                 _logger.LogInformation(
@@ -1857,11 +1857,13 @@ namespace ECommerce.API.Controllers.Admin
                     request.StokKod, request.YeniFiyat);
 
                 // MikroFiyatDegisikligiRequestDto oluştur
+                // 🔴 KRİTİK: Web'den yapılan fiyat güncellemeleri Liste 11'e yazılmalı
+                // Liste 11 = Web Fiyat Listesi (Tek Kaynak Gerçeklik - Single Source of Truth)
                 var mikroRequest = new ECommerce.Core.DTOs.Micro.MikroFiyatDegisikligiRequestDto
                 {
                     StoKod = request.StokKod,
                     YeniFiyat = request.YeniFiyat,
-                    FiyatNo = request.FiyatListesiNo ?? 1,
+                    FiyatNo = request.FiyatListesiNo ?? 11,  // ⚠️ DÜZELTİLDİ: Liste 1 → Liste 11
                     KdvDahil = request.KdvDahil ?? true
                 };
 
@@ -1946,9 +1948,9 @@ namespace ECommerce.API.Controllers.Admin
                     return BadRequest(new { success = false, message = "Fiyat 0'dan büyük olmalı" });
                 }
 
-                if (request.FiyatListesiNo.HasValue && (request.FiyatListesiNo < 1 || request.FiyatListesiNo > 10))
+                if (request.FiyatListesiNo.HasValue && (request.FiyatListesiNo < 1 || request.FiyatListesiNo > 11))
                 {
-                    return BadRequest(new { success = false, message = "Fiyat listesi 1 ile 10 arasında olmalı" });
+                    return BadRequest(new { success = false, message = "Fiyat listesi 1 ile 11 arasında olmalı" });
                 }
 
                 _logger.LogInformation(
@@ -1991,7 +1993,7 @@ namespace ECommerce.API.Controllers.Admin
                     {
                         StokKod = request.StokKod,
                         YeniFiyat = request.SatisFiyati.Value,
-                        FiyatListesiNo = request.FiyatListesiNo ?? 1,
+                        FiyatListesiNo = request.FiyatListesiNo ?? 11,
                         KdvDahil = request.KdvDahil ?? true
                     };
 

@@ -81,23 +81,23 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "stokkod");
+                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
                     if (string.IsNullOrWhiteSpace(stokKod) || !seen.Add(stokKod))
                         continue;
 
                     results.Add(new MikroUnifiedProductDto
                     {
                         StokKod         = stokKod,
-                        StokAd          = ReadString(reader, "stokad"),
-                        Fiyat           = ReadDecimal(reader, "fiyat"),
-                        StokMiktar      = ReadDecimal(reader, "stok_miktar"),
-                        DepoNo          = ReadNullableInt(reader, "depo_no"),
-                        Barkod          = ReadString(reader, "barkod"),
-                        GrupKod         = ReadString(reader, "grup_kod"),
-                        AnagrupKod      = ReadString(reader, "anagrup_kod"),
-                        Birim           = ReadString(reader, "birim"),
-                        KdvOrani        = ReadDecimal(reader, "kdv_orani"),
-                        WebeGonderilecekFl = ReadBool(reader, "webe_gonderilecek_fl"),
+                        StokAd          = ReadString(reader, "msg_S_0005", "stokad"),
+                        Fiyat           = ReadDecimal(reader, "msg_S_0002", "fiyat"),
+                        StokMiktar      = ReadDecimal(reader, "msg_S_0343", "stok_miktar"),
+                        DepoNo          = ReadNullableInt(reader, "msg_S_0873", "depo_no"),
+                        Barkod          = ReadString(reader, "bar_kodu", "barkod"),
+                        GrupKod         = ReadString(reader, "sto_grup_kod", "grup_kod"),
+                        AnagrupKod      = ReadString(reader, "sto_anagrup_kod", "anagrup_kod"),
+                        Birim           = ReadString(reader, "sto_birim1_ad", "birim"),
+                        KdvOrani        = ReadDecimal(reader, "sto_perakende_vergi", "kdv_orani"),
+                        WebeGonderilecekFl = ReadBool(reader, "sto_webe_gonderilecek_fl", "webe_gonderilecek_fl"),
                         SonHareketTarihi  = ReadNullableDateTime(reader, "son_hareket_tarihi")
                     });
                 }
@@ -178,7 +178,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "stokkod");
+                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
                     if (string.IsNullOrWhiteSpace(stokKod) ||
                         string.Equals(stokKod, "TANIMSIZ", StringComparison.OrdinalIgnoreCase))
                     {
@@ -189,8 +189,8 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     {
                         Guid            = ReadString(reader, "guid"),
                         StokKod         = stokKod.Trim(),
-                        UrunAdi         = ReadString(reader, "stokad"),
-                        Fiyat           = ReadDecimal(reader, "fiyat"),
+                        UrunAdi         = ReadString(reader, "msg_S_0005", "stokad"),
+                        Fiyat           = ReadDecimal(reader, "msg_S_0002", "fiyat"),
                         Barkod          = ReadString(reader, "barkod"),
                         WebeGonderilecekFl = ReadNullableBool(reader, "webe_gonderilecek_fl")
                     });
@@ -254,11 +254,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "stokkod");
+                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
                     if (string.IsNullOrWhiteSpace(stokKod))
                         continue;
 
-                    var miktar = ReadDecimal(reader, "stok_miktar");
+                    var miktar = ReadDecimal(reader, "msg_S_0343", "stok_miktar");
                     var normalizedKey = stokKod.Trim();
 
                     // Aynı stok kod birden fazla satırda gelirse en yüksek miktarı al
@@ -358,143 +358,15 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             int hedefDepoNo = 0,
             CancellationToken cancellationToken = default)
         {
-            if (!IsConfigured)
-            {
-                _logger.LogWarning("[MikroDbService] SqlConnectionString yapılandırılmamış (fiyat hazırlama).");
-                return (0, 0, 0);
-            }
-
-            try
-            {
-                await using var conn = new SqlConnection(_settings.SqlConnectionString);
-                await conn.OpenAsync(cancellationToken);
-
-                // Transaction ile atomik işlem — ya hepsi başarılı olur ya hiçbiri
-                await using var tx = (SqlTransaction)await conn.BeginTransactionAsync(cancellationToken);
-
-                try
-                {
-                    // ── ADIM 1: Hedef listeyi (11) tamamen temizle — sıfırdan doldurulacak ──
-                    const string deleteSql = @"
-                        DELETE FROM STOK_SATIS_FIYAT_LISTELERI
-                        WHERE sfiyat_listesirano = @HedefListeNo;";
-
-                    await using var deleteCmd = new SqlCommand(deleteSql, conn, tx)
-                    {
-                        CommandTimeout = _settings.SqlCommandTimeoutSeconds
-                    };
-                    deleteCmd.Parameters.Add(new SqlParameter("@HedefListeNo", SqlDbType.Int) { Value = hedefListeNo });
-
-                    var deleted = await deleteCmd.ExecuteNonQueryAsync(cancellationToken);
-                    _logger.LogInformation(
-                        "[MikroDbService] Liste {HedefListe} temizlendi. Silinen: {Deleted}",
-                        hedefListeNo, deleted);
-
-                    // ── ADIM 2: Web-aktif stokları hedef listeye ekle ──
-                    // DELETE sonrası liste boş olduğu için tüm web-aktif stoklar eklenir
-                    const string insertSql = @"
-                        INSERT INTO STOK_SATIS_FIYAT_LISTELERI (
-                            sfiyat_DBCno, sfiyat_SpecRECno, sfiyat_iptal, sfiyat_fileid,
-                            sfiyat_hidden, sfiyat_kilitli, sfiyat_degisti, sfiyat_checksum,
-                            sfiyat_create_user, sfiyat_create_date,
-                            sfiyat_lastup_user, sfiyat_lastup_date,
-                            sfiyat_special1, sfiyat_special2, sfiyat_special3,
-                            sfiyat_stokkod, sfiyat_listesirano, sfiyat_deposirano,
-                            sfiyat_odemeplan, sfiyat_birim_pntr, sfiyat_fiyati,
-                            sfiyat_doviz, sfiyat_iskontokod, sfiyat_deg_nedeni,
-                            sfiyat_primyuzdesi, sfiyat_kampanyakod, sfiyat_doviz_kuru
-                        )
-                        SELECT
-                            0, 0, 0, 228, 0, 0, 0, 0,
-                            1, GETDATE(), 1, GETDATE(),
-                            '', '', '',
-                            s.sto_kod,
-                            @HedefListeNo,
-                            @HedefDepoNo,
-                            0, 1, 0.0,
-                            0, '', '',
-                            0, '', 0
-                        FROM STOKLAR s
-                        WHERE s.sto_webe_gonderilecek_fl = 1;";
-
-                    await using var insertCmd = new SqlCommand(insertSql, conn, tx)
-                    {
-                        CommandTimeout = _settings.SqlCommandTimeoutSeconds
-                    };
-                    insertCmd.Parameters.Add(new SqlParameter("@HedefListeNo", SqlDbType.Int) { Value = hedefListeNo });
-                    insertCmd.Parameters.Add(new SqlParameter("@HedefDepoNo", SqlDbType.Int) { Value = hedefDepoNo });
-
-                    var inserted = await insertCmd.ExecuteNonQueryAsync(cancellationToken);
-                    _logger.LogInformation(
-                        "[MikroDbService] Web-aktif stoklar listeye eklendi. Eklenen: {Inserted}, Hedef: {Hedef}, Depo: {Depo}",
-                        inserted, hedefListeNo, hedefDepoNo);
-
-                    // ── ADIM 3: Hedef listedeki fiyatları KAYNAK listeden (1) MAX ile güncelle ──
-                    // NEDEN: Kaynak liste (1) Mikro'daki orijinal fiyatları barındırır.
-                    // Bir stok kodunun birden fazla satırı olabilir → MAX ile en yüksek fiyat alınır.
-                    const string updateSql = @"
-                        UPDATE f_hedef
-                        SET
-                            f_hedef.sfiyat_fiyati      = ISNULL(f_kaynak.MaxFiyat, 0),
-                            f_hedef.sfiyat_lastup_date = GETDATE()
-                        FROM STOK_SATIS_FIYAT_LISTELERI f_hedef
-                        INNER JOIN (
-                            SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
-                            FROM STOK_SATIS_FIYAT_LISTELERI
-                            WHERE sfiyat_listesirano = @KaynakListeNo
-                              AND sfiyat_deposirano  = 1   -- Yalnızca Depo 1 (ana perakende deposu)
-                            GROUP BY sfiyat_stokkod
-                        ) f_kaynak ON f_hedef.sfiyat_stokkod = f_kaynak.sfiyat_stokkod
-                        INNER JOIN STOKLAR s ON s.sto_kod = f_hedef.sfiyat_stokkod
-                        WHERE f_hedef.sfiyat_listesirano = @HedefListeNo
-                          AND f_hedef.sfiyat_deposirano  = @HedefDepoNo
-                          AND s.sto_webe_gonderilecek_fl = 1;";
-
-                    await using var updateCmd = new SqlCommand(updateSql, conn, tx)
-                    {
-                        CommandTimeout = _settings.SqlCommandTimeoutSeconds
-                    };
-                    updateCmd.Parameters.Add(new SqlParameter("@HedefListeNo", SqlDbType.Int) { Value = hedefListeNo });
-                    updateCmd.Parameters.Add(new SqlParameter("@KaynakListeNo", SqlDbType.Int) { Value = kaynakListeNo });
-                    updateCmd.Parameters.Add(new SqlParameter("@HedefDepoNo", SqlDbType.Int) { Value = hedefDepoNo });
-
-                    var updated = await updateCmd.ExecuteNonQueryAsync(cancellationToken);
-                    _logger.LogInformation(
-                        "[MikroDbService] Fiyatlar güncellendi. Güncellenen: {Updated}", updated);
-
-                    await tx.CommitAsync(cancellationToken);
-
-                    _logger.LogInformation(
-                        "[MikroDbService] Web fiyat listesi hazırlama tamamlandı. " +
-                        "Silinen: {Deleted}, Eklenen: {Inserted}, Güncellenen: {Updated}",
-                        deleted, inserted, updated);
-
-                    return (deleted, inserted, updated);
-                }
-                catch
-                {
-                    // Hata durumunda tüm işlemleri geri al — atomiklik garantisi
-                    await tx.RollbackAsync(cancellationToken);
-                    throw;
-                }
-            }
-            catch (SqlException ex)
-            {
-                _logger.LogError(ex,
-                    "[MikroDbService] Web fiyat listesi hazırlama SQL hatası. Number: {Number}, Severity: {Class}",
-                    ex.Number, ex.Class);
-                return (0, 0, 0);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogWarning("[MikroDbService] Web fiyat listesi hazırlama iptal edildi / timeout.");
-                return (0, 0, 0);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "[MikroDbService] Web fiyat listesi hazırlama beklenmeyen hata.");
-                return (0, 0, 0);
-            }
+            // ⚠️ MÜŞTERİ TALEBİYLE İPTAL EDİLDİ (Enpos - Liste Ezme Hatası Çözümü)
+            // Gamze Hanım'ın onayıyla bu metod devre dışı bırakıldı.
+            // Nedeni: Web admin panelinden Liste 11'e girilen özel fiyatları,
+            // bu metod SİLİP Liste 1'deki mağaza (Enpos) fiyatlarıyla eziyordu!
+            _logger.LogInformation(
+                "[MikroDbService] PrepareWebPriceListAsync ÇALIŞTIRILMADI! " +
+                "Müşteri onayıyla Liste 11'in mağaza fiyatları tarafından ezilmesi engellendi.");
+            
+            return await Task.FromResult((0, 0, 0));
         }
 
         // ==================== SQL SORGU BUILDERları ====================
@@ -513,69 +385,15 @@ namespace ECommerce.Infrastructure.Services.MicroServices
     /// </summary>
         private static string BuildUnifiedProductQuery(int? fiyatListesiNo, int? depoNo)
         {
-            // NEDEN: MicroService.PrepareWebPriceListAsync liste 11'e yazar,
-            // null geçildiğinde de 11'den oku — eskiden 2'ydi, fiyat 0 döndürüyordu.
-            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
-            var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
-
-            return $@"SELECT
-    S.sto_kod                                     AS stokkod,
-    ISNULL(S.sto_isim, '')                        AS stokad,
-    -- NEDEN: COALESCE ile çoklu fiyat listesi fallback.
-    -- Önce hedef liste (11), yoksa/0 ise kaynak liste (1), son çare 0.
-    -- PrepareWebPriceListAsync çalışmamış bile olsa fiyatlar gelir.
-    COALESCE(
-        NULLIF(Hedef.sfiyat_fiyati, 0),
-        NULLIF(Kaynak.MaxFiyat, 0),
-        0
-    )                                             AS fiyat,
-    ISNULL(ST.stok_miktar, 0)                     AS stok_miktar,
-    {hedefDepo}                                   AS depo_no,
-    ISNULL(BK.bar_kodu, '')                       AS barkod,
-    ISNULL(S.sto_altgrup_kod, '')                 AS grup_kod,
-    ISNULL(S.sto_anagrup_kod, '')                 AS anagrup_kod,
-    ISNULL(S.sto_birim1_ad, 'ADET')               AS birim,
-    CASE ISNULL(S.sto_perakende_vergi, 0)
-        WHEN 0 THEN 0
-        WHEN 1 THEN 0
-        WHEN 2 THEN 1
-        WHEN 3 THEN 10
-        WHEN 4 THEN 10
-        WHEN 5 THEN 10
-        WHEN 6 THEN 20
-        ELSE 20
-    END                                           AS kdv_orani,
-    1                                             AS webe_gonderilecek_fl,
-    NULL                                          AS son_hareket_tarihi
-FROM STOKLAR S
-LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
-       ON  Hedef.sfiyat_stokkod     = S.sto_kod
-       AND Hedef.sfiyat_listesirano = {hedefListe}
-       AND Hedef.sfiyat_deposirano  = {hedefDepo}
--- Fallback: Orijinal fiyat listesi (1) — PrepareWebPriceListAsync çalışmadıysa buradan oku
-LEFT JOIN (
-    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
-    FROM   STOK_SATIS_FIYAT_LISTELERI
-    WHERE  sfiyat_listesirano = 1
-      AND  sfiyat_deposirano  = 1   -- Yalnızca Depo 1 (ana perakende deposu)
-    GROUP BY sfiyat_stokkod
-) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
-LEFT JOIN (
-    SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
-    GROUP BY sth_stok_kod
-) ST ON ST.sth_stok_kod = S.sto_kod
-OUTER APPLY (
-    SELECT TOP 1 bar_kodu
-    FROM   BARKOD_TANIMLARI
-    WHERE  bar_stokkodu = S.sto_kod
-) BK
-WHERE S.sto_webe_gonderilecek_fl = 1
-  AND ISNULL(S.sto_iptal, 0) = 0
-  AND S.sto_kod IS NOT NULL
-  AND LTRIM(RTRIM(S.sto_kod)) <> ''
-ORDER BY S.sto_kod;";
+            var (sql, _) = MikroSqlQueryBuilder.BuildUnifiedProductQuery(
+                depoNo: depoNo,
+                fiyatListesiNo: fiyatListesiNo,
+                stokKod: null,
+                grupKod: null,
+                sadeceStoklu: null,
+                sadeceAktif: true
+            );
+            return sql;
         }
 
         /// <summary>
@@ -584,157 +402,146 @@ ORDER BY S.sto_kod;";
         /// </summary>
         private static string BuildSqlPriceQuery(int? fiyatListesiNo)
         {
-            // NEDEN: PrepareWebPriceListAsync liste 11'e yazar — default 2 uyumsuzdu
-            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
-
-            return $@"SELECT
-    ISNULL(CONVERT(NVARCHAR(36), Hedef.sfiyat_Guid), '00000000-0000-0000-0000-000000000000') AS guid,
-    S.sto_kod                                        AS stokkod,
-    ISNULL(S.sto_isim, '')                           AS stokad,
-    ISNULL(Hedef.sfiyat_fiyati, 0)                   AS fiyat,
-    ISNULL(BK.bar_kodu, '-BARKODYOK-')               AS barkod,
-    ISNULL(S.sto_webe_gonderilecek_fl, 0)            AS webe_gonderilecek_fl
-FROM STOKLAR S
-LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
-       ON  Hedef.sfiyat_stokkod     = S.sto_kod
-       AND Hedef.sfiyat_listesirano = {hedefListe}
-OUTER APPLY (
-    SELECT TOP 1 bar_kodu
-    FROM   BARKOD_TANIMLARI
-    WHERE  bar_stokkodu = S.sto_kod
-) BK
-WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
-  AND ISNULL(S.sto_iptal, 0) = 0
-  AND S.sto_kod IS NOT NULL
-  AND LTRIM(RTRIM(S.sto_kod)) <> ''
-ORDER BY S.sto_kod;";
+            var (sql, _) = MikroSqlQueryBuilder.BuildSqlPriceQuery(fiyatListesiNo);
+            return sql;
         }
 
         /// <summary>
-        /// Depo bazlı stok miktarı sorgusunu oluşturur.
-        /// STOKLAR → STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW ile doğrudan web-aktif ürün stoğu.
-        /// GÖLKÖY ŞUBE DEPO ve yıl bazlı filtreler kaldırıldı.
+        /// Depo bazlı anlık stok miktarı sorgusunu oluşturur.
+        /// dbo.fn_TeknikPc_Anlik_Stok_Miktari scalar fonksiyonu kullanılır:
+        /// — STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW'dan farklı olarak Enpos (POS) satışları
+        ///   anlık olarak stok miktarından düşülür → web sitesi doğru stok gösterir.
         /// </summary>
         private static string BuildSqlStockQuery(int? depoNo)
         {
-            // depoNo filtresi: kullanıcı belirli bir depo isterse uygulanır
-            // Not: STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW depo kolonu yapısına bağlı
-            _ = depoNo; // şimdilik kullanılmıyor — view toplam stok döner
-
-            return @"SELECT
-    S.sto_kod                                    AS stokkod,
-    ISNULL(ST.stok_miktar, 0)                    AS stok_miktar
-FROM STOKLAR S
-LEFT JOIN (
-    SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
-    GROUP BY sth_stok_kod
-) ST ON ST.sth_stok_kod = S.sto_kod
-WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
-  AND ISNULL(S.sto_iptal, 0) = 0
-  AND S.sto_kod IS NOT NULL
-  AND LTRIM(RTRIM(S.sto_kod)) <> ''
-ORDER BY S.sto_kod;";
+            var (sql, _) = MikroSqlQueryBuilder.BuildSqlStockQuery(depoNo);
+            return sql;
         }
 
         // ==================== YARDIMCI OKUYUCULAR ====================
         // SqlDataReader'dan type-safe, null-safe okuma — her alan için ayrı metod.
         // NEDEN: reader[col] direkt kullanımı runtime exception riski taşır.
 
-        private static string ReadString(SqlDataReader reader, string column)
+        private static string ReadString(SqlDataReader reader, params string[] columns)
         {
-            try
+            foreach(var column in columns)
             {
-                var ordinal = reader.GetOrdinal(column);
-                return reader.IsDBNull(ordinal) ? string.Empty : reader.GetString(ordinal).Trim();
-            }
-            catch (IndexOutOfRangeException)
-            {
-                // Sütun yoksa boş döndür — schema değişikliğine karşı toleranslı
-                return string.Empty;
-            }
-        }
-
-        private static decimal ReadDecimal(SqlDataReader reader, string column)
-        {
-            try
-            {
-                var ordinal = reader.GetOrdinal(column);
-                if (reader.IsDBNull(ordinal)) return 0m;
-
-                // MSSQL farklı numeric tipler dönebilir — Convert ile güvenli çevrim
-                return Convert.ToDecimal(reader.GetValue(ordinal));
-            }
-            catch
-            {
-                return 0m;
-            }
-        }
-
-        private static int? ReadNullableInt(SqlDataReader reader, string column)
-        {
-            try
-            {
-                var ordinal = reader.GetOrdinal(column);
-                if (reader.IsDBNull(ordinal)) return null;
-                return Convert.ToInt32(reader.GetValue(ordinal));
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static bool ReadBool(SqlDataReader reader, string column)
-        {
-            try
-            {
-                var ordinal = reader.GetOrdinal(column);
-                if (reader.IsDBNull(ordinal)) return false;
-                var val = reader.GetValue(ordinal);
-                return val switch
+                try
                 {
-                    bool b   => b,
-                    int i    => i != 0,
-                    byte by  => by != 0,
-                    short s  => s != 0,
-                    long l   => l != 0,
-                    _        => Convert.ToBoolean(val)
-                };
+                    var ordinal = reader.GetOrdinal(column);
+                    if (!reader.IsDBNull(ordinal)) return reader.GetString(ordinal).Trim();
+                }
+                catch (IndexOutOfRangeException)
+                {
+                    // Continue to next fallback
+                }
             }
-            catch
-            {
-                return false;
-            }
+            return string.Empty;
         }
 
-        private static bool? ReadNullableBool(SqlDataReader reader, string column)
+        private static decimal ReadDecimal(SqlDataReader reader, params string[] columns)
         {
-            try
+            foreach (var column in columns)
             {
-                var ordinal = reader.GetOrdinal(column);
-                if (reader.IsDBNull(ordinal)) return null;
-                return ReadBool(reader, column);
+                try
+                {
+                    var ordinal = reader.GetOrdinal(column);
+                    if (!reader.IsDBNull(ordinal)) return Convert.ToDecimal(reader.GetValue(ordinal));
+                }
+                catch
+                {
+                    // Continue
+                }
             }
-            catch
-            {
-                return null;
-            }
+            return 0m;
         }
 
-        private static DateTime? ReadNullableDateTime(SqlDataReader reader, string column)
+        private static int? ReadNullableInt(SqlDataReader reader, params string[] columns)
         {
-            try
+            foreach (var column in columns)
             {
-                var ordinal = reader.GetOrdinal(column);
-                if (reader.IsDBNull(ordinal)) return null;
-                return reader.GetDateTime(ordinal);
+                try
+                {
+                    var ordinal = reader.GetOrdinal(column);
+                    if (!reader.IsDBNull(ordinal)) return Convert.ToInt32(reader.GetValue(ordinal));
+                }
+                catch
+                {
+                    // Continue
+                }
             }
-            catch
+            return null;
+        }
+
+        private static bool ReadBool(SqlDataReader reader, params string[] columns)
+        {
+            foreach (var column in columns)
             {
-                return null;
+                try
+                {
+                    var ordinal = reader.GetOrdinal(column);
+                    if (reader.IsDBNull(ordinal)) continue;
+                    var val = reader.GetValue(ordinal);
+                    return val switch
+                    {
+                        bool b   => b,
+                        int i    => i != 0,
+                        byte by  => by != 0,
+                        short s  => s != 0,
+                        long l   => l != 0,
+                        _        => Convert.ToBoolean(val)
+                    };
+                }
+                catch
+                {
+                    // Continue
+                }
             }
+            return false;
+        }
+
+        private static bool? ReadNullableBool(SqlDataReader reader, params string[] columns)
+        {
+            foreach (var column in columns)
+            {
+                try
+                {
+                    var ordinal = reader.GetOrdinal(column);
+                    if (reader.IsDBNull(ordinal)) continue;
+                    var val = reader.GetValue(ordinal);
+                    return val switch
+                    {
+                        bool b   => b,
+                        int i    => i != 0,
+                        byte by  => by != 0,
+                        short s  => s != 0,
+                        long l   => l != 0,
+                        _        => Convert.ToBoolean(val)
+                    };
+                }
+                catch
+                {
+                    // Continue
+                }
+            }
+            return null;
+        }
+
+        private static DateTime? ReadNullableDateTime(SqlDataReader reader, params string[] columns)
+        {
+            foreach (var column in columns)
+            {
+                try
+                {
+                    var ordinal = reader.GetOrdinal(column);
+                    if (!reader.IsDBNull(ordinal)) return reader.GetDateTime(ordinal);
+                }
+                catch
+                {
+                    // Continue
+                }
+            }
+            return null;
         }
 
         // ==================== DELTA DEĞİŞİKLİK SORGUSU (HotPoll) ====================
@@ -846,7 +653,9 @@ ORDER BY S.sto_kod;";
         NULLIF(Kaynak.MaxFiyat, 0),
         0
     )                                             AS fiyat,
-    ISNULL(ST.stok_miktar, 0)                     AS stok_miktar,
+    -- ANLИК STOK: fn_TeknikPc_Anlik_Stok_Miktari Enpos (POS) satışlarını da düşer.
+    -- Delta sorgu sırasında da doğru stok gösterilmesi için kullanılır.
+    ISNULL(dbo.fn_TeknikPc_Anlik_Stok_Miktari(S.sto_kod, {hedefDepo}), 0) AS stok_miktar,
     {hedefDepo}                                   AS depo_no,
     ISNULL(BK.bar_kodu, '')                       AS barkod,
     ISNULL(S.sto_altgrup_kod, '')                 AS grup_kod,
@@ -867,22 +676,22 @@ ORDER BY S.sto_kod;";
      FROM STOK_HAREKETLERI H
      WHERE H.sth_stok_kod = S.sto_kod)            AS son_hareket_tarihi
 FROM STOKLAR S
-LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
-       ON  Hedef.sfiyat_stokkod     = S.sto_kod
-       AND Hedef.sfiyat_listesirano = {hedefListe}
-       AND Hedef.sfiyat_deposirano  = {hedefDepo}
+-- 🔴 KRİTİK DEĞİŞİKLİK (Task 0.2.2): Depo filtresi kaldırıldı
+-- NEDEN: Liste 11'deki TÜM kayıtlar kullanılmalı (Enpos dahil tüm depolar)
+-- Liste 11'de olmayan ürünler web'de görünmez (single source of truth)
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = {hedefListe}
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
     FROM   STOK_SATIS_FIYAT_LISTELERI
     WHERE  sfiyat_listesirano = 1
     GROUP BY sfiyat_stokkod
 ) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
-LEFT JOIN (
-    SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
-    GROUP BY sth_stok_kod
-) ST ON ST.sth_stok_kod = S.sto_kod
 OUTER APPLY (
     SELECT TOP 1 bar_kodu
     FROM   BARKOD_TANIMLARI

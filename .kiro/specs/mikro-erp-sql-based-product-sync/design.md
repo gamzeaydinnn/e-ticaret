@@ -2,7 +2,74 @@
 
 ## Genel Bakış
 
-Bu tasarım, Mikro ERP'den ürün çekerken yaşanan stok ve fiyat mapping sorunlarını çözmek için SQL tabanlı bir yaklaşım sunmaktadır. Mevcut API endpoint'lerinin döndürdüğü field isimleri ile sistemimizin beklediği field isimleri arasındaki uyumsuzluk, doğrudan SQL sorguları ve geliştirilmiş parsing mantığı ile giderilecektir.
+Bu tasarım, Mikro ERP'den ürün çekerken yaşanan stok ve fiyat mapping sorunlarını çözmek için SQL tabanlı bir yaklaşım sunmaktadır. **KRİTİK:** Enpos kasa entegrasyonu sonrası ortaya çıkan fiyat tutarsızlığı (web sitesinde 70 TL, sepette 100 TL) sorunu da bu tasarımda çözülmektedir.
+
+## 🔴 KRİTİK SORUN: Enpos Fiyat Tutarsızlığı
+
+### Sorun Açıklaması
+
+**Senaryo:** Müşteri web sitesinde Havuç ürününü 70 TL olarak görüyor, ancak sepete eklediğinde fiyat 100 TL oluyor.
+
+### Kök Neden
+
+1. **PrepareWebPriceListAsync Depo Filtresi:**
+
+   ```csharp
+   // MikroDbService.cs:445 - SORUNLU KOD
+   WHERE sfiyat_listesirano = @KaynakListeNo
+   AND sfiyat_deposirano = 1  // ← Bu filtre Enpos fiyatlarını kaçırıyor
+   ```
+
+   - Enpos Depo 2 veya Depo 0'a yazıyorsa, bu kayıtlar Liste 11'e aktarılmıyor
+   - Liste 11'de fiyat 0 veya NULL kalıyor
+
+2. **BuildUnifiedProductQuery COALESCE Fallback:**
+   ```sql
+   -- MikroDbService.cs:527-530 - SORUNLU KOD
+   COALESCE(liste11.fiyat, liste1.fiyat) AS final_fiyat
+   ```
+
+   - Liste 11'de fiyat yoksa (0 veya NULL) Liste 1'e fallback yapılıyor
+   - Liste 1'de eski/farklı fiyat (100 TL) bulunuyor
+   - Web sitesi yanlış fiyatı gösteriyor
+
+### Çözüm Stratejisi
+
+#### Çözüm 1: PrepareWebPriceListAsync Depo Filtresini Kaldır (ÖNERİLEN)
+
+```csharp
+// MikroDbService.cs:445 - DÜZELTİLMİŞ KOD
+WHERE sfiyat_listesirano = @KaynakListeNo
+-- sfiyat_deposirano filtresi KALDIRILDI
+-- Tüm depolardan en yüksek/güncel fiyatı al
+```
+
+**Mantık:**
+
+- Liste 1'den Liste 11'e aktarım yaparken depo numarasına bakma
+- Tüm depolardan (Enpos dahil) fiyatları al
+- En güncel veya en yüksek fiyatı Liste 11'e yaz
+
+#### Çözüm 2: BuildUnifiedProductQuery Liste 11 Önceliği (ÖNERİLEN)
+
+```sql
+-- MikroDbService.cs:527-530 - DÜZELTİLMİŞ KOD
+-- COALESCE yerine Liste 11'i öncelikli tut
+CASE
+  WHEN liste11.fiyat IS NOT NULL AND liste11.fiyat > 0 THEN liste11.fiyat
+  ELSE liste1.fiyat  -- Sadece Liste 11 gerçekten boşsa fallback yap
+END AS final_fiyat
+
+-- VE depo filtresini kaldır
+WHERE liste11.sfiyat_listesirano = 11
+-- sfiyat_deposirano filtresi YOK
+```
+
+**Mantık:**
+
+- Liste 11'de fiyat varsa (NULL değil VE 0'dan büyük) ASLA Liste 1'e fallback yapma
+- Liste 11'den fiyat çekerken depo numarasına bakma
+- Sadece Liste 11 gerçekten boşsa (NULL veya hiç kayıt yoksa) Liste 1'e git
 
 ## Mimari
 

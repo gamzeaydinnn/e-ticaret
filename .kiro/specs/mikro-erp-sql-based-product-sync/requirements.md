@@ -4,19 +4,84 @@
 
 Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak gelmekte veya yanlış mapping yapılmaktadır. Bu sorun, API endpoint'lerinin döndürdüğü field isimleri ile bizim sistemimizin beklediği field isimleri arasındaki uyumsuzluktan kaynaklanmaktadır.
 
+## 🔴 KRİTİK SORUN: Liste 11 Tek Kaynak Gerçeklik (Single Source of Truth)
+
+**Tespit Edilen Sorun:** Web sitesi fiyatları Liste 11'den okumuyor veya Liste 1'e fallback yaparak yanlış fiyatlar gösteriyor.
+
+### Temel Prensip: Liste 11 = Web Fiyat Listesi
+
+**Liste 11'in Rolü:**
+
+- Liste 11, web sitesinde gösterilecek ürünlerin **TEK VE YEGÂNe** kaynağıdır
+- Liste 11'de OLMAYAN ürün → Web sitesinde GÖRÜNMEZ
+- Liste 11'deki fiyat → Web sitesinde gösterilen fiyat (fallback YOK)
+- Web'den fiyat güncellemesi → **Direkt Liste 11'e** yazılır (Liste 1'e DEĞİL)
+
+### Mevcut Sorunlar
+
+1. **BuildUnifiedProductQuery Liste 1 Fallback Sorunu:**
+   - Kod Liste 11'de fiyat bulamazsa Liste 1'e fallback yapıyor (COALESCE)
+   - **Sorun:** Bu mantık yanlış! Liste 11'de yoksa o ürün web'de OLMAMALI
+   - **Sonuç:** Yanlış fiyatlar görüntüleniyor (sepette fiyat farklı çıkıyor)
+
+2. **PrepareWebPriceListAsync Gereksiz ve Tehlikeli:**
+   - Bu metod Liste 11'i silip yeniden dolduruyor
+   - **Sorun:** Web'den yapılan fiyat güncellemeleri siliniyor
+   - **Çözüm:** Bu metod tamamen DEVRE DIŞI bırakılmalı
+
+3. **Web Fiyat Güncelleme Yanlış Listeye Yazıyor:**
+   - Web admin panelinden fiyat güncellendiğinde Liste 1'e yazılıyor
+   - **Sorun:** Liste 11 güncellenmediği için değişiklik web'de görünmüyor
+   - **Çözüm:** Fiyat güncellemeleri **sfiyat_listesirano = 11** ile yazılmalı
+
+### Etkilenen Kod Bölgeleri
+
+- `MikroDbService.cs:355-460` - PrepareWebPriceListAsync (DEVRE DIŞI BIRAKILMALI)
+- `MikroDbService.cs:521-575` - BuildUnifiedProductQuery (COALESCE kaldırılmalı, SADECE Liste 11)
+- Fiyat güncelleme servisleri - SfiyatListesiNo parametresi 11 olmalı
+
 ## Terimler Sözlüğü
 
 - **Mikro_ERP**: Şirketin kullandığı ERP sistemi (Mikro yazılım)
+- **Enpos**: Mağazada kullanılan kasa sistemi, Mikro ERP ile entegre
+- **Liste 1**: Mikro'daki kaynak fiyat listesi (Enpos dahil tüm satışlar)
+- **Liste 11**: Mikro'daki **WEB FIYAT LİSTESİ** - Web sitesinin tek kaynağı
 - **StokListesiV2**: Mikro ERP'nin ürün listesi API endpoint'i
 - **SqlVeriOkuV2**: Mikro ERP'nin SQL sorgusu çalıştırma endpoint'i
-- **STOK_SATIS_FIYAT_LISTELERI_YONETIM**: Mikro ERP'deki fiyat listesi tablosu
+- **STOK_SATIS_FIYAT_LISTELERI**: Mikro ERP'deki fiyat listesi tablosu
+- **STOK_SATIS_FIYAT_LISTELERI_YONETIM**: Mikro ERP'nin yönetim fiyat listesi view'ı
 - **STOKLAR**: Mikro ERP'deki stok kartları tablosu
 - **fn_Stok_Depo_Dagilim**: Mikro ERP'deki depo dağılım fonksiyonu
+- **fn_TeknikPc_Anlik_Stok_Miktari**: Mikro ERP'deki anlık stok fonksiyonu
 - **STOK_HAREKETLERI**: Mikro ERP'deki stok hareketleri tablosu
+- **PrepareWebPriceListAsync**: Liste 11'i Liste 1'den güncelleyen background servis metodu (DEVRE DIŞI BIRAKILACAK)
+- **sfiyat_listesirano**: Fiyat kaydının hangi fiyat listesine ait olduğunu belirten alan (11 = Web)
 - **Mapping**: API'den gelen field isimlerinin sistem modellerine dönüştürülmesi
 - **Cache_Tablosu**: Mikro'dan çekilen ürünlerin geçici olarak saklandığı veritabanı tablosu
 
 ## Gereksinimler
+
+### 🔴 KRİTİK - Gereksinim 0: Liste 11 Tek Kaynak Gerçeklik (Single Source of Truth)
+
+**Kullanıcı Hikayesi:** Sistem yöneticisi olarak, web sitesinin fiyat ve ürün bilgilerini SADECE Liste 11'den okumasını istiyorum, böylece fiyat tutarsızlıkları olmayacak ve web'den yaptığım güncellemeler anında yansıyacak.
+
+#### Kabul Kriterleri
+
+1. WHEN sistem web'e ürün gösterdiğinde, THE Sistem SHALL **SADECE Liste 11'den** (sfiyat_listesirano = 11) okumalı
+2. WHEN Liste 11'de bir ürün için fiyat bulunamazsa, THE Sistem SHALL o ürünü web sitesinde GÖSTERMEMELİ (Liste 1'e fallback YAPILMAMALI)
+3. WHEN web admin panelinden fiyat güncellendiğinde, THE Sistem SHALL güncellemeyi **sfiyat_listesirano = 11** ile Mikro'ya GÖNDERMELİ
+4. WHEN Mikro'da Liste 11'e yeni ürün eklendiğinde, THE Sistem SHALL o ürünü web sitesinde GÖSTERMELI
+5. WHEN Mikro'da Liste 11'den ürün silindiğinde, THE Sistem SHALL o ürünü web sitesinden KALDIRMALI
+6. WHEN PrepareWebPriceListAsync servisi çalışmaya çalıştığında, THE Sistem SHALL bu servisi DEVRE DIŞI BIRAKMALI (Liste 11'i silmemeli)
+7. WHEN web'e ürün eklerken, THE Sistem SHALL ürünü Mikro'da **Liste 11'e** EKLEMELİ (sfiyat_listesirano = 11)
+8. WHEN BuildUnifiedProductQuery sorgusu çalıştırıldığında, THE Sistem SHALL **WHERE sfiyat_listesirano = 11** filtresi UYGULAMALI
+9. WHEN ürün fiyatı güncellendiğinde, THE Sistem SHALL hem web veritabanını HEM DE Mikro Liste 11'i GÜNCELLEMELİ
+
+#### İlgili Kod Bölgeleri
+
+- `MikroDbService.cs:355-460` - PrepareWebPriceListAsync (devre dışı bırakılmalı)
+- `MikroDbService.cs:521-575` - BuildUnifiedProductQuery (SADECE Liste 11, fallback yok)
+- Fiyat güncelleme servisleri - SfiyatListesiNo = 11 parametresi eklenme li
 
 ### Gereksinim 1: SQL Sorgusu ile Ürün Çekme
 
@@ -29,7 +94,7 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 3. WHEN SQL sorgusu sonucu geldiğinde, THE Sistem SHALL msg_S_XXXX formatındaki field isimlerini doğru şekilde parse etmeli
 4. WHEN ürün verisi parse edildiğinde, THE Sistem SHALL stok miktarını msg_S_0343 alanından okumalı
 5. WHEN ürün verisi parse edildiğinde, THE Sistem SHALL fiyat bilgisini msg_S_0002 alanından okumalı
-6. WHEN ürün verisi parse edildiğinde, THE Sistem SHALL sto_webe_gonderilecek_fl alanını kontrol etmeli
+6. WHEN ürün verisi parse edildiğinde, THE Sistem SHALL **SADECE sfiyat_listesirano = 11** olan kayıtları KULLANMALI
 
 ### Gereksinim 2: Field Mapping Düzeltmesi
 
@@ -52,11 +117,11 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 #### Kabul Kriterleri
 
 1. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL STOK_SATIS_FIYAT_LISTELERI_YONETIM tablosunu ana tablo olarak kullanmalı
-2. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL fn_Stok_Depo_Dagilim fonksiyonunu OUTER APPLY ile birleştirmeli
-3. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL STOKLAR tablosunu JOIN ederek sto_webe_gonderilecek_fl alanını almalı
-4. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL ROW_NUMBER() ile son stok hareketine göre tekilleştirme yapmalı
-5. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL sadece bu yıl içinde hareketi olan ürünleri filtrelemeli
-6. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL 'GÖLKÖY ŞUBE DEPO' ve boş depo filtrelerini uygulamalı
+2. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL **WHERE sfiyat_listesirano = 11** filtresini EKLEMELİ
+3. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL fn_Stok_Depo_Dagilim fonksiyonunu OUTER APPLY ile birleştirmeli
+4. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL STOKLAR tablosunu JOIN ederek sto_webe_gonderilecek_fl alanını almalı
+5. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL ROW_NUMBER() ile son stok hareketine göre tekilleştirme yapmalı
+6. WHEN SQL sorgusu oluşturulduğunda, THE Sistem SHALL sadece bu yıl içinde hareketi olan ürünleri filtrelemeli
 
 ### Gereksinim 4: Backend Service Güncellemesi
 
@@ -64,8 +129,8 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 
 #### Kabul Kriterleri
 
-1. WHEN BuildSqlPriceQuery metodu çağrıldığında, THE Sistem SHALL güncellenmiş birleşik SQL sorgusunu döndürmeli
-2. WHEN BuildSqlStockQuery metodu çağrıldığında, THE Sistem SHALL güncellenmiş birleşik SQL sorgusunu döndürmeli
+1. WHEN BuildSqlPriceQuery metodu çağrıldığında, THE Sistem SHALL **sfiyat_listesirano = 11** filtreli SQL sorgusunu döndürmeli
+2. WHEN BuildSqlStockQuery metodu çağrıldığında, THE Sistem SHALL **sfiyat_listesirano = 11** filtreli SQL sorgusunu döndürmeli
 3. WHEN ParseSqlPriceRows metodu çağrıldığında, THE Sistem SHALL msg_S_XXXX field isimlerini doğru parse etmeli
 4. WHEN ParseSqlStockRows metodu çağrıldığında, THE Sistem SHALL msg_S_XXXX field isimlerini doğru parse etmeli
 5. WHEN parse işlemi yapılırken, THE Sistem SHALL case-insensitive field name matching kullanmalı
@@ -77,8 +142,8 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 
 #### Kabul Kriterleri
 
-1. WHEN MikroStokSatirDto oluşturulduğında, THE Sistem SHALL msg_S_0001 için StokKod property'si içermeli
-2. WHEN MikroStokSatirDto oluşturulduğında, THE Sistem SHALL msg_S_0002 için Fiyat property'si içermeli
+1. WHEN MikroStokSatirDto oluşturulduğunda, THE Sistem SHALL msg_S_0001 için StokKod property'si içermeli
+2. WHEN MikroStokSatirDto oluşturulduğunda, THE Sistem SHALL msg_S_0002 için Fiyat property'si içermeli
 3. WHEN MikroStokSatirDto oluşturulduğunda, THE Sistem SHALL msg_S_0343 için StokMiktar property'si içermeli
 4. WHEN MikroStokSatirDto oluşturulduğunda, THE Sistem SHALL msg_S_0005 için UrunAdi property'si içermeli
 5. WHEN MikroStokSatirDto oluşturulduğunda, THE Sistem SHALL sto_webe_gonderilecek_fl için IsWebActive property'si içermeli
@@ -123,11 +188,12 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 ## Teknik Kısıtlamalar
 
 1. SQL sorguları Mikro ERP'nin SqlVeriOkuV2 endpoint'i üzerinden çalıştırılmalı
-2. Field isimleri case-insensitive olarak parse edilmeli
-3. Decimal değerler Türk kültür ayarlarına (virgül ayracı) uygun parse edilmeli
-4. Timeout değeri maksimum 30 saniye olmalı
-5. Cache süresi maksimum 5 dakika olmalı
-6. Sayfa başına maksimum 100 ürün çekilmeli
+2. **Tüm sorgularda WHERE sfiyat_listesirano = 11 filtresi ZORUNLU**
+3. Field isimleri case-insensitive olarak parse edilmeli
+4. Decimal değerler Türk kültür ayarlarına (virgül ayracı) uygun parse edilmeli
+5. Timeout değeri maksimum 30 saniye olmalı
+6. Cache süresi maksimum 5 dakika olmalı
+7. Sayfa başına maksimum 100 ürün çekilmeli
 
 ## Güvenlik Gereksinimleri
 
@@ -139,8 +205,32 @@ Mevcut sistemde Mikro ERP'den ürün çekerken stok ve fiyat bilgileri 0 olarak 
 
 ## Başarı Kriterleri
 
-1. Stok bilgileri %100 doğrulukla görüntülenmeli
-2. Fiyat bilgileri %100 doğrulukla görüntülenmeli
-3. Ürün çekme işlemi 10 saniyeden kısa sürmeli (100 ürün için)
-4. Hata oranı %1'in altında olmalı
-5. Sistem 7/24 çalışır durumda olmalı
+1. **Liste 11 Tek Kaynak:** Web sitesi SADECE Liste 11'den okur (KRİTİK)
+2. **Fallback YOK:** Liste 11'de yoksa o ürün web'de görünmez (KRİTİK)
+3. **Fiyat Tutarlılığı:** Web sitesinde görünen fiyat ile sepetteki fiyat %100 aynı olmalı (KRİTİK)
+4. **Web Güncellemeleri:** Web'den yapılan fiyat değişiklikleri Liste 11'e yazılır
+5. **Stok Doğruluğu:** Stok bilgileri %100 doğrulukla görüntülenmeli
+6. **Performans:** Ürün çekme işlemi 10 saniyeden kısa sürmeli (100 ürün için)
+7. **Hata Toleransı:** Hata oranı %1'in altında olmalı
+8. **Kesintisiz Çalışma:** Sistem 7/24 çalışır durumda olmalı
+
+## 🔍 Kontrol Edilmesi Gerekenler (Deployment Öncesi)
+
+### Mikro ERP Yapılandırma Kontrolleri
+
+1. **Liste 11 İçeriği:**
+   - Mikro'da Liste 11'de kaç ürün var?
+   - SQL: `SELECT COUNT(*) FROM STOK_SATIS_FIYAT_LISTELERI WHERE sfiyat_listesirano = 11`
+
+2. **Liste 11 Fiyat Kontrolü:**
+   - Liste 11'de fiyatı 0 veya NULL olan ürünler var mı?
+   - SQL: `SELECT sfiyat_stokkod FROM STOK_SATIS_FIYAT_LISTELERI WHERE sfiyat_listesirano = 11 AND (sfiyat_fiyati IS NULL OR sfiyat_fiyati = 0)`
+
+3. **PrepareWebPriceListAsync Durumu:**
+   - Bu servis şu an çalışıyor mu?
+   - Kod: `MikroDbService.cs` içinde `PrepareWebPriceListAsync` metoduna git
+   - Log: Son çalışma zamanını kontrol et
+
+4. **Web Ürün Sayısı vs Liste 11:**
+   - Web'deki ürün sayısı ile Liste 11'deki ürün sayısı eşleşiyor mu?
+   - Eşleşmiyorsa hangi ürünler eksik?
