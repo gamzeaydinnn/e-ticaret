@@ -79,13 +79,16 @@ namespace ECommerce.API.Infrastructure
         {
             if (_memoryCache != null &&
                 _memoryCache.TryGetValue(SnapshotCacheKey, out IReadOnlyList<AdminCatalogProductSnapshot>? cached) &&
-                cached != null)
+                cached != null && cached.Count > 0)
             {
                 return cached;
             }
 
             var snapshots = await BuildProductSnapshotsAsync(cancellationToken);
-            _memoryCache?.Set(SnapshotCacheKey, snapshots, SnapshotCacheTtl);
+            if (snapshots.Count > 0)
+            {
+                _memoryCache?.Set(SnapshotCacheKey, snapshots, SnapshotCacheTtl);
+            }
             return snapshots;
         }
 
@@ -98,7 +101,18 @@ namespace ECommerce.API.Infrastructure
                     await _mikroDbService.GetUnifiedProductsAsync(null, null, cancellationToken));
                 if (unified.Count == 0)
                 {
-                    // Mikro bağlıyken web aktif ürün yoksa yerel katalogu doldurma.
+                    // Mikro bağlıyken web aktif ürün dönmediyse (örn. geçici ağ/VPN kesintisi),
+                    // dashboard'un 0 göstermesini önlemek için yerel DB'deki ürünlere fallback yap.
+                    var localFallback = await _dbContext.Products
+                        .AsNoTracking()
+                        .Where(product => product.Price > 0)
+                        .ToListAsync(CancellationToken.None);
+
+                    if (localFallback.Count > 0)
+                    {
+                        return localFallback.Select(MapLocalProductSnapshot).ToList();
+                    }
+
                     return Array.Empty<AdminCatalogProductSnapshot>();
                 }
 

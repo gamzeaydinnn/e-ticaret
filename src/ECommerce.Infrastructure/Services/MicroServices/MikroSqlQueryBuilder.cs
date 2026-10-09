@@ -47,6 +47,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             sb.AppendLine("    D.msg_S_0873 AS msg_S_0873, -- Depo No");
             sb.AppendLine("    S.sto_webe_gonderilecek_fl AS sto_webe_gonderilecek_fl,");
             sb.AppendLine("    S.sto_birim1_ad AS sto_birim1_ad,");
+            sb.AppendLine("    S.sto_anagrup_kod AS sto_anagrup_kod,");
             sb.AppendLine("    S.sto_grup_kod AS sto_grup_kod,");
             sb.AppendLine("    S.sto_perakende_vergi AS sto_perakende_vergi,");
             sb.AppendLine("    ISNULL(BK.bar_kodu, '') AS bar_kodu,");
@@ -97,8 +98,6 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 sb.AppendLine($"  AND S.sto_grup_kod = '{safeGrupKod}'");
             }
 
-            // Bu yıl içinde hareket filtrelemesi istenmişti
-            sb.AppendLine($"  AND (S.sto_create_date >= '{currentYear}-01-01' OR S.sto_lastup_date >= '{currentYear}-01-01')");
 
             sb.AppendLine(")");
             sb.AppendLine("SELECT * FROM CTE_Urunler WHERE rn = 1");

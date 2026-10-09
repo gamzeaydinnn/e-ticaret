@@ -490,8 +490,33 @@ namespace ECommerce.API.Controllers
                 if (unified.Count == 0)
                 {
                     _logger.LogWarning(
-                        "[Products][AdminAll] Mikro configured but returned 0 web-active products. " +
-                        "Admin catalog stays empty (no local-only fallback).");
+                        "[Products][AdminAll] Mikro'dan web ürünleri alınamadı (bağlantı/VPN yok). " +
+                        "Yerel veritabanı ürünlerine fallback yapılıyor.");
+
+                    var localFallback = await _dbContext.Products
+                        .Include(product => product.Category)
+                        .AsNoTracking()
+                        .ToListAsync(CancellationToken.None);
+
+                    if (localFallback.Count > 0)
+                    {
+                        return localFallback.Select(local => new AdminProductListItem
+                        {
+                            Id = local.Id,
+                            Sku = local.SKU,
+                            Name = local.Name ?? string.Empty,
+                            Price = local.Price,
+                            StockQuantity = local.StockQuantity,
+                            IsActive = local.IsActive,
+                            CategoryId = local.CategoryId > 0 ? local.CategoryId : null,
+                            CategoryName = local.Category?.Name ?? string.Empty,
+                            CategorySlug = local.Category?.Slug ?? string.Empty,
+                            ImageUrl = local.ImageUrl ?? string.Empty,
+                            LegacyImageUrl = local.ImageUrl,
+                            Source = "Local"
+                        }).ToList();
+                    }
+
                     return new List<AdminProductListItem>();
                 }
 

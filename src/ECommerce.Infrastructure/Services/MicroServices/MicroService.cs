@@ -1191,20 +1191,30 @@ ORDER BY S.sto_kod;";
 
         private static string BuildSqlPriceQuery(int? fiyatListesiNo)
         {
-            // NEDEN: Web fiyat listesi Liste 11'e hazırlanır — default 2 hatalıydı
-            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+            const int hedefListe = 11;
 
             return $@"SELECT
     ISNULL(CONVERT(NVARCHAR(36), Hedef.sfiyat_Guid), '00000000-0000-0000-0000-000000000000') AS guid,
     S.sto_kod                                        AS stokkod,
     ISNULL(S.sto_isim, '')                           AS stokad,
-    ISNULL(Hedef.sfiyat_fiyati, 0)                   AS fiyat,
+    COALESCE(
+        NULLIF(Hedef.sfiyat_fiyati, 0),
+        NULLIF(Kaynak.MaxFiyat, 0),
+        0
+    )                                                AS fiyat,
     ISNULL(BK.bar_kodu, '-BARKODYOK-')               AS barkod,
     ISNULL(S.sto_webe_gonderilecek_fl, 0)            AS webe_gonderilecek_fl
 FROM STOKLAR S
 LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
        ON  Hedef.sfiyat_stokkod     = S.sto_kod
        AND Hedef.sfiyat_listesirano = {hedefListe}
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = 1
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
 OUTER APPLY (
     SELECT TOP 1 bar_kodu
     FROM   BARKOD_TANIMLARI
@@ -2960,19 +2970,17 @@ ORDER BY S.sto_kod;";
 
         /// <summary>
         /// Fiyat + stok + ürün bilgisi + barkod verilerini TEK SQL sorgusuyla çeken birleşik sorgu oluşturur.
-        /// 
-        /// FİYAT: PrepareWebPriceListAsync ile liste 11 önceden doldurulduğu için
-        /// doğrudan hedef listeden okunur. Fallback: Liste 1 Depo 1 (ana perakende deposu).
+        /// FİYAT: Yalnızca web fiyat listesinden (Liste 11) okunur.
         /// </summary>
         private static string BuildUnifiedProductQuery(int? fiyatListesiNo, int? depoNo)
         {
-            // NEDEN: Web fiyat listesi Liste 11'e hazırlanır — default 2 hatalıydı
-            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+            const int hedefListe = 11;
             var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
 
             return $@"SELECT
     S.sto_kod                                     AS stokkod,
     ISNULL(S.sto_isim, '')                        AS stokad,
+    -- 1. Öncelik: Liste 11 (Web Fiyatı), Fallback: Liste 1 (Eski Ürünler)
     COALESCE(
         NULLIF(Hedef.sfiyat_fiyati, 0),
         NULLIF(Kaynak.MaxFiyat, 0),
@@ -2997,9 +3005,7 @@ ORDER BY S.sto_kod;";
     1                                             AS webe_gonderilecek_fl,
     NULL                                          AS son_hareket_tarihi
 FROM STOKLAR S
--- 🔴 KRİTİK DEĞİŞİKLİK (Task 0.2.2): Depo filtresi kaldırıldı
--- NEDEN: Liste 11'deki TÜM kayıtlar kullanılmalı (Enpos dahil tüm depolar)
--- Liste 11'de olmayan ürünler web'de görünmez (single source of truth)
+-- 1. Öncelik: Liste 11 (Web Fiyat Listesi)
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
     FROM   STOK_SATIS_FIYAT_LISTELERI
@@ -3007,8 +3013,7 @@ LEFT JOIN (
       AND  sfiyat_fiyati      > 0
     GROUP BY sfiyat_stokkod
 ) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
--- Fallback: Orijinal fiyat listesi (1) — PrepareWebPriceListAsync çalışmadıysa buradan oku
--- 🔴 Depo filtresi kaldırıldı: Liste 1'den de tüm depoların kayıtları kullanılır
+-- 2. Fallback: Liste 1 (Eski Ürünler)
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
     FROM   STOK_SATIS_FIYAT_LISTELERI
@@ -3097,20 +3102,10 @@ ORDER BY S.sto_kod;";
                     "[MicroService] Birleşik SQL sorgusu DOĞRUDAN DB'ye gönderiliyor. FiyatListesiNo: {FiyatListesiNo}, DepoNo: {DepoNo}",
                     fiyatListesiNo ?? -1, depoNo ?? -1);
 
-                // ÖN ADIM: Liste 1'deki fiyatları Liste 11'e kopyala (DELETE 11 → INSERT → UPDATE from 1)
-                // NEDEN: Liste 1 orijinal Mikro fiyatları, liste 11 web için temiz kopya.
-                // SELECT sorguları liste 11'den okur — orijinal veriye dokunulmaz.
+                // Web katalog: Yalnızca Liste 11 (Web Fiyat Listesi) kullanılır.
                 const int webListeNo = 11;
-                const int kaynakListeNo = 1;
-                var hedefDepo = depoNo ?? 0;
-                var (deleted, inserted, updated) = await _mikroDbService.PrepareWebPriceListAsync(
-                    webListeNo, kaynakListeNo, hedefDepo, cancellationToken);
 
-                _logger.LogInformation(
-                    "[MicroService] Web fiyat listesi hazırlandı (Liste {Kaynak} → Liste {Hedef}). Silinen: {Deleted}, Eklenen: {Inserted}, Güncellenen: {Updated}",
-                    kaynakListeNo, webListeNo, deleted, inserted, updated);
-
-                // YENİ AKIŞ: Liste 11'den oku — hazırlanmış fiyatlar
+                // YENİ AKIŞ: Yalnızca Liste 11'den oku (Web Fiyat Listesi - Tek Kaynak Gerçeklik)
                 // NEDEN: SqlVeriOkuV2 → timeout. Direkt conn → <2s
                 var products = MikroWebCatalogFilter.OnlyWebActive(
                     await _mikroDbService.GetUnifiedProductsAsync(

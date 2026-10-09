@@ -80,15 +80,9 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         Task<int> GetWebProductCountAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Web fiyat listesini hazırlar: hedef listeyi temizler, eksik stokları ekler, kaynak listeden fiyatları kopyalar.
-        ///
-        /// ADIMLAR:
-        /// 1) DELETE — hedef liste (varsayılan 11) tamamen temizlenir (her çalıştırmada sıfırdan doldurulur).
-        /// 2) INSERT — sto_webe_gonderilecek_fl = 1 olan stoklar hedef listeye eklenir.
-        /// 3) UPDATE — Hedef listedeki fiyatlar, kaynak listeden (varsayılan 1) EN YÜKSEK fiyat ile güncellenir.
-        ///
-        /// NEDEN: Kaynak liste (1) orijinal Mikro fiyatlarını barındırır; hedef liste (11)
-        /// web için hazırlanmış temiz bir kopyadır. SELECT sorguları liste 11'den okur.
+        /// Web fiyat listesi yönetimi.
+        /// NOT: Liste 11 (Web Fiyat Listesi) web tarafının tek kaynak gerçekliğidir (Single Source of Truth).
+        /// Mağaza fiyatları (Liste 1) Liste 11'i ezmez; web fiyatları yalnızca Liste 11'den yönetilir ve okunur.
         /// </summary>
         /// <returns>Silinen, eklenen ve güncellenen satır sayıları.</returns>
         Task<(int Deleted, int Inserted, int Updated)> PrepareWebPriceListAsync(

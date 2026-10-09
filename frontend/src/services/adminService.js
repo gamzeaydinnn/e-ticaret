@@ -98,12 +98,12 @@ export const AdminService = {
     const bust = `_t=${Date.now()}`;
     try {
       return await api.get(`/api/admin/dashboard/overview?${bust}`, {
-        timeout: 20000,
+        timeout: 60000,
       });
     } catch (error) {
       if (error?.status === 404 || error?.response?.status === 404) {
         return api.get(`/api/admin/dashboard/stats?${bust}`, {
-          timeout: 20000,
+          timeout: 60000,
         });
       }
       throw error;

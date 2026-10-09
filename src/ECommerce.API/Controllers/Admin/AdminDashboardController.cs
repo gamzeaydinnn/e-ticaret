@@ -17,6 +17,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Microsoft.Extensions.Caching.Memory;
+
 namespace ECommerce.API.Controllers.Admin
 {
     [ApiController]
@@ -24,22 +26,28 @@ namespace ECommerce.API.Controllers.Admin
     [Route("api/admin/dashboard")]
     public class AdminDashboardController : ControllerBase
     {
+        private const string DashboardOverviewCacheKey = "admin:dashboard:overview:v1";
+        private static readonly TimeSpan DashboardOverviewCacheTtl = TimeSpan.FromSeconds(10);
+
         private readonly IOrderService _orderService;
         private readonly ECommerceDbContext _dbContext;
         private readonly IAdminCatalogStatsService _adminCatalogStatsService;
         private readonly InventorySettings _inventorySettings;
+        private readonly IMemoryCache? _memoryCache;
 
         public AdminDashboardController(
             IOrderService orderService,
             ECommerceDbContext dbContext,
             IAdminCatalogStatsService adminCatalogStatsService,
-            IOptions<InventorySettings> inventoryOptions
+            IOptions<InventorySettings> inventoryOptions,
+            IMemoryCache? memoryCache = null
         )
         {
             _orderService = orderService;
             _dbContext = dbContext;
             _adminCatalogStatsService = adminCatalogStatsService;
             _inventorySettings = inventoryOptions.Value;
+            _memoryCache = memoryCache;
         }
 
         [HttpGet("overview")]
@@ -48,7 +56,15 @@ namespace ECommerce.API.Controllers.Admin
         {
             try
             {
+                if (_memoryCache != null &&
+                    _memoryCache.TryGetValue(DashboardOverviewCacheKey, out AdminDashboardOverviewDto? cached) &&
+                    cached != null)
+                {
+                    return Ok(cached);
+                }
+
                 var overview = await BuildDashboardOverviewAsync();
+                _memoryCache?.Set(DashboardOverviewCacheKey, overview, DashboardOverviewCacheTtl);
                 return Ok(overview);
             }
             catch (Exception ex)
@@ -65,19 +81,7 @@ namespace ECommerce.API.Controllers.Admin
         [HasPermission(Permissions.Dashboard.View)]
         public async Task<IActionResult> GetDashboardStats()
         {
-            try
-            {
-                var overview = await BuildDashboardOverviewAsync();
-                return Ok(overview);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new
-                {
-                    success = false,
-                    message = "Dashboard verileri alınamadı: " + ex.Message
-                });
-            }
+            return await GetDashboardOverview();
         }
 
         private async Task<AdminDashboardOverviewDto> BuildDashboardOverviewAsync()

@@ -81,23 +81,23 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
+                    var stokKod = ReadString(reader, "stokkod", "msg_S_0001");
                     if (string.IsNullOrWhiteSpace(stokKod) || !seen.Add(stokKod))
                         continue;
 
                     results.Add(new MikroUnifiedProductDto
                     {
                         StokKod         = stokKod,
-                        StokAd          = ReadString(reader, "msg_S_0005", "stokad"),
-                        Fiyat           = ReadDecimal(reader, "msg_S_0002", "fiyat"),
-                        StokMiktar      = ReadDecimal(reader, "msg_S_0343", "stok_miktar"),
-                        DepoNo          = ReadNullableInt(reader, "msg_S_0873", "depo_no"),
-                        Barkod          = ReadString(reader, "bar_kodu", "barkod"),
-                        GrupKod         = ReadString(reader, "sto_grup_kod", "grup_kod"),
-                        AnagrupKod      = ReadString(reader, "sto_anagrup_kod", "anagrup_kod"),
-                        Birim           = ReadString(reader, "sto_birim1_ad", "birim"),
-                        KdvOrani        = ReadDecimal(reader, "sto_perakende_vergi", "kdv_orani"),
-                        WebeGonderilecekFl = ReadBool(reader, "sto_webe_gonderilecek_fl", "webe_gonderilecek_fl"),
+                        StokAd          = ReadString(reader, "stokad", "msg_S_0005"),
+                        Fiyat           = ReadDecimal(reader, "fiyat", "msg_S_0002"),
+                        StokMiktar      = ReadDecimal(reader, "stok_miktar", "msg_S_0343"),
+                        DepoNo          = ReadNullableInt(reader, "depo_no", "msg_S_0873"),
+                        Barkod          = ReadString(reader, "barkod", "bar_kodu"),
+                        GrupKod         = ReadString(reader, "grup_kod", "sto_grup_kod"),
+                        AnagrupKod      = ReadString(reader, "anagrup_kod", "sto_anagrup_kod"),
+                        Birim           = ReadString(reader, "birim", "sto_birim1_ad"),
+                        KdvOrani        = ReadDecimal(reader, "kdv_orani", "sto_perakende_vergi"),
+                        WebeGonderilecekFl = ReadBool(reader, "webe_gonderilecek_fl", "sto_webe_gonderilecek_fl"),
                         SonHareketTarihi  = ReadNullableDateTime(reader, "son_hareket_tarihi")
                     });
                 }
@@ -178,7 +178,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
+                    var stokKod = ReadString(reader, "stokkod", "msg_S_0001");
                     if (string.IsNullOrWhiteSpace(stokKod) ||
                         string.Equals(stokKod, "TANIMSIZ", StringComparison.OrdinalIgnoreCase))
                     {
@@ -189,8 +189,8 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                     {
                         Guid            = ReadString(reader, "guid"),
                         StokKod         = stokKod.Trim(),
-                        UrunAdi         = ReadString(reader, "msg_S_0005", "stokad"),
-                        Fiyat           = ReadDecimal(reader, "msg_S_0002", "fiyat"),
+                        UrunAdi         = ReadString(reader, "stokad", "msg_S_0005"),
+                        Fiyat           = ReadDecimal(reader, "fiyat", "msg_S_0002"),
                         Barkod          = ReadString(reader, "barkod"),
                         WebeGonderilecekFl = ReadNullableBool(reader, "webe_gonderilecek_fl")
                     });
@@ -254,11 +254,11 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
                 while (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "msg_S_0001", "stokkod");
+                    var stokKod = ReadString(reader, "stokkod", "msg_S_0001");
                     if (string.IsNullOrWhiteSpace(stokKod))
                         continue;
 
-                    var miktar = ReadDecimal(reader, "msg_S_0343", "stok_miktar");
+                    var miktar = ReadDecimal(reader, "stok_miktar", "msg_S_0343");
                     var normalizedKey = stokKod.Trim();
 
                     // Aynı stok kod birden fazla satırda gelirse en yüksek miktarı al
@@ -314,15 +314,10 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                   AND  LTRIM(RTRIM(S.sto_kod)) <> ''
                   AND  EXISTS (
                         SELECT 1
-                        FROM (
-                            SELECT TOP 1 F.sfiyat_fiyati
-                            FROM STOK_SATIS_FIYAT_LISTELERI F
-                            WHERE F.sfiyat_stokkod = S.sto_kod
-                              AND F.sfiyat_listesirano IN (11, 1)
-                              AND F.sfiyat_fiyati > 0
-                            ORDER BY CASE WHEN F.sfiyat_listesirano = 11 THEN 0 ELSE 1 END,
-                                     F.sfiyat_fiyati DESC
-                        ) PX
+                        FROM STOK_SATIS_FIYAT_LISTELERI F
+                        WHERE F.sfiyat_stokkod = S.sto_kod
+                          AND F.sfiyat_listesirano IN (11, 1)
+                          AND F.sfiyat_fiyati > 0
                       )";
 
             try
@@ -370,40 +365,118 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         // ==================== SQL SORGU BUILDERları ====================
-        // Tüm SELECT sorguları hedef liste 2'den doğrudan okur.
-        // NEDEN: PrepareWebPriceListAsync ile veri önceden hazırlandığı için
-        // fallback JOIN (diğer listelerden MAX) artık gereksiz — tek kaynak, temiz sorgu.
 
         /// <summary>
         /// Birleşik ürün sorgusunu oluşturur.
-        ///
-/// FİYAT: PrepareWebPriceListAsync ile liste 11 önceden doldurulduğu için
-    /// doğrudan hedef listeden okunur — fallback JOIN kaldırıldı.
-    ///
-    /// KDV: sto_perakende_vergi Mikro'da GRUP NUMARASI saklar, YÜZDE DEĞİL!
-    ///   Grup 0,1 → %0 | Grup 2 → %1 (gıda) | Grup 3,4 → %10 | Grup 5 → %10 | Grup 6 → %20
-    /// </summary>
+        /// FİYAT: Yalnızca web fiyat listesinden (Liste 11) okunur.
+        /// KDV: sto_perakende_vergi Mikro'da GRUP NUMARASI saklar, YÜZDE DEĞİL!
+        ///   Grup 0,1 → %0 | Grup 2 → %1 (gıda) | Grup 3,4 → %10 | Grup 5 → %10 | Grup 6 → %20
+        /// STOK: STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW üzerinden set-based aggregate ile <2s sürede çekilir.
+        /// </summary>
         private static string BuildUnifiedProductQuery(int? fiyatListesiNo, int? depoNo)
         {
-            var (sql, _) = MikroSqlQueryBuilder.BuildUnifiedProductQuery(
-                depoNo: depoNo,
-                fiyatListesiNo: fiyatListesiNo,
-                stokKod: null,
-                grupKod: null,
-                sadeceStoklu: null,
-                sadeceAktif: true
-            );
-            return sql;
+            const int hedefListe = 11;
+            var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
+
+            return $@"SELECT
+    S.sto_kod                                     AS stokkod,
+    ISNULL(S.sto_isim, '')                        AS stokad,
+    -- 1. Öncelik: Liste 11 (Web Fiyatı). Liste 11'de henüz fiyatı olmayan eski ürünler için Fallback: Liste 1
+    COALESCE(
+        NULLIF(Hedef.sfiyat_fiyati, 0),
+        NULLIF(Kaynak.MaxFiyat, 0),
+        0
+    )                                             AS fiyat,
+    ISNULL(ST.stok_miktar, 0)                     AS stok_miktar,
+    {hedefDepo}                                   AS depo_no,
+    ISNULL(BK.bar_kodu, '')                       AS barkod,
+    ISNULL(S.sto_altgrup_kod, '')                 AS grup_kod,
+    ISNULL(S.sto_anagrup_kod, '')                 AS anagrup_kod,
+    ISNULL(S.sto_birim1_ad, 'ADET')               AS birim,
+    CASE ISNULL(S.sto_perakende_vergi, 0)
+        WHEN 0 THEN 0
+        WHEN 1 THEN 0
+        WHEN 2 THEN 1
+        WHEN 3 THEN 10
+        WHEN 4 THEN 10
+        WHEN 5 THEN 10
+        WHEN 6 THEN 20
+        ELSE 20
+    END                                           AS kdv_orani,
+    1                                             AS webe_gonderilecek_fl,
+    NULL                                          AS son_hareket_tarihi
+FROM STOKLAR S
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = {hedefListe}
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = 1
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
+LEFT JOIN (
+    SELECT sth_stok_kod,
+           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
+    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+    GROUP BY sth_stok_kod
+) ST ON ST.sth_stok_kod = S.sto_kod
+OUTER APPLY (
+    SELECT TOP 1 bar_kodu
+    FROM   BARKOD_TANIMLARI
+    WHERE  bar_stokkodu = S.sto_kod
+) BK
+WHERE S.sto_webe_gonderilecek_fl = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
         }
 
         /// <summary>
-        /// Fiyat satırları sorgusunu oluşturur.
-        /// PrepareWebPriceListAsync ile liste 11 önceden doldurulduğu için tek kaynak okunur.
+        /// Fiyat satırları sorgusunu oluşturur (Öncelik Liste 11, Fallback Liste 1).
         /// </summary>
         private static string BuildSqlPriceQuery(int? fiyatListesiNo)
         {
-            var (sql, _) = MikroSqlQueryBuilder.BuildSqlPriceQuery(fiyatListesiNo);
-            return sql;
+            const int hedefListe = 11;
+
+            return $@"SELECT
+    ISNULL(CONVERT(NVARCHAR(36), Hedef.sfiyat_Guid), '00000000-0000-0000-0000-000000000000') AS guid,
+    S.sto_kod                                        AS stokkod,
+    ISNULL(S.sto_isim, '')                           AS stokad,
+    COALESCE(
+        NULLIF(Hedef.sfiyat_fiyati, 0),
+        NULLIF(Kaynak.MaxFiyat, 0),
+        0
+    )                                                AS fiyat,
+    ISNULL(BK.bar_kodu, '-BARKODYOK-')               AS barkod,
+    ISNULL(S.sto_webe_gonderilecek_fl, 0)            AS webe_gonderilecek_fl
+FROM STOKLAR S
+LEFT JOIN STOK_SATIS_FIYAT_LISTELERI Hedef
+       ON Hedef.sfiyat_stokkod     = S.sto_kod
+      AND Hedef.sfiyat_listesirano = {hedefListe}
+LEFT JOIN (
+    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
+    FROM   STOK_SATIS_FIYAT_LISTELERI
+    WHERE  sfiyat_listesirano = 1
+      AND  sfiyat_fiyati      > 0
+    GROUP BY sfiyat_stokkod
+) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
+OUTER APPLY (
+    SELECT TOP 1 bar_kodu
+    FROM   BARKOD_TANIMLARI
+    WHERE  bar_stokkodu = S.sto_kod
+) BK
+WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
         }
 
         /// <summary>
@@ -414,8 +487,18 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         /// </summary>
         private static string BuildSqlStockQuery(int? depoNo)
         {
-            var (sql, _) = MikroSqlQueryBuilder.BuildSqlStockQuery(depoNo);
-            return sql;
+            var hedefDepo = depoNo.HasValue ? depoNo.Value : 0;
+
+            return $@"SELECT
+    S.sto_kod                                                              AS stokkod,
+    -- ANLIK STOK: fn_TeknikPc_Anlik_Stok_Miktari Enpos satışlarını düşer.
+    ISNULL(dbo.fn_TeknikPc_Anlik_Stok_Miktari(S.sto_kod, {hedefDepo}), 0) AS stok_miktar
+FROM STOKLAR S
+WHERE ISNULL(S.sto_webe_gonderilecek_fl, 0) = 1
+  AND ISNULL(S.sto_iptal, 0) = 0
+  AND S.sto_kod IS NOT NULL
+  AND LTRIM(RTRIM(S.sto_kod)) <> ''
+ORDER BY S.sto_kod;";
         }
 
         // ==================== YARDIMCI OKUYUCULAR ====================
@@ -634,28 +717,25 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         /// 1. STOKLAR.sto_lastup_date >= @since (stok kartı güncelleme)
         /// 2. STOK_HAREKETLERI.sth_tarih >= @since (stok hareketi — satış/alış/iade)
         /// 
-        /// FİYAT: PrepareWebPriceListAsync ile liste 11 önceden doldurulduğu için doğrudan okunur.
+        /// FİYAT: Yalnızca web fiyat listesi (Liste 11) üzerinden okunur.
         /// </summary>
         private static string BuildDeltaChangedProductQuery(
             DateTime since, int? fiyatListesiNo, int? depoNo)
         {
-            // NEDEN: PrepareWebPriceListAsync liste 11'e yazar — default 2 uyumsuzdu
-            var hedefListe = fiyatListesiNo is > 0 ? fiyatListesiNo.Value : 11;
+            const int hedefListe = 11;
             var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
 
             // @since parametresi CMD üzerinden bağlanır — injection güvenli
             return $@"SELECT
     S.sto_kod                                     AS stokkod,
     ISNULL(S.sto_isim, '')                        AS stokad,
-    -- Fiyat fallback: önce hedef liste (11), yoksa kaynak liste (1)
+    -- 1. Öncelik: Liste 11 (Web Fiyatı), Fallback: Liste 1 (Eski Ürünler)
     COALESCE(
         NULLIF(Hedef.sfiyat_fiyati, 0),
         NULLIF(Kaynak.MaxFiyat, 0),
         0
     )                                             AS fiyat,
-    -- ANLИК STOK: fn_TeknikPc_Anlik_Stok_Miktari Enpos (POS) satışlarını da düşer.
-    -- Delta sorgu sırasında da doğru stok gösterilmesi için kullanılır.
-    ISNULL(dbo.fn_TeknikPc_Anlik_Stok_Miktari(S.sto_kod, {hedefDepo}), 0) AS stok_miktar,
+    ISNULL(ST.stok_miktar, 0)                     AS stok_miktar,
     {hedefDepo}                                   AS depo_no,
     ISNULL(BK.bar_kodu, '')                       AS barkod,
     ISNULL(S.sto_altgrup_kod, '')                 AS grup_kod,
@@ -676,9 +756,7 @@ namespace ECommerce.Infrastructure.Services.MicroServices
      FROM STOK_HAREKETLERI H
      WHERE H.sth_stok_kod = S.sto_kod)            AS son_hareket_tarihi
 FROM STOKLAR S
--- 🔴 KRİTİK DEĞİŞİKLİK (Task 0.2.2): Depo filtresi kaldırıldı
--- NEDEN: Liste 11'deki TÜM kayıtlar kullanılmalı (Enpos dahil tüm depolar)
--- Liste 11'de olmayan ürünler web'de görünmez (single source of truth)
+-- 1. Öncelik: Liste 11 (Web Fiyat Listesi)
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
     FROM   STOK_SATIS_FIYAT_LISTELERI
@@ -686,12 +764,20 @@ LEFT JOIN (
       AND  sfiyat_fiyati      > 0
     GROUP BY sfiyat_stokkod
 ) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
+-- 2. Fallback: Liste 1 (Eski Ürünler)
 LEFT JOIN (
     SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
     FROM   STOK_SATIS_FIYAT_LISTELERI
     WHERE  sfiyat_listesirano = 1
+      AND  sfiyat_fiyati      > 0
     GROUP BY sfiyat_stokkod
 ) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
+LEFT JOIN (
+    SELECT sth_stok_kod,
+           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
+    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+    GROUP BY sth_stok_kod
+) ST ON ST.sth_stok_kod = S.sto_kod
 OUTER APPLY (
     SELECT TOP 1 bar_kodu
     FROM   BARKOD_TANIMLARI

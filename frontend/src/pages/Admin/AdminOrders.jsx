@@ -1252,31 +1252,41 @@ export default function AdminOrders() {
     const colorMap = {
       // Ana Akış Durumları
       new: "secondary", // 🔘 Gri - Yeni sipariş
-      pending: "warning", // 🟡 Sarı - Beklemede (eski için uyumluluk)
+      pending: "warning", // 🟡 Sarı - Beklemede
       paid: "success",
       preauthorized: "info", // KG Auth provizyon
-      confirmed: "info", // 🔵 Mavi - Onaylanıyor
-      preparing: "orange", // 🟠 Turuncu - Hazırlanıyor
+      confirmed: "info", // 🔵 Mavi - Onaylandı
+      preparing: "warning", // 🟠 Turuncu/Sarı - Hazırlanıyor
+      processing: "warning",
       ready: "success", // 🟢 Yeşil - Hazır
+      ready_for_pickup: "success",
+      readyforpickup: "success",
       assigned: "primary", // 🔵 Koyu Mavi - Kuryeye Atandı
-      picked_up: "teal", // 🩵 Turkuaz - Teslim Alındı
-      pickedup: "teal",
-      out_for_delivery: "purple", // 🟣 Mor - Yolda
-      outfordelivery: "purple",
-      in_transit: "purple", // 🟣 Mor - Yolda (alternatif)
+      picked_up: "info", // 🩵 Turkuaz - Teslim Alındı
+      pickedup: "info",
+      out_for_delivery: "primary", // 🟣 Mor/Mavi - Yolda
+      outfordelivery: "primary",
+      in_transit: "primary",
+      intransit: "primary",
+      shipped: "primary",
       delivered: "dark", // ⬛ Koyu - Teslim Edildi
+      completed: "dark",
       cancelled: "danger", // 🔴 Kırmızı - İptal
       refunded: "secondary", // ⬜ Gri - İade Edildi
       partialrefund: "info", // 🔵 Mavi - Kısmi İade
+      partial_refund: "info",
 
       // Özel Durumlar
       delivery_failed: "danger",
+      deliveryfailed: "danger",
       delivery_payment_pending: "warning",
+      deliverypaymentpending: "warning",
       weight_pending: "info",
       payment_captured: "success",
     };
-    const normalized = (status || "").toLowerCase();
-    return colorMap[normalized] || "secondary";
+    const normalized = normalizeStatus(status);
+    const raw = (status || "").toString().trim().toLowerCase();
+    return colorMap[normalized] || colorMap[raw] || "warning";
   };
 
   // Durum renk hex kodları (timeline için)
@@ -1302,14 +1312,16 @@ export default function AdminOrders() {
       delivery_payment_pending: "#ffc107",
       deliverypaymentpending: "#ffc107",
     };
-    const normalized = (status || "").toLowerCase();
-    return hexMap[normalized] || "#6c757d";
+    const normalized = normalizeStatus(status);
+    const raw = (status || "").toString().trim().toLowerCase();
+    return hexMap[normalized] || hexMap[raw] || "#6c757d";
   };
 
   // =========================================================================
   // DURUM METİNLERİ - Türkçe durum açıklamaları
   // =========================================================================
   const getStatusText = (status) => {
+    if (!status && status !== 0) return "Beklemede";
     const statusMap = {
       // Ana Akış
       new: "Yeni Sipariş",
@@ -1318,17 +1330,24 @@ export default function AdminOrders() {
       preauthorized: "Provizyon Alındı",
       confirmed: "Onaylandı",
       preparing: "Hazırlanıyor",
-      ready: "Hazır - Kurye Bekliyor",
+      processing: "Hazırlanıyor",
+      ready: "Hazır",
+      ready_for_pickup: "Hazır - Kurye Bekliyor",
+      readyforpickup: "Hazır - Kurye Bekliyor",
       assigned: "Kuryeye Atandı",
       picked_up: "Kurye Teslim Aldı",
       pickedup: "Kurye Teslim Aldı",
       out_for_delivery: "Yolda - Teslimat",
       outfordelivery: "Yolda - Teslimat",
       in_transit: "Yolda",
+      intransit: "Yolda",
+      shipped: "Kargoya Verildi",
       delivered: "Teslim Edildi ✓",
+      completed: "Teslim Edildi ✓",
       cancelled: "İptal Edildi",
       refunded: "İade Edildi",
       partialrefund: "Kısmi İade",
+      partial_refund: "Kısmi İade",
 
       // Özel Durumlar
       delivery_failed: "Teslimat Başarısız",
@@ -1338,9 +1357,9 @@ export default function AdminOrders() {
       weight_pending: "Tartı Onayı Bekliyor",
       payment_captured: "Ödeme Tamamlandı",
     };
-    // Status'u küçük harfe çevir ve eşle
-    const normalized = (status || "").toLowerCase();
-    return statusMap[normalized] || status;
+    const normalized = normalizeStatus(status);
+    const raw = String(status).trim().toLowerCase();
+    return statusMap[normalized] || statusMap[raw] || String(status) || "Beklemede";
   };
 
   const getNextActionHint = (status) => {
@@ -2899,6 +2918,19 @@ export default function AdminOrders() {
             return sum + unitAmount * selectedQty;
           }, 0);
 
+          const itemsSubtotal = enrichedItems.reduce(
+            (sum, item) => sum + (Number(item.lineTotal) || 0),
+            0,
+          );
+          const shippingCost = Number(selectedOrder.shippingCost || 0);
+          const totalDiscount = Number(
+            selectedOrder.discountAmount ||
+              selectedOrder.couponDiscountAmount ||
+              selectedOrder.campaignDiscountAmount ||
+              0,
+          );
+          const orderTotalAmount = getOrderAmount(selectedOrder);
+
           return (
             <div
               className="modal fade show d-block"
@@ -2988,14 +3020,13 @@ export default function AdminOrders() {
                         <p className="mb-1">
                           <strong>Tutar:</strong>{" "}
                           <span className="text-success fw-bold">
-                            {(
-                              selectedOrder.finalPrice ??
-                              selectedOrder.totalPrice ??
-                              selectedOrder.totalAmount ??
-                              0
-                            ).toFixed(2)}{" "}
-                            ₺
+                            {orderTotalAmount.toFixed(2)} ₺
                           </span>
+                          {shippingCost > 0 && (
+                            <span className="text-muted ms-1 small" style={{ fontSize: "0.72rem" }}>
+                              (Ürünler: {Math.max(0, orderTotalAmount - shippingCost).toFixed(2)} ₺ + Kargo: {shippingCost.toFixed(2)} ₺)
+                            </span>
+                          )}
                         </p>
                         {/* Ödeme Yöntemi */}
                         <p className="mb-1">
@@ -3009,17 +3040,43 @@ export default function AdminOrders() {
                             {getPaymentMethodLabel(selectedOrder.paymentMethod)}
                           </span>
                         </p>
-                        <p className="mb-1">
+                        <div className="mb-1 d-flex align-items-center flex-wrap gap-1">
                           <strong>Durum:</strong>
                           <span
                             className={`badge bg-${getStatusColor(
                               selectedOrder.status,
                             )} ms-1`}
-                            style={{ fontSize: "0.6rem" }}
+                            style={{ fontSize: "0.75rem", padding: "4px 8px" }}
                           >
+                            <i className={`fas ${getStatusIcon(selectedOrder.status)} me-1`}></i>
                             {getStatusText(selectedOrder.status)}
                           </span>
-                        </p>
+                          <select
+                            className="form-select form-select-sm d-inline-block py-0 px-1 ms-1"
+                            style={{ width: "auto", fontSize: "0.72rem", height: "26px" }}
+                            value={normalizeStatus(selectedOrder.status)}
+                            onChange={(e) => {
+                              const newStatus = e.target.value;
+                              if (newStatus && newStatus !== normalizeStatus(selectedOrder.status)) {
+                                if (window.confirm(`Sipariş durumu "${getStatusText(newStatus)}" olarak güncellensin mi?`)) {
+                                  updateOrderStatus(selectedOrder.id, newStatus);
+                                  setSelectedOrder({
+                                    ...selectedOrder,
+                                    status: newStatus,
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <option value="pending">🟡 Beklemede</option>
+                            <option value="confirmed">✅ Onaylandı</option>
+                            <option value="preparing">🍳 Hazırlanıyor</option>
+                            <option value="ready">📦 Hazır</option>
+                            <option value="out_for_delivery">🛵 Yolda</option>
+                            <option value="delivered">✓ Teslim Edildi</option>
+                            <option value="cancelled">🚫 İptal Edildi</option>
+                          </select>
+                        </div>
                         {/* Sipariş Numarası varsa göster */}
                         {selectedOrder.orderNumber && (
                           <p className="mb-1">
@@ -3128,19 +3185,63 @@ export default function AdminOrders() {
                         </tbody>
                         {/* Toplam satırı */}
                         <tfoot className="bg-light">
+                          {/* Ürünler Toplamı */}
                           <tr>
+                            <td colSpan="4" className="px-1 text-end text-muted">
+                              Ürünler Toplamı:
+                            </td>
+                            <td className="px-1 text-end">
+                              <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                {itemsSubtotal.toFixed(2)} ₺
+                              </span>
+                            </td>
+                          </tr>
+
+                          {/* Kargo Ücreti */}
+                          <tr>
+                            <td colSpan="4" className="px-1 text-end text-muted">
+                              <i className="fas fa-motorcycle me-1 text-primary"></i>
+                              Kargo Ücreti:
+                            </td>
+                            <td className="px-1 text-end">
+                              <span className="text-muted fw-semibold" style={{ fontSize: "0.75rem" }}>
+                                {shippingCost > 0
+                                  ? `${shippingCost.toFixed(2)} ₺`
+                                  : "Ücretsiz"}
+                              </span>
+                            </td>
+                          </tr>
+
+                          {/* İndirim (varsa) */}
+                          {totalDiscount > 0 && (
+                            <tr>
+                              <td colSpan="4" className="px-1 text-end text-danger">
+                                <i className="fas fa-tag me-1"></i>
+                                İndirim:
+                              </td>
+                              <td className="px-1 text-end">
+                                <span className="text-danger" style={{ fontSize: "0.75rem" }}>
+                                  -{totalDiscount.toFixed(2)} ₺
+                                </span>
+                              </td>
+                            </tr>
+                          )}
+
+                          {/* Genel Toplam (Ödenen) */}
+                          <tr className="border-top">
                             <td colSpan="4" className="px-1 text-end fw-bold">
-                              Toplam:
+                              Toplam (Ödenen):
                             </td>
                             <td className="px-1 text-end">
                               <span
                                 className="fw-bold text-success"
-                                style={{ fontSize: "0.8rem" }}
+                                style={{ fontSize: "0.85rem" }}
                               >
-                                {getOrderAmount(selectedOrder).toFixed(2)} ₺
+                                {orderTotalAmount.toFixed(2)} ₺
                               </span>
                             </td>
                           </tr>
+
                           {/* Tartı Farkı - Eğer varsa göster */}
                           {selectedOrder.weightDifference !== undefined &&
                             selectedOrder.weightDifference !== 0 && (
@@ -3168,24 +3269,25 @@ export default function AdminOrders() {
                                 </td>
                               </tr>
                             )}
-                          {/* Final Tutar - Tartı farkı varsa göster */}
-                          {selectedOrder.finalAmount !== undefined &&
-                            selectedOrder.finalAmount !==
-                              selectedOrder.totalAmount && (
+
+                          {/* Final Tutar - Yalnızca tartılı ürünlerde ve gerçek bir tartı farkı oluşmuşsa göster */}
+                          {selectedOrder.hasWeightBasedItems &&
+                            Number(selectedOrder.finalAmount || 0) > 0 &&
+                            Math.abs(Number(selectedOrder.finalAmount) - orderTotalAmount) > 0.01 && (
                               <tr className="bg-success bg-opacity-25">
                                 <td
                                   colSpan="4"
                                   className="px-1 text-end fw-bold"
                                 >
                                   <i className="fas fa-calculator me-1"></i>
-                                  Final Tutar:
+                                  Tartı Sonrası Kesin Tutar:
                                 </td>
                                 <td className="px-1 text-end">
                                   <span
                                     className="fw-bold text-success"
                                     style={{ fontSize: "0.9rem" }}
                                   >
-                                    {(selectedOrder.finalAmount ?? 0).toFixed(
+                                    {Number(selectedOrder.finalAmount).toFixed(
                                       2,
                                     )}{" "}
                                     ₺
