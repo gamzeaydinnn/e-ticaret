@@ -125,7 +125,7 @@ services:
       - MikroSettings__MaxRetryAttempts=${MIKRO_MAX_RETRY_ATTEMPTS:-3}
       - MikroSettings__RequestTimeoutSeconds=${MIKRO_REQUEST_TIMEOUT_SECONDS:-120}
       - MikroSettings__IgnoreSslErrors=${MIKRO_IGNORE_SSL_ERRORS:-true}
-      - "MikroSettings__SqlConnectionString=Server=mikro-vpn,${MIKRO_SQL_RELAY_PORT:-1433};Database=${MIKRO_SQL_DATABASE:-MikroDB_V16_2023};User Id=${MIKRO_SQL_USER:-CHANGE_ME};Password=${MIKRO_SQL_PASSWORD:-CHANGE_ME};TrustServerCertificate=True;Connect Timeout=10;"
+      - "MikroSettings__SqlConnectionString=Server=mikro-vpn,${MIKRO_SQL_RELAY_PORT:-1433};Database=${MIKRO_SQL_DATABASE:-MikroDesktop_2023};User Id=${MIKRO_SQL_USER:-CHANGE_ME};Password=${MIKRO_SQL_PASSWORD:-CHANGE_ME};TrustServerCertificate=True;Connect Timeout=10;"
       - MikroSettings__SqlCommandTimeoutSeconds=${MIKRO_SQL_COMMAND_TIMEOUT_SECONDS:-30}
       - MikroSettings__OnlineMusteriPrefix=${MIKRO_ONLINE_MUSTERI_PREFIX:-WEB-}
       # ====== MİKRO SYNC JOB AYARLARI (HANGFIRE) ======
