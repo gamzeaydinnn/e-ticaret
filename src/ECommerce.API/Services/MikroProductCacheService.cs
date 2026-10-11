@@ -178,7 +178,7 @@ namespace ECommerce.API.Services
         /// ESKİ AKIŞ (devre dışı): StokListesiV2 sayfalı + GetSqlPriceMapAsync + GetSqlStockMapAsync
         /// </summary>
         public async Task<MikroCacheSyncResult> FetchAllAndCacheAsync(
-            int fiyatListesiNo = 1,
+            int fiyatListesiNo = 11,
             int depoNo = 0,
             IProgress<MikroFetchProgress>? progress = null)
         {
@@ -404,7 +404,7 @@ namespace ECommerce.API.Services
         /// hash karşılaştırmasıyla sadece değişenleri günceller.
         /// NEDEN: FetchAllAndCacheAsync zaten hash-bazlı delta mantığı içerir.
         /// </summary>
-        public async Task<MikroCacheSyncResult> SyncChangedProductsAsync(int fiyatListesiNo = 1, int depoNo = 0)
+        public async Task<MikroCacheSyncResult> SyncChangedProductsAsync(int fiyatListesiNo = 11, int depoNo = 0)
         {
             return await FetchAllAndCacheAsync(fiyatListesiNo, depoNo);
         }
@@ -414,7 +414,7 @@ namespace ECommerce.API.Services
         /// mevcut cache ile karşılaştırılarak yeni ürünler eklenir, değişenler güncellenir.
         /// ESKİ MANTIK (StokListesiV2 probe) kaldırıldı — artık tek SQL yeterli.
         /// </summary>
-        public async Task<MikroCacheSyncResult> SyncNewProductsOnlyAsync(int fiyatListesiNo = 1, int depoNo = 0)
+        public async Task<MikroCacheSyncResult> SyncNewProductsOnlyAsync(int fiyatListesiNo = 11, int depoNo = 0)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var result = new MikroCacheSyncResult();

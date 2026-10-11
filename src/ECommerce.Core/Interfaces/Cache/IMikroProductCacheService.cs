@@ -15,13 +15,13 @@ namespace ECommerce.Core.Interfaces.Cache
         Task<MikroCachePageResult> GetCachedProductsAsync(MikroCacheQuery query);
 
         /// <summary>Tüm ürünleri Mikro'dan çeker ve cache'e kaydeder</summary>
-        Task<MikroCacheSyncResult> FetchAllAndCacheAsync(int fiyatListesiNo = 1, int depoNo = 0, IProgress<MikroFetchProgress>? progress = null);
+        Task<MikroCacheSyncResult> FetchAllAndCacheAsync(int fiyatListesiNo = 11, int depoNo = 0, IProgress<MikroFetchProgress>? progress = null);
 
         /// <summary>Sadece değişen ürünleri günceller (delta sync)</summary>
-        Task<MikroCacheSyncResult> SyncChangedProductsAsync(int fiyatListesiNo = 1, int depoNo = 0);
+        Task<MikroCacheSyncResult> SyncChangedProductsAsync(int fiyatListesiNo = 11, int depoNo = 0);
 
         /// <summary>Yeni ürün varsa senkronizasyon yapar</summary>
-        Task<MikroCacheSyncResult> SyncNewProductsOnlyAsync(int fiyatListesiNo = 1, int depoNo = 0);
+        Task<MikroCacheSyncResult> SyncNewProductsOnlyAsync(int fiyatListesiNo = 11, int depoNo = 0);
 
         /// <summary>Cache istatistiklerini getirir</summary>
         Task<MikroCacheStats> GetCacheStatsAsync();

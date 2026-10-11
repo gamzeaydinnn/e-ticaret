@@ -1477,9 +1477,9 @@ ORDER BY S.sto_kod;";
                     {
                         StoKod = product.Sku,
                         StoIsim = product.Name,
-                        StoBirim1Ad = product.Unit,
-                        StoToptanVergi = product.VatRate,
-                        StoPerakendeVergi = product.VatRate,
+                        StoBirim1Ad = string.IsNullOrWhiteSpace(product.Unit) ? "ADET" : product.Unit,
+                        StoToptanVergi = product.VatRate > 0 ? product.VatRate : 20,
+                        StoPerakendeVergi = product.VatRate > 0 ? product.VatRate : 20,
                         StoAnagrupKod = product.CategoryCode,
                         Barkodlar = !string.IsNullOrEmpty(product.Barcode)
                             ? new List<MikroStokBarkodDto> { new() { BarBarkodNo = product.Barcode, BarCarpan = 1 } }
@@ -1613,11 +1613,44 @@ ORDER BY S.sto_kod;";
             }
         }
 
-        public Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices)
+        public async Task<bool> UpsertPricesAsync(IEnumerable<MicroPriceDto> prices)
         {
-            // TODO: FiyatDegisikligiKaydetV2 endpoint'i ile değiştirilecek (Adım 3'te)
-            _logger.LogWarning("[MicroService] UpsertPricesAsync henüz MikroAPI V2'ye migrate edilmedi.");
-            return Task.FromResult(false);
+            var priceList = prices?.Where(p => !string.IsNullOrWhiteSpace(p.Sku)).ToList();
+            if (priceList == null || priceList.Count == 0) return true;
+
+            int success = 0, fail = 0;
+            foreach (var priceDto in priceList)
+            {
+                try
+                {
+                    var request = new MikroStokKaydetRequestDto
+                    {
+                        StoKod = priceDto.Sku.Trim(),
+                        SatisFiyatlari = priceDto.Price > 0
+                            ? new List<MikroStokFiyatDto> { new() { SfiyatFiyati = priceDto.Price, SfiyatNo = 11 } }
+                            : new List<MikroStokFiyatDto>()
+                    };
+
+                    var result = await SaveStokV2Async(request);
+                    if (result.Success)
+                    {
+                        success++;
+                    }
+                    else
+                    {
+                        fail++;
+                        _logger.LogWarning("[MicroService] UpsertPrices — {Sku} Liste 11 fiyat güncellemesi başarısız: {Msg}", priceDto.Sku, result.Message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    fail++;
+                    _logger.LogError(ex, "[MicroService] UpsertPrices — {Sku} Liste 11 fiyat güncelleme hatası", priceDto.Sku);
+                }
+            }
+
+            _logger.LogInformation("[MicroService] UpsertPricesAsync tamamlandı. Başarılı: {Ok}, Başarısız: {Fail}", success, fail);
+            return fail == 0;
         }
 
         public async Task<bool> UpsertCustomersAsync(IEnumerable<MicroCustomerDto> customers)

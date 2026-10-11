@@ -1259,6 +1259,9 @@ namespace ECommerce.Business.Services.Managers
                         lines,
                         LocalInventoryPolicy.LogActionOrderCancelled,
                         order.OrderNumber ?? order.Id.ToString());
+
+                    // Mikro ERP'ye iade faturası / iade stok giriş fişi gönder (Depo 1)
+                    OrderInventorySettlementService.EnqueueMikroRefundInvoice(order.Id, order.FinalPrice);
                 }
 
                 order.IsInventoryCommitted = false;

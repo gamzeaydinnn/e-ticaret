@@ -278,22 +278,49 @@ namespace ECommerce.Business.Services.Sync
 
             try
             {
-                var result = await _microService.UpsertProductsAsync(
-                    new[]
-                    {
-                        new MicroProductDto
+                var cache = await _context.Set<MikroProductCache>()
+                    .FirstOrDefaultAsync(c => c.StokKod == product.SKU, cancellationToken);
+
+                var productDto = new MicroProductDto
+                {
+                    Sku = product.SKU,
+                    Name = product.Name,
+                    Price = product.Price,
+                    Stock = product.StockQuantity,
+                    Barcode = cache?.Barkod,
+                    Unit = !string.IsNullOrWhiteSpace(cache?.Birim) ? cache.Birim : "ADET",
+                    VatRate = cache?.KdvOrani > 0 ? (int)cache.KdvOrani : 20
+                };
+
+                var result = await _microService.UpsertProductsAsync(new[] { productDto });
+
+                // Fiyatı da Liste 11'e (Web Fiyat Listesi) push et
+                if (product.Price > 0)
+                {
+                    await _microService.UpsertPricesAsync(
+                        new[]
                         {
-                            Sku = product.SKU,
-                            Name = product.Name,
-                            Price = product.Price,
-                            Stock = product.StockQuantity
-                        }
-                    });
+                            new MicroPriceDto
+                            {
+                                Sku = product.SKU,
+                                Price = product.Price
+                            }
+                        });
+                }
 
                 sw.Stop();
 
                 if (result)
                 {
+                    if (cache != null)
+                    {
+                        cache.StokAd = product.Name;
+                        cache.SatisFiyati = product.Price;
+                        cache.GuncellemeTarihi = DateTime.UtcNow;
+                        cache.SyncStatus = (int)MikroSyncStatus.Synced;
+                        await _context.SaveChangesAsync(cancellationToken);
+                    }
+
                     await _syncLogger.CompleteOperationAsync(log.Id,
                         $"Ürün bilgi push başarılı: {product.SKU}", cancellationToken);
 
@@ -453,8 +480,15 @@ namespace ECommerce.Business.Services.Sync
         /// </summary>
         public static void EnqueueStockPush(int productId, int newQuantity, string reason)
         {
-            BackgroundJob.Enqueue<IMikroOutboundSyncService>(
-                svc => svc.PushStockChangeAsync(productId, newQuantity, reason, CancellationToken.None));
+            try
+            {
+                BackgroundJob.Enqueue<IMikroOutboundSyncService>(
+                    svc => svc.PushStockChangeAsync(productId, newQuantity, reason, CancellationToken.None));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MikroOutboundPushTrigger] EnqueueStockPush error: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -462,8 +496,15 @@ namespace ECommerce.Business.Services.Sync
         /// </summary>
         public static void EnqueuePricePush(int productId, decimal newPrice)
         {
-            BackgroundJob.Enqueue<IMikroOutboundSyncService>(
-                svc => svc.PushPriceChangeAsync(productId, newPrice, CancellationToken.None));
+            try
+            {
+                BackgroundJob.Enqueue<IMikroOutboundSyncService>(
+                    svc => svc.PushPriceChangeAsync(productId, newPrice, CancellationToken.None));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MikroOutboundPushTrigger] EnqueuePricePush error: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -471,8 +512,15 @@ namespace ECommerce.Business.Services.Sync
         /// </summary>
         public static void EnqueueProductInfoPush(int productId)
         {
-            BackgroundJob.Enqueue<IMikroOutboundSyncService>(
-                svc => svc.PushProductInfoChangeAsync(productId, CancellationToken.None));
+            try
+            {
+                BackgroundJob.Enqueue<IMikroOutboundSyncService>(
+                    svc => svc.PushProductInfoChangeAsync(productId, CancellationToken.None));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MikroOutboundPushTrigger] EnqueueProductInfoPush error: {ex.Message}");
+            }
         }
     }
 }

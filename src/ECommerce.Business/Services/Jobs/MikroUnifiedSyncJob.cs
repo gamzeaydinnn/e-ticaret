@@ -49,9 +49,9 @@ namespace ECommerce.Business.Services.Jobs
 
             try
             {
-                // Tek SQL sorgusuyla tüm web-aktif ürünleri çek ve cache'e yaz
+                // Tek SQL sorgusuyla tüm web-aktif ürünleri çek ve cache'e yaz (Liste 11 - Web Fiyat Listesi)
                 var syncResult = await _cacheService.FetchAllAndCacheAsync(
-                    fiyatListesiNo: 1,
+                    fiyatListesiNo: 11,
                     depoNo: 0);
 
                 result.Success = syncResult.Success;

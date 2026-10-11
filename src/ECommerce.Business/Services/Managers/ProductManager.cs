@@ -16,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
 using System.Text;
+using ECommerce.Business.Services.Sync;
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -263,6 +264,13 @@ namespace ECommerce.Business.Services.Managers
                     oldStock,
                     product.StockQuantity,
                     $"Product:{product.Id}");
+
+                MikroOutboundPushTrigger.EnqueueStockPush(product.Id, product.StockQuantity, "ProductUpdated");
+            }
+
+            if (!string.IsNullOrWhiteSpace(product.SKU))
+            {
+                MikroOutboundPushTrigger.EnqueueProductInfoPush(product.Id);
             }
             InvalidateProductCaches();
             
@@ -351,7 +359,11 @@ namespace ECommerce.Business.Services.Managers
                         Math.Abs(product.StockQuantity - oldStock),
                         oldStock, product.StockQuantity,
                         $"Product:{product.Id}");
+
+                    MikroOutboundPushTrigger.EnqueueStockPush(product.Id, product.StockQuantity, "ProductUpdated");
                 }
+
+                MikroOutboundPushTrigger.EnqueueProductInfoPush(product.Id);
             }
             else
             {
@@ -377,6 +389,12 @@ namespace ECommerce.Business.Services.Managers
                 };
                 await _productRepository.AddAsync(product);
                 await SyncProductImagesAsync(product.Id, createUrls);
+
+                MikroOutboundPushTrigger.EnqueueProductInfoPush(product.Id);
+                if (product.StockQuantity > 0)
+                {
+                    MikroOutboundPushTrigger.EnqueueStockPush(product.Id, product.StockQuantity, "ProductCreated");
+                }
             }
 
             InvalidateProductCaches();
@@ -407,6 +425,8 @@ namespace ECommerce.Business.Services.Managers
                     oldStock,
                     product.StockQuantity,
                     $"Product:{product.Id}");
+
+                MikroOutboundPushTrigger.EnqueueStockPush(product.Id, product.StockQuantity, "ProductStockUpdated");
             }
             InvalidateProductCaches();
             return true;
