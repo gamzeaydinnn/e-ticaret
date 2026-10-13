@@ -210,9 +210,9 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 // JIT Canlı Stok Doğrulama: Mikro ERP'den anlık net stok kontrolü
-                if (_mikroDbService != null && _mikroDbService.IsConfigured && !string.IsNullOrWhiteSpace(product.Sku))
+                if (_mikroDbService != null && _mikroDbService.IsConfigured && !string.IsNullOrWhiteSpace(product.SKU))
                 {
-                    var liveStock = await _mikroDbService.GetLiveStockQuantityAsync(product.Sku);
+                    var liveStock = await _mikroDbService.GetLiveStockQuantityAsync(product.SKU);
                     if (liveStock.HasValue)
                     {
                         var liveInt = (int)liveStock.Value;

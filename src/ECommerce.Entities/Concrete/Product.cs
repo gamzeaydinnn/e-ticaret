@@ -2,6 +2,7 @@ using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using System.Collections.Generic;
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ECommerce.Entities.Concrete
 {
@@ -21,6 +22,8 @@ namespace ECommerce.Entities.Concrete
         public int StockQuantity { get; set; } = 0;
         public string ImageUrl { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;
+        [NotMapped]
+        public string Sku { get => SKU; set => SKU = value; }
         public string Currency { get; set; } = "TRY";
         public bool? AdminOverrideName { get; set; }
         public bool? AdminOverridePrice { get; set; }
