@@ -1283,6 +1283,8 @@ export default function AdminOrders() {
       deliverypaymentpending: "warning",
       weight_pending: "info",
       payment_captured: "success",
+      payment_failed: "danger",
+      paymentfailed: "danger",
     };
     const normalized = normalizeStatus(status);
     const raw = (status || "").toString().trim().toLowerCase();
@@ -1311,6 +1313,8 @@ export default function AdminOrders() {
       deliveryfailed: "#dc3545",
       delivery_payment_pending: "#ffc107",
       deliverypaymentpending: "#ffc107",
+      payment_failed: "#dc3545",
+      paymentfailed: "#dc3545",
     };
     const normalized = normalizeStatus(status);
     const raw = (status || "").toString().trim().toLowerCase();
@@ -1356,6 +1360,8 @@ export default function AdminOrders() {
       deliverypaymentpending: "Ödeme Bekliyor",
       weight_pending: "Tartı Onayı Bekliyor",
       payment_captured: "Ödeme Tamamlandı",
+      payment_failed: "Ödeme Hatası",
+      paymentfailed: "Ödeme Hatası",
     };
     const normalized = normalizeStatus(status);
     const raw = String(status).trim().toLowerCase();
@@ -1432,9 +1438,12 @@ export default function AdminOrders() {
       deliveryfailed: "fa-exclamation-triangle",
       delivery_payment_pending: "fa-credit-card",
       deliverypaymentpending: "fa-credit-card",
+      payment_failed: "fa-exclamation-circle",
+      paymentfailed: "fa-exclamation-circle",
     };
-    const normalized = (status || "").toLowerCase();
-    return iconMap[normalized] || "fa-circle";
+    const normalized = normalizeStatus(status);
+    const raw = (status || "").toString().trim().toLowerCase();
+    return iconMap[normalized] || iconMap[raw] || "fa-circle";
   };
 
   if (loading) {
@@ -2941,64 +2950,43 @@ export default function AdminOrders() {
                 if (e.target === e.currentTarget) setSelectedOrder(null);
               }}
             >
-              <div
-                className="modal-dialog modal-dialog-centered modal-xl"
-                style={{ maxWidth: "1100px", margin: "auto" }}
-              >
-                <div className="modal-content" style={{ borderRadius: "12px" }}>
-                  <div className="modal-header py-2 px-3">
-                    <h6 className="modal-title" style={{ fontSize: "0.9rem" }}>
+              <div className="modal-dialog modal-dialog-centered modal-xl admin-order-detail-dialog">
+                <div className="modal-content admin-order-detail-modal">
+                  <div className="modal-header admin-order-detail-header">
+                    <h6 className="modal-title admin-order-detail-title">
                       <i className="fas fa-receipt me-2"></i>
                       Sipariş #{selectedOrder.id}
                     </h6>
-                    {/* Kapat butonu - × simgesi ile */}
                     <button
+                      type="button"
                       onClick={() => setSelectedOrder(null)}
-                      className="btn btn-outline-secondary btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "28px",
-                        height: "28px",
-                        fontSize: "18px",
-                        fontWeight: "bold",
-                        lineHeight: 1,
-                        padding: 0,
-                        border: "1px solid #dee2e6",
-                      }}
+                      className="admin-order-detail-close"
                       title="Kapat"
+                      aria-label="Kapat"
                     >
                       ×
                     </button>
                   </div>
-                  <div
-                    className="modal-body p-2 p-md-3"
-                    style={{
-                      fontSize: "0.75rem",
-                      maxHeight: "70vh",
-                      overflowY: "auto",
-                    }}
-                  >
+                  <div className="modal-body admin-order-detail-body">
                     {loadingOrderDetail && (
                       <div className="alert alert-info py-2">
                         Sipariş detayları ve iade geçmişi yükleniyor...
                       </div>
                     )}
-                    <div className="row g-2">
+                    <div className="row g-3">
                       <div className="col-12 col-md-6">
-                        <h6
-                          className="fw-bold mb-1"
-                          style={{ fontSize: "0.8rem" }}
-                        >
+                        <h6 className="admin-order-detail-section-title">
                           Müşteri
                         </h6>
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Ad:</strong>{" "}
                           {selectedOrder.customerName || "-"}
                         </p>
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Tel:</strong>{" "}
                           {selectedOrder.customerPhone || "-"}
                         </p>
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Adres:</strong>{" "}
                           {selectedOrder.shippingAddress ||
                             selectedOrder.address ||
@@ -3006,58 +2994,53 @@ export default function AdminOrders() {
                         </p>
                       </div>
                       <div className="col-12 col-md-6">
-                        <h6
-                          className="fw-bold mb-1"
-                          style={{ fontSize: "0.8rem" }}
-                        >
+                        <h6 className="admin-order-detail-section-title">
                           <i className="fas fa-receipt me-1 text-primary"></i>
                           Sipariş Bilgileri
                         </h6>
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Tarih:</strong>{" "}
                           {formatOrderDateTime(selectedOrder.orderDate)}
                         </p>
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Tutar:</strong>{" "}
                           <span className="text-success fw-bold">
                             {orderTotalAmount.toFixed(2)} ₺
                           </span>
                           {shippingCost > 0 && (
-                            <span className="text-muted ms-1 small" style={{ fontSize: "0.72rem" }}>
+                            <span className="admin-order-detail-breakdown">
                               (Ürünler: {Math.max(0, orderTotalAmount - shippingCost).toFixed(2)} ₺ + Kargo: {shippingCost.toFixed(2)} ₺)
                             </span>
                           )}
                         </p>
-                        {/* Ödeme Yöntemi */}
-                        <p className="mb-1">
+                        <p className="admin-order-detail-line">
                           <strong>Ödeme:</strong>{" "}
                           <span
                             className={`badge ${getPaymentMethodBadgeClass(
                               selectedOrder.paymentMethod,
                             )}`}
-                            style={{ fontSize: "0.6rem" }}
                           >
                             {getPaymentMethodLabel(selectedOrder.paymentMethod)}
                           </span>
                         </p>
-                        <div className="mb-1 d-flex align-items-center flex-wrap gap-1">
-                          <strong>Durum:</strong>
-                          <span
-                            className={`badge bg-${getStatusColor(
-                              selectedOrder.status,
-                            )} ms-1`}
-                            style={{ fontSize: "0.75rem", padding: "4px 8px" }}
-                          >
-                            <i className={`fas ${getStatusIcon(selectedOrder.status)} me-1`}></i>
-                            {getStatusText(selectedOrder.status)}
-                          </span>
+                        <div className="admin-order-detail-status">
+                          <div className="admin-order-detail-status-row">
+                            <strong>Durum:</strong>
+                            <span
+                              className={`badge bg-${getStatusColor(
+                                selectedOrder.status,
+                              )} admin-order-detail-status-badge`}
+                            >
+                              <i className={`fas ${getStatusIcon(selectedOrder.status)} me-1`}></i>
+                              {getStatusText(selectedOrder.status)}
+                            </span>
+                          </div>
                           <select
-                            className="form-select form-select-sm d-inline-block py-0 px-1 ms-1"
-                            style={{ width: "auto", fontSize: "0.72rem", height: "26px" }}
-                            value={normalizeStatus(selectedOrder.status)}
+                            className="form-select admin-order-detail-status-select"
+                            value={normalizedStatus}
                             onChange={(e) => {
                               const newStatus = e.target.value;
-                              if (newStatus && newStatus !== normalizeStatus(selectedOrder.status)) {
+                              if (newStatus && newStatus !== normalizedStatus) {
                                 if (window.confirm(`Sipariş durumu "${getStatusText(newStatus)}" olarak güncellensin mi?`)) {
                                   updateOrderStatus(selectedOrder.id, newStatus);
                                   setSelectedOrder({
@@ -3068,23 +3051,24 @@ export default function AdminOrders() {
                               }
                             }}
                           >
-                            <option value="pending">🟡 Beklemede</option>
-                            <option value="confirmed">✅ Onaylandı</option>
-                            <option value="preparing">🍳 Hazırlanıyor</option>
-                            <option value="ready">📦 Hazır</option>
-                            <option value="out_for_delivery">🛵 Yolda</option>
-                            <option value="delivered">✓ Teslim Edildi</option>
-                            <option value="cancelled">🚫 İptal Edildi</option>
+                            {!["pending", "confirmed", "preparing", "ready", "out_for_delivery", "delivered", "cancelled"].includes(normalizedStatus) && (
+                              <option value={normalizedStatus}>
+                                {getStatusText(selectedOrder.status)}
+                              </option>
+                            )}
+                            <option value="pending">Beklemede</option>
+                            <option value="confirmed">Onaylandı</option>
+                            <option value="preparing">Hazırlanıyor</option>
+                            <option value="ready">Hazır</option>
+                            <option value="out_for_delivery">Yolda</option>
+                            <option value="delivered">Teslim Edildi</option>
+                            <option value="cancelled">İptal Edildi</option>
                           </select>
                         </div>
-                        {/* Sipariş Numarası varsa göster */}
                         {selectedOrder.orderNumber && (
-                          <p className="mb-1">
+                          <p className="admin-order-detail-line">
                             <strong>Sipariş No:</strong>{" "}
-                            <span
-                              className="badge bg-dark"
-                              style={{ fontSize: "0.6rem" }}
-                            >
+                            <span className="badge bg-dark admin-order-detail-order-no">
                               {selectedOrder.orderNumber}
                             </span>
                           </p>
@@ -3096,18 +3080,12 @@ export default function AdminOrders() {
                     ÜRÜNLER TABLOSU - VARYANT BİLGİSİ DAHİL
                     SKU, varyant başlığı varsa gösterilir
                     ================================================================ */}
-                    <h6
-                      className="fw-bold mt-2 mb-1"
-                      style={{ fontSize: "0.8rem" }}
-                    >
+                    <h6 className="admin-order-detail-section-title mt-3">
                       <i className="fas fa-box-open me-1 text-primary"></i>
                       Ürünler
                     </h6>
                     <div className="table-responsive">
-                      <table
-                        className="table table-sm mb-0"
-                        style={{ fontSize: "0.7rem" }}
-                      >
+                      <table className="table table-sm mb-0 admin-order-detail-table">
                         <thead className="bg-light">
                           <tr>
                             <th className="px-1">Ürün</th>
@@ -3187,7 +3165,10 @@ export default function AdminOrders() {
                         <tfoot className="bg-light">
                           {/* Ürünler Toplamı */}
                           <tr>
-                            <td colSpan="4" className="px-1 text-end text-muted">
+                            <td colSpan="2" className="px-1 text-end text-muted d-md-none">
+                              Ürünler Toplamı:
+                            </td>
+                            <td colSpan="4" className="px-1 text-end text-muted d-none d-md-table-cell">
                               Ürünler Toplamı:
                             </td>
                             <td className="px-1 text-end">
@@ -3199,7 +3180,11 @@ export default function AdminOrders() {
 
                           {/* Kargo Ücreti */}
                           <tr>
-                            <td colSpan="4" className="px-1 text-end text-muted">
+                            <td colSpan="2" className="px-1 text-end text-muted d-md-none">
+                              <i className="fas fa-motorcycle me-1 text-primary"></i>
+                              Kargo Ücreti:
+                            </td>
+                            <td colSpan="4" className="px-1 text-end text-muted d-none d-md-table-cell">
                               <i className="fas fa-motorcycle me-1 text-primary"></i>
                               Kargo Ücreti:
                             </td>
@@ -3215,7 +3200,11 @@ export default function AdminOrders() {
                           {/* İndirim (varsa) */}
                           {totalDiscount > 0 && (
                             <tr>
-                              <td colSpan="4" className="px-1 text-end text-danger">
+                              <td colSpan="2" className="px-1 text-end text-danger d-md-none">
+                                <i className="fas fa-tag me-1"></i>
+                                İndirim:
+                              </td>
+                              <td colSpan="4" className="px-1 text-end text-danger d-none d-md-table-cell">
                                 <i className="fas fa-tag me-1"></i>
                                 İndirim:
                               </td>
@@ -3229,7 +3218,10 @@ export default function AdminOrders() {
 
                           {/* Genel Toplam (Ödenen) */}
                           <tr className="border-top">
-                            <td colSpan="4" className="px-1 text-end fw-bold">
+                            <td colSpan="2" className="px-1 text-end fw-bold d-md-none">
+                              Toplam (Ödenen):
+                            </td>
+                            <td colSpan="4" className="px-1 text-end fw-bold d-none d-md-table-cell">
                               Toplam (Ödenen):
                             </td>
                             <td className="px-1 text-end">
@@ -3246,9 +3238,13 @@ export default function AdminOrders() {
                           {selectedOrder.weightDifference !== undefined &&
                             selectedOrder.weightDifference !== 0 && (
                               <tr className="bg-warning bg-opacity-25">
+                                <td colSpan="2" className="px-1 text-end fw-bold d-md-none">
+                                  <i className="fas fa-balance-scale me-1"></i>
+                                  Tartı Farkı:
+                                </td>
                                 <td
                                   colSpan="4"
-                                  className="px-1 text-end fw-bold"
+                                  className="px-1 text-end fw-bold d-none d-md-table-cell"
                                 >
                                   <i className="fas fa-balance-scale me-1"></i>
                                   Tartı Farkı:
@@ -3275,9 +3271,13 @@ export default function AdminOrders() {
                             Number(selectedOrder.finalAmount || 0) > 0 &&
                             Math.abs(Number(selectedOrder.finalAmount) - orderTotalAmount) > 0.01 && (
                               <tr className="bg-success bg-opacity-25">
+                                <td colSpan="2" className="px-1 text-end fw-bold d-md-none">
+                                  <i className="fas fa-calculator me-1"></i>
+                                  Tartı Sonrası Kesin Tutar:
+                                </td>
                                 <td
                                   colSpan="4"
-                                  className="px-1 text-end fw-bold"
+                                  className="px-1 text-end fw-bold d-none d-md-table-cell"
                                 >
                                   <i className="fas fa-calculator me-1"></i>
                                   Tartı Sonrası Kesin Tutar:
@@ -3303,8 +3303,8 @@ export default function AdminOrders() {
                       <div className="col-12 col-lg-6">
                         <div className="card border-0 shadow-sm h-100">
                           <div className="card-body">
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <h6 className="fw-bold mb-0" style={{ fontSize: "0.82rem" }}>
+                            <div className="d-flex justify-content-between align-items-center gap-2 mb-2 flex-wrap">
+                              <h6 className="admin-order-detail-section-title mb-0">
                                 <i className="fas fa-pen me-1 text-primary"></i>
                                 Siparişi Düzenle
                               </h6>
