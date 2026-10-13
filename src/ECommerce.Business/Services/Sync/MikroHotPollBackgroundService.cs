@@ -43,10 +43,14 @@ namespace ECommerce.Business.Services.Sync
         // Durum takibi — volatile çünkü timer thread'inden okunuyor
         private volatile HotPollStatus _currentStatus = new();
         private DateTime? _lastSuccessfulPollTime;
+        private DateTime? _lastDbWatermark;
         private int _consecutiveFailureCount;
 
-        // Polling aralığı — config'den okunabilir, varsayılan 10sn
-        private static readonly TimeSpan DefaultPollInterval = TimeSpan.FromSeconds(10);
+        // Polling aralığı — config'den okunabilir, varsayılan 5sn
+        private TimeSpan PollInterval =>
+            _settings.HotPollIntervalSeconds > 0
+                ? TimeSpan.FromSeconds(_settings.HotPollIntervalSeconds)
+                : TimeSpan.FromSeconds(5);
 
         // Ardışık hata sonrası cooldown — DB'yi boğmamak için geri çekilme
         private static readonly TimeSpan ErrorCooldownInterval = TimeSpan.FromSeconds(30);
@@ -96,7 +100,7 @@ namespace ECommerce.Business.Services.Sync
             _logger.LogInformation(
                 "[HotPoll] Mikro HotPoll servisi başlatılıyor. " +
                 "Aralık: {Interval}sn, İlk gecikme: {Delay}sn",
-                DefaultPollInterval.TotalSeconds, InitialDelay.TotalSeconds);
+                PollInterval.TotalSeconds, InitialDelay.TotalSeconds);
 
             // İlk gecikme — uygulama tamamen başlasın, DB bağlantıları hazır olsun
             await Task.Delay(InitialDelay, stoppingToken);
@@ -139,7 +143,7 @@ namespace ECommerce.Business.Services.Sync
                 // Hata durumunda cooldown uygula — DB'yi boğmamak için
                 var delay = _consecutiveFailureCount >= 3
                     ? ErrorCooldownInterval
-                    : DefaultPollInterval;
+                    : PollInterval;
 
                 await Task.Delay(delay, stoppingToken);
             }
@@ -167,17 +171,31 @@ namespace ECommerce.Business.Services.Sync
             var conflictCoordinator = serviceProvider.GetService<SyncConflictCoordinator>();
             var metricsService = serviceProvider.GetService<ISyncMetricsService>();
 
-            // Delta penceresi: Son başarılı poll'dan itibaren, ama max 5dk geriye git
-            var since = _lastSuccessfulPollTime ?? DateTime.UtcNow.AddMinutes(-2);
-            var minSince = DateTime.UtcNow.Subtract(MaxDeltaWindow);
-            if (since < minSince) since = minSince;
+            // Delta penceresi: Mikro SQL Server watermark'ı üzerinden (saat dilimi korumalı)
+            DateTime since;
+            if (_lastDbWatermark.HasValue)
+            {
+                // 5 saniye güvenlik payı (transaction overlap) ile geçmişe git
+                since = _lastDbWatermark.Value.AddSeconds(-5);
+                var minSince = _lastDbWatermark.Value.Subtract(MaxDeltaWindow);
+                if (since < minSince) since = minSince;
+            }
+            else
+            {
+                // İlk döngü: Mikro SQL sunucusunun mevcut saatini al
+                var serverTime = await dbService.GetServerTimeAsync(cancellationToken);
+                since = serverTime.AddMinutes(-2);
+            }
 
-            // Mikro DB'den değişen ürünleri çek
-            var changedProducts = await dbService.GetDeltaChangedProductsAsync(
+            // Mikro DB'den değişen ürünleri ve güncel sunucu saatini çek
+            var deltaResponse = await dbService.GetDeltaChangedProductsWithTimeAsync(
                 since,
                 fiyatListesiNo: null,
                 depoNo: 0,
                 cancellationToken);
+
+            _lastDbWatermark = deltaResponse.ServerTime;
+            var changedProducts = deltaResponse.Products;
 
             if (changedProducts.Count == 0)
             {
@@ -188,8 +206,8 @@ namespace ECommerce.Business.Services.Sync
             }
 
             _logger.LogInformation(
-                "[HotPoll] {Count} ürün değişikliği tespit edildi. Since: {Since:HH:mm:ss}",
-                changedProducts.Count, since);
+                "[HotPoll] {Count} ürün değişikliği tespit edildi. Since: {Since:HH:mm:ss}, DbTime: {DbTime:HH:mm:ss}",
+                changedProducts.Count, since, deltaResponse.ServerTime);
 
             // Değişiklikleri cache ve product tablosuna uygula
             var (stockUpdated, priceUpdated, infoUpdated, changes) =
@@ -199,6 +217,12 @@ namespace ECommerce.Business.Services.Sync
                     changedProducts,
                     conflictCoordinator,
                     cancellationToken);
+
+            // In-memory cache'i değişen ürünlerle anında senkronize et
+            if (dbService is MikroDbCachedService cachedDbService)
+            {
+                cachedDbService.UpdateCacheItems(changedProducts);
+            }
 
             // SignalR bildirimi gönder
             if (notificationService != null && changes.Count > 0)
@@ -309,6 +333,8 @@ namespace ECommerce.Business.Services.Sync
 
                     if (changeType != ProductChangeType.None)
                     {
+                        // Fiyat ve stok durumuna göre cache.Aktif durumunu senkronize et
+                        cache.Aktif = mikro.WebeGonderilecekFl && (cache.SatisFiyati > 0) && (cache.DepoMiktari > 0);
                         cache.GuncellemeTarihi = DateTime.UtcNow;
                         cache.SonHareketTarihi = mikro.SonHareketTarihi;
                         cache.SyncStatus = (int)MikroSyncStatus.PendingUpdate;
@@ -363,6 +389,13 @@ namespace ECommerce.Business.Services.Sync
                                     product.Price = mikro.Fiyat;
                                 }
                             }
+                        }
+
+                        // Stok veya Fiyat değiştiğinde vitrin görünürlüğü (IsActive) ve UpdatedAt anında güncellenir
+                        if (changeType.HasFlag(ProductChangeType.Stock) || changeType.HasFlag(ProductChangeType.Price))
+                        {
+                            product.IsActive = product.StockQuantity > 0 && product.Price > 0;
+                            product.UpdatedAt = DateTime.UtcNow;
                         }
 
                         if (changeType.HasFlag(ProductChangeType.Info))

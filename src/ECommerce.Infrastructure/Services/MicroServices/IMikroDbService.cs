@@ -56,20 +56,34 @@ namespace ECommerce.Infrastructure.Services.MicroServices
 
         /// <summary>
         /// Son belirtilen tarihten bu yana değişen ürünleri çeker (HotPoll delta sorgusu).
-        /// 
-        /// NEDEN: 6000+ ürünü her 10sn'de çekmek DB'yi boğar.
-        /// Bu metod yalnızca sto_lastup_date + stok hareketleri tablosundaki 
-        /// son değişiklikleri filtreler — tipik olarak &lt;50 satır döner.
-        /// 
-        /// SQL STRATEJİSİ: STOKLAR.sto_lastup_date >= @since OR 
-        /// STOK_HAREKETLERI.sth_tarih >= @since 
         /// </summary>
-        /// <param name="since">Bu tarihten sonra değişen kayıtlar (UTC)</param>
-        /// <param name="fiyatListesiNo">Fiyat listesi numarası</param>
-        /// <param name="depoNo">Depo numarası</param>
         Task<List<ECommerce.Core.DTOs.Micro.MikroUnifiedProductDto>> GetDeltaChangedProductsAsync(
             DateTime since,
             int? fiyatListesiNo = null,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Mikro SQL sunucusunun mevcut tarih ve saatini döner (GETDATE()).
+        /// Sunucu ile uygulama arasındaki saat dilimi / saat kaymasını kalibre etmek için kullanılır.
+        /// </summary>
+        Task<DateTime> GetServerTimeAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Son belirtilen tarihten bu yana değişen ürünleri ve SQL sunucusunun anlık saatini (watermark) döner.
+        /// Bu metod tek sorguda hem DB sunucu saatini hem de değişen ürünleri okur.
+        /// </summary>
+        Task<ECommerce.Core.DTOs.Micro.MikroDeltaResponse> GetDeltaChangedProductsWithTimeAsync(
+            DateTime since,
+            int? fiyatListesiNo = null,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Tekil bir SKU'nun Mikro ERP'deki anlık eldeki stok miktarını direkt ve en hızlı şekilde döner (JIT Stok Doğrulama).
+        /// </summary>
+        Task<decimal?> GetLiveStockQuantityAsync(
+            string sku,
             int? depoNo = null,
             CancellationToken cancellationToken = default);
 

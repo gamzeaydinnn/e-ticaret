@@ -243,7 +243,33 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         /// <inheritdoc/>
+        public async Task<DateTime> GetServerTimeAsync(CancellationToken cancellationToken = default)
+        {
+            var acquired = await _sqlGate.WaitAsync(SqlGateTimeout, cancellationToken);
+            if (!acquired) return DateTime.UtcNow;
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var inner = scope.ServiceProvider.GetRequiredService<MikroDbService>();
+                return await inner.GetServerTimeAsync(cancellationToken);
+            }
+            finally { _sqlGate.Release(); }
+        }
+
+        /// <inheritdoc/>
         public async Task<List<MikroUnifiedProductDto>> GetDeltaChangedProductsAsync(
+            DateTime since,
+            int? fiyatListesiNo = null,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetDeltaChangedProductsWithTimeAsync(since, fiyatListesiNo, depoNo, cancellationToken);
+            return response.Products;
+        }
+
+        /// <inheritdoc/>
+        public async Task<MikroDeltaResponse> GetDeltaChangedProductsWithTimeAsync(
             DateTime since,
             int? fiyatListesiNo = null,
             int? depoNo = null,
@@ -256,14 +282,57 @@ namespace ECommerce.Infrastructure.Services.MicroServices
                 _logger.LogWarning(
                     "[MikroDbCachedService] Delta sorgusu SQL gate timeout — atlanıyor. " +
                     "Sonraki HotPoll cycle'da tekrar denenecek.");
-                return new List<MikroUnifiedProductDto>();
+                return new MikroDeltaResponse { ServerTime = DateTime.UtcNow };
             }
 
             try
             {
                 using var scope = _scopeFactory.CreateScope();
                 var inner = scope.ServiceProvider.GetRequiredService<MikroDbService>();
-                return await inner.GetDeltaChangedProductsAsync(since, fiyatListesiNo, depoNo, cancellationToken);
+                var response = await inner.GetDeltaChangedProductsWithTimeAsync(since, fiyatListesiNo, depoNo, cancellationToken);
+
+                // Değişen ürünleri anında in-memory cache'e de yansıt
+                if (response.Products.Count > 0)
+                {
+                    UpdateCacheItems(response.Products);
+                }
+
+                return response;
+            }
+            finally { _sqlGate.Release(); }
+        }
+
+        /// <inheritdoc/>
+        public async Task<decimal?> GetLiveStockQuantityAsync(
+            string sku,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(sku)) return null;
+
+            var acquired = await _sqlGate.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+            if (!acquired)
+            {
+                // Fallback: SQL gate meşgulse bellekten hızlı yanıt ver
+                if (_cachedProductsBySku != null && _cachedProductsBySku.TryGetValue(sku, out var cachedDto))
+                {
+                    return cachedDto.StokMiktar;
+                }
+                return null;
+            }
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var inner = scope.ServiceProvider.GetRequiredService<MikroDbService>();
+                var liveStock = await inner.GetLiveStockQuantityAsync(sku, depoNo, cancellationToken);
+
+                if (liveStock.HasValue && _cachedProductsBySku != null && _cachedProductsBySku.TryGetValue(sku, out var existing))
+                {
+                    existing.StokMiktar = liveStock.Value;
+                }
+
+                return liveStock;
             }
             finally { _sqlGate.Release(); }
         }
@@ -299,6 +368,30 @@ namespace ECommerce.Infrastructure.Services.MicroServices
         }
 
         // ==================== CACHE YÖNETİMİ ====================
+
+        /// <summary>
+        /// In-memory cache içerisindeki değişen ürünleri anında günceller.
+        /// Tüm cache'i yok etmek yerine sadece değişen SKU'ların stok ve fiyatını günceller.
+        /// </summary>
+        public void UpdateCacheItems(IEnumerable<MikroUnifiedProductDto> changedProducts)
+        {
+            if (_cachedProductsBySku == null || !changedProducts.Any()) return;
+
+            bool anyUpdated = false;
+            foreach (var item in changedProducts)
+            {
+                if (string.IsNullOrWhiteSpace(item.StokKod)) continue;
+
+                _cachedProductsBySku.AddOrUpdate(item.StokKod, item, (_, _) => item);
+                anyUpdated = true;
+            }
+
+            if (anyUpdated)
+            {
+                _cachedProducts = _cachedProductsBySku.Values.ToList();
+                _logger.LogInformation("[MikroDbCachedService] In-memory cache {Count} değişen ürün ile anlık güncellendi.", changedProducts.Count());
+            }
+        }
 
         /// <summary>
         /// Cache'i manuel olarak geçersiz kılar.

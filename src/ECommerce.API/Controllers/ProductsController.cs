@@ -1230,7 +1230,7 @@ namespace ECommerce.API.Controllers
             [FromQuery] int size = 50,
             [FromQuery] string sort = "name",
             [FromQuery] string direction = "asc",
-            [FromQuery] bool? inStock = null)
+            [FromQuery] bool? inStock = true)
         {
             page = Math.Max(page, 1);
             size = Math.Min(Math.Max(size, 1), 100);
@@ -1408,6 +1408,9 @@ namespace ECommerce.API.Controllers
 
             if (mikro == null)
                 return NotFound(new { message = $"Ürün bulunamadı: {sku}" });
+
+            if (mikro.StokMiktar <= 0) return BadRequest(new { message = "Stokta yok.", outOfStock = true });
+            if (mikro.Fiyat <= 0) return BadRequest(new { message = "Fiyat belirlenmemiş.", noPrice = true });
 
             // Kategori eşleme
             var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);

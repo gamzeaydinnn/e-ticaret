@@ -10,6 +10,7 @@ using ECommerce.Core.Validators;
 using ECommerce.Core.Interfaces;
 using ECommerce.Business.Services.Interfaces;
 using ECommerce.Business.Helpers;
+using ECommerce.Infrastructure.Services.MicroServices;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
@@ -35,6 +36,7 @@ namespace ECommerce.API.Controllers
         private readonly IOrderLimitResolver _orderLimitResolver;
         private readonly IProductOrderLimitSettingsService _limitSettingsService;
         private readonly ILogger<CartItemsController> _logger;
+        private readonly IMikroDbService? _mikroDbService;
 
         public CartItemsController(
             ECommerceDbContext context,
@@ -43,7 +45,8 @@ namespace ECommerce.API.Controllers
             IShippingService shippingService,
             IOrderLimitResolver orderLimitResolver,
             IProductOrderLimitSettingsService limitSettingsService,
-            ILogger<CartItemsController> logger)
+            ILogger<CartItemsController> logger,
+            IMikroDbService? mikroDbService = null)
         {
             _context = context;
             _pricingEngine = pricingEngine;
@@ -52,6 +55,7 @@ namespace ECommerce.API.Controllers
             _orderLimitResolver = orderLimitResolver;
             _limitSettingsService = limitSettingsService;
             _logger = logger;
+            _mikroDbService = mikroDbService;
         }
 
         #region Misafir Kullanıcı Endpoint'leri (CartToken bazlı)
@@ -744,14 +748,34 @@ namespace ECommerce.API.Controllers
         }
 
         /// <summary>
-        /// Sepet limit/stok doğrulaması için kategori bilgisiyle ürün yükler.
+        /// Sepet limit/stok doğrulaması için kategori bilgisiyle ürün yükler ve Mikro ERP'den JIT canlı stok doğrulaması yapar.
         /// FindAsync kullanılırsa manav ürünleri yanlışlıkla adet (max 5) sayılır.
         /// </summary>
         private async Task<Product?> GetProductForCartAsync(int productId)
         {
-            return await _context.Products
+            var product = await _context.Products
                 .Include(p => p.Category)
                 .FirstOrDefaultAsync(p => p.Id == productId);
+
+            if (product != null && _mikroDbService != null && _mikroDbService.IsConfigured && !string.IsNullOrWhiteSpace(product.Sku))
+            {
+                var liveStock = await _mikroDbService.GetLiveStockQuantityAsync(product.Sku);
+                if (liveStock.HasValue)
+                {
+                    var liveInt = (int)liveStock.Value;
+                    if (product.StockQuantity != liveInt)
+                    {
+                        product.StockQuantity = liveInt;
+                        if (product.StockQuantity <= 0)
+                        {
+                            product.IsActive = false;
+                        }
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+
+            return product;
         }
 
         /// <summary>

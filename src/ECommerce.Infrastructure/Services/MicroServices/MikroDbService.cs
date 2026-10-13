@@ -636,10 +636,53 @@ ORDER BY S.sto_kod;";
             int? depoNo = null,
             CancellationToken cancellationToken = default)
         {
+            var response = await GetDeltaChangedProductsWithTimeAsync(since, fiyatListesiNo, depoNo, cancellationToken);
+            return response.Products;
+        }
+
+        /// <inheritdoc/>
+        public async Task<DateTime> GetServerTimeAsync(CancellationToken cancellationToken = default)
+        {
+            if (!IsConfigured) return DateTime.UtcNow;
+
+            try
+            {
+                await using var conn = new SqlConnection(_settings.SqlConnectionString);
+                await conn.OpenAsync(cancellationToken);
+
+                await using var cmd = new SqlCommand("SELECT GETDATE();", conn)
+                {
+                    CommandTimeout = 5,
+                    CommandType = CommandType.Text
+                };
+
+                var val = await cmd.ExecuteScalarAsync(cancellationToken);
+                if (val != null && val != DBNull.Value && val is DateTime dt)
+                {
+                    return dt;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MikroDbService] SQL Server saat sorgusu başarısız, UtcNow kullanılıyor.");
+            }
+
+            return DateTime.UtcNow;
+        }
+
+        /// <inheritdoc/>
+        public async Task<MikroDeltaResponse> GetDeltaChangedProductsWithTimeAsync(
+            DateTime since,
+            int? fiyatListesiNo = null,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            var response = new MikroDeltaResponse();
+
             if (!IsConfigured)
             {
                 _logger.LogWarning("[MikroDbService] SqlConnectionString yapılandırılmamış (delta sorgusu).");
-                return [];
+                return response;
             }
 
             var sql = BuildDeltaChangedProductQuery(since, fiyatListesiNo, depoNo);
@@ -659,74 +702,162 @@ ORDER BY S.sto_kod;";
                 cmd.Parameters.Add(new SqlParameter("@since", SqlDbType.DateTime) { Value = since });
 
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
-                var results = new List<MikroUnifiedProductDto>();
-                var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                while (await reader.ReadAsync(cancellationToken))
+                // 1. Sonuç Kümesi: SQL Server'ın mevcut anlık saati (watermark)
+                if (await reader.ReadAsync(cancellationToken))
                 {
-                    var stokKod = ReadString(reader, "stokkod");
-                    if (string.IsNullOrWhiteSpace(stokKod) || !seen.Add(stokKod))
-                        continue;
-
-                    results.Add(new MikroUnifiedProductDto
+                    if (!reader.IsDBNull(0))
                     {
-                        StokKod              = stokKod,
-                        StokAd               = ReadString(reader, "stokad"),
-                        Fiyat                = ReadDecimal(reader, "fiyat"),
-                        StokMiktar           = ReadDecimal(reader, "stok_miktar"),
-                        DepoNo               = ReadNullableInt(reader, "depo_no"),
-                        Barkod               = ReadString(reader, "barkod"),
-                        GrupKod              = ReadString(reader, "grup_kod"),
-                        AnagrupKod           = ReadString(reader, "anagrup_kod"),
-                        Birim                = ReadString(reader, "birim"),
-                        KdvOrani             = ReadDecimal(reader, "kdv_orani"),
-                        WebeGonderilecekFl   = ReadBool(reader, "webe_gonderilecek_fl"),
-                        SonHareketTarihi     = ReadNullableDateTime(reader, "son_hareket_tarihi")
-                    });
+                        response.ServerTime = reader.GetDateTime(0);
+                    }
+                }
+
+                // 2. Sonuç Kümesi: Son @since anından bu yana değişen ürünler
+                if (await reader.NextResultAsync(cancellationToken))
+                {
+                    var results = new List<MikroUnifiedProductDto>();
+                    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        var stokKod = ReadString(reader, "stokkod");
+                        if (string.IsNullOrWhiteSpace(stokKod) || !seen.Add(stokKod))
+                            continue;
+
+                        results.Add(new MikroUnifiedProductDto
+                        {
+                            StokKod              = stokKod,
+                            StokAd               = ReadString(reader, "stokad"),
+                            Fiyat                = ReadDecimal(reader, "fiyat"),
+                            StokMiktar           = ReadDecimal(reader, "stok_miktar"),
+                            DepoNo               = ReadNullableInt(reader, "depo_no"),
+                            Barkod               = ReadString(reader, "barkod"),
+                            GrupKod              = ReadString(reader, "grup_kod"),
+                            AnagrupKod           = ReadString(reader, "anagrup_kod"),
+                            Birim                = ReadString(reader, "birim"),
+                            KdvOrani             = ReadDecimal(reader, "kdv_orani"),
+                            WebeGonderilecekFl   = ReadBool(reader, "webe_gonderilecek_fl"),
+                            SonHareketTarihi     = ReadNullableDateTime(reader, "son_hareket_tarihi")
+                        });
+                    }
+
+                    response.Products = results;
                 }
 
                 _logger.LogInformation(
-                    "[MikroDbService] Delta sorgusu tamamlandı. Değişen: {Count}, Since: {Since:HH:mm:ss}",
-                    results.Count, since);
+                    "[MikroDbService] Delta sorgusu tamamlandı. Değişen: {Count}, Since: {Since:HH:mm:ss}, DbTime: {DbTime:HH:mm:ss}",
+                    response.Products.Count, since, response.ServerTime);
 
-                return results;
+                return response;
             }
             catch (SqlException ex)
             {
                 _logger.LogError(ex,
                     "[MikroDbService] Delta sorgusu SQL hatası. Number: {Number}, Severity: {Class}",
                     ex.Number, ex.Class);
-                return [];
+                return response;
             }
             catch (OperationCanceledException)
             {
                 _logger.LogWarning("[MikroDbService] Delta sorgusu iptal edildi / timeout.");
-                return [];
+                return response;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "[MikroDbService] Delta sorgusu beklenmeyen hata.");
-                return [];
+                return response;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task<decimal?> GetLiveStockQuantityAsync(
+            string sku,
+            int? depoNo = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (!IsConfigured || string.IsNullOrWhiteSpace(sku))
+                return null;
+
+            const string sql = @"
+                SELECT ISNULL(SUM(sth_eldeki_miktar), 0) AS stok_miktar
+                FROM STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+                WHERE sth_stok_kod = @sku;";
+
+            try
+            {
+                await using var conn = new SqlConnection(_settings.SqlConnectionString);
+                await conn.OpenAsync(cancellationToken);
+
+                await using var cmd = new SqlCommand(sql, conn)
+                {
+                    CommandTimeout = 5,
+                    CommandType = CommandType.Text
+                };
+                cmd.Parameters.Add(new SqlParameter("@sku", SqlDbType.NVarChar, 50) { Value = sku.Trim() });
+
+                var val = await cmd.ExecuteScalarAsync(cancellationToken);
+                if (val != null && val != DBNull.Value)
+                {
+                    return Convert.ToDecimal(val);
+                }
+                return 0m;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[MikroDbService] JIT canlı stok sorgusu başarısız: SKU={Sku}", sku);
+                return null;
             }
         }
 
         /// <summary>
-        /// HotPoll delta sorgusu oluşturur.
+        /// HotPoll delta sorgusu oluşturur (Yüksek Performanslı CTE & Multi-ResultSet).
         /// 
-        /// STRATEJİ: 2 kaynaktan "son değişiklik" tespiti:
-        /// 1. STOKLAR.sto_lastup_date >= @since (stok kartı güncelleme)
-        /// 2. STOK_HAREKETLERI.sth_tarih >= @since (stok hareketi — satış/alış/iade)
-        /// 
-        /// FİYAT: Yalnızca web fiyat listesi (Liste 11) üzerinden okunur.
+        /// STRATEJİ:
+        /// 1. ResultSet 1: SELECT GETDATE() - Mikro sunucu saatini anında döner.
+        /// 2. ResultSet 2: DegisenUrunler CTE ile SADECE son değişen SKU'lar filtrelenir:
+        ///    - STOKLAR (sto_lastup_date / sto_create_date)
+        ///    - STOK_HAREKETLERI (sth_lastup_date / sth_create_date / sth_tarih)
+        ///    - STOK_SATIS_FIYAT_LISTELERI (sfiyat_lastup_date / sfiyat_create_date)
+        /// 3. OUTER APPLY: Ağır stok view'ı ve fiyat listeleri sadece değişen 1-5 SKU için çalıştırılır.
         /// </summary>
         private static string BuildDeltaChangedProductQuery(
             DateTime since, int? fiyatListesiNo, int? depoNo)
         {
             const int hedefListe = 11;
-            var hedefDepo  = depoNo.HasValue ? depoNo.Value : 0;
+            var hedefDepo = depoNo.HasValue ? depoNo.Value : 0;
 
-            // @since parametresi CMD üzerinden bağlanır — injection güvenli
-            return $@"SELECT
+            return $@"-- 1. Sonuç: Sunucu saati
+SELECT GETDATE() AS server_time;
+
+-- 2. Sonuç: Değişen ürünler ve anlık stok/fiyatları
+;WITH DegisenUrunler AS (
+    SELECT DISTINCT S.sto_kod
+    FROM STOKLAR S
+    WHERE S.sto_webe_gonderilecek_fl = 1
+      AND ISNULL(S.sto_iptal, 0) = 0
+      AND S.sto_kod IS NOT NULL
+      AND LTRIM(RTRIM(S.sto_kod)) <> ''
+      AND (
+          S.sto_lastup_date >= @since
+          OR S.sto_create_date >= @since
+          OR EXISTS (
+              SELECT 1 FROM STOK_HAREKETLERI H
+              WHERE H.sth_stok_kod = S.sto_kod
+                AND (
+                    H.sth_lastup_date >= @since
+                    OR H.sth_create_date >= @since
+                    OR (H.sth_tarih >= CAST(@since AS DATE) AND H.sth_tarih >= @since)
+                )
+          )
+          OR EXISTS (
+              SELECT 1 FROM STOK_SATIS_FIYAT_LISTELERI F
+              WHERE F.sfiyat_stokkod = S.sto_kod
+                AND F.sfiyat_listesirano IN ({hedefListe}, 1)
+                AND (F.sfiyat_lastup_date >= @since OR F.sfiyat_create_date >= @since)
+          )
+      )
+)
+SELECT
     S.sto_kod                                     AS stokkod,
     ISNULL(S.sto_isim, '')                        AS stokad,
     -- 1. Öncelik: Liste 11 (Web Fiyatı), Fallback: Liste 1 (Eski Ürünler)
@@ -755,47 +886,32 @@ ORDER BY S.sto_kod;";
     (SELECT MAX(H.sth_tarih)
      FROM STOK_HAREKETLERI H
      WHERE H.sth_stok_kod = S.sto_kod)            AS son_hareket_tarihi
-FROM STOKLAR S
--- 1. Öncelik: Liste 11 (Web Fiyat Listesi)
-LEFT JOIN (
-    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS sfiyat_fiyati
+FROM DegisenUrunler D
+INNER JOIN STOKLAR S ON S.sto_kod = D.sto_kod
+OUTER APPLY (
+    SELECT MAX(sfiyat_fiyati) AS sfiyat_fiyati
     FROM   STOK_SATIS_FIYAT_LISTELERI
-    WHERE  sfiyat_listesirano = {hedefListe}
+    WHERE  sfiyat_stokkod = S.sto_kod
+      AND  sfiyat_listesirano = {hedefListe}
       AND  sfiyat_fiyati      > 0
-    GROUP BY sfiyat_stokkod
-) Hedef ON Hedef.sfiyat_stokkod = S.sto_kod
--- 2. Fallback: Liste 1 (Eski Ürünler)
-LEFT JOIN (
-    SELECT sfiyat_stokkod, MAX(sfiyat_fiyati) AS MaxFiyat
+) Hedef
+OUTER APPLY (
+    SELECT MAX(sfiyat_fiyati) AS MaxFiyat
     FROM   STOK_SATIS_FIYAT_LISTELERI
-    WHERE  sfiyat_listesirano = 1
+    WHERE  sfiyat_stokkod = S.sto_kod
+      AND  sfiyat_listesirano = 1
       AND  sfiyat_fiyati      > 0
-    GROUP BY sfiyat_stokkod
-) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
-LEFT JOIN (
-    SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
+) Kaynak
+OUTER APPLY (
+    SELECT SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
     FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
-    GROUP BY sth_stok_kod
-) ST ON ST.sth_stok_kod = S.sto_kod
+    WHERE  sth_stok_kod = S.sto_kod
+) ST
 OUTER APPLY (
     SELECT TOP 1 bar_kodu
     FROM   BARKOD_TANIMLARI
     WHERE  bar_stokkodu = S.sto_kod
 ) BK
-WHERE S.sto_webe_gonderilecek_fl = 1
-  AND ISNULL(S.sto_iptal, 0) = 0
-  AND S.sto_kod IS NOT NULL
-  AND LTRIM(RTRIM(S.sto_kod)) <> ''
-  AND (
-      S.sto_lastup_date >= @since
-      OR
-      EXISTS (
-          SELECT 1 FROM STOK_HAREKETLERI H
-          WHERE  H.sth_stok_kod = S.sto_kod
-            AND  H.sth_tarih >= @since
-      )
-  )
 ORDER BY S.sto_kod;";
         }
     }

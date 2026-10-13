@@ -239,6 +239,7 @@ namespace ECommerce.API.Services
                     // Fiyat = 0 uyarısı — logla ama ürünü yine de cache'e al
                     if (cacheItem.SatisFiyati <= 0)
                     {
+                        cacheItem.Aktif = false;
                         zeroPriceCount++;
                         if (zeroPriceCount <= 10) // İlk 10 tanesini logla (spam önleme)
                         {
@@ -251,7 +252,7 @@ namespace ECommerce.API.Services
                     if (existingProducts.TryGetValue(cacheItem.StokKod, out var existing))
                     {
                         // Mevcut ürün — hash kontrolü ile güncelleme kararı
-                        if (existing.DataHash != cacheItem.DataHash)
+                        if (existing.DataHash != cacheItem.DataHash || existing.Aktif != cacheItem.Aktif)
                         {
                             existing.StokAd = cacheItem.StokAd;
                             existing.Barkod = cacheItem.Barkod;
@@ -268,7 +269,7 @@ namespace ECommerce.API.Services
                             existing.TumDepolarJson = null;   // Birleşik sorguda tekil depo gelir
                             existing.DataHash = cacheItem.DataHash;
                             existing.GuncellemeTarihi = DateTime.UtcNow;
-                            existing.Aktif = true;
+                            existing.Aktif = cacheItem.Aktif;
                             existing.VeriKaynagi = "SQL_UNIFIED";
                             existing.SonHareketTarihi = cacheItem.SonHareketTarihi;
                             result.UpdatedProducts++;
@@ -978,6 +979,16 @@ namespace ECommerce.API.Services
                     {
                         product.StockQuantity = newStock;
                         changed = true;
+                    }
+
+                    if (!product.AdminDeactivated)
+                    {
+                        var shouldBeActive = cache.SatisFiyati > 0 && newStock > 0;
+                        if (product.IsActive != shouldBeActive)
+                        {
+                            product.IsActive = shouldBeActive;
+                            changed = true;
+                        }
                     }
 
                     if (changed)

@@ -37,6 +37,12 @@ namespace ECommerce.Core.Helpers
             if (localProduct != null && !localProduct.IsActive)
                 return false;
 
+            if (mikroProduct.Fiyat <= 0)
+                return false;
+
+            if (mikroProduct.StokMiktar <= 0)
+                return false;
+
             return true;
         }
 

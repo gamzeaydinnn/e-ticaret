@@ -166,6 +166,12 @@ namespace ECommerce.Infrastructure.Config
         /// Varsayılan: 30s — büyük stok tablolarında 60s gerekebilir.
         /// </summary>
         public int SqlCommandTimeoutSeconds { get; set; } = 30;
+
+        /// <summary>
+        /// Anlık HotPoll stok ve fiyat delta döngüsü aralığı (saniye).
+        /// Varsayılan: 5s.
+        /// </summary>
+        public int HotPollIntervalSeconds { get; set; } = 5;
     }
 }
 

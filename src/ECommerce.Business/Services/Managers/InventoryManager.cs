@@ -14,11 +14,11 @@ using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Infrastructure.Config;
 using ECommerce.Infrastructure.Services.Email;
+using ECommerce.Infrastructure.Services.MicroServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-
 
 namespace ECommerce.Business.Services.Managers
 {
@@ -30,6 +30,7 @@ namespace ECommerce.Business.Services.Managers
         private readonly InventorySettings _inventorySettings;
         private readonly IConfiguration _configuration;
         private readonly IInventoryLogService _inventoryLogService;
+        private readonly IMikroDbService? _mikroDbService;
 
         public InventoryManager(
             IProductRepository productRepository,
@@ -37,7 +38,8 @@ namespace ECommerce.Business.Services.Managers
             EmailSender emailSender,
             IOptions<InventorySettings> inventoryOptions,
             IConfiguration configuration,
-            IInventoryLogService inventoryLogService)
+            IInventoryLogService inventoryLogService,
+            IMikroDbService? mikroDbService = null)
         {
             _productRepository = productRepository;
             _context = context;
@@ -45,6 +47,7 @@ namespace ECommerce.Business.Services.Managers
             _inventorySettings = inventoryOptions.Value;
             _configuration = configuration;
             _inventoryLogService = inventoryLogService;
+            _mikroDbService = mikroDbService;
         }
 
         public async Task<bool> IncreaseStockAsync(int productId, int quantity)
@@ -206,11 +209,30 @@ namespace ECommerce.Business.Services.Managers
                     return (false, $"Ürün bulunamadı: {entry.ProductId}");
                 }
 
+                // JIT Canlı Stok Doğrulama: Mikro ERP'den anlık net stok kontrolü
+                if (_mikroDbService != null && _mikroDbService.IsConfigured && !string.IsNullOrWhiteSpace(product.Sku))
+                {
+                    var liveStock = await _mikroDbService.GetLiveStockQuantityAsync(product.Sku);
+                    if (liveStock.HasValue)
+                    {
+                        var liveInt = (int)liveStock.Value;
+                        if (product.StockQuantity != liveInt)
+                        {
+                            product.StockQuantity = liveInt;
+                            if (product.StockQuantity <= 0)
+                            {
+                                product.IsActive = false;
+                            }
+                            await _productRepository.UpdateAsync(product);
+                        }
+                    }
+                }
+
                 var reservedQuantity = await GetActiveReservedQuantityAsync(entry.ProductId, now);
                 decimal available = product.StockQuantity - reservedQuantity;
                 if (available < entry.Quantity)
                 {
-                    return (false, $"Yetersiz stok: {product.Name}");
+                    return (false, $"Yetersiz stok: {product.Name}. Kalan stok: {Math.Max(0, available)}");
                 }
             }
 

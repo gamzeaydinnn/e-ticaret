@@ -581,7 +581,7 @@ namespace ECommerce.Business.Services.Managers
             if (_dbContext == null)
             {
                 var products = (await _productRepository.GetAllAsync())
-                    .Where(p => p.IsActive && p.CategoryId == categoryId && GetDisplayPrice(p) > 0);
+                    .Where(p => p.IsActive && p.CategoryId == categoryId && p.StockQuantity > 0 && GetDisplayPrice(p) > 0);
 
                 if (inStock.HasValue)
                     products = inStock.Value
@@ -604,7 +604,7 @@ namespace ECommerce.Business.Services.Managers
                 .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Brand)
-                .Where(p => p.IsActive && p.CategoryId == categoryId && (p.SpecialPrice.HasValue && p.SpecialPrice.Value > 0 && p.SpecialPrice.Value < p.Price || p.Price > 0));
+                .Where(p => p.IsActive && p.CategoryId == categoryId && p.StockQuantity > 0 && (p.SpecialPrice.HasValue && p.SpecialPrice.Value > 0 && p.SpecialPrice.Value < p.Price || p.Price > 0));
 
             if (inStock.HasValue)
                 query = inStock.Value
@@ -733,7 +733,7 @@ namespace ECommerce.Business.Services.Managers
                 var products = await _productRepository.GetAllAsync();
                 
                 // SADECE AKTİF ÜRÜNLERİ FİLTRELE
-                products = products.Where(p => p.IsActive);
+                products = products.Where(p => p.IsActive && p.Price > 0 && p.StockQuantity > 0);
                 
                 // KATEGORİYE GÖRE FİLTRELE
                 if (categoryId.HasValue)
@@ -856,7 +856,7 @@ namespace ECommerce.Business.Services.Managers
                 var products = await _productRepository.GetAllAsync();
                 
                 // Sadece aktif ürünleri filtrele
-                products = products.Where(p => p.IsActive);
+                products = products.Where(p => p.IsActive && p.Price > 0 && p.StockQuantity > 0);
                 
                 // Kategoriye göre filtrele
                 if (categoryId.HasValue)
