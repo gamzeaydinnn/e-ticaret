@@ -124,6 +124,19 @@ const mapProduct = (p = {}) => {
     category: p.category_name || p.category || "",
     categoryId: p.categoryId ?? p.category_id ?? null,
     categoryName: p.categoryName || p.category_name || p.category || "",
+    categorySlug: p.categorySlug || p.category_slug || "",
+    categoryCode:
+      p.categoryCode ||
+      p.category_code ||
+      p.mikroAltGrupKod ||
+      p.MikroAltGrupKod ||
+      "",
+    anagrupCode:
+      p.anagrupCode ||
+      p.anagrup_code ||
+      p.mikroAnaGrupKod ||
+      p.MikroAnaGrupKod ||
+      "",
     price,
     originalPrice,
     discountPrice: special,
@@ -158,10 +171,37 @@ const mapProduct = (p = {}) => {
     orderLimits: p.orderLimits || p.OrderLimits || null,
   };
 
+  // Konserve, dondurulmuş/donuk gıda ve paketli/adetli ürünlerde backend'de eski
+  // isWeightBased=true kalmış olsa bile isStrictVariableWeightProduct false döner.
+  const resolvedWeightBased = isStrictVariableWeightProduct(mapped);
+  const rawLimits = mapped.orderLimits;
+  const sanitizedOrderLimits =
+    !resolvedWeightBased &&
+    rawLimits &&
+    (rawLimits.isWeightBased ||
+      rawLimits.IsWeightBased ||
+      String(rawLimits.unit || rawLimits.Unit || "").toLowerCase() === "kg")
+      ? {
+          ...rawLimits,
+          isWeightBased: false,
+          IsWeightBased: false,
+          unit: "adet",
+          Unit: "adet",
+          minQuantity: 1,
+          MinQuantity: 1,
+          step: 1,
+          Step: 1,
+        }
+      : rawLimits;
+
   return {
     ...mapped,
-    isWeightBased:
-      mapped.isWeightBased || isStrictVariableWeightProduct(mapped),
+    isWeightBased: resolvedWeightBased,
+    unit:
+      !resolvedWeightBased && String(mapped.unit || "").toUpperCase() === "KG"
+        ? "ADET"
+        : mapped.unit,
+    orderLimits: sanitizedOrderLimits,
   };
 };
 
@@ -355,7 +395,10 @@ export const findProductPreview = ({ id, slug, sku } = {}) => {
 // ============================================================
 // PRODUCT SERVICE
 // ============================================================
+export { mapProduct };
+
 export const ProductService = {
+  mapProduct,
   // -----------------------------------------------------------
   // PUBLIC ENDPOINTS (Herkes erişebilir)
   // -----------------------------------------------------------
@@ -431,16 +474,16 @@ export const ProductService = {
             Math.round(
               (1 -
                 (parseFloat(a.specialPrice) || 0) /
-                  (parseFloat(a.price) || 1)) *
-                100,
+                (parseFloat(a.price) || 1)) *
+              100,
             );
           const pctB =
             b.discountPercentage ||
             Math.round(
               (1 -
                 (parseFloat(b.specialPrice) || 0) /
-                  (parseFloat(b.price) || 1)) *
-                100,
+                (parseFloat(b.price) || 1)) *
+              100,
             );
           return pctB - pctA;
         });
@@ -643,7 +686,7 @@ export const ProductService = {
   subscribe: (callback) => {
     if (typeof callback !== "function") {
       console.warn("ProductService.subscribe: callback fonksiyon olmalı");
-      return () => {};
+      return () => { };
     }
 
     subscribers.push(callback);
@@ -946,8 +989,8 @@ export const ProductService = {
           ...group,
           products: Array.isArray(group?.products)
             ? group.products
-                .map((product) => mapProduct(product))
-                .filter((product) => product !== null)
+              .map((product) => mapProduct(product))
+              .filter((product) => product !== null)
             : [],
         })),
       };

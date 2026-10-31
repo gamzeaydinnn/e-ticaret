@@ -200,10 +200,12 @@ export default function ProductGrid({
   }, []);
 
   const filteredProducts = useMemo(() => {
-    if (!categoryId) return [...data];
+    // Backend API kategoriye göre sorgulandığında hem ana kategori hem de alt kategorilerinin ürünlerini döner.
+    // Yalnızca dışarıdan tüm ürün listesi (initialProducts) verilip categoryId ile daraltılmak istendiğinde filtrele.
+    if (!categoryId || !Array.isArray(initialProducts)) return [...data];
     const cid = Number(categoryId);
     return data.filter((p) => Number(p.categoryId) === cid);
-  }, [data, categoryId]);
+  }, [data, categoryId, initialProducts]);
 
   const syncPagination = useCallback(
     (nextPage, nextPageSize) => {

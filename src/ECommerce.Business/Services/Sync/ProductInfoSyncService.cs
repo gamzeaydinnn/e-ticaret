@@ -314,20 +314,29 @@ namespace ECommerce.Business.Services.Sync
                 .Where(p => productIds.Contains(p.Id))
                 .ToDictionaryAsync(p => p.Id, cancellationToken);
 
+            var subCategoryIds = (await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.ParentId.HasValue)
+                .Select(c => c.Id)
+                .ToListAsync(cancellationToken))
+                .ToHashSet();
+
             foreach (var cacheItem in cacheWithGroup)
             {
                 if (!products.TryGetValue(cacheItem.LocalProductId!.Value, out var product))
                     continue;
 
-                // Önce AnagrupKod ile ara (doğru semantik), yoksa GrupKod fallback
-                var lookupKey = !string.IsNullOrEmpty(cacheItem.AnagrupKod)
-                    ? cacheItem.AnagrupKod
-                    : cacheItem.GrupKod!;
+                var normAna = MikroGrupKodHelper.NormalizeAnaKod(cacheItem.AnagrupKod);
+                var normAlt = MikroGrupKodHelper.NormalizeAltKod(cacheItem.GrupKod);
 
-                var mapping = FindBestCategoryMapping(lookupKey, mappingLookup);
+                // Eğer Mikro'da alt grup kodu boşsa ve ürün zaten bir alt kategorideyse ana kategoriye geri düşürme
+                if (string.IsNullOrWhiteSpace(normAlt) && subCategoryIds.Contains(product.CategoryId))
+                    continue;
+
+                var mapping = FindBestCategoryMapping(normAna, normAlt, mappingLookup);
 
                 // Wildcard fallback — hiçbir eşleme bulunamazsa "*" dene
-                mapping ??= FindBestCategoryMapping("*", mappingLookup);
+                mapping ??= FindBestCategoryMapping("*", null, mappingLookup);
 
                 // ADIM 5: Hâlâ mapping yoksa AutoCategoryMappingEngine ile otomatik oluştur
                 // NEDEN: Yeni ürün grupları geldiğinde mapping tablosu boş olabilir.
@@ -496,17 +505,20 @@ namespace ECommerce.Business.Services.Sync
                 }
             }
 
-            // Kategori güncelleme — AnagrupKod öncelikli, GrupKod fallback
+            // Kategori güncelleme — (AnagrupKod + GrupKod) öncelikli, ardından AnagrupKod fallback
             if (categoryMappings != null &&
                 (!string.IsNullOrWhiteSpace(cache.AnagrupKod) || !string.IsNullOrWhiteSpace(cache.GrupKod)))
             {
-                var lookupKey = !string.IsNullOrEmpty(cache.AnagrupKod)
-                    ? cache.AnagrupKod
-                    : cache.GrupKod!;
+                var normAna = MikroGrupKodHelper.NormalizeAnaKod(cache.AnagrupKod);
+                var normAlt = MikroGrupKodHelper.NormalizeAltKod(cache.GrupKod);
 
-                var mapping = FindBestCategoryMapping(lookupKey, categoryMappings)
-                    ?? FindBestCategoryMapping("*", categoryMappings); // wildcard fallback
-                if (mapping != null &&
+                bool alreadyInSubCategory = string.IsNullOrWhiteSpace(normAlt) &&
+                    _context.Categories.AsNoTracking().Any(c => c.Id == product.CategoryId && c.ParentId.HasValue);
+
+                var mapping = FindBestCategoryMapping(normAna, normAlt, categoryMappings)
+                    ?? FindBestCategoryMapping("*", null, categoryMappings); // wildcard fallback
+                if (!alreadyInSubCategory &&
+                    mapping != null &&
                     ProductAdminOverridePolicy.CanSyncCategory(product, overrideDefaults) &&
                     product.CategoryId != mapping.CategoryId)
                 {
@@ -580,7 +592,8 @@ namespace ECommerce.Business.Services.Sync
             List<MikroCategoryMapping> mappings)
         {
             return mappings
-                .GroupBy(m => m.MikroAnagrupKod, StringComparer.OrdinalIgnoreCase)
+                .Where(m => m.IsActive)
+                .GroupBy(m => MikroGrupKodHelper.NormalizeAnaKod(m.MikroAnagrupKod), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     g => g.Key,
                     g => g.OrderByDescending(m => m.Priority).ToList(),
@@ -588,14 +601,34 @@ namespace ECommerce.Business.Services.Sync
         }
 
         /// <summary>
-        /// GrupKod için en iyi eşlemeyi bulur (Priority DESC).
+        /// Önce (AnagrupKod + AltgrupKod) spesifik eşleşmesini arar, bulamazsa (AnagrupKod + null) ana grup eşleşmesine düşer.
         /// </summary>
         private static MikroCategoryMapping? FindBestCategoryMapping(
-            string grupKod,
+            string? anagrupKod,
+            string? altgrupKod,
             Dictionary<string, List<MikroCategoryMapping>> lookup)
         {
-            if (lookup.TryGetValue(grupKod, out var mappings) && mappings.Count > 0)
-                return mappings[0]; // En yüksek priority'li eşleme
+            var normAna = MikroGrupKodHelper.NormalizeAnaKod(anagrupKod);
+            var normAlt = MikroGrupKodHelper.NormalizeAltKod(altgrupKod);
+
+            if (!string.IsNullOrWhiteSpace(normAna) && lookup.TryGetValue(normAna, out var mappings) && mappings.Count > 0)
+            {
+                if (!string.IsNullOrWhiteSpace(normAlt))
+                {
+                    var exactAlt = mappings.FirstOrDefault(m =>
+                        !string.IsNullOrWhiteSpace(m.MikroAltgrupKod) &&
+                        string.Equals(MikroGrupKodHelper.NormalizeAltKod(m.MikroAltgrupKod), normAlt, StringComparison.OrdinalIgnoreCase));
+
+                    if (exactAlt != null)
+                        return exactAlt;
+                }
+
+                var mainOnly = mappings.FirstOrDefault(m => string.IsNullOrWhiteSpace(m.MikroAltgrupKod));
+                if (mainOnly != null)
+                    return mainOnly;
+
+                return mappings[0];
+            }
 
             return null;
         }
@@ -837,12 +870,11 @@ namespace ECommerce.Business.Services.Sync
                 if (!products.TryGetValue(cacheItem.LocalProductId!.Value, out var product))
                     continue;
 
-                var lookupKey = !string.IsNullOrEmpty(cacheItem.AnagrupKod)
-                    ? cacheItem.AnagrupKod
-                    : cacheItem.GrupKod!;
+                var normAna = MikroGrupKodHelper.NormalizeAnaKod(cacheItem.AnagrupKod);
+                var normAlt = MikroGrupKodHelper.NormalizeAltKod(cacheItem.GrupKod);
 
-                var mapping = FindBestCategoryMapping(lookupKey, mappingLookup)
-                    ?? FindBestCategoryMapping("*", mappingLookup);
+                var mapping = FindBestCategoryMapping(normAna, normAlt, mappingLookup)
+                    ?? FindBestCategoryMapping("*", null, mappingLookup);
 
                 if (mapping != null && product.CategoryId != mapping.CategoryId)
                 {

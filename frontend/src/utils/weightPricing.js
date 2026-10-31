@@ -1,4 +1,5 @@
 import {
+  isExcludedFromWeightSale,
   isStrictVariableWeightProduct,
   toWeightBasedProductCandidate,
 } from "./weightBasedProduct";
@@ -21,6 +22,13 @@ const pickPositiveNumber = (...values) => {
 
 export const isResolvedWeightBasedProduct = (item, product) => {
   const mergedProduct = product || item?.product || {};
+  const candidate = toWeightBasedProductCandidate(item, mergedProduct);
+
+  // Konserve, dondurulmuş/donuk gıda ve paketli/adetli ürünler ASLA kg sayılmaz
+  if (isExcludedFromWeightSale(candidate)) {
+    return false;
+  }
+
   const explicitWeightBased =
     item?.isWeightBased === true ||
     item?.IsWeightBased === true ||
@@ -42,14 +50,11 @@ export const isResolvedWeightBasedProduct = (item, product) => {
     return true;
   }
 
-  return isStrictVariableWeightProduct(
-    toWeightBasedProductCandidate(item, mergedProduct),
-  );
+  return isStrictVariableWeightProduct(candidate);
 };
 
 export const getEffectiveUnitPrice = (item, product) => {
   const mergedProduct = product || item?.product || {};
-  const isWeightBased = isResolvedWeightBasedProduct(item, mergedProduct);
   // 🔴 KRİTİK DÜZELTME: Eskimiş pricePerUnit değerlerini tamamen yok sayıyoruz.
   // Her zaman güncel olan unitPrice, specialPrice veya price alanları baz alınacak.
   return pickPositiveNumber(

@@ -4,27 +4,8 @@ using ECommerce.Entities.Enums;
 namespace ECommerce.Business.Helpers
 {
     /// <summary>
-    /// Bir ürünün "değişken ağırlıklı (kg) mı yoksa adet bazlı mı" olduğuna ve
+    /// Bir ürünün "değişken ağırlıklı (kg) mı yoksa adet/paket bazlı mı" olduğuna ve
     /// hangi birim fiyatın kullanılacağına karar veren TEK otorite (Single Source of Truth).
-    ///
-    /// NEDEN BU SINIF VAR?
-    /// Daha önce bu karar dört ayrı yerde (CartManager, PricingEngine, OrderManager ve frontend)
-    /// birbirinden FARKLI kurallarla veriliyordu. Örneğin eski <see cref="WeightBasedProductRules.IsVariableWeightKgProduct"/>
-    /// kuralı, ürün adında "KG" token'ı yoksa <c>IsWeightBased=true</c> ve <c>WeightUnit=Kilogram</c>
-    /// olsa bile ürünü adet sayıyordu. Bu tutarsızlık, sepette gösterilen tutar ile 3D Secure'a giden
-    /// tutarın farklı olmasının kök nedeniydi.
-    ///
-    /// Bu çözümleyici, kararı yapısal/açık verilere (IsWeightBased, WeightUnit, PricePerUnit) öncelik
-    /// vererek tek noktadan üretir; isim+kategori heuristiği yalnızca yapısal veri yetersiz kaldığında
-    /// SON ÇARE olarak kullanılır. Tüm katmanlar bu sınıfı çağırarak aynı sonucu üretmelidir.
-    ///
-    /// ÖNCELİK SIRASI (yüksekten düşüğe):
-    /// 1. Açık bayrak: <c>IsWeightBased == true</c> → kg (admin/senkron açıkça işaretlemiş; en yüksek güven).
-    /// 2. Negatif isim sinyali: "500 GR" / "1 LT" / "ADET" → adet (paketli ürün).
-    /// 3. Yapısal birim: <c>WeightUnit</c> kütle birimi (Kilogram/Gram) → kg.
-    /// 4. Yapısal fiyat: <c>PricePerUnit &gt; 0</c> ve birim Piece değilse → kg.
-    /// 5. Heuristik (son çare): isimde "KG" + uygun kategori ipucu → kg.
-    /// 6. Aksi halde → adet.
     /// </summary>
     public static class WeightBasedProductResolver
     {
@@ -39,20 +20,24 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            // 1) Admin/senkron tarafından AÇIKÇA işaretlenmiş ürünlere koşulsuz güven.
-            //    Bool alanı varsayılan 'false' olduğundan 'true' güçlü bir pozitif sinyaldir
-            //    (biri bilerek set etmiştir); 'false' ise zayıftır (hiç set edilmemiş olabilir).
+            // 1) Paketli ürün / Konserve / Donuk & Dondurulmuş Gıda negatif sinyali HER ŞEYİ EZER.
+            //    NEDEN: Eski senkronlarda "Konserve Meyve & Sebze" (2203), "Donuk Meyve & Sebze" (2204)
+            //    veya isminde "ADET" / "PAKET" / "500 GR" geçen ürünlere yanlışlıkla IsWeightBased=true
+            //    yazılmış olabilir. Bu ürünler kesinlikle paket/adet ile satılır, kg satışı yoktur.
+            if (WeightBasedProductRules.HasPackagedNameSignal(product.Name) ||
+                WeightBasedProductRules.IsPackagedOrExcludedCategory(
+                    product.Category?.Name,
+                    product.Category?.Slug,
+                    product.Category?.MikroAltGrupKod,
+                    product.Category?.MikroAnaGrupKod))
+            {
+                return false;
+            }
+
+            // 2) Negatif sinyal yoksa ve açıkça IsWeightBased=true işaretlenmişse kg.
             if (product.IsWeightBased)
             {
                 return true;
-            }
-
-            // 2) Paketli ürün negatif sinyali, yapısal tahminleri (3-4. adım) EZER.
-            //    NEDEN: Senkron/import sırasında yanlış doldurulmuş WeightUnit veya PricePerUnit,
-            //    "ZEYTİN 500 GR" gibi paketli bir ürünü hatalıca kg'ya çevirmesin.
-            if (WeightBasedProductRules.HasPackagedNameSignal(product.Name))
-            {
-                return false;
             }
 
             // 3) Kütle birimi (kg/gram) tanımlıysa değişken ağırlıklıdır.
@@ -67,8 +52,7 @@ namespace ECommerce.Business.Helpers
                 return true;
             }
 
-            // 5) Yapısal veri yetersiz: mevcut isim+kategori heuristiğine düş (kural çoğaltma yok).
-            //    Kategori navigasyonu yüklenmemişse null geçilir; heuristik güvenli biçimde 'false' döner.
+            // 5) Yapısal veri yetersiz: mevcut isim+kategori heuristiğine düş.
             return WeightBasedProductRules.IsVariableWeightKgProduct(
                 product.Name,
                 product.WeightUnit,
@@ -77,9 +61,6 @@ namespace ECommerce.Business.Helpers
 
         /// <summary>
         /// Ürünün geçerli birim fiyatını döndürür.
-        /// kg ürünlerde TL/kg fiyatı (<c>PricePerUnit</c>) önceliklidir; tanımlı değilse indirimli/normal
-        /// fiyata düşer. Adet ürünlerde indirimli fiyat varsa o, yoksa normal fiyat kullanılır.
-        /// Bu mantık daha önce PricingEngine ve OrderManager içinde kopyalanmıştı; tek noktaya alındı.
         /// </summary>
         public static decimal ResolveUnitPrice(Product? product, bool isWeightBased)
         {
@@ -95,7 +76,6 @@ namespace ECommerce.Business.Helpers
 
         /// <summary>
         /// Tespit ve birim fiyatı tek çağrıda döndüren kolaylık metodu.
-        /// Çağıranların iki ayrı metodu yanlış sırada kullanma riskini azaltır.
         /// </summary>
         public static (bool IsWeightBased, decimal UnitPrice) Resolve(Product? product)
         {
@@ -105,7 +85,6 @@ namespace ECommerce.Business.Helpers
 
         /// <summary>
         /// Birim, kütle bazlı (değişken ağırlıklı satışa uygun) mı?
-        /// Kilogram ve Gram kütle birimidir; Liter/Milliliter (hacim) ve Piece (adet) hariçtir.
         /// </summary>
         private static bool IsMassWeightUnit(WeightUnit unit) =>
             unit is WeightUnit.Kilogram or WeightUnit.Gram;

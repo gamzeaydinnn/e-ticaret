@@ -900,6 +900,9 @@ namespace ECommerce.API.Controllers
                 recategorizeResult = await _productInfoSyncService.RecategorizeAllProductsAsync(HttpContext.RequestAborted);
             }
 
+            // 2.5) Alt grup kodu boş olan veya ana kategoride kalan ürünleri alt kategorilere dağıt
+            await ECommerce.API.Data.CategorySeeder.EnsureProductsClassifiedAsync(_dbContext, _mikroDbService, HttpContext.RequestAborted);
+
             // 3) Kategori bazlı dağılım raporu
             var categoryNameById = await _dbContext.Categories
                 .AsNoTracking()
@@ -1106,15 +1109,32 @@ namespace ECommerce.API.Controllers
                 .GroupBy(p => p.SKU!)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-            var slugToId = await _dbContext.Categories
+            var allCategories = await _dbContext.Categories
                 .AsNoTracking()
-                .ToDictionaryAsync(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+                .ToListAsync(cancellationToken);
 
-            var slugToName = await _dbContext.Categories
-                .AsNoTracking()
-                .ToDictionaryAsync(c => c.Slug, c => c.Name, StringComparer.OrdinalIgnoreCase, cancellationToken);
+            var activeCategoryMap = allCategories
+                .Where(c => c.IsActive)
+                .ToDictionary(c => c.Id);
 
-            var idToSlug = slugToId.ToDictionary(kv => kv.Value, kv => kv.Key);
+            var visibleCategoryIds = activeCategoryMap.Values
+                .Where(c => !c.ParentId.HasValue || activeCategoryMap.ContainsKey(c.ParentId.Value))
+                .Select(c => c.Id)
+                .ToHashSet();
+
+            var slugToId = allCategories
+                .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                .GroupBy(c => c.Slug, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.IsActive).First().Id, StringComparer.OrdinalIgnoreCase);
+
+            var slugToName = allCategories
+                .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                .GroupBy(c => c.Slug, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.IsActive).First().Name, StringComparer.OrdinalIgnoreCase);
+
+            var idToSlug = allCategories
+                .Where(c => !string.IsNullOrWhiteSpace(c.Slug))
+                .ToDictionary(c => c.Id, c => c.Slug);
             var categoryMappings = await LoadActiveCategoryMappingsAsync(cancellationToken);
             var productImageMap = await GetProductImageUrlsMapAsync(cancellationToken);
 
@@ -1167,6 +1187,7 @@ namespace ECommerce.API.Controllers
                     };
                 })
                 .Where(row => row.IsVisible)
+                .Where(row => !row.Product.CategoryId.HasValue || visibleCategoryIds.Contains(row.Product.CategoryId.Value))
                 .Where(row => row.Product.Price > 0)
                 .Where(row => row.Product.StockQuantity > 0)
                 .ToList();
@@ -1348,17 +1369,15 @@ namespace ECommerce.API.Controllers
             if (mikro == null) return NotFound();
 
             // Mikro verisinden ProductListDto inşa et (detay sayfası bu formatı kullanır)
-            var slugToId = await _dbContext.Categories
+            var categoriesList = await _dbContext.Categories
                 .AsNoTracking()
-                .ToDictionaryAsync(c => c.Slug, c => c.Id, StringComparer.OrdinalIgnoreCase);
-            var slugToName = await _dbContext.Categories
-                .AsNoTracking()
-                .ToDictionaryAsync(c => c.Slug, c => c.Name, StringComparer.OrdinalIgnoreCase);
+                .ToListAsync(HttpContext.RequestAborted);
+            var idToCat = categoriesList.ToDictionary(c => c.Id);
 
             var categoryMappings = await LoadActiveCategoryMappingsAsync(HttpContext.RequestAborted);
             var catId = ResolveCategoryId(mikro.AnagrupKod, mikro.GrupKod, categoryMappings)
                 ?? await GetFallbackCategoryIdAsync(HttpContext.RequestAborted);
-            var categorySlug = slugToId.FirstOrDefault(item => item.Value == catId).Key;
+            var resolvedCatName = idToCat.TryGetValue(catId, out var foundCat) ? foundCat.Name : string.Empty;
 
             var dto = new ProductListDto
             {
@@ -1373,7 +1392,7 @@ namespace ECommerce.API.Controllers
                 ImageUrl = string.Empty,
                 Unit = string.IsNullOrWhiteSpace(mikro.Birim) ? "ADET" : mikro.Birim.Trim().ToUpperInvariant(),
                 CategoryId = catId,
-                CategoryName = !string.IsNullOrWhiteSpace(categorySlug) ? slugToName.GetValueOrDefault(categorySlug, string.Empty) : string.Empty,
+                CategoryName = resolvedCatName,
             };
 
             return Ok(dto);
@@ -1466,7 +1485,8 @@ namespace ECommerce.API.Controllers
                 .ToListAsync(cancellationToken);
 
             return mappings
-                .GroupBy(m => m.MikroAnagrupKod, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(m => MikroGrupKodHelper.NormalizeAnaKod(m.MikroAnagrupKod), StringComparer.OrdinalIgnoreCase)
+                .Where(group => !string.IsNullOrWhiteSpace(group.Key))
                 .ToDictionary(
                     group => group.Key,
                     group => group.ToList(),
@@ -1498,13 +1518,6 @@ namespace ECommerce.API.Controllers
                     return fallback;
             }
 
-            var hintedCategory = TryResolveCategoryInfoFromProductName(productName, idToSlug, slugToName);
-            if (hintedCategory.CategoryId.HasValue &&
-                ShouldPreferHintedCategory(normalizedSlug, hintedCategory.CategorySlug))
-            {
-                return hintedCategory;
-            }
-
             return (
                 categoryId,
                 normalizedSlug,
@@ -1516,15 +1529,21 @@ namespace ECommerce.API.Controllers
             string? grupKod,
             Dictionary<string, List<MikroCategoryMapping>> mappings)
         {
-            if (!string.IsNullOrWhiteSpace(anagrupKod) &&
-                mappings.TryGetValue(anagrupKod.Trim(), out var directMappings) &&
+            var normAna = MikroGrupKodHelper.NormalizeAnaKod(anagrupKod);
+            var normAlt = MikroGrupKodHelper.NormalizeAltKod(grupKod);
+
+            if (!string.IsNullOrWhiteSpace(normAna) &&
+                mappings.TryGetValue(normAna, out var directMappings) &&
                 directMappings.Count > 0)
             {
-                if (!string.IsNullOrWhiteSpace(grupKod))
+                if (!string.IsNullOrWhiteSpace(normAlt))
                 {
                     var exactAltgrupMatch = directMappings.FirstOrDefault(mapping =>
                         !string.IsNullOrWhiteSpace(mapping.MikroAltgrupKod) &&
-                        string.Equals(mapping.MikroAltgrupKod, grupKod.Trim(), StringComparison.OrdinalIgnoreCase));
+                        string.Equals(
+                            MikroGrupKodHelper.NormalizeAltKod(mapping.MikroAltgrupKod),
+                            normAlt,
+                            StringComparison.OrdinalIgnoreCase));
 
                     if (exactAltgrupMatch != null)
                         return exactAltgrupMatch.CategoryId;
@@ -1537,8 +1556,8 @@ namespace ECommerce.API.Controllers
                 return (baseMapping ?? directMappings[0]).CategoryId;
             }
 
-            if (!string.IsNullOrWhiteSpace(grupKod) &&
-                mappings.TryGetValue(grupKod.Trim(), out var groupMappings) &&
+            if (!string.IsNullOrWhiteSpace(normAlt) &&
+                mappings.TryGetValue(normAlt, out var groupMappings) &&
                 groupMappings.Count > 0)
             {
                 return groupMappings[0].CategoryId;

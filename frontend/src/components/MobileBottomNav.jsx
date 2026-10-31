@@ -8,7 +8,7 @@
  * - Anasayfa, Kategoriler, Sepetim, Kampanyalar, Hesabım navigasyonu
  * - Aktif sayfa vurgulaması
  * - Sepet badge ile ürün sayısı gösterimi
- * - Kategoriler açılır panel (API'den dinamik)
+ * - Kategoriler açılır panel (API'den dinamik, alt kategori destekli)
  * - Touch-friendly buton boyutları (min 44x44px)
  * - CSS-only responsive görünürlük (performans için)
  *
@@ -56,7 +56,7 @@ const getCategoryIcon = (name) => {
     temizlik: "fa-spray-can-sparkles",
   };
 
-  const lowerName = name.toLowerCase();
+  const lowerName = (name || "").toLowerCase();
   for (const [key, icon] of Object.entries(iconMap)) {
     if (lowerName.includes(key)) return icon;
   }
@@ -130,8 +130,9 @@ const MobileBottomNav = () => {
   const favoriteCount = favorites?.length ?? 0;
   const [showCategories, setShowCategories] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [expandedCatId, setExpandedCatId] = useState(null);
 
-  // Kategorileri API'den yükle (yalnızca ana kategoriler)
+  // Kategorileri API'den yükle (ana kategoriler + alt kategoriler)
   useEffect(() => {
     const loadCategories = async () => {
       try {
@@ -179,7 +180,19 @@ const MobileBottomNav = () => {
   const handleCategoryClick = (cat) => {
     const slug = normalizeCategorySlug(cat.slug || createSlug(cat.name));
     setShowCategories(false);
+    setExpandedCatId(null);
     navigate(`/category/${slug}`);
+  };
+
+  /**
+   * Alt kategori seçme handler'ı
+   */
+  const handleSubCategoryClick = (cat, sub) => {
+    const slug = normalizeCategorySlug(cat.slug || createSlug(cat.name));
+    const subSlug = normalizeCategorySlug(sub.slug || createSlug(sub.name));
+    setShowCategories(false);
+    setExpandedCatId(null);
+    navigate(`/category/${slug}#${subSlug}`);
   };
 
   return (
@@ -207,18 +220,101 @@ const MobileBottomNav = () => {
                   Yükleniyor...
                 </div>
               ) : (
-                categories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className="category-panel-item"
-                    onClick={() => handleCategoryClick(cat)}
-                  >
-                    <i className={`fas ${getCategoryIcon(cat.name)} me-3`}></i>
-                    <span>{cat.name}</span>
-                    <i className="fas fa-chevron-right ms-auto"></i>
-                  </button>
-                ))
+                categories.map((cat) => {
+                  const subs = (
+                    cat.subCategories ||
+                    cat.children ||
+                    cat.SubCategories ||
+                    cat.Children ||
+                    []
+                  ).filter((sc) => (sc?.isActive ?? sc?.IsActive) !== false);
+                  const hasSubs = subs.length > 0;
+                  const isExpanded = expandedCatId === cat.id;
+
+                  return (
+                    <div key={cat.id}>
+                      <div className="d-flex align-items-center">
+                        <button
+                          type="button"
+                          className="category-panel-item flex-grow-1"
+                          onClick={() => handleCategoryClick(cat)}
+                        >
+                          <i
+                            className={`fas ${getCategoryIcon(cat.name)} me-3`}
+                          ></i>
+                          <span>{cat.name}</span>
+                          {!hasSubs && (
+                            <i className="fas fa-chevron-right ms-auto"></i>
+                          )}
+                        </button>
+                        {hasSubs && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedCatId((prev) =>
+                                prev === cat.id ? null : cat.id,
+                              );
+                            }}
+                            aria-label={`${cat.name} alt kategorileri`}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              padding: "14px 18px",
+                              color: isExpanded ? "#ff6b35" : "#64748b",
+                              cursor: "pointer",
+                            }}
+                          >
+                            <i
+                              className={`fas fa-chevron-${
+                                isExpanded ? "up" : "down"
+                              }`}
+                            ></i>
+                          </button>
+                        )}
+                      </div>
+
+                      {hasSubs && isExpanded && (
+                        <div
+                          style={{
+                            background: "#fffaf5",
+                            borderTop: "1px solid #fff0e5",
+                            borderBottom: "1px solid #fff0e5",
+                            padding: "6px 16px 8px 44px",
+                          }}
+                        >
+                          {subs.map((sub) => (
+                            <button
+                              key={sub.id ?? sub.Id ?? sub.slug}
+                              type="button"
+                              onClick={() => handleSubCategoryClick(cat, sub)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                width: "100%",
+                                padding: "9px 10px",
+                                background: "none",
+                                border: "none",
+                                textAlign: "left",
+                                fontSize: "0.88rem",
+                                fontWeight: 500,
+                                color: "#334155",
+                                borderRadius: "8px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <i
+                                className="fas fa-angle-right me-2"
+                                style={{ color: "#ff6b35", fontSize: "0.75rem" }}
+                              ></i>
+                              <span>{sub.name || sub.Name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

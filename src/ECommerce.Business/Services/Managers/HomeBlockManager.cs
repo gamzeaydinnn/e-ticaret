@@ -601,7 +601,7 @@ namespace ECommerce.Business.Services.Managers
                 case "category":
                     if (categoryId.HasValue)
                     {
-                        // Alt kategorileri de dahil et
+                        // Alt kategorileri ve birleşik navbar kardeş kategorilerini de dahil et
                         var categoryIds = await GetCategoryWithChildrenIdsAsync(categoryId.Value);
                         query = query.Where(p => categoryIds.Contains(p.CategoryId));
                     }
@@ -845,23 +845,45 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// Kategori ve alt kategorilerinin ID'lerini getirir
-        /// Recursive olarak tüm alt kategorileri bulur
+        /// Kategori ve alt kategorilerinin (ve birleşik navbar grubu kardeşlerinin) ID'lerini getirir.
+        /// Kategori pasifse boş liste döner.
         /// </summary>
         private async Task<List<int>> GetCategoryWithChildrenIdsAsync(int categoryId)
         {
-            var result = new List<int> { categoryId };
-
-            // Alt kategorileri bul
-            var childCategories = await _context.Categories
-                .Where(c => c.ParentId == categoryId && c.IsActive)
-                .Select(c => c.Id)
+            var activeCategories = await _context.Categories
+                .AsNoTracking()
+                .Where(c => c.IsActive)
                 .ToListAsync();
 
-            foreach (var childId in childCategories)
+            var target = activeCategories.FirstOrDefault(c => c.Id == categoryId);
+            if (target == null)
             {
-                result.AddRange(await GetCategoryWithChildrenIdsAsync(childId));
+                return new List<int>();
             }
+
+            if (target.ParentId.HasValue)
+            {
+                return activeCategories.Any(c => c.Id == target.ParentId.Value)
+                    ? new List<int> { target.Id }
+                    : new List<int>();
+            }
+
+            var rootIds = new HashSet<int> { target.Id };
+            if (!string.IsNullOrWhiteSpace(target.NavbarGroupKey) &&
+                string.Equals(target.Slug, target.NavbarGroupKey, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var sibling in activeCategories.Where(c =>
+                    c.ParentId == null &&
+                    string.Equals(c.NavbarGroupKey, target.NavbarGroupKey, StringComparison.OrdinalIgnoreCase)))
+                {
+                    rootIds.Add(sibling.Id);
+                }
+            }
+
+            var result = new List<int>(rootIds);
+            result.AddRange(activeCategories
+                .Where(c => c.ParentId.HasValue && rootIds.Contains(c.ParentId.Value))
+                .Select(c => c.Id));
 
             return result;
         }

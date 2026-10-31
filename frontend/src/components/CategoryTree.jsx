@@ -1,25 +1,27 @@
 /**
  * CategoryTree.jsx
  *
- * Hiyerarşik kategori ağacı component'i
- * Admin panelinde kategorileri tree yapısında gösterir
- *
- * @author E-Ticaret Projesi - Hierarchical Category System
- * @version 1.0.0
+ * Hiyerarşik kategori ağacı component'i (Mikro ERP grup kodları ve Aktif/Pasif yönetimi ile)
  */
 
 import React, { useState } from "react";
 
-/**
- * Tekil kategori node'u (recursive)
- */
-const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
+const CategoryTreeNode = ({
+  category,
+  onEdit,
+  onDelete,
+  onToggleActive,
+  onAddSubCategory,
+  level = 0,
+}) => {
   const [expanded, setExpanded] = useState(true);
-  const hasChildren = category.children?.length > 0;
+  const children = category.children || category.subCategories || [];
+  const hasChildren = children.length > 0;
+  const mikroAna = category.mikroAnaGrupKod || category.MikroAnaGrupKod || "";
+  const mikroAlt = category.mikroAltGrupKod || category.MikroAltGrupKod || "";
 
   return (
     <div className="category-tree-node">
-      {/* Node Container */}
       <div
         className="d-flex align-items-center py-2 px-3 rounded mb-1 position-relative"
         style={{
@@ -32,26 +34,13 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
             level === 0
               ? "1px solid rgba(249, 115, 22, 0.2)"
               : "1px solid rgba(0,0,0,0.05)",
+          opacity: category.isActive === false ? 0.65 : 1,
           transition: "all 0.2s ease",
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background =
-            level === 0
-              ? "linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(251, 146, 60, 0.15))"
-              : "rgba(240, 240, 240, 0.8)";
-          e.currentTarget.style.transform = "translateX(2px)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background =
-            level === 0
-              ? "linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(251, 146, 60, 0.08))"
-              : "rgba(245, 245, 245, 0.5)";
-          e.currentTarget.style.transform = "translateX(0)";
-        }}
       >
-        {/* Expand/Collapse Button */}
-        {hasChildren && (
+        {hasChildren ? (
           <button
+            type="button"
             onClick={() => setExpanded(!expanded)}
             className="btn btn-sm p-0 me-2 border-0 bg-transparent"
             style={{ width: "20px", height: "20px" }}
@@ -62,16 +51,13 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
               style={{
                 fontSize: "0.7rem",
                 color: level === 0 ? "#f97316" : "#6b7280",
-                transition: "transform 0.2s ease",
               }}
             ></i>
           </button>
+        ) : (
+          <div style={{ width: "28px" }}></div>
         )}
 
-        {/* Spacer for alignment when no children */}
-        {!hasChildren && <div style={{ width: "28px" }}></div>}
-
-        {/* Category Icon */}
         <div
           className="d-flex align-items-center justify-content-center rounded me-2"
           style={{
@@ -81,9 +67,7 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
             background:
               level === 0
                 ? "linear-gradient(135deg, #f97316, #fb923c)"
-                : level === 1
-                  ? "linear-gradient(135deg, #3b82f6, #60a5fa)"
-                  : "linear-gradient(135deg, #8b5cf6, #a78bfa)",
+                : "linear-gradient(135deg, #3b82f6, #60a5fa)",
           }}
         >
           {category.imageUrl ? (
@@ -108,9 +92,11 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
           )}
         </div>
 
-        {/* Category Name */}
         <div className="flex-grow-1 me-2">
-          <div className="d-flex align-items-center" style={{ gap: "8px" }}>
+          <div
+            className="d-flex flex-wrap align-items-center"
+            style={{ gap: "6px" }}
+          >
             <span
               className="fw-semibold"
               style={{
@@ -121,20 +107,25 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
               {category.name}
             </span>
 
-            {/* Active/Inactive Badge */}
+            {(mikroAna || mikroAlt) && (
+              <span
+                className="badge bg-dark text-white"
+                style={{ fontSize: "0.6rem", padding: "0.18em 0.5em" }}
+                title="Mikro ERP Grup Kodu"
+              >
+                Mikro: {mikroAlt ? `${mikroAna} / ${mikroAlt}` : mikroAna}
+              </span>
+            )}
+
             <span
               className={`badge rounded-pill ${
                 category.isActive ? "bg-success" : "bg-secondary"
               }`}
-              style={{
-                fontSize: "0.6rem",
-                padding: "0.15em 0.4em",
-              }}
+              style={{ fontSize: "0.6rem", padding: "0.15em 0.45em" }}
             >
-              {category.isActive ? "Aktif" : "Pasif"}
+              {category.isActive ? "Sitede Aktif" : "Sitede Gizli (Pasif)"}
             </span>
 
-            {/* Product Count */}
             {category.productCount > 0 && (
               <span
                 className="badge bg-light text-dark"
@@ -149,22 +140,17 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
               </span>
             )}
 
-            {/* Children Count */}
             {hasChildren && (
               <span
                 className="badge bg-info text-white"
-                style={{
-                  fontSize: "0.6rem",
-                  padding: "0.15em 0.4em",
-                }}
+                style={{ fontSize: "0.6rem", padding: "0.15em 0.4em" }}
               >
                 <i className="fas fa-sitemap me-1"></i>
-                {category.children.length} alt
+                {children.length} alt
               </span>
             )}
           </div>
 
-          {/* Description */}
           {category.description && (
             <small
               className="text-muted d-block mt-1"
@@ -173,7 +159,7 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                maxWidth: "300px",
+                maxWidth: "360px",
               }}
             >
               {category.description}
@@ -181,9 +167,52 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="d-flex gap-1">
+        <div className="d-flex flex-wrap gap-1">
+          {level === 0 && onAddSubCategory && (
+            <button
+              type="button"
+              className="btn btn-sm btn-success"
+              style={{
+                padding: "0.25rem 0.5rem",
+                fontSize: "0.68rem",
+                lineHeight: 1,
+              }}
+              onClick={() => onAddSubCategory(category)}
+              title="Bu ana kategoriye yeni alt kategori ekle (Mikro'ya da kaydedilir)"
+            >
+              + Alt
+            </button>
+          )}
+          {onToggleActive && (
+            <button
+              type="button"
+              className={`btn btn-sm ${
+                category.isActive
+                  ? "btn-outline-warning"
+                  : "btn-outline-success"
+              }`}
+              style={{
+                padding: "0.25rem 0.5rem",
+                fontSize: "0.68rem",
+                lineHeight: 1,
+              }}
+              onClick={() => onToggleActive(category)}
+              title={
+                category.isActive
+                  ? "Sitede gizle (Pasife al)"
+                  : "Sitede göster (Aktife al)"
+              }
+            >
+              <i
+                className={`fas ${
+                  category.isActive ? "fa-eye-slash" : "fa-eye"
+                } me-1`}
+              ></i>
+              {category.isActive ? "Pasife Al" : "Aktif Yap"}
+            </button>
+          )}
           <button
+            type="button"
             className="btn btn-sm btn-outline-primary"
             style={{
               padding: "0.25rem 0.5rem",
@@ -196,6 +225,7 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
             <i className="fas fa-edit"></i>
           </button>
           <button
+            type="button"
             className="btn btn-sm btn-outline-danger"
             style={{
               padding: "0.25rem 0.5rem",
@@ -210,15 +240,16 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
         </div>
       </div>
 
-      {/* Children (Recursive) */}
       {hasChildren && expanded && (
         <div className="category-tree-children">
-          {category.children.map((child) => (
+          {children.map((child) => (
             <CategoryTreeNode
               key={child.id}
               category={child}
               onEdit={onEdit}
               onDelete={onDelete}
+              onToggleActive={onToggleActive}
+              onAddSubCategory={onAddSubCategory}
               level={level + 1}
             />
           ))}
@@ -228,10 +259,13 @@ const CategoryTreeNode = ({ category, onEdit, onDelete, level = 0 }) => {
   );
 };
 
-/**
- * Ana CategoryTree Component
- */
-export default function CategoryTree({ categories, onEdit, onDelete }) {
+export default function CategoryTree({
+  categories,
+  onEdit,
+  onDelete,
+  onToggleActive,
+  onAddSubCategory,
+}) {
   if (!categories || categories.length === 0) {
     return (
       <div className="text-center py-5">
@@ -241,7 +275,7 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
         ></i>
         <h6 className="text-muted">Henüz kategori yok</h6>
         <p className="text-muted small">
-          Yeni kategori eklemek için "Yeni" butonuna tıklayın
+          Yeni kategori eklemek için &quot;Ana kategori&quot; butonuna tıklayın
         </p>
       </div>
     );
@@ -249,7 +283,6 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
 
   return (
     <div className="category-tree">
-      {/* Header */}
       <div
         className="d-flex align-items-center justify-content-between mb-3 p-3 rounded"
         style={{
@@ -259,8 +292,11 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
       >
         <div>
           <h6 className="mb-0 fw-bold" style={{ color: "#1e293b" }}>
-            <i className="fas fa-sitemap me-2" style={{ color: "#f97316" }}></i>
-            Kategori Hiyerarşisi
+            <i
+              className="fas fa-sitemap me-2"
+              style={{ color: "#f97316" }}
+            ></i>
+            Mikro ERP Kategori Hiyerarşisi
           </h6>
           <small className="text-muted" style={{ fontSize: "0.7rem" }}>
             Toplam {categories.length} ana kategori
@@ -270,7 +306,7 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
         <div className="d-flex gap-2">
           <span className="badge bg-success" style={{ fontSize: "0.7rem" }}>
             <i className="fas fa-check-circle me-1"></i>
-            Aktif Kategoriler
+            Aktif / Pasif Yönetimi
           </span>
           <span className="badge bg-info" style={{ fontSize: "0.7rem" }}>
             <i className="fas fa-layer-group me-1"></i>
@@ -279,7 +315,6 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
         </div>
       </div>
 
-      {/* Tree Nodes */}
       <div className="category-tree-container">
         {categories.map((category) => (
           <CategoryTreeNode
@@ -287,29 +322,11 @@ export default function CategoryTree({ categories, onEdit, onDelete }) {
             category={category}
             onEdit={onEdit}
             onDelete={onDelete}
+            onToggleActive={onToggleActive}
+            onAddSubCategory={onAddSubCategory}
             level={0}
           />
         ))}
-      </div>
-
-      {/* Legend */}
-      <div
-        className="mt-3 p-2 rounded"
-        style={{
-          background: "rgba(249, 115, 22, 0.05)",
-          border: "1px dashed rgba(249, 115, 22, 0.3)",
-        }}
-      >
-        <small
-          className="text-muted d-flex align-items-center gap-2"
-          style={{ fontSize: "0.65rem" }}
-        >
-          <i className="fas fa-info-circle" style={{ color: "#f97316" }}></i>
-          <span>
-            <strong>İpucu:</strong> Kategorileri genişletmek için ok simgesine
-            tıklayın. Alt kategorisi olan kategoriler silinemez.
-          </span>
-        </small>
       </div>
     </div>
   );

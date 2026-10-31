@@ -253,7 +253,7 @@ export const getPromoBanners = async () => {
 
 /**
  * Şef Tavsiyesi / Tarif posterlerini getirir (sadece aktif olanlar)
- * Ana sayfa "Ne Pişirsem?" bölümü için kullanılır
+ * Ana sayfa "Şef Tavsiyesi" bölümü için kullanılır
  * Önerilen boyut: 600x300 piksel (2:1 oran, yan yana 2 poster için ideal)
  *
  * @returns {Promise<Array>} Tarif poster listesi
@@ -390,7 +390,7 @@ export const getBannerById = async (id) => {
  * @param {string} bannerData.title - Başlık (zorunlu)
  * @param {string} bannerData.imageUrl - Görsel URL (zorunlu)
  * @param {string} [bannerData.linkUrl] - Tıklanınca gidilecek URL
- * @param {string} [bannerData.bannerType] - Banner tipi (slider/promo/banner)
+ * @param {string} [bannerData.bannerType] - Banner tipi (slider/promo/banner/recipe)
  * @param {string} [bannerData.position] - Konum (homepage-top/homepage-middle vb.)
  * @param {number} [bannerData.displayOrder] - Görüntüleme sırası
  * @param {boolean} [bannerData.isActive] - Aktif mi?
@@ -407,15 +407,20 @@ export const createBanner = async (bannerData) => {
   }
 
   try {
+    const resolvedType = bannerData.bannerType || bannerData.type || "slider";
     // API'ye gönderilecek veriyi hazırla (backend 'type' field'ını bekliyor)
     const payload = {
       title: bannerData.title.trim(),
       imageUrl: bannerData.imageUrl.trim(),
       linkUrl: bannerData.linkUrl?.trim() || "",
-      type: bannerData.bannerType || bannerData.type || "slider",
+      type: resolvedType,
       position:
         bannerData.position ||
-        (bannerData.type === "promo" ? "homepage-middle" : "homepage-top"),
+        (resolvedType === "promo"
+          ? "homepage-middle"
+          : resolvedType === "recipe"
+            ? "homepage-recipe"
+            : "homepage-top"),
       displayOrder: Number(bannerData.displayOrder) || 0,
       isActive: bannerData.isActive !== false, // default true
       subTitle: bannerData.subTitle?.trim() || "",
@@ -452,16 +457,21 @@ export const updateBanner = async (id, bannerData) => {
   }
 
   try {
+    const resolvedType = bannerData.bannerType || bannerData.type || "slider";
     // API'ye gönderilecek veriyi hazırla (backend 'type' field'ını bekliyor)
     const payload = {
       id: Number(id),
       title: bannerData.title.trim(),
       imageUrl: bannerData.imageUrl.trim(),
       linkUrl: bannerData.linkUrl?.trim() || "",
-      type: bannerData.bannerType || bannerData.type || "slider",
+      type: resolvedType,
       position:
         bannerData.position ||
-        (bannerData.type === "promo" ? "homepage-middle" : "homepage-top"),
+        (resolvedType === "promo"
+          ? "homepage-middle"
+          : resolvedType === "recipe"
+            ? "homepage-recipe"
+            : "homepage-top"),
       displayOrder: Number(bannerData.displayOrder) || 0,
       isActive: bannerData.isActive !== false,
       subTitle: bannerData.subTitle?.trim() || "",

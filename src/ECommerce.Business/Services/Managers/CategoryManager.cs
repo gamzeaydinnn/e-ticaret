@@ -37,7 +37,7 @@ namespace ECommerce.Business.Services.Managers
                 );
             }
             
-            // 2. Bğ ürün kontrolü — FK_Products_Categories_CategoryId constraint
+            // 2. Bağlı ürün kontrolü — FK_Products_Categories_CategoryId constraint
             var productCount = await _categoryRepository.GetProductCountAsync(category.Id);
             if (productCount > 0)
             {
@@ -132,15 +132,21 @@ namespace ECommerce.Business.Services.Managers
 
         /// <summary>
         /// Hiyerarşik kategori ağacını döndürür
-        /// Sadece aktif kategorileri içerir
+        /// Sadece aktif kategorileri içerir (vitrin için, 'diger' hariç)
         /// </summary>
         public async Task<IEnumerable<CategoryTreeDto>> GetCategoryTreeAsync()
         {
             var allCategories = await _categoryRepository.GetAllWithRelationsAsync();
-            var categoryList = allCategories.ToList();
+            var categoryList = allCategories
+                .Where(c => c.IsActive && !string.Equals(c.Slug, "diger", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             
             // Root kategorileri bul (ParentId == null)
-            var rootCategories = categoryList.Where(c => c.ParentId == null).ToList();
+            var rootCategories = categoryList
+                .Where(c => c.ParentId == null)
+                .OrderBy(c => c.SortOrder)
+                .ThenBy(c => c.Name)
+                .ToList();
             
             // DTO'ya dönüştür ve ağacı oluştur
             var tree = new List<CategoryTreeDto>();
@@ -150,7 +156,31 @@ namespace ECommerce.Business.Services.Managers
                 tree.Add(dto);
             }
             
-            return tree.OrderBy(c => c.SortOrder);
+            return tree;
+        }
+
+        /// <summary>
+        /// Admin paneli için aktif ve pasif tüm kategorileri içeren hiyerarşik kategori ağacını döndürür.
+        /// </summary>
+        public async Task<IEnumerable<CategoryTreeDto>> GetAdminCategoryTreeAsync()
+        {
+            var allCategories = await _categoryRepository.GetAllWithRelationsIncludingInactiveAsync();
+            var categoryList = allCategories.ToList();
+
+            var rootCategories = categoryList
+                .Where(c => c.ParentId == null)
+                .OrderBy(c => c.SortOrder)
+                .ThenBy(c => c.Name)
+                .ToList();
+
+            var tree = new List<CategoryTreeDto>();
+            foreach (var root in rootCategories)
+            {
+                var dto = await MapToCategoryTreeDto(root, categoryList);
+                tree.Add(dto);
+            }
+
+            return tree;
         }
 
         /// <summary>
@@ -168,12 +198,19 @@ namespace ECommerce.Business.Services.Managers
                 ParentId = category.ParentId,
                 SortOrder = category.SortOrder,
                 IsActive = category.IsActive,
+                MikroAnaGrupKod = category.MikroAnaGrupKod,
+                MikroAltGrupKod = category.MikroAltGrupKod,
+                NavbarGroupKey = category.NavbarGroupKey,
                 ProductCount = await _categoryRepository.GetProductCountAsync(category.Id),
                 Children = new List<CategoryTreeDto>()
             };
 
             // Alt kategorileri bul ve recursive olarak ekle
-            var children = allCategories.Where(c => c.ParentId == category.Id).OrderBy(c => c.SortOrder).ToList();
+            var children = allCategories
+                .Where(c => c.ParentId == category.Id)
+                .OrderBy(c => c.SortOrder)
+                .ThenBy(c => c.Name)
+                .ToList();
             foreach (var child in children)
             {
                 var childDto = await MapToCategoryTreeDto(child, allCategories);

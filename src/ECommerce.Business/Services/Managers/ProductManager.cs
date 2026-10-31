@@ -10,7 +10,6 @@ using ECommerce.Core.DTOs;
 using ECommerce.Core.DTOs.ProductReview;            // Product DTO
 using ECommerce.Core.Helpers;
 using ECommerce.Data.Context;
-using ECommerce.Core.Interfaces;
 using ECommerce.Business.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -60,7 +59,82 @@ namespace ECommerce.Business.Services.Managers
         {
         }
 
-    public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string? query, int page = 1, int size = 10)
+        /// <summary>
+        /// Verilen kategori ID'si için (ana kategori ise aktif alt kategorileri ve varsa birleşik navbar kardeş kategorileri dahil)
+        /// eşleşen aktif kategori ID kümesini döndürür. Kategori veya üst kategorisi pasifse boş küme döner.
+        /// </summary>
+        private async Task<HashSet<int>> ResolveMatchingCategoryIdsAsync(int categoryId)
+        {
+            if (_dbContext == null)
+            {
+                return new HashSet<int> { categoryId };
+            }
+
+            var activeCategories = await _dbContext.Categories
+                .AsNoTracking()
+                .Where(c => c.IsActive)
+                .ToListAsync();
+
+            var target = activeCategories.FirstOrDefault(c => c.Id == categoryId);
+            if (target == null)
+            {
+                return new HashSet<int>();
+            }
+
+            if (target.ParentId.HasValue)
+            {
+                var parentActive = activeCategories.Any(c => c.Id == target.ParentId.Value);
+                return parentActive ? new HashSet<int> { target.Id } : new HashSet<int>();
+            }
+
+            var rootIds = new HashSet<int> { target.Id };
+            if (!string.IsNullOrWhiteSpace(target.NavbarGroupKey) &&
+                string.Equals(target.Slug, target.NavbarGroupKey, StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var sibling in activeCategories.Where(c =>
+                    c.ParentId == null &&
+                    string.Equals(c.NavbarGroupKey, target.NavbarGroupKey, StringComparison.OrdinalIgnoreCase)))
+                {
+                    rootIds.Add(sibling.Id);
+                }
+            }
+
+            var result = new HashSet<int>(rootIds);
+            foreach (var sub in activeCategories.Where(c => c.ParentId.HasValue && rootIds.Contains(c.ParentId.Value)))
+            {
+                result.Add(sub.Id);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Vitrinde görünür (aktif, 'diger' olmayan ve üst kategorisi de aktif olan) tüm kategori ID'lerini döner.
+        /// </summary>
+        private async Task<HashSet<int>?> GetVisibleStorefrontCategoryIdsAsync()
+        {
+            if (_dbContext == null)
+            {
+                return null;
+            }
+
+            var activeCategories = await _dbContext.Categories
+                .AsNoTracking()
+                .Where(c => c.IsActive && c.Slug != "diger")
+                .ToListAsync();
+
+            var activeRootIds = activeCategories
+                .Where(c => c.ParentId == null)
+                .Select(c => c.Id)
+                .ToHashSet();
+
+            return activeCategories
+                .Where(c => !c.ParentId.HasValue || activeRootIds.Contains(c.ParentId.Value))
+                .Select(c => c.Id)
+                .ToHashSet();
+        }
+
+        public async Task<IEnumerable<ProductListDto>> SearchProductsAsync(string? query, int page = 1, int size = 10)
         {
             if (string.IsNullOrWhiteSpace(query))
                 return Enumerable.Empty<ProductListDto>();
@@ -71,6 +145,11 @@ namespace ECommerce.Business.Services.Managers
 
             // Tüm kataloğu RAM'e çekme — DB filtre + skorlama (autocomplete hızı)
             var candidates = await _productRepository.SearchAsync(term);
+            var visibleCategoryIds = await GetVisibleStorefrontCategoryIdsAsync();
+            if (visibleCategoryIds != null)
+            {
+                candidates = candidates.Where(p => visibleCategoryIds.Contains(p.CategoryId));
+            }
 
             var pagedProducts = candidates
                 .Select(p => (
@@ -108,12 +187,23 @@ namespace ECommerce.Business.Services.Managers
             });
         }
 
-    public async Task<IEnumerable<ProductListDto>> GetProductsAsync(string? query = null, int? categoryId = null, int page = 1, int pageSize = 20)
+        public async Task<IEnumerable<ProductListDto>> GetProductsAsync(string? query = null, int? categoryId = null, int page = 1, int pageSize = 20)
         {
             var products = await _productRepository.GetAllAsync();
 
             if (categoryId.HasValue)
-                products = products.Where(p => p.CategoryId == categoryId.Value);
+            {
+                var matchingCategoryIds = await ResolveMatchingCategoryIdsAsync(categoryId.Value);
+                products = products.Where(p => matchingCategoryIds.Contains(p.CategoryId));
+            }
+            else
+            {
+                var visibleCategoryIds = await GetVisibleStorefrontCategoryIdsAsync();
+                if (visibleCategoryIds != null)
+                {
+                    products = products.Where(p => visibleCategoryIds.Contains(p.CategoryId));
+                }
+            }
 
             if (!string.IsNullOrEmpty(query))
             {
@@ -138,8 +228,8 @@ namespace ECommerce.Business.Services.Managers
             }
 
             products = products
-                               .Skip((page - 1) * pageSize)
-                               .Take(pageSize);
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize);
 
             return products.Select(p => new ProductListDto
             {
@@ -578,10 +668,16 @@ namespace ECommerce.Business.Services.Managers
             size = Math.Clamp(size, 1, 100);
             var isDescending = string.Equals(direction, "desc", StringComparison.OrdinalIgnoreCase);
 
+            var matchingCategoryIds = await ResolveMatchingCategoryIdsAsync(categoryId);
+            if (matchingCategoryIds.Count == 0)
+            {
+                return new PagedResult<ProductListDto>(new List<ProductListDto>(), 0, (page - 1) * size, size);
+            }
+
             if (_dbContext == null)
             {
                 var products = (await _productRepository.GetAllAsync())
-                    .Where(p => p.IsActive && p.CategoryId == categoryId && p.StockQuantity > 0 && GetDisplayPrice(p) > 0);
+                    .Where(p => p.IsActive && matchingCategoryIds.Contains(p.CategoryId) && p.StockQuantity > 0 && GetDisplayPrice(p) > 0);
 
                 if (inStock.HasValue)
                     products = inStock.Value
@@ -604,7 +700,7 @@ namespace ECommerce.Business.Services.Managers
                 .AsNoTracking()
                 .Include(p => p.Category)
                 .Include(p => p.Brand)
-                .Where(p => p.IsActive && p.CategoryId == categoryId && p.StockQuantity > 0 && (p.SpecialPrice.HasValue && p.SpecialPrice.Value > 0 && p.SpecialPrice.Value < p.Price || p.Price > 0));
+                .Where(p => p.IsActive && matchingCategoryIds.Contains(p.CategoryId) && p.StockQuantity > 0 && (p.SpecialPrice.HasValue && p.SpecialPrice.Value > 0 && p.SpecialPrice.Value < p.Price || p.Price > 0));
 
             if (inStock.HasValue)
                 query = inStock.Value
@@ -735,9 +831,20 @@ namespace ECommerce.Business.Services.Managers
                 // SADECE AKTİF ÜRÜNLERİ FİLTRELE
                 products = products.Where(p => p.IsActive && p.Price > 0 && p.StockQuantity > 0);
                 
-                // KATEGORİYE GÖRE FİLTRELE
+                // KATEGORİYE GÖRE FİLTRELE (Ana kategori ise aktif alt kategorileri de dahil edilir)
                 if (categoryId.HasValue)
-                    products = products.Where(p => p.CategoryId == categoryId.Value);
+                {
+                    var matchingCategoryIds = await ResolveMatchingCategoryIdsAsync(categoryId.Value);
+                    products = products.Where(p => matchingCategoryIds.Contains(p.CategoryId));
+                }
+                else
+                {
+                    var visibleCategoryIds = await GetVisibleStorefrontCategoryIdsAsync();
+                    if (visibleCategoryIds != null)
+                    {
+                        products = products.Where(p => visibleCategoryIds.Contains(p.CategoryId));
+                    }
+                }
 
                 products = products.Skip((page - 1) * size).Take(size);
 
@@ -780,11 +887,13 @@ namespace ECommerce.Business.Services.Managers
                 SpecialPrice = product.SpecialPrice,
                 StockQuantity = product.StockQuantity,
                 ImageUrl = product.ImageUrl,
-                Brand = product.Brand?.Name ?? string.Empty,
+                Brand = pBrandName(product),
                 CategoryId = product.CategoryId,
                 CategoryName = product.Category?.Name ?? string.Empty
             };
         }
+
+        private static string pBrandName(Product product) => product.Brand?.Name ?? string.Empty;
 
         public async Task AddProductReviewAsync(int productId, int userId, ProductReviewCreateDto reviewDto)
         {
@@ -858,9 +967,20 @@ namespace ECommerce.Business.Services.Managers
                 // Sadece aktif ürünleri filtrele
                 products = products.Where(p => p.IsActive && p.Price > 0 && p.StockQuantity > 0);
                 
-                // Kategoriye göre filtrele
+                // Kategoriye göre filtrele (Ana kategori ise aktif alt kategorileri ve birleşik grup alt kategorileri dahil edilir)
                 if (categoryId.HasValue)
-                    products = products.Where(p => p.CategoryId == categoryId.Value);
+                {
+                    var matchingCategoryIds = await ResolveMatchingCategoryIdsAsync(categoryId.Value);
+                    products = products.Where(p => matchingCategoryIds.Contains(p.CategoryId));
+                }
+                else
+                {
+                    var visibleCategoryIds = await GetVisibleStorefrontCategoryIdsAsync();
+                    if (visibleCategoryIds != null)
+                    {
+                        products = products.Where(p => visibleCategoryIds.Contains(p.CategoryId));
+                    }
+                }
 
                 // DTO'ya çevir, kampanya ve sipariş limitlerini ekle
                 var limitSettings = await GetLimitSettingsAsync();
@@ -900,6 +1020,7 @@ namespace ECommerce.Business.Services.Managers
         private ProductListDto MapToDto(Product product)
         {
             var imageUrls = GetProductImageUrls(product);
+            var isWeightBased = WeightBasedProductResolver.ResolveIsWeightBased(product);
             return new ProductListDto
             {
                 Id = product.Id,
@@ -918,8 +1039,8 @@ namespace ECommerce.Business.Services.Managers
                 AdminOverrideName = product.AdminOverrideName,
                 AdminOverridePrice = product.AdminOverridePrice,
                 AdminOverrideCategory = product.AdminOverrideCategory,
-                IsWeightBased = WeightBasedProductResolver.ResolveIsWeightBased(product),
-                Unit = MapWeightUnitLabel(product.WeightUnit),
+                IsWeightBased = isWeightBased,
+                Unit = !isWeightBased ? "ADET" : MapWeightUnitLabel(product.WeightUnit),
                 MaxOrderQuantity = product.MaxOrderQuantity,
                 MinOrderQuantity = product.MinOrderQuantity,
                 QuantityStep = product.QuantityStep,

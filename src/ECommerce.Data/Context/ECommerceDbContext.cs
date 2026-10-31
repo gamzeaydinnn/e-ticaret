@@ -269,6 +269,13 @@ namespace ECommerce.Data.Context
                 entity.ToTable("Categories");
                 entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.MikroAnaGrupKod).HasMaxLength(25);
+                entity.Property(e => e.MikroAltGrupKod).HasMaxLength(25);
+                entity.Property(e => e.MikroIsim).HasMaxLength(100);
+                entity.Property(e => e.NavbarGroupKey).HasMaxLength(60);
+
+                entity.HasIndex(e => new { e.MikroAnaGrupKod, e.MikroAltGrupKod })
+                      .HasDatabaseName("IX_Categories_MikroKod");
 
                 entity.HasOne(e => e.Parent)
                       .WithMany(e => e.SubCategories)

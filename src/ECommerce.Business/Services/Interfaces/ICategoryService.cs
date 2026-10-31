@@ -16,8 +16,11 @@ namespace ECommerce.Business.Services.Interfaces
         Task<Category?> GetBySlugAsync(string slug);
         Task<int> GetCategoryCountAsync();
         
-        // ✨ YENİ: Hiyerarşik kategori ağacı
+        // ✨ YENİ: Hiyerarşik kategori ağacı (sadece aktif kategoriler - vitrin için)
         Task<IEnumerable<CategoryTreeDto>> GetCategoryTreeAsync();
+
+        // ✨ YENİ: Hiyerarşik kategori ağacı (aktif + pasif tüm kategoriler - admin için)
+        Task<IEnumerable<CategoryTreeDto>> GetAdminCategoryTreeAsync();
         
         // ✨ YENİ: Sadece ana kategoriler (üst kategorisi olmayanlar)
         Task<IEnumerable<Category>> GetRootCategoriesAsync();

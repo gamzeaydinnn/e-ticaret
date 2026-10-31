@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 using ECommerce.Entities.Enums;
 
@@ -7,9 +10,50 @@ namespace ECommerce.Business.Helpers
     public static class WeightBasedProductRules
     {
         private static readonly Regex FixedWeightPattern =
-            new(@"\b\d+(?:[.,]\d+)?\s*(GR|KG|LT|ML|CL|L)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            new(@"\b\d+(?:[.,]\d+)?\s*(GR|G|GRAM|KG|LT|ML|CL|L)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex StandaloneKgPattern =
             new(@"\bKG\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex PackagedPieceNamePattern =
+            new(@"\b(ADET|AD|PAKET|PK|DEMET|BAG|BAĞ|KUTU|KAVANOZ|TENEKE|POSET|POŞET|SISE|ŞİŞE|KOLI|KOLİ|TABAK|FILE|FİLE)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex CannedOrFrozenNamePattern =
+            new(@"\b(KONSERVE|KONSERVESI|KONSERVESİ|DONUK|DONDURULMUS|DONDURULMUŞ|DONDURMA|TURSU|TURŞU|GARNITUR|GARNİTÜR|KOZLENMIS|KÖZLENMİŞ|HASLANMIS|HAŞLANMIŞ|SUPERFRESH|FEAST)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Konserve, dondurulmuş/donuk gıda, dondurma, turşu ve paketli alt kategorilerde
+        /// kesinlikle kg (açık tartım) satışı yoktur; bu ürünler paket/adet ile satılır.
+        /// </summary>
+        private static readonly string[] NonWeightCategoryHints =
+        {
+            "KONSERVE",
+            "TURSU",
+            "TURŞU",
+            "DONUK",
+            "DONDURULMUS",
+            "DONDURULMUŞ",
+            "DONDURMA",
+            "PAKETLI",
+            "PAKETLİ",
+            "PAKET KURUYEMIS",
+            "PAKET KURUYEMİŞ",
+        };
+
+        private static readonly HashSet<string> NonWeightCategoryCodes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "2203", // Konserve Meyve & Sebze
+            "2204", // Donuk Meyve & Sebze
+            "703",  // Konserve & Turşu
+            "1102", // Paket Kuruyemiş
+            "1300", // Dondurulmuş Gıda (Ana Grup)
+            "1301", // Dondurulmuş Balık & Deniz Ürünleri
+            "1302", // Dondurulmuş Piliç Ürünleri
+            "1303", // Dondurulmuş Et Ürünleri
+            "1304", // Dondurulmuş Sebze & Meyve
+            "1305", // Dondurulmuş Pasta & Unlu Mamuller
+            "1306", // Diğer Dondurulmuş Gıda
+            "800",  // Dondurma (Ana Grup)
+            "801",  // Kap Dondurma
+            "802",  // Tek Dondurma
+        };
 
         /// <summary>
         /// Açık tartımla satılan kategori ipuçları (isimde "KG" olmasa da kg).
@@ -21,9 +65,9 @@ namespace ECommerce.Business.Helpers
             "SEBZE",
             "YESILLIK",
             "YEŞİLLİK",
-            "OT",
             "KASAP",
-            "ET",
+            "KIRMIZI ET",
+            "BEYAZ ET",
             "TAVUK",
             "BALIK",
             "DENIZ",
@@ -35,6 +79,8 @@ namespace ECommerce.Business.Helpers
             "ZEYTIN",
             "ZEYTİN",
             // Kuruyemiş / bakliyat (açık satılan)
+            "ACIK KURUYEMIS",
+            "AÇIK KURUYEMİŞ",
             "KURUYEMIS",
             "KURUYEMİŞ",
             "KURU YEMIS",
@@ -45,7 +91,7 @@ namespace ECommerce.Business.Helpers
         };
 
         /// <summary>
-        /// Açık kg/gr ile satılan ürün adı anahtarları (paketli "250 GR" hariç).
+        /// Açık kg/gr ile satılan ürün adı anahtarları (paketli "250 GR", konserve ve donuk hariç).
         /// Mikro birimi ADET olsa bile badem/fındık vb. tartılı ürün sayılır.
         /// </summary>
         private static readonly string[] VariableWeightNameHints =
@@ -99,20 +145,13 @@ namespace ECommerce.Business.Helpers
 
         /// <summary>
         /// Senkron/import (Mikro) katmanı için kalıcı <c>Product.IsWeightBased</c> bayrağını TÜRETİR.
-        ///
-        /// <see cref="WeightBasedProductResolver"/>'dan farkı: mevcut (muhtemelen bayat) bayrağa GÜVENMEZ;
-        /// kararı yalnızca kaynak sistemin yapısal verisinden (WeightUnit) ve üründen üretir. Böylece bir
-        /// ürün Mikro'da kg→adet değişirse bayrak doğru biçimde 'false'a güncellenir.
-        ///
-        /// Kural: Paketli isim sinyali ("500 GR"/"ADET") yoksa VE (kütle birimi Kilogram/Gram VEYA
-        /// isim+kategori heuristiği doğruysa) → tartılı (kg).
         /// </summary>
         public static bool DeriveIsWeightBasedForSync(
             string? productName,
             WeightUnit weightUnit,
             string? categoryNameOrCode)
         {
-            if (HasPackagedNameSignal(productName))
+            if (HasPackagedNameSignal(productName) || IsPackagedOrExcludedCategory(categoryNameOrCode))
             {
                 return false;
             }
@@ -123,7 +162,8 @@ namespace ECommerce.Business.Helpers
         }
 
         /// <summary>
-        /// İsimde sabit gramaj/hacim ("500 GR", "1 LT") veya "ADET" geçiyor mu?
+        /// İsimde sabit gramaj/hacim ("500 GR", "1 LT"), paket/adet birimi ("ADET", "PAKET", "KAVANOZ")
+        /// veya konserve/dondurulmuş ("KONSERVE", "DONUK", "DONDURULMUŞ") geçiyor mu?
         /// true → ürün paketli/adet bazlıdır ve değişken ağırlıklı (kg) DEĞİLDİR.
         /// </summary>
         public static bool HasPackagedNameSignal(string? productName)
@@ -135,7 +175,40 @@ namespace ECommerce.Business.Helpers
             }
 
             return FixedWeightPattern.IsMatch(normalizedName)
-                || Regex.IsMatch(normalizedName, @"\bADET\b", RegexOptions.IgnoreCase);
+                || PackagedPieceNamePattern.IsMatch(normalizedName)
+                || CannedOrFrozenNamePattern.IsMatch(normalizedName);
+        }
+
+        /// <summary>
+        /// Kategori adı, slug veya Mikro grup kodu konserve, dondurulmuş/donuk gıda, dondurma veya paketli
+        /// bir alt kategoriye mi ait? True dönerse ürün ASLA kg ile satılmaz.
+        /// </summary>
+        public static bool IsPackagedOrExcludedCategory(
+            string? categoryNameOrCode,
+            string? categorySlug = null,
+            string? mikroAltGrupKod = null,
+            string? mikroAnaGrupKod = null)
+        {
+            var codes = new[] { categoryNameOrCode, mikroAltGrupKod, mikroAnaGrupKod };
+            foreach (var raw in codes)
+            {
+                var trimmed = (raw ?? string.Empty).Trim();
+                if (!string.IsNullOrEmpty(trimmed) && NonWeightCategoryCodes.Contains(trimmed))
+                {
+                    return true;
+                }
+            }
+
+            var combinedText = NormalizeForHintMatch(
+                string.Join(" ", new[] { categoryNameOrCode, categorySlug }.Where(s => !string.IsNullOrWhiteSpace(s))));
+
+            if (string.IsNullOrWhiteSpace(combinedText))
+            {
+                return false;
+            }
+
+            return NonWeightCategoryHints.Any(h =>
+                combinedText.Contains(NormalizeForHintMatch(h)));
         }
 
         /// <summary>
@@ -153,7 +226,7 @@ namespace ECommerce.Business.Helpers
                 return false;
             }
 
-            if (HasPackagedNameSignal(productName))
+            if (HasPackagedNameSignal(productName) || IsPackagedOrExcludedCategory(categoryNameOrCode))
             {
                 return false;
             }

@@ -364,6 +364,10 @@ builder.Services.Configure<ECommerce.Infrastructure.Config.SiteSettings>(
 builder.Services.Configure<ECommerce.Infrastructure.Config.MikroSettings>(
     builder.Configuration.GetSection("MikroSettings"));
 
+// Mikro stok grupları (ana/alt) — YALNIZCA OKUMA. Kategori ağacı senkronu için.
+builder.Services.AddSingleton<ECommerce.Infrastructure.Services.MicroServices.IMikroGrupDbService,
+    ECommerce.Infrastructure.Services.MicroServices.MikroGrupDbService>();
+
 // Mikro resilience (Polly Circuit Breaker + Retry) ayarları
 builder.Services.Configure<ECommerce.Infrastructure.Config.MikroResilienceSettings>(
     builder.Configuration.GetSection("MikroResilience"));
@@ -1020,6 +1024,9 @@ using (var scope = app.Services.CreateScope())
         // Migration — pending yoksa DB'ye dokunmaz
         ApplyDatabaseMigrations(db, logger);
 
+        // Mikro Kategori kolonlarını idempotent olarak garantile (EF sorgularından önce)
+        EnsureCategoryMikroColumns(db, logger);
+
         // Seeder'lar — hepsi idempotent (zaten var ise atlanır)
         logger.LogInformation("[SEED] IdentitySeeder başlatılıyor...");
         IdentitySeeder.SeedAsync(services).GetAwaiter().GetResult();
@@ -1031,7 +1038,8 @@ using (var scope = app.Services.CreateScope())
         BannerSeeder.SeedAsync(services).GetAwaiter().GetResult();
 
         logger.LogInformation("[SEED] CategorySeeder başlatılıyor...");
-        CategorySeeder.SeedAsync(db).GetAwaiter().GetResult();
+        var mikroGrupDb = services.GetService<ECommerce.Infrastructure.Services.MicroServices.IMikroGrupDbService>();
+        CategorySeeder.SeedAsync(db, mikroGrupDb, services.GetService<ECommerce.Infrastructure.Services.MicroServices.IMikroDbService>()).GetAwaiter().GetResult();
 
         logger.LogInformation("[SEED] LegacySeedProductCleanup başlatılıyor...");
         LegacySeedProductCleanup.RunAsync(services).GetAwaiter().GetResult();
@@ -1320,5 +1328,47 @@ static void EnsureMigrationHistoryTable(ECommerceDbContext db, ILogger logger)
     {
         logger.LogInformation("[DB-INIT] __EFMigrationsHistory tablosu oluşturuluyor...");
         historyRepository.CreateIfNotExists();
+    }
+}
+
+/// <summary>
+/// Categories tablosunda Mikro ERP entegrasyon kolonlarının ve indeksinin mevcut olduğunu
+/// idempotent (COL_LENGTH kontrolü ile) garantiler.
+/// </summary>
+static void EnsureCategoryMikroColumns(ECommerceDbContext db, ILogger logger)
+{
+    const string sql = @"
+IF OBJECT_ID('dbo.Categories', 'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('dbo.Categories', 'MikroAnaGrupKod') IS NULL
+        ALTER TABLE dbo.Categories ADD MikroAnaGrupKod NVARCHAR(25) NULL;
+
+    IF COL_LENGTH('dbo.Categories', 'MikroAltGrupKod') IS NULL
+        ALTER TABLE dbo.Categories ADD MikroAltGrupKod NVARCHAR(25) NULL;
+
+    IF COL_LENGTH('dbo.Categories', 'MikroIsim') IS NULL
+        ALTER TABLE dbo.Categories ADD MikroIsim NVARCHAR(100) NULL;
+
+    IF COL_LENGTH('dbo.Categories', 'IsMikroSynced') IS NULL
+        ALTER TABLE dbo.Categories ADD IsMikroSynced BIT NOT NULL CONSTRAINT DF_Categories_IsMikroSynced DEFAULT(0);
+
+    IF COL_LENGTH('dbo.Categories', 'LastMikroSyncAt') IS NULL
+        ALTER TABLE dbo.Categories ADD LastMikroSyncAt DATETIME2 NULL;
+
+    IF COL_LENGTH('dbo.Categories', 'NavbarGroupKey') IS NULL
+        ALTER TABLE dbo.Categories ADD NavbarGroupKey NVARCHAR(60) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Categories_MikroKod' AND object_id = OBJECT_ID('dbo.Categories'))
+        CREATE NONCLUSTERED INDEX IX_Categories_MikroKod ON dbo.Categories(MikroAnaGrupKod, MikroAltGrupKod);
+END";
+
+    try
+    {
+        db.Database.ExecuteSqlRaw(sql);
+        logger.LogInformation("[DB-INIT] ✅ Categories Mikro ERP kolonları doğrulandı.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "[DB-INIT] Categories Mikro ERP kolon kontrolü sırasında uyarı: {Message}", ex.Message);
     }
 }

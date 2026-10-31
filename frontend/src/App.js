@@ -133,6 +133,7 @@ import homeBlockService from "./services/homeBlockService";
 import ProductBlockSection from "./pages/components/ProductBlockSection";
 import PromoBannerSection from "./components/PromoBannerSection";
 import CategoryDiscoverSection from "./components/CategoryDiscoverSection";
+import { RecipesPage, RecipeDetailPage } from "./pages/RecipePages";
 import { subscribe, SUBSCRIPTION_SOURCES } from "./services/newsletterService";
 import { CampaignService } from "./services/campaignService";
 // 3D Secure Ödeme Callback Sayfaları
@@ -148,16 +149,74 @@ import ActiveOrdersBadge from "./components/ActiveOrdersBadge";
 import "./styles/mobileNav.css";
 import "./styles/panelMobile.css"; // Panel sayfaları için mobil stiller
 
-const HEADER_FALLBACK_CATEGORIES = [
-  { id: "fallback-et", name: "Et ve Et Ürünleri", slug: "et-ve-et-urunleri" },
-  { id: "fallback-sut", name: "Süt Ürünleri", slug: "sut-ve-sut-urunleri" },
-  { id: "fallback-meyve", name: "Meyve ve Sebze", slug: "meyve-ve-sebze" },
-  { id: "fallback-icecek", name: "İçecekler", slug: "icecekler" },
-  { id: "fallback-atistirmalik", name: "Atıştırmalık", slug: "atistirmalik" },
-  { id: "fallback-temizlik", name: "Temizlik", slug: "temizlik" },
-  { id: "fallback-temel", name: "Temel Gıda", slug: "temel-gida" },
-  { id: "fallback-ev-mutfak", name: "Ev ve Mutfak", slug: "ev-ve-mutfak" },
+const NAVBAR_PILL_SLOTS = [
+  {
+    key: "ev-ve-mutfak",
+    name: "Ev & Mutfak",
+    slug: "ev-ve-mutfak",
+    groupSlugs: ["ev-ve-mutfak", "ev-yasam"],
+  },
+  {
+    key: "et-ve-et-urunleri",
+    name: "Et Ürünleri",
+    slug: "et-ve-et-urunleri",
+    groupSlugs: ["et-ve-et-urunleri", "et-ve-tavuk"],
+  },
+  {
+    key: "sut-ve-sut-urunleri",
+    name: "Süt Ürünleri",
+    slug: "sut-ve-sut-urunleri",
+    groupSlugs: ["sut-ve-sut-urunleri", "sut-kahvalti"],
+  },
+  {
+    key: "meyve-ve-sebze",
+    name: "Meyve ve Sebze",
+    slug: "meyve-ve-sebze",
+    groupSlugs: ["meyve-ve-sebze"],
+  },
+  {
+    key: "icecekler",
+    name: "İçecekler",
+    slug: "icecekler",
+    groupSlugs: ["icecekler"],
+  },
+  {
+    key: "atistirmalik",
+    name: "Atıştırmalık",
+    slug: "atistirmalik",
+    groupSlugs: ["atistirmalik", "kuruyemis"],
+  },
+  {
+    key: "dondurma-ve-dondurulmus-gida",
+    name: "Dondurulmuş Gıda",
+    slug: "dondurma-ve-dondurulmus-gida",
+    groupSlugs: [
+      "dondurma-ve-dondurulmus-gida",
+      "dondurulmus-gida",
+      "dondurma",
+    ],
+  },
+  {
+    key: "temizlik",
+    name: "Temizlik",
+    slug: "temizlik",
+    groupSlugs: ["temizlik", "ev-bakim-temizlik", "kagit-islak-mendil"],
+  },
+  {
+    key: "temel-gida",
+    name: "Temel Gıda",
+    slug: "temel-gida",
+    groupSlugs: ["temel-gida"],
+  },
 ];
+
+const HEADER_FALLBACK_CATEGORIES = NAVBAR_PILL_SLOTS.map((slot) => ({
+  id: `fallback-${slot.key}`,
+  name: slot.name,
+  slug: slot.slug,
+  navbarGroupKey: slot.key,
+  subCategories: [],
+}));
 
 function Header() {
   const { count: cartCount, lineCount: cartLineCount } = useCartCount();
@@ -167,6 +226,7 @@ function Header() {
   const { openLoginModal } = useLoginModal();
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [allRootCategories, setAllRootCategories] = useState([]);
   const [hoveredCat, setHoveredCat] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
   const navRef = React.useRef(null);
@@ -174,6 +234,79 @@ function Header() {
   const closeTimerRef = React.useRef(null);
   const [categoryScrollLeft, setCategoryScrollLeft] = useState(false);
   const [categoryScrollRight, setCategoryScrollRight] = useState(false);
+
+  // Slug oluşturma fonksiyonu
+  const createSlug = (name) => {
+    return String(name || "")
+      .toLowerCase()
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ı/g, "i")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ü/g, "u")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim();
+  };
+
+  const buildNavbarPillsFromTree = React.useCallback((rootCats) => {
+    if (!Array.isArray(rootCats) || rootCats.length === 0) {
+      return HEADER_FALLBACK_CATEGORIES;
+    }
+
+    const pills = [];
+    for (const slot of NAVBAR_PILL_SLOTS) {
+      const matchedRoots = rootCats.filter((c) => {
+        if (!c || c.isActive === false) return false;
+        const navKey = String(c.navbarGroupKey || c.NavbarGroupKey || "")
+          .trim()
+          .toLowerCase();
+        const rawSlug = String(
+          c.slug || c.Slug || createSlug(c.name || c.Name),
+        )
+          .trim()
+          .toLowerCase();
+        const normSlug = normalizeCategorySlug(rawSlug);
+        return (
+          navKey === slot.key ||
+          slot.groupSlugs.includes(rawSlug) ||
+          slot.groupSlugs.includes(normSlug)
+        );
+      });
+
+      if (matchedRoots.length === 0) continue;
+
+      const mergedSubsMap = new Map();
+      for (const rootCat of matchedRoots) {
+        const subs =
+          rootCat.subCategories || rootCat.children || rootCat.Children || [];
+        for (const sub of subs) {
+          if (!sub || sub.isActive === false) continue;
+          const subId = sub.id ?? sub.Id;
+          if (subId != null && !mergedSubsMap.has(subId)) {
+            mergedSubsMap.set(subId, {
+              id: subId,
+              name: sub.name ?? sub.Name,
+              slug:
+                sub.slug ?? sub.Slug ?? createSlug(sub.name ?? sub.Name ?? ""),
+            });
+          }
+        }
+      }
+
+      pills.push({
+        id: `nav-pill-${slot.key}`,
+        name: slot.name,
+        slug: slot.slug,
+        navbarGroupKey: slot.key,
+        subCategories: Array.from(mergedSubsMap.values()),
+      });
+    }
+
+    return pills.length > 0 ? pills : HEADER_FALLBACK_CATEGORIES;
+  }, []);
 
   const updateCategoryScrollState = React.useCallback(() => {
     const el = categoryScrollRef.current;
@@ -222,9 +355,9 @@ function Header() {
     };
   }, [categories.length, updateCategoryScrollState]);
 
-  // Dropdown'u geçikmeyle kapat (mouse gap'ten geçerken iptal edebiliriz)
+  // Dropdown'u gecikmeyle kapat (mouse gap'ten geçerken iptal edebiliriz)
   const scheduleClose = () => {
-    closeTimerRef.current = setTimeout(() => setHoveredCat(null), 120);
+    closeTimerRef.current = setTimeout(() => setHoveredCat(null), 130);
   };
   const cancelClose = (catId) => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -237,22 +370,23 @@ function Header() {
   React.useEffect(() => {
     const loadCategories = async () => {
       try {
-        // getCategoryTree: her kategori subCategories dizisiyle gelir
         const tree = await categoryServiceReal.getCategoryTree();
         const rootCats = Array.isArray(tree)
-          ? tree.filter((c) => c.isActive !== false)
+          ? tree.filter((c) => c && c.isActive !== false)
           : [];
-        setCategories(
-          rootCats.length > 0 ? rootCats : HEADER_FALLBACK_CATEGORIES,
-        );
+        setAllRootCategories(rootCats);
+        setCategories(buildNavbarPillsFromTree(rootCats));
       } catch (err) {
         console.error("[Header] Kategoriler yüklenemedi:", err.message);
-        // Fallback: düz liste
         try {
           const cats = await categoryServiceReal.getActive();
-          const rootOnly = (cats || []).filter((c) => !c.parentId);
-          setCategories(rootOnly.length > 0 ? rootOnly : HEADER_FALLBACK_CATEGORIES);
+          const rootOnly = (cats || []).filter(
+            (c) => !c.parentId && c.isActive !== false,
+          );
+          setAllRootCategories(rootOnly);
+          setCategories(buildNavbarPillsFromTree(rootOnly));
         } catch {
+          setAllRootCategories([]);
           setCategories(HEADER_FALLBACK_CATEGORIES);
         }
       }
@@ -261,7 +395,7 @@ function Header() {
     loadCategories();
     const unsubscribe = categoryServiceReal.subscribe(loadCategories);
     return () => unsubscribe && unsubscribe();
-  }, []);
+  }, [buildNavbarPillsFromTree]);
 
   const handleAccountClick = () => {
     if (user) {
@@ -275,22 +409,6 @@ function Header() {
     setShowUserDropdown(false);
     await logout();
     navigate("/");
-  };
-
-  // Slug oluşturma fonksiyonu
-  const createSlug = (name) => {
-    return name
-      .toLowerCase()
-      .replace(/ç/g, "c")
-      .replace(/ğ/g, "g")
-      .replace(/ı/g, "i")
-      .replace(/ö/g, "o")
-      .replace(/ş/g, "s")
-      .replace(/ü/g, "u")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .trim();
   };
 
   // Dropdown dışına tıklama ile kapatma
@@ -684,64 +802,54 @@ function Header() {
               ref={categoryScrollRef}
               className="category-scroll-container"
             >
-            <button
-              className={
-                "category-btn" + (location.pathname === "/" ? " active" : "")
-              }
-              type="button"
-              onClick={() => navigate("/")}
-            >
-              KATEGORİLER
-            </button>
-
-            {categories.map((cat) => {
-              const slug = normalizeCategorySlug(
-                cat.slug || createSlug(cat.name),
-              );
-              const isActive = location.pathname.startsWith(`/category/${slug}`);
-              const subs = cat.subCategories || cat.children || [];
-              const hasSubCats = subs.length > 0;
-
-              return (
-                <div
-                  key={cat.id}
-                  className="category-item-wrap"
-                  onMouseEnter={(e) => {
-                    cancelClose();
-                    if (!hasSubCats) return;
-                    const navRect = navRef.current?.getBoundingClientRect();
-                    const btnRect = e.currentTarget.getBoundingClientRect();
-                    setDropdownPos({
-                      top: navRect ? navRect.bottom + 2 : btnRect.bottom + 2,
-                      left: btnRect.left,
-                    });
-                    setHoveredCat(cat.id);
-                  }}
-                  onMouseLeave={() => scheduleClose()}
+              {/* KATEGORİLER Butonu + Tüm Aktif Ana Kategoriler Mega-Menü */}
+              <div
+                className="category-item-wrap"
+                onMouseEnter={(e) => {
+                  cancelClose();
+                  if (allRootCategories.length === 0) return;
+                  const navRect = navRef.current?.getBoundingClientRect();
+                  const btnRect = e.currentTarget.getBoundingClientRect();
+                  setDropdownPos({
+                    top: navRect ? navRect.bottom + 2 : btnRect.bottom + 2,
+                    left: Math.max(16, btnRect.left),
+                  });
+                  setHoveredCat("ALL_MEGA");
+                }}
+                onMouseLeave={() => scheduleClose()}
+              >
+                <button
+                  className={
+                    "category-btn" +
+                    (location.pathname === "/kategoriler" ||
+                    location.pathname === "/"
+                      ? " active"
+                      : "")
+                  }
+                  type="button"
+                  onClick={() => navigate("/kategoriler")}
                 >
-                  {/* Ana kategori butonu */}
-                  <button
-                    className={"category-btn" + (isActive ? " active" : "")}
-                    type="button"
-                    onClick={() => navigate(`/category/${slug}`)}
-                    style={hasSubCats ? { paddingRight: "20px" } : {}}
-                  >
-                    {cat.name.toUpperCase()}
-                    {hasSubCats && (
-                      <i
-                        className="fas fa-chevron-down"
-                        style={{
-                          fontSize: "0.55rem",
-                          marginLeft: "4px",
-                          opacity: 0.7,
-                          transition: "transform 0.2s",
-                          transform: hoveredCat === cat.id ? "rotate(180deg)" : "rotate(0deg)",
-                        }}
-                      />
-                    )}
-                  </button>
+                  KATEGORİLER
+                  {allRootCategories.length > 0 && (
+                    <i
+                      className="fas fa-chevron-down"
+                      style={{
+                        fontSize: "0.55rem",
+                        marginLeft: "5px",
+                        opacity: 0.85,
+                        transition: "transform 0.2s",
+                        transform:
+                          hoveredCat === "ALL_MEGA"
+                            ? "rotate(180deg)"
+                            : "rotate(0deg)",
+                      }}
+                    />
+                  )}
+                </button>
 
-                  {hasSubCats && hoveredCat === cat.id && createPortal(
+                {hoveredCat === "ALL_MEGA" &&
+                  allRootCategories.length > 0 &&
+                  createPortal(
                     <div
                       style={{
                         position: "fixed",
@@ -749,74 +857,290 @@ function Header() {
                         left: dropdownPos.left,
                         zIndex: 999999,
                         background: "#fff",
-                        borderRadius: "10px",
-                        boxShadow: "0 8px 30px rgba(255,107,53,0.18)",
-                        minWidth: "190px",
-                        padding: "6px 0",
-                        border: "1px solid rgba(255,107,53,0.2)",
+                        borderRadius: "14px",
+                        boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
+                        width: "min(760px, calc(100vw - 32px))",
+                        maxHeight: "72vh",
+                        overflowY: "auto",
+                        padding: "14px 16px",
+                        border: "1px solid rgba(255,107,53,0.22)",
                         pointerEvents: "auto",
                       }}
-                      onMouseEnter={() => cancelClose(cat.id)}
+                      onMouseEnter={() => cancelClose("ALL_MEGA")}
                       onMouseLeave={() => scheduleClose()}
                     >
-                      {/* Üst kategori: Tümü linki */}
-                      <button
-                        style={{
-                          display: "block", width: "100%", padding: "9px 16px",
-                          background: "none", border: "none", textAlign: "left",
-                          fontSize: "0.8rem", fontWeight: "700",
-                          color: "#ff6b35", cursor: "pointer",
-                          borderBottom: "1px solid #fff3eb", marginBottom: "4px",
-                        }}
-                        onClick={() => { cancelClose(); setHoveredCat(null); navigate(`/category/${slug}`); }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = "#fff3eb"}
-                        onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                      <div
+                        className="d-flex align-items-center justify-content-between pb-2 mb-2"
+                        style={{ borderBottom: "1px solid #fff3eb" }}
                       >
-                        <i className="fas fa-th-large me-2" style={{ fontSize: "0.7rem" }}></i>
-                        Tümü — {cat.name}
-                      </button>
-                      {/* Alt kategoriler */}
-                      {subs.map((sub) => {
-                        const subSlug = normalizeCategorySlug(sub.slug || createSlug(sub.name));
-                        return (
-                          <button
-                            key={sub.id}
-                            style={{
-                              display: "block", width: "100%", padding: "8px 16px",
-                              background: "none", border: "none", textAlign: "left",
-                              fontSize: "0.82rem", color: "#333",
-                              cursor: "pointer", transition: "background 0.12s",
-                            }}
-                            onClick={() => { cancelClose(); setHoveredCat(null); navigate(`/category/${subSlug}`); }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = "#fff3eb"; e.currentTarget.style.color = "#ff6b35"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "#333"; }}
-                          >
-                            <i className="fas fa-chevron-right me-2" style={{ fontSize: "0.6rem", color: "#ff6b35" }}></i>
-                            {sub.name}
-                          </button>
-                        );
-                      })}
-                    </div>,
-                    document.body
-                  )}
-                </div>
-              );
-            })}
+                        <span
+                          style={{
+                            fontSize: "0.82rem",
+                            fontWeight: 700,
+                            color: "#ff6b35",
+                          }}
+                        >
+                          <i className="fas fa-th-large me-2"></i>
+                          Tüm Reyonlar
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            cancelClose();
+                            setHoveredCat(null);
+                            navigate("/kategoriler");
+                          }}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            fontSize: "0.76rem",
+                            fontWeight: 600,
+                            color: "#ff6b35",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Tümünü Gör →
+                        </button>
+                      </div>
 
-            <button
-              className="category-btn"
-              type="button"
-              onClick={() => (window.location.href = "/favorites")}
-            >
-              FAVORİLERİM
-            </button>
-            <button
-              className="category-btn"
-              type="button"
-              onClick={() => navigate("/campaigns")}
-            >
-              KAMPANYALAR
-            </button>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fill, minmax(165px, 1fr))",
+                          gap: "8px",
+                        }}
+                      >
+                        {allRootCategories.map((rootCat) => {
+                          const rootSlug = normalizeCategorySlug(
+                            rootCat.slug || createSlug(rootCat.name),
+                          );
+                          return (
+                            <button
+                              key={rootCat.id}
+                              type="button"
+                              onClick={() => {
+                                cancelClose();
+                                setHoveredCat(null);
+                                navigate(`/category/${rootSlug}`);
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                width: "100%",
+                                padding: "8px 11px",
+                                background: "#fafafa",
+                                border: "1px solid #f1f5f9",
+                                borderRadius: "8px",
+                                textAlign: "left",
+                                fontSize: "0.8rem",
+                                fontWeight: 600,
+                                color: "#1e293b",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "#fff3eb";
+                                e.currentTarget.style.borderColor = "#fed7aa";
+                                e.currentTarget.style.color = "#ea580c";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "#fafafa";
+                                e.currentTarget.style.borderColor = "#f1f5f9";
+                                e.currentTarget.style.color = "#1e293b";
+                              }}
+                            >
+                              <span className="text-truncate">
+                                {rootCat.name}
+                              </span>
+                              <i
+                                className="fas fa-chevron-right ms-1"
+                                style={{
+                                  fontSize: "0.6rem",
+                                  color: "#ff6b35",
+                                  flexShrink: 0,
+                                }}
+                              ></i>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>,
+                    document.body,
+                  )}
+              </div>
+
+              {categories.map((cat) => {
+                const slug = normalizeCategorySlug(
+                  cat.slug || createSlug(cat.name),
+                );
+                const isActive = location.pathname.startsWith(
+                  `/category/${slug}`,
+                );
+                const subs = cat.subCategories || cat.children || [];
+                const hasSubCats = subs.length > 0;
+
+                return (
+                  <div
+                    key={cat.id}
+                    className="category-item-wrap"
+                    onMouseEnter={(e) => {
+                      cancelClose();
+                      if (!hasSubCats) return;
+                      const navRect = navRef.current?.getBoundingClientRect();
+                      const btnRect = e.currentTarget.getBoundingClientRect();
+                      setDropdownPos({
+                        top: navRect ? navRect.bottom + 2 : btnRect.bottom + 2,
+                        left: btnRect.left,
+                      });
+                      setHoveredCat(cat.id);
+                    }}
+                    onMouseLeave={() => scheduleClose()}
+                  >
+                    {/* Ana kategori butonu */}
+                    <button
+                      className={"category-btn" + (isActive ? " active" : "")}
+                      type="button"
+                      onClick={() => navigate(`/category/${slug}`)}
+                      style={hasSubCats ? { paddingRight: "20px" } : {}}
+                    >
+                      {cat.name.toUpperCase()}
+                      {hasSubCats && (
+                        <i
+                          className="fas fa-chevron-down"
+                          style={{
+                            fontSize: "0.55rem",
+                            marginLeft: "4px",
+                            opacity: 0.7,
+                            transition: "transform 0.2s",
+                            transform:
+                              hoveredCat === cat.id
+                                ? "rotate(180deg)"
+                                : "rotate(0deg)",
+                          }}
+                        />
+                      )}
+                    </button>
+
+                    {hasSubCats &&
+                      hoveredCat === cat.id &&
+                      createPortal(
+                        <div
+                          style={{
+                            position: "fixed",
+                            top: dropdownPos.top,
+                            left: dropdownPos.left,
+                            zIndex: 999999,
+                            background: "#fff",
+                            borderRadius: "10px",
+                            boxShadow: "0 8px 30px rgba(255,107,53,0.18)",
+                            minWidth: "200px",
+                            maxHeight: "340px",
+                            overflowY: "auto",
+                            padding: "6px 0",
+                            border: "1px solid rgba(255,107,53,0.2)",
+                            pointerEvents: "auto",
+                          }}
+                          onMouseEnter={() => cancelClose(cat.id)}
+                          onMouseLeave={() => scheduleClose()}
+                        >
+                          {/* Üst kategori başlığı */}
+                          <button
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "9px 16px",
+                              background: "none",
+                              border: "none",
+                              textAlign: "left",
+                              fontSize: "0.8rem",
+                              fontWeight: "700",
+                              color: "#ff6b35",
+                              cursor: "pointer",
+                              borderBottom: "1px solid #fff3eb",
+                              marginBottom: "4px",
+                            }}
+                            onClick={() => {
+                              cancelClose();
+                              setHoveredCat(null);
+                              navigate(`/category/${slug}`);
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = "#fff3eb")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = "none")
+                            }
+                          >
+                            {cat.name}
+                          </button>
+                          {/* Alt kategoriler (ürün sayısı gösterilmez, ilgili alt kategori bölümüne kaydırır) */}
+                          {subs.map((sub) => {
+                            const subSlug = normalizeCategorySlug(
+                              sub.slug || createSlug(sub.name),
+                            );
+                            return (
+                              <button
+                                key={sub.id}
+                                style={{
+                                  display: "block",
+                                  width: "100%",
+                                  padding: "8px 16px",
+                                  background: "none",
+                                  border: "none",
+                                  textAlign: "left",
+                                  fontSize: "0.82rem",
+                                  color: "#333",
+                                  cursor: "pointer",
+                                  transition: "background 0.12s",
+                                }}
+                                onClick={() => {
+                                  cancelClose();
+                                  setHoveredCat(null);
+                                  navigate(`/category/${slug}#${subSlug}`);
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = "#fff3eb";
+                                  e.currentTarget.style.color = "#ff6b35";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = "none";
+                                  e.currentTarget.style.color = "#333";
+                                }}
+                              >
+                                <i
+                                  className="fas fa-chevron-right me-2"
+                                  style={{
+                                    fontSize: "0.6rem",
+                                    color: "#ff6b35",
+                                  }}
+                                ></i>
+                                {sub.name}
+                              </button>
+                            );
+                          })}
+                        </div>,
+                        document.body,
+                      )}
+                  </div>
+                );
+              })}
+
+              <button
+                className="category-btn"
+                type="button"
+                onClick={() => (window.location.href = "/favorites")}
+              >
+                FAVORİLERİM
+              </button>
+              <button
+                className="category-btn"
+                type="button"
+                onClick={() => navigate("/campaigns")}
+              >
+                KAMPANYALAR
+              </button>
             </div>
             {categoryScrollRight && (
               <button
@@ -896,10 +1220,10 @@ function App() {
         />
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
-        {/* Eski tarif / Google sitelink URL'leri — sitede olmayan içerik yok */}
-        <Route path="/tarif" element={<Navigate to="/" replace />} />
-        <Route path="/tarif/:id" element={<Navigate to="/" replace />} />
-        <Route path="/tarifler" element={<Navigate to="/" replace />} />
+        {/* Şef Tavsiyesi — tarif listesi ve detay (malzemeleri sepete ekle) */}
+        <Route path="/tarif" element={<Navigate to="/tarifler" replace />} />
+        <Route path="/tarif/:id" element={<RecipeDetailPage />} />
+        <Route path="/tarifler" element={<RecipesPage />} />
         <Route path="/kurumsal" element={<Navigate to="/" replace />} />
         <Route path="/kategoriler" element={<CategoriesPage />} />
         <Route path="/vizyonumuz" element={<Navigate to="/vizyon-misyon" replace />} />
@@ -1465,102 +1789,34 @@ function HomePage() {
     fetchHomeBlocks();
   }, []);
 
-  // Ana sayfa kategori keşif alanı — ana + alt kategoriler
+  // Ana sayfa kategori keşif alanı — "Gölköy Gurme'yi Keşfet" (ana kategoriler + hover alt kategori menüleri)
   React.useEffect(() => {
     let mounted = true;
-
-    const flattenTree = (nodes = [], depth = 0) => {
-      const result = [];
-      const sorted = [...(nodes || [])].sort((a, b) => {
-        const orderA = Number(a?.sortOrder ?? a?.SortOrder ?? 0);
-        const orderB = Number(b?.sortOrder ?? b?.SortOrder ?? 0);
-        if (orderA !== orderB) return orderA - orderB;
-        return String(a?.name || a?.Name || "").localeCompare(
-          String(b?.name || b?.Name || ""),
-          "tr",
-        );
-      });
-
-      for (const cat of sorted) {
-        if (!cat || cat.isActive === false) continue;
-        const slug = String(cat.slug || cat.Slug || "").toLowerCase();
-        if (slug === "kategorisiz" || slug === "uncategorized") continue;
-
-        result.push({
-          id: cat.id ?? cat.Id,
-          name: cat.name ?? cat.Name,
-          slug: cat.slug ?? cat.Slug,
-          imageUrl: cat.imageUrl ?? cat.ImageUrl ?? "",
-          parentId: cat.parentId ?? cat.ParentId ?? null,
-          sortOrder: cat.sortOrder ?? cat.SortOrder ?? 0,
-          isActive: cat.isActive !== false,
-          depth,
-        });
-
-        const children =
-          cat.children || cat.Children || cat.subCategories || [];
-        if (children.length > 0) {
-          result.push(...flattenTree(children, depth + 1));
-        }
-      }
-      return result;
-    };
-
-    const normalizeFlat = (list = []) =>
-      (list || [])
-        .filter((cat) => {
-          if (!cat || cat.isActive === false) return false;
-          const slug = String(cat.slug || cat.Slug || "").toLowerCase();
-          return slug !== "kategorisiz" && slug !== "uncategorized";
-        })
-        .map((cat) => ({
-          id: cat.id ?? cat.Id,
-          name: cat.name ?? cat.Name,
-          slug: cat.slug ?? cat.Slug,
-          imageUrl: cat.imageUrl ?? cat.ImageUrl ?? "",
-          parentId: cat.parentId ?? cat.ParentId ?? null,
-          sortOrder: cat.sortOrder ?? cat.SortOrder ?? 0,
-          isActive: cat.isActive !== false,
-          depth: cat.parentId || cat.ParentId ? 1 : 0,
-        }));
-
-    const mergeUniqueById = (lists) => {
-      const byId = new Map();
-      for (const list of lists) {
-        for (const cat of list || []) {
-          if (cat?.id == null) continue;
-          if (!byId.has(cat.id)) byId.set(cat.id, cat);
-        }
-      }
-      return Array.from(byId.values()).sort((a, b) => {
-        const orderA = Number(a?.sortOrder ?? 0);
-        const orderB = Number(b?.sortOrder ?? 0);
-        if (orderA !== orderB) return orderA - orderB;
-        if ((a.depth || 0) !== (b.depth || 0)) {
-          return (a.depth || 0) - (b.depth || 0);
-        }
-        return String(a?.name || "").localeCompare(String(b?.name || ""), "tr");
-      });
-    };
 
     const fetchDiscoverCategories = async () => {
       setCategoriesLoading(true);
       try {
-        const [tree, allActive] = await Promise.all([
-          categoryServiceReal.getCategoryTree(),
-          categoryServiceReal.getActive(),
-        ]);
+        const tree = await categoryServiceReal.getCategoryTree();
         if (!mounted) return;
 
-        const fromTree = flattenTree(
-          Array.isArray(tree) ? tree.filter((c) => c?.isActive !== false) : [],
-        );
-        const fromFlat = normalizeFlat(allActive);
-        // Ağaç + düz liste birleşimi: yeni eklenen ana/alt hepsi gelsin
-        const merged = mergeUniqueById([fromTree, fromFlat]);
+        const activeRoots = Array.isArray(tree)
+          ? tree.filter((c) => {
+              if (!c || c.isActive === false) return false;
+              const slug = String(c.slug || c.Slug || "").toLowerCase();
+              return slug !== "kategorisiz" && slug !== "uncategorized";
+            })
+          : [];
 
-        setDiscoverCategories(merged);
-        console.log("[HomePage] Keşif kategorileri (ana+alt):", merged.length);
+        if (activeRoots.length > 0) {
+          setDiscoverCategories(activeRoots);
+        } else {
+          const allActive = await categoryServiceReal.getActive();
+          if (mounted) {
+            setDiscoverCategories(
+              (allActive || []).filter((c) => c && c.isActive !== false),
+            );
+          }
+        }
       } catch (err) {
         console.error(
           "[HomePage] Kategoriler yüklenemedi:",
@@ -1568,7 +1824,11 @@ function HomePage() {
         );
         try {
           const fallback = await categoryServiceReal.getActive();
-          if (mounted) setDiscoverCategories(normalizeFlat(fallback));
+          if (mounted) {
+            setDiscoverCategories(
+              (fallback || []).filter((c) => c && c.isActive !== false),
+            );
+          }
         } catch {
           if (mounted) setDiscoverCategories([]);
         }
@@ -1688,10 +1948,13 @@ function HomePage() {
             recipeData.map((p) => ({
               id: p.id,
               title: p.title,
+              subTitle: p.subTitle || p.description || "",
               image: p.imageUrl,
-              link: p.linkUrl || `/tarif/${p.id}`,
+              link: p.linkUrl || "",
             })),
           );
+        } else {
+          setRecipeBanners([]);
         }
       } catch (error) {
         console.error("[HomePage] Poster yükleme hatası:", error);
@@ -1989,24 +2252,212 @@ function HomePage() {
         title="Gölköy Gurme'yi Keşfet"
       />
 
+      {/* ========== ŞEF TAVSİYESİ / TARİF POSTERLERİ (Web + Mobil Uyumlu) ========== */}
+      {recipeBanners.length > 0 && (
+        <section
+          className="recipe-section py-3 py-md-4"
+          aria-label="Şef Tavsiyesi"
+        >
+          <div
+            className="container-fluid px-3 px-md-4"
+            style={{ maxWidth: "1400px", margin: "0 auto" }}
+          >
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <span
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "10px",
+                  background: "linear-gradient(135deg, #f97316, #ea580c)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                <i
+                  className="fas fa-utensils"
+                  style={{ fontSize: "0.9rem" }}
+                ></i>
+              </span>
+              <h2
+                className="mb-0 fw-bold"
+                style={{
+                  fontSize: "1.2rem",
+                  color: "#1a1a2e",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                Şef Tavsiyesi
+              </h2>
+            </div>
+
+            <div className="recipe-posters-grid">
+              {recipeBanners.map((recipe, index) => {
+                const cardInner = (
+                  <div className="recipe-poster-card">
+                    <BannerMedia
+                      src={recipe.image}
+                      alt={recipe.title || "Şef Tavsiyesi"}
+                      className="recipe-poster-media"
+                      onError={(e) => {
+                        if (e?.target?.tagName === "IMG") {
+                          e.target.src = "/images/placeholder.png";
+                        }
+                      }}
+                    />
+                    {recipe.title && (
+                      <div className="recipe-poster-overlay">
+                        <h3 className="recipe-poster-title">{recipe.title}</h3>
+                        {recipe.subTitle && (
+                          <p className="recipe-poster-subtitle">
+                            {recipe.subTitle}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+
+                const isExternal = /^https?:\/\//i.test(recipe.link || "");
+                // İkinci poster (index 1) her zaman Gurme Lezzetler'dir; ayrıca başlık/açıklama/resimde "gurme" geçiyorsa da gurmedir
+                const isGourmet =
+                  index === 1 ||
+                  /gurme/i.test(
+                    `${recipe.title || ""} ${recipe.subTitle || ""} ${recipe.link || ""} ${recipe.image || ""}`
+                  );
+                const defaultLink = isGourmet
+                  ? "/tarifler?koleksiyon=gurme-lezzetler"
+                  : "/tarifler?koleksiyon=sef-tavsiyesi";
+
+                // Eğer link boşsa, jenerik /tarifler ise ya da gurme posteri yanlışlıkla sef-tavsiyesi'ne linklenmişse defaultLink kullan
+                const targetLink =
+                  !recipe.link ||
+                  recipe.link === "/tarifler" ||
+                  recipe.link === "/tarif" ||
+                  (isGourmet && recipe.link.includes("koleksiyon=sef-tavsiyesi"))
+                    ? defaultLink
+                    : recipe.link;
+
+                return isExternal ? (
+                  <a
+                    key={recipe.id}
+                    href={targetLink}
+                    className="recipe-poster-link text-decoration-none"
+                  >
+                    {cardInner}
+                  </a>
+                ) : (
+                  <Link
+                    key={recipe.id}
+                    to={targetLink}
+                    className="recipe-poster-link text-decoration-none"
+                  >
+                    {cardInner}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <style>{`
+            .recipe-posters-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+              gap: 16px;
+            }
+            .recipe-poster-link {
+              display: block;
+              min-width: 0;
+            }
+            .recipe-poster-card {
+              position: relative;
+              width: 100%;
+              border-radius: 16px;
+              overflow: hidden;
+              background: #f1f5f9;
+              box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+              border: 1px solid rgba(255, 107, 53, 0.12);
+              transition: transform 0.25s ease, box-shadow 0.25s ease;
+            }
+            .recipe-poster-card:hover {
+              transform: translateY(-3px);
+              box-shadow: 0 14px 32px rgba(249, 115, 22, 0.16);
+            }
+            .recipe-poster-media {
+              width: 100%;
+              height: auto;
+              object-fit: contain;
+              display: block;
+            }
+            .recipe-poster-overlay {
+              display: none !important;
+            }
+            .recipe-poster-overlay {
+              position: absolute;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              padding: 20px 16px 14px;
+              background: linear-gradient(transparent, rgba(15, 23, 42, 0.78));
+              color: #ffffff;
+            }
+            .recipe-poster-title {
+              margin: 0;
+              font-size: 1rem;
+              font-weight: 700;
+              line-height: 1.25;
+              text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+            }
+            .recipe-poster-subtitle {
+              margin: 4px 0 0;
+              font-size: 0.8rem;
+              opacity: 0.92;
+            }
+            @media (max-width: 768px) {
+              .recipe-posters-grid {
+                display: flex;
+                flex-direction: column;
+                overflow: visible;
+                gap: 12px;
+                padding-bottom: 0;
+              }
+              .recipe-section {
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+              .recipe-section .container-fluid {
+                padding-left: 12px !important;
+                padding-right: 12px !important;
+              }
+              .recipe-section .d-flex.mb-3 {
+                margin-bottom: 8px !important;
+              }
+              .recipe-poster-card {
+                border-radius: 14px;
+              }
+              .recipe-poster-card:hover {
+                transform: none;
+              }
+              .recipe-poster-link {
+                flex: 0 0 auto;
+                width: 100%;
+                max-width: 100%;
+              }
+              .recipe-posters-grid:has(> :only-child) .recipe-poster-link {
+                flex: 0 0 auto;
+                max-width: 100%;
+              }
+              .recipe-poster-title {
+                font-size: 0.9rem;
+              }
+            }
+          `}</style>
+        </section>
+      )}
+
       {/* ========== ANA SAYFA ÜRÜN BLOKLARI SECTION (Poster + Ürünler) ========== */}
-      {/* 
-        ÖNEMLİ: "İlgini Çekebilecek Ürünler" dahil TÜM ürün blokları
-        Admin Panel > Ana Sayfa Blokları'ndan yönetilir.
-        
-        Admin panelden yeni blok eklemek için:
-        1. Admin Panel > Ana Sayfa Blokları
-        2. "Yeni Blok Ekle"
-        3. Başlık: "İlgini Çekebilecek Ürünler" / "Süt Ürünleri" / "İndirimli Ürünler" vb.
-        4. Blok Tipi: Manuel Seçim (ID ile ürün ekleme) / Kategori Bazlı / İndirimli vb.
-        5. Poster görseli yükle
-        6. Ürünleri seç (ID veya isim ile arama)
-      */}
-      {/* 
-        Bu bölüm Admin Panel > Ana Sayfa Blokları'ndan kontrol edilir.
-        Her blok: Sol tarafta poster, sağ tarafta ürün grid'i
-        Blok Tipleri: manual, category, discounted, newest, bestseller
-      */}
       {blocksLoading ? (
         <section className="py-4">
           <div className="container-fluid px-4">
@@ -2031,11 +2482,6 @@ function HomePage() {
           style={{ background: "#f8f9fa" }}
         >
           <div className="container-fluid px-4">
-            {console.log(
-              "🏠 [HomePage] Rendering homeBlocks:",
-              homeBlocks.length,
-              homeBlocks,
-            )}
             {homeBlocks.map((block) => (
               <ProductBlockSection key={block.id || block.Id} block={block} />
             ))}
@@ -2230,4 +2676,3 @@ function HomePage() {
 }
 
 export default AppWithProviders;
-

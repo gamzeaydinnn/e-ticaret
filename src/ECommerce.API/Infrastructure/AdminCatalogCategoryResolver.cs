@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using ECommerce.Core.Helpers;
 using ECommerce.Entities.Concrete;
 
 namespace ECommerce.API.Infrastructure
@@ -39,31 +40,6 @@ namespace ECommerce.API.Infrastructure
             },
         };
 
-        private static readonly HashSet<string> FrozenHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "atistirmalik",
-            "temel-gida",
-            "sut-ve-sut-urunleri"
-        };
-
-        private static readonly HashSet<string> MilkHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "icecekler",
-            "temel-gida",
-            "atistirmalik",
-            "diger"
-        };
-
-        private static readonly HashSet<string> MeatHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "sut-ve-sut-urunleri",
-            "temel-gida",
-            "atistirmalik",
-            "diger"
-        };
-
-        private const string FrozenStorefrontCategorySlug = "dondurma-ve-dondurulmus-gida";
-        private const string MeatStorefrontCategorySlug = "et-ve-et-urunleri";
         private const string UncategorizedCategorySlug = "diger";
 
         public static string NormalizeCategorySlug(string? slug)
@@ -108,13 +84,6 @@ namespace ECommerce.API.Infrastructure
                 }
             }
 
-            var hintedCategory = TryResolveCategoryInfoFromProductName(productName, idToSlug, slugToName);
-            if (hintedCategory.CategoryId.HasValue &&
-                ShouldPreferHintedCategory(normalizedSlug, hintedCategory.CategorySlug))
-            {
-                return hintedCategory;
-            }
-
             return (
                 categoryId,
                 normalizedSlug,
@@ -126,15 +95,21 @@ namespace ECommerce.API.Infrastructure
             string? grupKod,
             Dictionary<string, List<MikroCategoryMapping>> mappings)
         {
-            if (!string.IsNullOrWhiteSpace(anagrupKod) &&
-                mappings.TryGetValue(anagrupKod.Trim(), out var directMappings) &&
+            var normAna = MikroGrupKodHelper.NormalizeAnaKod(anagrupKod);
+            var normAlt = MikroGrupKodHelper.NormalizeAltKod(grupKod);
+
+            if (!string.IsNullOrWhiteSpace(normAna) &&
+                mappings.TryGetValue(normAna, out var directMappings) &&
                 directMappings.Count > 0)
             {
-                if (!string.IsNullOrWhiteSpace(grupKod))
+                if (!string.IsNullOrWhiteSpace(normAlt))
                 {
                     var exactAltgrupMatch = directMappings.FirstOrDefault(mapping =>
                         !string.IsNullOrWhiteSpace(mapping.MikroAltgrupKod) &&
-                        string.Equals(mapping.MikroAltgrupKod, grupKod.Trim(), StringComparison.OrdinalIgnoreCase));
+                        string.Equals(
+                            MikroGrupKodHelper.NormalizeAltKod(mapping.MikroAltgrupKod),
+                            normAlt,
+                            StringComparison.OrdinalIgnoreCase));
 
                     if (exactAltgrupMatch != null)
                     {
@@ -149,8 +124,8 @@ namespace ECommerce.API.Infrastructure
                 return (baseMapping ?? directMappings[0]).CategoryId;
             }
 
-            if (!string.IsNullOrWhiteSpace(grupKod) &&
-                mappings.TryGetValue(grupKod.Trim(), out var groupMappings) &&
+            if (!string.IsNullOrWhiteSpace(normAlt) &&
+                mappings.TryGetValue(normAlt, out var groupMappings) &&
                 groupMappings.Count > 0)
             {
                 return groupMappings[0].CategoryId;
@@ -210,32 +185,6 @@ namespace ECommerce.API.Infrastructure
             var normalized = Regex.Replace(value.ToLowerInvariant(), @"[^\p{L}\p{Nd}]+", " ");
             normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
             return $" {normalized} ";
-        }
-
-        private static bool ShouldPreferHintedCategory(string resolvedSlug, string hintedSlug)
-        {
-            if (string.IsNullOrWhiteSpace(hintedSlug) ||
-                string.Equals(resolvedSlug, hintedSlug, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            if (string.Equals(hintedSlug, FrozenStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase))
-            {
-                return FrozenHintOverridableCategorySlugs.Contains(resolvedSlug);
-            }
-
-            if (string.Equals(hintedSlug, "sut-ve-sut-urunleri", StringComparison.OrdinalIgnoreCase))
-            {
-                return MilkHintOverridableCategorySlugs.Contains(resolvedSlug);
-            }
-
-            if (string.Equals(hintedSlug, MeatStorefrontCategorySlug, StringComparison.OrdinalIgnoreCase))
-            {
-                return MeatHintOverridableCategorySlugs.Contains(resolvedSlug);
-            }
-
-            return false;
         }
 
         private static string GenerateSlug(string input)

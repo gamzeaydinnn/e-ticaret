@@ -1,23 +1,18 @@
 /**
  * categoryServiceReal.js
  *
- * Kategori Servisi - Backend API ile iletişim
- *
- * Bu servis, veritabanındaki kategorileri frontend'e taşır.
- * Public endpoint'ler navigasyon için, Admin endpoint'ler yönetim içindir.
- *
- * @author E-Ticaret Projesi
- * @version 2.0.0 - Sıfırdan yeniden yazıldı
+ * Kategori Servisi - Backend API ile iletişim (Mikro ERP Ana/Alt Grup Hiyerarşisi Uyumlu)
  */
 
 import api from "./api";
 
 export const CATEGORY_SLUG_ALIASES = {
-  diger: "ev-ve-mutfak",
   "sut-urunleri": "sut-ve-sut-urunleri",
   "meyve-sebze": "meyve-ve-sebze",
   "et-tavuk": "et-ve-et-urunleri",
   "et-tavuk-balik": "et-ve-et-urunleri",
+  "dondurulmus-gida": "dondurma-ve-dondurulmus-gida",
+  "dondurma-dondurulmus": "dondurma-ve-dondurulmus-gida",
 };
 
 export const normalizeCategorySlug = (slug) => {
@@ -37,11 +32,47 @@ export const matchesCategorySlug = (candidateSlug, requestedSlug) => {
 const normalizeCategoryEntity = (category = {}) => {
   const name = String(category?.name ?? category?.Name ?? "").trim();
   const rawSlug = String(category?.slug ?? category?.Slug ?? "").trim();
+  const rawSubs =
+    category?.subCategories ??
+    category?.SubCategories ??
+    category?.children ??
+    category?.Children ??
+    [];
 
   return {
     ...category,
+    id: category?.id ?? category?.Id,
     name,
     slug: rawSlug,
+    imageUrl: category?.imageUrl ?? category?.ImageUrl ?? "",
+    parentId: category?.parentId ?? category?.ParentId ?? null,
+    sortOrder: category?.sortOrder ?? category?.SortOrder ?? 0,
+    isActive: (category?.isActive ?? category?.IsActive) !== false,
+    mikroAnaGrupKod:
+      category?.mikroAnaGrupKod ?? category?.MikroAnaGrupKod ?? null,
+    mikroAltGrupKod:
+      category?.mikroAltGrupKod ?? category?.MikroAltGrupKod ?? null,
+    mikroIsim: category?.mikroIsim ?? category?.MikroIsim ?? null,
+    navbarGroupKey:
+      category?.navbarGroupKey ?? category?.NavbarGroupKey ?? null,
+    isMikroSynced: Boolean(
+      category?.isMikroSynced ?? category?.IsMikroSynced ?? false,
+    ),
+    subCategories: Array.isArray(rawSubs)
+      ? rawSubs.map((sc) => ({
+          ...sc,
+          id: sc?.id ?? sc?.Id,
+          name: String(sc?.name ?? sc?.Name ?? "").trim(),
+          slug: String(sc?.slug ?? sc?.Slug ?? "").trim(),
+          imageUrl: sc?.imageUrl ?? sc?.ImageUrl ?? "",
+          parentId: sc?.parentId ?? sc?.ParentId ?? null,
+          sortOrder: sc?.sortOrder ?? sc?.SortOrder ?? 0,
+          isActive: (sc?.isActive ?? sc?.IsActive) !== false,
+          mikroAnaGrupKod: sc?.mikroAnaGrupKod ?? sc?.MikroAnaGrupKod ?? null,
+          mikroAltGrupKod: sc?.mikroAltGrupKod ?? sc?.MikroAltGrupKod ?? null,
+          navbarGroupKey: sc?.navbarGroupKey ?? sc?.NavbarGroupKey ?? null,
+        }))
+      : [],
   };
 };
 
@@ -63,7 +94,8 @@ const dedupeCategoriesBySlug = (categories = []) => {
   categories.forEach((item) => {
     const normalizedItem = normalizeCategoryEntity(item);
     const slugKey = normalizeCategorySlug(normalizedItem.slug);
-    const dedupeKey = slugKey || `id:${normalizedItem.id ?? normalizedItem.name}`;
+    const dedupeKey =
+      slugKey || `id:${normalizedItem.id ?? normalizedItem.name}`;
     const existing = seen.get(dedupeKey);
 
     if (!existing || shouldReplaceCategory(normalizedItem, existing)) {
@@ -74,14 +106,8 @@ const dedupeCategoriesBySlug = (categories = []) => {
   return Array.from(seen.values());
 };
 
-// ============================================================
-// YARDIMCI FONKSİYONLAR
-// ============================================================
-
 /**
  * Türkçe karakterleri ASCII'ye çevirip URL-uyumlu slug oluşturur
- * @param {string} name - Kategori adı
- * @returns {string} URL-uyumlu slug
  */
 const createSlug = (name) => {
   if (!name) return "";
@@ -100,79 +126,48 @@ const createSlug = (name) => {
     .trim();
 };
 
-// ============================================================
-// EVENT LISTENER SİSTEMİ
-// Admin panelden kategori güncellendiğinde diğer bileşenleri bilgilendirir
-// ============================================================
-
 const listeners = [];
 
-/**
- * Tüm listener'ları tetikler (kategori güncellendiğinde)
- */
 const notify = () => {
   listeners.forEach((callback) => {
     try {
       callback();
     } catch (e) {
-      // Listener hatası sessizce loglanır, uygulama çökmez
       console.error("[CategoryService] Listener hatası:", e);
     }
   });
 };
 
-// ============================================================
-// KATEGORİ SERVİSİ
-// ============================================================
-
 const categoryServiceReal = {
   // ==================== PUBLIC ENDPOINT'LER ====================
 
-  /**
-   * Tüm kategorileri getirir (navigasyon menüsü için)
-   * Backend: GET /api/categories
-   *
-   * @returns {Promise<Array>} Kategori listesi
-   */
   async getAll() {
     try {
       const response = await api.get("/api/categories");
-      // API response'u array olmalı, değilse boş array döndür
-      return Array.isArray(response)
-        ? dedupeCategoriesBySlug(response)
-        : [];
+      return Array.isArray(response) ? dedupeCategoriesBySlug(response) : [];
     } catch (error) {
       console.error("[CategoryService] Kategoriler alınamadı:", error.message);
-      return []; // Hata durumunda boş array döndür, UI çökmez
+      return [];
     }
   },
 
-  /**
-   * Aktif kategorileri getirir (header butonları için)
-   * isActive: true veya undefined olan kategorileri filtreler
-   *
-   * @returns {Promise<Array>} Aktif kategori listesi
-   */
   async getActive() {
     const allCategories = await this.getAll();
-    // isActive false olmayanları getir (true veya undefined kabul edilir)
-    return allCategories.filter((cat) => cat.isActive !== false);
+    return allCategories.filter(
+      (cat) =>
+        cat.isActive !== false &&
+        String(cat.slug || "").toLowerCase() !== "diger",
+    );
   },
 
-  /**
-   * Slug'a göre tek kategori getirir
-   * Backend: GET /api/categories/{slug}
-   *
-   * @param {string} slug - Kategori slug'ı
-   * @returns {Promise<Object|null>} Kategori objesi veya null
-   */
   async getBySlug(slug) {
     try {
       if (!slug) return null;
       const normalizedSlug = normalizeCategorySlug(slug);
-      return await api.get(
+      const res = await api.get(
         `/api/categories/${encodeURIComponent(normalizedSlug)}`,
       );
+      return res ? normalizeCategoryEntity(res) : null;
     } catch (error) {
       console.error(
         `[CategoryService] Kategori bulunamadı: ${slug}`,
@@ -182,22 +177,41 @@ const categoryServiceReal = {
     }
   },
 
-  // ✨ YENİ: Hiyerarşik kategori ağacı
   /**
-   * Hiyerarşik kategori ağacını getirir (tree yapısı)
-   * Backend: GET /api/categories/tree
-   *
-   * @returns {Promise<Array>} Kategori ağacı
+   * Kategori sayfası için yapışkan (sticky) alt kategori barı + scroll-spy bölümlerini getirir
+   * Backend: GET /api/categories/{slug}/sections
    */
+  async getSectionsBySlug(slug) {
+    try {
+      if (!slug) return null;
+      const normalizedSlug = normalizeCategorySlug(slug);
+      return await api.get(
+        `/api/categories/${encodeURIComponent(normalizedSlug)}/sections`,
+      );
+    } catch (error) {
+      console.error(
+        `[CategoryService] Kategori bölümleri alınamadı: ${slug}`,
+        error.message,
+      );
+      return null;
+    }
+  },
+
   async getCategoryTree() {
     try {
       const response = await api.get("/api/categories/tree");
       const raw = Array.isArray(response) ? response : [];
-      // Backend "Children" alanı döndürüyor, CategoryTile "subCategories" bekliyor
-      // Her kategoriyi normalize et
       const normalize = (cat) => {
         const kids = dedupeCategoriesBySlug(
-          (cat.children || cat.Children || cat.subCategories || []).map(normalize),
+          (
+            cat.children ||
+            cat.Children ||
+            cat.subCategories ||
+            cat.SubCategories ||
+            []
+          )
+            .filter((k) => (k?.isActive ?? k?.IsActive) !== false)
+            .map(normalize),
         );
         return {
           ...normalizeCategoryEntity(cat),
@@ -205,7 +219,15 @@ const categoryServiceReal = {
           subCategories: kids,
         };
       };
-      return dedupeCategoriesBySlug(raw.map(normalize));
+      return dedupeCategoriesBySlug(
+        raw
+          .filter(
+            (c) =>
+              (c?.isActive ?? c?.IsActive) !== false &&
+              String(c?.slug ?? c?.Slug ?? "").toLowerCase() !== "diger",
+          )
+          .map(normalize),
+      );
     } catch (error) {
       console.error(
         "[CategoryService] Kategori ağacı alınamadı:",
@@ -215,19 +237,10 @@ const categoryServiceReal = {
     }
   },
 
-  // ✨ YENİ: Ana kategoriler (root)
-  /**
-   * Sadece ana kategorileri getirir (ParentId == null)
-   * Backend: GET /api/categories/root
-   *
-   * @returns {Promise<Array>} Ana kategori listesi
-   */
   async getRootCategories() {
     try {
       const response = await api.get("/api/categories/root");
-      return Array.isArray(response)
-        ? dedupeCategoriesBySlug(response)
-        : [];
+      return Array.isArray(response) ? dedupeCategoriesBySlug(response) : [];
     } catch (error) {
       console.error(
         "[CategoryService] Ana kategoriler alınamadı:",
@@ -239,14 +252,14 @@ const categoryServiceReal = {
 
   // ==================== ADMIN ENDPOINT'LER ====================
 
-  /**
-   * Admin: Tüm kategorileri getirir (aktif/pasif dahil)
-   * Backend: GET /api/admin/categories
-   */
   async getAllAdmin() {
     try {
-      const response = await api.get("/api/admin/categories", { timeout: 20000 });
-      return Array.isArray(response) ? response : [];
+      const response = await api.get("/api/admin/categories", {
+        timeout: 20000,
+      });
+      return Array.isArray(response)
+        ? response.map(normalizeCategoryEntity)
+        : [];
     } catch (error) {
       console.error(
         "[CategoryService] Admin kategoriler alınamadı:",
@@ -256,16 +269,10 @@ const categoryServiceReal = {
     }
   },
 
-  /**
-   * Admin: ID'ye göre kategori getirir
-   */
   async getById(id) {
     return await api.get(`/api/admin/categories/${id}`);
   },
 
-  /**
-   * Admin: Yeni kategori oluşturur
-   */
   async create(category) {
     const payload = {
       name: category.name,
@@ -275,16 +282,14 @@ const categoryServiceReal = {
       parentId: category.parentId || null,
       sortOrder: parseInt(category.sortOrder) || 0,
       isActive: category.isActive !== false,
+      navbarGroupKey: category.navbarGroupKey || null,
     };
 
     const result = await api.post("/api/admin/categories", payload);
-    notify(); // Diğer bileşenleri bilgilendir
+    notify();
     return result;
   },
 
-  /**
-   * Admin: Kategori günceller
-   */
   async update(id, category) {
     const payload = {
       id: parseInt(id),
@@ -295,6 +300,8 @@ const categoryServiceReal = {
       parentId: category.parentId || null,
       sortOrder: parseInt(category.sortOrder) || 0,
       isActive: category.isActive !== false,
+      navbarGroupKey:
+        category.navbarGroupKey !== undefined ? category.navbarGroupKey : null,
     };
 
     const result = await api.put(`/api/admin/categories/${id}`, payload);
@@ -302,38 +309,42 @@ const categoryServiceReal = {
     return result;
   },
 
-  /**
-   * Admin: Kategori siler
-   */
   async delete(id) {
     await api.delete(`/api/admin/categories/${id}`);
     notify();
     return { success: true };
   },
 
-  /**
-   * Admin: Aktif/Pasif durumunu değiştirir
-   */
   async toggleActive(category) {
-    const payload = {
-      ...category,
-      id: parseInt(category.id),
-      isActive: !category.isActive,
-    };
-    const result = await api.put(
-      `/api/admin/categories/${category.id}`,
-      payload,
-    );
+    const nextIsActive = !category.isActive;
+    try {
+      const result = await api.patch(
+        `/api/admin/categories/${category.id}/toggle-active`,
+        { isActive: nextIsActive },
+      );
+      notify();
+      return result;
+    } catch {
+      const payload = {
+        ...category,
+        id: parseInt(category.id),
+        isActive: nextIsActive,
+      };
+      const result = await api.put(
+        `/api/admin/categories/${category.id}`,
+        payload,
+      );
+      notify();
+      return result;
+    }
+  },
+
+  async syncFromMikro() {
+    const result = await api.post("/api/admin/categories/sync-mikro");
     notify();
     return result;
   },
 
-  // ✨ YENİ ADMIN ENDPOINT'LER
-
-  /**
-   * Admin: Hiyerarşik kategori ağacı (pasifler dahil)
-   * Backend: GET /api/admin/categories/tree
-   */
   async getAdminCategoryTree() {
     try {
       const response = await api.get("/api/admin/categories/tree");
@@ -347,10 +358,6 @@ const categoryServiceReal = {
     }
   },
 
-  /**
-   * Admin: Ana kategoriler (pasifler dahil)
-   * Backend: GET /api/admin/categories/root
-   */
   async getAdminRootCategories() {
     try {
       const response = await api.get("/api/admin/categories/root");
@@ -364,16 +371,14 @@ const categoryServiceReal = {
     }
   },
 
-  /**
-   * Admin: Belirli kategorinin alt kategorileri
-   * Backend: GET /api/admin/categories/{id}/subcategories
-   */
   async getSubCategories(parentId) {
     try {
       const response = await api.get(
-        `/api/admin/categories/${parentId}/subcategories`,
+        `/api/categories/${parentId}/subcategories`,
       );
-      return Array.isArray(response) ? response : [];
+      return Array.isArray(response)
+        ? response.map(normalizeCategoryEntity)
+        : [];
     } catch (error) {
       console.error(
         `[CategoryService] Alt kategoriler alınamadı (parentId: ${parentId}):`,
@@ -383,44 +388,30 @@ const categoryServiceReal = {
     }
   },
 
-  /**
-   * Admin: Kategori yolu (breadcrumb)
-   * Backend: GET /api/admin/categories/{id}/path
-   */
   async getCategoryPath(categoryId) {
     try {
       const response = await api.get(
         `/api/admin/categories/${categoryId}/path`,
       );
       return Array.isArray(response) ? response : [];
-    } catch (error) {
-      console.error(
-        `[CategoryService] Kategori yolu alınamadı (id: ${categoryId}):`,
-        error.message,
-      );
+    } catch {
       return [];
     }
   },
 
-  /**
-   * Admin: Kategori görseli yükler
-   */
   async uploadCategoryImage(file) {
     const formData = new FormData();
     formData.append("image", file);
-    const response = await api.post("/api/admin/categories/upload-image", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    const response = await api.post(
+      "/api/admin/categories/upload-image",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return response?.imageUrl || response?.data?.imageUrl || null;
   },
 
-  // ==================== SUBSCRIPTION SİSTEMİ ====================
-
-  /**
-   * Kategori değişikliklerini dinlemek için subscribe olur
-   * @param {Function} callback - Değişiklik olduğunda çağrılacak fonksiyon
-   * @returns {Function} Unsubscribe fonksiyonu
-   */
   subscribe(callback) {
     listeners.push(callback);
     return () => {

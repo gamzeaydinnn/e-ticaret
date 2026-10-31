@@ -1,3 +1,4 @@
+using ECommerce.Core.Helpers;
 using ECommerce.Core.Interfaces.Mapping;
 using ECommerce.Entities.Concrete;
 using Microsoft.EntityFrameworkCore;
@@ -224,6 +225,8 @@ namespace ECommerce.Business.Services.Mapping
             string? markaKod,
             CancellationToken cancellationToken)
         {
+            anagrupKod = MikroGrupKodHelper.NormalizeAnaKod(anagrupKod);
+            altgrupKod = string.IsNullOrWhiteSpace(altgrupKod) ? null : MikroGrupKodHelper.NormalizeAltKod(altgrupKod);
             var mappings = _dbContext.Set<MikroCategoryMapping>();
 
             // 1. En spesifik: Anagrup + Altgrup + Marka

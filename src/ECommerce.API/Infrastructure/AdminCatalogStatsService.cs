@@ -237,7 +237,10 @@ namespace ECommerce.API.Infrastructure
                 .ToListAsync(cancellationToken);
 
             return mappings
-                .GroupBy(mapping => mapping.MikroAnagrupKod, StringComparer.OrdinalIgnoreCase)
+                .GroupBy(
+                    mapping => MikroGrupKodHelper.NormalizeAnaKod(mapping.MikroAnagrupKod),
+                    StringComparer.OrdinalIgnoreCase)
+                .Where(group => !string.IsNullOrWhiteSpace(group.Key))
                 .ToDictionary(
                     group => group.Key,
                     group => group.ToList(),

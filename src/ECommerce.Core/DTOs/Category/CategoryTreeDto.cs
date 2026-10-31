@@ -16,12 +16,15 @@ namespace ECommerce.Core.DTOs.Category
         public int? ParentId { get; set; }
         public int SortOrder { get; set; }
         public bool IsActive { get; set; }
-        
+        public string? MikroAnaGrupKod { get; set; }
+        public string? MikroAltGrupKod { get; set; }
+        public string? NavbarGroupKey { get; set; }
+
         /// <summary>
-        /// Bu kategoriye ait ürün sayısı
+        /// Bu kategoriye ait ürün sayısı (Yalnızca Admin panelinde kullanılır, vitrinde gösterilmez)
         /// </summary>
         public int ProductCount { get; set; }
-        
+
         /// <summary>
         /// Alt kategoriler (recursive)
         /// </summary>

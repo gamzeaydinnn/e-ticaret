@@ -64,6 +64,7 @@ namespace ECommerce.Data.Repositories
         public async Task<Category?> GetBySlugAsync(string slug)
         {
             return await _dbSet
+                .Include(c => c.Parent)
                 .Include(c => c.SubCategories)
                 .Include(c => c.Products)
                 .FirstOrDefaultAsync(c => c.Slug == slug && c.IsActive);
@@ -131,12 +132,12 @@ namespace ECommerce.Data.Repositories
         }
 
         /// <summary>
-        /// Kategoriye bağlı ürün sayısını döndürür (sadece aktif ürünler)
+        /// Kategoriye (ve varsa alt kategorilerine) bağlı aktif ürün sayısını döndürür
         /// </summary>
         public async Task<int> GetProductCountAsync(int categoryId)
         {
             return await _context.Products
-                .Where(p => p.CategoryId == categoryId && p.IsActive)
+                .Where(p => p.IsActive && (p.CategoryId == categoryId || (p.Category != null && p.Category.ParentId == categoryId)))
                 .CountAsync();
         }
 
