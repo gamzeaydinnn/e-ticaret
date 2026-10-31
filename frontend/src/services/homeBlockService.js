@@ -526,6 +526,32 @@ export const getBlockProducts = async (blockId) => {
  * @param {number} blockId - Blok ID
  * @returns {Promise<Object>} Güncellenen blok
  */
+/**
+ * Blok görüntülenmesini kaydeder (Intersection Observer)
+ * @param {number} blockId - Blok ID
+ */
+export const trackBlockView = async (blockId) => {
+  if (!blockId) return;
+  try {
+    await api.post(`/api/homeblocks/${blockId}/track-view`);
+  } catch {
+    // Analitik hatası kullanıcı akışını etkilemez
+  }
+};
+
+/**
+ * Blok poster tıklanmasını kaydeder
+ * @param {number} blockId - Blok ID
+ */
+export const trackPosterClick = async (blockId) => {
+  if (!blockId) return;
+  try {
+    await api.post(`/api/homeblocks/${blockId}/track-click`);
+  } catch {
+    // Analitik hatası kullanıcı akışını etkilemez
+  }
+};
+
 export const toggleBlock = async (blockId) => {
   try {
     const response = await api.put(`/api/admin/homeblocks/${blockId}/toggle-active`);
@@ -563,6 +589,10 @@ export default {
   setBlockProducts,
   updateBlockProductsOrder,
   getBlockProducts,
+
+  // Analytics
+  trackBlockView,
+  trackPosterClick,
 
   // Helpers
   checkSlugAvailability,

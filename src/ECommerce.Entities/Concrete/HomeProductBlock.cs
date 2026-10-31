@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ECommerce.Entities.Concrete
 {
@@ -11,7 +13,7 @@ namespace ECommerce.Entities.Concrete
     /// 
     /// Blok Tipleri:
     /// - manual: Admin tek tek ürün seçer (HomeBlockProduct tablosu kullanılır)
-    /// - category: Belirli bir kategorideki ürünler otomatik gelir (CategoryId alanı)
+    /// - category: Belirli bir kategorideki ürünler otomatik gelir (TargetCategoryId alanı)
     /// - discounted: İndirimli ürünler otomatik (SpecialPrice != null && SpecialPrice < Price)
     /// - newest: En son eklenen ürünler (CreatedAt'e göre sıralanır)
     /// - bestseller: En çok satan ürünler (sipariş sayısına göre - gelecekte)
@@ -34,12 +36,14 @@ namespace ECommerce.Entities.Concrete
         /// Blok adı - Admin panelinde gösterilir (internal name)
         /// Örnek: "İndirimli Ürünler", "Süt Ürünleri", "Atıştırmalıklar"
         /// </summary>
+        [MaxLength(100)]
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Müşterilere gösterilen başlık - Ana sayfada görünür
         /// Örnek: "Bu Fırsatları Kaçırmayın", "Haftalık İndirimler"
         /// </summary>
+        [MaxLength(200)]
         public string? Title { get; set; }
 
         /// <summary>
@@ -47,12 +51,14 @@ namespace ECommerce.Entities.Concrete
         /// Örnek: "indirimli-urunler", "sut-urunleri"
         /// "Tümünü Gör" linkinde kullanılır: /kategori/{slug} veya /blok/{slug}
         /// </summary>
+        [MaxLength(150)]
         public string Slug { get; set; } = string.Empty;
 
         /// <summary>
         /// Blok açıklaması - Admin panelinde bilgi amaçlı
         /// Frontend'de gösterilmeyebilir
         /// </summary>
+        [MaxLength(500)]
         public string? Description { get; set; }
 
         #endregion
@@ -64,19 +70,28 @@ namespace ECommerce.Entities.Concrete
         /// Değerler: "manual", "category", "discounted", "newest", "bestseller"
         /// 
         /// manual: HomeBlockProduct tablosundan çekilir (admin elle seçer)
-        /// category: CategoryId alanındaki kategorinin ürünleri
+        /// category: TargetCategoryId alanındaki kategorinin ürünleri
         /// discounted: SpecialPrice olan tüm ürünler
         /// newest: CreatedAt'e göre en yeni ürünler
         /// bestseller: OrderItems sayısına göre en çok satanlar
         /// </summary>
+        [MaxLength(50)]
         public string BlockType { get; set; } = "manual";
 
         /// <summary>
-        /// Kategori bazlı bloklar için hedef kategori ID'si
-        /// Sadece BlockType = "category" olduğunda kullanılır
-        /// Null ise manuel veya otomatik tip demektir
+        /// Kategori bazlı bloklar için hedef kategori ID'si (Eski alan - geriye dönük uyumluluk ve rollback güvenliği için tutulur)
+        /// Yeni kodlarda TargetCategoryId kullanılmalıdır.
         /// </summary>
+        [Obsolete("Use TargetCategoryId instead. Retained for backward compatibility/rollback safety.")]
         public int? CategoryId { get; set; }
+
+        /// <summary>
+        /// Target category for this block (replaces deprecated CategoryId)
+        /// Supports both parent and subcategories
+        /// When parent: includes all subcategory products
+        /// When subcategory: includes only that subcategory products
+        /// </summary>
+        public int? TargetCategoryId { get; set; }
 
         #endregion
 
@@ -94,13 +109,24 @@ namespace ECommerce.Entities.Concrete
         /// BannerId null ise bu alan kontrol edilir
         /// Admin basit bir görsel yüklemek isterse kullanılır
         /// </summary>
+        [MaxLength(500)]
         public string? PosterImageUrl { get; set; }
+
+        /// <summary>
+        /// Direct poster click target URL (alternative to Banner.linkUrl)
+        /// Takes precedence when BannerId is null
+        /// Max length: 500 characters
+        /// Examples: "/category/milk-products", "https://example.com/campaign"
+        /// </summary>
+        [MaxLength(500)]
+        public string? PosterLinkUrl { get; set; }
 
         /// <summary>
         /// Poster arka plan rengi (hex kodu)
         /// Örnek: "#00BCD4" (turkuaz), "#FF5722" (turuncu)
         /// Poster yoksa veya yüklenirken arka plan rengi olarak kullanılır
         /// </summary>
+        [MaxLength(20)]
         public string? BackgroundColor { get; set; }
 
         #endregion
@@ -125,6 +151,7 @@ namespace ECommerce.Entities.Concrete
         /// Örnek: "/kategori/sut-urunleri" veya "/kampanya/indirimli"
         /// Null ise slug'dan otomatik oluşturulur
         /// </summary>
+        [MaxLength(300)]
         public string? ViewAllUrl { get; set; }
 
         /// <summary>
@@ -132,6 +159,7 @@ namespace ECommerce.Entities.Concrete
         /// Varsayılan: "Tümünü Gör"
         /// Özelleştirilebilir: "Tüm İndirimleri Gör", "Daha Fazla" vb.
         /// </summary>
+        [MaxLength(50)]
         public string ViewAllText { get; set; } = "Tümünü Gör";
 
         /// <summary>
@@ -139,6 +167,22 @@ namespace ECommerce.Entities.Concrete
         /// Admin hızlıca gizleyebilir
         /// </summary>
         public bool IsActive { get; set; } = true;
+
+        #endregion
+
+        #region Analitik Sayaçları
+
+        /// <summary>
+        /// Poster click count for analytics
+        /// Incremented via track-click endpoint
+        /// </summary>
+        public int ClickCount { get; set; } = 0;
+
+        /// <summary>
+        /// Block view count for analytics
+        /// Incremented via track-view endpoint (Intersection Observer)
+        /// </summary>
+        public int ViewCount { get; set; } = 0;
 
         #endregion
 
@@ -183,10 +227,17 @@ namespace ECommerce.Entities.Concrete
         public virtual Banner? Banner { get; set; }
 
         /// <summary>
-        /// Kategori bazlı bloklar için ilişkili kategori
-        /// CategoryId üzerinden lazy loading ile yüklenir
+        /// Kategori bazlı bloklar için ilişkili kategori (Eski navigation property)
         /// </summary>
+        [Obsolete("Use TargetCategory instead.")]
         public virtual Category? Category { get; set; }
+
+        /// <summary>
+        /// Target Category navigation property for TargetCategoryId
+        /// Supports both parent and subcategories
+        /// </summary>
+        [ForeignKey("TargetCategoryId")]
+        public virtual Category? TargetCategory { get; set; }
 
         /// <summary>
         /// Manuel seçimli bloklar için ürün ilişkileri

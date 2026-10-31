@@ -1,6 +1,8 @@
 import React, { memo, useMemo } from "react";
 import PropTypes from "prop-types";
+import { Link } from "react-router-dom";
 import BannerMedia from "./BannerMedia";
+import bannerService from "../services/bannerService";
 import {
   useAutoSlideCarousel,
   useInViewMotion,
@@ -10,6 +12,21 @@ import "./PromoBannerSection.css";
 /** Web geniş ekranda taşma + seamless loop için yeterli kart. */
 const MIN_SLIDE_CARDS = 14;
 const LOOP_COPIES = 3;
+
+function getPromoTargetUrl(promo) {
+  const raw = promo.link || promo.linkUrl;
+  if (raw && raw !== "#") return raw;
+
+  const t = (promo.title || "").toLowerCase();
+  if (t.includes("meyve") || t.includes("sebze")) return "/category/meyve-ve-sebze";
+  if (t.includes("et") || t.includes("butcher") || t.includes("kasap") || t.includes("tavuk")) return "/category/et-ve-et-urunleri";
+  if (t.includes("süt") || t.includes("sut") || t.includes("peynir") || t.includes("yoğurt") || t.includes("yogurt")) return "/category/sut-ve-sut-urunleri";
+  if (t.includes("temizlik") || t.includes("deterjan")) return "/category/ev-ve-mutfak";
+  if (t.includes("indirim") || t.includes("kaçırma") || t.includes("kacirma") || t.includes("fırsat")) return "/indirimli-urunler";
+  if (t.includes("günlük") || t.includes("gunluk") || t.includes("gurme")) return "/kategoriler";
+
+  return "/kategoriler";
+}
 
 function buildLoopSlides(promos) {
   if (!promos?.length) return { slides: [], copies: 0 };
@@ -87,12 +104,34 @@ function PromoBannerSection({ promos = [], className = "" }) {
               {slidePromos.map((promo, index) => {
                 const enterDelayMs = Math.min(index, 10) * 45;
 
+                const targetUrl = getPromoTargetUrl(promo);
+                const isExternal = /^https?:\/\//i.test(targetUrl);
+                const CardWrapper = isExternal ? "a" : Link;
+                const wrapperProps = isExternal
+                  ? {
+                      href: targetUrl,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      onClick: () => promo.id && bannerService.trackBannerClick(promo.id),
+                    }
+                  : {
+                      to: targetUrl,
+                      onClick: () => promo.id && bannerService.trackBannerClick(promo.id),
+                    };
+
                 return (
-                  <div
+                  <CardWrapper
                     key={`${promo.id}-${index}`}
-                    className={`promo-grid-item carousel-slide-card${hasEntered ? " promo-banner-item--enter is-animated" : ""}`}
-                    style={{ "--enter-delay": `${enterDelayMs}ms` }}
-                    role="presentation"
+                    className={`promo-grid-item is-clickable carousel-slide-card${hasEntered ? " promo-banner-item--enter is-animated" : ""}`}
+                    style={{
+                      "--enter-delay": `${enterDelayMs}ms`,
+                      textDecoration: "none",
+                      display: "block",
+                      cursor: "pointer",
+                    }}
+                    role="link"
+                    aria-label={promo.title || "Promosyon Ürünlerini İncele"}
+                    {...wrapperProps}
                   >
                     <BannerMedia
                       src={promo.image}
@@ -104,7 +143,7 @@ function PromoBannerSection({ promos = [], className = "" }) {
                         }
                       }}
                     />
-                  </div>
+                  </CardWrapper>
                 );
               })}
             </div>

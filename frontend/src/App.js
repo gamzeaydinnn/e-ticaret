@@ -473,9 +473,8 @@ function Header() {
                       }}
                     >
                       <i
-                        className={`fas ${
-                          user ? "fa-user-check" : "fa-user"
-                        } text-white`}
+                        className={`fas ${user ? "fa-user-check" : "fa-user"
+                          } text-white`}
                         style={{ fontSize: "0.8rem" }}
                       ></i>
                     </div>
@@ -822,7 +821,7 @@ function Header() {
                   className={
                     "category-btn" +
                     (location.pathname === "/kategoriler" ||
-                    location.pathname === "/"
+                      location.pathname === "/"
                       ? " active"
                       : "")
                   }
@@ -1159,6 +1158,16 @@ function Header() {
   );
 }
 
+function ProductsRedirect() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const category = searchParams.get("category");
+  if (category) {
+    return <Navigate to={`/category/${category}`} replace />;
+  }
+  return <Navigate to="/kategoriler" replace />;
+}
+
 function App() {
   const location = useLocation();
 
@@ -1197,6 +1206,7 @@ function App() {
         <Route path="/kategori/:slug" element={<Category />} />
         {/* Eski /kategoriler yolu da aynı gerçek ürün listesine gider */}
         <Route path="/kategoriler/:slug" element={<Category />} />
+        <Route path="/products" element={<ProductsRedirect />} />
         <Route path="/indirimli-urunler" element={<DiscountedProductsPage />} />
         <Route
           path="/kampanya/indirimli-urunler"
@@ -1801,10 +1811,10 @@ function HomePage() {
 
         const activeRoots = Array.isArray(tree)
           ? tree.filter((c) => {
-              if (!c || c.isActive === false) return false;
-              const slug = String(c.slug || c.Slug || "").toLowerCase();
-              return slug !== "kategorisiz" && slug !== "uncategorized";
-            })
+            if (!c || c.isActive === false) return false;
+            const slug = String(c.slug || c.Slug || "").toLowerCase();
+            return slug !== "kategorisiz" && slug !== "uncategorized";
+          })
           : [];
 
         if (activeRoots.length > 0) {
@@ -2153,57 +2163,84 @@ function HomePage() {
                 margin: "0 auto",
               }}
             >
-              {slides.map((slide, index) => (
-                <div
-                  key={slide.id}
-                  className={`carousel-slide ${
-                    index === currentSlide ? "active" : ""
-                  }`}
-                  style={{
-                    minHeight: "260px",
-                    height: "min(500px, 70vw)",
-                    position: index === currentSlide ? "relative" : "absolute",
-                    top: index === currentSlide ? "auto" : "0",
-                    left: index === currentSlide ? "auto" : "0",
-                    width: "100%",
-                    maxWidth: "100%",
-                    overflow: "hidden",
-                    opacity: index === currentSlide ? 1 : 0,
-                    transition: "opacity 0.8s ease-in-out",
-                    zIndex: index === currentSlide ? 2 : 1,
-                    ...(isVideoUrl(slide.image)
-                      ? { backgroundColor: "#000" }
-                      : {
+              {slides.map((slide, index) => {
+                const targetUrl = slide.link || slide.linkUrl || "/indirimli-urunler";
+                const isExternal = /^https?:\/\//i.test(targetUrl);
+                const SlideLink = isExternal ? "a" : Link;
+                const linkProps = isExternal
+                  ? {
+                      href: targetUrl,
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      onClick: () => slide.id && bannerService.trackBannerClick(slide.id),
+                    }
+                  : {
+                      to: targetUrl,
+                      onClick: () => slide.id && bannerService.trackBannerClick(slide.id),
+                    };
+
+                return (
+                  <div
+                    key={slide.id}
+                    className={`carousel-slide ${index === currentSlide ? "active" : ""}`}
+                    style={{
+                      minHeight: "260px",
+                      height: "min(500px, 70vw)",
+                      position: index === currentSlide ? "relative" : "absolute",
+                      top: index === currentSlide ? "auto" : "0",
+                      left: index === currentSlide ? "auto" : "0",
+                      width: "100%",
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      opacity: index === currentSlide ? 1 : 0,
+                      transition: "opacity 0.8s ease-in-out",
+                      zIndex: index === currentSlide ? 2 : 1,
+                      cursor: "pointer",
+                      ...(isVideoUrl(slide.image)
+                        ? { backgroundColor: "#000" }
+                        : {
                           backgroundImage: `url(${slide.image})`,
                           backgroundSize: "cover",
                           backgroundPosition: "center center",
                           backgroundRepeat: "no-repeat",
                         }),
-                  }}
-                  role="group"
-                  aria-label={`Slayt ${index + 1} / ${slides.length}: ${
-                    slide.title
-                  }`}
-                  aria-hidden={index !== currentSlide}
-                >
-                  {isVideoUrl(slide.image) && (
-                    <BannerMedia
-                      src={slide.image}
-                      alt={slide.title || "Slayt"}
-                      className="carousel-slide-media"
-                      active={index === currentSlide}
+                    }}
+                    role="group"
+                    aria-label={`Slayt ${index + 1} / ${slides.length}: ${slide.title}`}
+                    aria-hidden={index !== currentSlide}
+                  >
+                    <SlideLink
+                      {...linkProps}
                       style={{
                         position: "absolute",
                         inset: 0,
+                        zIndex: 3,
+                        display: "block",
                         width: "100%",
                         height: "100%",
-                        objectFit: "cover",
-                        objectPosition: "center",
+                        textDecoration: "none",
                       }}
-                    />
-                  )}
-                </div>
-              ))}
+                    >
+                      {isVideoUrl(slide.image) && (
+                        <BannerMedia
+                          src={slide.image}
+                          alt={slide.title || "Slayt"}
+                          className="carousel-slide-media"
+                          active={index === currentSlide}
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            objectPosition: "center",
+                          }}
+                        />
+                      )}
+                    </SlideLink>
+                  </div>
+                );
+              })}
               {/* Slide Indicators */}
               <div className="position-absolute bottom-0 start-50 translate-middle-x mb-4">
                 <div
@@ -2214,9 +2251,8 @@ function HomePage() {
                   {slides.map((_, indicatorIndex) => (
                     <button
                       key={indicatorIndex}
-                      className={`slide-indicator ${
-                        indicatorIndex === currentSlide ? "active" : ""
-                      }`}
+                      className={`slide-indicator ${indicatorIndex === currentSlide ? "active" : ""
+                        }`}
                       style={{
                         width: "12px",
                         height: "12px",
@@ -2334,9 +2370,9 @@ function HomePage() {
                 // Eğer link boşsa, jenerik /tarifler ise ya da gurme posteri yanlışlıkla sef-tavsiyesi'ne linklenmişse defaultLink kullan
                 const targetLink =
                   !recipe.link ||
-                  recipe.link === "/tarifler" ||
-                  recipe.link === "/tarif" ||
-                  (isGourmet && recipe.link.includes("koleksiyon=sef-tavsiyesi"))
+                    recipe.link === "/tarifler" ||
+                    recipe.link === "/tarif" ||
+                    (isGourmet && recipe.link.includes("koleksiyon=sef-tavsiyesi"))
                     ? defaultLink
                     : recipe.link;
 
@@ -2633,11 +2669,10 @@ function HomePage() {
 
                 {newsletterMessage && (
                   <div
-                    className={`mt-3 alert ${
-                      newsletterStatus === "success"
+                    className={`mt-3 alert ${newsletterStatus === "success"
                         ? "alert-success"
                         : "alert-danger"
-                    } py-2`}
+                      } py-2`}
                     role={newsletterStatus === "success" ? "status" : "alert"}
                   >
                     {newsletterMessage}

@@ -66,6 +66,61 @@ export const CampaignService = {
   },
 
   getBySlug: async (slug) => {
+    // 1. Önce aktif dinamik promosyonlarda ara (ID, slug veya isim ile)
+    try {
+      const activeList = await api.get("/api/promotions/active");
+      const items = Array.isArray(activeList) ? activeList : activeList?.data || [];
+      const found = items.find(
+        (c) =>
+          String(c.id) === String(slug) ||
+          (c.slug && String(c.slug).toLowerCase() === String(slug).toLowerCase()) ||
+          (c.name && String(c.name).toLowerCase() === String(slug).toLowerCase())
+      );
+      if (found) {
+        return {
+          id: found.id,
+          title: found.name || "Kampanya",
+          summary: found.displayText || found.description || "",
+          description: found.description || found.displayText || "",
+          image: found.imageUrl || "/images/placeholder.png",
+          badge: found.badgeText || "Kampanya",
+          categoryId:
+            found.targetType === 1 && found.targetIds?.length
+              ? found.targetIds[0]
+              : null,
+          targetType: found.targetType,
+          targetIds: found.targetIds || [],
+        };
+      }
+    } catch {
+      // devam et
+    }
+
+    // 2. ID ile admin kampanya detayından çekmeyi dene
+    if (/^\d+$/.test(String(slug))) {
+      try {
+        const detail = await api.get(`/api/admin/campaigns/${slug}`);
+        if (detail && detail.id) {
+          return {
+            id: detail.id,
+            title: detail.name,
+            summary: detail.description || "",
+            description: detail.description || "",
+            image: detail.imageUrl || "/images/placeholder.png",
+            badge: detail.typeDisplayName || "Kampanya",
+            categoryId:
+              detail.targetType === 1 && detail.targetIds?.length
+                ? detail.targetIds[0]
+                : null,
+            targetType: detail.targetType,
+            targetIds: detail.targetIds || [],
+          };
+        }
+      } catch {
+        // devam et
+      }
+    }
+
     if (shouldUseMockData()) {
       debugLog("Campaign detail - Mock data kullanılıyor", { slug });
       const c = findMockBySlug(slug);

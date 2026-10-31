@@ -94,6 +94,35 @@ namespace ECommerce.Business.Services.Managers
             await _bannerRepository.DeleteAsync(id);
         }
 
+        /// <summary>
+        /// Banner tıklanma sayısını 1 artırır (analytics için)
+        /// </summary>
+        public async Task IncrementClickCountAsync(int id)
+        {
+            var banner = await _bannerRepository.GetByIdAsync(id);
+            if (banner != null)
+            {
+                banner.ClickCount++;
+                await _bannerRepository.UpdateAsync(banner);
+            }
+        }
+
+        private static string CleanText(string? input)
+        {
+            if (string.IsNullOrEmpty(input) || !input.Contains('&'))
+                return input ?? string.Empty;
+
+            var current = input;
+            for (int i = 0; i < 5; i++)
+            {
+                if (!current.Contains('&')) break;
+                var decoded = System.Net.WebUtility.HtmlDecode(current);
+                if (decoded == current) break;
+                current = decoded;
+            }
+            return current;
+        }
+
         #region Mapping Methods
         
         /// <summary>
@@ -105,12 +134,12 @@ namespace ECommerce.Business.Services.Managers
             return new BannerDto
             {
                 Id = banner.Id,
-                Title = banner.Title,
-                SubTitle = banner.SubTitle,
-                Description = banner.Description,
+                Title = CleanText(banner.Title),
+                SubTitle = CleanText(banner.SubTitle),
+                Description = CleanText(banner.Description),
                 ImageUrl = banner.ImageUrl,
                 LinkUrl = banner.LinkUrl,
-                ButtonText = banner.ButtonText,
+                ButtonText = CleanText(banner.ButtonText),
                 Type = banner.Type,
                 Position = banner.Position,
                 IsActive = banner.IsActive,
@@ -133,12 +162,12 @@ namespace ECommerce.Business.Services.Managers
             return new Banner
             {
                 Id = dto.Id,
-                Title = dto.Title,
-                SubTitle = dto.SubTitle,
-                Description = dto.Description,
+                Title = CleanText(dto.Title),
+                SubTitle = CleanText(dto.SubTitle),
+                Description = CleanText(dto.Description),
                 ImageUrl = dto.ImageUrl,
                 LinkUrl = dto.LinkUrl,
-                ButtonText = dto.ButtonText,
+                ButtonText = CleanText(dto.ButtonText),
                 Type = dto.Type,
                 Position = dto.Position,
                 IsActive = dto.IsActive,

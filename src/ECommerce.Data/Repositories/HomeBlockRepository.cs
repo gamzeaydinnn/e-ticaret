@@ -39,6 +39,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .Include(b => b.BlockProducts)
                 .OrderBy(b => b.DisplayOrder)
                 .AsNoTracking()
@@ -56,6 +58,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .Where(b => b.IsActive)
                 .Where(b => !b.StartDate.HasValue || b.StartDate.Value <= now)
                 .Where(b => !b.EndDate.HasValue || b.EndDate.Value >= now)
@@ -77,6 +81,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .Include(b => b.BlockProducts)
                     .ThenInclude(bp => bp.Product)
                         .ThenInclude(p => p.Category) // Ürünün kategorisi de lazım
@@ -96,6 +102,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .FirstOrDefaultAsync(b => b.Id == id);
         }
 
@@ -107,6 +115,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .Include(b => b.BlockProducts)
                     .ThenInclude(bp => bp.Product)
                         .ThenInclude(p => p.Category)
@@ -121,6 +131,8 @@ namespace ECommerce.Data.Repositories
             return await _context.HomeProductBlocks
                 .Include(b => b.Banner)
                 .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
                 .Include(b => b.BlockProducts)
                     .ThenInclude(bp => bp.Product)
                         .ThenInclude(p => p.Category)

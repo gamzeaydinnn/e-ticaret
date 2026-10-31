@@ -12,6 +12,7 @@ import CartActionToast, {
   useCartActionToast,
 } from "../../components/CartActionToast";
 import BannerMedia from "../../components/BannerMedia";
+import homeBlockService from "../../services/homeBlockService";
 import "./ProductBlockSection.css";
 
 const WEIGHT_FALLBACK_KEYWORDS = [
@@ -334,6 +335,7 @@ const ProductBlockSection = ({
   const autoScrollRafRef = useRef(null);
   const userInteractUntilRef = useRef(0);
   const slideOffsetRef = useRef(0);
+  const hasTrackedViewRef = useRef(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [hasEntered, setHasEntered] = useState(false);
@@ -444,6 +446,14 @@ const ProductBlockSection = ({
         const ratio = entry.isIntersecting ? entry.intersectionRatio : 0;
         if (ratio > 0.05) {
           setHasEntered(true);
+        }
+
+        if (ratio >= 0.5 && !hasTrackedViewRef.current) {
+          hasTrackedViewRef.current = true;
+          const blockId = block?.id || block?.Id;
+          if (blockId) {
+            homeBlockService?.trackBlockView?.(blockId);
+          }
         }
 
         const registryEntry = blockVisibilityRegistry.get(blockMotionKey);
@@ -1121,16 +1131,67 @@ const ProductBlockSection = ({
       <div
         className={`product-block-container ${posterUrl ? "with-poster" : "no-poster"}`}
       >
-        {/* Sol Taraf - Poster (Opsiyonel) */}
-        {posterUrl && (
-          <div className="product-block-poster">
-            <BannerMedia
-              src={posterUrl}
-              alt={normalizedTitle || title}
-              className="poster-image"
-            />
-          </div>
-        )}
+        {/* Sol Taraf - Poster (Opsiyonel ve Tıklanabilir) */}
+        {posterUrl && (() => {
+          const posterClickTarget =
+            block?.posterClickTarget ||
+            block?.banner?.linkUrl ||
+            block?.posterLinkUrl ||
+            null;
+          const isExternal = posterClickTarget?.startsWith("http");
+          const PosterWrapper = posterClickTarget
+            ? isExternal
+              ? "a"
+              : Link
+            : "div";
+          const blockId = block?.id || block?.Id;
+          const posterProps = posterClickTarget
+            ? isExternal
+              ? {
+                  href: posterClickTarget,
+                  target: "_blank",
+                  rel: "noopener noreferrer",
+                  onClick: () => blockId && homeBlockService?.trackPosterClick?.(blockId),
+                }
+              : {
+                  to: posterClickTarget,
+                  onClick: () => blockId && homeBlockService?.trackPosterClick?.(blockId),
+                }
+            : {};
+
+          return (
+            <div className="product-block-poster">
+              <PosterWrapper
+                {...posterProps}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  height: "100%",
+                  textDecoration: "none",
+                  cursor: posterClickTarget ? "pointer" : "default",
+                  touchAction: "manipulation",
+                  transition: "transform 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (posterClickTarget) {
+                    e.currentTarget.style.transform = "scale(1.02)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (posterClickTarget) {
+                    e.currentTarget.style.transform = "scale(1)";
+                  }
+                }}
+              >
+                <BannerMedia
+                  src={posterUrl}
+                  alt={normalizedTitle || title}
+                  className="poster-image"
+                />
+              </PosterWrapper>
+            </div>
+          );
+        })()}
 
         {/* Sağ Taraf - Ürünler Carousel */}
         <div className="product-block-content">

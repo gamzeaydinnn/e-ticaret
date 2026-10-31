@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ECommerce.Core.DTOs.HomeBlock;
 using ECommerce.Core.DTOs;
+using ECommerce.Entities.Concrete;
 
 namespace ECommerce.Business.Services.Interfaces
 {
@@ -15,6 +16,8 @@ namespace ECommerce.Business.Services.Interfaces
     /// - Blok tipine göre ürün filtreleme (category, discounted, newest, bestseller)
     /// - Slug oluşturma ve validasyon
     /// - ViewAllUrl otomatik oluşturma
+    /// - Poster tıklama hedefi çözümleme
+    /// - Tıklama ve görüntülenme analitiği
     /// </summary>
     public interface IHomeBlockService
     {
@@ -28,11 +31,43 @@ namespace ECommerce.Business.Services.Interfaces
         Task<IEnumerable<HomeProductBlockDto>> GetActiveBlocksForHomepageAsync();
 
         /// <summary>
+        /// Gets all active blocks with enriched data for public display
+        /// Includes: resolved posterClickTarget, category breadcrumbs, products
+        /// Filters: IsActive = true, date range, active TargetCategory
+        /// Caches result for 5 minutes
+        /// </summary>
+        Task<List<HomeProductBlockDto>> GetAllActiveBlocksAsync();
+
+        /// <summary>
         /// Slug'a göre tek blok getirir (Tümünü Gör sayfası için)
         /// Tüm ürünleri içerir (MaxProductCount sınırı yok)
         /// </summary>
         Task<HomeProductBlockDto?> GetBlockBySlugAsync(string slug);
         Task<PagedResult<HomeBlockProductItemDto>?> GetBlockBySlugPagedAsync(string slug, int page, int size);
+
+        /// <summary>
+        /// Resolves poster click target for a block
+        /// Priority: Banner.linkUrl > PosterLinkUrl > null
+        /// </summary>
+        Task<string?> GetPosterClickTargetAsync(int blockId);
+
+        /// <summary>
+        /// Gets products for a block based on BlockType and TargetCategoryId
+        /// Handles parent category (includes subcategories) vs subcategory (only that category)
+        /// </summary>
+        Task<List<Product>> GetBlockProductsAsync(int blockId, int maxCount);
+
+        /// <summary>
+        /// Tracks poster click for analytics
+        /// Increments ClickCount asynchronously
+        /// </summary>
+        Task TrackPosterClickAsync(int blockId);
+
+        /// <summary>
+        /// Tracks block view for analytics
+        /// Increments ViewCount asynchronously
+        /// </summary>
+        Task TrackBlockViewAsync(int blockId);
 
         #endregion
 
@@ -123,6 +158,12 @@ namespace ECommerce.Business.Services.Interfaces
         /// Blok tipine göre ürünleri getirir (preview için)
         /// </summary>
         Task<IEnumerable<HomeBlockProductItemDto>> GetProductsByBlockTypeAsync(string blockType, int? categoryId, int maxCount);
+
+        /// <summary>
+        /// Validates TargetCategoryId exists and is active
+        /// Returns validation result with error message
+        /// </summary>
+        Task<(bool IsValid, string? ErrorMessage)> ValidateTargetCategoryAsync(int? categoryId);
 
         #endregion
     }

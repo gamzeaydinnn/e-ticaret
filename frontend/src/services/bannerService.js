@@ -636,7 +636,24 @@ export const resetToDefault = async () => {
  * veya named import:
  * import { getSliderBanners, getPromoBanners } from './services/bannerService';
  */
+/**
+ * Banner tıklama sayısını artırır (analitik takip)
+ *
+ * @param {number|string} bannerId - Banner ID
+ * @returns {Promise<void>}
+ */
+export const trackBannerClick = async (bannerId) => {
+  if (!bannerId) return;
+  try {
+    await api.post(`/api/banners/${bannerId}/track-click`);
+  } catch (error) {
+    // Fail silently - analytics tracking should not interrupt UX
+    console.debug("[BannerService] Banner click tracking failed:", error);
+  }
+};
+
 const bannerService = {
+  trackBannerClick,
   // Public
   getSliderBanners,
   getPromoBanners,

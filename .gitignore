@@ -331,3 +331,7 @@ vpn.ovpn
 # Local-only appsettings with real secrets or machine-specific VPN settings
 src/ECommerce.API/appsettings.Development.json
 src/ECommerce.API/appsettings.VpnTest.json
+
+# Temporary local files
+powershell.bat
+x.toLowerCase()

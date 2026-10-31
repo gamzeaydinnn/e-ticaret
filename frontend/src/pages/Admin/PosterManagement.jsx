@@ -28,6 +28,7 @@ import bannerService, {
   isVideoUrl,
 } from "../../services/bannerService";
 import BannerMedia from "../../components/BannerMedia";
+import api from "../../services/api";
 
 // ============================================
 // SABİTLER
@@ -45,6 +46,23 @@ const INITIAL_FORM = {
   subTitle: "",
   description: "",
   buttonText: "",
+};
+
+/** HTML entity'lerini çözen yardımcı fonksiyon (örn: &amp;amp;#x11F; -> ğ) */
+const decodeHtmlEntities = (str) => {
+  if (!str || typeof str !== "string") return str;
+  let decoded = str;
+  try {
+    for (let i = 0; i < 3; i++) {
+      if (!decoded.includes("&")) break;
+      const txt = document.createElement("textarea");
+      txt.innerHTML = decoded;
+      decoded = txt.value;
+    }
+  } catch {
+    // browser harici ortam fallback
+  }
+  return decoded.replace(/\r/g, "");
 };
 
 /** Feedback türleri için CSS class'ları */
@@ -79,6 +97,10 @@ export default function PosterManagement() {
   // Filtre ve feedback
   const [filter, setFilter] = useState("all");
   const [feedback, setFeedback] = useState({ msg: "", type: "" });
+
+  // Tıklama hedefi için kategori ve kampanya listeleri
+  const [targetCategories, setTargetCategories] = useState([]);
+  const [targetCampaigns, setTargetCampaigns] = useState([]);
 
   // Drag & drop state
   const [isDragging, setIsDragging] = useState(false);
@@ -128,6 +150,65 @@ export default function PosterManagement() {
   // Sayfa yüklendiğinde verileri çek
   useEffect(() => {
     fetchPosters();
+
+    // Kategorileri çek (Link hedefi için)
+    api.get("/api/categories")
+      .then((res) => {
+        const items = res?.$values || res?.data || res || [];
+        setTargetCategories(Array.isArray(items) ? items.filter((c) => c.isActive !== false) : []);
+      })
+      .catch(() => {});
+
+    // Gerçek admin kampanyalarını çek (Link hedefi için)
+    api.get("/api/admin/campaigns")
+      .then((res) => {
+        const items = res?.$values || res?.data || res || [];
+        if (Array.isArray(items) && items.length > 0) {
+          setTargetCampaigns(
+            items.filter((c) => c.isActive !== false).map((c) => ({
+              id: c.id,
+              name: decodeHtmlEntities(c.name || c.title || `Kampanya #${c.id}`),
+              typeLabel: c.typeDisplayName || "",
+              slug: c.slug || String(c.id),
+              link: `/campaigns/${c.slug || c.id}`,
+            }))
+          );
+        } else {
+          return api.get("/api/promotions/active").then((pRes) => {
+            const pItems = pRes?.$values || pRes?.data || pRes || [];
+            if (Array.isArray(pItems)) {
+              setTargetCampaigns(
+                pItems.map((c) => ({
+                  id: c.id,
+                  name: decodeHtmlEntities(c.name || c.title || `Kampanya #${c.id}`),
+                  typeLabel: c.badgeText || "",
+                  slug: c.slug || String(c.id),
+                  link: `/campaigns/${c.slug || c.id}`,
+                }))
+              );
+            }
+          });
+        }
+      })
+      .catch(async () => {
+        try {
+          const pRes = await api.get("/api/promotions/active");
+          const pItems = pRes?.$values || pRes?.data || pRes || [];
+          if (Array.isArray(pItems)) {
+            setTargetCampaigns(
+              pItems.map((c) => ({
+                id: c.id,
+                name: decodeHtmlEntities(c.name || c.title || `Kampanya #${c.id}`),
+                typeLabel: c.badgeText || "",
+                slug: c.slug || String(c.id),
+                link: `/campaigns/${c.slug || c.id}`,
+              }))
+            );
+          }
+        } catch {
+          // ignore
+        }
+      });
   }, [fetchPosters]);
 
   // ============================================
@@ -175,6 +256,10 @@ export default function PosterManagement() {
       setForm({
         ...INITIAL_FORM,
         ...poster,
+        title: decodeHtmlEntities(poster.title || ""),
+        subTitle: decodeHtmlEntities(poster.subTitle || ""),
+        buttonText: decodeHtmlEntities(poster.buttonText || ""),
+        description: decodeHtmlEntities(poster.description || ""),
         type:
           poster.type ||
           (poster.position === "homepage-middle" ? "promo" : "slider"),
@@ -913,25 +998,142 @@ export default function PosterManagement() {
                         )}
                       </div>
 
-                      {/* Link URL */}
+                      {/* Link URL & Akıllı Tıklama Hedefi */}
                       <div className="mb-3">
-                        <label className="form-label">Link URL</label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          name="linkUrl"
-                          value={form.linkUrl || ""}
-                          onChange={handleChange}
-                          placeholder={
-                            form.type === "recipe"
-                              ? "/tarif/1 (otomatik atanır)"
-                              : "/kategori/meyve-sebze veya https://..."
-                          }
-                          disabled={saving}
-                        />
-                        <small className="text-muted">
-                          Tıklandığında gidilecek sayfa
-                        </small>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <label className="form-label fw-semibold mb-0">
+                            Tıklama Hedefi (Link URL)
+                          </label>
+                          <small className="text-muted">Afişe basılınca açılacak sayfa</small>
+                        </div>
+
+                        {/* Hızlı Kısayol Butonları */}
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${
+                              form.linkUrl === "/indirimli-urunler"
+                                ? "btn-danger text-white"
+                                : "btn-outline-danger"
+                            }`}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                linkUrl: "/indirimli-urunler",
+                              }))
+                            }
+                            title="Tıklandığında tüm indirimli ve kampanyalı ürünler listelenir"
+                          >
+                            <i className="fas fa-fire me-1"></i>
+                            İndirimli Ürünler
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${
+                              form.linkUrl === "/kategoriler"
+                                ? "btn-primary text-white"
+                                : "btn-outline-primary"
+                            }`}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                linkUrl: "/kategoriler",
+                              }))
+                            }
+                            title="Tüm kategorilerin listesini açar"
+                          >
+                            <i className="fas fa-th-list me-1"></i>
+                            Tüm Kategoriler
+                          </button>
+                        </div>
+
+                        {/* Kategori ve Kampanya Açılır Seçicileri */}
+                        <div className="row g-2 mb-2">
+                          <div className="col-sm-6">
+                            <select
+                              className="form-select form-select-sm"
+                              value={
+                                form.linkUrl?.startsWith("/category/")
+                                  ? form.linkUrl.replace("/category/", "")
+                                  : ""
+                              }
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    linkUrl: `/category/${e.target.value}`,
+                                  }));
+                                }
+                              }}
+                            >
+                              <option value="">📂 Kategori Seç...</option>
+                              {targetCategories.map((c) => (
+                                <option key={c.id} value={c.slug}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="col-sm-6">
+                            <select
+                              className="form-select form-select-sm"
+                              value={
+                                targetCampaigns.some((c) => c.link === form.linkUrl)
+                                  ? form.linkUrl
+                                  : form.linkUrl?.startsWith("/campaigns/")
+                                  ? form.linkUrl
+                                  : ""
+                              }
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    linkUrl: e.target.value,
+                                  }));
+                                }
+                              }}
+                            >
+                              <option value="">🎁 Kampanya Seç...</option>
+                              {targetCampaigns.map((c) => {
+                                const optVal = c.link || `/campaigns/${c.slug || c.id}`;
+                                return (
+                                  <option key={c.id} value={optVal}>
+                                    {c.name} {c.typeLabel ? `(${c.typeLabel})` : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Manuel Link Girişi */}
+                        <div className="input-group">
+                          <span className="input-group-text bg-light text-muted">
+                            <i className="fas fa-link"></i>
+                          </span>
+                          <input
+                            type="text"
+                            className="form-control"
+                            name="linkUrl"
+                            value={form.linkUrl || ""}
+                            onChange={handleChange}
+                            placeholder={
+                              form.type === "recipe"
+                                ? "/tarif/1 (otomatik atanır)"
+                                : "/indirimli-urunler veya /category/meyve-sebze veya /campaigns/..."
+                            }
+                            disabled={saving}
+                          />
+                        </div>
+
+                        {form.linkUrl && (
+                          <div className="mt-1 small text-success d-flex align-items-center">
+                            <i className="fas fa-check-circle me-1"></i>
+                            <span>Aktif Hedef: <code>{form.linkUrl}</code></span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Buton Metni */}

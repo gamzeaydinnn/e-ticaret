@@ -96,6 +96,16 @@ export default function CategoryTile({ category }) {
         style={{
           outline: "none",
           textDecoration: "none",
+          minWidth: 44,
+          minHeight: 44,
+          touchAction: "manipulation",
+          transition: "opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease",
+        }}
+        onTouchStart={(e) => {
+          e.currentTarget.style.opacity = "0.7";
+        }}
+        onTouchEnd={(e) => {
+          e.currentTarget.style.opacity = "1";
         }}
       >
         {(category?.imageUrl || category?.ImageUrl) && (

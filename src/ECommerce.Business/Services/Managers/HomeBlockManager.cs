@@ -12,6 +12,8 @@ using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using ECommerce.Core.DTOs.Category;
 using Microsoft.Extensions.Logging;
 
 namespace ECommerce.Business.Services.Managers
@@ -37,16 +39,33 @@ namespace ECommerce.Business.Services.Managers
     {
         private readonly IHomeBlockRepository _repository;
         private readonly ECommerceDbContext _context;
+        private readonly IMemoryCache _cache;
         private readonly ILogger<HomeBlockManager> _logger;
+        private const string ActiveBlocksCacheKey = "active_home_blocks";
 
         public HomeBlockManager(
             IHomeBlockRepository repository,
             ECommerceDbContext context,
             ILogger<HomeBlockManager> logger)
+            : this(repository, context, new MemoryCache(new MemoryCacheOptions()), logger)
+        {
+        }
+
+        public HomeBlockManager(
+            IHomeBlockRepository repository,
+            ECommerceDbContext context,
+            IMemoryCache cache,
+            ILogger<HomeBlockManager> logger)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _context = context ?? throw new ArgumentNullException(nameof(context));
+            _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        private void InvalidateCache()
+        {
+            _cache.Remove(ActiveBlocksCacheKey);
         }
 
         #region Public Endpoints (Ana Sayfa İçin)
@@ -210,7 +229,9 @@ namespace ECommerce.Business.Services.Managers
                     Slug = await GenerateUniqueSlugAsync(dto.Name),
                     Description = dto.Description,
                     BlockType = dto.BlockType,
-                    CategoryId = dto.CategoryId,
+                    CategoryId = dto.CategoryId ?? dto.TargetCategoryId,
+                    TargetCategoryId = dto.TargetCategoryId ?? dto.CategoryId,
+                    PosterLinkUrl = dto.PosterLinkUrl,
                     BannerId = dto.BannerId,
                     PosterImageUrl = dto.PosterImageUrl,
                     BackgroundColor = dto.BackgroundColor,
@@ -231,6 +252,7 @@ namespace ECommerce.Business.Services.Managers
 
                 var created = await _repository.AddAsync(block);
                 _logger.LogInformation("✅ Blok oluşturuldu: #{Id} - {Name}", created.Id, created.Name);
+                InvalidateCache();
 
                 return MapToDto(created);
             }
@@ -267,7 +289,9 @@ namespace ECommerce.Business.Services.Managers
                 block.Title = dto.Title;
                 block.Description = dto.Description;
                 block.BlockType = dto.BlockType;
-                block.CategoryId = dto.CategoryId;
+                block.CategoryId = dto.CategoryId ?? dto.TargetCategoryId;
+                block.TargetCategoryId = dto.TargetCategoryId ?? dto.CategoryId;
+                block.PosterLinkUrl = dto.PosterLinkUrl;
                 block.BannerId = dto.BannerId;
                 block.PosterImageUrl = dto.PosterImageUrl;
                 block.BackgroundColor = dto.BackgroundColor;
@@ -285,6 +309,7 @@ namespace ECommerce.Business.Services.Managers
 
                 await _repository.UpdateAsync(block);
                 _logger.LogInformation("✅ Blok güncellendi: #{Id}", id);
+                InvalidateCache();
 
                 return MapToDto(block);
             }
@@ -312,6 +337,7 @@ namespace ECommerce.Business.Services.Managers
                 id,
                 block.IsActive ? "Aktif" : "Pasif");
 
+            InvalidateCache();
             return MapToDto(block);
         }
 
@@ -543,10 +569,11 @@ namespace ECommerce.Business.Services.Managers
                 }
 
                 case "category":
-                    // Kategori bazlı
-                    if (!block.CategoryId.HasValue) return new List<HomeBlockProductItemDto>();
+                    // Kategori bazlı (TargetCategoryId veya CategoryId)
+                    var targetCatId = block.TargetCategoryId ?? block.CategoryId;
+                    if (!targetCatId.HasValue) return new List<HomeBlockProductItemDto>();
                     var categoryProducts = await GetProductsByTypeAsync(
-                        "category", block.CategoryId, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
+                        "category", targetCatId.Value, maxCount, onlyInStock, onlyPositivePrice, mikroVisibleSkus, applyStorefrontFilter);
                     return categoryProducts.Select((p, i) => MapProductToDto(p, i)).ToList();
 
                 case "discounted":
@@ -950,7 +977,7 @@ namespace ECommerce.Business.Services.Managers
         {
             return block.BlockType.ToLower() switch
             {
-                "category" when block.CategoryId.HasValue => $"/kategori/{block.Category?.Slug ?? block.CategoryId.ToString()}",
+                "category" when (block.TargetCategoryId.HasValue || block.CategoryId.HasValue) => $"/kategori/{block.TargetCategory?.Slug ?? block.Category?.Slug ?? (block.TargetCategoryId ?? block.CategoryId).ToString()}",
                 "discounted" => "/kampanya/indirimli-urunler",
                 "newest" => "/urunler/yeni",
                 "bestseller" => "/urunler/cok-satanlar",
@@ -959,6 +986,22 @@ namespace ECommerce.Business.Services.Managers
         }
 
         #endregion
+
+        private static string CleanText(string? input)
+        {
+            if (string.IsNullOrEmpty(input) || !input.Contains('&'))
+                return input ?? string.Empty;
+
+            var current = input;
+            for (int i = 0; i < 5; i++)
+            {
+                if (!current.Contains('&')) break;
+                var decoded = System.Net.WebUtility.HtmlDecode(current);
+                if (decoded == current) break;
+                current = decoded;
+            }
+            return current;
+        }
 
         #region Mapping Methods
 
@@ -970,16 +1013,62 @@ namespace ECommerce.Business.Services.Managers
             return new HomeProductBlockDto
             {
                 Id = entity.Id,
-                Name = entity.Name,
-                Title = entity.Title,
+                Name = CleanText(entity.Name),
+                Title = CleanText(entity.Title),
                 Slug = entity.Slug,
-                Description = entity.Description,
+                Description = CleanText(entity.Description),
                 BlockType = entity.BlockType,
                 CategoryId = entity.CategoryId,
-                CategoryName = entity.Category?.Name,
-                CategorySlug = entity.Category?.Slug,
-                BannerId = entity.BannerId,
+                CategoryName = entity.Category?.Name ?? entity.TargetCategory?.Name,
+                CategorySlug = entity.Category?.Slug ?? entity.TargetCategory?.Slug,
+                TargetCategoryId = entity.TargetCategoryId ?? entity.CategoryId,
                 PosterImageUrl = entity.PosterImageUrl ?? entity.Banner?.ImageUrl,
+                PosterLinkUrl = entity.PosterLinkUrl,
+                PosterClickTarget = (entity.BannerId.HasValue && entity.Banner != null && !string.IsNullOrWhiteSpace(entity.Banner.LinkUrl))
+                    ? entity.Banner.LinkUrl
+                    : (!string.IsNullOrWhiteSpace(entity.PosterLinkUrl) ? entity.PosterLinkUrl : null),
+                ClickCount = entity.ClickCount,
+                ViewCount = entity.ViewCount,
+                ClickThroughRate = entity.ViewCount > 0 ? Math.Round((decimal)entity.ClickCount / entity.ViewCount * 100, 2) : 0m,
+                BannerId = entity.BannerId,
+                Banner = entity.Banner != null ? new BannerDto
+                {
+                    Id = entity.Banner.Id,
+                    Title = CleanText(entity.Banner.Title),
+                    SubTitle = CleanText(entity.Banner.SubTitle),
+                    Description = CleanText(entity.Banner.Description),
+                    ImageUrl = entity.Banner.ImageUrl,
+                    LinkUrl = entity.Banner.LinkUrl,
+                    ButtonText = entity.Banner.ButtonText,
+                    Type = entity.Banner.Type,
+                    Position = entity.Banner.Position,
+                    IsActive = entity.Banner.IsActive,
+                    DisplayOrder = entity.Banner.DisplayOrder,
+                    StartDate = entity.Banner.StartDate,
+                    EndDate = entity.Banner.EndDate,
+                    ClickCount = entity.Banner.ClickCount,
+                    ViewCount = entity.Banner.ViewCount,
+                    CreatedAt = entity.Banner.CreatedAt,
+                    UpdatedAt = entity.Banner.UpdatedAt
+                } : null,
+                TargetCategoryInfo = entity.TargetCategory != null ? new CategoryBreadcrumbDto
+                {
+                    Id = entity.TargetCategory.Id,
+                    Name = entity.TargetCategory.Name,
+                    Slug = entity.TargetCategory.Slug,
+                    IsSubcategory = entity.TargetCategory.ParentId.HasValue,
+                    Breadcrumb = entity.TargetCategory.Parent != null
+                        ? $"{entity.TargetCategory.Parent.Name} > {entity.TargetCategory.Name}"
+                        : entity.TargetCategory.Name,
+                    Parent = entity.TargetCategory.Parent != null ? new CategoryBreadcrumbDto
+                    {
+                        Id = entity.TargetCategory.Parent.Id,
+                        Name = entity.TargetCategory.Parent.Name,
+                        Slug = entity.TargetCategory.Parent.Slug,
+                        Breadcrumb = entity.TargetCategory.Parent.Name,
+                        IsSubcategory = false
+                    } : null
+                } : null,
                 BackgroundColor = entity.BackgroundColor,
                 DisplayOrder = entity.DisplayOrder,
                 MaxProductCount = entity.MaxProductCount,
@@ -1019,6 +1108,136 @@ namespace ECommerce.Business.Services.Managers
                 DisplayOrder = displayOrder
             };
         }
+
+        #region New Click Target, Analytics and Caching Methods
+
+        public async Task<string?> GetPosterClickTargetAsync(int blockId)
+        {
+            var block = await _context.HomeProductBlocks
+                .Include(b => b.Banner)
+                .FirstOrDefaultAsync(b => b.Id == blockId);
+
+            if (block == null) return null;
+
+            // Priority 1: Banner.LinkUrl
+            if (block.BannerId != null && block.Banner != null && !string.IsNullOrWhiteSpace(block.Banner.LinkUrl))
+            {
+                return block.Banner.LinkUrl;
+            }
+
+            // Priority 2: PosterLinkUrl
+            if (!string.IsNullOrWhiteSpace(block.PosterLinkUrl))
+            {
+                return block.PosterLinkUrl;
+            }
+
+            return null;
+        }
+
+        public async Task<List<Product>> GetBlockProductsAsync(int blockId, int maxCount)
+        {
+            var block = await _context.HomeProductBlocks
+                .Include(b => b.TargetCategory)
+                .FirstOrDefaultAsync(b => b.Id == blockId);
+
+            if (block == null) return new List<Product>();
+
+            var targetCatId = block.TargetCategoryId ?? block.CategoryId;
+            return await GetProductsByTypeAsync(
+                block.BlockType,
+                targetCatId,
+                maxCount,
+                onlyInStock: true,
+                onlyPositivePrice: true);
+        }
+
+        public async Task<List<HomeProductBlockDto>> GetAllActiveBlocksAsync()
+        {
+            if (_cache.TryGetValue(ActiveBlocksCacheKey, out List<HomeProductBlockDto>? cachedBlocks) && cachedBlocks != null)
+            {
+                return cachedBlocks;
+            }
+
+            var now = DateTime.UtcNow;
+            var blocks = await _context.HomeProductBlocks
+                .Include(b => b.Banner)
+                .Include(b => b.Category)
+                .Include(b => b.TargetCategory)
+                    .ThenInclude(c => c!.Parent)
+                .Include(b => b.BlockProducts)
+                    .ThenInclude(bp => bp.Product)
+                        .ThenInclude(p => p.Category)
+                .Where(b => b.IsActive &&
+                           (!b.StartDate.HasValue || b.StartDate.Value <= now) &&
+                           (!b.EndDate.HasValue || b.EndDate.Value >= now) &&
+                           (b.TargetCategoryId == null || b.TargetCategory!.IsActive))
+                .OrderBy(b => b.DisplayOrder)
+                .ToListAsync();
+
+            var mikroVisibleSkus = await GetMikroVisibleSkusAsync();
+            var dtos = new List<HomeProductBlockDto>();
+
+            foreach (var block in blocks)
+            {
+                var dto = MapToDto(block);
+                dto.PosterClickTarget = await GetPosterClickTargetAsync(block.Id);
+                dto.Products = await GetProductsForBlockAsync(
+                    block,
+                    onlyInStock: true,
+                    onlyPositivePrice: true,
+                    mikroVisibleSkus: mikroVisibleSkus);
+
+                dto.ClickThroughRate = block.ViewCount > 0
+                    ? Math.Round((decimal)block.ClickCount / block.ViewCount * 100, 2)
+                    : 0m;
+
+                dtos.Add(dto);
+            }
+
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(5));
+            _cache.Set(ActiveBlocksCacheKey, dtos, cacheOptions);
+
+            return dtos;
+        }
+
+        public async Task TrackPosterClickAsync(int blockId)
+        {
+            var block = await _context.HomeProductBlocks.FindAsync(blockId);
+            if (block != null)
+            {
+                block.ClickCount++;
+                await _context.SaveChangesAsync();
+                InvalidateCache();
+            }
+        }
+
+        public async Task TrackBlockViewAsync(int blockId)
+        {
+            var block = await _context.HomeProductBlocks.FindAsync(blockId);
+            if (block != null)
+            {
+                block.ViewCount++;
+                await _context.SaveChangesAsync();
+                InvalidateCache();
+            }
+        }
+
+        public async Task<(bool IsValid, string? ErrorMessage)> ValidateTargetCategoryAsync(int? categoryId)
+        {
+            if (!categoryId.HasValue) return (true, null);
+
+            var category = await _context.Categories.FindAsync(categoryId.Value);
+            if (category == null)
+                return (false, "Seçilen kategori bulunamadı.");
+
+            if (!category.IsActive)
+                return (false, "Seçilen kategori pasif durumda.");
+
+            return (true, null);
+        }
+
+        #endregion
 
         #endregion
     }

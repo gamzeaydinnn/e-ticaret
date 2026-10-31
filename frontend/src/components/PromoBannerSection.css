@@ -77,6 +77,17 @@
 }
 
 /* Kart — sabit px ölçü; App.css %/5 kuralını ezer (aksi halde kayma yok) */
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item.is-clickable {
+  cursor: pointer !important;
+  transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+.promo-banner-section .promo-banner-scroll-track .promo-grid-item.is-clickable:hover {
+  transform: translateY(-3px) scale(1.02) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16) !important;
+  z-index: 5;
+}
+
 .promo-banner-section .promo-banner-scroll-track .promo-grid-item {
   position: relative !important;
   flex: 0 0 var(--promo-card-width) !important;

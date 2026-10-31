@@ -38,10 +38,11 @@ namespace ECommerce.API.Data
                 logger.LogInformation("🖼️ BannerSeeder: Başlatılıyor...");
                 Console.WriteLine("🖼️ BannerSeeder: Başlatılıyor...");
 
-                // ⚠️ GÜVENLİK: Eğer zaten banner varsa, seed etme (veriler KORUNUR)
+                // ⚠️ GÜVENLİK: Eğer zaten banner varsa, seed etme ama bozuk Türkçe karakter entity'lerini temizle
                 if (context.Banners.Any())
                 {
-                    Console.WriteLine("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed ATLANILIYOR (banner'lar KORUNUYOR)");
+                    Console.WriteLine("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, bozuk HTML entity kontrolü yapılıyor...");
+                    await CleanHtmlEntitiesAsync(context, logger);
                     logger.LogInformation("ℹ️ BannerSeeder: Veritabanında zaten banner mevcut, seed ATLANILIYOR");
                     return;
                 }
@@ -321,6 +322,73 @@ namespace ECommerce.API.Data
                     CreatedAt = now
                 }
             };
+        }
+        private static string DecodeNested(string? text)
+        {
+            if (string.IsNullOrEmpty(text) || !text.Contains('&'))
+                return text ?? string.Empty;
+
+            var current = text;
+            for (int i = 0; i < 5; i++)
+            {
+                if (!current.Contains('&')) break;
+                var decoded = System.Net.WebUtility.HtmlDecode(current);
+                if (decoded == current) break;
+                current = decoded;
+            }
+            return current;
+        }
+
+        private static async Task CleanHtmlEntitiesAsync(ECommerceDbContext context, ILogger logger)
+        {
+            try
+            {
+                var banners = context.Banners.ToList();
+                bool changed = false;
+                foreach (var b in banners)
+                {
+                    var cleanTitle = DecodeNested(b.Title);
+                    var cleanSub = DecodeNested(b.SubTitle);
+                    var cleanDesc = DecodeNested(b.Description);
+                    var cleanBtn = DecodeNested(b.ButtonText);
+
+                    if (cleanTitle != b.Title || cleanSub != b.SubTitle || cleanDesc != b.Description || cleanBtn != b.ButtonText)
+                    {
+                        b.Title = cleanTitle;
+                        b.SubTitle = cleanSub;
+                        b.Description = cleanDesc;
+                        b.ButtonText = cleanBtn;
+                        changed = true;
+                    }
+                }
+
+                var blocks = context.HomeProductBlocks.ToList();
+                foreach (var blk in blocks)
+                {
+                    var cleanTitle = DecodeNested(blk.Title);
+                    var cleanName = DecodeNested(blk.Name);
+                    var cleanDesc = DecodeNested(blk.Description);
+
+                    if (cleanTitle != blk.Title || cleanName != blk.Name || cleanDesc != blk.Description)
+                    {
+                        blk.Title = cleanTitle;
+                        blk.Name = cleanName;
+                        blk.Description = cleanDesc;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    await context.SaveChangesAsync();
+                    logger.LogInformation("✅ Banner ve Bloklardaki bozuk HTML entity Türkçe karakterleri başarıyla temizlendi.");
+                    Console.WriteLine("✅ Banner ve Bloklardaki bozuk HTML entity Türkçe karakterleri temizlendi.");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "⚠️ CleanHtmlEntitiesAsync sırasında hata (kritik değil)");
+            }
         }
     }
 }

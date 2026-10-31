@@ -96,6 +96,21 @@ namespace ECommerce.API.Controllers
                 return BadRequest(new { message = "Blok adı zorunludur" });
             }
 
+            var updateCatId = dto.TargetCategoryId ?? dto.CategoryId;
+            if (dto.BlockType?.ToLower() == "category" && !updateCatId.HasValue)
+            {
+                return BadRequest(new { message = "Kategori bazlı bloklar için kategori seçilmelidir", error = "Kategori bazlı bloklar için kategori seçilmelidir" });
+            }
+
+            if (updateCatId.HasValue)
+            {
+                var (isValid, errorMessage) = await _homeBlockService.ValidateTargetCategoryAsync(updateCatId.Value);
+                if (!isValid)
+                {
+                    return BadRequest(new { message = errorMessage, error = errorMessage });
+                }
+            }
+
             // Blok tipi validasyonu
             var validTypes = new[] { "manual", "category", "discounted", "newest", "bestseller" };
             if (!validTypes.Contains(dto.BlockType.ToLower()))
@@ -106,10 +121,20 @@ namespace ECommerce.API.Controllers
                 });
             }
 
-            // Kategori bazlı blok için CategoryId zorunlu
-            if (dto.BlockType.ToLower() == "category" && !dto.CategoryId.HasValue)
+            // Kategori bazlı blok için TargetCategoryId / CategoryId zorunlu ve aktif olmalı
+            var targetCatId = dto.TargetCategoryId ?? dto.CategoryId;
+            if (dto.BlockType.ToLower() == "category" && !targetCatId.HasValue)
             {
-                return BadRequest(new { message = "Kategori bazlı bloklar için CategoryId zorunludur" });
+                return BadRequest(new { message = "Kategori bazlı bloklar için kategori seçilmelidir", error = "Kategori bazlı bloklar için kategori seçilmelidir" });
+            }
+
+            if (targetCatId.HasValue)
+            {
+                var (isValid, errorMessage) = await _homeBlockService.ValidateTargetCategoryAsync(targetCatId.Value);
+                if (!isValid)
+                {
+                    return BadRequest(new { message = errorMessage, error = errorMessage });
+                }
             }
 
             _logger.LogInformation("➕ Admin: Yeni blok oluşturuluyor: {Name}", dto.Name);

@@ -558,10 +558,32 @@ namespace ECommerce.Data.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsMikroSynced")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("LastMikroSyncAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MikroAltGrupKod")
+                        .HasMaxLength(25)
+                        .HasColumnType("nvarchar(25)");
+
+                    b.Property<string>("MikroAnaGrupKod")
+                        .HasMaxLength(25)
+                        .HasColumnType("nvarchar(25)");
+
+                    b.Property<string>("MikroIsim")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NavbarGroupKey")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
 
                     b.Property<int?>("ParentId")
                         .HasColumnType("int");
@@ -584,6 +606,9 @@ namespace ECommerce.Data.Migrations
                     b.HasIndex("ParentId");
 
                     b.HasIndex("ProductId");
+
+                    b.HasIndex("MikroAnaGrupKod", "MikroAltGrupKod")
+                        .HasDatabaseName("IX_Categories_MikroKod");
 
                     b.ToTable("Categories", (string)null);
                 });
@@ -1045,6 +1070,11 @@ namespace ECommerce.Data.Migrations
                     b.Property<int?>("CategoryId")
                         .HasColumnType("int");
 
+                    b.Property<int>("ClickCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -1077,6 +1107,10 @@ namespace ECommerce.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("PosterLinkUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("Slug")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -1085,8 +1119,12 @@ namespace ECommerce.Data.Migrations
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("TargetCategoryId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Title")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -1102,6 +1140,11 @@ namespace ECommerce.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<int>("ViewCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.HasKey("Id");
 
                     b.HasIndex("BannerId");
@@ -1112,8 +1155,17 @@ namespace ECommerce.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_HomeProductBlocks_Slug");
 
+                    b.HasIndex("TargetCategoryId")
+                        .HasDatabaseName("IX_HomeProductBlocks_TargetCategoryId");
+
+                    b.HasIndex("ClickCount", "ViewCount")
+                        .HasDatabaseName("IX_HomeProductBlocks_Analytics");
+
                     b.HasIndex("IsActive", "DisplayOrder")
                         .HasDatabaseName("IX_HomeProductBlocks_Active_Order");
+
+                    b.HasIndex("IsActive", "DisplayOrder", "StartDate", "EndDate")
+                        .HasDatabaseName("IX_HomeProductBlocks_Active");
 
                     b.ToTable("HomeProductBlocks", (string)null);
                 });
@@ -4387,9 +4439,16 @@ namespace ECommerce.Data.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("ECommerce.Entities.Concrete.Category", "TargetCategory")
+                        .WithMany()
+                        .HasForeignKey("TargetCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.Navigation("Banner");
 
                     b.Navigation("Category");
+
+                    b.Navigation("TargetCategory");
                 });
 
             modelBuilder.Entity("ECommerce.Entities.Concrete.InventoryLog", b =>

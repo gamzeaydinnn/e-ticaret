@@ -6,7 +6,9 @@
 
 import React, { useState, useCallback, memo } from "react";
 import PropTypes from "prop-types";
+import { Link } from "react-router-dom";
 import BannerMedia from "./BannerMedia";
+import bannerService from "../services/bannerService";
 import {
   useAutoSlideCarousel,
   useInViewMotion,
@@ -30,10 +32,40 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
 
   const enterDelayMs = Math.min(index, 10) * 55;
 
+  const isExternal = promo.linkUrl?.startsWith("http");
+  const CardWrapper = promo.linkUrl
+    ? isExternal
+      ? "a"
+      : Link
+    : "div";
+
+  const wrapperProps = promo.linkUrl
+    ? isExternal
+      ? {
+          href: promo.linkUrl,
+          target: "_blank",
+          rel: "noopener noreferrer",
+          onClick: () => bannerService.trackBannerClick(promo.id),
+        }
+      : {
+          to: promo.linkUrl,
+          onClick: () => bannerService.trackBannerClick(promo.id),
+        }
+    : {};
+
   return (
-    <div
+    <CardWrapper
+      {...wrapperProps}
       className={`promo-card-item carousel-slide-card promo-card-item--enter${isHovered ? " is-hovered" : ""}`}
-      style={{ "--enter-delay": `${enterDelayMs}ms` }}
+      style={{
+        "--enter-delay": `${enterDelayMs}ms`,
+        textDecoration: "none",
+        cursor: promo.linkUrl ? "pointer" : "default",
+        touchAction: "manipulation",
+        display: "block",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        transform: isHovered && promo.linkUrl ? "translateY(-4px)" : "none",
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       role="article"
@@ -57,7 +89,7 @@ const PromoCard = memo(function PromoCard({ promo, index }) {
           </h3>
         </div>
       )}
-    </div>
+    </CardWrapper>
   );
 });
 

@@ -33,7 +33,25 @@ import bannerService, {
   UPLOAD_CONFIG,
 } from "../../services/bannerService";
 import BannerMedia from "../../components/BannerMedia";
+import CategorySelector from "../../components/CategorySelector";
 import api from "../../services/api";
+
+/** HTML entity'lerini temizleyen yardımcı fonksiyon (örn: &amp;amp;#x11F; -> ğ, &#xF6; -> ö) */
+export const decodeHtmlEntities = (str) => {
+  if (!str || typeof str !== "string") return str || "";
+  let decoded = str;
+  try {
+    for (let i = 0; i < 4; i++) {
+      if (!decoded.includes("&")) break;
+      const txt = document.createElement("textarea");
+      txt.innerHTML = decoded;
+      decoded = txt.value;
+    }
+  } catch {
+    // fallback
+  }
+  return decoded.replace(/\r/g, "");
+};
 
 // ============================================
 // SABİTLER
@@ -265,7 +283,7 @@ export default function AdminHomeBlocks() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState({ msg: "", type: "" });
-  const [categories, setCategories] = useState([]);
+  const [banners, setBanners] = useState([]);
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -294,7 +312,13 @@ export default function AdminHomeBlocks() {
       setLoading(true);
       setError(null);
       const data = await homeBlockService.getAllBlocks();
-      setBlocks(data || []);
+      const cleaned = (Array.isArray(data) ? data : []).map((blk) => ({
+        ...blk,
+        name: decodeHtmlEntities(blk.name),
+        title: decodeHtmlEntities(blk.title),
+        description: decodeHtmlEntities(blk.description),
+      }));
+      setBlocks(cleaned);
     } catch (err) {
       console.error("[AdminHomeBlocks] Veri çekme hatası:", err);
       setError(err.message || "Bloklar yüklenirken hata oluştu");
@@ -304,13 +328,19 @@ export default function AdminHomeBlocks() {
     }
   }, []);
 
-  const fetchCategories = useCallback(async () => {
+  const fetchBanners = useCallback(async () => {
     try {
-      const data = await api.get("/api/categories");
+      const data = await api.get("/api/banners");
       const items = data?.$values || data || [];
-      setCategories(Array.isArray(items) ? items : []);
+      const cleaned = (Array.isArray(items) ? items : []).map((b) => ({
+        ...b,
+        title: decodeHtmlEntities(b.title),
+        subTitle: decodeHtmlEntities(b.subTitle),
+        description: decodeHtmlEntities(b.description),
+      }));
+      setBanners(cleaned);
     } catch (err) {
-      console.error("[AdminHomeBlocks] Kategori çekme hatası:", err);
+      console.error("[AdminHomeBlocks] Banner çekme hatası:", err);
     }
   }, []);
 
@@ -334,9 +364,9 @@ export default function AdminHomeBlocks() {
 
   useEffect(() => {
     fetchBlocks();
-    fetchCategories();
     fetchProducts();
-  }, [fetchBlocks, fetchCategories, fetchProducts]);
+    fetchBanners();
+  }, [fetchBlocks, fetchProducts, fetchBanners]);
 
   // ============================================
   // FEEDBACK
@@ -482,6 +512,33 @@ export default function AdminHomeBlocks() {
   // ============================================
   // CRUD İŞLEMLERİ
   // ============================================
+
+  const selectedBanner = useMemo(() => {
+    if (!form.bannerId) return null;
+    return banners.find((b) => Number(b.id) === Number(form.bannerId)) || null;
+  }, [form.bannerId, banners]);
+
+  const getPosterSource = useCallback(() => {
+    if (form.bannerId && selectedBanner?.linkUrl) {
+      return {
+        type: "banner",
+        url: selectedBanner.linkUrl,
+        label: "Banner Linki",
+      };
+    }
+    if (form.posterLinkUrl && form.posterLinkUrl.trim()) {
+      return {
+        type: "direct",
+        url: form.posterLinkUrl.trim(),
+        label: "Direkt Link",
+      };
+    }
+    return {
+      type: "none",
+      url: null,
+      label: "Hedef Yok",
+    };
+  }, [form.bannerId, form.posterLinkUrl, selectedBanner]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1396,33 +1453,153 @@ export default function AdminHomeBlocks() {
                         )}
                     </div>
 
-                    {/* Kategori (sadece category tipinde) */}
+                    {/* Kategori Seçici (Ana ve Alt Kategori Destekli) */}
                     {form.blockType === "category" && (
-                      <div className="col-md-6">
-                        <label className="form-label fw-semibold">
-                          Kategori
-                        </label>
-                        <select
-                          className="form-select"
-                          value={form.categoryId || ""}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              categoryId: e.target.value
-                                ? parseInt(e.target.value)
-                                : null,
-                            })
-                          }
-                        >
-                          <option value="">Kategori seçin...</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="col-12">
+                        <CategorySelector
+                          value={form.targetCategoryId || form.categoryId}
+                          onChange={(e) => {
+                            const val = e.target.value ? parseInt(e.target.value) : null;
+                            setForm((prev) => ({
+                              ...prev,
+                              targetCategoryId: val,
+                              categoryId: val,
+                            }));
+                          }}
+                        />
                       </div>
                     )}
+
+                    {/* Poster Banner ve Link Alanları */}
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Poster Banner (İsteğe Bağlı)
+                      </label>
+                      <select
+                        className="form-select"
+                        value={form.bannerId || ""}
+                        onChange={(e) => {
+                          const bId = e.target.value ? parseInt(e.target.value) : null;
+                          const bObj = banners.find((b) => Number(b.id) === bId);
+                          setForm((prev) => ({
+                            ...prev,
+                            bannerId: bId,
+                            posterImageUrl: bObj ? bObj.imageUrl : prev.posterImageUrl,
+                          }));
+                          if (bObj?.imageUrl) {
+                            setImagePreview(bObj.imageUrl);
+                          }
+                        }}
+                      >
+                        <option value="">Banner Seçilmedi (Özel Poster)</option>
+                        {banners
+                          .filter((b) => b.type !== "recipe")
+                          .map((b) => {
+                            const cleanTitle = decodeHtmlEntities(b.title) || `Banner #${b.id}`;
+                            const typeLabel =
+                              b.type === "slider"
+                                ? "Slider"
+                                : b.type === "promo"
+                                ? "Promosyon"
+                                : "Banner";
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {cleanTitle} ({typeLabel}){b.linkUrl ? ` 🔗 ${b.linkUrl}` : ""}
+                              </option>
+                            );
+                          })}
+                      </select>
+                      <small className="text-muted d-block mt-1">
+                        Sistemdeki kayıtlı banner'lardan birini seçebilirsiniz.
+                      </small>
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Poster Tıklama Hedefi (Direkt Link)
+                        <i
+                          className="fas fa-info-circle ms-1 text-muted"
+                          title="Banner seçilmediğinde veya banner linki yoksa bu link kullanılır"
+                        ></i>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        placeholder="/category/sut-urunleri veya https://..."
+                        value={form.posterLinkUrl || ""}
+                        onChange={(e) =>
+                          setForm({ ...form, posterLinkUrl: e.target.value })
+                        }
+                      />
+                      <small className="text-muted d-block mt-1">
+                        Dahili: /category/meyve-sebze | Harici: https://...
+                      </small>
+                    </div>
+
+                    {/* Aktif Poster Hedefi Önizleme Kartı */}
+                    <div className="col-12">
+                      {(() => {
+                        const posterSource = getPosterSource();
+                        return (
+                          <div
+                            className={`alert py-2 px-3 mb-0 ${
+                              posterSource.type === "none"
+                                ? "alert-secondary"
+                                : "alert-info"
+                            }`}
+                            style={{ fontSize: "0.85rem" }}
+                          >
+                            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                              <div>
+                                <strong>Aktif Poster Hedefi:</strong>
+                                <span
+                                  className={`badge ms-2 ${
+                                    posterSource.type === "none"
+                                      ? "bg-secondary"
+                                      : "bg-success"
+                                  }`}
+                                >
+                                  {posterSource.label}
+                                </span>
+                                {posterSource.url && (
+                                  <span
+                                    className="ms-2 text-dark font-monospace"
+                                    style={{ wordBreak: "break-all" }}
+                                  >
+                                    {posterSource.url}
+                                  </span>
+                                )}
+                                {posterSource.type === "none" && (
+                                  <span className="ms-2 text-muted fst-italic">
+                                    (Poster tıklandığında yönlendirme yapılmayacaktır)
+                                  </span>
+                                )}
+                              </div>
+                              {posterSource.url && (
+                                <a
+                                  href={posterSource.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn btn-sm btn-outline-primary py-0 px-2"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
+                                  <i className="fas fa-external-link-alt me-1"></i>
+                                  Test Et
+                                </a>
+                              )}
+                            </div>
+                            {form.bannerId &&
+                              selectedBanner?.linkUrl &&
+                              form.posterLinkUrl && (
+                                <div className="text-warning mt-1 small">
+                                  <i className="fas fa-exclamation-triangle me-1"></i>
+                                  Banner linki direkt linkten <strong>öncelikli</strong> olacaktır.
+                                </div>
+                              )}
+                          </div>
+                        );
+                      })()}
+                    </div>
 
                     {/* Poster Görseli - Dosya Yükleme */}
                     <div className="col-12">

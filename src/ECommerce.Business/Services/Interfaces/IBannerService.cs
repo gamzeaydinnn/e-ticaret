@@ -45,5 +45,10 @@ namespace ECommerce.Business.Services.Interfaces
         /// Banner'ı siler
         /// </summary>
         Task DeleteAsync(int id);
+
+        /// <summary>
+        /// Banner tıklanma sayısını 1 artırır (analytics için)
+        /// </summary>
+        Task IncrementClickCountAsync(int id);
     }
 }

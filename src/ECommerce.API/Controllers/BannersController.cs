@@ -112,5 +112,16 @@ namespace ECommerce.API.Controllers
             }
             return Ok(banner);
         }
+
+        /// <summary>
+        /// POST /api/banners/{id}/track-click - Banner tıklamasını kaydeder (analitik)
+        /// </summary>
+        [HttpPost("{id:int}/track-click")]
+        [ProducesResponseType(204)]
+        public async Task<IActionResult> TrackClick(int id)
+        {
+            await _bannerService.IncrementClickCountAsync(id);
+            return NoContent();
+        }
     }
 }

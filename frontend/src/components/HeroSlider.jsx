@@ -19,7 +19,9 @@
 
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import PropTypes from "prop-types";
+import { Link } from "react-router-dom";
 import BannerMedia from "./BannerMedia";
+import bannerService from "../services/bannerService";
 
 // ============================================
 // SABİTLER
@@ -381,27 +383,74 @@ function HeroSlider({
               }`}
               aria-hidden={!isActive}
             >
-              {/* Banner görseli — tıklanabilir değil (bozuk link / 404 önleme) */}
-              <BannerMedia
-                src={getImageSrc(banner)}
-                alt={banner.title || "Banner"}
-                style={styles.slideImage}
-                active={isActive}
-                loading={index === 0 ? "eager" : "lazy"}
-                onError={() => handleImageError(banner.id)}
-              />
+              {(() => {
+                const isExternal = banner.linkUrl?.startsWith("http");
+                const BannerWrapper = banner.linkUrl
+                  ? isExternal
+                    ? "a"
+                    : Link
+                  : "div";
 
-              {/* Slider Content (opsiyonel) */}
-              {showContent && (banner.title || banner.subTitle) && (
-                <div style={styles.slideContent}>
-                  {banner.title && (
-                    <h2 style={styles.slideTitle}>{banner.title}</h2>
-                  )}
-                  {banner.subTitle && (
-                    <p style={styles.slideSubtitle}>{banner.subTitle}</p>
-                  )}
-                </div>
-              )}
+                const wrapperProps = banner.linkUrl
+                  ? isExternal
+                    ? {
+                        href: banner.linkUrl,
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                        onClick: () => bannerService.trackBannerClick(banner.id),
+                      }
+                    : {
+                        to: banner.linkUrl,
+                        onClick: () => bannerService.trackBannerClick(banner.id),
+                      }
+                  : {};
+
+                return (
+                  <BannerWrapper
+                    {...wrapperProps}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      height: "100%",
+                      textDecoration: "none",
+                      cursor: banner.linkUrl ? "pointer" : "default",
+                      touchAction: "manipulation",
+                      transition: "transform 0.25s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (banner.linkUrl) {
+                        e.currentTarget.style.transform = "scale(1.015)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (banner.linkUrl) {
+                        e.currentTarget.style.transform = "scale(1)";
+                      }
+                    }}
+                  >
+                    <BannerMedia
+                      src={getImageSrc(banner)}
+                      alt={banner.title || "Banner"}
+                      style={styles.slideImage}
+                      active={isActive}
+                      loading={index === 0 ? "eager" : "lazy"}
+                      onError={() => handleImageError(banner.id)}
+                    />
+
+                    {/* Slider Content (opsiyonel) */}
+                    {showContent && (banner.title || banner.subTitle) && (
+                      <div style={styles.slideContent}>
+                        {banner.title && (
+                          <h2 style={styles.slideTitle}>{banner.title}</h2>
+                        )}
+                        {banner.subTitle && (
+                          <p style={styles.slideSubtitle}>{banner.subTitle}</p>
+                        )}
+                      </div>
+                    )}
+                  </BannerWrapper>
+                );
+              })()}
             </div>
           );
         })}

@@ -1656,6 +1656,9 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.PosterImageUrl)
                     .HasMaxLength(500);
 
+                entity.Property(e => e.PosterLinkUrl)
+                    .HasMaxLength(500);
+
                 entity.Property(e => e.BackgroundColor)
                     .HasMaxLength(20);
 
@@ -1672,6 +1675,12 @@ namespace ECommerce.Data.Context
                 entity.Property(e => e.IsActive)
                     .HasDefaultValue(true);
 
+                entity.Property(e => e.ClickCount)
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.ViewCount)
+                    .HasDefaultValue(0);
+
                 // Slug benzersiz olmalı
                 entity.HasIndex(e => e.Slug)
                     .IsUnique()
@@ -1680,6 +1689,18 @@ namespace ECommerce.Data.Context
                 // Aktif blokları sıralı getirmek için index
                 entity.HasIndex(e => new { e.IsActive, e.DisplayOrder })
                     .HasDatabaseName("IX_HomeProductBlocks_Active_Order");
+
+                // TargetCategoryId index
+                entity.HasIndex(e => e.TargetCategoryId)
+                    .HasDatabaseName("IX_HomeProductBlocks_TargetCategoryId");
+
+                // Aktif blok sorgu optimizasyonu index
+                entity.HasIndex(e => new { e.IsActive, e.DisplayOrder, e.StartDate, e.EndDate })
+                    .HasDatabaseName("IX_HomeProductBlocks_Active");
+
+                // Analitik index
+                entity.HasIndex(e => new { e.ClickCount, e.ViewCount })
+                    .HasDatabaseName("IX_HomeProductBlocks_Analytics");
 
                 // Banner ilişkisi (1 : 0..1)
                 entity.HasOne(e => e.Banner)
@@ -1692,6 +1713,12 @@ namespace ECommerce.Data.Context
                     .WithMany()
                     .HasForeignKey(e => e.CategoryId)
                     .OnDelete(DeleteBehavior.SetNull);
+
+                // TargetCategory ilişkisi (1 : 0..1)
+                entity.HasOne(e => e.TargetCategory)
+                    .WithMany()
+                    .HasForeignKey(e => e.TargetCategoryId)
+                    .OnDelete(DeleteBehavior.NoAction);
             });
 
             // -------------------
