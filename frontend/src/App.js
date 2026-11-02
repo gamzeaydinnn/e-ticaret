@@ -1231,7 +1231,7 @@ function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/addresses" element={<Addresses />} />
         {/* Şef Tavsiyesi — tarif listesi ve detay (malzemeleri sepete ekle) */}
-        <Route path="/tarif" element={<Navigate to="/tarifler" replace />} />
+        <Route path="/tarif" element={<Navigate to="/tarifler?koleksiyon=sef-tavsiyesi" replace />} />
         <Route path="/tarif/:id" element={<RecipeDetailPage />} />
         <Route path="/tarifler" element={<RecipesPage />} />
         <Route path="/kurumsal" element={<Navigate to="/" replace />} />
@@ -2298,35 +2298,51 @@ function HomePage() {
             className="container-fluid px-3 px-md-4"
             style={{ maxWidth: "1400px", margin: "0 auto" }}
           >
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <span
-                style={{
-                  width: "34px",
-                  height: "34px",
-                  borderRadius: "10px",
-                  background: "linear-gradient(135deg, #f97316, #ea580c)",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  flexShrink: 0,
-                }}
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <Link
+                to="/tarifler?koleksiyon=sef-tavsiyesi"
+                className="d-flex align-items-center gap-2 text-decoration-none text-reset"
               >
+                <span
+                  style={{
+                    width: "34px",
+                    height: "34px",
+                    borderRadius: "10px",
+                    background: "linear-gradient(135deg, #f97316, #ea580c)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    flexShrink: 0,
+                  }}
+                >
+                  <i
+                    className="fas fa-utensils"
+                    style={{ fontSize: "0.9rem" }}
+                  ></i>
+                </span>
+                <h2
+                  className="mb-0 fw-bold"
+                  style={{
+                    fontSize: "1.2rem",
+                    color: "#1a1a2e",
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  Şef Tavsiyesi
+                </h2>
+              </Link>
+              <Link
+                to="/tarifler?koleksiyon=sef-tavsiyesi"
+                className="text-decoration-none fw-semibold d-inline-flex align-items-center gap-1"
+                style={{ fontSize: "0.88rem", color: "#f97316" }}
+              >
+                <span>Tümünü Gör</span>
                 <i
-                  className="fas fa-utensils"
-                  style={{ fontSize: "0.9rem" }}
+                  className="fas fa-arrow-right"
+                  style={{ fontSize: "0.75rem" }}
                 ></i>
-              </span>
-              <h2
-                className="mb-0 fw-bold"
-                style={{
-                  fontSize: "1.2rem",
-                  color: "#1a1a2e",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Şef Tavsiyesi
-              </h2>
+              </Link>
             </div>
 
             <div className="recipe-posters-grid">
@@ -2357,24 +2373,33 @@ function HomePage() {
                 );
 
                 const isExternal = /^https?:\/\//i.test(recipe.link || "");
-                // İkinci poster (index 1) her zaman Gurme Lezzetler'dir; ayrıca başlık/açıklama/resimde "gurme" geçiyorsa da gurmedir
-                const isGourmet =
-                  index === 1 ||
-                  /gurme/i.test(
-                    `${recipe.title || ""} ${recipe.subTitle || ""} ${recipe.link || ""} ${recipe.image || ""}`
-                  );
-                const defaultLink = isGourmet
+                // Başlık veya alt başlıkta açıkça "gurme" geçiyorsa gurme koleksiyonuna yönlendir
+                // (ÖNEMLİ: recipe.image içindeki 'golkoygurme' domain adı gurme olarak algılanmamalıdır)
+                const titleAndSub = `${recipe.title || ""} ${recipe.subTitle || ""}`.toLowerCase();
+                const isChefRecipe = /şef|sef|chef/i.test(titleAndSub);
+                const isExplicitGourmet =
+                  !isChefRecipe &&
+                  (titleAndSub.includes("gurme") ||
+                    (recipe.link && recipe.link.includes("koleksiyon=gurme-lezzetler")));
+
+                const defaultLink = isExplicitGourmet
                   ? "/tarifler?koleksiyon=gurme-lezzetler"
                   : "/tarifler?koleksiyon=sef-tavsiyesi";
 
-                // Eğer link boşsa, jenerik /tarifler ise ya da gurme posteri yanlışlıkla sef-tavsiyesi'ne linklenmişse defaultLink kullan
-                const targetLink =
-                  !recipe.link ||
-                    recipe.link === "/tarifler" ||
-                    recipe.link === "/tarif" ||
-                    (isGourmet && recipe.link.includes("koleksiyon=sef-tavsiyesi"))
-                    ? defaultLink
-                    : recipe.link;
+                // Eğer link boşsa veya genel /tarifler ise defaultLink (Şef Tavsiyesi) kullan
+                let targetLink = recipe.link;
+                if (
+                  !targetLink ||
+                  targetLink === "/tarifler" ||
+                  targetLink === "/tarif"
+                ) {
+                  targetLink = defaultLink;
+                } else if (
+                  isChefRecipe &&
+                  targetLink.includes("koleksiyon=gurme-lezzetler")
+                ) {
+                  targetLink = "/tarifler?koleksiyon=sef-tavsiyesi";
+                }
 
                 return isExternal ? (
                   <a
