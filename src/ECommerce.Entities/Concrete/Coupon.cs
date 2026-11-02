@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // Coupon Entity - E-Ticaret Kupon Sistemi
 // =============================================================================
 // Bu entity, sistemdeki tüm kuponları temsil eder.
@@ -148,6 +148,7 @@ namespace ECommerce.Entities.Concrete
         /// Kategori navigation property
         /// </summary>
         [ForeignKey("CategoryId")]
+        [System.Text.Json.Serialization.JsonIgnore]
         public virtual Category? Category { get; set; }
 
         /// <summary>
@@ -160,6 +161,7 @@ namespace ECommerce.Entities.Concrete
         /// Ürün bazlı kupon - Sadece bu ürünlerde geçerli (many-to-many)
         /// Boş ise tüm ürünlerde geçerli
         /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
         public virtual ICollection<CouponProduct> CouponProducts { get; set; } = new HashSet<CouponProduct>();
 
         // =============================================================================
@@ -189,6 +191,7 @@ namespace ECommerce.Entities.Concrete
         /// <summary>
         /// Kupon kullanım geçmişi - Hangi siparişlerde kullanıldı
         /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
         public virtual ICollection<CouponUsage> CouponUsages { get; set; } = new HashSet<CouponUsage>();
 
         // IsActive already provided by BaseEntity - Kupon aktif/pasif durumu

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { AdminService } from "../../services/adminService";
 
 const initialForm = {
@@ -39,6 +39,7 @@ export default function CouponManagement() {
   async function loadCoupons() {
     try {
       setLoading(true);
+      setError("");
       const data = await AdminService.getCoupons();
       setCoupons(Array.isArray(data) ? data : []);
     } catch (e) {

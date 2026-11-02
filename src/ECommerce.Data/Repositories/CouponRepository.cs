@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // CouponRepository - Kupon Repository Implementasyonu
 // =============================================================================
 // Bu repository, kupon ve kupon kullanım verilerine erişim sağlar.
@@ -23,6 +23,15 @@ namespace ECommerce.Data.Repositories
     public class CouponRepository : BaseRepository<Coupon>, ICouponRepository
     {
         public CouponRepository(ECommerceDbContext context) : base(context) { }
+
+        /// <inheritdoc />
+        /// <summary>Admin paneli iÃ§in tÃ¼m kuponlarÄ± (aktif ve pasif dahil) getirir.</summary>
+        public override async Task<IEnumerable<Coupon>> GetAllAsync()
+        {
+            return await _dbSet
+                .OrderByDescending(c => c.CreatedAt)
+                .ToListAsync();
+        }
 
         // =============================================================================
         // Kupon Sorgulama
