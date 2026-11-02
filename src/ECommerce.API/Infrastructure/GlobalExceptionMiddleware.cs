@@ -102,6 +102,9 @@ namespace ECommerce.API.Infrastructure
                 ArgumentException ae =>
                     (StatusCodes.Status400BadRequest, ae.Message),
 
+                InvalidOperationException ioe =>
+                    (StatusCodes.Status400BadRequest, ioe.Message),
+
                 OperationCanceledException =>
                     (StatusCodes.Status400BadRequest, "İstek iptal edildi."),
 

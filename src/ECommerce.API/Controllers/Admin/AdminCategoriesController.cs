@@ -138,16 +138,44 @@ namespace ECommerce.API.Controllers.Admin
             return Ok(category);
         }
 
+        public class AdminCategorySaveDto
+        {
+            public string Name { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string? ImageUrl { get; set; }
+            public int? ParentId { get; set; }
+            public int SortOrder { get; set; } = 0;
+            public string? Slug { get; set; }
+            public bool IsActive { get; set; } = true;
+            public string? MikroAnaGrupKod { get; set; }
+            public string? MikroAltGrupKod { get; set; }
+            public string? NavbarGroupKey { get; set; }
+        }
+
         // POST /api/admin/categories
         // YALNIZCA admin yeni bir ana kategori veya alt kategori eklediğinde Mikro ERP'ye INSERT yapılır.
         [HttpPost]
         [HasPermission(Permissions.Categories.Create)]
-        public async Task<IActionResult> CreateCategory([FromBody] Category category)
+        public async Task<IActionResult> CreateCategory([FromBody] AdminCategorySaveDto dto)
         {
-            if (category == null || string.IsNullOrWhiteSpace(category.Name))
+            if (dto == null || string.IsNullOrWhiteSpace(dto.Name))
             {
                 return BadRequest(new { message = "Kategori adı zorunludur." });
             }
+
+            var category = new Category
+            {
+                Name = dto.Name.Trim(),
+                Description = dto.Description ?? string.Empty,
+                ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim(),
+                ParentId = dto.ParentId,
+                SortOrder = dto.SortOrder,
+                Slug = dto.Slug ?? string.Empty,
+                IsActive = dto.IsActive,
+                MikroAnaGrupKod = dto.MikroAnaGrupKod,
+                MikroAltGrupKod = dto.MikroAltGrupKod,
+                NavbarGroupKey = string.IsNullOrWhiteSpace(dto.NavbarGroupKey) ? null : dto.NavbarGroupKey.Trim()
+            };
 
             try
             {
@@ -245,24 +273,27 @@ namespace ECommerce.API.Controllers.Admin
         // Güncelleme ve aktif/pasif yapma işlemleri yalnızca yerel DB'de uygulanır, Mikro'ya dokunmaz.
         [HttpPut("{id}")]
         [HasPermission(Permissions.Categories.Update)]
-        public async Task<IActionResult> UpdateCategory(int id, [FromBody] Category category)
+        public async Task<IActionResult> UpdateCategory(int id, [FromBody] AdminCategorySaveDto dto)
         {
             var existing = await _categoryService.GetByIdAsync(id);
             if (existing == null) return NotFound();
 
-            existing.Name = category.Name;
-            existing.Description = category.Description;
-            existing.ImageUrl = category.ImageUrl;
-            existing.ParentId = category.ParentId;
-            existing.SortOrder = category.SortOrder;
-            existing.Slug = category.Slug;
-            existing.IsActive = category.IsActive;
-
-            if (category.NavbarGroupKey != null)
+            existing.Name = dto.Name.Trim();
+            existing.Description = dto.Description ?? string.Empty;
+            existing.ImageUrl = string.IsNullOrWhiteSpace(dto.ImageUrl) ? null : dto.ImageUrl.Trim();
+            existing.ParentId = dto.ParentId;
+            existing.SortOrder = dto.SortOrder;
+            if (!string.IsNullOrWhiteSpace(dto.Slug))
             {
-                existing.NavbarGroupKey = string.IsNullOrWhiteSpace(category.NavbarGroupKey)
+                existing.Slug = dto.Slug.Trim();
+            }
+            existing.IsActive = dto.IsActive;
+
+            if (dto.NavbarGroupKey != null)
+            {
+                existing.NavbarGroupKey = string.IsNullOrWhiteSpace(dto.NavbarGroupKey)
                     ? null
-                    : category.NavbarGroupKey.Trim();
+                    : dto.NavbarGroupKey.Trim();
             }
 
             try

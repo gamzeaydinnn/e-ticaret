@@ -56,10 +56,13 @@ namespace ECommerce.Entities.Concrete
         public string? NavbarGroupKey { get; set; }
 
         // ParentCategoryId ile hiyerarşi desteği.
+        [System.Text.Json.Serialization.JsonIgnore]
         public ICollection<Product> Products { get; set; } = new HashSet<Product>();
 
         // Navigation Properties
+        [System.Text.Json.Serialization.JsonIgnore]
         public virtual Category? Parent { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
         public virtual ICollection<Category> SubCategories { get; set; } = new HashSet<Category>();
     }
 }

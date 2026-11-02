@@ -23,6 +23,7 @@ namespace ECommerce.Entities.Concrete
         public string ImageUrl { get; set; } = string.Empty;
         public string SKU { get; set; } = string.Empty;
         [NotMapped]
+        [System.Text.Json.Serialization.JsonIgnore]
         public string Sku { get => SKU; set => SKU = value; }
         public string Currency { get; set; } = "TRY";
         public bool? AdminOverrideName { get; set; }
