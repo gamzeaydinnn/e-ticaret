@@ -5,9 +5,9 @@
  */
 
 export const RECIPE_COLLECTIONS = [
-  { id: "tumu", name: "Tüm Tarifler" },
-  { id: "gurme-lezzetler", name: "✨ Gurme Lezzetler (Elit)" },
+  { id: "tumu", name: "🍽️ Tüm Tarifler" },
   { id: "sef-tavsiyesi", name: "👨‍🍳 Şef Tavsiyesi (Klasik)" },
+  { id: "gurme-lezzetler", name: "✨ Gurme Lezzetler (Elit)" },
 ];
 
 export const RECIPE_CATEGORIES = [

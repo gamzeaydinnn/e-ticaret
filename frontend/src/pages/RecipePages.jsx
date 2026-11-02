@@ -845,18 +845,21 @@ export function RecipesPage() {
   const [selectedCategory, setSelectedCategory] = useState("Tümü");
 
   useEffect(() => {
-    const colParam = searchParams.get("koleksiyon");
-    if (colParam) setSelectedCollection(colParam);
+    const colParam = searchParams.get("koleksiyon") || "tumu";
+    setSelectedCollection(colParam);
+    setSelectedCategory("Tümü");
   }, [searchParams]);
 
   const handleCollectionChange = (colId) => {
     setSelectedCollection(colId);
+    setSelectedCategory("Tümü");
+    const nextParams = new URLSearchParams(searchParams);
     if (colId === "tumu") {
-      searchParams.delete("koleksiyon");
+      nextParams.delete("koleksiyon");
     } else {
-      searchParams.set("koleksiyon", colId);
+      nextParams.set("koleksiyon", colId);
     }
-    setSearchParams(searchParams);
+    setSearchParams(nextParams);
   };
 
   const filteredRecipes = useMemo(() => {
@@ -879,10 +882,10 @@ export function RecipesPage() {
           <i className="fas fa-angle-right" style={{ fontSize: "0.7rem" }}></i>
           <span>
             {selectedCollection === "gurme-lezzetler"
-              ? "Gurme Lezzetler"
+              ? "✨ Gurme Lezzetler"
               : selectedCollection === "sef-tavsiyesi"
-              ? "Şef Tavsiyesi"
-              : "Yemek Tarifleri"}
+              ? "👨‍🍳 Şef Tavsiyesi"
+              : "🍽️ Tüm Tarifler"}
           </span>
         </div>
 
@@ -893,12 +896,16 @@ export function RecipesPage() {
               {selectedCollection === "gurme-lezzetler"
                 ? "✨ Gurme Lezzetler"
                 : selectedCollection === "sef-tavsiyesi"
-                ? "👨‍🍳 Şef Tavsiyesi"
-                : "Gölköy Gurme Tarifler"}
+                ? "👨‍🍳 Şef Tavsiyesi (Klasik Tarifler)"
+                : "🍽️ Gölköy Gurme Tarifler"}
             </h1>
           </div>
           <p className="rcp-header-subtitle">
-            Usta şeflerimizden özel tarifler; tüm malzemeleri tek tıkla sepetinize ekleyin.
+            {selectedCollection === "gurme-lezzetler"
+              ? "Usta şeflerimizden gurme ve elit lezzet seçkisi; tüm özel malzemeler tek tıkla kapınızda."
+              : selectedCollection === "sef-tavsiyesi"
+              ? "Ev sıcaklığında geleneksel lezzetler ve şef klasikleri; taze malzemeleriyle sepete ekleyin."
+              : "Usta şeflerimizden özel tarifler; tüm malzemeleri tek tıkla sepetinize ekleyin."}
           </p>
 
           {/* Koleksiyon Seçimi (Elit Gurme & Şef Tavsiyesi) */}

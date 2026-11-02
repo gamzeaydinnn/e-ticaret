@@ -384,6 +384,9 @@ export default function PosterManagement() {
       if (matched) return `Kampanya: ${matched.name}`;
       return `Kampanya: ${slug}`;
     }
+    if (form.linkUrl === "/tarifler?koleksiyon=sef-tavsiyesi") return "Şef Tavsiyesi (Klasik Ev Lezzetleri)";
+    if (form.linkUrl === "/tarifler?koleksiyon=gurme-lezzetler") return "Gurme Lezzetler (Elit Şef Seçkisi)";
+    if (form.linkUrl === "/tarifler" || form.linkUrl === "/tarif") return "Tüm Yemek Tarifleri Sayfası";
     return "";
   }, [form.linkUrl, targetHomeBlocks, targetCategories, targetCampaigns]);
 
@@ -1383,6 +1386,63 @@ export default function PosterManagement() {
                                 );
                               })}
                             </select>
+                          </div>
+                        </div>
+
+                        {/* 4. Tarif Koleksiyonu Seçimi (Özellikle Şef Tavsiyesi / Tarif Tipleri İçin) */}
+                        <div className="mb-2 p-2 bg-white rounded border">
+                          <label className="form-label small text-muted mb-1 fw-semibold d-block">
+                            🍳 Tarif Koleksiyonu Hızlı Seçim
+                          </label>
+                          <div className="d-flex gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${
+                                form.linkUrl === "/tarifler?koleksiyon=sef-tavsiyesi"
+                                  ? "btn-warning text-dark fw-bold"
+                                  : "btn-outline-warning"
+                              }`}
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  linkUrl: "/tarifler?koleksiyon=sef-tavsiyesi",
+                                }))
+                              }
+                            >
+                              👨‍🍳 Şef Tavsiyesi (Klasik Tarifler)
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${
+                                form.linkUrl === "/tarifler?koleksiyon=gurme-lezzetler"
+                                  ? "btn-dark text-warning fw-bold"
+                                  : "btn-outline-dark"
+                              }`}
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  linkUrl: "/tarifler?koleksiyon=gurme-lezzetler",
+                                }))
+                              }
+                            >
+                              ✨ Gurme Lezzetler (Elit Seçki)
+                            </button>
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${
+                                form.linkUrl === "/tarifler"
+                                  ? "btn-secondary text-white fw-bold"
+                                  : "btn-outline-secondary"
+                              }`}
+                              onClick={() =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  linkUrl: "/tarifler",
+                                }))
+                              }
+                            >
+                              🍽️ Tüm Tarifler
+                            </button>
                           </div>
                         </div>
 

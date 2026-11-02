@@ -2292,7 +2292,7 @@ function HomePage() {
       {recipeBanners.length > 0 && (
         <section
           className="recipe-section py-3 py-md-4"
-          aria-label="Şef Tavsiyesi"
+          aria-label="Şef Tavsiyesi ve Gurme Lezzetler"
         >
           <div
             className="container-fluid px-3 px-md-4"
@@ -2300,7 +2300,7 @@ function HomePage() {
           >
             <div className="d-flex align-items-center justify-content-between mb-3">
               <Link
-                to="/tarifler?koleksiyon=sef-tavsiyesi"
+                to="/tarifler"
                 className="d-flex align-items-center gap-2 text-decoration-none text-reset"
               >
                 <span
@@ -2329,15 +2329,15 @@ function HomePage() {
                     letterSpacing: "-0.02em",
                   }}
                 >
-                  Şef Tavsiyesi
+                  Şef Tavsiyesi & Gurme Lezzetler
                 </h2>
               </Link>
               <Link
-                to="/tarifler?koleksiyon=sef-tavsiyesi"
+                to="/tarifler"
                 className="text-decoration-none fw-semibold d-inline-flex align-items-center gap-1"
                 style={{ fontSize: "0.88rem", color: "#f97316" }}
               >
-                <span>Tümünü Gör</span>
+                <span>Tüm Tarifleri Gör</span>
                 <i
                   className="fas fa-arrow-right"
                   style={{ fontSize: "0.75rem" }}
@@ -2351,7 +2351,7 @@ function HomePage() {
                   <div className="recipe-poster-card">
                     <BannerMedia
                       src={recipe.image}
-                      alt={recipe.title || "Şef Tavsiyesi"}
+                      alt={recipe.title || "Tarif"}
                       className="recipe-poster-media"
                       onError={(e) => {
                         if (e?.target?.tagName === "IMG") {
@@ -2373,32 +2373,20 @@ function HomePage() {
                 );
 
                 const isExternal = /^https?:\/\//i.test(recipe.link || "");
-                // Başlık veya alt başlıkta açıkça "gurme" geçiyorsa gurme koleksiyonuna yönlendir
-                // (ÖNEMLİ: recipe.image içindeki 'golkoygurme' domain adı gurme olarak algılanmamalıdır)
                 const titleAndSub = `${recipe.title || ""} ${recipe.subTitle || ""}`.toLowerCase();
-                const isChefRecipe = /şef|sef|chef/i.test(titleAndSub);
-                const isExplicitGourmet =
-                  !isChefRecipe &&
-                  (titleAndSub.includes("gurme") ||
-                    (recipe.link && recipe.link.includes("koleksiyon=gurme-lezzetler")));
 
-                const defaultLink = isExplicitGourmet
-                  ? "/tarifler?koleksiyon=gurme-lezzetler"
-                  : "/tarifler?koleksiyon=sef-tavsiyesi";
+                let targetLink = String(recipe.link || "").trim();
 
-                // Eğer link boşsa veya genel /tarifler ise defaultLink (Şef Tavsiyesi) kullan
-                let targetLink = recipe.link;
-                if (
-                  !targetLink ||
-                  targetLink === "/tarifler" ||
-                  targetLink === "/tarif"
-                ) {
-                  targetLink = defaultLink;
-                } else if (
-                  isChefRecipe &&
-                  targetLink.includes("koleksiyon=gurme-lezzetler")
-                ) {
-                  targetLink = "/tarifler?koleksiyon=sef-tavsiyesi";
+                // Eğer poster linki boşsa veya genel /tarifler ise başlığa ve sıraya göre yönlendir
+                if (!targetLink || targetLink === "/tarifler" || targetLink === "/tarif") {
+                  if (titleAndSub.includes("gurme")) {
+                    targetLink = "/tarifler?koleksiyon=gurme-lezzetler";
+                  } else if (titleAndSub.includes("şef") || titleAndSub.includes("sef") || titleAndSub.includes("klasik")) {
+                    // Eğer 2. poster ise ve adı şef2 ise gurmeye, değilse klasiğe
+                    targetLink = index === 1 ? "/tarifler?koleksiyon=gurme-lezzetler" : "/tarifler?koleksiyon=sef-tavsiyesi";
+                  } else {
+                    targetLink = index === 1 ? "/tarifler?koleksiyon=gurme-lezzetler" : "/tarifler?koleksiyon=sef-tavsiyesi";
+                  }
                 }
 
                 return isExternal ? (
