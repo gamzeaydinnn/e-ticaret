@@ -105,8 +105,6 @@ RUN echo 'server { \
     location = /media { return 301 /; } \
     location = /medya { return 301 /; } \
     location = /basin-kiti { return 301 /; } \
-    location = /tarifler { return 301 /; } \
-    location ~ ^/tarif(/|$) { return 301 /; } \
     location = /markalar { return 301 /kategoriler; } \
     location ~* ^/product/dececco { return 301 /; } \
     \
