@@ -235,6 +235,19 @@ export default function CategoryDetail() {
         </nav>
       )}
 
+      {/* Geri Dön Butonu (Mobil ve Masaüstü Uyumlu) */}
+      <div className="d-flex align-items-center justify-content-end mb-3">
+        <Link
+          to="/"
+          className="category-back-btn"
+          title="Ana Sayfaya Dön"
+          aria-label="Ana Sayfaya Dön"
+        >
+          <i className="fas fa-arrow-left category-back-icon"></i>
+          <span>Ana Sayfaya Dön</span>
+        </Link>
+      </div>
+
       {/* Category Header */}
       <section className="mb-4">
         <div

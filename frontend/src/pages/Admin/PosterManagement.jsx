@@ -20,7 +20,7 @@
  * @version 2.0.0
  */
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import bannerService, {
   BANNER_DIMENSIONS,
   UPLOAD_CONFIG,
@@ -29,6 +29,7 @@ import bannerService, {
 } from "../../services/bannerService";
 import BannerMedia from "../../components/BannerMedia";
 import api from "../../services/api";
+import categoryServiceReal from "../../services/categoryServiceReal";
 
 // ============================================
 // SABİTLER
@@ -100,6 +101,7 @@ export default function PosterManagement() {
 
   // Tıklama hedefi için kategori ve kampanya listeleri
   const [targetCategories, setTargetCategories] = useState([]);
+  const [targetHomeBlocks, setTargetHomeBlocks] = useState([]);
   const [targetCampaigns, setTargetCampaigns] = useState([]);
 
   // Drag & drop state
@@ -151,13 +153,68 @@ export default function PosterManagement() {
   useEffect(() => {
     fetchPosters();
 
-    // Kategorileri çek (Link hedefi için)
-    api.get("/api/categories")
-      .then((res) => {
+        // Kategorileri çek (Link hedefi için)
+    const loadCategories = async () => {
+      try {
+        const tree = await categoryServiceReal.getCategoryTree();
+        if (Array.isArray(tree) && tree.length > 0) {
+          const list = [];
+          for (const root of tree) {
+            const rootName = root.name || root.Name || "";
+            const rootSlug = root.slug || root.Slug || "";
+            const rootId = root.id || root.Id;
+            if (rootName) {
+              list.push({
+                id: rootId,
+                name: rootName,
+                slug: rootSlug,
+                depth: 0,
+              });
+            }
+            const subs = root.subCategories || root.children || root.SubCategories || root.Children || [];
+            for (const sub of subs) {
+              const subName = sub.name || sub.Name || "";
+              const subSlug = sub.slug || sub.Slug || "";
+              const subId = sub.id || sub.Id;
+              if (subName) {
+                list.push({
+                  id: subId,
+                  name: subName,
+                  slug: subSlug,
+                  depth: 1,
+                  parentName: rootName,
+                });
+              }
+            }
+          }
+          if (list.length > 0) {
+            setTargetCategories(list);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("[PosterManagement] Kategori ağacı alınamadı, düz API deneniyor:", err);
+      }
+
+      try {
+        const res = await api.get("/api/categories");
         const items = res?.$values || res?.data || res || [];
-        setTargetCategories(Array.isArray(items) ? items.filter((c) => c.isActive !== false) : []);
-      })
-      .catch(() => {});
+        if (Array.isArray(items) && items.length > 0) {
+          const list = items
+            .filter((c) => (c?.isActive ?? c?.IsActive) !== false)
+            .map((c) => ({
+              id: c.id ?? c.Id,
+              name: c.name ?? c.Name ?? "",
+              slug: c.slug ?? c.Slug ?? "",
+              depth: c.parentId || c.ParentId ? 1 : 0,
+            }));
+          setTargetCategories(list);
+        }
+      } catch (e) {
+        console.error("[PosterManagement] Kategoriler yüklenemedi:", e);
+      }
+    };
+    loadCategories();
 
     // Gerçek admin kampanyalarını çek (Link hedefi için)
     api.get("/api/admin/campaigns")
@@ -209,7 +266,126 @@ export default function PosterManagement() {
           // ignore
         }
       });
+    // Ana sayfa bloklarını çek (Link hedefi için: Son Eklenenler, Çok Satanlar, İndirimli Bloklar vb.)
+    const fetchHomeBlocks = async () => {
+      try {
+        const res = await api.get("/api/admin/homeblocks");
+        const items = res?.value || res?.$values || res?.data || res || [];
+        if (Array.isArray(items) && items.length > 0) {
+          setTargetHomeBlocks(
+            items
+              .filter((b) => b && (b.isActive !== false && b.IsActive !== false))
+              .map((b) => ({
+                id: b.id || b.Id,
+                title: decodeHtmlEntities(b.title || b.Title || b.name || b.Name || `Blok #${b.id || b.Id}`),
+                slug: b.slug || b.Slug || String(b.id || b.Id),
+                blockType: String(b.blockType || b.BlockType || "manual").toLowerCase(),
+                categoryName: b.categoryName || b.CategoryName || "",
+              }))
+          );
+          return;
+        }
+      } catch (err) {
+        console.warn("[PosterManagement] Admin bloklar alınamadı, genel deneniyor:", err);
+      }
+
+      try {
+        const pubRes = await api.get("/api/homeblocks");
+        const pubItems = pubRes?.value || pubRes?.$values || pubRes?.data || pubRes || [];
+        if (Array.isArray(pubItems)) {
+          setTargetHomeBlocks(
+            pubItems
+              .filter((b) => b && (b.isActive !== false && b.IsActive !== false))
+              .map((b) => ({
+                id: b.id || b.Id,
+                title: decodeHtmlEntities(b.title || b.Title || b.name || b.Name || `Blok #${b.id || b.Id}`),
+                slug: b.slug || b.Slug || String(b.id || b.Id),
+                blockType: String(b.blockType || b.BlockType || "manual").toLowerCase(),
+                categoryName: b.categoryName || b.CategoryName || "",
+              }))
+          );
+        }
+      } catch (e) {
+        console.error("[PosterManagement] Bloklar alınamadı:", e);
+      }
+    };
+    fetchHomeBlocks();
   }, [fetchPosters]);
+
+  // Ana sayfa bloklarından hızlı kısayol URL'leri (Yeni Ürünler, Çok Satanlar vb.)
+  const newestBlock = useMemo(
+    () => targetHomeBlocks.find((b) => b.blockType === "newest" || b.slug?.includes("yeni") || b.slug?.includes("son")),
+    [targetHomeBlocks]
+  );
+  const bestsellerBlock = useMemo(
+    () => targetHomeBlocks.find((b) => b.blockType === "bestseller" || b.slug?.includes("cok-satan")),
+    [targetHomeBlocks]
+  );
+  const newestUrl = newestBlock ? `/collection/${newestBlock.slug}` : "/collection/yeni-urunler";
+  const bestsellerUrl = bestsellerBlock ? `/collection/${bestsellerBlock.slug}` : "/collection/cok-satanlar";
+
+  // Kategorileri hiyerarşik ve güvenli olarak hazırla
+  const categoryOptions = useMemo(() => {
+    if (!Array.isArray(targetCategories) || targetCategories.length === 0) return [];
+    
+    // Eğer depth bilgisi zaten varsa doğrudan kullan
+    if (targetCategories.some((c) => c.depth !== undefined)) {
+      return targetCategories;
+    }
+
+    const roots = targetCategories.filter((c) => !c.parentId && !c.ParentId && c.parentId !== 0 && c.ParentId !== 0);
+    if (roots.length === 0) {
+      return targetCategories;
+    }
+
+    const subMap = new Map();
+    for (const c of targetCategories) {
+      const pid = c.parentId || c.ParentId;
+      if (pid && pid !== 0) {
+        const key = String(pid);
+        if (!subMap.has(key)) subMap.set(key, []);
+        subMap.get(key).push(c);
+      }
+    }
+
+    const result = [];
+    for (const r of roots) {
+      result.push({ ...r, depth: 0 });
+      const subs = subMap.get(String(r.id || r.Id)) || [];
+      for (const s of subs) {
+        result.push({ ...s, depth: 1, parentName: r.name || r.Name });
+      }
+    }
+    return result.length > 0 ? result : targetCategories;
+  }, [targetCategories]);
+
+  // Aktif link URL'sinin insan tarafından okunabilir açıklaması
+  const targetLabel = useMemo(() => {
+    if (!form.linkUrl) return "";
+    if (form.linkUrl === "/indirimli-urunler") return "Tüm İndirimli Ürünler Sayfası";
+    if (form.linkUrl === "/kategoriler") return "Tüm Kategoriler Dizini";
+    if (form.linkUrl.startsWith("/collection/")) {
+      const slug = form.linkUrl.replace("/collection/", "");
+      const matched = targetHomeBlocks.find((b) => b.slug === slug || String(b.id) === slug);
+      if (matched) return `Ana Sayfa Bloğu: ${matched.title}`;
+      if (slug === "yeni-urunler" || slug === "son-eklenenler") return "Son Eklenen Yeni Ürünler";
+      if (slug === "cok-satanlar") return "En Çok Satan Ürünler";
+      return `Koleksiyon: ${slug}`;
+    }
+    if (form.linkUrl.startsWith("/category/")) {
+      const slug = form.linkUrl.replace("/category/", "");
+      const matched = targetCategories.find((c) => c.slug === slug || String(c.id) === slug);
+      if (matched) return `Kategori: ${matched.name || matched.Name}`;
+      return `Kategori: ${slug}`;
+    }
+    if (form.linkUrl.startsWith("/campaigns/")) {
+      const slug = form.linkUrl.replace("/campaigns/", "");
+      const matched = targetCampaigns.find((c) => c.slug === slug || String(c.id) === slug || c.link === form.linkUrl);
+      if (matched) return `Kampanya: ${matched.name}`;
+      return `Kampanya: ${slug}`;
+    }
+    return "";
+  }, [form.linkUrl, targetHomeBlocks, targetCategories, targetCampaigns]);
 
   // ============================================
   // FEEDBACK (BİLDİRİM) YÖNETİMİ
@@ -1007,13 +1183,13 @@ export default function PosterManagement() {
                           <small className="text-muted">Afişe basılınca açılacak sayfa</small>
                         </div>
 
-                        {/* Hızlı Kısayol Butonları */}
+                        {/* Hızlı Kısayol Butonları (İndirimli Ürünler, Son Eklenenler, Çok Satanlar, vb.) */}
                         <div className="d-flex flex-wrap gap-2 mb-2">
                           <button
                             type="button"
                             className={`btn btn-sm ${
                               form.linkUrl === "/indirimli-urunler"
-                                ? "btn-danger text-white"
+                                ? "btn-danger text-white shadow-sm"
                                 : "btn-outline-danger"
                             }`}
                             onClick={() =>
@@ -1031,8 +1207,46 @@ export default function PosterManagement() {
                           <button
                             type="button"
                             className={`btn btn-sm ${
+                              form.linkUrl === newestUrl
+                                ? "btn-success text-white shadow-sm"
+                                : "btn-outline-success"
+                            }`}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                linkUrl: newestUrl,
+                              }))
+                            }
+                            title="Tıklandığında en son eklenen yeni ürünleri açar"
+                          >
+                            <i className="fas fa-sparkles me-1"></i>
+                            Son Eklenenler
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${
+                              form.linkUrl === bestsellerUrl
+                                ? "btn-warning text-dark shadow-sm"
+                                : "btn-outline-warning text-dark"
+                            }`}
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                linkUrl: bestsellerUrl,
+                              }))
+                            }
+                            title="Tıklandığında en çok satan popüler ürünler bloğunu açar"
+                          >
+                            <i className="fas fa-star me-1"></i>
+                            Çok Satanlar
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`btn btn-sm ${
                               form.linkUrl === "/kategoriler"
-                                ? "btn-primary text-white"
+                                ? "btn-primary text-white shadow-sm"
                                 : "btn-outline-primary"
                             }`}
                             onClick={() =>
@@ -1048,9 +1262,64 @@ export default function PosterManagement() {
                           </button>
                         </div>
 
-                        {/* Kategori ve Kampanya Açılır Seçicileri */}
+                        {/* Seçiciler: Ana Sayfa Blokları, Kategori / Ürün Grupları, Kampanyalar */}
+                        <div className="mb-2">
+                          <label className="form-label small text-muted mb-1 fw-semibold">
+                            📦 Ana Sayfa Bloğu / Koleksiyon
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={
+                              form.linkUrl?.startsWith("/collection/")
+                                ? form.linkUrl.replace("/collection/", "")
+                                : ""
+                            }
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  linkUrl: `/collection/${e.target.value}`,
+                                }));
+                              }
+                            }}
+                          >
+                            <option value="">Ana Sayfa Bloğu / Koleksiyon Seç...</option>
+                            {targetHomeBlocks.map((b) => {
+                              const typeIcon =
+                                b.blockType === "newest"
+                                  ? "🆕"
+                                  : b.blockType === "bestseller"
+                                  ? "⭐"
+                                  : b.blockType === "discounted"
+                                  ? "🏷️"
+                                  : b.blockType === "category"
+                                  ? "📁"
+                                  : "✨";
+                              const typeLabel =
+                                b.blockType === "newest"
+                                  ? "Son Eklenenler"
+                                  : b.blockType === "bestseller"
+                                  ? "Çok Satanlar"
+                                  : b.blockType === "discounted"
+                                  ? "İndirim Bloğu"
+                                  : b.blockType === "category"
+                                  ? "Kategori Bloğu"
+                                  : "Özel Seçki";
+                              return (
+                                <option key={b.id} value={b.slug}>
+                                  {typeIcon} {b.title} ({typeLabel})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
                         <div className="row g-2 mb-2">
+                          {/* 2. Kategori ve Alt Ürün Grupları */}
                           <div className="col-sm-6">
+                            <label className="form-label small text-muted mb-1 fw-semibold">
+                              📁 Kategori / Ürün Grubu
+                            </label>
                             <select
                               className="form-select form-select-sm"
                               value={
@@ -1067,16 +1336,25 @@ export default function PosterManagement() {
                                 }
                               }}
                             >
-                              <option value="">📂 Kategori Seç...</option>
-                              {targetCategories.map((c) => (
-                                <option key={c.id} value={c.slug}>
-                                  {c.name}
-                                </option>
-                              ))}
+                              <option value="">Kategori / Ürün Grubu Seç...</option>
+                              {categoryOptions.map((c) => {
+                                const cId = c.id ?? c.Id;
+                                const cName = c.name ?? c.Name ?? "Kategori";
+                                const cSlug = c.slug ?? c.Slug ?? String(cId);
+                                return (
+                                  <option key={cId} value={cSlug}>
+                                    {c.depth === 1 ? `  ↳ ${cName}` : `📁 ${cName}`}
+                                  </option>
+                                );
+                              })}
                             </select>
                           </div>
 
+                          {/* 3. Kampanyalar */}
                           <div className="col-sm-6">
+                            <label className="form-label small text-muted mb-1 fw-semibold">
+                              🎁 Kampanya
+                            </label>
                             <select
                               className="form-select form-select-sm"
                               value={
@@ -1095,7 +1373,7 @@ export default function PosterManagement() {
                                 }
                               }}
                             >
-                              <option value="">🎁 Kampanya Seç...</option>
+                              <option value="">Kampanya Seç...</option>
                               {targetCampaigns.map((c) => {
                                 const optVal = c.link || `/campaigns/${c.slug || c.id}`;
                                 return (
@@ -1122,16 +1400,32 @@ export default function PosterManagement() {
                             placeholder={
                               form.type === "recipe"
                                 ? "/tarif/1 (otomatik atanır)"
-                                : "/indirimli-urunler veya /category/meyve-sebze veya /campaigns/..."
+                                : "/indirimli-urunler, /collection/son-eklenenler, /category/sut-urunleri..."
                             }
                             disabled={saving}
                           />
                         </div>
 
                         {form.linkUrl && (
-                          <div className="mt-1 small text-success d-flex align-items-center">
-                            <i className="fas fa-check-circle me-1"></i>
-                            <span>Aktif Hedef: <code>{form.linkUrl}</code></span>
+                          <div className="mt-2 p-2 rounded bg-light border d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div className="small d-flex align-items-center flex-wrap gap-2">
+                              <span className="badge bg-success">
+                                <i className="fas fa-check-circle me-1"></i>
+                                Aktif Hedef
+                              </span>
+                              <code className="text-primary fw-semibold">{form.linkUrl}</code>
+                              {targetLabel && (
+                                <span className="text-muted fw-semibold">({targetLabel})</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm text-danger p-0 text-decoration-none"
+                              onClick={() => setForm((prev) => ({ ...prev, linkUrl: "" }))}
+                              title="Hedefi temizle"
+                            >
+                              <i className="fas fa-times me-1"></i>Temizle
+                            </button>
                           </div>
                         )}
                       </div>

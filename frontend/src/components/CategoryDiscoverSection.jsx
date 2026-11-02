@@ -1,7 +1,6 @@
-import React, { memo, useState, useRef, useMemo } from "react";
-import { createPortal } from "react-dom";
+import React, { memo, useMemo } from "react";
 import PropTypes from "prop-types";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { getApiBaseUrl } from "../config/apiConfig";
 import { normalizeCategorySlug } from "../services/categoryServiceReal";
 import { useInViewMotion } from "../hooks/useAutoSlideCarousel";
@@ -136,11 +135,6 @@ const CategoryDiscoverItem = memo(function CategoryDiscoverItem({
   index,
   animate,
 }) {
-  const navigate = useNavigate();
-  const [hovered, setHovered] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
-  const closeTimerRef = useRef(null);
-
   const imageUrl = category?.isPromoTile
     ? category.imageUrl || catImg("indirimli.jpg")
     : getCategoryDiscoverImage(category);
@@ -148,42 +142,9 @@ const CategoryDiscoverItem = memo(function CategoryDiscoverItem({
   const path = getCategoryPath(category);
   const enterDelayMs = Math.min(index, 20) * 20;
   const isDiscountTile = Boolean(category?.isPromoTile);
-  const subs = (
-    category?.subCategories ||
-    category?.children ||
-    category?.SubCategories ||
-    category?.Children ||
-    []
-  ).filter((sc) => (sc?.isActive ?? sc?.IsActive) !== false);
-  const hasSubs = !isDiscountTile && subs.length > 0;
-
-  const openDropdown = (e) => {
-    if (!hasSubs) return;
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    const rect = e.currentTarget.getBoundingClientRect();
-    const maxLeft = Math.max(12, window.innerWidth - 230);
-    setDropdownPos({
-      top: rect.bottom + 6,
-      left: Math.min(Math.max(12, rect.left), maxLeft),
-    });
-    setHovered(true);
-  };
-
-  const scheduleClose = () => {
-    closeTimerRef.current = setTimeout(() => setHovered(false), 130);
-  };
-
-  const cancelClose = () => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    setHovered(true);
-  };
 
   return (
-    <div
-      className="category-discover-item-shell"
-      onMouseEnter={openDropdown}
-      onMouseLeave={scheduleClose}
-    >
+    <div className="category-discover-item-shell">
       <Link
         to={path}
         className={`category-discover-item${isDiscountTile ? " category-discover-item--discount" : ""}${animate ? " category-discover-item--enter is-animated" : ""}`}
@@ -211,62 +172,8 @@ const CategoryDiscoverItem = memo(function CategoryDiscoverItem({
             }}
           />
         </div>
-        <span className="category-discover-label">
-          {name}
-          {hasSubs && (
-            <i
-              className="fas fa-chevron-down ms-1"
-              style={{ fontSize: "0.55rem", opacity: 0.65 }}
-              aria-hidden="true"
-            />
-          )}
-        </span>
+        <span className="category-discover-label">{name}</span>
       </Link>
-
-      {hasSubs &&
-        hovered &&
-        createPortal(
-          <div
-            className="category-discover-dropdown"
-            style={{
-              top: dropdownPos.top,
-              left: dropdownPos.left,
-            }}
-            onMouseEnter={cancelClose}
-            onMouseLeave={scheduleClose}
-          >
-            <button
-              type="button"
-              className="category-discover-dropdown-header"
-              onClick={() => {
-                setHovered(false);
-                navigate(path);
-              }}
-            >
-              {name}
-            </button>
-            <div className="category-discover-dropdown-list">
-              {subs.map((sub) => {
-                const subSlug = normalizeCategorySlug(sub.slug || sub.Slug || "");
-                return (
-                  <button
-                    key={sub.id ?? sub.Id ?? subSlug}
-                    type="button"
-                    className="category-discover-dropdown-item"
-                    onClick={() => {
-                      setHovered(false);
-                      navigate(`${path}#${subSlug}`);
-                    }}
-                  >
-                    <i className="fas fa-angle-right me-2"></i>
-                    <span>{sub.name || sub.Name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>,
-          document.body,
-        )}
     </div>
   );
 });

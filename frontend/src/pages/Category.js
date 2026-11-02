@@ -777,9 +777,9 @@ export default function Category() {
           </nav>
         )}
 
-        <div className="d-flex align-items-center justify-content-between mb-2 mb-md-3 category-header-block">
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-2 mb-md-3 category-header-block">
           <div>
-            <h1 className="h4 fw-bold mb-0 mb-md-1 category-main-title" style={{ color: "#1e293b" }}>
+            <h1 className="h4 fw-bold mb-0 category-main-title" style={{ color: "#1e293b" }}>
               <i
                 className="fas fa-layer-group me-2"
                 style={{ color: "#f57c00" }}
@@ -787,9 +787,20 @@ export default function Category() {
               {category?.name || "Kategori"}
             </h1>
             {category?.description ? (
-              <div className="text-muted small d-none d-md-block">{category.description}</div>
+              <div className="text-muted small mt-1">{category.description}</div>
             ) : null}
           </div>
+
+          <Link
+            to="/"
+            className="category-back-btn"
+            title="Ana Sayfaya Dön"
+            aria-label="Ana Sayfaya Dön"
+          >
+            <i className="fas fa-arrow-left category-back-icon"></i>
+            <span className="d-none d-sm-inline">Ana Sayfaya Dön</span>
+            <span className="d-inline d-sm-none">Ana Sayfa</span>
+          </Link>
         </div>
 
         {error && (
@@ -1013,8 +1024,20 @@ export default function Category() {
       )}
 
       {!category && !loading && !error && (
-        <div className="container-fluid px-3 px-md-4 text-muted">
-          Kategori bulunamadı.
+        <div className="container-fluid px-3 px-md-4 py-5 text-center">
+          <div className="text-muted mb-3">
+            <i className="fas fa-layer-group fa-3x mb-3 text-warning"></i>
+            <h5 className="fw-bold">Kategori bulunamadı</h5>
+            <p className="small text-muted">Aradığınız kategori mevcut değil veya henüz ürün eklenmemiş olabilir.</p>
+          </div>
+          <Link
+            to="/"
+            className="category-back-btn d-inline-flex"
+            title="Ana Sayfaya Dön"
+          >
+            <i className="fas fa-arrow-left category-back-icon"></i>
+            <span>Ana Sayfaya Dön</span>
+          </Link>
         </div>
       )}
     </div>

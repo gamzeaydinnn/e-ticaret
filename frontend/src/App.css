@@ -6126,3 +6126,61 @@ video.promo-grid-image,
     display: none !important;
   }
 }
+
+/* ==========================================================================
+   Category Navigation & Back to Home Button (Web & Mobile Responsive)
+   ========================================================================== */
+.category-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 8px 18px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.category-back-btn:hover {
+  background: #fff7ed;
+  border-color: #f97316;
+  color: #ea580c;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.16);
+  transform: translateX(-2px);
+}
+
+.category-back-btn:active {
+  transform: scale(0.97);
+  background: #ffedd5;
+}
+
+.category-back-btn .category-back-icon {
+  font-size: 0.82rem;
+  color: #f97316;
+  transition: transform 0.2s ease;
+}
+
+.category-back-btn:hover .category-back-icon {
+  transform: translateX(-2px);
+}
+
+@media (max-width: 768px) {
+  .category-back-btn {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    min-height: 36px;
+    gap: 6px;
+  }
+}
+
