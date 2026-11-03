@@ -352,13 +352,22 @@ namespace ECommerce.API.Controllers
             var catalog = await GetOrBuildAdminMergedCatalogAsync(HttpContext.RequestAborted);
 
             // Tek materialize: Count + OrderBy/Skip/Take aynı birleşimi iki kez çalıştırmasın.
+            var normalizedNameQuery = !string.IsNullOrWhiteSpace(name) ? ProductSearchMatcher.Normalize(name) : null;
+            var normalizedSkuQuery = !string.IsNullOrWhiteSpace(sku) ? ProductSearchMatcher.Normalize(sku) : null;
+
             var filtered = catalog
                 .Where(product =>
                     string.IsNullOrWhiteSpace(sku) ||
-                    (!string.IsNullOrWhiteSpace(product.Sku) && product.Sku.Contains(sku, StringComparison.OrdinalIgnoreCase)))
+                    (!string.IsNullOrWhiteSpace(product.Sku) && (
+                        product.Sku.Contains(sku, StringComparison.OrdinalIgnoreCase) ||
+                        (normalizedSkuQuery != null && ProductSearchMatcher.Normalize(product.Sku).Contains(normalizedSkuQuery))
+                    )))
                 .Where(product =>
                     string.IsNullOrWhiteSpace(name) ||
-                    (!string.IsNullOrWhiteSpace(product.Name) && product.Name.Contains(name, StringComparison.OrdinalIgnoreCase)))
+                    (!string.IsNullOrWhiteSpace(product.Name) && (
+                        product.Name.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                        (normalizedNameQuery != null && ProductSearchMatcher.Normalize(product.Name).Contains(normalizedNameQuery))
+                    )))
                 .Where(product => MatchesAdminStatusFilter(product.IsActive, status))
                 .Where(product => MatchesAdminStockFilter(product.StockQuantity, stockStatus))
                 .OrderBy(product => string.IsNullOrWhiteSpace(product.Sku) ? product.Name : product.Sku)
