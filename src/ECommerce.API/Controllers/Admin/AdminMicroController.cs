@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ECommerce.Core.Constants;
 using Microsoft.AspNetCore.Mvc;
 using ECommerce.Business.Services.Managers;
@@ -240,8 +240,15 @@ namespace ECommerce.API.Controllers.Admin
         [HttpPost("sync-stocks-from-erp")]
         public async Task<IActionResult> SyncStocksFromErp()
         {
+            var syncResult = await _cacheService.FetchAllAndCacheAsync(11, 0);
+            int updated = 0;
+            if (syncResult.Success)
+            {
+                updated = await _cacheService.SyncCacheToProductTableAsync();
+                return Ok(new { success = true, message = $"{updated} Ã¼rÃ¼nÃ¼n stoÄŸu Mikro ERP'den gÃ¼ncellendi", updatedCount = updated });
+            }
             await _microSyncManager.SyncStocksFromMikroAsync();
-            return Ok(new { message = "Stoklar ERP'den alınıp güncellendi" });
+            return Ok(new { success = false, message = syncResult.Message ?? "Stoklar ERP'den alÄ±nÄ±p gÃ¼ncellendi" });
         }
 
         /// <summary>

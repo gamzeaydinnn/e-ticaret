@@ -56,15 +56,25 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             sb.AppendLine("  FROM STOK_SATIS_FIYAT_LISTELERI_YONETIM Y");
             sb.AppendLine("  INNER JOIN STOKLAR S ON S.sto_kod = Y.msg_S_0001");
             
-            // fn_Stok_Depo_Dagilim parametreleri (depo bazlı stok durumu)
+            // STOK_HAREKETLERI üzerinden doğrudan ve hatasız stok hesaplama
             if (depoNo.HasValue && depoNo.Value > 0)
             {
-                sb.AppendLine($"  LEFT JOIN dbo.fn_Stok_Depo_Dagilim('', {depoNo.Value}) D ON D.msg_S_0001 = Y.msg_S_0001");
+                sb.AppendLine("  LEFT JOIN (");
+                sb.AppendLine($"    SELECT sth_stok_kod, {depoNo.Value} AS msg_S_0873, '' AS msg_S_1266,");
+                sb.AppendLine($"           SUM(CASE WHEN sth_tip = 0 AND sth_giris_depo_no = {depoNo.Value} THEN sth_miktar WHEN sth_tip = 1 AND sth_cikis_depo_no = {depoNo.Value} THEN -sth_miktar ELSE 0 END) AS msg_S_0343");
+                sb.AppendLine("    FROM STOK_HAREKETLERI WITH (NOLOCK)");
+                sb.AppendLine($"    WHERE sth_giris_depo_no = {depoNo.Value} OR sth_cikis_depo_no = {depoNo.Value}");
+                sb.AppendLine("    GROUP BY sth_stok_kod");
+                sb.AppendLine("  ) D ON D.sth_stok_kod = Y.msg_S_0001");
             }
             else
             {
-                // Depo parametresi yoksa tüm depoları kapsayan view veya fonksiyon hali
-                sb.AppendLine("  LEFT JOIN dbo.fn_Stok_Depo_Dagilim('', 0) D ON D.msg_S_0001 = Y.msg_S_0001");
+                sb.AppendLine("  LEFT JOIN (");
+                sb.AppendLine("    SELECT sth_stok_kod, 0 AS msg_S_0873, '' AS msg_S_1266,");
+                sb.AppendLine("           SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END) AS msg_S_0343");
+                sb.AppendLine("    FROM STOK_HAREKETLERI WITH (NOLOCK)");
+                sb.AppendLine("    GROUP BY sth_stok_kod");
+                sb.AppendLine("  ) D ON D.sth_stok_kod = Y.msg_S_0001");
             }
             
             sb.AppendLine("  OUTER APPLY (");
@@ -116,7 +126,23 @@ namespace ECommerce.Infrastructure.Services.MicroServices
             sb.AppendLine("  ISNULL(D.msg_S_0343, 0) AS msg_S_0343");
             sb.AppendLine("FROM STOK_SATIS_FIYAT_LISTELERI_YONETIM Y");
             sb.AppendLine("INNER JOIN STOKLAR S ON S.sto_kod = Y.msg_S_0001");
-            sb.AppendLine($"LEFT JOIN dbo.fn_Stok_Depo_Dagilim('', {hedefDepo}) D ON D.msg_S_0001 = Y.msg_S_0001");
+            if (hedefDepo > 0)
+            {
+                sb.AppendLine("LEFT JOIN (");
+                sb.AppendLine($"  SELECT sth_stok_kod, SUM(CASE WHEN sth_tip = 0 AND sth_giris_depo_no = {hedefDepo} THEN sth_miktar WHEN sth_tip = 1 AND sth_cikis_depo_no = {hedefDepo} THEN -sth_miktar ELSE 0 END) AS msg_S_0343");
+                sb.AppendLine("  FROM STOK_HAREKETLERI WITH (NOLOCK)");
+                sb.AppendLine($"  WHERE sth_giris_depo_no = {hedefDepo} OR sth_cikis_depo_no = {hedefDepo}");
+                sb.AppendLine("  GROUP BY sth_stok_kod");
+                sb.AppendLine(") D ON D.sth_stok_kod = Y.msg_S_0001");
+            }
+            else
+            {
+                sb.AppendLine("LEFT JOIN (");
+                sb.AppendLine("  SELECT sth_stok_kod, SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END) AS msg_S_0343");
+                sb.AppendLine("  FROM STOK_HAREKETLERI WITH (NOLOCK)");
+                sb.AppendLine("  GROUP BY sth_stok_kod");
+                sb.AppendLine(") D ON D.sth_stok_kod = Y.msg_S_0001");
+            }
             sb.AppendLine("WHERE Y.msg_S_1265 = 11"); // ZORUNLU
             
             return (sb.ToString(), parameters);

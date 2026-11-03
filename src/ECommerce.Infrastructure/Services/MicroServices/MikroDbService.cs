@@ -422,8 +422,8 @@ LEFT JOIN (
 ) Kaynak ON Kaynak.sfiyat_stokkod = S.sto_kod
 LEFT JOIN (
     SELECT sth_stok_kod,
-           SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+           SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END) AS stok_miktar
+    FROM   STOK_HAREKETLERI WITH (NOLOCK)
     GROUP BY sth_stok_kod
 ) ST ON ST.sth_stok_kod = S.sto_kod
 OUTER APPLY (
@@ -779,8 +779,8 @@ ORDER BY S.sto_kod;";
                 return null;
 
             const string sql = @"
-                SELECT ISNULL(SUM(sth_eldeki_miktar), 0) AS stok_miktar
-                FROM STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+                SELECT ISNULL(SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END), 0) AS stok_miktar
+                FROM STOK_HAREKETLERI WITH (NOLOCK)
                 WHERE sth_stok_kod = @sku;";
 
             try
@@ -903,8 +903,8 @@ OUTER APPLY (
       AND  sfiyat_fiyati      > 0
 ) Kaynak
 OUTER APPLY (
-    SELECT SUM(ISNULL(sth_eldeki_miktar, 0)) AS stok_miktar
-    FROM   STOK_HAREKETTEN_ELDEKI_MIKTAR_VIEW
+    SELECT SUM(CASE WHEN sth_tip = 0 THEN sth_miktar ELSE -sth_miktar END) AS stok_miktar
+    FROM   STOK_HAREKETLERI WITH (NOLOCK)
     WHERE  sth_stok_kod = S.sto_kod
 ) ST
 OUTER APPLY (
