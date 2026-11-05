@@ -43,8 +43,8 @@ namespace ECommerce.Business.Services.Mapping
         private static readonly Dictionary<string, string[]> KeywordHintMap = new(StringComparer.OrdinalIgnoreCase)
         {
             ["ev-ve-mutfak"] = new[] { "tencere", "tava", "bardak", "tabak", "catal", "kasik", "bicak", "servis", "tepsi", "guvec", "suzgec", "termos" },
-            ["et-ve-et-urunleri"] = new[] { "et", "dana", "kuzu", "sarkuteri", "tavuk", "pilic", "balik", "somon", "hindi", "kofte", "kiyma", "sucuk" },
-            ["sut-ve-sut-urunleri"] = new[] { "sut", "peynir", "yogurt", "ayran", "kefir", "tereyag", "kaymak", "labne", "kasar", "kahvaltilik", "yumurta" },
+            ["et-ve-et-urunleri"] = new[] { "et", "dana", "kuzu", "tavuk", "pilic", "balik", "somon", "hindi", "kofte", "kiyma" },
+            ["sut-ve-sut-urunleri"] = new[] { "sut", "peynir", "yogurt", "ayran", "kefir", "tereyag", "kaymak", "labne", "kasar", "kahvaltilik", "yumurta", "sarkuteri", "sucuk", "pastirma", "salam", "sosis" },
             ["meyve-ve-sebze"] = new[] { "meyve", "sebze", "yesillik", "domates", "patates", "salatalik", "marul", "elma", "muz", "limon", "avokado" },
             ["icecekler"] = new[] { "icecek", "su", "soda", "kola", "meyve suyu", "cay", "kahve", "limonata", "enerji", "gazoz" },
             ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "dondurulmus", "frozen", "superfresh", "super fresh", "algida", "magnum", "cornetto", "calippo", "classics", "carte dor", "boom boom" },

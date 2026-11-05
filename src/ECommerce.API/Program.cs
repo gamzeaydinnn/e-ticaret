@@ -774,6 +774,8 @@ builder.Services.AddScoped<ECommerce.Core.Interfaces.Sync.IMikroOutboundSyncServ
 
 // Mikro→EC yönünde 10sn delta polling (BackgroundService olarak çalışır)
 builder.Services.AddSingleton<ECommerce.Business.Services.Sync.MikroHotPollBackgroundService>();
+builder.Services.AddSingleton<ECommerce.Core.Interfaces.Sync.IMikroHotPollService>(sp => 
+    sp.GetRequiredService<ECommerce.Business.Services.Sync.MikroHotPollBackgroundService>());
 builder.Services.AddHostedService(sp => 
     sp.GetRequiredService<ECommerce.Business.Services.Sync.MikroHotPollBackgroundService>());
 

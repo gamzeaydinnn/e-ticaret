@@ -1097,7 +1097,9 @@ namespace ECommerce.API.Data
                     continue;
                 }
 
-                int? resolvedCategoryId = ResolveProductCategoryId(
+                int? explicitOverrideId = ResolveExplicitKeywordOverride(stokAd ?? product.Name, subByCompositeKey);
+
+                int? resolvedCategoryId = explicitOverrideId ?? ResolveProductCategoryId(
                     anaKod,
                     altKod,
                     stokAd ?? product.Name,
@@ -1107,8 +1109,9 @@ namespace ECommerce.API.Data
 
                 // Eğer ürünün Mikro alt grup kodu boşsa veya hâlâ bir Ana Kategorideyse,
                 // ürün adından alt kategorisini çözümle (Yumurta -> 509, Zeytin -> 510, Şarküteri -> 503 vb.)
-                if (product.AdminOverrideCategory != true &&
-                    (string.IsNullOrWhiteSpace(altKod) || !resolvedCategoryId.HasValue || mainCategoryIds.Contains(resolvedCategoryId.Value)))
+                if (explicitOverrideId.HasValue ||
+                    (product.AdminOverrideCategory != true &&
+                     (string.IsNullOrWhiteSpace(altKod) || !resolvedCategoryId.HasValue || mainCategoryIds.Contains(resolvedCategoryId.Value))))
                 {
                     string? effectiveMainAnaKod = null;
                     if (resolvedCategoryId.HasValue &&
@@ -1187,7 +1190,9 @@ namespace ECommerce.API.Data
                 if (!string.IsNullOrWhiteSpace(anaKod) && ForbiddenAnaGrupKodlari.Contains(anaKod))
                     continue;
 
-                int? resolvedCategoryId = ResolveProductCategoryId(
+                int? explicitOverrideId = ResolveExplicitKeywordOverride(info.StokAd, subByCompositeKey);
+
+                int? resolvedCategoryId = explicitOverrideId ?? ResolveProductCategoryId(
                     anaKod,
                     altKod,
                     info.StokAd,
@@ -1287,6 +1292,79 @@ namespace ECommerce.API.Data
         }
 
         /// <summary>
+        /// Mikro ERP veya legacy eşleştirmelerden bağımsız olarak, ürün adından kesin olarak bilinen
+        /// kategori atamalarını (örn. Calippo/Cornetto/Magnum -> Dondurma, Kuru Et/Pastırma -> Et Şarküteri,
+        /// Kekik/Tarçın -> Baharat, Çiğ Köfte -> Meze, Mantı -> Dondurulmuş, Choco Snack -> Sütlü Tatlı) yapar.
+        /// </summary>
+        public static int? ResolveExplicitKeywordOverride(
+            string? productName,
+            IReadOnlyDictionary<string, Category> subByCompositeKey)
+        {
+            if (string.IsNullOrWhiteSpace(productName))
+                return null;
+
+            var upper = productName.Trim().ToUpper(TrCulture);
+
+            int? TryGetSub(string ana, string alt)
+                => subByCompositeKey.TryGetValue($"{ana}|{alt}", out var c) ? c.Id : null;
+
+            // 1) Şarküteri: Kuru et ve Pastırma (asla kırmızı ette kalmamalı)
+            if (ContainsAny(upper, "PASTIRMA", "KURU ET", "KURUET", "DANA KURU ET"))
+                return TryGetSub("500", "503");
+
+            // 2) Dondurma: Calippo, Cornetto, Magnum, Algida (asla meyve veya çikolatada kalmamalı)
+            if (ContainsAny(upper, "CALIPPO", "CORNETTO", "CORNET", "MAGNUM") ||
+                (ContainsAny(upper, "ALGİDA", "ALGIDA") && !ContainsAny(upper, "SOS", "BARDAK")))
+            {
+                return upper.Contains("ML") || upper.Contains("KAP") || upper.Contains("CARTE") || upper.Contains("MARAŞ")
+                    ? (TryGetSub("800", "801") ?? TryGetSub("800", "802"))
+                    : (TryGetSub("800", "802") ?? TryGetSub("800", "801"));
+            }
+
+            // 3) Sütlü Tatlı / Krema: Milka Choco Snack (asla çikolatada kalmamalı)
+            if (ContainsAny(upper, "CHOCO SNACK"))
+                return TryGetSub("500", "505");
+
+            // 4) Dondurulmuş Ürün: Mantı ve Hıngel (asla makarna / temel gıdada kalmamalı)
+            if (ContainsAny(upper, "MANTI", "HINGEL", "HİNGEL") && !ContainsAny(upper, "MANTAR"))
+                return TryGetSub("1300", "1306") ?? TryGetSub("1300", "1305");
+
+            // 5) Hazır Yemek / Meze: Çiğ Köfte (asla kahvaltılıkta kalmamalı)
+            if (ContainsAny(upper, "ÇİĞ KÖFTE", "CIG KOFTE", "ÇİĞKÖFTE", "CIGKOFTE") &&
+                !ContainsAny(upper, "BULGUR", "HARÇ", "HARCI", "SETSİZ", "BAHARAT"))
+                return TryGetSub("1200", "1201");
+
+            // 6) Fırın & Pastane: Alaçatı Kurabiye & Damla Sakızlı Kurabiye (asla sakızda kalmamalı)
+            if ((ContainsAny(upper, "ALAÇATI", "ALACATI") && ContainsAny(upper, "KURABİYE", "KURABIYE", "GEVREK", "ÇITIR TOP", "CITIR TOP")) ||
+                ContainsAny(upper, "DAMLA SAKIZLI KURABİYE", "DAMLA SAKIZLI KURABIYE"))
+                return TryGetSub("600", "604");
+
+            // 7) Fırın & Pastane: İzmir Bombası (asla çikolatada kalmamalı)
+            if (ContainsAny(upper, "İZMİR BOMBASI", "IZMIR BOMBASI", "BOMBA KURABİYE") ||
+                (ContainsAny(upper, "BOMBA") && ContainsAny(upper, "TATLI", "PASTA", "KURABİYE", "ÇİKOLATALI")))
+                return TryGetSub("600", "606") ?? TryGetSub("600", "604");
+
+            // 8) Baharat: Arifoğlu Kekik ve Arifoğlu Çubuk Tarçın (asla kek veya krakerde kalmamalı)
+            if ((ContainsAny(upper, "KEKİK", "KEKIK") && !ContainsAny(upper, "ÇAY", "CAY")) ||
+                ContainsAny(upper, "ÇUBUK TARÇIN", "CUBUK TARCIN", "TOZ TARÇIN", "TOZ TARCIN"))
+            {
+                if (!ContainsAny(upper, "DIFFUSER", "DİFÜZÖR", "ODA KOKUSU", "PARFÜM", "KOLONYA"))
+                    return TryGetSub("700", "708");
+            }
+
+            // 9) Tereyağı: Silivri Aslan Tereyağ (asla margarinde kalmamalı)
+            if (ContainsAny(upper, "TEREYAĞ", "TEREYAG", "SADE YAĞ", "SADEYAĞ", "SADEYAG") &&
+                !ContainsAny(upper, "BİSKÜVİ", "BISKUVI", "KURABİYE", "KRUVASAN", "CİPS"))
+                return TryGetSub("500", "508");
+
+            // 10) Gazsız İçecek: Ben Organic portakal suyu / meyve suları
+            if (ContainsAny(upper, "BEN ORGANIC", "BEN ORGANİK"))
+                return TryGetSub("100", "103");
+
+            return null;
+        }
+
+        /// <summary>
         /// Alt grup kodu boş olan veya doğrudan ana kategoriye atanmış ürünleri,
         /// ürün adına göre ilgili Mikro alt kategorisine (örn. Yumurta -> 509, Süt -> 501, Peynir -> 502) yerleştirir.
         /// </summary>
@@ -1298,6 +1376,11 @@ namespace ECommerce.API.Data
         {
             if (string.IsNullOrWhiteSpace(productName))
                 return null;
+
+            // Önce kesin anahtar kelime eşleşmesini kontrol et
+            var explicitMatch = ResolveExplicitKeywordOverride(productName, subByCompositeKey);
+            if (explicitMatch.HasValue)
+                return explicitMatch.Value;
 
             var upper = productName.Trim().ToUpper(TrCulture);
 
@@ -1433,9 +1516,11 @@ namespace ECommerce.API.Data
                     return TryGetSub("1400", "1403");
                 if (ContainsAny(upper, "GOFRET", "HOŞBEŞ", "HOSBES", "DİDO", "DIDO", "ÇOKOPRENS"))
                     return TryGetSub("1400", "1406");
-                if (ContainsAny(upper, "KEK", "BROWNİ", "BROWNI", "SUFLE", "KRUVASAN", "HALLEY", "LUPPO", "DANKek", "DANKEK", "POPKEK", "TOPKEK"))
+                if (ContainsAny(upper, "BROWNİ", "BROWNI", "SUFLE", "KRUVASAN", "HALLEY", "LUPPO", "DANKek", "DANKEK", "POPKEK", "TOPKEK") ||
+                    (ContainsAny(upper, "KEK") && !ContainsAny(upper, "KEKİK", "KEKIK")))
                     return TryGetSub("1400", "1405");
-                if (ContainsAny(upper, "KRAKER", "ÇUBUK", "CUBUK", "ÇİZİ", "CIZI", "ETİ GONG", "TUZLU"))
+                if (ContainsAny(upper, "KRAKER", "ÇİZİ", "CIZI", "ETİ GONG") ||
+                    (ContainsAny(upper, "ÇUBUK", "CUBUK") && !ContainsAny(upper, "TARÇIN", "TARCIN", "VANİLYA", "VANILYA", "DİFÜZÖR", "DIFFUSER")))
                     return TryGetSub("1400", "1409");
                 if (ContainsAny(upper, "MISIR PATLAĞI", "POPCORN", "CİN MISIR", "PİRİNÇ PATLAĞI"))
                     return TryGetSub("1400", "1410");
@@ -1495,7 +1580,7 @@ namespace ECommerce.API.Data
             {
                 if (ContainsAny(upper, "ZEYTİNYAĞ", "ZEYTINYAG", "AYÇİÇEK YAĞ", "AYCICEK YAG", "MISIRÖZÜ", "MISIR YAĞ", "SIVI YAĞ", "FINDIK YAĞ", "KANOLA"))
                     return TryGetSub("700", "705");
-                if (ContainsAny(upper, "MAKARNA", "SPAGETTİ", "SPAGETTI", "PENNE", "FİYONK", "BURGU MAKARNA", "LAZANYA", "ERİŞTE", "MANTI", "ŞEHRİYE", "KUSKUS", "NOODLE"))
+                if (ContainsAny(upper, "MAKARNA", "SPAGETTİ", "SPAGETTI", "PENNE", "FİYONK", "BURGU MAKARNA", "LAZANYA", "ERİŞTE", "ŞEHRİYE", "KUSKUS", "NOODLE"))
                     return TryGetSub("700", "704");
                 if (ContainsAny(upper, "PİRİNÇ", "PIRINC", "BULGUR", "MERCİMEK", "MERCIMEK", "NOHUT", "FASULYE", "BARBUNYA", "BAKLA", "İRMİK", "IRMIK", "KİNOA", "KARABUĞDAY", "BAKLİYAT"))
                     return TryGetSub("700", "701");

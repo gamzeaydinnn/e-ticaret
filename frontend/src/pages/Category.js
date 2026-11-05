@@ -50,6 +50,49 @@ const resolveSubAltKodByProductName = (mainAnaKod, productName) => {
   const upper = toTrUpper(productName);
   if (!upper) return null;
 
+  // Dondurma ürünleri (Cornetto, Magnum, Algida, Calippo vb.) kesinlikle dondurmadır (800 / 801-802),
+  // içinde OREO, ÇİKOLATA, MEYVE geçse dahi asla bisküvi, çikolata veya meyveye giremez!
+  if (
+    containsAnyKeyword(upper, ["DONDURMA", "MAGNUM", "CORNETTO", "CORNET", "CARTE D'OR", "CARTE DOR", "CALIPPO", "MARAŞ", "MEYBUZ", "MAX ", "BRAVO", "ALGİDA", "ALGIDA", "GOLF "])
+  ) {
+    return upper.includes("ML") || upper.includes("KAP") || upper.includes("CARTE") || upper.includes("MARAŞ") ? "801" : "802";
+  }
+
+  // Milka Choco Snack, çikolata değil tatlı/krema (505) bölümünde olmalı
+  if (containsAnyKeyword(upper, ["CHOCO SNACK"])) {
+    return "505";
+  }
+
+  // Mantı & Hıngel donuk gıdadır (1306), makarna değildir
+  if (containsAnyKeyword(upper, ["MANTI", "HINGEL", "HİNGEL"])) {
+    return "1306";
+  }
+
+  // Çiğ köfte hazır yemek / mezedir (1201), kahvaltılık değildir
+  if (containsAnyKeyword(upper, ["ÇİĞ KÖFTE", "CIG KOFTE"])) {
+    return "1201";
+  }
+
+  // Alaçatı ve kurabiyeler fırın / pastanedir (604)
+  if (containsAnyKeyword(upper, ["ALAÇATI", "ALACATI"]) || (containsAnyKeyword(upper, ["DAMLA SAKIZ"]) && containsAnyKeyword(upper, ["KURABİYE", "KURABIYE"]))) {
+    return "604";
+  }
+
+  // İzmir bombası kuru pasta / tatlıdır (604), çikolata değildir
+  if (containsAnyKeyword(upper, ["IZMIR BOMBASI", "İZMİR BOMBASI"])) {
+    return "604";
+  }
+
+  // Kekik ve Çubuk Tarçın baharattır (708), kek veya kraker değildir
+  if (containsAnyKeyword(upper, ["KEKİK", "KEKIK"]) || containsAnyKeyword(upper, ["ÇUBUK TARÇIN", "CUBUK TARCIN"])) {
+    return "708";
+  }
+
+  // Ben Organic Portakal Suyu gazsız içecektir (103)
+  if (containsAnyKeyword(upper, ["BEN ORGANIC", "BEN ORGANİK"]) && containsAnyKeyword(upper, ["PORTAKAL"])) {
+    return "103";
+  }
+
   // Çapraz kategori kesin eşleşmeler (500 Süt & Kahvaltılık alt grupları)
   if (
     containsAnyKeyword(upper, ["YUMURTA", "BILDIRCIN YUMURTA", "GEZEN TAVUK YUMURTA"]) &&
@@ -67,19 +110,19 @@ const resolveSubAltKodByProductName = (mainAnaKod, productName) => {
 
   if (
     mainAnaKod !== "1300" &&
-    containsAnyKeyword(upper, ["SUCUK", "SALAM", "SOSİS", "SOSIS", "PASTIRMA", "JAMBON", "KAVURMA", "FÜME ET", "FUME ET", "DANA FÜME", "HİNDİ FÜME", "PİLİÇ FÜME", "ŞARKÜTERİ", "SARKUTERI"])
+    containsAnyKeyword(upper, ["SUCUK", "SALAM", "SOSİS", "SOSIS", "PASTIRMA", "JAMBON", "KAVURMA", "FÜME ET", "FUME ET", "DANA FÜME", "HİNDİ FÜME", "PİLİÇ FÜME", "ŞARKÜTERİ", "SARKUTERI", "KURU ET"])
   ) {
     return "503";
   }
 
   if (
-    containsAnyKeyword(upper, ["TEREYAĞ", "TEREYAG", "SADE YAĞ", "SADEYAĞ", "SADEYAG"]) &&
+    containsAnyKeyword(upper, ["TEREYAĞ", "TEREYAG", "SADE YAĞ", "SADEYAĞ", "SADEYAG", "SILIVRI ASLAN", "SİLİVRİ ASLAN"]) &&
     !containsAnyKeyword(upper, ["BİSKÜVİ", "BISKUVI", "KURABİYE", "KRUVASAN", "CİPS"])
   ) {
     return "508";
   }
 
-  if (containsAnyKeyword(upper, ["MARGARİN", "MARGARIN", "BECEL", "BİZİM YAĞ", "BIZIM YAG", "TEREMYAĞ", "TEREMYAG", "SANA "])) {
+  if (containsAnyKeyword(upper, ["MARGARİN", "MARGARIN", "BECEL", "BİZİM YAĞ", "BIZIM YAG", "TEREMYAĞ", "TEREMYAG", "SANA "]) && !containsAnyKeyword(upper, ["TEREYAĞ", "TEREYAG", "SILIVRI ASLAN", "SİLİVRİ ASLAN"])) {
     return "507";
   }
 
@@ -109,12 +152,12 @@ const resolveSubAltKodByProductName = (mainAnaKod, productName) => {
     if (containsAnyKeyword(upper, ["JELİBON", "JELIBON", "HARIBO", "ŞEKERLEME", "SEKERLEME", "LOLİPOP", "BONBON", "LOKUM", "DRAJE", "YUPO", "BEBETO"])) return "1402";
     if (containsAnyKeyword(upper, ["CİPS", "CIPS", "DORITOS", "RUFFLES", "LAYS", "LAY'S", "PRINGLES", "CHEETOS", "ÇEREZYA", "SAMBA", "PATOS"])) return "1403";
     if (containsAnyKeyword(upper, ["GOFRET", "HOŞBEŞ", "HOSBES", "DİDO", "DIDO", "ÇOKOPRENS"])) return "1406";
-    if (containsAnyKeyword(upper, ["KEK", "BROWNİ", "BROWNI", "SUFLE", "KRUVASAN", "HALLEY", "LUPPO", "DANKEK", "POPKEK", "TOPKEK"])) return "1405";
-    if (containsAnyKeyword(upper, ["KRAKER", "ÇUBUK", "CUBUK", "ÇİZİ", "CIZI", "ETİ GONG", "TUZLU"])) return "1409";
+    if (containsAnyKeyword(upper, ["KEK", "BROWNİ", "BROWNI", "SUFLE", "KRUVASAN", "HALLEY", "LUPPO", "DANKEK", "POPKEK", "TOPKEK"]) && !containsAnyKeyword(upper, ["KEKİK", "KEKIK"])) return "1405";
+    if (containsAnyKeyword(upper, ["KRAKER", "ÇUBUK", "CUBUK", "ÇİZİ", "CIZI", "ETİ GONG", "TUZLU"]) && !containsAnyKeyword(upper, ["TARÇIN", "TARCIN"])) return "1409";
     if (containsAnyKeyword(upper, ["MISIR PATLAĞI", "POPCORN", "CİN MISIR", "PİRİNÇ PATLAĞI"])) return "1410";
     if (containsAnyKeyword(upper, ["BAR ", "PROTEİN BAR", "CORNY", "SNICKERS", "TWIX", "MARS ", "BOUNTY", "METRO ", "ALBENİ", "ALBENI", "ÇOKONAT", "COKONAT", "LAVİVA", "WANTED"])) return "1408";
-    if (containsAnyKeyword(upper, ["BİSKÜVİ", "BISKUVI", "PETİBÖR", "PETIBOR", "BURÇAK", "BURCAK", "NEGRO", "OREO", "BİSKREM", "BISKREM", "TUTKU", "İKRAM", "IKRAM", "HANIMELLER", "PROBİS", "PROBIS", "CİCİBEBE"])) return "1407";
-    if (containsAnyKeyword(upper, ["ÇİKOLATA", "CIKOLATA", "KARAM", "MILKA", "TOBLERONE", "DAMAK", "TADELLE", " SÜTLÜ ", " BİTTER "])) return "1404";
+    if (containsAnyKeyword(upper, ["BİSKÜVİ", "BISKUVI", "PETİBÖR", "PETIBOR", "BURÇAK", "BURCAK", "NEGRO", "OREO", "BİSKREM", "BISKREM", "TUTKU", "İKRAM", "IKRAM", "HANIMELLER", "PROBİS", "PROBIS", "CİCİBEBE"]) && !containsAnyKeyword(upper, ["CORNETTO", "CORNET", "MAGNUM", "DONDURMA", "CALIPPO", "ALGİDA", "ALGIDA"])) return "1407";
+    if (containsAnyKeyword(upper, ["ÇİKOLATA", "CIKOLATA", "KARAM", "MILKA", "TOBLERONE", "DAMAK", "TADELLE", " SÜTLÜ ", " BİTTER "]) && !containsAnyKeyword(upper, ["CORNETTO", "CORNET", "MAGNUM", "DONDURMA", "CALIPPO", "ALGİDA", "ALGIDA", "BOMBASI", "CHOCO SNACK"])) return "1404";
     if (containsAnyKeyword(upper, ["KURUYEMİŞ", "FINDIK", "FISTIK", "BADEM", "CEVİZ", "CEVIZ", "KAJU", "LEBLEBİ", "LEBLEBI", "ÇEKİRDEK", "CEKIRDEK", "KURU ÜZÜM", "KURU KAYISI", "KURU İNCİR", "HURMA"])) {
       return upper.includes("AÇIK") || upper.includes("KG") ? "1101" : "1102";
     }
@@ -400,6 +443,9 @@ export default function Category() {
             });
           }
 
+          // Sadece bu ana kategorinin genel havuzundaki (fallback) ürünleri,
+          // alt kategorilerine dağıtılmak üzere aday havuzuna ekle.
+          // Başka reyonların ürünleri ASLA çekilmez; veritabanında ne tanımlıysa o gösterilir.
           const candidatePool = [];
           fallbackSections.forEach((fb) => {
             (fb.products || []).forEach((p) => candidatePool.push(p));
@@ -412,36 +458,6 @@ export default function Category() {
               ),
             ),
           );
-
-          // Eğer gerçek alt kategorilerin tamamı veya bir kısmı boşsa, kategori ürünlerinden ve genel katalogdan eşleşen ürünleri kontrol et
-          const emptySubCount = realSections.filter(
-            (s) => !s.products || s.products.length === 0,
-          ).length;
-          if (emptySubCount > 0) {
-            try {
-              const [byCat, allCatalog] = await Promise.all([
-                ProductService.getByCategory(cat.id).catch(() => []),
-                ProductService.list().catch(() => []),
-              ]);
-
-              (byCat || []).forEach((p) => {
-                const key = p.sku ? `sku:${p.sku}` : `id:${p.id}`;
-                rootProductKeys.add(key);
-                if (!existingProductKeys.has(key)) {
-                  candidatePool.push(p);
-                }
-              });
-
-              (allCatalog || []).forEach((p) => {
-                const key = p.sku ? `sku:${p.sku}` : `id:${p.id}`;
-                if (!existingProductKeys.has(key)) {
-                  candidatePool.push(p);
-                }
-              });
-            } catch {
-              // Genel katalog okunamazsa yalnızca mevcut havuzla devam et
-            }
-          }
 
           const defaultAltKodByMain = {
             "500": "506",

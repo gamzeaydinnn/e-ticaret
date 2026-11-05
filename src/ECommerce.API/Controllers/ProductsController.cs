@@ -52,12 +52,11 @@ namespace ECommerce.API.Controllers
         {
             ["et-ve-et-urunleri"] = new[]
             {
-                "sucuk", "salam", "sosis", "pastirma", "pastırma", "kavurma",
-                "jambon", "füme et", "fume et", "dana", "kuzu", "köfte", "kofte",
-                "kıyma", "kiyma", "antrikot", "bonfile", "biftek", "tavuk", "hindi"
+                "dana", "kuzu", "köfte", "kofte",
+                "kıyma", "kiyma", "antrikot", "bonfile", "biftek", "tavuk", "hindi", "pirzola", "kuşbaşı", "kusbasi"
             },
             ["temel-gida"] = new[] { "recel", "reçel", "pekmez", "marmelat", "bal", "tahin" },
-            ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "donmuş", "dondurulmus", "dondurulmuş", "superfresh", "super fresh" },
+            ["dondurma-ve-dondurulmus-gida"] = new[] { "dondurma", "donmus", "donmuş", "dondurulmus", "dondurulmuş", "superfresh", "super fresh", "calippo", "cornetto", "cornet", "magnum", "manti", "mantı" },
             ["ev-ve-mutfak"] = new[] { "pisirme kagidi", "pişirme kağıdı", "kagit", "kağıt", "servis seti", "servis", "folyo" },
             ["temizlik"] = new[] { "eldiven", "muayene" },
             ["sut-ve-sut-urunleri"] = new[]
@@ -86,7 +85,6 @@ namespace ECommerce.API.Controllers
 
         private static readonly HashSet<string> MeatHintOverridableCategorySlugs = new(StringComparer.OrdinalIgnoreCase)
         {
-            "sut-ve-sut-urunleri",
             "temel-gida",
             "atistirmalik",
             "diger"
