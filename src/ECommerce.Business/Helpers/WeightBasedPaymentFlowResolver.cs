@@ -24,16 +24,11 @@ namespace ECommerce.Business.Helpers
                 return WeightBasedPaymentFlowType.NotApplicable;
             }
 
-            if (IsAuthCaptureFlow(order))
-            {
-                return WeightBasedPaymentFlowType.AuthCapture;
-            }
-
+            // Ön provizyon (Auth/Capt) mimarisi kaldırıldı: tüm tartılı siparişler direkt satış (SaleImmediate) olarak işlenir.
             return WeightBasedPaymentFlowType.SaleImmediate;
         }
 
-        public static bool CanBankCaptureOverage(Order? order)
-            => Resolve(order) == WeightBasedPaymentFlowType.AuthCapture;
+        public static bool CanBankCaptureOverage(Order? order) => false;
 
         /// <summary>
         /// Sale modunda checkout'ta çekilen tutar (tartı farkı karşılaştırması için).

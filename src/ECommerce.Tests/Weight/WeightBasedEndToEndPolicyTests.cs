@@ -1,7 +1,19 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using ECommerce.Business.Helpers;
+using ECommerce.Business.Services.Interfaces;
+using ECommerce.Business.Services.Managers;
+using ECommerce.Core.DTOs.Payment;
+using ECommerce.Core.Interfaces;
+using ECommerce.Data.Context;
 using ECommerce.Entities.Concrete;
 using ECommerce.Entities.Enums;
+using ECommerce.Infrastructure.Services.Payment.Posnet;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using Xunit;
 
 namespace ECommerce.Tests.Weight
@@ -78,8 +90,8 @@ namespace ECommerce.Tests.Weight
             var order = CreateAuthOrder(100m);
             const decimal actualPrice = 110m; // 1100g @ 100 TL/kg
 
-            Assert.Equal(WeightBasedPaymentFlowType.AuthCapture, WeightBasedPaymentFlowResolver.Resolve(order));
-            Assert.True(WeightBasedPaymentFlowResolver.CanBankCaptureOverage(order));
+            Assert.Equal(WeightBasedPaymentFlowType.SaleImmediate, WeightBasedPaymentFlowResolver.Resolve(order));
+            Assert.False(WeightBasedPaymentFlowResolver.CanBankCaptureOverage(order));
 
             var decision = WeightBasedCapturePolicy.ClampToCaptureLimit(
                 WeightBasedCapturePolicy.ResolveAuthorizedAmount(order),
@@ -164,7 +176,7 @@ namespace ECommerce.Tests.Weight
         }
 
         [Fact]
-        public void ReadyAndPickupGate_BlocksUnweighedKgItems()
+        public void ReadyAndPickupGate_AllowsDirectOrderFlowWithoutWeighing()
         {
             var order = new Order
             {
@@ -176,9 +188,9 @@ namespace ECommerce.Tests.Weight
                 }
             };
 
-            Assert.True(WeightBasedWeighingGate.HasUnweighedWeightItems(order));
-            Assert.False(WeightBasedWeighingGate.CanMarkReady(order));
-            Assert.False(WeightBasedWeighingGate.CanCourierPickup(order));
+            Assert.False(WeightBasedWeighingGate.HasUnweighedWeightItems(order));
+            Assert.True(WeightBasedWeighingGate.CanMarkReady(order));
+            Assert.True(WeightBasedWeighingGate.CanCourierPickup(order));
         }
 
         [Fact]
@@ -200,15 +212,100 @@ namespace ECommerce.Tests.Weight
         }
 
         [Fact]
-        public void StoreDelivery_BlocksKgCard_AllowsCash()
+        public void StoreDelivery_AllowsAllOrdersDirectly()
         {
             var card = new Order { HasWeightBasedItems = true, PaymentMethod = "posnet" };
             var cash = new Order { HasWeightBasedItems = true, PaymentMethod = "cash_on_delivery" };
             var normal = new Order { HasWeightBasedItems = false, PaymentMethod = "posnet" };
 
-            Assert.True(WeightBasedWeighingGate.ShouldBlockStoreDelivery(card));
+            Assert.False(WeightBasedWeighingGate.ShouldBlockStoreDelivery(card));
             Assert.False(WeightBasedWeighingGate.ShouldBlockStoreDelivery(cash));
             Assert.False(WeightBasedWeighingGate.ShouldBlockStoreDelivery(normal));
+        }
+
+        [Fact]
+        public async Task SaleImmediate_UnderWeight_ExecutesPartialReturnAndUpdatesCapturedAmount()
+        {
+            var options = new DbContextOptionsBuilder<ECommerceDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options;
+            using var db = new ECommerceDbContext(options);
+
+            var order = CreateSaleOrder(100m);
+            order.OrderNumber = "ORD-SALE-UNDER";
+            order.PaymentMethod = "posnet";
+            order.PreAuthHostLogKey = "HLK-SALE-001";
+            db.Orders.Add(order);
+            await db.SaveChangesAsync();
+
+            var payment = new Payments
+            {
+                OrderId = order.Id,
+                Provider = "posnet",
+                ProviderPaymentId = "HLK-SALE-001",
+                HostLogKey = "HLK-SALE-001",
+                Amount = 100m,
+                CapturedAmount = 100m,
+                Status = "Paid",
+                TransactionType = "Sale"
+            };
+            db.Payments.Add(payment);
+            await db.SaveChangesAsync();
+
+            var extPaymentMock = new Mock<IExtendedPaymentService>();
+            extPaymentMock
+                .Setup(p => p.ExecutePosnetRefundAsync(It.Is<PosnetRefundExecutionRequest>(r =>
+                    r.OrderId == order.Id && r.PaymentId == payment.Id && r.RefundAmount == 8m)))
+                .ReturnsAsync(PosnetRefundExecutionResult.Ok("return", "HLK-SALE-001"));
+
+            var sut = new PaymentCaptureService(
+                db,
+                Mock.Of<IRealTimeNotificationService>(),
+                NullLogger<PaymentCaptureService>.Instance,
+                Mock.Of<IPosnetPaymentService>(),
+                extPaymentMock.Object);
+
+            var result = await sut.CapturePaymentAsync(order.Id, 92m);
+
+            Assert.True(result.Success);
+            Assert.Equal(92m, result.CapturedAmount);
+            Assert.Equal(8m, result.ReleasedAmount);
+
+            var reloadedOrder = await db.Orders.FindAsync(order.Id);
+            Assert.Equal(92m, reloadedOrder!.CapturedAmount);
+            Assert.Equal(92m, reloadedOrder.FinalAmount);
+            Assert.Equal(OrderStatus.Paid, reloadedOrder.Status);
+        }
+
+        [Fact]
+        public async Task SaleImmediate_OverWeight_DoesNotBlockDeliveryOrSetPaymentPending()
+        {
+            var options = new DbContextOptionsBuilder<ECommerceDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options;
+            using var db = new ECommerceDbContext(options);
+
+            var order = CreateSaleOrder(100m);
+            order.OrderNumber = "ORD-SALE-OVER";
+            order.PaymentMethod = "posnet";
+            db.Orders.Add(order);
+            await db.SaveChangesAsync();
+
+            var sut = new PaymentCaptureService(
+                db,
+                Mock.Of<IRealTimeNotificationService>(),
+                NullLogger<PaymentCaptureService>.Instance);
+
+            var result = await sut.CapturePaymentAsync(order.Id, 108m);
+
+            Assert.True(result.Success);
+            Assert.Equal(100m, result.CapturedAmount);
+
+            var reloadedOrder = await db.Orders.FindAsync(order.Id);
+            Assert.NotEqual(OrderStatus.DeliveryPaymentPending, reloadedOrder!.Status);
+            Assert.Equal(108m, reloadedOrder.FinalAmount);
         }
     }
 }

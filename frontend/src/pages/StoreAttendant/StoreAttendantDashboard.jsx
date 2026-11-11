@@ -406,111 +406,10 @@ export default function StoreAttendantDashboard({
     updateOrderStatus(order.id, "Preparing");
   };
 
-  // Hazır İşaretle — kg ürünlerde tartı modalı yalnız Preparing'de açılır
+  // Hazır İşaretle — tüm siparişler doğrudan Ready durumuna geçer
   const handleMarkReady = async (order) => {
-    if (!order?.hasWeightBasedItems && !order?.HasWeightBasedItems) {
-      updateOrderStatus(order.id, "Ready");
-      return;
-    }
-
-    const status = normalizeStatus(order.status);
-    if (status !== "preparing") {
-      alert(
-        "Tartı girişi yalnızca Hazırlanıyor aşamasında yapılabilir. Önce siparişi onaylayıp hazırlamaya başlayın.",
-      );
-      return;
-    }
-
-    setWeightLoading(true);
-    try {
-      const result = await storeAttendantService.getOrderDetail(order.id);
-      if (!result.success) {
-        alert(result.error || "Sipariş detayı yüklenemedi");
-        return;
-      }
-
-      const detail = result.data;
-      const orderItems = detail?.orderItems || detail?.OrderItems || [];
-      const editableWeightItems = orderItems
-        .filter((item) => {
-          const weightUnit = (
-            item.weightUnit ||
-            item.WeightUnit ||
-            ""
-          ).toString().toLowerCase();
-
-          return isStrictVariableWeightProduct({
-            ...item,
-            name: item.productName || item.ProductName || item.name || item.Name,
-            categoryName:
-              item.categoryName ||
-              item.CategoryName ||
-              item.category?.name ||
-              item.Category?.Name ||
-              "",
-            unit: item.unit || item.Unit || "",
-            weightUnit: item.weightUnit || item.WeightUnit || weightUnit,
-            isWeightBased: item.isWeightBased ?? item.IsWeightBased,
-            pricePerUnit: item.pricePerUnit ?? item.PricePerUnit ?? item.unitPrice,
-          });
-        })
-        .map((item) => {
-          const quantity = Number(item.quantity ?? item.Quantity ?? 1) || 1;
-          const unitPrice = Number(
-            item.unitPrice ?? item.UnitPrice ?? item.pricePerUnit ?? item.PricePerUnit ?? 0,
-          );
-          const lineTotal = Number(item.lineTotal ?? item.LineTotal ?? 0);
-          // Backend gram tutar; eski kayıtlarda 0 olabilir → quantity×1000 (1 adet ≈ 1 kg) fallback
-          let estimatedWeight = Number(
-            item.estimatedWeight ?? item.EstimatedWeight ?? 0,
-          );
-          if (!estimatedWeight || estimatedWeight <= 0) {
-            estimatedWeight = quantity * 1000;
-          }
-          let estimatedPrice = Number(
-            item.estimatedPrice ?? item.EstimatedPrice ?? 0,
-          );
-          if (!estimatedPrice || estimatedPrice <= 0) {
-            estimatedPrice =
-              lineTotal > 0
-                ? lineTotal
-                : unitPrice > 0
-                  ? Math.round(unitPrice * (estimatedWeight / 1000) * 100) / 100
-                  : 0;
-          }
-          const actualWeightRaw =
-            item.actualWeight ?? item.ActualWeight ?? null;
-          const actualWeight =
-            actualWeightRaw != null && Number(actualWeightRaw) > 0
-              ? Number(actualWeightRaw)
-              : estimatedWeight;
-
-          return {
-            id: item.id || item.Id,
-            productName: item.productName || item.ProductName || "Ürün",
-            estimatedWeight,
-            actualWeight,
-            estimatedPrice,
-            unitPrice,
-            actualPrice: item.actualPrice ?? item.ActualPrice ?? null,
-            priceDifference: item.priceDifference ?? item.PriceDifference ?? null,
-          };
-        });
-
-      if (editableWeightItems.length === 0) {
-        updateOrderStatus(order.id, "Ready");
-        return;
-      }
-
-      setSelectedOrder(order);
-      setWeightItems(editableWeightItems);
-      setShowWeightModal(true);
-    } catch (err) {
-      console.error("[StoreAttendant] Sipariş detayı yükleme hatası:", err);
-      alert("Sipariş detayı yüklenemedi");
-    } finally {
-      setWeightLoading(false);
-    }
+    if (!order?.id) return;
+    await updateOrderStatus(order.id, "Ready");
   };
 
   // Tartı girişi — yalnız Preparing; otomatik Onayla/Hazırlamaya Başla YOK
@@ -561,23 +460,9 @@ export default function StoreAttendantDashboard({
         fetchData(true);
       }
 
-      if (latestWeightUpdate?.requiresManualCollection) {
-        const flow = latestWeightUpdate.paymentFlowType || "";
-        const overage = Number(latestWeightUpdate.uncollectableOverageAmount || 0).toFixed(2);
-        const finalAmt = Number(latestWeightUpdate.finalAmount || 0).toFixed(2);
-
-        if (flow === "SaleImmediate") {
-          alert(
-            `Sipariş yeni tutarı ${finalAmt} TL oldu. Ödeme Sale (anında çekim) modunda olduğu için ${overage} TL fark karttan otomatik çekilemez — teslimatta manuel tahsilat gerekir.`,
-          );
-        } else if (latestWeightUpdate.exceedsPreAuthLimit) {
-          alert(
-            `Sipariş yeni tutarı ${finalAmt} TL oldu. Provizyon limiti (Auth×1.20) en fazla ${Number(latestWeightUpdate.maxCaptureAmountFromPreAuth || 0).toFixed(2)} TL çekime izin veriyor; kalan ${overage} TL manuel tahsilat gerektirir.`,
-          );
-        }
-      } else if (latestWeightUpdate?.requiresManualRefund) {
+      if (latestWeightUpdate?.requiresManualRefund) {
         alert(
-          `Tartı eksik geldi. ${Math.abs(Number(latestWeightUpdate.priceDifference || 0)).toFixed(2)} TL iade/manuel düzeltme gerekebilir (Sale modu).`,
+          `Tartı eksik geldi. ${Math.abs(Number(latestWeightUpdate.priceDifference || 0)).toFixed(2)} TL tutar farkı teslimatta müşterinin kartına kısmi iade olarak yansıtılacaktır.`,
         );
       }
     } catch (err) {
@@ -1362,21 +1247,14 @@ export default function StoreAttendantDashboard({
                           </button>
                         )}
 
-                        {/* Preparing → tartı + Hazır (tek tartı yolu) */}
+                        {/* Preparing → Hazır */}
                         {normalizeStatus(order.status) === "preparing" && (
                           <button
                             className="btn btn-success mobile-action-btn fw-semibold"
                             onClick={() => handleMarkReady(order)}
                           >
                             <i className="fas fa-check me-2"></i>
-                            {weightOnly ? "Tartı Gir" : "Hazır"}
-                            {(order.hasWeightBasedItems ||
-                              order.HasWeightBasedItems) && (
-                              <span className="badge bg-light text-dark ms-2">
-                                <i className="fas fa-weight me-1"></i>
-                                Tartı
-                              </span>
-                            )}
+                            Hazır
                           </button>
                         )}
 
@@ -1420,16 +1298,10 @@ export default function StoreAttendantDashboard({
                           </button>
                         )}
 
-                        {/* Yolda → Teslim (kg kart: kurye Capt yolu) */}
+                        {/* Yolda → Teslim */}
                         {!weightOnly &&
                           normalizeStatus(order.status) ===
                           "out_for_delivery" && (
-                          isKgCardOrder(order) ? (
-                            <div className="alert alert-info py-2 mb-0 small">
-                              <i className="fas fa-info-circle me-1"></i>
-                              Kg kart siparişi kurye teslimatında Capt ile kapanır.
-                            </div>
-                          ) : (
                           <button
                             className="btn btn-dark mobile-action-btn fw-semibold"
                             onClick={() =>
@@ -1439,7 +1311,6 @@ export default function StoreAttendantDashboard({
                             <i className="fas fa-check-double me-2"></i>
                             Teslim Edildi
                           </button>
-                          )
                         )}
 
                         {/* İptal */}

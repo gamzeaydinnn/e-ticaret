@@ -603,42 +603,27 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
 
                 var posnetOrderId = await GetOrCreatePosnetOrderIdAsync(order, cancellationToken);
 
-                // ── KG ÜRÜN FIX: Amount hesaplama mantığı ─────────────────────────────
-                // Öncelik sırası:
-                // 1. Method parametresi (amount) - Üst katmandan hesaplanmış (PreAuthAmount gibi)
-                // 2. KG ürün ise Order.PreAuthAmount (tartı öncesi hesaplanan provizyon tutarı)
-                // 3. Normal ürün ise Order.FinalPrice (indirim/kupon uygulanmış)
-                // 4. Son çare Order.TotalPrice
+                // ── Tutar hesaplama mantığı (Direkt Satış / Sale) ─────────────────────
                 decimal effectiveAmount;
                 
                 if (amount.HasValue && amount.Value > 0)
                 {
-                    // Üst katmandan gelen tutar (KG ürünlerde PreAuthAmount olabilir)
                     effectiveAmount = amount.Value;
                     _logger.LogInformation(
                         "[POSNET-3DS] Parametre amount kullanılıyor: {Amount} TL, OrderId: {OrderId}",
                         effectiveAmount, orderId);
                 }
-                else if (order.HasWeightBasedItems && order.PreAuthAmount > 0)
-                {
-                    // KG ürün VE PreAuthAmount hesaplanmış
-                    effectiveAmount = order.PreAuthAmount;
-                    _logger.LogInformation(
-                        "[POSNET-3DS] KG ürün - PreAuthAmount kullanılıyor: {PreAuthAmount} TL, " +
-                        "OrderId: {OrderId} (FinalPrice: {FinalPrice} TL, TotalPrice: {TotalPrice} TL)",
-                        effectiveAmount, orderId, order.FinalPrice, order.TotalPrice);
-                }
                 else
                 {
-                    // Normal ürün - FinalPrice veya TotalPrice
+                    // Tüm ürünlerde (KG dahil) FinalPrice veya TotalPrice kullanılır
                     effectiveAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice;
                     _logger.LogInformation(
-                        "[POSNET-3DS] Normal ürün - FinalPrice/TotalPrice kullanılıyor: {Amount} TL, " +
+                        "[POSNET-3DS] FinalPrice/TotalPrice kullanılıyor: {Amount} TL, " +
                         "OrderId: {OrderId}",
                         effectiveAmount, orderId);
                 }
 
-                // OOS request oluştur
+                // OOS request oluştur (Ön provizyon kaldırıldı: her zaman Sale)
                 var request = new PosnetOosRequest
                 {
                     MerchantId = _settings.PosnetMerchantId,
@@ -655,7 +640,7 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                     Amount = PosnetSaleRequest.ConvertToKurus(effectiveAmount),
                     Installment = installment.ToString("D2"),
                     CurrencyCode = NormalizeCurrencyCode(order.Currency),
-                    TxnType = string.IsNullOrWhiteSpace(txnType) ? "Sale" : txnType.Trim(),
+                    TxnType = "Sale",
                     ReturnUrl = _settings.PosnetCallbackUrl
                 };
 
@@ -701,14 +686,12 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 await SavePaymentRecordAsync(
                     orderId,
                     posnetOrderId,
-                    amount ?? order.TotalPrice,
+                    effectiveAmount,
                     "Pending",
                     httpResponse.ResponseXml,
                     cancellationToken,
-                    transactionType: request.TxnType,
-                    authorizedAmount: request.TxnType.Equals("Auth", StringComparison.OrdinalIgnoreCase)
-                        ? amount ?? order.TotalPrice
-                        : null,
+                    transactionType: "Sale",
+                    authorizedAmount: null,
                     transactionId: posnetOrderId);
 
                 if (oosResponse.IsSuccess && oosResponse.RequiresRedirect)
@@ -1356,8 +1339,12 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                 var hasPartialReturns = await _db.Payments
                     .AsNoTracking()
                     .AnyAsync(p => p.OrderId == orderId &&
-                                   p.TransactionType == "return" &&
-                                   (p.Status == "Refunded" || p.Status == "Success"),
+                                   (
+                                       (p.TransactionType == "return" && (p.Status == "Refunded" || p.Status == "Success")) ||
+                                       p.Status == "PartiallyRefunded" ||
+                                       p.Status == "PartialRefund" ||
+                                       ((p.RefundedAmount ?? 0m) > 0m && p.Status != "Cancelled")
+                                   ),
                               cancellationToken);
 
                 if (hasPartialReturns)

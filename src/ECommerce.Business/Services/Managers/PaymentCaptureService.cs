@@ -211,6 +211,14 @@ namespace ECommerce.Business.Services.Managers
                     return await HandleSaleImmediateWeightCaptureAsync(order, finalAmount);
                 }
 
+                // Normal (KG olmayan) siparişlerde ödeme checkout'ta Sale olarak zaten çekildiyse idempotent başarı dön
+                if (order.CaptureStatus == CaptureStatus.Success ||
+                    (order.PaymentStatus == PaymentStatus.Paid && order.AuthorizedAmount <= 0m))
+                {
+                    var captured = order.CapturedAmount > 0m ? order.CapturedAmount : finalAmount;
+                    return PaymentCaptureResult.Succeeded(captured, 0m);
+                }
+
                 // Provizyon tutarı için tek doğruluk kaynağı (AuthorizedAmount veya PreAuthAmount).
                 var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
 
@@ -616,7 +624,9 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// KG + Sale: ödeme checkout'ta alındı. Tartı farkı bankadan Capt ile çekilemez.
+        /// KG + Sale: ödeme checkout'ta (Direkt Satış) alındı.
+        /// - Eksik gramaj (finalAmount &lt; paidAmount) varsa POSNET &lt;return&gt; ile kısmi iade yapılır.
+        /// - Tam gramaj veya fazla gramaj durumunda teslimat bloke edilmez, doğrudan tamamlanır.
         /// </summary>
         private async Task<PaymentCaptureResult> HandleSaleImmediateWeightCaptureAsync(
             Order order, decimal finalAmount)
@@ -625,35 +635,75 @@ namespace ECommerce.Business.Services.Managers
             var paidAmount = WeightBasedPaymentFlowResolver.ResolveSaleCapturedAmount(order);
             order.FinalAmount = finalAmount;
 
-            if (finalAmount <= paidAmount + tolerance)
+            // 1. Eksik gramaj (Müşteri lehine fark) -> POSNET <return> ile kısmi iade
+            if (finalAmount < paidAmount - tolerance)
             {
+                var refundDelta = Math.Round(paidAmount - finalAmount, 2, MidpointRounding.AwayFromZero);
+
+                if (!IsCashOnDelivery(order.PaymentMethod))
+                {
+                    var payment = await _context.Payments
+                        .OrderByDescending(p => p.CreatedAt)
+                        .FirstOrDefaultAsync(p => p.OrderId == order.Id &&
+                            (p.Status == "Paid" || p.Status == "Success" ||
+                             p.Status == "PartialRefund" || p.Status == "PartiallyRefunded"));
+
+                    if (payment != null)
+                    {
+                        var refundResult = await ExecuteRefundAsync(payment, refundDelta);
+                        if (refundResult.success)
+                        {
+                            order.CapturedAmount = finalAmount;
+                            order.CaptureStatus = CaptureStatus.Success;
+                            await _context.SaveChangesAsync();
+
+                            _logger.LogInformation(
+                                "KG Sale — eksik gramaj farkı ({RefundDelta:N2} TL) karta kısmi iade edildi. OrderId={OrderId}, Paid={Paid}, Final={Final}",
+                                refundDelta, order.Id, paidAmount, finalAmount);
+
+                            return PaymentCaptureResult.Succeeded(
+                                finalAmount,
+                                refundDelta,
+                                refundResult.refundReference);
+                        }
+
+                        _logger.LogWarning(
+                            "KG Sale — eksik gramaj kısmi iadesi ({RefundDelta:N2} TL) banka tarafında tamamlanamadı ({Error}); teslimat bloke edilmiyor. OrderId={OrderId}",
+                            refundDelta, refundResult.errorMessage, order.Id);
+
+                        await _notificationService.NotifyRefundRequestedAsync(
+                            order.Id,
+                            order.OrderNumber ?? $"#{order.Id}",
+                            refundDelta,
+                            $"Tartı eksik gramaj farkı ({refundDelta:N2} TL) otomatik iade edilemedi: {refundResult.errorMessage}");
+
+                        await _context.SaveChangesAsync();
+                        return PaymentCaptureResult.Succeeded(paidAmount, 0m);
+                    }
+                }
+
+                order.CapturedAmount = finalAmount;
                 await _context.SaveChangesAsync();
-                _logger.LogInformation(
-                    "KG Sale — tartı farkı yok veya checkout tutarı yeterli. OrderId={OrderId}, Paid={Paid}, Final={Final}",
-                    order.Id, paidAmount, finalAmount);
-                return PaymentCaptureResult.Succeeded(finalAmount, 0m);
+                return PaymentCaptureResult.Succeeded(finalAmount, refundDelta);
             }
 
-            var overage = Math.Round(finalAmount - paidAmount, 2, MidpointRounding.AwayFromZero);
-            order.Status = OrderStatus.DeliveryPaymentPending;
-            order.DeliveryProblemReason =
-                $"Sale modunda tartı farkı ({overage:N2} TL) karttan otomatik çekilemez; manuel tahsilat gerekir.";
+            // 2. Tam gramaj veya fazla gramaj -> Teslimatı kilitlemeden tamamla
+            if (finalAmount > paidAmount + tolerance)
+            {
+                var overage = Math.Round(finalAmount - paidAmount, 2, MidpointRounding.AwayFromZero);
+                _logger.LogInformation(
+                    "KG Sale — fazla gramaj ({Overage:N2} TL) mağaza toleransı kapsamında kapatıldı, teslimat tamamlanıyor. OrderId={OrderId}, Paid={Paid}, Final={Final}",
+                    overage, order.Id, paidAmount, finalAmount);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "KG Sale — tartı farkı yok. OrderId={OrderId}, Paid={Paid}, Final={Final}",
+                    order.Id, paidAmount, finalAmount);
+            }
 
             await _context.SaveChangesAsync();
-
-            await _notificationService.NotifyPaymentFailedAsync(
-                order.Id,
-                order.OrderNumber ?? $"#{order.Id}",
-                $"KG Sale tartı farkı: {overage:N2} TL manuel tahsilat gerektirir.",
-                "Internal");
-
-            _logger.LogWarning(
-                "KG Sale — tartı farkı manuel tahsilat. OrderId={OrderId}, Paid={Paid}, Final={Final}, Overage={Overage}",
-                order.Id, paidAmount, finalAmount, overage);
-
-            return PaymentCaptureResult.Failed(
-                $"Tartı farkı {overage:N2} TL karttan otomatik çekilemez (Sale modu). Manuel tahsilat gerekir.",
-                "WEIGHT_OVERAGE_REQUIRES_MANUAL_COLLECTION");
+            return PaymentCaptureResult.Succeeded(paidAmount, 0m);
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════

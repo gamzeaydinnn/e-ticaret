@@ -1068,17 +1068,6 @@ export default function CourierDashboard() {
                               <button
                                 onClick={async (e) => {
                                   e.preventDefault();
-                                  if (order.hasWeightBasedItems || order.hasWeightDifference || order.totalPriceDifference) {
-                                    const finalAmt = order.finalAmount || order.totalAmount || 0;
-                                    const priceDiff = order.totalPriceDifference || 0;
-                                    const msg = priceDiff > 0
-                                      ? `⚠️ Bu siparişte tartı farkı var!\n\nToplam Tutar: ${finalAmt.toFixed(2)} ₺\nEk Tahsilat: +${priceDiff.toFixed(2)} ₺\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`
-                                      : `Bu siparişte ağırlık bazlı ürün var.\n\nDetaylı teslimat ekranına yönlendirileceksiniz.`;
-                                    if (window.confirm(msg)) {
-                                      navigate(`/courier/orders/${order.id}`);
-                                    }
-                                    return;
-                                  }
                                   try {
                                     await CourierService.markDelivered(order.id);
                                     playNotificationSound();
@@ -1087,52 +1076,13 @@ export default function CourierDashboard() {
                                     alert("Hata: " + err.message);
                                   }
                                 }}
-                                className={`courier-btn ${
-                                  order.hasWeightDifference || order.totalPriceDifference
-                                    ? "courier-btn-deliver-warning"
-                                    : "courier-btn-deliver"
-                                }`}
-                                title={
-                                  order.totalPriceDifference
-                                    ? `⚠️ Tartı farkı: ${order.totalPriceDifference > 0 ? "+" : ""}${(order.totalPriceDifference || 0).toFixed(2)} ₺`
-                                    : "Siparişi Teslim Et"
-                                }
+                                className="courier-btn courier-btn-deliver"
+                                title="Siparişi Teslim Et"
                               >
-                                <i className={`fas ${order.totalPriceDifference ? "fa-exclamation-triangle" : "fa-check-circle"}`}></i>
+                                <i className="fas fa-check-circle"></i>
                                 <span className="btn-text">
-                                  <span className="btn-label">
-                                    {order.totalPriceDifference ? "Fark Var!" : "Müşteriye"}
-                                  </span>
-                                  <span className="btn-action">
-                                    {order.totalPriceDifference 
-                                      ? `TESLİM (+${(order.totalPriceDifference || 0).toFixed(0)}₺)` 
-                                      : "TESLİM ET"}
-                                  </span>
-                                </span>
-                              </button>
-                            )}
-
-                            {/* 💰 NAKİT TAHSİL - DeliveryPaymentPending durumunda */}
-                            {(order.status === "deliverypaymentpending" ||
-                              order.status === "delivery_payment_pending") && (
-                              <button
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  const priceDiff = order.totalPriceDifference || 0;
-                                  if (window.confirm(
-                                    `💰 NAKİT TAHSİLAT\n\nTahsil Edilecek Tutar: ${priceDiff.toFixed(2)} ₺\n\nMüşteriden bu tutarı nakit olarak tahsil ettiniz mi?`
-                                  )) {
-                                    navigate(`/courier/orders`);
-                                  }
-                                }}
-                                className="courier-btn courier-btn-collect"
-                              >
-                                <i className="fas fa-hand-holding-usd"></i>
-                                <span className="btn-text">
-                                  <span className="btn-label">Nakit Tahsil</span>
-                                  <span className="btn-action">
-                                    {(order.totalPriceDifference || 0).toFixed(2)} ₺ AL
-                                  </span>
+                                  <span className="btn-label">Müşteriye</span>
+                                  <span className="btn-action">TESLİM ET</span>
                                 </span>
                               </button>
                             )}

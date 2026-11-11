@@ -594,8 +594,8 @@ namespace ECommerce.Business.Services.Managers
                     case WeightBasedPaymentFlowType.SaleImmediate:
                         result.MaxCaptureAmountFromPreAuth = 0m;
                         result.ExceedsPreAuthLimit = false;
-                        result.RequiresManualCollection = priceDifference > 0;
-                        result.UncollectableOverageAmount = Math.Max(0m, Math.Round(priceDifference, 2, MidpointRounding.AwayFromZero));
+                        result.RequiresManualCollection = false;
+                        result.UncollectableOverageAmount = 0m;
                         result.RequiresManualRefund = priceDifference < 0;
                         break;
 
@@ -1124,31 +1124,12 @@ namespace ECommerce.Business.Services.Managers
                 return captureResult;
             }
 
-            // Capture kararı için tek doğruluk kaynağı: final tutarı banka aşım sınırına (Auth × 1.20)
-            // kırp. Provizyon tutarı da tek kaynaktan (AuthorizedAmount veya PreAuthAmount) çözülür.
-            var authorizedAmount = WeightBasedCapturePolicy.ResolveAuthorizedAmount(order);
-            var maxCapturableAmount = WeightBasedCapturePolicy.CalculateMaxCapturableAmount(authorizedAmount);
-            var captureDecision = WeightBasedCapturePolicy.ClampToCaptureLimit(authorizedAmount, finalAmount);
-            var captureAmount = captureDecision.CaptureAmount;
-            var preAuthExceeded = captureDecision.ExceedsLimit;
+            var paidAmount = WeightBasedPaymentFlowResolver.ResolveSaleCapturedAmount(order);
+            const bool preAuthExceeded = false;
 
-            if (!preAuthExceeded)
-            {
-                // ✅ Normal senaryo: banka tarafından izin verilen limit dahilinde gerçek tutar ile capture
-                _logger?.LogInformation(
-                    "[WEIGHT-SVC] Capture tutarı: {CaptureAmount:F2} TL (Final={Final:F2}, PreAuth={PreAuth:F2}, MaxCapturable={MaxCapturable:F2}). OrderId={OrderId}",
-                    captureAmount, finalAmount, authorizedAmount, maxCapturableAmount, order.Id);
-            }
-            else
-            {
-                // ⚠️ Final tutar banka tarafından tanımlanan aşım limitini de aşıyor.
-                // Mevcut provizyondan çekilebilecek maksimum tutar otomatik çekilir, kalan farkı admin çözer.
-                _logger?.LogWarning(
-                    "[WEIGHT-SVC] UYARI: FinalAmount ({Final:F2}) > MaxCapturable ({MaxCapturable:F2})! " +
-                    "Capture {Capture:F2} TL ile yapılıyor. Kalan fark={Diff:F2} TL. OrderId={OrderId}",
-                    finalAmount, maxCapturableAmount, captureAmount,
-                    finalAmount - captureAmount, order.Id);
-            }
+            _logger?.LogInformation(
+                "[WEIGHT-SVC] Direkt satış (Sale) tartı farkı kapatma: Final={Final:F2} TL, Paid={Paid:F2} TL. OrderId={OrderId}",
+                finalAmount, paidAmount, order.Id);
 
             try
             {
@@ -1166,36 +1147,26 @@ namespace ECommerce.Business.Services.Managers
                         "[WEIGHT-SVC] IPaymentCaptureService bulunamadı, fallback akışına geçildi. OrderId={OrderId}",
                         order.Id);
 
-                    // Order bilgilerini güncelle ve başarı döndür (capture dış sistemde yapılacak)
-                    await UpdateOrderAfterCaptureAsync(order, finalAmount, captureAmount, calculation,
+                    await UpdateOrderAfterCaptureAsync(order, finalAmount, finalAmount, calculation,
                         $"CARD-FALLBACK-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}", preAuthExceeded);
 
                     captureResult.IsSuccess = true;
                     captureResult.TransactionReference =
                         $"CARD-FALLBACK-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
-                    captureResult.CapturedAmount = captureAmount;
+                    captureResult.CapturedAmount = finalAmount;
                     return captureResult;
                 }
 
-                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                // POSNET CAPT XML → Bankaya gönder
-                // capt işlemi: hostLogKey (provizyondan dönen) + gerçek tutar
-                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                _logger?.LogInformation(
-                    "[WEIGHT-SVC] POSNET capt başlatılıyor. OrderId={OrderId}, HostLogKey={Key}, Amount={Amount:F2} TL",
-                    order.Id, order.PreAuthHostLogKey, captureAmount);
-
                 var posnetCaptureResult = await captureService.CapturePaymentAsync(
                     order.Id,
-                    captureAmount);
+                    finalAmount);
 
                 if (!posnetCaptureResult.Success)
                 {
                     _logger?.LogError(
-                        "[WEIGHT-SVC] POSNET capture BAŞARISIZ. OrderId={OrderId}, Error={Error}",
+                        "[WEIGHT-SVC] POSNET fark kapatma BAŞARISIZ. OrderId={OrderId}, Error={Error}",
                         order.Id, posnetCaptureResult.Message);
 
-                    // WeightAdjustment kayıtlarını hata durumuna al
                     var adjustments = await _adjustmentRepository.GetByOrderIdAsync(order.Id);
                     foreach (var adj in adjustments)
                     {
@@ -1206,26 +1177,27 @@ namespace ECommerce.Business.Services.Managers
                     await _unitOfWork.SaveChangesAsync();
 
                     captureResult.ErrorMessage =
-                        $"POSNET capture hatası: {posnetCaptureResult.Message}";
+                        $"POSNET işlem hatası: {posnetCaptureResult.Message}";
                     return captureResult;
                 }
 
-                // ✅ Capture başarılı - Order ve WeightAdjustment kayıtlarını güncelle
+                var settledAmount = posnetCaptureResult.CapturedAmount > 0m
+                    ? posnetCaptureResult.CapturedAmount
+                    : finalAmount;
                 var transactionRef = posnetCaptureResult.CaptureReference
-                    ?? $"CAPT-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                    ?? $"SALE-SETTLE-{order.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
-                await UpdateOrderAfterCaptureAsync(order, finalAmount, captureAmount, calculation,
+                await UpdateOrderAfterCaptureAsync(order, finalAmount, settledAmount, calculation,
                     transactionRef, preAuthExceeded);
 
                 _logger?.LogInformation(
-                    "[WEIGHT-SVC] ✅ POSNET capture başarılı. OrderId={OrderId}, CapturedAmount={Amount:F2} TL, " +
-                    "TransactionRef={Ref}, PreAuthExceeded={Exceeded}",
-                    order.Id, captureAmount, transactionRef, preAuthExceeded);
+                    "[WEIGHT-SVC] ✅ POSNET tartı farkı kapatma başarılı. OrderId={OrderId}, SettledAmount={Amount:F2} TL, TransactionRef={Ref}",
+                    order.Id, settledAmount, transactionRef);
 
                 captureResult.IsSuccess = true;
                 captureResult.TransactionReference = transactionRef;
-                captureResult.CapturedAmount = captureAmount;
-                captureResult.PreAuthExceeded = preAuthExceeded;
+                captureResult.CapturedAmount = settledAmount;
+                captureResult.PreAuthExceeded = false;
                 return captureResult;
             }
             catch (Exception ex)

@@ -77,7 +77,7 @@ namespace ECommerce.Tests.Weight
         }
 
         [Fact]
-        public void AuthFlow_IsDetected_WhenAuthorizedAndCapturePending()
+        public void AuthFlow_IsResolvedAsSaleImmediate_SinceProvisionIsRemoved()
         {
             var order = new Order
             {
@@ -88,8 +88,8 @@ namespace ECommerce.Tests.Weight
                 AuthorizedAmount = 100m
             };
 
-            Assert.Equal(WeightBasedPaymentFlowType.AuthCapture, WeightBasedPaymentFlowResolver.Resolve(order));
-            Assert.True(WeightBasedPaymentFlowResolver.CanBankCaptureOverage(order));
+            Assert.Equal(WeightBasedPaymentFlowType.SaleImmediate, WeightBasedPaymentFlowResolver.Resolve(order));
+            Assert.False(WeightBasedPaymentFlowResolver.CanBankCaptureOverage(order));
         }
 
         [Fact]

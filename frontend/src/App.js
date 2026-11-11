@@ -41,7 +41,6 @@ import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminReports from "./pages/Admin/AdminReports";
 import AdminUsers from "./pages/Admin/AdminUsers";
-import AdminWeightManagement from "./pages/Admin/AdminWeightManagement";
 import PosterManagement from "./pages/Admin/PosterManagement";
 import AdminHomeBlocks from "./pages/Admin/AdminHomeBlocks"; // Ana sayfa blok yönetimi
 import Dashboard from "./pages/Admin/Dashboard";
@@ -1404,27 +1403,14 @@ function App() {
             </AdminGuard>
           }
         />
-        {/* Weight Reports: reports.weight VEYA orders.view izni gerekli (OR logic) */}
+        {/* Eski Ağırlık Raporları rotaları doğrudan sipariş yönetimine yönlendirilir */}
         <Route
           path="/admin/weight-reports"
-          element={
-            <AdminGuard requiredPermission={["reports.weight", "orders.view"]}>
-              <AdminLayout>
-                <AdminWeightManagement />
-              </AdminLayout>
-            </AdminGuard>
-          }
+          element={<Navigate to="/admin/orders" replace />}
         />
-        {/* Weight Management: Ağırlık Bazlı Ödeme Yönetimi */}
         <Route
           path="/admin/weight-management"
-          element={
-            <AdminGuard requiredPermission={["orders.view", "orders.manage"]}>
-              <AdminLayout>
-                <AdminWeightManagement />
-              </AdminLayout>
-            </AdminGuard>
-          }
+          element={<Navigate to="/admin/orders" replace />}
         />
         <Route
           path="/admin/campaigns"

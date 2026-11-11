@@ -7,7 +7,6 @@ import AdminUsers from "../pages/Admin/AdminUsers";
 import CouponManagement from "../pages/Admin/CouponManagement";
 import PosterManagement from "../pages/Admin/PosterManagement";
 import AdminHomeBlocks from "../pages/Admin/AdminHomeBlocks";
-import WeightReportsPanel from "./WeightReportsPanel";
 import AdminMicro from "../pages/Admin/AdminMicro";
 
 function AdminPanel() {
@@ -123,12 +122,6 @@ function AdminPanel() {
       color: "cyan",
     },
     { id: "coupons", icon: "fas fa-ticket-alt", label: "Kuponlar" },
-    {
-      id: "weights",
-      icon: "fas fa-balance-scale",
-      label: "Ağırlık Raporları",
-      color: "purple",
-    },
     {
       id: "erp",
       icon: "fas fa-plug",
@@ -422,7 +415,6 @@ function AdminPanel() {
           {activeTab === "posters" && <PosterManagement />}
           {activeTab === "homeblocks" && <AdminHomeBlocks />}
           {activeTab === "coupons" && <CouponManagement />}
-          {activeTab === "weights" && <WeightReportsPanel />}
           {activeTab === "erp" && <AdminMicro />}
         </div>
       </div>

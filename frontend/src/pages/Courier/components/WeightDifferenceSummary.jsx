@@ -231,15 +231,15 @@ export default function WeightDifferenceSummary({
         </div>
       </div>
 
-      {/* Provizyon/Uygulama Uyarısı */}
+      {/* Tartı Farkı Bilgilendirmesi */}
       {summary.hasAdminPendingApproval && (
         <div 
           className="alert alert-info d-flex align-items-center mt-3 mb-0 py-2"
           style={{ borderRadius: '10px', fontSize: '13px' }}
         >
-          <i className="fas fa-user-shield me-2"></i>
+          <i className="fas fa-info-circle me-2"></i>
           <span>
-            <strong>Provizyon sınırı aşıldı.</strong> Bu siparişte ek kart tahsilatı için checkout/provizyon akışı yeniden ele alınmalı.
+            Tartı farkı özeti kaydedildi. Teslimatı tamamlayabilirsiniz.
           </span>
         </div>
       )}

@@ -864,6 +864,10 @@ namespace ECommerce.Business.Services.Managers
                             ? 1
                             : Math.Max(1, (int)Math.Round(requestedQuantity, MidpointRounding.AwayFromZero));
 
+                        var estimatedPrice = isWeightBasedProduct
+                            ? CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit)
+                            : unitPrice * requestedQuantity;
+
                         itemsTotal += lineTotal;
                         items.Add(new OrderItem
                         {
@@ -877,10 +881,14 @@ namespace ECommerce.Business.Services.Managers
                             IsWeightBased = isWeightBasedProduct,
                             WeightUnit = product.WeightUnit,
                             EstimatedWeight = estimatedWeight,  // Gram cinsinden gerçek ağırlık
+                            ActualWeight = estimatedWeight,
                             PricePerUnit = pricePerUnit,
-                            EstimatedPrice = isWeightBasedProduct
-                                ? CalculateWeightedPrice(estimatedWeight, pricePerUnit, product.WeightUnit)
-                                : unitPrice * requestedQuantity
+                            EstimatedPrice = estimatedPrice,
+                            ActualPrice = estimatedPrice,
+                            PriceDifference = 0m,
+                            WeightDifference = 0m,
+                            IsWeighed = true,
+                            WeighedAt = DateTime.UtcNow
                         });
 
                         hasWeightBasedItems |= isWeightBasedProduct;
@@ -970,16 +978,14 @@ namespace ECommerce.Business.Services.Managers
                     ShippingMethod = shippingMethod,
                     ShippingCost = shippingCost,
                     HasWeightBasedItems = hasWeightBasedItems,
-                    WeightAdjustmentStatus = hasWeightBasedItems
-                        ? WeightAdjustmentStatus.PendingWeighing
-                        : WeightAdjustmentStatus.NotApplicable,
-                    AllItemsWeighed = !hasWeightBasedItems,
+                    WeightAdjustmentStatus = WeightAdjustmentStatus.NotApplicable,
+                    AllItemsWeighed = true,
                     // 3D Secure ekranında müşteriye gösterilen tutar ile sipariş toplamı aynı kalmalı.
-                    // Tartı sonrası olası fark için tolerans ayrı tutulur; başlangıç provizyonu şişirmiyoruz.
+                    // Direkt satış (Sale) mimarisinde sipariş toplamı (FinalPrice) doğrudan tahsil edilir; provizyon marjı yoktur.
                     PreAuthAmount = hasWeightBasedItems
                         ? Math.Round(finalPrice, 2, MidpointRounding.AwayFromZero)
                         : 0m,
-                    TolerancePercentage = hasWeightBasedItems ? 0.20m : 0.10m
+                    TolerancePercentage = 0m
                 };
                 _context.Orders.Add(order);
                 await _context.SaveChangesAsync();

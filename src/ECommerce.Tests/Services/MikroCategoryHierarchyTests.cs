@@ -237,7 +237,7 @@ namespace ECommerce.Tests.Services
             };
 
             // Act 1: Admin yeni Ana Kategori ekler -> Mikro'ya 2300 olarak INSERT edilmeli
-            var createMainResult = await adminController.CreateCategory(new Category
+            var createMainResult = await adminController.CreateCategory(new AdminCategoriesController.AdminCategorySaveDto
             {
                 Name = "Yöresel Ürünler",
                 ParentId = null,
@@ -250,7 +250,7 @@ namespace ECommerce.Tests.Services
             Assert.True(createdMain.IsMikroSynced);
 
             // Act 2: Admin 1400 altına yeni Alt Kategori ekler -> Mikro'ya 1411 olarak INSERT edilmeli
-            var createSubResult = await adminController.CreateCategory(new Category
+            var createSubResult = await adminController.CreateCategory(new AdminCategoriesController.AdminCategorySaveDto
             {
                 Name = "Diyet Barlar",
                 ParentId = parent1400.Id,

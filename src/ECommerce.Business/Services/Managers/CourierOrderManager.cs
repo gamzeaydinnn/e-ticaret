@@ -1119,9 +1119,7 @@ namespace ECommerce.Business.Services.Managers
         {
             if (order.PaymentStatus == PaymentStatus.Paid)
             {
-                return order.AuthorizedAmount > 0 
-                    ? $"Kredi Kartı (Provizyon: {order.AuthorizedAmount:C})" 
-                    : "Kredi Kartı (Ödendi)";
+                return "Kredi Kartı (Ödendi)";
             }
             return $"Kapıda Ödeme ({order.FinalPrice:C})";
         }

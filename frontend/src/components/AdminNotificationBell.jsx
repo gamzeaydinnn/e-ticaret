@@ -196,7 +196,7 @@ export default function AdminNotificationBell() {
         courier_offline: "/admin/couriers",
         low_stock: "/admin/products",
         refund_requested: "/admin/orders",
-        weight_charge: "/admin/weight-management",
+        weight_charge: "/admin/orders",
         sla_violation: "/admin/orders",
       };
 

@@ -508,51 +508,32 @@ namespace ECommerce.API.Controllers
                 var hasWeightBasedItems = order.HasWeightBasedItems ||
                     (order.OrderItems?.Any(oi => oi.IsWeightBased) == true);
 
-                // Canlı POS'ta Auth yetkisi açık değilse Yapı Kredi 0058 döner.
-                // Yetki açıldı: kg siparişler Auth (provizyon) → teslimatta Capt.
+                // Ön provizyon (Auth/Capt) kaldırıldı: Normal ve tartılı (KG) tüm siparişler
+                // tek tip 3D Secure Direkt Satış (Sale) olarak tahsil edilir.
                 var settings = _paymentOptions.Value;
-                var useAuthForWeightItems = hasWeightBasedItems && settings.PosnetUseAuthForWeightBasedItems;
-                var txnType = useAuthForWeightItems ? "Auth" : "Sale";
+                const string txnType = "Sale";
 
-                // ── MADDE 9: Tutar kaynağı tek noktadan belirleniyor ──────────────────
+                // ── MADDE 9: Tutar kaynağı tek noktadan (Sunucu Otoritesi: FinalPrice) belirleniyor ──
                 decimal bankAmount;
 
                 if (hasWeightBasedItems)
                 {
-                    // KG sipariş: PreAuthAmount zaten sipariş oluşturulurken hesaplandı
-                    // Eğer PreAuthAmount > 0 ise onu kullan, değilse hesapla
-                    if (order.PreAuthAmount > 0)
-                    {
-                        bankAmount = order.PreAuthAmount;
-                        _logger.LogInformation(
-                            "[POSNET-3DS] KG sipariş — Mevcut PreAuthAmount kullanılıyor: {PreAuthAmount} TL. OrderId: {OrderId}",
-                            bankAmount, request.OrderId);
-                    }
-                    else
-                    {
-                        // Fallback: Sipariş oluşturulurken hesaplanmadıysa sipariş toplamını kullan.
-                        // Tolerans post-auth aşamasında dikkate alınır; müşteriye burada şişirilmiş tutar gösterilmez.
-                        var baseAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice;
-                        bankAmount = Math.Round(baseAmount, 2);
+                    var baseAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice;
+                    bankAmount = Math.Round(baseAmount, 2);
 
-                        // Hesaplanan provizyon tutarını Order'a kaydet
+                    if (order.PreAuthAmount != bankAmount)
+                    {
                         order.PreAuthAmount = bankAmount;
                         await _db.SaveChangesAsync();
-
-                        _logger.LogInformation(
-                            "[POSNET-3DS] KG sipariş — PreAuthAmount sipariş toplamından hesaplandı: baseAmount={Base}, bankAmount={BankAmount}. OrderId: {OrderId}",
-                            baseAmount, bankAmount, request.OrderId);
                     }
+
+                    _logger.LogInformation(
+                        "[POSNET-3DS] KG sipariş — Direkt satış (Sale) tutarı: {BankAmount} TL. OrderId: {OrderId}",
+                        bankAmount, request.OrderId);
                 }
                 else
                 {
                     // Normal sipariş: SUNUCU OTORİTESİ ilkesi.
-                    // NEDEN: Bankaya gönderilecek tutar ASLA istemciden gelen değere (request.Amount)
-                    // güvenilerek belirlenmez; tek doğruluk kaynağı sunucudaki sipariş kaydıdır
-                    // (FinalPrice). İstemci değeri yalnızca bir tutarsızlık tespiti (manipülasyon/
-                    // bayat sepet) için ±1 TL toleransla doğrulanır, ancak çekilen tutar her zaman
-                    // DB'deki sipariş toplamıdır. Böylece sepet ile 3DS ekranındaki tutar farkı
-                    // (istemci hesaplama sapması) banka işlemine yansımaz.
                     var expectedAmount = order.FinalPrice > 0 ? order.FinalPrice : order.TotalPrice;
                     const decimal amountTolerance = 1.0m;
 
@@ -576,13 +557,6 @@ namespace ECommerce.API.Controllers
                     _logger.LogInformation(
                         "[POSNET-3DS] Normal sipariş — txnType=Sale, bankAmount={BankAmount} (DB otoritesi). OrderId: {OrderId}",
                         bankAmount, request.OrderId);
-                }
-
-                if (hasWeightBasedItems)
-                {
-                    _logger.LogInformation(
-                        "[POSNET-3DS] KG sipariş işlem tipi: {TxnType}. PosnetUseAuthForWeightBasedItems={UseAuth}. OrderId: {OrderId}",
-                        txnType, settings.PosnetUseAuthForWeightBasedItems, request.OrderId);
                 }
 
                 // 3D Secure başlat

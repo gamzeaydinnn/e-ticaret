@@ -27,7 +27,7 @@ namespace ECommerce.Business.Helpers
             "Market görevlisinin tartımı tamamlanmalıdır.";
 
         public const string StoreDeliveryDeniedMessage =
-            "Kg kart siparişleri kurye teslimatında Capt ile kapanır. " +
+            "Kg kart siparişlerinde tartı farkı/iade kontrolü kurye teslimatında kapatılır. " +
             "Market görevlisi 'Teslim Edildi' kullanamaz.";
 
         /// <summary>
@@ -43,33 +43,19 @@ namespace ECommerce.Business.Helpers
             => status == OrderStatus.Preparing;
 
         /// <summary>
-        /// Kg kalemlerden tartılmamış olan var mı?
-        /// OrderItems yüklenmemişse AllItemsWeighed alanına düşülür — yanlış "tartıldı" varsayılmaz.
+        /// Direkt satış (Sale) mimarisinde siparişler tartı kapısına takılmadan doğrudan ilerler.
         /// </summary>
         public static bool HasUnweighedWeightItems(Order? order)
-        {
-            if (order == null || !order.HasWeightBasedItems)
-            {
-                return false;
-            }
-
-            var items = order.OrderItems;
-            if (items != null && items.Count > 0)
-            {
-                return items.Any(oi => oi.IsWeightBased && !oi.IsWeighed);
-            }
-
-            return !order.AllItemsWeighed;
-        }
+            => false;
 
         public static bool CanMarkReady(Order? order)
-            => !HasUnweighedWeightItems(order);
+            => true;
 
         public static bool CanCourierPickup(Order? order)
-            => !HasUnweighedWeightItems(order);
+            => true;
 
         /// <summary>
-        /// Kapıda nakit ise Capt yok; store teslimi kart Capt'i atlamasın diye yalnız kart kg kilitlenir.
+        /// Kapıda nakit kontrolü.
         /// </summary>
         public static bool IsCashOnDelivery(Order? order)
         {
@@ -79,6 +65,6 @@ namespace ECommerce.Business.Helpers
         }
 
         public static bool ShouldBlockStoreDelivery(Order? order)
-            => order != null && order.HasWeightBasedItems && !IsCashOnDelivery(order);
+            => false;
     }
 }

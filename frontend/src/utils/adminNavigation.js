@@ -11,7 +11,6 @@ export const ADMIN_LANDING_ROUTES = [
   { path: "/admin/categories", permission: PERMISSIONS.CATEGORIES_VIEW },
   { path: "/admin/couriers", permission: PERMISSIONS.COURIERS_VIEW },
   { path: "/admin/reports", permission: [PERMISSIONS.REPORTS_VIEW, PERMISSIONS.REPORTS_SALES] },
-  { path: "/admin/weight-management", permission: [PERMISSIONS.REPORTS_WEIGHT, PERMISSIONS.ORDERS_VIEW] },
   { path: "/admin/campaigns", permission: PERMISSIONS.CAMPAIGNS_VIEW },
   { path: "/admin/coupons", permission: PERMISSIONS.COUPONS_VIEW },
   { path: "/admin/newsletter", permission: PERMISSIONS.NEWSLETTER_VIEW },

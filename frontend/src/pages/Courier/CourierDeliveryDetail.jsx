@@ -520,63 +520,6 @@ export default function CourierDeliveryDetail() {
                 )}
               </div>
 
-              {/* Tartı / Tahsilat Özeti (admin tarafından girilen) */}
-              {(task.hasWeightBasedItems || priceDiff !== 0) && (
-                <div
-                  className="info-card shadow-sm mb-3"
-                  style={{
-                    background:
-                      priceDiff > 0
-                        ? "linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%)"
-                        : priceDiff < 0
-                          ? "linear-gradient(135deg, #cff4fc 0%, #9eeaf9 100%)"
-                          : "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
-                    border: "1px solid #dee2e6",
-                  }}
-                >
-                  <div className="d-flex align-items-start">
-                    <div
-                      className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
-                      style={{
-                        width: "48px",
-                        height: "48px",
-                        backgroundColor: "#ff6b35",
-                        color: "white",
-                      }}
-                    >
-                      <i className="fas fa-balance-scale"></i>
-                    </div>
-                    <div className="flex-grow-1">
-                      <h6 className="mb-1 fw-bold">Tartı Bilgisi</h6>
-                      <p className="mb-2 small text-muted">
-                        Tartı mağaza/admin tarafından girildi. Teslimatta aşağıdaki tutarı tahsil edin.
-                      </p>
-                      <div className="d-flex flex-wrap gap-3">
-                        <div>
-                          <small className="text-muted d-block">Tahsil Edilecek</small>
-                          <strong style={{ color: "#ff6b35", fontSize: "1.1rem" }}>
-                            {Number(collectionAmount).toFixed(2)} ₺
-                          </strong>
-                        </div>
-                        {priceDiff !== 0 && (
-                          <div>
-                            <small className="text-muted d-block">Tartı Farkı</small>
-                            <strong
-                              className={
-                                priceDiff > 0 ? "text-warning" : "text-info"
-                              }
-                            >
-                              {priceDiff > 0 ? "+" : ""}
-                              {Number(priceDiff).toFixed(2)} ₺
-                            </strong>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Order Details Card */}
               <div className="info-card shadow-sm">
                 <h6 className="fw-bold mb-3">
@@ -589,18 +532,10 @@ export default function CourierDeliveryDetail() {
                 <div className="row g-2">
                   <div className="col-6">
                     <div className="bg-light rounded p-2 text-center">
-                      <small className="text-muted d-block">Tahsilat</small>
+                      <small className="text-muted d-block">Tutar</small>
                       <span className="fw-bold" style={{ color: "#ff6b35" }}>
                         {Number(collectionAmount).toFixed(2)} ₺
                       </span>
-                      {priceDiff !== 0 && (
-                        <small
-                          className={`d-block ${priceDiff > 0 ? "text-warning" : "text-info"}`}
-                        >
-                          Fark: {priceDiff > 0 ? "+" : ""}
-                          {Number(priceDiff).toFixed(2)} ₺
-                        </small>
-                      )}
                     </div>
                   </div>
                   <div className="col-6">
@@ -668,9 +603,7 @@ export default function CourierDeliveryDetail() {
 
               {task.items && task.items.length > 0 ? (
                 <div className="list-group list-group-flush">
-                  {task.items.map((item, index) => {
-                    const weightDiff = formatItemWeightDiff(item);
-                    return (
+                  {task.items.map((item, index) => (
                       <div
                         key={item.id || item.orderItemId || index}
                         className="list-group-item px-0"
@@ -694,35 +627,18 @@ export default function CourierDeliveryDetail() {
                               {item.quantity} ×{" "}
                               {Number(item.price || 0).toFixed(2)} ₺
                             </small>
-                            {item.isWeightBased &&
-                              item.actualWeightGrams != null && (
-                                <small className="text-muted d-block">
-                                  Tartı: {item.expectedWeightGrams}g →{" "}
-                                  {item.actualWeightGrams}g
-                                </small>
-                              )}
-                            {weightDiff && (
-                              <span
-                                className={`badge bg-${weightDiff.tone} mt-1`}
-                              >
-                                {weightDiff.label} {weightDiff.gramsText}
-                                {weightDiff.amount !== 0 &&
-                                  ` (${weightDiff.amount > 0 ? "+" : ""}${weightDiff.amount.toFixed(2)} ₺)`}
-                              </span>
-                            )}
                           </div>
                           <span className="fw-bold flex-shrink-0">
                             {Number(item.totalPrice || 0).toFixed(2)} ₺
                           </span>
                         </div>
                       </div>
-                    );
-                  })}
+                  ))}
 
                   {/* Toplam */}
                   <div className="list-group-item px-0">
                     <div className="d-flex justify-content-between">
-                      <span className="fw-bold">Tahsil Edilecek</span>
+                      <span className="fw-bold">Toplam Tutar</span>
                       <span
                         className="fw-bold"
                         style={{ color: "#ff6b35", fontSize: "18px" }}
@@ -730,21 +646,6 @@ export default function CourierDeliveryDetail() {
                         {Number(collectionAmount).toFixed(2)} ₺
                       </span>
                     </div>
-                    {priceDiff !== 0 && (
-                      <div className="d-flex justify-content-between mt-1">
-                        <small className="text-muted">Tartı farkı</small>
-                        <small
-                          className={
-                            priceDiff > 0
-                              ? "text-warning fw-semibold"
-                              : "text-info fw-semibold"
-                          }
-                        >
-                          {priceDiff > 0 ? "+" : ""}
-                          {Number(priceDiff).toFixed(2)} ₺
-                        </small>
-                      </div>
-                    )}
                   </div>
                 </div>
               ) : (

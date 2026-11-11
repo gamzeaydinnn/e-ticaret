@@ -215,8 +215,8 @@ export default function WeightBasedProductAlert({
             <div className="guarantee-message">
               <i className="fas fa-shield-alt"></i>
               <span>
-                Tartılı siparişlerde tahmini tutarın %15 fazlası kadar bloke
-                konur. Kesin tutar teslimatta çekilir, kalan bloke çözülür.
+                Tartılı siparişlerde sepet tutarınız doğrudan tahsil edilir (fazladan bloke konulmaz).
+                Hazırlama sırasında tartım ağırlığı düşük çıkarsa aradaki fark kartınıza iade edilir.
               </span>
             </div>
           </div>
@@ -229,9 +229,9 @@ export default function WeightBasedProductAlert({
           <div className="checkout-note">
             <i className="fas fa-credit-card"></i>
             <span>
-              Kredi kartı ödemelerinde tahmini tutar üzerinden{" "}
-              <strong>%15 marjlı ön provizyon</strong> alınır. Teslimat sonrası
-              sadece kesin tutar çekilir.
+              Kredi kartı ödemelerinde sepet tutarınız{" "}
+              <strong>doğrudan satış</strong> olarak çekilir. Eksik gramaj durumunda
+              tutar farkı kartınıza otomatik iade edilir.
             </span>
           </div>
         </div>

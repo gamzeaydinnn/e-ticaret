@@ -492,7 +492,7 @@ builder.Services.AddScoped<ICartService, CartManager>();
 builder.Services.AddScoped<IWeightService, WeightService>();
 builder.Services.AddScoped<IWeightAdjustmentService, WeightAdjustmentService>();
 builder.Services.AddScoped<IWeightBasedPaymentService, WeightBasedPaymentService>();
-builder.Services.AddHostedService<ECommerce.API.Services.PreAuthExpiryBackgroundService>();
+// Ön provizyon (Auth/Capt) kaldırıldı; tüm ödemeler direkt Sale olarak işlendiğinden PreAuthExpiryBackgroundService devre dışı.
 // Mikro ERP'den tartı verisi senkronizasyonu - sipariş teslim miktarlarını çeker
 builder.Services.AddScoped<IMikroWeightSyncService, MikroWeightSyncService>();
 // Ödeme sağlayıcıları + PaymentManager (provider seçimi)

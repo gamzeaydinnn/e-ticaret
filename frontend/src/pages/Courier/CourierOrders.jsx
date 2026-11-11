@@ -2,26 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useCourierAuth } from "../../contexts/CourierAuthContext";
-import WeightApprovalWarningModal from "../../components/WeightApprovalWarningModal";
 import { CourierService, formatPhoneDisplay, formatPhoneReadable, getPhoneTelUri, mapCourierStatusColor } from "../../services/courierService";
-import { WeightAdjustmentService } from "../../services/weightAdjustmentService";
 import "./CourierOrders.css";
-
-/** Market tartısı (WeightAdjustment) tamamlanmamış kg sipariş. */
-const isKgUnweighed = (order) => {
-  if (!order) return false;
-  const hasKg = order.hasWeightBasedItems || order.HasWeightBasedItems;
-  if (!hasKg) return false;
-  return !(order.allItemsWeighed === true || order.AllItemsWeighed === true);
-};
 
 export default function CourierOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [updating, setUpdating] = useState(false);
-  const [showWeightModal, setShowWeightModal] = useState(false);
-  const [pendingDeliveryOrder, setPendingDeliveryOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   // FİLTRE STATE'LERİ (sunucu taraflı filtreleme - backend OrderDate'e göre süzer)
   // statusFilter boş ise backend varsayılan olarak yalnızca aktif siparişleri döner;
@@ -111,152 +99,7 @@ export default function CourierOrders() {
     }
   };
 
-  const handleDeliveryAttempt = (order) => {
-    // Faz E: Market tartısı (AllItemsWeighed) teslimat kapısı — WeightReport değil.
-    if (isKgUnweighed(order)) {
-      alert(
-        "Kg ürünler market görevlisi tarafından tartılmadan teslim edilemez.\n\nSiparişi mağazaya iade edin.",
-      );
-      return;
-    }
-
-    setPendingDeliveryOrder(order);
-    setShowWeightModal(true);
-  };
-
-  const confirmDelivery = async () => {
-    if (!pendingDeliveryOrder) return;
-
-    setUpdating(true);
-    setShowWeightModal(false);
-
-    try {
-      const orderId = pendingDeliveryOrder.id;
-
-      // Backend'e teslimat isteği gönder - ödeme otomatik yapılacak
-      const response = await CourierService.updateOrderStatus(
-        orderId,
-        "delivered",
-      );
-
-      if (response.success) {
-        // Başarılı yanıt
-        let message = "✅ Teslimat Başarıyla Tamamlandı!\n\n";
-        message += `Sipariş: #${orderId}\n`;
-        message += `Müşteri: ${pendingDeliveryOrder.customerName}\n`;
-        message += `Tutar: ${pendingDeliveryOrder.totalAmount.toFixed(2)} ₺\n`;
-
-        if (response.paymentProcessed && response.paymentAmount > 0) {
-          message += `\n💰 EK ÖDEME TAHSİLATI:\n`;
-          message += `Ağırlık Farkı Ücreti: +${response.paymentAmount.toFixed(
-            2,
-          )} ₺\n`;
-          message += `\n📊 Toplam Tahsilat: ${(
-            parseFloat(pendingDeliveryOrder.totalAmount) +
-            parseFloat(response.paymentAmount)
-          ).toFixed(2)} ₺`;
-
-          if (response.paymentDetails && response.paymentDetails.length > 0) {
-            message += `\n\nDetaylar:\n${response.paymentDetails.join("\n")}`;
-          }
-        }
-
-        message += response.message ? `\n\n${response.message}` : "";
-
-        alert(message);
-      } else {
-        alert(
-          `⚠️ Uyarı!\n\n${
-            response.message ||
-            "Teslimat tamamlandı ancak bazı ödemeler başarısız oldu."
-          }`,
-        );
-      }
-
-      // Siparişleri yeniden yükle
-      await loadOrders();
-
-      setSelectedOrder(null);
-      setPendingDeliveryOrder(null);
-    } catch (error) {
-      console.error("Teslimat hatası:", error);
-      alert(
-        `❌ Teslimat Hatası!\n\n${
-          error.response?.data?.message ||
-          error.message ||
-          "Bilinmeyen bir hata oluştu"
-        }`,
-      );
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  // Nakit tahsilat onayı - DeliveryPaymentPending durumunda kullanılır
-  const handleCashSettlement = async (order) => {
-    const priceDiff = order.totalPriceDifference || 0;
-    
-    if (!window.confirm(
-      `💰 NAKİT TAHSİLAT ONAYI\n\n` +
-      `Sipariş: #${order.id}\n` +
-      `Müşteri: ${order.customerName}\n` +
-      `Tahsil edilecek ek tutar: ${priceDiff.toFixed(2)} ₺\n\n` +
-      `Bu tutarı müşteriden nakit olarak tahsil ettiniz mi?`
-    )) {
-      return;
-    }
-
-    setUpdating(true);
-    try {
-      const result = await WeightAdjustmentService.calculateCashSettlement(order.id, {
-        collectedAmount: priceDiff,
-        notes: "Kurye tarafından nakit tahsil edildi",
-      });
-
-      if (result.success) {
-        alert(
-          `✅ Tahsilat Kaydedildi!\n\n` +
-          `Sipariş: #${order.id}\n` +
-          `Tahsil edilen tutar: ${priceDiff.toFixed(2)} ₺\n\n` +
-          `Sipariş tamamlandı.`
-        );
-        await loadOrders();
-      } else {
-        alert(`⚠️ Hata: ${result.message || "Tahsilat kaydedilemedi"}`);
-      }
-    } catch (error) {
-      console.error("Nakit tahsilat hatası:", error);
-      alert(
-        `❌ Tahsilat Hatası!\n\n${
-          error.response?.data?.message || error.message || "Bilinmeyen hata"
-        }`
-      );
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   const updateOrderStatus = async (orderId, newStatus, notes = "") => {
-    // Teslim durumu için özel kontrol
-    if (newStatus === "delivered") {
-      const order = orders.find((o) => o.id === orderId);
-      if (order) {
-        handleDeliveryAttempt(order);
-        return;
-      }
-    }
-
-    if (newStatus === "picked_up" || newStatus === "out_for_delivery") {
-      const order = orders.find((o) => o.id === orderId);
-      if (order && isKgUnweighed(order)) {
-        alert(
-          "Kg ürünler tartılmadan teslim alınamaz / yola çıkılamaz. Market görevlisinin tartımı tamamlanmalıdır.",
-        );
-        return;
-      }
-    }
-
-    // Diğer durum güncellemeleri normal devam eder
     setUpdating(true);
     try {
       await CourierService.updateOrderStatus(orderId, newStatus, notes);
@@ -511,24 +354,12 @@ export default function CourierOrders() {
         ) : (
           <div className="d-flex flex-column gap-2">
             {orders.map((order) => {
-              const kgUnweighed = isKgUnweighed(order);
-              const isPaymentPending = isDeliveryPaymentPending(order.status);
-              const hasWeightDiff = order.hasWeightDifference || order.totalPriceDifference > 0;
               const finalAmount = order.finalAmount || order.totalAmount;
-              const priceDiff = order.totalPriceDifference || 0;
 
               return (
                 <div
                   key={order.id}
-                  className={`card border-0 shadow-sm ${
-                    isPaymentPending
-                      ? "border-start border-danger border-4"
-                      : kgUnweighed
-                        ? "border-start border-warning border-4"
-                        : hasWeightDiff
-                          ? "border-start border-success border-4"
-                          : ""
-                  }`}
+                  className="card border-0 shadow-sm"
                 >
                   <div className="card-body p-3">
                     {/* Üst Satır: Sipariş No, Durum, Tutar */}
@@ -546,11 +377,6 @@ export default function CourierOrders() {
                         <div className="fw-bold" style={{ color: "#ff6b35", fontSize: "1.1rem" }}>
                           {Number(finalAmount || 0).toFixed(2)} ₺
                         </div>
-                        {priceDiff !== 0 && (
-                          <small className={priceDiff > 0 ? "text-warning fw-bold" : "text-info"}>
-                            {priceDiff > 0 ? "+" : ""}{priceDiff.toFixed(2)} ₺
-                          </small>
-                        )}
                       </div>
                     </div>
 
@@ -574,28 +400,6 @@ export default function CourierOrders() {
                         </small>
                       </div>
                     </div>
-
-                    {/* Uyarı Badges — tartı kapısı WeightAdjustment (AllItemsWeighed) üzerinden */}
-                    {(kgUnweighed || hasWeightDiff || isPaymentPending) && (
-                      <div className="mb-2">
-                        {kgUnweighed && (
-                          <span className="badge bg-warning text-dark me-1">
-                            <i className="fas fa-clock me-1"></i>Tartı Bekleniyor
-                          </span>
-                        )}
-                        {hasWeightDiff && !kgUnweighed && (
-                          <span className="badge bg-success me-1">
-                            <i className="fas fa-check me-1"></i>
-                            {priceDiff > 0 ? "+" : ""}{priceDiff.toFixed(2)} ₺
-                          </span>
-                        )}
-                        {isPaymentPending && (
-                          <span className="badge bg-danger">
-                            <i className="fas fa-exclamation-triangle me-1"></i>Ek Tahsilat
-                          </span>
-                        )}
-                      </div>
-                    )}
 
                     {/* Aksiyon Butonları */}
                     <div className="d-flex flex-wrap gap-2 mt-2">
@@ -626,16 +430,7 @@ export default function CourierOrders() {
                       )}
 
                       {/* Ana Aksiyon Butonu */}
-                      {isPaymentPending && priceDiff > 0 ? (
-                        <button
-                          onClick={() => handleCashSettlement(order)}
-                          disabled={updating}
-                          className="btn btn-sm btn-danger flex-grow-1"
-                        >
-                          <i className="fas fa-hand-holding-usd me-1"></i>
-                          {priceDiff.toFixed(2)} ₺ AL
-                        </button>
-                      ) : (order.status?.toLowerCase() === "assigned" || order.status?.toLowerCase() === "ready") ? (
+                      {(order.status?.toLowerCase() === "assigned" || order.status?.toLowerCase() === "ready") ? (
                         <button
                           onClick={() => updateOrderStatus(order.id, "picked_up")}
                           disabled={updating}
@@ -654,14 +449,14 @@ export default function CourierOrders() {
                         </button>
                       ) : (order.status?.toLowerCase() === "out_for_delivery" || 
                            order.status?.toLowerCase() === "outfordelivery" ||
-                           order.status?.toLowerCase() === "in_transit") && !isPaymentPending ? (
+                           order.status?.toLowerCase() === "in_transit") ? (
                         <button
                           onClick={() => updateOrderStatus(order.id, "delivered")}
-                          disabled={updating || kgUnweighed}
-                          className={`btn btn-sm flex-grow-1 ${kgUnweighed || hasWeightDiff ? "btn-warning" : "btn-success"}`}
+                          disabled={updating}
+                          className="btn btn-sm flex-grow-1 btn-success"
                         >
-                          <i className={`fas ${kgUnweighed ? "fa-clock" : "fa-check-circle"} me-1`}></i>
-                          {kgUnweighed ? "TARTI BEKLENİYOR" : "TESLİM ET"}
+                          <i className="fas fa-check-circle me-1"></i>
+                          TESLİM ET
                         </button>
                       ) : null}
                     </div>
@@ -709,36 +504,6 @@ export default function CourierOrders() {
                     Ürün bilgileri yükleniyor...
                   </div>
                 )}
-                {/* Uyarı Badges */}
-                {(() => {
-                  if (isKgUnweighed(selectedOrder)) {
-                    return (
-                      <div className="alert alert-warning py-2 mb-3">
-                        <i className="fas fa-weight me-2"></i>
-                        <strong>Market tartımı eksik</strong>
-                        <div className="small mt-1">
-                          Kg ürünler tartılmadan teslim alınamaz / teslim edilemez.
-                        </div>
-                      </div>
-                    );
-                  }
-                  const priceDiff = selectedOrder.totalPriceDifference || 0;
-                  if (selectedOrder.hasWeightBasedItems && (selectedOrder.allItemsWeighed || selectedOrder.AllItemsWeighed)) {
-                    return (
-                      <div className="alert alert-success py-2 mb-3">
-                        <i className="fas fa-check-circle me-2"></i>
-                        <strong>Market tartımı tamam</strong>
-                        {priceDiff !== 0 && (
-                          <div className="small mt-1">
-                            Tartı farkı: {priceDiff > 0 ? "+" : ""}
-                            {Number(priceDiff).toFixed(2)} ₺
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
 
                 {/* Müşteri Bilgileri */}
                 <div className="card border-0 shadow-sm mb-3 courier-customer-card">
@@ -809,27 +574,12 @@ export default function CourierOrders() {
                         <span className="courier-info-value">{breakdown.shippingCost.toFixed(2)} ₺</span>
                       </div>
                     )}
-                    {breakdown.weightDiff !== 0 && (
-                      <div className="courier-info-row mb-2">
-                        <span className="text-muted">Tartı Farkı</span>
-                        <span className={`courier-info-value ${breakdown.weightDiff > 0 ? "text-warning fw-bold" : "text-info fw-bold"}`}>
-                          {breakdown.weightDiff > 0 ? "+" : ""}
-                          {breakdown.weightDiff.toFixed(2)} ₺
-                        </span>
-                      </div>
-                    )}
                     <div className="courier-info-row mb-2 pt-2 border-top">
-                      <span className="text-muted fw-semibold">Tahsil Edilecek</span>
+                      <span className="text-muted fw-semibold">Toplam Tutar</span>
                       <span className="fw-bold courier-info-value" style={{ color: "#ff6b35", fontSize: "1.05rem" }}>
                         {breakdown.finalAmount.toFixed(2)} ₺
                       </span>
                     </div>
-                    {breakdown.finalAmount !== breakdown.orderTotal && breakdown.orderTotal > 0 && (
-                      <div className="courier-info-row mb-2">
-                        <span className="text-muted small">Sipariş Tutarı</span>
-                        <span className="text-muted small courier-info-value">{breakdown.orderTotal.toFixed(2)} ₺</span>
-                      </div>
-                    )}
                     <div className="courier-info-row">
                       <span className="text-muted">Durum</span>
                       <span className={`badge bg-${getStatusColor(selectedOrder.status, selectedOrder.statusColor)} courier-info-value`}>
@@ -850,9 +600,7 @@ export default function CourierOrders() {
                     </h6>
                     {selectedOrder.items && selectedOrder.items.length > 0 ? (
                       <div className="d-flex flex-column gap-2">
-                        {selectedOrder.items.map((item, index) => {
-                          const weightDiff = formatItemWeightDiff(item);
-                          return (
+                        {selectedOrder.items.map((item, index) => (
                             <div key={item.id || index} className="border-bottom pb-2">
                               <div className="d-flex justify-content-between">
                                 <span className="fw-semibold">{item.name}</span>
@@ -863,19 +611,8 @@ export default function CourierOrders() {
                                 {(item.weightUnit || "adet").toLowerCase()} ×{" "}
                                 {Number(item.price || 0).toFixed(2)} ₺
                               </small>
-                              {item.isWeightBased && item.actualWeightGrams != null && (
-                                <div className="small text-muted">
-                                  Tartı: {item.expectedWeightGrams}g → {item.actualWeightGrams}g
-                                </div>
-                              )}
-                              {weightDiff && (
-                                <span className={`badge bg-${weightDiff.tone} mt-1`} style={{ fontSize: "0.7rem" }}>
-                                  {weightDiff.label} {weightDiff.gramsText}
-                                </span>
-                              )}
                             </div>
-                          );
-                        })}
+                        ))}
                       </div>
                     ) : (
                       <small className="text-muted">
@@ -924,7 +661,7 @@ export default function CourierOrders() {
                         setSelectedOrder(null);
                         updateOrderStatus(selectedOrder.id, getNextStatus(selectedOrder.status));
                       }}
-                      disabled={updating || (getNextStatus(selectedOrder.status) === "delivered" && isKgUnweighed(selectedOrder))}
+                      disabled={updating}
                       className={`btn courier-modal-main-btn ${
                         getNextStatus(selectedOrder.status) === "delivered"
                           ? "btn-success"
@@ -960,18 +697,6 @@ export default function CourierOrders() {
         </div>,
         document.body,
       )}
-
-      {/* Ağırlık Onay Uyarı Modal */}
-      <WeightApprovalWarningModal
-        isOpen={showWeightModal}
-        onClose={() => {
-          setShowWeightModal(false);
-          setPendingDeliveryOrder(null);
-        }}
-        onConfirm={confirmDelivery}
-        orderData={pendingDeliveryOrder}
-        weightReport={null}
-      />
     </div>
   );
 }

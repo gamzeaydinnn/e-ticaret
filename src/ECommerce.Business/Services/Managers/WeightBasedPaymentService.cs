@@ -264,52 +264,54 @@ namespace ECommerce.Business.Services.Managers
                     return PreAuthorizationResult.Failure(orderId, "Sipariş bulunamadı");
                 }
 
-                // Auth tutarı marjsız — %20 Capt tavanı teslimatta uygulanır
+                // Direkt satış (Sale) tutarı
                 var blockAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, estimatedAmount);
 
-                // POSNET Pre-Auth çağır
-                var authResult = await _posnetService.ProcessAuthAsync(
+                // POSNET Direkt Satış (Sale) çağır (Auth/Capt kaldırıldı)
+                var saleResult = await _posnetService.ProcessDirectSaleAsync(
                     orderId,
                     cardNumber,
                     expireDate,
                     cvv,
-                    blockAmount,
                     0, // Taksit yok
                     cancellationToken);
 
                 stopwatch.Stop();
 
-                if (!authResult.IsSuccess || authResult.Data == null)
+                if (!saleResult.IsSuccess || saleResult.Data == null)
                 {
                     _logger?.LogWarning(
-                        "[WEIGHT-PAYMENT] POSNET Pre-Auth başarısız. OrderId: {OrderId}, Error: {Error}",
-                        orderId, authResult.Error);
+                        "[WEIGHT-PAYMENT] POSNET Sale başarısız. OrderId: {OrderId}, Error: {Error}",
+                        orderId, saleResult.Error);
 
                     return PreAuthorizationResult.Failure(
                         orderId,
-                        authResult.Error ?? "Pre-Auth başarısız",
-                        authResult.ErrorCode.ToString());
+                        saleResult.Error ?? "Ödeme başarısız",
+                        saleResult.ErrorCode.ToString());
                 }
 
                 // Siparişi güncelle
                 order.PreAuthAmount = blockAmount;
-                order.PreAuthHostLogKey = authResult.Data.HostLogKey;
+                order.AuthorizedAmount = blockAmount;
+                order.CapturedAmount = blockAmount;
+                order.CaptureStatus = CaptureStatus.Success;
+                order.PreAuthHostLogKey = saleResult.Data.HostLogKey;
                 order.PreAuthDate = DateTime.UtcNow;
                 order.WeightAdjustmentStatus = WeightAdjustmentStatus.PendingWeighing;
                 await _db.SaveChangesAsync(cancellationToken);
 
                 _logger?.LogInformation(
-                    "[WEIGHT-PAYMENT] Pre-Auth başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}, " +
-                    "BlockAmount: {Amount}, ElapsedMs: {Elapsed}",
-                    orderId, authResult.Data.HostLogKey, blockAmount, stopwatch.ElapsedMilliseconds);
+                    "[WEIGHT-PAYMENT] Direkt satış başarılı. OrderId: {OrderId}, HostLogKey: {HostLogKey}, " +
+                    "Amount: {Amount}, ElapsedMs: {Elapsed}",
+                    orderId, saleResult.Data.HostLogKey, blockAmount, stopwatch.ElapsedMilliseconds);
 
                 return new PreAuthorizationResult
                 {
                     IsSuccess = true,
                     OrderId = orderId,
                     BlockedAmount = blockAmount,
-                    HostLogKey = authResult.Data.HostLogKey,
-                    AuthCode = authResult.Data.AuthCode,
+                    HostLogKey = saleResult.Data.HostLogKey,
+                    AuthCode = saleResult.Data.AuthCode,
                     TransactionDate = DateTime.UtcNow,
                     ExpiresAt = DateTime.UtcNow.AddHours(PRE_AUTH_VALIDITY_HOURS),
                     ElapsedMilliseconds = stopwatch.ElapsedMilliseconds

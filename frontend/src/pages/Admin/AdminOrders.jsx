@@ -3414,11 +3414,6 @@ export default function AdminOrders() {
                                           >
                                             <div className="flex-grow-1">
                                               <div className="fw-semibold">{getItemDisplayName(item)}</div>
-                                              {item.isWeightBased && (
-                                                <small className="text-muted">
-                                                  Tartılı ürünler miktar yerine ağırlık ekranından düzenlenir.
-                                                </small>
-                                              )}
                                             </div>
                                             <input
                                               type="number"
@@ -3432,7 +3427,6 @@ export default function AdminOrders() {
                                                   ? item.quantity
                                                   : editableItem.quantity
                                               }
-                                              disabled={item.isWeightBased}
                                               onChange={(e) =>
                                                 handleEditOrderItemQuantityChange(
                                                   item.id,
@@ -3472,9 +3466,9 @@ export default function AdminOrders() {
                               </h6>
                               <p className="admin-item-refund__hint">
                                 WhatsApp taleplerinde siparişi bulun, iade
-                                edilecek ürün ve adedi seçin. Aynı gün kalan
-                                tutar için provizyon iptali, kısmi veya sonraki
-                                gün kart iadesi uygulanır.
+                                edilecek ürün ve adedi seçin. Aynı gün tam
+                                iptallerde satış iptali (reverse), kısmi veya
+                                sonraki gün iadelerde kart iadesi (return) uygulanır.
                               </p>
                             </div>
                             <button

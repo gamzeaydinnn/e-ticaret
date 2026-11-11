@@ -96,12 +96,12 @@ namespace ECommerce.Business.Services.Managers
         /// </summary>
         private Task<Payments?> GetOriginalSaleOrCaptPaymentAsync(int orderId)
         {
-            // Önce capt (finansallaştırma) bak, sonra sale (direkt satış)
+            // Direkt satış (Sale) veya eski capt kaydını bul; kısmi iade görmüş (PartiallyRefunded) satışlar da dahildir.
             return _db.Payments
                 .Where(p => p.OrderId == orderId &&
-                       (p.TransactionType == "capt" || p.TransactionType == "sale") &&
-                       (p.Status == "Paid" || p.Status == "Success"))
-                .OrderByDescending(p => p.CreatedAt)  // En son capt/sale (re-auth senaryosu için)
+                       (p.TransactionType == "sale" || p.TransactionType == "Sale" || p.TransactionType == "capt") &&
+                       (p.Status == "Paid" || p.Status == "Success" || p.Status == "PartiallyRefunded" || p.Status == "PartialRefund"))
+                .OrderByDescending(p => p.CreatedAt)
                 .FirstOrDefaultAsync();
         }
 

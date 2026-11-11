@@ -765,6 +765,16 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
                         // Sale = anında çekim; Capt beklenmez. SaleImmediate akışı bunu kullanır.
                         order.CaptureStatus = CaptureStatus.Success;
 
+                        if (order.HasWeightBasedItems)
+                        {
+                            order.PreAuthAmount = processedAmount;
+                            order.AuthorizedAmount = processedAmount;
+                            order.PreAuthDate = DateTime.UtcNow;
+                            order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
+                                ? WeightAdjustmentStatus.PendingWeighing
+                                : order.WeightAdjustmentStatus;
+                        }
+
                         // NEDEN: 3D sale işleminde de iade/reverse için bankanın orijinal referansı saklanmalı.
                         if (!string.IsNullOrWhiteSpace(hostLogKey))
                         {
@@ -807,16 +817,11 @@ namespace ECommerce.Infrastructure.Services.Payment.Posnet
         }
 
         /// <summary>
-        /// Callback'in auth-only mi yoksa sale mi olduğunu pending ödeme kaydından tespit eder.
-        /// NEDEN: Ağırlık bazlı siparişler her zaman Auth değildir. POS Auth yetkisi kapalıysa
-        /// kg ürünler de Sale olarak çekilir; bu durumda sırf HasWeightBasedItems=true diye
-        /// siparişi PreAuthorized bırakmak sipariş/tartı ekranlarında kaydı gizler.
+        /// Ön provizyon (Auth/Capt) kaldırıldı: tüm 3D Secure işlemleri Sale (Direkt Satış) olarak yürütülür.
         /// </summary>
-        private async Task<bool> IsAuthorizationOnlyFlowAsync(int orderId)
+        private Task<bool> IsAuthorizationOnlyFlowAsync(int orderId)
         {
-            var payment = await GetLatestPosnetPaymentAsync(orderId);
-            return payment?.TransactionType != null &&
-                payment.TransactionType.Equals("Auth", StringComparison.OrdinalIgnoreCase);
+            return Task.FromResult(false);
         }
 
         /// <summary>

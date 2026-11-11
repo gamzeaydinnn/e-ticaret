@@ -142,11 +142,9 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// KG siparişlerde POSNET Auth kullanılsın mı?
-        /// Tek config kaynağı: PaymentSettings:PosnetUseAuthForWeightBasedItems.
+        /// Ön provizyon (Auth/Capt) mimarisi kaldırıldı. Tüm ödemeler Sale olarak işlenir.
         /// </summary>
-        private bool IsPosnetAuthEnabledForWeightItems()
-            => _configuration.GetValue("PaymentSettings:PosnetUseAuthForWeightBasedItems", false);
+        private bool IsPosnetAuthEnabledForWeightItems() => false;
 
         /// <summary>
         /// Payment method string'ine göre uygun provider'ı seçer
@@ -335,9 +333,17 @@ namespace ECommerce.Business.Services.Managers
             decimal refundAmount,
             decimal remainingRefundableAmount)
         {
-            return (payment.TransactionType == "auth" ||
-                    payment.TransactionType == "capt" ||
-                    payment.TransactionType == "sale") &&
+            // Banka kuralı (0218): Kısmi iadesi (<return>) yapılmış bir satış işlemi gün içinde bile
+            // <reverse> ile iptal edilemez; kalan tutar için <return> çağrılmalıdır.
+            if ((payment.RefundedAmount ?? 0m) > 0m ||
+                string.Equals(payment.Status, "PartiallyRefunded", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(payment.Status, "PartialRefund", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var txnType = payment.TransactionType?.Trim().ToLowerInvariant() ?? "sale";
+            return (txnType == "sale" || txnType == "capt" || txnType == "auth") &&
                 refundAmount >= remainingRefundableAmount - 0.01m &&
                 IsSameBusinessDay(payment.CreatedAt);
         }
@@ -600,20 +606,17 @@ namespace ECommerce.Business.Services.Managers
                 };
             }
 
-            // NEDEN: Tartılı siparişte checkout Sale yapılamaz; Capt teslimatta gerçek tartıya göre çekilir.
-            // Auth tutarı sepet toplamıdır (+%20 şişirme yok). %20 yalnız banka Capt tavanıdır.
-            var preAuthAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, dto.Amount);
-            var useAuth = IsPosnetAuthEnabledForWeightItems();
-            var txnType = useAuth ? "Auth" : "Sale";
+            // Direkt satış (Sale) mimarisinde tartılı siparişlerde de sepet toplamı (FinalPrice) çekilir.
+            var saleAmount = WeightBasedCapturePolicy.ResolveCheckoutAuthAmount(order, dto.Amount);
+            const string txnType = "Sale";
 
             try
             {
-                // Flag kapalıysa (eski 0058) Sale'e düş; açıkken Auth zorunlu.
                 if (dto.Use3DSecure)
                 {
                     order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
-                    order.PreAuthAmount = preAuthAmount;
-                    order.TolerancePercentage = WeightBasedCapturePolicy.CaptureOveragePercent / 100m;
+                    order.PreAuthAmount = saleAmount;
+                    order.TolerancePercentage = 0m;
                     order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                         ? WeightAdjustmentStatus.PendingWeighing
                         : order.WeightAdjustmentStatus;
@@ -625,7 +628,7 @@ namespace ECommerce.Business.Services.Managers
                         dto.CardNumber!,
                         dto.ExpireDate!,
                         dto.Cvv!,
-                        preAuthAmount,
+                        saleAmount,
                         txnType,
                         dto.GetNormalizedInstallment(),
                         CancellationToken.None);
@@ -634,18 +637,18 @@ namespace ECommerce.Business.Services.Managers
                     {
                         await LogFailureAsync(
                             dto.OrderId,
-                            preAuthAmount,
+                            saleAmount,
                             "posnet",
-                            "WEIGHT_BASED_3DS_AUTH",
-                            threeDsResult.Error ?? "3D provizyon başlatılamadı");
+                            "WEIGHT_BASED_3DS_SALE",
+                            threeDsResult.Error ?? "3D ödeme başlatılamadı");
 
                         return new PaymentInitResult
                         {
                             Success = false,
-                            Error = threeDsResult.Error ?? "3D provizyon başlatılamadı",
+                            Error = threeDsResult.Error ?? "3D ödeme başlatılamadı",
                             ErrorCode = threeDsResult.ErrorCode.ToString(),
                             OrderId = dto.OrderId,
-                            Amount = preAuthAmount,
+                            Amount = saleAmount,
                             Provider = "posnet"
                         };
                     }
@@ -663,45 +666,47 @@ namespace ECommerce.Business.Services.Managers
                             _configuration["Payment:PosnetCallbackUrl"] ?? dto.SuccessUrl ?? string.Empty),
                         Is3DSecure = true,
                         Provider = "posnet",
-                        Amount = preAuthAmount,
+                        Amount = saleAmount,
                         OrderId = dto.OrderId
                     };
                 }
 
-                var authResult = await _posnet.ProcessAuthAsync(
+                var saleResult = await _posnet.ProcessDirectSaleAsync(
                     dto.OrderId,
                     dto.CardNumber!,
                     dto.ExpireDate!,
                     dto.Cvv!,
-                    preAuthAmount,
                     dto.GetNormalizedInstallment(),
                     CancellationToken.None);
 
-                if (!authResult.IsSuccess || authResult.Data == null)
+                if (!saleResult.IsSuccess || saleResult.Data == null)
                 {
                     await LogFailureAsync(
                         dto.OrderId,
-                        preAuthAmount,
+                        saleAmount,
                         "posnet",
-                        "WEIGHT_BASED_AUTH",
-                        authResult.Error ?? "Provizyon başlatılamadı");
+                        "WEIGHT_BASED_SALE",
+                        saleResult.Error ?? "Direkt satış başlatılamadı");
 
                     return new PaymentInitResult
                     {
                         Success = false,
-                        Error = authResult.Error ?? "Provizyon başlatılamadı",
-                        ErrorCode = authResult.ErrorCode.ToString(),
+                        Error = saleResult.Error ?? "Direkt satış başlatılamadı",
+                        ErrorCode = saleResult.ErrorCode.ToString(),
                         OrderId = dto.OrderId,
-                        Amount = preAuthAmount,
+                        Amount = saleAmount,
                         Provider = "posnet"
                     };
                 }
 
                 order.PaymentMethod = string.IsNullOrWhiteSpace(dto.PaymentMethod) ? "posnet" : dto.PaymentMethod;
-                order.PreAuthAmount = preAuthAmount;
-                order.AuthorizedAmount = preAuthAmount;
-                order.TolerancePercentage = WeightBasedCapturePolicy.CaptureOveragePercent / 100m;
+                order.PreAuthAmount = saleAmount;
+                order.AuthorizedAmount = saleAmount;
+                order.CapturedAmount = saleAmount;
+                order.CaptureStatus = CaptureStatus.Success;
+                order.TolerancePercentage = 0m;
                 order.PreAuthDate = DateTime.UtcNow;
+                order.PreAuthHostLogKey = saleResult.Data.HostLogKey;
                 order.WeightAdjustmentStatus = order.WeightAdjustmentStatus == WeightAdjustmentStatus.NotApplicable
                     ? WeightAdjustmentStatus.PendingWeighing
                     : order.WeightAdjustmentStatus;
@@ -711,20 +716,20 @@ namespace ECommerce.Business.Services.Managers
                 return new PaymentInitResult
                 {
                     Success = true,
-                    PaymentId = authResult.Data.HostLogKey,
-                    HostLogKey = authResult.Data.HostLogKey,
-                    AuthCode = authResult.Data.AuthCode,
+                    PaymentId = saleResult.Data.HostLogKey,
+                    HostLogKey = saleResult.Data.HostLogKey,
+                    AuthCode = saleResult.Data.AuthCode,
                     Provider = "posnet",
-                    Amount = preAuthAmount,
+                    Amount = saleAmount,
                     OrderId = dto.OrderId
                 };
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex,
-                    "POSNET weight-based authorization failed. OrderId: {OrderId}",
+                    "POSNET weight-based sale failed. OrderId: {OrderId}",
                     dto.OrderId);
-                await LogFailureAsync(dto.OrderId, preAuthAmount, "posnet", "WEIGHT_BASED_AUTH_EXCEPTION", ex.Message, ex);
+                await LogFailureAsync(dto.OrderId, saleAmount, "posnet", "WEIGHT_BASED_SALE_EXCEPTION", ex.Message, ex);
                 throw;
             }
         }
@@ -1384,10 +1389,10 @@ namespace ECommerce.Business.Services.Managers
         {
             return await _db.Payments.AnyAsync(p =>
                 p.OrderId == orderId &&
-                p.Id != paymentId &&
                 (
                     p.TransactionType == "return" ||
                     p.Status == "PartiallyRefunded" ||
+                    p.Status == "PartialRefund" ||
                     ((p.RefundedAmount ?? 0m) > 0m && p.Status != "Cancelled")
                 ));
         }
@@ -1782,11 +1787,17 @@ namespace ECommerce.Business.Services.Managers
         }
 
         /// <summary>
-        /// Sipariş + ödeme kaydına göre iade edilebilir üst limit.
-        /// KG/ağırlıklı siparişlerde payment.Amount yerine CapturedAmount kullanılır.
+        /// Sipariş + ödeme kaydına göre iade edilebilir orijinal satış üst limiti.
+        /// Direkt satış (Sale) mimarisinde kısmi iadeler payment.RefundedAmount alanına eklendiğinden,
+        /// tavan değer olarak orijinal tahsilat (payment.Amount) esas alınır (çift düşümü önler).
         /// </summary>
         private static decimal ResolveMaxRefundableAmount(Order? order, Payments payment)
         {
+            if (payment.Amount > 0)
+            {
+                return Math.Max(payment.Amount, order?.CapturedAmount ?? 0m);
+            }
+
             if (order?.CapturedAmount > 0)
             {
                 return order.CapturedAmount;

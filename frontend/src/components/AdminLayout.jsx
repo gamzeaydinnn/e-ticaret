@@ -241,12 +241,6 @@ function AdminLayoutInner({ children }) {
         permission: PERMISSIONS.BANNERS_VIEW,
       },
       {
-        path: "/admin/weight-management",
-        icon: "fas fa-weight",
-        label: "Ağırlık Raporları",
-        permission: PERMISSIONS.ORDERS_VIEW,
-      },
-      {
         path: "/admin/campaigns",
         icon: "fas fa-gift",
         label: "Kampanya Yönetimi",
@@ -628,29 +622,6 @@ function AdminLayoutInner({ children }) {
                 >
                   {item.label}
                 </span>
-                {item.path === "/admin/weight-management" && (
-                  <span
-                    className="position-absolute"
-                    style={{
-                      right: "12px",
-                      top: "50%",
-                      transform: "translateY(-50%)",
-                      background:
-                        "linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%)",
-                      color: "white",
-                      fontSize: "0.7rem",
-                      fontWeight: "700",
-                      padding: "3px 7px",
-                      borderRadius: "12px",
-                      boxShadow: "0 2px 8px rgba(255, 107, 107, 0.4)",
-                      animation: "pulse 2s infinite",
-                      minWidth: "22px",
-                      textAlign: "center",
-                    }}
-                  >
-                    3
-                  </span>
-                )}
               </Link>
             );
           })}

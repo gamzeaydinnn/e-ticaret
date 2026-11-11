@@ -208,10 +208,10 @@ namespace ECommerce.Business.Services.Managers
             var isFullRemaining = remaining >= maxRefundable - 0.01m;
             if (isSameDay && isFullRemaining)
             {
-                return "reverse(sale/capt) — aynı gün tam iptal; 0211 alınırsa return fallback";
+                return "reverse(sale) — aynı gün tam iptal; 0211 alınırsa return fallback";
             }
 
-            return "return — kısmi veya ertesi gün iade";
+            return "return — kısmi iade, kısmi iade sonrası tam iade (0218 koruması) veya ertesi gün iade";
         }
 
         private static decimal CalculateMaxRefundableAmount(Order order, Payments? payment)
